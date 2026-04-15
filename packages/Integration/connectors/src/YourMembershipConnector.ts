@@ -152,7 +152,7 @@ const YM_CLIENT_WATERMARK_FIELDS: Record<string, { field: string; strategy: 'ful
  *   idField       — field name within each item to extract as the string parent ID
  */
 type YMParentScopeConfig =
-    | { parentType: 'Event' | 'Member'; pathTemplate: string }
+    | { parentType: 'Event' | 'Member' | 'Group'; pathTemplate: string }
     | { parentType: 'Custom'; pathTemplate: string; idSourcePath: string; idResponseKey: string; idField: string };
 
 /**
@@ -237,6 +237,28 @@ const YM_PARENT_SCOPED: Record<string, YMParentScopeConfig> = {
         idSourcePath: 'Markup',
         idResponseKey: 'MarkupList',
         idField: 'MarkupId',
+    },
+    // MemberReferrals/{ProfileID} — enumerate member IDs from PeopleIDs endpoint
+    'memberreferrals': { parentType: 'Member', pathTemplate: 'Member/{parentId}/MemberReferrals' },
+    // StoreOrders/{ProfileID} — enumerate member IDs from PeopleIDs endpoint (requires ProfileID)
+    'storeorders':     { parentType: 'Member', pathTemplate: 'Member/{parentId}/StoreOrders' },
+    // GroupMembershipLogs/{GroupID} — enumerate group IDs from Groups endpoint
+    'groupmembershiplogs': { parentType: 'Group', pathTemplate: 'Group/{parentId}/MembershipLogs' },
+    // FinanceBatchDetails/{BatchId} — enumerate batch IDs from FinanceBatches endpoint
+    'financebatchdetails': {
+        parentType: 'Custom',
+        pathTemplate: 'FinanceBatchDetails/{parentId}',
+        idSourcePath: 'FinanceBatches',
+        idResponseKey: 'FinanceBatch',
+        idField: 'BatchID',
+    },
+    // CustomPageVersions/{PageID} — enumerate page IDs from CustomPages endpoint
+    'custompageversions': {
+        parentType: 'Custom',
+        pathTemplate: 'CustomPageVersions/{parentId}',
+        idSourcePath: 'CustomPages',
+        idResponseKey: 'CustomPages',
+        idField: 'PageID',
     },
     // MembershipModifiers/{MembershipID} — enumerate membership type IDs from Memberships
     'membershipmodifiers': {
@@ -400,7 +422,8 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
         Name: 'PeopleIDs', DisplayName: 'People IDs',
         Description: 'Member and non-member identity records for data synchronization with timestamp support', SupportsWrite: false,
         Fields: [
-            { Name: 'ID', DisplayName: 'Person ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Person ID' },
+            { Name: 'ProfileID', DisplayName: 'Profile ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Profile ID' },
+            { Name: 'ID', DisplayName: 'Person ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person ID' },
             { Name: 'UserType', DisplayName: 'User Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'User Type' },
             { Name: 'DateRegistered', DisplayName: 'Date Registered', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Date Registered' },
         ],
@@ -669,7 +692,8 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
         Name: 'StoreOrderDetails', DisplayName: 'Store Order Details',
         Description: 'Individual line items within store orders with product, pricing, and quantity details', SupportsWrite: false,
         Fields: [
-            { Name: 'OrderID', DisplayName: 'OrderID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'OrderID' },
+            { Name: 'OrderID', DisplayName: 'OrderID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Parent order ID' },
+            { Name: 'InvoiceNumber', DisplayName: 'Invoice Number', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Invoice Number' },
             { Name: 'WebsiteMemberID', DisplayName: 'Member ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Member ID' },
             { Name: 'ProductName', DisplayName: 'Product Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Product Name' },
             { Name: 'Quantity', DisplayName: 'Quantity', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Quantity' },
@@ -678,7 +702,7 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'OrderDate', DisplayName: 'Order Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Order Date' },
             { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Status' },
             { Name: 'ShippingMethod', DisplayName: 'Shipping Method', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Shipping Method' },
-            { Name: 'ProductCode', DisplayName: 'Product Code', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Product Code' },
+            { Name: 'ProductCode', DisplayName: 'Product Code', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Product Code' },
         ],
     },
     {
@@ -1003,7 +1027,7 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
         Name: 'Locations', DisplayName: 'Locations',
         Description: 'States, provinces, and regions within countries with tax GL codes', SupportsWrite: false,
         Fields: [
-            { Name: 'locationCode', DisplayName: 'Location Code', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Location Code' },
+            { Name: 'locationCode', DisplayName: 'Location Code', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Location Code (filled with locationName when absent in the API response)' },
             { Name: 'countryId', DisplayName: 'Country ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Country ID' },
             { Name: 'locationName', DisplayName: 'Location Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Location Name' },
             { Name: 'taxGLCode', DisplayName: 'Tax GL Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Tax GL Code' },
@@ -1549,14 +1573,14 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
         Description: 'YourMembership LatestPosts data', SupportsWrite: false,
         Fields: [
             { Name: 'Sponsored', DisplayName: 'Sponsored', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Sponsored' },
-            { Name: 'MemberID', DisplayName: 'MemberID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'MemberID' },
+            { Name: 'MemberID', DisplayName: 'MemberID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'MemberID' },
             { Name: 'PostText', DisplayName: 'PostText', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PostText' },
             { Name: 'PostHtml', DisplayName: 'PostHtml', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PostHtml' },
             { Name: 'AuthorId', DisplayName: 'AuthorId', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'AuthorId' },
             { Name: 'WallOwnerId', DisplayName: 'WallOwnerId', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'WallOwnerId' },
             { Name: 'AuthorName', DisplayName: 'AuthorName', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'AuthorName' },
             { Name: 'WallOwnerName', DisplayName: 'WallOwnerName', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'WallOwnerName' },
-            { Name: 'PostId', DisplayName: 'PostId', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PostId' },
+            { Name: 'PostId', DisplayName: 'PostId', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'PostId' },
             { Name: 'PostDate', DisplayName: 'PostDate', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PostDate' },
             { Name: 'PostType', DisplayName: 'PostType', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PostType' },
             { Name: 'ShareCount', DisplayName: 'ShareCount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ShareCount' },
@@ -1696,11 +1720,11 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
         Name: 'MarkupComponentTypes', DisplayName: 'MarkupComponentTypes',
         Description: 'YourMembership MarkupComponentTypes data', SupportsWrite: false,
         Fields: [
-            { Name: 'ComponentType', DisplayName: 'ComponentType', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ComponentType' },
+            { Name: 'ComponentType', DisplayName: 'ComponentType', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Component type identifier (unique per record)' },
             { Name: 'ComponentName', DisplayName: 'ComponentName', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ComponentName' },
             { Name: 'IsAtRootColumn', DisplayName: 'IsAtRootColumn', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'IsAtRootColumn' },
             { Name: 'CanHaveChildren', DisplayName: 'CanHaveChildren', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'CanHaveChildren' },
-            { Name: 'OrderId', DisplayName: 'OrderId', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'OrderId' },
+            { Name: 'OrderId', DisplayName: 'OrderId', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Sort order (API returns 0 for all records — not usable as PK)' },
             { Name: 'ButtonData', DisplayName: 'ButtonData', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ButtonData' },
             { Name: 'ImageData', DisplayName: 'ImageData', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ImageData' },
             { Name: 'DividerData', DisplayName: 'DividerData', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'DividerData' },
@@ -1821,7 +1845,7 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'GroupCode', DisplayName: 'GroupCode', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'GroupCode' },
             { Name: 'GroupName', DisplayName: 'GroupName', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'GroupName' },
             { Name: 'PrimaryGroup', DisplayName: 'PrimaryGroup', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PrimaryGroup' },
-            { Name: 'GroupID', DisplayName: 'GroupID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'GroupID' },
+            { Name: 'GroupID', DisplayName: 'GroupID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'GroupID' },
         ],
     },
     {
@@ -2327,6 +2351,115 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'OriginalSrc', DisplayName: 'OriginalSrc', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'OriginalSrc' },
         ],
     },
+    // ── Objects present in metadata but not previously listed in YM_ACTION_OBJECTS ──
+    // Added so DiscoverObjects()/IntrospectSchema() returns them and buildTargetConfigs
+    // does not emit "not found in source schema" warnings for these entity maps.
+    { Name: 'BasicMemberProfile', DisplayName: 'Basic Member Profile', Description: 'Basic member profile data (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'ProfileID', DisplayName: 'Profile ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Profile ID' }] },
+    { Name: 'BrandingConfig', DisplayName: 'Branding Config', Description: 'Site branding configuration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ContentAreas', DisplayName: 'Content Areas', Description: 'CMS content areas', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ContentProxy', DisplayName: 'Content Proxy', Description: 'Member content proxy data (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CustomCSS', DisplayName: 'Custom CSS', Description: 'Custom site CSS configuration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CustomPageCategories', DisplayName: 'Custom Page Categories', Description: 'Categories for custom pages', SupportsWrite: false, Fields: [{ Name: 'CategoryID', DisplayName: 'Category ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Category ID' }] },
+    { Name: 'CustomPageDocTypes', DisplayName: 'Custom Page Doc Types', Description: 'Document types for custom pages', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CustomPageFileCollections', DisplayName: 'Custom Page File Collections', Description: 'File collections on custom pages', SupportsWrite: false, Fields: [{ Name: 'FileCollectionID', DisplayName: 'File Collection ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'File Collection ID' }, { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ID' }] },
+    { Name: 'CustomPageTemplates', DisplayName: 'Custom Page Templates', Description: 'Templates for custom pages', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CustomPages', DisplayName: 'Custom Pages', Description: 'Custom CMS pages', SupportsWrite: false, Fields: [{ Name: 'PageID', DisplayName: 'Page ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Page ID' }] },
+    { Name: 'Donations', DisplayName: 'Donations', Description: 'Member donation records', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'Dues', DisplayName: 'Dues', Description: 'Membership dues information', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventAlias', DisplayName: 'Event Alias', Description: 'Event URL aliases (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventRegistrationIDs', DisplayName: 'Event Registration IDs', Description: 'Registration ID list for events (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'RegistrationID', DisplayName: 'Registration ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Registration ID' }] },
+    { Name: 'EventVirtualMeetings', DisplayName: 'Event Virtual Meetings', Description: 'Virtual meeting settings for events (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventVirtualUsers', DisplayName: 'Event Virtual Users', Description: 'Virtual meeting users for events (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventVirtualWebinars', DisplayName: 'Event Virtual Webinars', Description: 'Virtual webinar settings for events (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'Favorites', DisplayName: 'Favorites', Description: 'Member favorite items (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'FavoriteId', DisplayName: 'Favorite ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Favorite ID' }] },
+    { Name: 'FreestoneTypes', DisplayName: 'Freestone Types', Description: 'Freestone integration types', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'HelpTopic', DisplayName: 'Help Topic', Description: 'Help topics', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InvoicePayments', DisplayName: 'Invoice Payments', Description: 'Payments applied to invoices', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'JobAlertsCriteria', DisplayName: 'Job Alerts Criteria', Description: 'Criteria for job alerts (member-scoped, /Ymc/)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'JobSearch', DisplayName: 'Job Search', Description: 'Job board search (member-scoped, /Ymc/)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MemberConfig', DisplayName: 'Member Config', Description: 'Member configuration settings (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MemberProfile', DisplayName: 'Member Profile', Description: 'Full member profile (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'ProfileID', DisplayName: 'Profile ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Profile ID' }] },
+    { Name: 'MemberPulse', DisplayName: 'Member Pulse', Description: 'Member engagement pulse data (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MessageFolders', DisplayName: 'Message Folders', Description: 'Member message folders (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'Messages', DisplayName: 'Messages', Description: 'Member messages (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'MessageId', DisplayName: 'Message ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Message ID' }] },
+    { Name: 'NotificationDetails', DisplayName: 'Notification Details', Description: 'Notification detail records', SupportsWrite: false, Fields: [{ Name: 'NotificationID', DisplayName: 'Notification ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Notification ID' }] },
+    { Name: 'NotificationSubscription', DisplayName: 'Notification Subscription', Description: 'Member notification subscriptions (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'Orders', DisplayName: 'Orders', Description: 'Store orders', SupportsWrite: false, Fields: [{ Name: 'OrderID', DisplayName: 'Order ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Order ID' }] },
+    { Name: 'PeopleGroups', DisplayName: 'People Groups', Description: 'Groups of people/members', SupportsWrite: false, Fields: [{ Name: 'GroupID', DisplayName: 'Group ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Group ID' }] },
+    { Name: 'Pinpoint', DisplayName: 'Pinpoint', Description: 'Member pinpoint/location data (member-scoped, /Ymc/)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ProductMemberPrice', DisplayName: 'Product Member Price', Description: 'Member-specific product pricing', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'RegistrationSessionRequest', DisplayName: 'Registration Session Request', Description: 'Event registration session requests (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SMSCampaigns', DisplayName: 'SMS Campaigns', Description: 'SMS marketing campaigns', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SavedJobs', DisplayName: 'Saved Jobs', Description: 'Member saved job listings (member-scoped, /Ymc/)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SingleMembership', DisplayName: 'Single Membership', Description: 'Single membership record lookup', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'WallPostFirst', DisplayName: 'Wall Post First', Description: 'First wall post for a member (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'WallId', DisplayName: 'Wall ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Wall ID' }] },
+    { Name: 'WallPosts', DisplayName: 'Wall Posts', Description: 'Member wall posts (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'WallId', DisplayName: 'Wall ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Wall ID' }] },
+    // ── Additional stubs from DB entity maps (write/action endpoints not used for pull sync) ──
+    { Name: 'Auth', DisplayName: 'Auth', Description: 'Authentication endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'Authenticate', DisplayName: 'Authenticate', Description: 'Authenticate endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'BrandingConfigCss', DisplayName: 'Branding Config CSS', Description: 'Branding configuration CSS', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CBXClientConfig', DisplayName: 'CBX Client Config', Description: 'CBX client configuration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ClientConfig', DisplayName: 'Client Config', Description: 'Client configuration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ConvertToMemberRequest', DisplayName: 'Convert To Member Request', Description: 'Convert non-member to member request', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CopyCampaign', DisplayName: 'Copy Campaign', Description: 'Copy campaign action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'DonationHistoryCancelAutoBill', DisplayName: 'Donation History Cancel Auto Bill', Description: 'Cancel auto-bill on donation history', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventRegistrationAttendance', DisplayName: 'Event Registration Attendance', Description: 'Event registration attendance tracking', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventSessionAttendanceRequest', DisplayName: 'Event Session Attendance Request', Description: 'Event session attendance request', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ExternalLink', DisplayName: 'External Link', Description: 'External link records', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FacebookProfile', DisplayName: 'Facebook Profile', Description: 'Facebook profile integration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FilesUpload', DisplayName: 'Files Upload', Description: 'File upload endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FinalizeLogin', DisplayName: 'Finalize Login', Description: 'Finalize login action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FindEventRegistrationForms', DisplayName: 'Find Event Registration Forms', Description: 'Search event registration forms', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FindEventTickets', DisplayName: 'Find Event Tickets', Description: 'Search event tickets', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FindMembers', DisplayName: 'Find Members', Description: 'Member search endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FindProducts', DisplayName: 'Find Products', Description: 'Product search endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'GetAccessToken', DisplayName: 'Get Access Token', Description: 'OAuth access token endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'GetToken', DisplayName: 'Get Token', Description: 'Token retrieval endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'GroupJoin', DisplayName: 'Group Join', Description: 'Join group action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'HasInformz', DisplayName: 'Has Informz', Description: 'Informz integration check', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'HassAcessTestFolder', DisplayName: 'Has Access Test Folder', Description: 'Access test folder check', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'HtmlSanitization', DisplayName: 'HTML Sanitization', Description: 'HTML sanitization utility', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadBySearchGuidRequest', DisplayName: 'Informz Bulk Upload By Search GUID', Description: 'Informz bulk upload by search GUID', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadEventRegistrantsRequest', DisplayName: 'Informz Bulk Upload Event Registrants', Description: 'Informz bulk upload event registrants', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadForDuesBySearchIdRequest', DisplayName: 'Informz Bulk Upload For Dues By Search ID', Description: 'Informz bulk upload dues by search ID', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadForDuesRequest', DisplayName: 'Informz Bulk Upload For Dues', Description: 'Informz bulk upload for dues', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadForOrdersBySearchIdRequest', DisplayName: 'Informz Bulk Upload For Orders By Search ID', Description: 'Informz bulk upload orders by search ID', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadForOrdersRequest', DisplayName: 'Informz Bulk Upload For Orders', Description: 'Informz bulk upload for orders', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadForReportsRequest', DisplayName: 'Informz Bulk Upload For Reports', Description: 'Informz bulk upload for reports', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzFindGroupRequest', DisplayName: 'Informz Find Group', Description: 'Informz find group request', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MarkupRender', DisplayName: 'Markup Render', Description: 'Render markup content (custom-scoped)', SupportsWrite: false, Fields: [{ Name: 'MarkupId', DisplayName: 'Markup ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Markup ID' }] },
+    { Name: 'MemberPasswordReset', DisplayName: 'Member Password Reset', Description: 'Member password reset action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MembershipRenewalReminderGetRequest', DisplayName: 'Membership Renewal Reminder Get', Description: 'Get membership renewal reminder settings', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MembershipRenewalReminderPutRequest', DisplayName: 'Membership Renewal Reminder Put', Description: 'Update membership renewal reminder settings', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'NotificationUpdate', DisplayName: 'Notification Update', Description: 'Update notification records', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'OAuthClientAppAPISetting', DisplayName: 'OAuth Client App API Setting', Description: 'OAuth client app API settings', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'OIDCGetAccessToken', DisplayName: 'OIDC Get Access Token', Description: 'OIDC access token endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'OrganizationPosts', DisplayName: 'Organization Posts', Description: 'Organization post records', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'PageMetaInfo', DisplayName: 'Page Meta Info', Description: 'Page metadata information', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'PasswordValidityRequest', DisplayName: 'Password Validity Request', Description: 'Password validity check', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'PeopleBulkDetachRequest', DisplayName: 'People Bulk Detach Request', Description: 'Bulk detach people records', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'PeopleProfileFindID', DisplayName: 'People Profile Find ID', Description: 'Find member profile ID', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'PhotoComments', DisplayName: 'Photo Comments', Description: 'Comments on member photos', SupportsWrite: false, Fields: [{ Name: 'PhotoCommentId', DisplayName: 'Photo Comment ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Photo Comment ID' }] },
+    { Name: 'Ping', DisplayName: 'Ping', Description: 'API health check endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ProductsDto', DisplayName: 'Products DTO', Description: 'Products data transfer object', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'QuickBooksOnlineOAuth', DisplayName: 'QuickBooks Online OAuth', Description: 'QuickBooks Online OAuth integration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ResendCampaign', DisplayName: 'Resend Campaign', Description: 'Resend campaign action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ResourceManagerFilesUpload', DisplayName: 'Resource Manager Files Upload', Description: 'Resource manager file upload', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'RssBuilder', DisplayName: 'RSS Builder', Description: 'RSS feed builder', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SMSCampaignListDetails', DisplayName: 'SMS Campaign List Details', Description: 'SMS campaign list details', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SendTestNotification', DisplayName: 'Send Test Notification', Description: 'Send test notification action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SocialOAuth', DisplayName: 'Social OAuth', Description: 'Social OAuth integration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'StoreProductBulkStatus', DisplayName: 'Store Product Bulk Status', Description: 'Bulk update store product status', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'StoreProductBulkStatusAll', DisplayName: 'Store Product Bulk Status All', Description: 'Bulk update all store product statuses', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'StoreProductPromoCodes', DisplayName: 'Store Product Promo Codes', Description: 'Promo codes for store products', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'StoreProductSequence', DisplayName: 'Store Product Sequence', Description: 'Store product sequence ordering', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'StoreProductUpdate', DisplayName: 'Store Product Update', Description: 'Update store product action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'TaxRateRequest', DisplayName: 'Tax Rate Request', Description: 'Tax rate lookup request', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'UnblockCardRequest', DisplayName: 'Unblock Card Request', Description: 'Unblock payment card request', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'UsernameAvailabilityRequest', DisplayName: 'Username Availability Request', Description: 'Check username availability', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ZoomEventListener', DisplayName: 'Zoom Event Listener', Description: 'Zoom event listener integration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ZoomEventListenerOAuth', DisplayName: 'Zoom Event Listener OAuth', Description: 'Zoom event listener OAuth', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ZoomOAuth', DisplayName: 'Zoom OAuth', Description: 'Zoom OAuth integration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
 ];
 
 
@@ -2854,11 +2987,16 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     ): string {
         const separator = basePath.includes('?') ? '&' : '?';
 
+        // MembersGroups: YM enforces max page size of 100
+        const pageSize = obj.Name.toLowerCase() === 'membersgroups'
+            ? Math.min(obj.DefaultPageSize, 100)
+            : obj.DefaultPageSize;
+
         switch (obj.PaginationType) {
             case 'PageNumber':
-                return `${basePath}${separator}PageNumber=${page}&PageSize=${obj.DefaultPageSize}`;
+                return `${basePath}${separator}PageNumber=${page}&PageSize=${pageSize}`;
             case 'Offset':
-                return `${basePath}${separator}OffSet=${offset}&PageSize=${obj.DefaultPageSize}`;
+                return `${basePath}${separator}OffSet=${offset}&PageSize=${pageSize}`;
             case 'Cursor':
                 return cursor
                     ? `${basePath}${separator}cursor=${encodeURIComponent(cursor)}&limit=${obj.DefaultPageSize}`
@@ -2889,6 +3027,68 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
         const objLower = ctx.ObjectName.toLowerCase();
 
+        // Objects that cannot be synced: doubly parameterized, or require unresolvable query params.
+        // ── NOT_DATA: Auth, action, webhook, utility endpoints — never syncable ──
+        const notDataObjects = new Set([
+            'auth', 'authenticate', 'brandingconfigcss', 'converttomemberrequest',
+            'copycampaign', 'customcss', 'donationhistorycancelautobill', 'donations',
+            'dues', 'eventregistrationattendance', 'eventsessionattendancerequest',
+            'externallink', 'filesupload', 'finalizelogin', 'getaccesstoken', 'gettoken',
+            'groupjoin', 'hasinformz', 'hassacesstestfolder', 'htmlsanitization',
+            'informzbulkuploadbysearchguidrequest', 'informzbulkuploadeventregistrantsrequest',
+            'informzbulkuploadforduesbysearchidrequest', 'informzbulkuploadforduesrequest',
+            'informzbulkuploadforordersbysearchidrequest', 'informzbulkuploadforordersrequest',
+            'informzbulkuploadforreportsrequest', 'informzfindgrouprequest',
+            'invoicepayments', 'memberpasswordreset', 'membershiprenewalreminderputrequest',
+            'notificationsubscription', 'notificationupdate', 'oauthclientappname',
+            'oidcgetaccesstoken', 'orders', 'passwordvalidityrequest', 'productsdto',
+            'peoplebulkdetachrequest', 'quickbooksonlineoauth', 'registrationsessionrequest',
+            'resendcampaign', 'resourcemanagerfilesupload', 'rssbuilder',
+            'sendtestnotification', 'socialoauth', 'storeproductbulkstatus',
+            'storeproductbulkstatusall', 'storeproductpromocodes', 'storeproductsequence',
+            'storeproductupdate', 'unblockcardrequest', 'usernameavailabilityrequest',
+            'webscraper', 'zoomeventlistener', 'zoomeventlisteneroauth', 'zoomoauth',
+            'ping', 'wallpostfirst',
+            'facebookprofile',       // returns malformed/empty JSON (Unexpected end of JSON input)
+        ]);
+        // ── UNSYNCABLE: Requires params that can't be enumerated ──
+        const unsyncableObjects = new Set([
+            'productmemberprice',    // doubly parameterized (ProductId + MemberId)
+            'contentareas',          // requires AreaType query param
+            'customformfields',      // scoped by FormID — no form list
+            'markupcomponenttypes',  // OrderId=0 for all records — no unique key
+            'custompagedoctypes',    // field name mismatch (DocTypeID vs Id)
+            'dashboarddata',         // requires EndDate param, aggregate not entity
+            'eventattendees',        // doubly nested (Member + Event)
+            'eventsessionceuawards', // doubly nested (Event + Session)
+            'communityPhotos',       // requires PhotoId — no flat list
+            'feeds',                 // requires PostId — no flat list
+            'helptopic',             // requires HelpTopicID — no flat list
+            'notificationdetails',   // requires NotificationID — no flat list
+            'wallcomments',          // requires PostId — no flat list
+            'wallcomments_memberlist', // sub-object of WallComments
+            'photocomments',         // doubly nested (Member + Photo), write-only
+            'taxraterequest',        // lookup requiring address params
+            'findeventregistrationforms', // search endpoint requiring params
+            'findeventtickets',      // search endpoint requiring params
+            'findmembers',           // search endpoint requiring params
+            'findproducts',          // search endpoint requiring params
+            'peopleprofilefindid',   // search/lookup requiring params
+            'smscampaignlistdetails', // requires ListId — no flat SMS list
+            'smscampaignreports',    // requires CampaignId — could be Custom but not configured
+            'smscampaignreports_messages', // sub-object of SMSCampaignReports
+            'campaignreports_dailyrate',      // sub-object extracted from CampaignReports response
+            'campaignreports_messageactivity', // sub-object extracted from CampaignReports response
+            'campaignreports_messages',       // sub-object extracted from CampaignReports response
+        ]);
+        if (notDataObjects.has(objLower)) {
+            return { Records: [], HasMore: false };
+        }
+        if (unsyncableObjects.has(objLower)) {
+            console.warn(`[YM] '${ctx.ObjectName}' requires unenumerable parameters. Skipping.`);
+            return { Records: [], HasMore: false };
+        }
+
         if (objLower === 'groups' || objLower === 'grouptypes') {
             return this.FetchGroups(ctx);
         }
@@ -2897,21 +3097,44 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             return this.FetchMemberBatch(ctx);
         }
 
-        // Client-side watermark filtering: fetch all records, filter locally by date field.
-        // Used for endpoints that return a usable date field but offer no server-side filter param.
-        const clientWatermark = YM_CLIENT_WATERMARK_FIELDS[objLower];
-        if (clientWatermark) {
-            return this.FetchWithClientWatermark(ctx, clientWatermark.field);
+        // PeopleIDs returns flat ID arrays under "IDList" — wrap each as {ID: value}
+        if (objLower === 'peopleids') {
+            return this.FetchPeopleIDs(ctx);
         }
 
-        // Parent-scoped endpoints: only run on first call (offset 0 / undefined)
-        // to avoid duplicate fetches — they load all records in one pass
-        const parentScope = YM_PARENT_SCOPED[objLower];
-        if (parentScope && (ctx.CurrentOffset ?? 0) === 0 && !ctx.CurrentPage && !ctx.CurrentCursor) {
-            return this.FetchParentScopedRecords(ctx, parentScope);
+        // All remaining paths wrapped in error catch for graceful 400/404/500 handling
+        let result: FetchBatchResult;
+        try {
+            // Client-side watermark filtering: fetch all records, filter locally by date field.
+            const clientWatermark = YM_CLIENT_WATERMARK_FIELDS[objLower];
+            if (clientWatermark) {
+                result = await this.FetchWithClientWatermark(ctx, clientWatermark.field);
+            } else {
+                // Parent-scoped endpoints: only run on first call (offset 0 / undefined)
+                const parentScope = YM_PARENT_SCOPED[objLower];
+                if (parentScope && (ctx.CurrentOffset ?? 0) === 0 && !ctx.CurrentPage && !ctx.CurrentCursor) {
+                    result = await this.FetchParentScopedRecords(ctx, parentScope);
+                } else {
+                    result = await super.FetchChanges(ctx);
+                }
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            if (message.includes('HTTP 404')) {
+                console.warn(`[YM] '${ctx.ObjectName}' returned 404. Skipping.`);
+                return { Records: [], HasMore: false };
+            }
+            throw err;
         }
 
-        return super.FetchChanges(ctx);
+        // ── GENERAL RULE: Filter out records with unresolvable PK fields ──
+        // Drops records where the declared PK field is null and can't be resolved
+        // via case-insensitive matching. Better to skip than insert a garbage-keyed row.
+        if (result.Records.length > 0) {
+            result.Records = this.EnsurePrimaryKeys(result.Records, ctx);
+        }
+
+        return result;
     }
 
     /**
@@ -2982,6 +3205,46 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
      * Because these endpoints are typically small-to-medium in size, fetching
      * all and filtering locally is acceptable.
      */
+    /**
+     * PeopleIDs endpoint returns a flat array of ID numbers under "IDList",
+     * not objects with named fields. This wraps each ID as {ID: value} so
+     * the engine can map it to the PeopleIDs table's ID column.
+     */
+    private async FetchPeopleIDs(ctx: FetchContext): Promise<FetchBatchResult> {
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser) as YMAuthContext;
+        const page = (ctx.CurrentPage ?? 0) + 1;
+        const pageSize = 200;
+        const url = `${YM_API_BASE}/Ams/${auth.Config.ClientID}/PeopleIDs?PageNumber=${page}&PageSize=${pageSize}`;
+        const headers = this.BuildHeaders(auth);
+        const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+
+        if (resp.Status >= 400 || !resp.Body) {
+            return { Records: [], HasMore: false };
+        }
+
+        const body = resp.Body as Record<string, unknown>;
+        const list = (body['IDList'] ?? body['PeopleIDs'] ?? body['Ids'] ?? []) as unknown[];
+        if (!Array.isArray(list) || list.length === 0) {
+            return { Records: [], HasMore: false };
+        }
+
+        const records: ExternalRecord[] = list.map(item => {
+            const id = typeof item === 'object' && item !== null
+                ? String((item as Record<string, unknown>)['ProfileId'] ?? (item as Record<string, unknown>)['Id'] ?? (item as Record<string, unknown>)['ID'] ?? item)
+                : String(item);
+            const fields: Record<string, unknown> = typeof item === 'object' && item !== null
+                ? { ID: id, ...(item as Record<string, unknown>) }
+                : { ID: id };
+            return { ExternalID: id, ObjectType: ctx.ObjectName, Fields: fields };
+        });
+
+        return {
+            Records: records,
+            HasMore: list.length >= pageSize,
+            NextPage: page,
+        };
+    }
+
     private async FetchWithClientWatermark(ctx: FetchContext, dateFieldName: string): Promise<FetchBatchResult> {
         const pageResult = await super.FetchChanges(ctx);
 
@@ -3242,8 +3505,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
                 ];
             case 'StoreOrderDetails':
                 return [
-                    { SourceFieldName: 'OrderDetailID', DestinationFieldName: 'OrderDetailID', IsKeyField: true },
-                    { SourceFieldName: 'OrderID', DestinationFieldName: 'OrderID' },
+                    { SourceFieldName: 'OrderID', DestinationFieldName: 'OrderID', IsKeyField: true },
+                    { SourceFieldName: 'ProductCode', DestinationFieldName: 'ProductCode', IsKeyField: true },
                     { SourceFieldName: 'WebsiteMemberID', DestinationFieldName: 'WebsiteMemberID' },
                     { SourceFieldName: 'ProductName', DestinationFieldName: 'ProductName' },
                     { SourceFieldName: 'Quantity', DestinationFieldName: 'Quantity' },
@@ -3374,6 +3637,10 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         auth: YMAuthContext,
         record: ExternalRecord
     ): Promise<ExternalRecord> {
+        if (!record.ExternalID) {
+            console.warn(`[YM Members] Skipping enrichment for record with empty ExternalID`);
+            return record;
+        }
         try {
             const detailPath = `Members/${record.ExternalID}`;
             const fetchPromise = this.MakeYMRequest(auth, detailPath);
@@ -3691,24 +3958,30 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         const ids: string[] = [];
         let page = 1;
 
-        while (true) {
-            const url = `${baseUrl}?PageNumber=${page}&PageSize=500`;
-            const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
-            if (resp.Status >= 400 || !resp.Body) break;
+        try {
+            while (true) {
+                const url = `${baseUrl}?PageNumber=${page}&PageSize=500`;
+                const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+                if (resp.Status >= 400 || !resp.Body) break;
 
-            const body = resp.Body as Record<string, unknown>;
-            const list = (body['EventIDs'] ?? body['Ids'] ?? body['IDs'] ?? []) as unknown[];
-            if (!Array.isArray(list) || list.length === 0) break;
+                const body = resp.Body as Record<string, unknown>;
+                const list = (body['EventIDs'] ?? body['Ids'] ?? body['IDs'] ?? []) as unknown[];
+                if (!Array.isArray(list) || list.length === 0) break;
 
-            for (const item of list) {
-                const id = typeof item === 'object' && item !== null
-                    ? String((item as Record<string, unknown>)['EventId'] ?? (item as Record<string, unknown>)['Id'] ?? item)
-                    : String(item);
-                ids.push(id);
+                for (const item of list) {
+                    const id = typeof item === 'object' && item !== null
+                        ? String((item as Record<string, unknown>)['EventId'] ?? (item as Record<string, unknown>)['Id'] ?? item)
+                        : String(item);
+                    ids.push(id);
+                }
+
+                if (list.length < 500) break;
+                page++;
             }
-
-            if (list.length < 500) break;
-            page++;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`[YM] FetchAllEventIDs failed: ${message} — skipping event-scoped objects`);
+            return [];
         }
 
         console.log(`[YM] FetchAllEventIDs: found ${ids.length} event IDs`);
@@ -3727,28 +4000,64 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         const ids: string[] = [];
         let page = 1;
 
-        while (true) {
-            const url = `${baseUrl}?PageNumber=${page}&PageSize=500`;
-            const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
-            if (resp.Status >= 400 || !resp.Body) break;
+        try {
+            while (true) {
+                const url = `${baseUrl}?PageNumber=${page}&PageSize=500`;
+                const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+                if (resp.Status >= 400 || !resp.Body) break;
 
-            const body = resp.Body as Record<string, unknown>;
-            const list = (body['PeopleIDs'] ?? body['Ids'] ?? body['IDs'] ?? []) as unknown[];
-            if (!Array.isArray(list) || list.length === 0) break;
+                const body = resp.Body as Record<string, unknown>;
+                const list = (body['PeopleIDs'] ?? body['Ids'] ?? body['IDs'] ?? []) as unknown[];
+                if (!Array.isArray(list) || list.length === 0) break;
 
-            for (const item of list) {
-                const id = typeof item === 'object' && item !== null
-                    ? String((item as Record<string, unknown>)['ProfileId'] ?? (item as Record<string, unknown>)['Id'] ?? item)
-                    : String(item);
-                ids.push(id);
+                for (const item of list) {
+                    const id = typeof item === 'object' && item !== null
+                        ? String((item as Record<string, unknown>)['ProfileId'] ?? (item as Record<string, unknown>)['Id'] ?? item)
+                        : String(item);
+                    ids.push(id);
+                }
+
+                if (list.length < 500) break;
+                page++;
             }
-
-            if (list.length < 500) break;
-            page++;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`[YM] FetchAllMemberIDs failed: ${message} — skipping member-scoped objects`);
+            return [];
         }
 
         console.log(`[YM] FetchAllMemberIDs: found ${ids.length} member IDs`);
         return ids;
+    }
+
+    /**
+     * Fetches all group IDs by calling the Groups endpoint and flattening
+     * the nested GroupTypeList → Groups[].Id structure.
+     */
+    private async FetchAllGroupIDs(
+        auth: RESTAuthContext,
+        config: YMConnectionConfig
+    ): Promise<string[]> {
+        try {
+            const json = await this.MakeYMRequest(auth as YMAuthContext, 'Groups');
+            const typeList = json['GroupTypeList'] as GroupTypeListItem[] | undefined;
+            if (!typeList || !Array.isArray(typeList)) {
+                console.warn(`[YM] FetchAllGroupIDs: no GroupTypeList in Groups response`);
+                return [];
+            }
+            const ids: string[] = [];
+            for (const groupType of typeList) {
+                for (const group of groupType.Groups ?? []) {
+                    if (group.Id !== undefined) ids.push(String(group.Id));
+                }
+            }
+            console.log(`[YM] FetchAllGroupIDs: found ${ids.length} group IDs`);
+            return ids;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`[YM] FetchAllGroupIDs failed: ${message} — skipping group-scoped objects`);
+            return [];
+        }
     }
 
     /**
@@ -3810,7 +4119,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
         // Fetch or use cached parent IDs
         // Narrow the Custom variant explicitly to satisfy TypeScript (first union member
-        // uses 'Event'|'Member' as a combined literal so narrowing via else doesn't work).
+        // uses 'Event'|'Member'|'Group' as combined literals so narrowing via else doesn't work).
         type CustomScope = { parentType: 'Custom'; pathTemplate: string; idSourcePath: string; idResponseKey: string; idField: string };
         const isCustom = (s: YMParentScopeConfig): s is CustomScope => s.parentType === 'Custom';
 
@@ -3821,6 +4130,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
                 parentIds = await this.FetchAllEventIDs(auth, config);
             } else if (scope.parentType === 'Member') {
                 parentIds = await this.FetchAllMemberIDs(auth, config);
+            } else if (scope.parentType === 'Group') {
+                parentIds = await this.FetchAllGroupIDs(auth, config);
             } else {
                 const cs = scope as CustomScope;
                 parentIds = await this.FetchCustomParentIDs(auth, config, cs.idSourcePath, cs.idResponseKey, cs.idField);
@@ -3830,7 +4141,9 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
         if (parentIds.length === 0) {
             const sourceDesc = isCustom(scope) ? scope.idSourcePath
-                : scope.parentType === 'Event' ? 'EventIDs' : 'PeopleIDs';
+                : scope.parentType === 'Event' ? 'EventIDs'
+                : scope.parentType === 'Group' ? 'Groups'
+                : 'PeopleIDs';
             console.warn(`[YM] FetchParentScopedRecords: 0 ${scope.parentType} IDs found for '${ctx.ObjectName}' — check ${sourceDesc} endpoint`);
             return { Records: [], HasMore: false };
         }
@@ -3873,7 +4186,23 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
                 for (const rec of records) {
                     const sanitized = this.SanitizeDateFields({ ...rec, _parentId: parentId });
                     const flattened = this.FlattenYMRecord(sanitized);
+
+                    // For Locations: locationCode is the PK (NOT NULL in DB) but is absent on many YM
+                    // records (254/330 in production). Fill it with locationName as fallback so inserts
+                    // always succeed. Build a stable countryId|locationCode ExternalID for deduplication.
+                    let locationExternalId: string | undefined;
+                    if (ctx.ObjectName.toLowerCase() === 'locations') {
+                        const locName = flattened['locationName'] as string | null | undefined;
+                        if (!flattened['locationCode']) {
+                            // PK is NOT NULL — fill with locationName, or countryId_index as last resort
+                            flattened['locationCode'] = locName ?? `${parentId}_${allRecords.length}`;
+                        }
+                        const countryId = (flattened['countryId'] as string | undefined) ?? parentId;
+                        locationExternalId = `${countryId}|${String(flattened['locationCode'])}`;
+                    }
+
                     const externalId = String(
+                        locationExternalId ??
                         flattened['Id'] ?? flattened['ID'] ?? flattened['ProfileID'] ??
                         flattened['EventId'] ?? flattened['SessionId'] ?? `${parentId}_${fetched}_${allRecords.length}`
                     );
@@ -3961,6 +4290,66 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             }
         }
         return 0;
+    }
+
+    /**
+     * General-purpose PK safety net: filters out records where a declared PK field is null/missing
+     * and cannot be resolved via case-insensitive field name matching.
+     *
+     * Strategy per PK field:
+     * 1. Field is already present and non-null → keep record as-is.
+     * 2. Case-insensitive match finds the field under a different casing → copy the value.
+     * 3. No match at all → DROP the record and log a warning.
+     *
+     * Dropping is intentional: inserting with a garbage or positional PK creates phantom rows
+     * that can never be correctly updated on subsequent incremental syncs.
+     *
+     * Returns a new array with only the records that have valid PKs.
+     */
+    private EnsurePrimaryKeys(records: ExternalRecord[], ctx: FetchContext): ExternalRecord[] {
+        // Look up the declared PK field names from cached metadata.
+        let pkFieldNames: string[] = [];
+        try {
+            const integrationID = ctx.CompanyIntegration.IntegrationID;
+            const obj = this.GetCachedObject(integrationID, ctx.ObjectName);
+            const fields = this.GetCachedFields(obj.ID);
+            pkFieldNames = fields
+                .filter(f => f.IsPrimaryKey)
+                .sort((a, b) => a.Sequence - b.Sequence)
+                .map(f => f.Name);
+        } catch {
+            // Object or fields not in cache yet — pass through unchanged.
+            return records;
+        }
+
+        if (pkFieldNames.length === 0) return records;
+
+        const valid: ExternalRecord[] = [];
+        for (const record of records) {
+            const raw = record.Fields;
+            let drop = false;
+
+            for (const pkField of pkFieldNames) {
+                if (raw[pkField] != null) continue; // already present
+
+                // Case-insensitive search among the record's own keys.
+                const recordKeys = Object.keys(raw);
+                const matchKey = recordKeys.find(k => k.toLowerCase() === pkField.toLowerCase());
+                if (matchKey && raw[matchKey] != null) {
+                    raw[pkField] = raw[matchKey];
+                    continue;
+                }
+
+                // No recoverable value — drop this record.
+                console.warn(`[YM] '${ctx.ObjectName}': dropping record with null PK field '${pkField}'. Record keys: ${recordKeys.join(', ')}`);
+                drop = true;
+                break;
+            }
+
+            if (!drop) valid.push(record);
+        }
+
+        return valid;
     }
 }
 

@@ -289,99 +289,810 @@
       ]
     }
   ],
-  "hubspot": [
+  "yourmembership": [
     {
-      "TableName": "contacts",
+      "TableName": "TaxRateRequest",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "companies",
+      "TableName": "ConvertToMemberRequest",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "deals",
+      "TableName": "CBXClientConfig",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "calls",
+      "TableName": "InformzBulkUploadForReportsRequest",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "quotes",
+      "TableName": "StoreProductPromoCodes",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "line_items",
+      "TableName": "InformzBulkUploadForDuesRequest",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "carts",
+      "TableName": "InformzFindGroupRequest",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "invoices",
+      "TableName": "StoreProductSequence",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "meetings",
+      "TableName": "PeopleProfileFindID",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "postal_mail",
+      "TableName": "FindMembers",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "file_folders",
+      "TableName": "UnblockCardRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "FacebookProfile",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "InformzBulkUploadBySearchGuidRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "StoreProductUpdate",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ExternalLink",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CopyCampaign",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "QuickBooksOnlineOAuth",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "BrandingConfigCss",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "FilesUpload",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ResourceManagerFilesUpload",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "OIDCGetAccessToken",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "OrganizationPosts",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "SendTestNotification",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "PasswordValidityRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "StoreProductBulkStatus",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ZoomOAuth",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "DonationHistoryCancelAutoBill",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "InformzBulkUploadForOrdersBySearchIdRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "InformzBulkUploadForDuesBySearchIdRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "HtmlSanitization",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "FindEventTickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "StoreProductBulkStatusAll",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberPasswordReset",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "GetAccessToken",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "SMSCampaignListDetails",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "InformzBulkUploadForOrdersRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "HasInformz",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MarkupRender",
+      "PrimaryKey": [
+        {
+          "FieldName": "MarkupId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "FindEventRegistrationForms",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "SocialOAuth",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ZoomEventListenerOAuth",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "NotificationUpdate",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "FindProducts",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventRegistrationAttendance",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "InformzBulkUploadEventRegistrantsRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "OAuthClientAppAPISetting",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Ping",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventSessionAttendanceRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Authenticate",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "FinalizeLogin",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "GetToken",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ClientConfig",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ResendCampaign",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "GroupJoin",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ProductsDto",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "PageMetaInfo",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Auth",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MembershipRenewalReminderGetRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "UsernameAvailabilityRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "RssBuilder",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "HassAcessTestFolder",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "PhotoComments",
+      "PrimaryKey": [
+        {
+          "FieldName": "PhotoCommentId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ZoomEventListener",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MembershipRenewalReminderPutRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "PeopleBulkDetachRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberConfig",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "QBClasses",
+      "PrimaryKey": [
+        {
+          "FieldName": "GLCodeId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "WallPostFirst",
+      "PrimaryKey": [
+        {
+          "FieldName": "WallId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MessageFolders",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "BasicMemberProfile",
+      "PrimaryKey": [
+        {
+          "FieldName": "ProfileID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Orders",
+      "PrimaryKey": [
+        {
+          "FieldName": "OrderID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberTypes",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Likes_PostList",
+      "PrimaryKey": [
+        {
+          "FieldName": "LikeId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomPageTemplates",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "GroupTypes",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomPageCrossLinks",
+      "PrimaryKey": [
+        {
+          "FieldName": "PageID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberProfile",
+      "PrimaryKey": [
+        {
+          "FieldName": "ProfileID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventSearch",
+      "PrimaryKey": [
+        {
+          "FieldName": "EventID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MediaGalleryAlbum",
+      "PrimaryKey": [
+        {
+          "FieldName": "AlbumID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventRegistrants",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomFormFields",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventAttendees",
+      "PrimaryKey": [
+        {
+          "FieldName": "RegisterID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ConnectionSuggestions",
+      "PrimaryKey": [
+        {
+          "FieldName": "ConnectionId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EmailSendersInfo",
+      "PrimaryKey": [
+        {
+          "FieldName": "Address",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Groups",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventSessionGroups",
+      "PrimaryKey": [
+        {
+          "FieldName": "SessionGroupId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "InvoicePayments",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CommunityPhotos",
+      "PrimaryKey": [
+        {
+          "FieldName": "CommentID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "PeopleIDs",
+      "PrimaryKey": [
+        {
+          "FieldName": "ProfileID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Products",
       "PrimaryKey": [
         {
           "FieldName": "id",
@@ -390,416 +1101,654 @@
       ]
     },
     {
-      "TableName": "conversation_inbox_channels",
+      "TableName": "MemberGroups",
       "PrimaryKey": [
         {
-          "FieldName": "channelId",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "behavioral_events",
+      "TableName": "MemberFavorites",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "FavoriteId",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "ad_accounts",
+      "TableName": "CustomPageFeatures",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "ID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "discounts",
+      "TableName": "CampaignReports_MessageActivity",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "TypeId",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "landing_pages",
+      "TableName": "EventCEUAwards",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "AwardID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "marketing_events",
+      "TableName": "Shares",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "ShareId",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "deal_splits",
+      "TableName": "Pinpoint",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "ticket_pipeline_stages",
+      "TableName": "CertificationCreditTypes",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "ID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "commerce_payments",
+      "TableName": "MembersGroups",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "fees",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "domains",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ticket_pipelines",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "emails",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "owners",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "blog_tags",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "notes",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "communications",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "tickets",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "campaigns",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "event_definitions",
-      "PrimaryKey": [
-        {
-          "FieldName": "name",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "appointments",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "conversation_inboxes",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "custom_coded_actions",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "products",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "portal_users",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "subscriptions",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "users",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "listings",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ad_campaigns",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "forms",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "timeline_event_templates",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "courses",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "orders",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "projects",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "currencies",
-      "PrimaryKey": [
-        {
-          "FieldName": "currencyCode",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "goal_targets",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "services",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "user_roles",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "business_units",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "crm_exports",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "deal_pipelines",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "lists",
-      "PrimaryKey": [
-        {
-          "FieldName": "listId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "taxes",
-      "PrimaryKey": [
-        {
-          "FieldName": "hs_object_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "list_folders",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
+          "FieldName": "WebSiteMemberID",
           "Description": "Primary key from source system"
         },
         {
-          "FieldName": "folderId",
+          "FieldName": "GroupID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "tasks",
+      "TableName": "CampaignReports_DailyRate",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Date",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "workflows",
+      "TableName": "Feeds",
+      "PrimaryKey": [
+        {
+          "FieldName": "PostId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomPageFileCollections",
+      "PrimaryKey": [
+        {
+          "FieldName": "FileCollectionID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventSessions",
+      "PrimaryKey": [
+        {
+          "FieldName": "SessionId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Events",
+      "PrimaryKey": [
+        {
+          "FieldName": "EventId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "AllCampaigns",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "PaymentProcessors",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CareerOpenings",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MembersGroupsBulk",
+      "PrimaryKey": [
+        {
+          "FieldName": "WebSiteMemberID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "GroupID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Campaigns",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EngagementScores",
+      "PrimaryKey": [
+        {
+          "FieldName": "ProfileID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventVirtualUsers",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "DirectorySearch",
+      "PrimaryKey": [
+        {
+          "FieldName": "MemberID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Photos",
+      "PrimaryKey": [
+        {
+          "FieldName": "CommentID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Notifications",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ProductMemberPrice",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MarkupComponentTypes",
+      "PrimaryKey": [
+        {
+          "FieldName": "ComponentType",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberNetworks",
+      "PrimaryKey": [
+        {
+          "FieldName": "NetworkId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Favorites",
+      "PrimaryKey": [
+        {
+          "FieldName": "FavoriteId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "JobAlertsCriteria",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomCSS",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "InvoiceItems",
+      "PrimaryKey": [
+        {
+          "FieldName": "LineItemID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Networks",
+      "PrimaryKey": [
+        {
+          "FieldName": "NetworkId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "TimeZones",
+      "PrimaryKey": [
+        {
+          "FieldName": "fullName",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomPages",
+      "PrimaryKey": [
+        {
+          "FieldName": "PageID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "SMSCampaigns",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventVirtualWebinars",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberReferrals",
+      "PrimaryKey": [
+        {
+          "FieldName": "ReferralId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "PeopleGroups",
+      "PrimaryKey": [
+        {
+          "FieldName": "GroupID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Members",
+      "PrimaryKey": [
+        {
+          "FieldName": "ProfileID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomPageVersions",
+      "PrimaryKey": [
+        {
+          "FieldName": "VersionID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "TopContributors",
+      "PrimaryKey": [
+        {
+          "FieldName": "LevelId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MembershipModifiers",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Donations",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventVirtualMeetings",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "NotificationDetails",
+      "PrimaryKey": [
+        {
+          "FieldName": "NotificationID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "TrendingPosts",
+      "PrimaryKey": [
+        {
+          "FieldName": "PostId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CampaignReports_Messages",
+      "PrimaryKey": [
+        {
+          "FieldName": "MemberId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "JobAlerts",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventAlias",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ConnectionCategoryList",
+      "PrimaryKey": [
+        {
+          "FieldName": "CategoryID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Countries",
+      "PrimaryKey": [
+        {
+          "FieldName": "countryId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ContentAreas",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomTaxLocations",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CampaignReports",
+      "PrimaryKey": [
+        {
+          "FieldName": "Date",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventTickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "TicketId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventIDs",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "WallComments_MemberList",
+      "PrimaryKey": [
+        {
+          "FieldName": "ConnectionId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "DashboardData",
+      "PrimaryKey": [
+        {
+          "FieldName": "Date",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "LocationCoordinates",
+      "PrimaryKey": [
+        {
+          "FieldName": "place_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EmailSuppressionList",
+      "PrimaryKey": [
+        {
+          "FieldName": "EmailAddress",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventCustomLabels",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "GLCodes",
+      "PrimaryKey": [
+        {
+          "FieldName": "GLCodeId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventRegistrationIDs",
+      "PrimaryKey": [
+        {
+          "FieldName": "RegistrationID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "DuesRules",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "StoreOrders",
+      "PrimaryKey": [
+        {
+          "FieldName": "OrderID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CertificationsJournals",
+      "PrimaryKey": [
+        {
+          "FieldName": "EntryID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ContentAreaVersions",
+      "PrimaryKey": [
+        {
+          "FieldName": "VersionID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "OAuthClientApps",
+      "PrimaryKey": [
+        {
+          "FieldName": "AppID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventAttendeeTypeTickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "EventId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "SponsorRotators",
+      "PrimaryKey": [
+        {
+          "FieldName": "RotatorId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Memberships",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ShippingMethods",
       "PrimaryKey": [
         {
           "FieldName": "id",
@@ -808,16 +1757,362 @@
       ]
     },
     {
-      "TableName": "form_submissions",
+      "TableName": "NotificationSubscription",
       "PrimaryKey": [
         {
-          "FieldName": "submittedAt",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "conversation_messages",
+      "TableName": "WallPosts",
+      "PrimaryKey": [
+        {
+          "FieldName": "WallId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "SMSCampaignReports_Messages",
+      "PrimaryKey": [
+        {
+          "FieldName": "MemberId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "WebScraper",
+      "PrimaryKey": [
+        {
+          "FieldName": "Src",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Certifications",
+      "PrimaryKey": [
+        {
+          "FieldName": "CertificationID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberList",
+      "PrimaryKey": [
+        {
+          "FieldName": "ProfileID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventSessionCEUAwards",
+      "PrimaryKey": [
+        {
+          "FieldName": "AwardID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "SponsorPosts",
+      "PrimaryKey": [
+        {
+          "FieldName": "PostId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ProductCategories",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Connections",
+      "PrimaryKey": [
+        {
+          "FieldName": "ConnectionId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "NotificationMacros",
+      "PrimaryKey": [
+        {
+          "FieldName": "MacroId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventCategories",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Markup",
+      "PrimaryKey": [
+        {
+          "FieldName": "MarkupId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MarkupMacroComponents",
+      "PrimaryKey": [
+        {
+          "FieldName": "MacroComponentId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "DonationTransactions",
+      "PrimaryKey": [
+        {
+          "FieldName": "TransactionID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Likes",
+      "PrimaryKey": [
+        {
+          "FieldName": "LikeId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "RegistrationSessionRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "OAuthClientAppName",
+      "PrimaryKey": [
+        {
+          "FieldName": "AppID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventAttendeeTypeSessions",
+      "PrimaryKey": [
+        {
+          "FieldName": "EventId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "DonationHistory",
+      "PrimaryKey": [
+        {
+          "FieldName": "intDonationId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomPageDocTypes",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "LatestPosts",
+      "PrimaryKey": [
+        {
+          "FieldName": "PostId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "DomainAuthentication",
+      "PrimaryKey": [
+        {
+          "FieldName": "DomainId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "SingleMembership",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "FinanceBatchDetails",
+      "PrimaryKey": [
+        {
+          "FieldName": "LineItemID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CampaignEmailListDuplicates",
+      "PrimaryKey": [
+        {
+          "FieldName": "ItemId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Ambassadors",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberPulse",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CampaignEmailLists",
+      "PrimaryKey": [
+        {
+          "FieldName": "ListId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EmailVerification",
+      "PrimaryKey": [
+        {
+          "FieldName": "EmailId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "StoreProductExtractSelection",
+      "PrimaryKey": [
+        {
+          "FieldName": "Product_ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberSubAccounts",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ContentProxy",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "People",
+      "PrimaryKey": [
+        {
+          "FieldName": "ClientID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "SMSCampaignReports",
+      "PrimaryKey": [
+        {
+          "FieldName": "TypeId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "BrandingConfig",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "HelpTopic",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "StoreOrderDetails",
+      "PrimaryKey": [
+        {
+          "FieldName": "OrderID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "InvoiceNumber",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "DonationFunds",
+      "PrimaryKey": [
+        {
+          "FieldName": "fundId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Templates",
       "PrimaryKey": [
         {
           "FieldName": "id",
@@ -826,325 +2121,226 @@
       ]
     },
     {
-      "TableName": "blog_posts",
+      "TableName": "MembersProfiles",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "WebSiteMemberID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "goals",
+      "TableName": "PushNotificationsConfig",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "NotificationID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "conversation_threads",
+      "TableName": "FreestoneTypes",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "site_pages",
+      "TableName": "OAuthScopes",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "ScopeID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "email_campaigns_legacy",
+      "TableName": "EventRegistrationForms",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "FormId",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "conversation_custom_channels",
+      "TableName": "SavedJobs",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "marketing_emails",
+      "TableName": "Announcements",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "AnnouncementId",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "feedback_submissions",
+      "TableName": "NetworkTypes",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "ServiceId",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "transactional_smtp_tokens",
+      "TableName": "WallComments",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "WallId",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "leads",
+      "TableName": "ContentAreaCustomMacros",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "Label",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "hubdb_rows",
+      "TableName": "SavedSearches",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "SavedSearchId",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "api_usage",
+      "TableName": "EventRegistrations",
       "PrimaryKey": [
         {
-          "FieldName": "date",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "audit_logs",
+      "TableName": "Locations",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "locationCode",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "account_info",
+      "TableName": "NetworksCloud",
       "PrimaryKey": [
         {
-          "FieldName": "portalId",
+          "FieldName": "NetworkId",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "deal_pipeline_stages",
+      "TableName": "GroupMembershipLogs",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "ItemID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "blog_authors",
+      "TableName": "CustomPageMemberTypes",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "TypeID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "subscription_definitions",
+      "TableName": "CustomPageForms",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "FormID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "url_redirects",
+      "TableName": "MembershipPromoCodes",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "PromoCodeId",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "transcriptions",
+      "TableName": "CustomPageCategories",
       "PrimaryKey": [
         {
-          "FieldName": "hs_object_id",
+          "FieldName": "CategoryID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "hubdb_tables",
+      "TableName": "Messages",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "MessageId",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "crm_imports",
+      "TableName": "EventAttendeeTypes",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "files",
+      "TableName": "JobSearch",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "list_memberships",
+      "TableName": "Dues",
       "PrimaryKey": [
         {
-          "FieldName": "recordId",
+          "FieldName": "Id",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "datasource_ingestion",
+      "TableName": "DuesTransactions",
       "PrimaryKey": [
         {
-          "FieldName": "id",
+          "FieldName": "TransactionID",
           "Description": "Primary key from source system"
         }
       ]
     },
     {
-      "TableName": "sequences",
+      "TableName": "StoreProductSelection",
       "PrimaryKey": [
         {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "media_bridge",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "site_search",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "meeting_scheduler",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "forecasts",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "scim_users",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "blog_settings",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "url_mappings",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "tax_rates",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "scim_groups",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "source_code",
-      "PrimaryKey": [
-        {
-          "FieldName": "path",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "event_completions",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
+          "FieldName": "aut_ProductId",
           "Description": "Primary key from source system"
         }
       ]
