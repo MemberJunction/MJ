@@ -44,7 +44,9 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
               (ngModelChange)="OnFieldChange()"
               placeholder="Brief summary of your feedback..."
               [maxlength]="256" />
-            <div class="char-count">{{ Title.length }}/256</div>
+            <div class="char-count" [class.warning]="Title.length > 0 && Title.length < 5">
+              {{ Title.length }}/256 (minimum 5 characters)
+            </div>
           </div>
 
           <!-- Description -->
@@ -59,7 +61,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
               placeholder="Please provide a detailed description..."
               rows="4"
               [maxlength]="10000"></textarea>
-            <div class="char-count" [class.warning]="Description.length < 20">
+            <div class="char-count" [class.warning]="Description.length > 0 && Description.length < 20">
               {{ Description.length }}/10000 (minimum 20 characters)
             </div>
             @if (IsClassifying) {
