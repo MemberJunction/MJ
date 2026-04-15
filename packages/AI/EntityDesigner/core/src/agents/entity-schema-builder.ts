@@ -17,6 +17,8 @@ import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
 
+import { BaseEntityDesignerCodeAgent } from './base-entity-designer-code-agent.js';
+
 import { EntityDesignerPipelineExecutor, type PipelineExecutionOptions } from '../pipeline-executor.js';
 import type {
     EntityDesignerPayload,
@@ -28,7 +30,7 @@ import { UDT_SETTINGS } from '../interfaces.js';
 // ─── Driver registration ─────────────────────────────────────────────────────
 
 @RegisterClass(BaseAgent, 'EntityDesignerSchemaBuilder')
-export class EntityDesignerSchemaBuilder extends BaseAgent {
+export class EntityDesignerSchemaBuilder extends BaseEntityDesignerCodeAgent {
 
     // ─── LLM bypass ────────────────────────────────────────────────────────
 
@@ -44,7 +46,7 @@ export class EntityDesignerSchemaBuilder extends BaseAgent {
 
         const guardError = this.validatePreconditions(payload);
         if (guardError) {
-            return this.buildFailure(guardError);
+            return this.buildCodeFailure(guardError);
         }
 
         const tableDefinition = payload.SchemaDesign!.TableDefinition!;
@@ -78,13 +80,13 @@ export class EntityDesignerSchemaBuilder extends BaseAgent {
         };
 
         if (!execResult.Success) {
-            return this.buildFailure(
+            return this.buildCodeFailure(
                 execResult.ErrorMessage ?? 'Pipeline failed without error message',
                 newPayload as P
             );
         }
 
-        return this.buildSuccess(
+        return this.buildCodeSuccess(
             newPayload as P,
             `Entity '${execResult.EntityName ?? tableDefinition.EntityName}' created/modified successfully`
         );
@@ -168,32 +170,22 @@ export class EntityDesignerSchemaBuilder extends BaseAgent {
 
         return {
             SkipGitCommit: false,
-            SkipRestart: false,
+            // SkipRestart: true — the pipeline runs inside a live MJAPI request that is
+            // part of an active agent run. A full server restart would kill this process
+            // mid-execution, leaving the agent run permanently incomplete/failed.
+            //
+            // This is safe because:
+            // 1. Metadata.Refresh() (called by the pipeline executor after CodeGen) updates
+            //    the in-memory entity registry without a restart.
+            // 2. UDT tables are loaded dynamically at runtime — they do NOT need a compiled
+            //    TypeScript rebuild. A restart is only needed for @memberjunction/core-entities
+            //    subclass changes, which only happen for MJ core schema changes.
+            SkipRestart: true,
             Source: isAgentManagerMode
                 ? UDT_SETTINGS.SOURCE_AGENT_MANAGER
                 : UDT_SETTINGS.SOURCE_ENTITY_DESIGNER,
         };
     }
 
-    // ─── Result builders ─────────────────────────────────────────────────
-
-    private buildSuccess<P>(
-        newPayload: P,
-        reasoning: string
-    ): { finalStep: BaseAgentNextStep<P>; stepCount: number } {
-        return {
-            finalStep: { terminate: true, step: 'Success', reasoning, newPayload },
-            stepCount: 1,
-        };
-    }
-
-    private buildFailure<P>(
-        reasoning: string,
-        newPayload?: P
-    ): { finalStep: BaseAgentNextStep<P>; stepCount: number } {
-        return {
-            finalStep: { terminate: true, step: 'Failed', reasoning, newPayload },
-            stepCount: 1,
-        };
-    }
 }
+

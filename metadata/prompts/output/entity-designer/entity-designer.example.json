@@ -1,8 +1,8 @@
 {
-  "description": "Entity Designer is a state-machine orchestrator. It uses terminateAfter: false for Requirements Analyst (so it runs again after and can either show DRAFT questions or chain to Schema Designer). It uses terminateAfter: true for Schema Designer and Validator (their messages go directly to user).",
+  "description": "Entity Designer orchestrates a pipeline: Requirements Analyst → Schema Designer → show prototype to user → user approves → Schema Validator → Builder. terminateAfter is false for Analyst and Designer (you react to their results), true for Validator only (its output goes directly to the user).",
 
   "example_1_new_entity_request": {
-    "description": "Condition 4: FunctionalRequirements absent — call Requirements Analyst with terminateAfter: false",
+    "description": "User describes a new entity. Call Requirements Analyst immediately — do not ask questions yourself.",
     "nextStep": {
       "type": "Sub-Agent",
       "subAgent": {
@@ -13,12 +13,12 @@
     }
   },
 
-  "example_2_after_requirements_draft": {
-    "description": "Condition 6: Requirements Analyst returned DRAFT — extract questions from FunctionalRequirements and show them with a responseForm (one text field per question)",
+  "example_2_analyst_returned_draft": {
+    "description": "Requirements Analyst returned with DRAFT — it has questions. Extract them from FunctionalRequirements and show them to the user as a form. Do not call any sub-agent yet.",
     "taskComplete": false,
-    "message": "Before I design the schema, I need a few details:",
+    "message": "Before I design the schema, I have a few questions:",
     "responseForm": {
-      "description": "Answer these questions to continue:",
+      "description": "Answer these to continue:",
       "submitLabel": "Continue",
       "questions": [
         {
@@ -46,8 +46,8 @@
     }
   },
 
-  "example_3_user_answered_questions": {
-    "description": "Condition 5: DRAFT in payload, user just answered questions — call Requirements Analyst again with terminateAfter: false",
+  "example_3_user_answered_draft_questions": {
+    "description": "User answered the draft questions. Call Requirements Analyst again with their answers so it can finalize FunctionalRequirements.",
     "nextStep": {
       "type": "Sub-Agent",
       "subAgent": {
@@ -58,20 +58,41 @@
     }
   },
 
-  "example_4_after_requirements_final": {
-    "description": "Condition 7: Requirements Analyst returned FINAL, SchemaDesign absent — immediately call Schema Designer with terminateAfter: true",
+  "example_4_requirements_final_call_designer": {
+    "description": "FunctionalRequirements is complete (no DRAFT), SchemaDesign is not yet in payload. Call Schema Designer. It will write SchemaDesign to the payload and return — you then show the prototype.",
     "nextStep": {
       "type": "Sub-Agent",
       "subAgent": {
         "name": "Entity Schema Designer",
-        "message": "Design the schema based on FunctionalRequirements in the payload. Research any FK targets first using Database Research Agent. Write SchemaDesign (Prototype + TableDefinition + ModificationType) and return.",
-        "terminateAfter": true
+        "message": "Design the schema based on FunctionalRequirements in the payload. Research any FK targets first using Database Research Agent. Write SchemaDesign (Prototype + TableDefinition + ModificationType) to payload and return Success. Do NOT show the prototype to the user — the parent agent will present it.",
+        "terminateAfter": false
       }
     }
   },
 
-  "example_5_user_approved_schema": {
-    "description": "Condition 1: User approved the schema ('create it') — call Schema Validator with terminateAfter: true",
+  "example_5_designer_returned_show_prototype": {
+    "description": "Schema Designer returned — SchemaDesign is now in the payload. YOU show SchemaDesign.Prototype to the user with the approval buttons. When the user clicks 'Looks good — create it', the framework will send 'Does this design look right?: create_now' as the next user message.",
+    "message": "📁 __mj_UDT.ProjectMilestones — new entity\n\nHere's the proposed design for **Project Milestones**:\n\n| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Title | NVARCHAR(200) | ✅ Yes | — | Milestone display name |\n| Status | NVARCHAR(50) | ✅ Yes | 'Active' | Lifecycle status: Active, Completed, Cancelled |\n| DueDate | DATE | ✅ Yes | — | Target completion date |\n| Description | NVARCHAR(MAX) | No | — | Details about this milestone |\n\nAuto-managed by CodeGen (do not add): `ID` · `__mj_CreatedAt` · `__mj_UpdatedAt`",
+    "responseForm": {
+      "questions": [{
+        "id": "approval",
+        "label": "Does this design look right?",
+        "type": {
+          "type": "buttongroup",
+          "options": [
+            { "value": "create_now", "label": "Looks good — create it" },
+            { "value": "modify", "label": "Change something" }
+          ]
+        }
+      }]
+    },
+    "nextStep": {
+      "type": "Chat"
+    }
+  },
+
+  "example_6_user_clicked_create_now": {
+    "description": "The last user message is 'Does this design look right?: create_now' — the framework formats button clicks as '[label]: [value]', so create_now means the user approved. Call Schema Validator immediately. No message, no responseForm, no confirmation — just the sub-agent call.",
     "nextStep": {
       "type": "Sub-Agent",
       "subAgent": {
@@ -82,26 +103,26 @@
     }
   },
 
-  "example_6_schema_change_request": {
-    "description": "Condition 2: User wants a schema change ('add a Notes field') — call Schema Designer with terminateAfter: true",
+  "example_7_user_wants_schema_change": {
+    "description": "User asked to change the design ('add a Notes field'). Call Schema Designer again with the change appended. After it returns, show the updated prototype.",
     "nextStep": {
       "type": "Sub-Agent",
       "subAgent": {
         "name": "Entity Schema Designer",
-        "message": "Design the schema based on FunctionalRequirements in the payload. Research any FK targets first using Database Research Agent. Write SchemaDesign (Prototype + TableDefinition + ModificationType) and return. Also apply this change from the user: add a Notes column (long text, optional).",
-        "terminateAfter": true
+        "message": "Design the schema based on FunctionalRequirements in the payload. Research any FK targets first using Database Research Agent. Write SchemaDesign (Prototype + TableDefinition + ModificationType) to payload and return Success. Do NOT show the prototype to the user — the parent agent will present it. Also apply this change from the user: add a Notes column (long text, optional).",
+        "terminateAfter": false
       }
     }
   },
 
-  "example_7_build_success": {
-    "description": "Condition 3: BuildResult present — report final success",
+  "example_8_build_success": {
+    "description": "EntityDesignerResult is in the payload — entity was created successfully. Report it to the user and set taskComplete: true.",
     "taskComplete": true,
-    "message": "Your new entity is live!\n\n- **Entity Name**: Project Milestones\n- **Table**: `__mj_UDT.ProjectMilestones`\n- **Columns**: 7 custom + 3 auto-managed (ID, CreatedAt, UpdatedAt)\n\nYou can start creating records immediately via the API or Explorer UI."
+    "message": "Your new entity is live!\n\n- **Entity Name**: Project Milestones\n- **Table**: `__mj_UDT.ProjectMilestones`\n- **Columns**: 4 custom + 3 auto-managed (ID, CreatedAt, UpdatedAt)\n\nYou can start creating records immediately via the API or Explorer UI."
   },
 
-  "example_8_validation_failure": {
-    "description": "Condition 3: ValidationResult with failure — explain and ask how to proceed",
+  "example_9_validation_failure": {
+    "description": "ValidationResult is in the payload and validation failed. Explain the problem and offer options.",
     "taskComplete": false,
     "message": "There's a problem with the schema:\n\n**Error**: An entity named `Project Milestones` already exists in `__mj_UDT`.\n\nWould you like to use a different name, or modify the existing entity instead?",
     "responseForm": {

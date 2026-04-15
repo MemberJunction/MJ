@@ -21,6 +21,8 @@
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
+
+import { BaseEntityDesignerCodeAgent } from './base-entity-designer-code-agent.js';
 import { AuthorizationEvaluator, Metadata, RunView } from '@memberjunction/core';
 import { SchemaValidator, type TableDefinition } from '@memberjunction/schema-engine';
 
@@ -37,7 +39,7 @@ import {
 // ─── Driver registration ─────────────────────────────────────────────────────
 
 @RegisterClass(BaseAgent, 'EntityDesignerSchemaValidator')
-export class EntityDesignerSchemaValidator extends BaseAgent {
+export class EntityDesignerSchemaValidator extends BaseEntityDesignerCodeAgent {
 
     // ─── LLM bypass ────────────────────────────────────────────────────────
 
@@ -53,7 +55,7 @@ export class EntityDesignerSchemaValidator extends BaseAgent {
 
         const tableDefinition = payload.SchemaDesign?.TableDefinition;
         if (!tableDefinition) {
-            return this.buildFailure(
+            return this.buildCodeFailure(
                 'Schema Validator received no TableDefinition in payload.SchemaDesign. ' +
                 'The Schema Designer sub-agent must populate this field before validation can proceed.'
             );
@@ -61,7 +63,7 @@ export class EntityDesignerSchemaValidator extends BaseAgent {
 
         const authError = await this.checkAuthorization(tableDefinition, payload, params);
         if (authError) {
-            return this.buildFailure(authError);
+            return this.buildCodeFailure(authError);
         }
 
         const validationResult = await this.runValidationChecks(tableDefinition, params);
@@ -74,10 +76,10 @@ export class EntityDesignerSchemaValidator extends BaseAgent {
         if (!validationResult.Valid) {
             // Return Success so the orchestrator can report errors back to the
             // user (via the ValidationResult), rather than terminating the run.
-            return this.buildSuccess(newPayload as P, 'Validation failed — errors written to ValidationResult');
+            return this.buildCodeSuccess(newPayload as P, 'Validation failed — errors written to ValidationResult');
         }
 
-        return this.buildSuccess(newPayload as P, 'Validation passed');
+        return this.buildCodeSuccess(newPayload as P, 'Validation passed');
     }
 
     // ─── Authorization ────────────────────────────────────────────────────
@@ -234,19 +236,5 @@ export class EntityDesignerSchemaValidator extends BaseAgent {
         }
     }
 
-    // ─── Result builders ──────────────────────────────────────────────────
-
-    private buildSuccess<P>(newPayload: P, reasoning: string): { finalStep: BaseAgentNextStep<P>; stepCount: number } {
-        return {
-            finalStep: { terminate: true, step: 'Success', reasoning, newPayload },
-            stepCount: 1,
-        };
-    }
-
-    private buildFailure<P>(reasoning: string): { finalStep: BaseAgentNextStep<P>; stepCount: number } {
-        return {
-            finalStep: { terminate: true, step: 'Failed', reasoning, message: reasoning, errorMessage: reasoning },
-            stepCount: 1,
-        };
-    }
 }
+

@@ -12,6 +12,10 @@ export * from './interfaces.js';
 export * from './pipeline-executor.js';
 
 // Agent driver classes — importing registers them with the MJ ClassFactory.
+// BaseEntityDesignerCodeAgent is also exported for consumers who want to
+// build additional code-based Entity Designer sub-agents.
+export * from './agents/base-entity-designer-code-agent.js';
+export * from './agents/entity-designer-agent.js';
 export * from './agents/entity-schema-validator.js';
 export * from './agents/entity-schema-builder.js';
 export * from './agents/entity-schema-designer.js';

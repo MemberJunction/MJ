@@ -9,6 +9,7 @@
       "ExecutionOrder": 0,
       "ArtifactCreationMode": "System Only",
       "ExposeAsAction": true,
+      "DriverClass": "EntityDesignerAgent",
       "IconClass": "fa-solid fa-database",
       "PayloadSelfWritePaths": [
         "ID"
@@ -124,7 +125,7 @@
               "*"
             ],
             "PayloadUpstreamPaths": [
-              "SchemaDesign"
+              "SchemaDesign.*"
             ],
             "FinalPayloadValidationMode": "Retry"
           },
@@ -174,8 +175,8 @@
             "ID": "FD11FB0D-A0CA-4EDA-A725-0933AB1BCC42"
           },
           "sync": {
-            "lastModified": "2026-04-13T06:12:36.850Z",
-            "checksum": "0ed6aac6bc635f5fff61376d0e2048ed84023bd20409b1f1603fb0cbcc892ddc"
+            "lastModified": "2026-04-14T21:29:25.270Z",
+            "checksum": "eaf95766ea945b01dfea3e1a54f31057bdb786ab0c61d7b6dc634074058dcd7a"
           }
         },
         {
@@ -194,15 +195,15 @@
               "*"
             ],
             "PayloadUpstreamPaths": [
-              "ValidationResult"
+              "ValidationResult.*"
             ]
           },
           "primaryKey": {
             "ID": "C041DFDD-28C8-4A6D-83A5-BFF399764B23"
           },
           "sync": {
-            "lastModified": "2026-04-13T06:12:36.872Z",
-            "checksum": "5d894be5dcf769a6a4a499a0ea0089056dc3ab5cd1ca19f80fa9bdd0f335aee6"
+            "lastModified": "2026-04-14T21:29:25.305Z",
+            "checksum": "b52f5f5bbb2c7b16f1823c70813ae65e923f6ec446b149b4da698314ff833b0c"
           }
         },
         {
@@ -221,15 +222,15 @@
               "*"
             ],
             "PayloadUpstreamPaths": [
-              "EntityDesignerResult"
+              "EntityDesignerResult.*"
             ]
           },
           "primaryKey": {
             "ID": "07D3C950-E4A2-47EE-A485-03A4972BF1D9"
           },
           "sync": {
-            "lastModified": "2026-04-13T06:12:36.891Z",
-            "checksum": "f550ef6cd4adab5aca3d57b36b7ca0ba46cbcaeb0016829a0ca015bd7baa3c32"
+            "lastModified": "2026-04-14T21:29:25.327Z",
+            "checksum": "a4dc89d49ed8ac111001f8e25ece243d7e71dacbc4e06d5c72363d96ac11ca77"
           }
         }
       ]
@@ -238,8 +239,8 @@
       "ID": "A3C9C16A-90C7-4DC5-AFA0-9922251A1756"
     },
     "sync": {
-      "lastModified": "2026-04-13T06:12:36.755Z",
-      "checksum": "76cc6202853379d778a09a1e3092e4af8c2ff5dc15980150a1d542a88768d919"
+      "lastModified": "2026-04-15T00:45:17.813Z",
+      "checksum": "9170bd1fb535906b407dc3297e9c8dbfee249c9e8a52d65e3b848cd5df2e7831"
     }
   }
 ]
