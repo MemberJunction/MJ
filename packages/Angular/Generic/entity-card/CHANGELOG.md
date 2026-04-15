@@ -1,5 +1,13 @@
 # @memberjunction/ng-entity-card
 
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [a1002f4]
+  - @memberjunction/core@5.26.0
+  - @memberjunction/global@5.26.0
+
 ## 5.25.0
 
 ### Patch Changes

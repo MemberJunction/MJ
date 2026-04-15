@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/external-change-detection
 
+## 5.26.0
+
+### Minor Changes
+
+- a1002f4: - Entities now expose AllowCaching as the runtime source of truth for
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/sqlserver-dataprovider@5.26.0
+  - @memberjunction/global@5.26.0
+  - @memberjunction/sql-dialect@5.26.0
+
 ## 5.25.0
 
 ### Patch Changes

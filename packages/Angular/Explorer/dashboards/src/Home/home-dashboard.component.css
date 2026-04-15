@@ -44,8 +44,8 @@
 
 /* FAB Toggle Button for Quick Access - top-right on desktop */
 .sidebar-fab-toggle {
-  position: fixed;
-  top: 80px; /* Below shell header with some spacing */
+  position: absolute;
+  top: 20px;
   right: 24px;
   width: 56px;
   height: 56px;
@@ -320,8 +320,8 @@
    RIGHT SIDEBAR
    ======================================== */
 .quick-access-sidebar {
-  position: fixed;
-  top: 60px; /* Below shell header */
+  position: absolute;
+  top: 0;
   right: 0;
   bottom: 0;
   width: 320px;
@@ -1123,8 +1123,8 @@
 }
 
 .slide-panel {
-  position: fixed;
-  top: 60px;
+  position: absolute;
+  top: 0;
   right: 0;
   bottom: 0;
   width: 400px;
@@ -1502,8 +1502,8 @@
 
   /* Make sidebar an overlay on tablet */
   .quick-access-sidebar {
-    position: fixed;
-    top: 60px; /* Below shell header */
+    position: absolute;
+    top: 0;
     right: 0;
     bottom: 0;
     width: 320px;
@@ -1518,8 +1518,8 @@
   /* Show backdrop when sidebar is open on tablet */
   .home-dashboard.sidebar-open::after {
     content: '';
-    position: fixed;
-    top: 60px;
+    position: absolute;
+    top: 0;
     left: 0;
     right: 320px;
     bottom: 0;
@@ -1552,29 +1552,22 @@
     font-size: var(--mj-text-2xl);
   }
 
-  /* Full-width sidebar on mobile - positioned below top nav */
+  /* Full-width sidebar on mobile — fixed overlay covering full viewport */
   .quick-access-sidebar {
     position: fixed;
-    top: 60px; /* Below the shell header */
+    top: 0;
     right: 0;
     bottom: 0;
     width: 100%;
     max-width: 100%;
-    z-index: 100; /* Below shell header */
+    z-index: 10000;
     border-left: none;
-    border-top: 1px solid var(--mj-border-default);
+    border-top: none;
   }
 
-  /* Add backdrop on mobile when sidebar is open */
+  /* No separate backdrop needed on mobile — sidebar covers full screen */
   .home-dashboard.sidebar-open::before {
-    content: '';
-    position: fixed;
-    top: 60px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--mj-bg-overlay);
-    z-index: 99;
+    display: none;
   }
 
   /* No ::after backdrop needed on mobile */
@@ -1617,8 +1610,9 @@
     display: none;
   }
 
-  /* Move FAB to bottom-right on mobile */
+  /* Move FAB to bottom-right on mobile — fixed so it stays visible while scrolling */
   .sidebar-fab-toggle {
+    position: fixed;
     top: auto;
     bottom: 20px;
     right: 20px;
