@@ -60,10 +60,17 @@ export class AnalyzeArtifactService {
     const title = args.title || snapshot.title || 'Untitled Snapshot';
     const initialMessage = args.initialMessage || `Analyze "${title}"`;
 
-    // 1. Resolve the "Data Snapshot" artifact type
+    // 1. Resolve the "Data Snapshot" artifact type.
+    //    Falls back to a force-refresh if the engine's cache predates the
+    //    Data Snapshot type being pushed (common on long-running browser
+    //    sessions that started before the type migration).
     const engine = ArtifactMetadataEngine.Instance;
     await engine.Config(false, currentUser);
-    const snapshotType = engine.FindArtifactType('Data Snapshot');
+    let snapshotType = engine.FindArtifactType('Data Snapshot');
+    if (!snapshotType) {
+      await engine.Config(true, currentUser);
+      snapshotType = engine.FindArtifactType('Data Snapshot');
+    }
     if (!snapshotType) {
       throw new Error(
         'AnalyzeArtifactService: "Data Snapshot" artifact type not found. Ensure metadata has been pushed.',
