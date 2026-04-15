@@ -1,5 +1,6 @@
 import { MJGlobal } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, ArtifactToolResult } from './artifact-tools/BaseArtifactToolLibrary';
+import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from './artifact-tools/BaseArtifactToolLibrary';
 import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
 import { JSONToolLibrary } from './artifact-tools/JSONToolLibrary';
 import { TextToolLibrary } from './artifact-tools/TextToolLibrary';
@@ -41,16 +42,81 @@ interface ArtifactEntry {
   library: BaseArtifactToolLibrary;
 }
 
+/**
+ * Merges tool libraries from an artifact type's inheritance chain.
+ *
+ * Given a chain ordered leaf-first (most-specific at index 0), tool lookups
+ * scan front-to-back, so a child type's tool with the same name as a parent
+ * type's tool wins. `GetToolList()` deduplicates by tool name.
+ *
+ * Used transparently by ArtifactToolManager — callers continue to see a
+ * single BaseArtifactToolLibrary.
+ */
+class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
+  constructor(private readonly chain: BaseArtifactToolLibrary[]) {
+    super();
+  }
+
+  GetToolList(): ArtifactToolDefinition[] {
+    const seen = new Set<string>();
+    const merged: ArtifactToolDefinition[] = [];
+    for (const lib of this.chain) {
+      for (const tool of lib.GetToolList()) {
+        if (seen.has(tool.name)) continue;
+        seen.add(tool.name);
+        merged.push(tool);
+      }
+    }
+    return merged;
+  }
+
+  async InvokeTool(
+    toolName: string,
+    input: Record<string, unknown>,
+    artifactContent: string | Buffer,
+  ): Promise<ArtifactToolResult> {
+    // Dispatch to the first library (leaf-first) that declares this tool.
+    for (const lib of this.chain) {
+      if (lib.GetToolList().some((t) => t.name === toolName)) {
+        return lib.InvokeTool(toolName, input, artifactContent);
+      }
+    }
+    return {
+      success: false,
+      data: null,
+      errorMessage: `Tool "${toolName}" is not defined by any library in this artifact type's chain.`,
+    };
+  }
+}
+
 interface StoredToolResult {
   artifactId: string;
   tool: string;
   input: Record<string, unknown>;
   result: ArtifactToolResult;
+  /** When the invocation completed (UTC) */
+  timestamp: Date;
+  /** How long the invocation took, in milliseconds */
+  durationMs: number;
 }
 
 export interface ArtifactToolSnapshot {
   artifacts: Array<{ alphaId: string; name: string; typeName: string }>;
   resultCount: number;
+}
+
+/**
+ * A single tool invocation, projected from the internal result store.
+ * Used for audit / training-data / debugging.
+ */
+export interface ArtifactAccessLogEntry {
+  artifactId: string;
+  tool: string;
+  input: Record<string, unknown>;
+  success: boolean;
+  errorMessage?: string;
+  timestamp: Date;
+  durationMs: number;
 }
 
 /**
@@ -322,6 +388,7 @@ export class ArtifactToolManager {
   /** Execute tool calls from LLM response */
   async ExecuteToolCalls(calls: ArtifactToolCall[]): Promise<void> {
     const promises = calls.map(async (call) => {
+      const startedAt = Date.now();
       // Try exact alpha ID first, then fallback to name match
       let entry = this.artifacts.get(call.artifactId);
       if (!entry) {
@@ -347,6 +414,8 @@ export class ArtifactToolManager {
             data: null,
             errorMessage: `Unknown artifact ID: ${call.artifactId}. Use the alpha ID (A, B, C, etc.) from the manifest.`,
           },
+          timestamp: new Date(),
+          durationMs: Date.now() - startedAt,
         });
         return;
       }
@@ -357,6 +426,8 @@ export class ArtifactToolManager {
         tool: call.tool,
         input: call.input,
         result,
+        timestamp: new Date(),
+        durationMs: Date.now() - startedAt,
       });
     });
 
@@ -375,6 +446,25 @@ export class ArtifactToolManager {
       })),
       resultCount: this.toolResults.length,
     };
+  }
+
+  // ─── AUDIT ───
+
+  /**
+   * Access log for this run — one entry per tool invocation, in call order.
+   * Useful for audit trails, training data capture, and debugging.
+   * Projected from the internal result store (no parallel state).
+   */
+  GetAccessLog(): ArtifactAccessLogEntry[] {
+    return this.toolResults.map((r) => ({
+      artifactId: r.artifactId,
+      tool: r.tool,
+      input: r.input,
+      success: r.result.success,
+      errorMessage: r.result.errorMessage,
+      timestamp: r.timestamp,
+      durationMs: r.durationMs,
+    }));
   }
 
   // ─── STATIC HELPERS ───
@@ -446,16 +536,66 @@ export class ArtifactToolManager {
     return String.fromCharCode(65 + first) + String.fromCharCode(65 + second);
   }
 
-  /** Resolve a tool library for an artifact type.
-   *  Priority: toolLibraryClass from metadata → ClassFactory → name-based fallback */
+  /**
+   * Resolve a tool library for an artifact type, walking the ParentID chain
+   * of `MJ: Artifact Types` to collect libraries from the leaf type and all
+   * ancestors. Child libraries override parent libraries for same-named tools.
+   *
+   * Resolution order:
+   *  1. If the metadata engine is loaded, walk `typeName → parent → ...` via
+   *     `ArtifactMetadataEngine`, instantiating each level's `ToolLibraryClass`
+   *     via ClassFactory. Returns a CompositeArtifactToolLibrary.
+   *  2. If the engine isn't loaded or the type isn't found, resolve the single
+   *     leaf library using the `toolLibraryClass` hint plus name-based fallback.
+   *
+   * The engine is expected to be configured by AgentRunner before Initialize
+   * is called, so path (1) is the normal case.
+   */
   private ResolveLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
-    // Try metadata-driven resolution via ClassFactory
+    const chain = this.ResolveLibraryChain(typeName);
+    if (chain.length > 1) return new CompositeArtifactToolLibrary(chain);
+    if (chain.length === 1) return chain[0];
+    // Engine didn't yield anything — fall back to a single leaf library.
+    return this.ResolveLeafLibrary(typeName, toolLibraryClass);
+  }
+
+  /**
+   * Walk the ParentID chain for `typeName` in ArtifactMetadataEngine,
+   * instantiating each level's ToolLibraryClass via ClassFactory.
+   * Returns the chain leaf-first. Levels without a ToolLibraryClass are
+   * skipped. Returns [] if the engine isn't loaded or the type isn't found.
+   */
+  private ResolveLibraryChain(typeName: string): BaseArtifactToolLibrary[] {
+    const engine = ArtifactMetadataEngine.Instance;
+    if (!engine.ArtifactTypes?.length) return [];
+
+    const chain: BaseArtifactToolLibrary[] = [];
+    const visited = new Set<string>();
+    let current = engine.FindArtifactType(typeName);
+    while (current && !visited.has(current.ID)) {
+      visited.add(current.ID);
+      const className = current.ToolLibraryClass;
+      if (className) {
+        const lib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, className);
+        if (lib) chain.push(lib);
+      }
+      current = current.ParentID
+        ? engine.ArtifactTypes.find((t) => t.ID === current!.ParentID)
+        : undefined;
+    }
+    return chain;
+  }
+
+  /**
+   * Single-library fallback when the metadata engine isn't available.
+   * Uses the provided `toolLibraryClass` hint first, then name-based heuristics.
+   */
+  private ResolveLeafLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
     if (toolLibraryClass) {
       const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, toolLibraryClass);
       if (instance) return instance;
     }
 
-    // Fallback: name-based resolution for types without ToolLibraryClass metadata
     const lower = typeName.toLowerCase();
     if (lower.includes('data') || lower.includes('snapshot')) {
       return new DataSnapshotToolLibrary();

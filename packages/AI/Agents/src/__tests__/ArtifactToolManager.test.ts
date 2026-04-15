@@ -1,9 +1,45 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ArtifactToolManager, InputArtifact } from '../ArtifactToolManager';
+import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '../artifact-tools/BaseArtifactToolLibrary';
+import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
 
 function makeArtifact(name: string, typeName: string, content: string): InputArtifact {
     return { name, typeName, content };
 }
+
+// Test fixtures for parent-chain inheritance tests.
+// TestParentLib provides `parent_only_tool` + `shared_tool`; child overrides `shared_tool`.
+
+@RegisterClass(BaseArtifactToolLibrary, 'TestParentLib')
+class TestParentLib extends BaseArtifactToolLibrary {
+    GetToolList(): ArtifactToolDefinition[] {
+        return [
+            { name: 'parent_only_tool', description: 'parent-only tool', inputSchema: { type: 'object', properties: {} } },
+            { name: 'shared_tool', description: 'from parent', inputSchema: { type: 'object', properties: {} } },
+        ];
+    }
+    async InvokeTool(): Promise<ArtifactToolResult> {
+        return { success: true, data: { handledBy: 'parent' } };
+    }
+}
+
+@RegisterClass(BaseArtifactToolLibrary, 'TestChildLib')
+class TestChildLib extends BaseArtifactToolLibrary {
+    GetToolList(): ArtifactToolDefinition[] {
+        return [
+            { name: 'child_only_tool', description: 'child-only tool', inputSchema: { type: 'object', properties: {} } },
+            { name: 'shared_tool', description: 'from child', inputSchema: { type: 'object', properties: {} } },
+        ];
+    }
+    async InvokeTool(): Promise<ArtifactToolResult> {
+        return { success: true, data: { handledBy: 'child' } };
+    }
+}
+
+// Force the compiler to keep these classes (they register via decorator side effects)
+void TestParentLib;
+void TestChildLib;
 
 describe('ArtifactToolManager', () => {
     let manager: ArtifactToolManager;
@@ -147,6 +183,93 @@ describe('ArtifactToolManager', () => {
 
         it('returns empty string when no artifacts', () => {
             expect(manager.GetSummary()).toBe('');
+        });
+    });
+
+    describe('Parent-chain tool library inheritance', () => {
+        // Simulated ArtifactType records for a "Data Snapshot" child of "Data"
+        const dataTypeId = '11111111-1111-1111-1111-111111111111';
+        const snapshotTypeId = '22222222-2222-2222-2222-222222222222';
+
+        beforeEach(() => {
+            // Pre-populate the engine with a two-level artifact type chain
+            const engineAny = ArtifactMetadataEngine.Instance as unknown as { _artifactTypes: Array<Record<string, unknown>> };
+            engineAny._artifactTypes = [
+                { ID: dataTypeId, Name: 'Data', ParentID: null, ToolLibraryClass: 'TestParentLib' },
+                { ID: snapshotTypeId, Name: 'Data Snapshot', ParentID: dataTypeId, ToolLibraryClass: 'TestChildLib' },
+            ];
+        });
+
+        afterEach(() => {
+            const engineAny = ArtifactMetadataEngine.Instance as unknown as { _artifactTypes: Array<Record<string, unknown>> };
+            engineAny._artifactTypes = [];
+        });
+
+        it('merges tools from child and parent libraries, child wins on name collision', async () => {
+            manager.Initialize([makeArtifact('Snapshot', 'Data Snapshot', '{}')]);
+            const docs = manager.GetToolDocumentation();
+            // child-only tool
+            expect(docs).toContain('child_only_tool');
+            // parent-only tool inherited
+            expect(docs).toContain('parent_only_tool');
+            // overridden tool uses child's description
+            expect(docs).toContain('from child');
+            expect(docs).not.toContain('from parent');
+        });
+
+        it('dispatches overridden tool to child library', async () => {
+            manager.Initialize([makeArtifact('Snapshot', 'Data Snapshot', '{}')]);
+            await manager.ExecuteToolCalls([
+                { artifactId: 'A', tool: 'shared_tool', input: {} },
+            ]);
+            expect(manager.GetAccessLog()[0].success).toBe(true);
+            // Child library tags results with 'child'
+            const resultText = manager.GetPendingResults();
+            expect(resultText).toContain('"handledBy": "child"');
+        });
+
+        it('dispatches inherited tool to parent library', async () => {
+            manager.Initialize([makeArtifact('Snapshot', 'Data Snapshot', '{}')]);
+            await manager.ExecuteToolCalls([
+                { artifactId: 'A', tool: 'parent_only_tool', input: {} },
+            ]);
+            const resultText = manager.GetPendingResults();
+            expect(resultText).toContain('"handledBy": "parent"');
+        });
+    });
+
+    describe('GetAccessLog', () => {
+        it('returns empty array when no tool calls have been made', () => {
+            manager.Initialize([makeArtifact('X', 'JSON', '{}')]);
+            expect(manager.GetAccessLog()).toEqual([]);
+        });
+
+        it('records one entry per tool call with timestamp and duration', async () => {
+            manager.Initialize([makeArtifact('Doc', 'JSON', '{"a":1,"b":2}')]);
+            await manager.ExecuteToolCalls([
+                { artifactId: 'A', tool: 'json_keys', input: {} },
+            ]);
+            const log = manager.GetAccessLog();
+            expect(log).toHaveLength(1);
+            expect(log[0].artifactId).toBe('A');
+            expect(log[0].tool).toBe('json_keys');
+            expect(log[0].timestamp).toBeInstanceOf(Date);
+            expect(log[0].durationMs).toBeGreaterThanOrEqual(0);
+        });
+
+        it('records failures with errorMessage', async () => {
+            // Two artifacts so the single-artifact fallback doesn't resolve an unknown ID
+            manager.Initialize([
+                makeArtifact('First', 'JSON', '{}'),
+                makeArtifact('Second', 'JSON', '{}'),
+            ]);
+            await manager.ExecuteToolCalls([
+                { artifactId: 'ZZZ', tool: 'json_keys', input: {} },
+            ]);
+            const log = manager.GetAccessLog();
+            expect(log).toHaveLength(1);
+            expect(log[0].success).toBe(false);
+            expect(log[0].errorMessage).toContain('Unknown artifact ID');
         });
     });
 });
