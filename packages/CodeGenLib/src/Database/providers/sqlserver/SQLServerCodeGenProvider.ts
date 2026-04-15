@@ -9,7 +9,7 @@ import {
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { logIf, sortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { configInfo, dbDatabase } from '../../../Config/config';
-import { sqlConfig } from '../../../Config/db-connection';
+import { sqlConfig, MSSQLConnection } from '../../../Config/db-connection';
 import { logError, logMessage, logWarning } from '../../../Misc/status_logging';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -1541,8 +1541,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
             .map(b => b.trim())
             .filter(b => b.length > 0);
 
-        const mssql = await import('mssql');
-        const pool = await mssql.default.connect(sqlConfig);
+        const pool = await MSSQLConnection();
 
         for (const batch of batches) {
             try {
