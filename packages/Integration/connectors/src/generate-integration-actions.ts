@@ -42,164 +42,18 @@ interface MjSyncRecord {
     relatedEntities?: Record<string, MjSyncRecord[]>;
 }
 
-/** Raw Integration Object field as stored in the mj-sync metadata JSON. */
-interface MetadataField {
-    fields: {
-        Name: string;
-        DisplayName?: string;
-        Description?: string;
-        Type?: string;
-        Length?: number;
-        IsPrimaryKey?: boolean;
-        IsRequired?: boolean;
-        IsReadOnly?: boolean;
-    };
-}
-
-/** Raw Integration Object as stored in the mj-sync metadata JSON. */
-interface MetadataObject {
-    fields: {
-        Name: string;
-        DisplayName?: string;
-        Description?: string;
-        SupportsWrite?: boolean;
-        Category?: string;
-    };
-    relatedEntities?: {
-        'MJ: Integration Object Fields'?: MetadataField[];
-    };
-}
-
 /**
- * Registry of known connector aliases → connector instance, output filename,
- * and optional path to the integration metadata JSON file (relative to metadata/).
- * When metadataFile is set, writable objects defined there but not already covered
- * by GetActionGeneratorConfig() are supplemented into the generated action set.
+ * Registry of known connector aliases → connector instance + output filename.
+ * To add a new connector, add an entry here and import the connector class above.
  */
-const CONNECTOR_REGISTRY: Record<string, {
-    Connector: BaseIntegrationConnector;
-    FileName: string;
-    /** Relative path under the metadata/ dir, e.g. 'integrations/.hubspot.json' */
-    MetadataFile?: string;
-}> = {
-    hubspot:     { Connector: new HubSpotConnector(),       FileName: '.hubspot-actions.json',      MetadataFile: 'integrations/.hubspot.json' },
-    rasa:        { Connector: new RasaConnector(),           FileName: '.rasa-actions.json' },
-    salesforce:  { Connector: new SalesforceConnector(),     FileName: '.salesforce-actions.json' },
-    ym:          { Connector: new YourMembershipConnector(), FileName: '.ym-actions.json',         MetadataFile: 'integrations/.your-membership.json' },
-    'sage-intacct': { Connector: new SageIntacctConnector(), FileName: '.sage-intacct-actions.json' },
-    quickbooks:  { Connector: new QuickBooksConnector(),     FileName: '.quickbooks-actions.json' },
+const CONNECTOR_REGISTRY: Record<string, { Connector: BaseIntegrationConnector; FileName: string }> = {
+    hubspot:     { Connector: new HubSpotConnector(),           FileName: '.hubspot-actions.json' },
+    rasa:        { Connector: new RasaConnector(),               FileName: '.rasa-actions.json' },
+    salesforce:  { Connector: new SalesforceConnector(),         FileName: '.salesforce-actions.json' },
+    ym:              { Connector: new YourMembershipConnector(),     FileName: '.ym-actions.json' },
+    'sage-intacct':  { Connector: new SageIntacctConnector(),       FileName: '.sage-intacct-actions.json' },
+    quickbooks:      { Connector: new QuickBooksConnector(),        FileName: '.quickbooks-actions.json' },
 };
-
-// ─── Metadata Supplement ─────────────────────────────────────────────
-
-/**
- * Maps SQL column types from mj-sync metadata JSON to the simplified type strings
- * used by IntegrationFieldInfo. Falls back to 'string' for unmapped types.
- */
-function sqlTypeToFieldType(sqlType: string | undefined, length?: number): string {
-    switch ((sqlType ?? '').toLowerCase()) {
-        case 'bigint':
-        case 'int':
-        case 'smallint':
-        case 'tinyint':
-            return 'number';
-        case 'decimal':
-        case 'numeric':
-        case 'float':
-        case 'real':
-        case 'money':
-        case 'smallmoney':
-            return 'number';
-        case 'bit':
-            return 'boolean';
-        case 'datetime':
-        case 'datetime2':
-        case 'datetimeoffset':
-        case 'smalldatetime':
-            return 'datetime';
-        case 'date':
-            return 'date';
-        case 'nvarchar':
-        case 'varchar':
-        case 'char':
-        case 'nchar':
-            // -1 length = MAX → treat as text (nvarchar(MAX))
-            return length === -1 ? 'text' : 'string';
-        case 'ntext':
-        case 'text':
-            return 'text';
-        default:
-            return 'string';
-    }
-}
-
-/**
- * Reads the integration metadata JSON and returns IntegrationObjectInfo entries
- * for every Integration Object that:
- *   1. Has SupportsWrite: true
- *   2. Is not already known to the connector at all — meaning not in
- *      allConnectorObjectNames (which includes CRM ancillary objects like calls/notes
- *      that have IncludeInActionGeneration: false, plus the 6 core CRM objects).
- *
- * This bridges the gap between the static metadata file (single source of truth for
- * non-CRM field schemas) and the action generator (which reads from connector memory).
- *
- * @param allConnectorObjectNames - ALL objects known to the connector regardless of
- *   IncludeInActionGeneration flag. Pass Set of lowercase names. Objects in this set
- *   are skipped even if they appear in the metadata with SupportsWrite: true.
- */
-function buildObjectsFromMetadata(
-    metadataPath: string,
-    allConnectorObjectNames: Set<string>
-): import('@memberjunction/integration-engine').IntegrationObjectInfo[] {
-    if (!fs.existsSync(metadataPath)) {
-        console.warn(`  Metadata file not found: ${metadataPath}`);
-        return [];
-    }
-
-    const raw = JSON.parse(fs.readFileSync(metadataPath, 'utf-8')) as MjSyncRecord[];
-    // Integration metadata files have one top-level record (the integration itself)
-    const integrationRecord = raw[0];
-    const allObjects = (
-        integrationRecord?.relatedEntities?.['MJ: Integration Objects'] ?? []
-    ) as MetadataObject[];
-
-    // Exclude anything the connector already handles (directly or via IncludeInActionGeneration: false)
-    const existingNames = allConnectorObjectNames;
-
-    const result: import('@memberjunction/integration-engine').IntegrationObjectInfo[] = [];
-
-    for (const obj of allObjects) {
-        const name = obj.fields.Name;
-        if (!name) continue;
-        if (existingNames.has(name.toLowerCase())) continue;  // already generated by connector
-        if (!obj.fields.SupportsWrite) continue;              // read-only — skip write actions
-
-        // Skip association tables (named assoc_*) — they're managed differently
-        if (name.startsWith('assoc_')) continue;
-
-        const rawFields = obj.relatedEntities?.['MJ: Integration Object Fields'] ?? [];
-
-        result.push({
-            Name: name,
-            DisplayName: obj.fields.DisplayName ?? name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-            Description: obj.fields.Description,
-            SupportsWrite: true,
-            IncludeInActionGeneration: true,
-            Fields: rawFields.map(f => ({
-                Name: f.fields.Name,
-                DisplayName: f.fields.DisplayName ?? f.fields.Name,
-                Description: f.fields.Description,
-                Type: sqlTypeToFieldType(f.fields.Type, f.fields.Length),
-                IsRequired: f.fields.IsRequired ?? false,
-                IsReadOnly: f.fields.IsReadOnly ?? false,
-                IsPrimaryKey: f.fields.IsPrimaryKey ?? false,
-            })),
-        });
-    }
-
-    return result;
-}
 
 // ─── Main ────────────────────────────────────────────────────────────
 
@@ -237,24 +91,6 @@ function main(): void {
         if (!config) {
             console.warn(`WARNING: Connector "${alias}" returned no action config — skipping`);
             continue;
-        }
-
-        // Supplement with writable objects from the static metadata file.
-        // This covers non-CRM objects whose fields are defined in the integration JSON
-        // but are not in the connector's in-memory GetIntegrationObjects() at all.
-        // We exclude everything the connector knows about (including ancillary CRM objects
-        // like calls/notes that have IncludeInActionGeneration: false) so they don't get
-        // spurious write actions from the metadata pass.
-        if (entry.MetadataFile) {
-            const metadataPath = path.join(outputBase, entry.MetadataFile);
-            const allConnectorNames = new Set(
-                entry.Connector.GetIntegrationObjects().map(o => o.Name.toLowerCase())
-            );
-            const supplemental = buildObjectsFromMetadata(metadataPath, allConnectorNames);
-            if (supplemental.length > 0) {
-                config.Objects.push(...supplemental);
-                console.log(`${config.IntegrationName}: supplemented ${supplemental.length} non-CRM objects from metadata`);
-            }
         }
 
         const result = generator.Generate(config);
