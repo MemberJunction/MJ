@@ -1,2349 +1,292 @@
 {
-  "wicket": [
-    {
-      "TableName": "Person",
-      "PrimaryKey": [
+    "wicket": [
         {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Organization",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Connection",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "person_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Person",
-          "RelatedField": "uuid"
+            "TableName": "Person",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
         },
         {
-          "FieldName": "organization_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Organization",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "WicketGroup",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "GroupMember",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "group_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "WicketGroup",
-          "RelatedField": "uuid"
+            "TableName": "Organization",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
         },
         {
-          "FieldName": "person_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Person",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "Membership",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "PersonMembership",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "person_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Person",
-          "RelatedField": "uuid"
+            "TableName": "Connection",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                },
+                {
+                    "FieldName": "organization_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Organization",
+                    "RelatedField": "uuid"
+                }
+            ]
         },
         {
-          "FieldName": "membership_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Membership",
-          "RelatedField": "uuid"
+            "TableName": "WicketGroup",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
         },
         {
-          "FieldName": "organization_membership_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "OrganizationMembership",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "OrganizationMembership",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "organization_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Organization",
-          "RelatedField": "uuid"
+            "TableName": "GroupMember",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "group_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "WicketGroup",
+                    "RelatedField": "uuid"
+                },
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
         },
         {
-          "FieldName": "membership_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Membership",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "PersonEmail",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "person_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Person",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "PersonPhone",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "person_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Person",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "PersonAddress",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "person_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Person",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "OrganizationEmail",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "organization_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Organization",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "OrganizationPhone",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "organization_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Organization",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "OrganizationAddress",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "organization_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Organization",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "Touchpoint",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "person_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Person",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "Role",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "UserIdentity",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ],
-      "ForeignKeys": [
-        {
-          "FieldName": "person_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Person",
-          "RelatedField": "uuid"
-        }
-      ]
-    },
-    {
-      "TableName": "ResourceTag",
-      "PrimaryKey": [
-        {
-          "FieldName": "uuid",
-          "Description": "Primary key from source system"
-        }
-      ]
-    }
-  ],
-  "yourmembership": [
-    {
-      "TableName": "TaxRateRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ConvertToMemberRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CBXClientConfig",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "InformzBulkUploadForReportsRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "StoreProductPromoCodes",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "InformzBulkUploadForDuesRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "InformzFindGroupRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "StoreProductSequence",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "PeopleProfileFindID",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "FindMembers",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "UnblockCardRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "FacebookProfile",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "InformzBulkUploadBySearchGuidRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "StoreProductUpdate",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ExternalLink",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CopyCampaign",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "QuickBooksOnlineOAuth",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "BrandingConfigCss",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "FilesUpload",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ResourceManagerFilesUpload",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "OIDCGetAccessToken",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "OrganizationPosts",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "SendTestNotification",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "PasswordValidityRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "StoreProductBulkStatus",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ZoomOAuth",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "DonationHistoryCancelAutoBill",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "InformzBulkUploadForOrdersBySearchIdRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "InformzBulkUploadForDuesBySearchIdRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "HtmlSanitization",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "FindEventTickets",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "StoreProductBulkStatusAll",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MemberPasswordReset",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "GetAccessToken",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "SMSCampaignListDetails",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "InformzBulkUploadForOrdersRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "HasInformz",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MarkupRender",
-      "PrimaryKey": [
-        {
-          "FieldName": "MarkupId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "FindEventRegistrationForms",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "SocialOAuth",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ZoomEventListenerOAuth",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "NotificationUpdate",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "FindProducts",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventRegistrationAttendance",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "InformzBulkUploadEventRegistrantsRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "OAuthClientAppAPISetting",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Ping",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventSessionAttendanceRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Authenticate",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "FinalizeLogin",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "GetToken",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ClientConfig",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ResendCampaign",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "GroupJoin",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ProductsDto",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "PageMetaInfo",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Auth",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MembershipRenewalReminderGetRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "UsernameAvailabilityRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "RssBuilder",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "HassAcessTestFolder",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "PhotoComments",
-      "PrimaryKey": [
-        {
-          "FieldName": "PhotoCommentId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ZoomEventListener",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MembershipRenewalReminderPutRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "PeopleBulkDetachRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MemberConfig",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "QBClasses",
-      "PrimaryKey": [
-        {
-          "FieldName": "GLCodeId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "WallPostFirst",
-      "PrimaryKey": [
-        {
-          "FieldName": "WallId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MessageFolders",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "BasicMemberProfile",
-      "PrimaryKey": [
-        {
-          "FieldName": "ProfileID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Orders",
-      "PrimaryKey": [
-        {
-          "FieldName": "OrderID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MemberTypes",
-      "PrimaryKey": [
-        {
-          "FieldName": "ID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Likes_PostList",
-      "PrimaryKey": [
-        {
-          "FieldName": "LikeId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomPageTemplates",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "GroupTypes",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomPageCrossLinks",
-      "PrimaryKey": [
-        {
-          "FieldName": "PageID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MemberProfile",
-      "PrimaryKey": [
-        {
-          "FieldName": "ProfileID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventSearch",
-      "PrimaryKey": [
-        {
-          "FieldName": "EventID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MediaGalleryAlbum",
-      "PrimaryKey": [
-        {
-          "FieldName": "AlbumID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventRegistrants",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomFormFields",
-      "PrimaryKey": [
-        {
-          "FieldName": "ID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventAttendees",
-      "PrimaryKey": [
-        {
-          "FieldName": "RegisterID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ConnectionSuggestions",
-      "PrimaryKey": [
-        {
-          "FieldName": "ConnectionId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EmailSendersInfo",
-      "PrimaryKey": [
-        {
-          "FieldName": "Address",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Groups",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventSessionGroups",
-      "PrimaryKey": [
-        {
-          "FieldName": "SessionGroupId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "InvoicePayments",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CommunityPhotos",
-      "PrimaryKey": [
-        {
-          "FieldName": "CommentID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "PeopleIDs",
-      "PrimaryKey": [
-        {
-          "FieldName": "ProfileID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Products",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MemberGroups",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MemberFavorites",
-      "PrimaryKey": [
-        {
-          "FieldName": "FavoriteId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomPageFeatures",
-      "PrimaryKey": [
-        {
-          "FieldName": "ID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CampaignReports_MessageActivity",
-      "PrimaryKey": [
-        {
-          "FieldName": "TypeId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventCEUAwards",
-      "PrimaryKey": [
-        {
-          "FieldName": "AwardID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Shares",
-      "PrimaryKey": [
-        {
-          "FieldName": "ShareId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Pinpoint",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CertificationCreditTypes",
-      "PrimaryKey": [
-        {
-          "FieldName": "ID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MembersGroups",
-      "PrimaryKey": [
-        {
-          "FieldName": "WebSiteMemberID",
-          "Description": "Primary key from source system"
+            "TableName": "Membership",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
         },
         {
-          "FieldName": "GroupID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CampaignReports_DailyRate",
-      "PrimaryKey": [
-        {
-          "FieldName": "Date",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Feeds",
-      "PrimaryKey": [
-        {
-          "FieldName": "PostId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomPageFileCollections",
-      "PrimaryKey": [
-        {
-          "FieldName": "FileCollectionID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventSessions",
-      "PrimaryKey": [
-        {
-          "FieldName": "SessionId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Events",
-      "PrimaryKey": [
-        {
-          "FieldName": "EventId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "AllCampaigns",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "PaymentProcessors",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CareerOpenings",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MembersGroupsBulk",
-      "PrimaryKey": [
-        {
-          "FieldName": "WebSiteMemberID",
-          "Description": "Primary key from source system"
+            "TableName": "PersonMembership",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                },
+                {
+                    "FieldName": "membership_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Membership",
+                    "RelatedField": "uuid"
+                },
+                {
+                    "FieldName": "organization_membership_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "OrganizationMembership",
+                    "RelatedField": "uuid"
+                }
+            ]
         },
         {
-          "FieldName": "GroupID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Campaigns",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EngagementScores",
-      "PrimaryKey": [
-        {
-          "FieldName": "ProfileID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventVirtualUsers",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "DirectorySearch",
-      "PrimaryKey": [
-        {
-          "FieldName": "MemberID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Photos",
-      "PrimaryKey": [
-        {
-          "FieldName": "CommentID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Notifications",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ProductMemberPrice",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MarkupComponentTypes",
-      "PrimaryKey": [
-        {
-          "FieldName": "ComponentType",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MemberNetworks",
-      "PrimaryKey": [
-        {
-          "FieldName": "NetworkId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Favorites",
-      "PrimaryKey": [
-        {
-          "FieldName": "FavoriteId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "JobAlertsCriteria",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomCSS",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "InvoiceItems",
-      "PrimaryKey": [
-        {
-          "FieldName": "LineItemID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Networks",
-      "PrimaryKey": [
-        {
-          "FieldName": "NetworkId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "TimeZones",
-      "PrimaryKey": [
-        {
-          "FieldName": "fullName",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomPages",
-      "PrimaryKey": [
-        {
-          "FieldName": "PageID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "SMSCampaigns",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventVirtualWebinars",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MemberReferrals",
-      "PrimaryKey": [
-        {
-          "FieldName": "ReferralId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "PeopleGroups",
-      "PrimaryKey": [
-        {
-          "FieldName": "GroupID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Members",
-      "PrimaryKey": [
-        {
-          "FieldName": "ProfileID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomPageVersions",
-      "PrimaryKey": [
-        {
-          "FieldName": "VersionID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "TopContributors",
-      "PrimaryKey": [
-        {
-          "FieldName": "LevelId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MembershipModifiers",
-      "PrimaryKey": [
-        {
-          "FieldName": "ID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Donations",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventVirtualMeetings",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "NotificationDetails",
-      "PrimaryKey": [
-        {
-          "FieldName": "NotificationID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "TrendingPosts",
-      "PrimaryKey": [
-        {
-          "FieldName": "PostId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CampaignReports_Messages",
-      "PrimaryKey": [
-        {
-          "FieldName": "MemberId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "JobAlerts",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventAlias",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ConnectionCategoryList",
-      "PrimaryKey": [
-        {
-          "FieldName": "CategoryID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Countries",
-      "PrimaryKey": [
-        {
-          "FieldName": "countryId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ContentAreas",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomTaxLocations",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CampaignReports",
-      "PrimaryKey": [
-        {
-          "FieldName": "Date",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventTickets",
-      "PrimaryKey": [
-        {
-          "FieldName": "TicketId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventIDs",
-      "PrimaryKey": [
-        {
-          "FieldName": "ID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "WallComments_MemberList",
-      "PrimaryKey": [
-        {
-          "FieldName": "ConnectionId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "DashboardData",
-      "PrimaryKey": [
-        {
-          "FieldName": "Date",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "LocationCoordinates",
-      "PrimaryKey": [
-        {
-          "FieldName": "place_id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EmailSuppressionList",
-      "PrimaryKey": [
-        {
-          "FieldName": "EmailAddress",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventCustomLabels",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "GLCodes",
-      "PrimaryKey": [
-        {
-          "FieldName": "GLCodeId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventRegistrationIDs",
-      "PrimaryKey": [
-        {
-          "FieldName": "RegistrationID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "DuesRules",
-      "PrimaryKey": [
-        {
-          "FieldName": "ID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "StoreOrders",
-      "PrimaryKey": [
-        {
-          "FieldName": "OrderID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CertificationsJournals",
-      "PrimaryKey": [
-        {
-          "FieldName": "EntryID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ContentAreaVersions",
-      "PrimaryKey": [
-        {
-          "FieldName": "VersionID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "OAuthClientApps",
-      "PrimaryKey": [
-        {
-          "FieldName": "AppID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventAttendeeTypeTickets",
-      "PrimaryKey": [
-        {
-          "FieldName": "EventId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "SponsorRotators",
-      "PrimaryKey": [
-        {
-          "FieldName": "RotatorId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Memberships",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ShippingMethods",
-      "PrimaryKey": [
-        {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "NotificationSubscription",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "WallPosts",
-      "PrimaryKey": [
-        {
-          "FieldName": "WallId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "SMSCampaignReports_Messages",
-      "PrimaryKey": [
-        {
-          "FieldName": "MemberId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "WebScraper",
-      "PrimaryKey": [
-        {
-          "FieldName": "Src",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Certifications",
-      "PrimaryKey": [
-        {
-          "FieldName": "CertificationID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MemberList",
-      "PrimaryKey": [
-        {
-          "FieldName": "ProfileID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventSessionCEUAwards",
-      "PrimaryKey": [
-        {
-          "FieldName": "AwardID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "SponsorPosts",
-      "PrimaryKey": [
-        {
-          "FieldName": "PostId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ProductCategories",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Connections",
-      "PrimaryKey": [
-        {
-          "FieldName": "ConnectionId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "NotificationMacros",
-      "PrimaryKey": [
-        {
-          "FieldName": "MacroId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventCategories",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Markup",
-      "PrimaryKey": [
-        {
-          "FieldName": "MarkupId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MarkupMacroComponents",
-      "PrimaryKey": [
-        {
-          "FieldName": "MacroComponentId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "DonationTransactions",
-      "PrimaryKey": [
-        {
-          "FieldName": "TransactionID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Likes",
-      "PrimaryKey": [
-        {
-          "FieldName": "LikeId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "RegistrationSessionRequest",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "OAuthClientAppName",
-      "PrimaryKey": [
-        {
-          "FieldName": "AppID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventAttendeeTypeSessions",
-      "PrimaryKey": [
-        {
-          "FieldName": "EventId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "DonationHistory",
-      "PrimaryKey": [
-        {
-          "FieldName": "intDonationId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomPageDocTypes",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "LatestPosts",
-      "PrimaryKey": [
-        {
-          "FieldName": "PostId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "DomainAuthentication",
-      "PrimaryKey": [
-        {
-          "FieldName": "DomainId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "SingleMembership",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "FinanceBatchDetails",
-      "PrimaryKey": [
-        {
-          "FieldName": "LineItemID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CampaignEmailListDuplicates",
-      "PrimaryKey": [
-        {
-          "FieldName": "ItemId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Ambassadors",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MemberPulse",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CampaignEmailLists",
-      "PrimaryKey": [
-        {
-          "FieldName": "ListId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EmailVerification",
-      "PrimaryKey": [
-        {
-          "FieldName": "EmailId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "StoreProductExtractSelection",
-      "PrimaryKey": [
-        {
-          "FieldName": "Product_ID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MemberSubAccounts",
-      "PrimaryKey": [
-        {
-          "FieldName": "ID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ContentProxy",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "People",
-      "PrimaryKey": [
-        {
-          "FieldName": "ClientID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "SMSCampaignReports",
-      "PrimaryKey": [
-        {
-          "FieldName": "TypeId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "BrandingConfig",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "HelpTopic",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "StoreOrderDetails",
-      "PrimaryKey": [
-        {
-          "FieldName": "OrderID",
-          "Description": "Primary key from source system"
+            "TableName": "OrganizationMembership",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "organization_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Organization",
+                    "RelatedField": "uuid"
+                },
+                {
+                    "FieldName": "membership_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Membership",
+                    "RelatedField": "uuid"
+                }
+            ]
         },
         {
-          "FieldName": "InvoiceNumber",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "DonationFunds",
-      "PrimaryKey": [
+            "TableName": "PersonEmail",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
         {
-          "FieldName": "fundId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Templates",
-      "PrimaryKey": [
+            "TableName": "PersonPhone",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
         {
-          "FieldName": "id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MembersProfiles",
-      "PrimaryKey": [
+            "TableName": "PersonAddress",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
         {
-          "FieldName": "WebSiteMemberID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "PushNotificationsConfig",
-      "PrimaryKey": [
+            "TableName": "OrganizationEmail",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "organization_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Organization",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
         {
-          "FieldName": "NotificationID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "FreestoneTypes",
-      "PrimaryKey": [
+            "TableName": "OrganizationPhone",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "organization_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Organization",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
         {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "OAuthScopes",
-      "PrimaryKey": [
+            "TableName": "OrganizationAddress",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "organization_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Organization",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
         {
-          "FieldName": "ScopeID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventRegistrationForms",
-      "PrimaryKey": [
+            "TableName": "Touchpoint",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
         {
-          "FieldName": "FormId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "SavedJobs",
-      "PrimaryKey": [
+            "TableName": "Role",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
+        },
         {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Announcements",
-      "PrimaryKey": [
+            "TableName": "UserIdentity",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "person_id",
+                    "SchemaName": "wicket",
+                    "RelatedTable": "Person",
+                    "RelatedField": "uuid"
+                }
+            ]
+        },
         {
-          "FieldName": "AnnouncementId",
-          "Description": "Primary key from source system"
+            "TableName": "ResourceTag",
+            "PrimaryKey": [
+                {
+                    "FieldName": "uuid",
+                    "Description": "Primary key from source system"
+                }
+            ]
         }
-      ]
-    },
-    {
-      "TableName": "NetworkTypes",
-      "PrimaryKey": [
-        {
-          "FieldName": "ServiceId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "WallComments",
-      "PrimaryKey": [
-        {
-          "FieldName": "WallId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "ContentAreaCustomMacros",
-      "PrimaryKey": [
-        {
-          "FieldName": "Label",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "SavedSearches",
-      "PrimaryKey": [
-        {
-          "FieldName": "SavedSearchId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventRegistrations",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Locations",
-      "PrimaryKey": [
-        {
-          "FieldName": "locationCode",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "NetworksCloud",
-      "PrimaryKey": [
-        {
-          "FieldName": "NetworkId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "GroupMembershipLogs",
-      "PrimaryKey": [
-        {
-          "FieldName": "ItemID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomPageMemberTypes",
-      "PrimaryKey": [
-        {
-          "FieldName": "TypeID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomPageForms",
-      "PrimaryKey": [
-        {
-          "FieldName": "FormID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "MembershipPromoCodes",
-      "PrimaryKey": [
-        {
-          "FieldName": "PromoCodeId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "CustomPageCategories",
-      "PrimaryKey": [
-        {
-          "FieldName": "CategoryID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Messages",
-      "PrimaryKey": [
-        {
-          "FieldName": "MessageId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "EventAttendeeTypes",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "JobSearch",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "Dues",
-      "PrimaryKey": [
-        {
-          "FieldName": "Id",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "DuesTransactions",
-      "PrimaryKey": [
-        {
-          "FieldName": "TransactionID",
-          "Description": "Primary key from source system"
-        }
-      ]
-    },
-    {
-      "TableName": "StoreProductSelection",
-      "PrimaryKey": [
-        {
-          "FieldName": "aut_ProductId",
-          "Description": "Primary key from source system"
-        }
-      ]
-    }
-  ]
+    ]
 }
