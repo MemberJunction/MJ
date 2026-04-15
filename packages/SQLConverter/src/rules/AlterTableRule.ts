@@ -220,13 +220,26 @@ export class AlterTableRule implements IConversionRule {
    * PostgreSQL: ALTER TABLE t ALTER COLUMN "col" SET NOT NULL
    */
   private convertAlterColumnNotNull(sql: string): string {
-    return sql.replace(
+    // T-SQL: ALTER COLUMN col TYPE NOT NULL → PG: ALTER COLUMN "col" SET NOT NULL
+    let result = sql.replace(
       /ALTER\s+COLUMN\s+("?\w+"?)\s+\w+(?:\s*\([^)]*\))?\s+NOT\s+NULL/gi,
       (_match, col: string) => {
         const quotedCol = col.startsWith('"') ? col : `"${col}"`;
         return `ALTER COLUMN ${quotedCol} SET NOT NULL`;
       }
     );
+
+    // T-SQL: ALTER COLUMN col TYPE NULL → PG: ALTER COLUMN "col" DROP NOT NULL
+    // (T-SQL requires repeating the type when changing nullability; PG just uses DROP NOT NULL)
+    result = result.replace(
+      /ALTER\s+COLUMN\s+("?\w+"?)\s+\w+(?:\s*\([^)]*\))?\s+NULL\b(?!\s*,)/gi,
+      (_match, col: string) => {
+        const quotedCol = col.startsWith('"') ? col : `"${col}"`;
+        return `ALTER COLUMN ${quotedCol} DROP NOT NULL`;
+      }
+    );
+
+    return result;
   }
 
   /**

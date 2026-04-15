@@ -18,11 +18,11 @@ import { CRUDType } from '../packages/CodeGenLib/dist/Database/codeGenDatabasePr
 import { EntityInfo } from '../packages/MJCore/dist/index.js';
 
 const DB_CONFIG = {
-  host: 'localhost',
-  port: 5432,
-  database: 'mj_pg_codegen_test',
-  user: 'postgres',
-  password: 'z2qXgNvvstcc',
+  host: process.env.PG_HOST ?? 'localhost',
+  port: parseInt(process.env.PG_PORT ?? '5432', 10),
+  database: process.env.PG_DATABASE ?? 'mj_pg_codegen_test',
+  user: process.env.PG_USERNAME ?? 'postgres',
+  password: process.env.PG_PASSWORD ?? '',
 };
 
 // ─── Mock entity matching the unit-test pattern ──────────────────────────

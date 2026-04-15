@@ -312,13 +312,29 @@ export const getSkywayConfig = async (
 
 /**
  * Creates the appropriate Skyway database provider based on the dialect.
+ *
+ * Requires @memberjunction/skyway-sqlserver or @memberjunction/skyway-postgres
+ * to be installed. These are optional peer dependencies — install the one matching
+ * your target database platform.
  */
 async function createSkywayProvider(dialect: DatabaseDialect, dbConfig: SkywayConfig['Database']): Promise<DatabaseProvider> {
   if (dialect === 'postgresql') {
-    const { PostgresProvider } = await import('@memberjunction/skyway-postgres');
-    return new PostgresProvider(dbConfig);
+    try {
+      const { PostgresProvider } = await import('@memberjunction/skyway-postgres');
+      return new PostgresProvider(dbConfig);
+    } catch {
+      throw new Error(
+        'PostgreSQL provider not found. Install @memberjunction/skyway-postgres to use mj migrate with PostgreSQL.'
+      );
+    }
   } else {
-    const { SqlServerProvider } = await import('@memberjunction/skyway-sqlserver');
-    return new SqlServerProvider(dbConfig);
+    try {
+      const { SqlServerProvider } = await import('@memberjunction/skyway-sqlserver');
+      return new SqlServerProvider(dbConfig);
+    } catch {
+      throw new Error(
+        'SQL Server provider not found. Install @memberjunction/skyway-sqlserver to use mj migrate with SQL Server.'
+      );
+    }
   }
 }

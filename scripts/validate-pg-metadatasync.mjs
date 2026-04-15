@@ -20,11 +20,11 @@ import pg from 'pg';
 import { initializeProvider, cleanupProvider, getSystemUser, getDataProvider } from '../packages/MetadataSync/dist/lib/provider-utils.js';
 
 const DB_CONFIG = {
-  dbHost: 'localhost',
-  dbPort: 5432,
-  dbDatabase: 'mj_pg_codegen_test',
-  dbUsername: 'postgres',
-  dbPassword: 'z2qXgNvvstcc',
+  dbHost: process.env.PG_HOST ?? 'localhost',
+  dbPort: parseInt(process.env.PG_PORT ?? '5432', 10),
+  dbDatabase: process.env.PG_DATABASE ?? 'mj_pg_codegen_test',
+  dbUsername: process.env.PG_USERNAME ?? 'postgres',
+  dbPassword: process.env.PG_PASSWORD ?? '',
   mjCoreSchema: '__mj',
   dbPlatform: 'postgresql',
 };

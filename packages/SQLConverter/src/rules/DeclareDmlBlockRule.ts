@@ -31,6 +31,12 @@ export class DeclareDmlBlockRule implements IConversionRule {
   PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
     let result = sql;
 
+    // Early pattern simplification: T-SQL "drop default constraint + add default" block
+    // uses sys.default_constraints which doesn't exist on PG. Replace the entire block
+    // with a direct ALTER COLUMN SET DEFAULT (PG doesn't use named default constraints).
+    const simplified = this.simplifyDefaultConstraintBlock(result);
+    if (simplified) return simplified + '\n';
+
     // Strip SET NOCOUNT ON (may still be present if it wasn't the first line)
     result = result.replace(/^\s*SET\s+NOCOUNT\s+ON\s*;?\s*\n?/gim, '');
 
@@ -354,5 +360,51 @@ export class DeclareDmlBlockRule implements IConversionRule {
     }
     if (current) segments.push({ text: current, type: inStr ? 'string' : 'code' });
     return segments;
+  }
+
+  /**
+   * Detects the T-SQL "lookup default constraint in sys.default_constraints, drop it,
+   * then ADD DEFAULT val FOR col" pattern and replaces the entire block with PG's
+   * direct `ALTER TABLE ... ALTER COLUMN ... SET DEFAULT val`.
+   *
+   * PG doesn't use named default constraints — SET DEFAULT replaces any existing default.
+   * Returns null if the pattern isn't detected (caller should continue with generic transforms).
+   */
+  private simplifyDefaultConstraintBlock(sql: string): string | null {
+    // Must reference sys.default_constraints somewhere
+    if (!/sys\.default_constraints/i.test(sql)) return null;
+
+    // Extract all ADD DEFAULT ... FOR ... lines
+    const defaultMatches = [...sql.matchAll(
+      /ALTER\s+TABLE\s+(\S+)\s+ADD\s+DEFAULT\s+(.+?)\s+FOR\s+(\w+)\s*;?/gi
+    )];
+    if (defaultMatches.length === 0) return null;
+
+    // Convert bracket/schema identifiers in the table reference
+    const lines: string[] = [];
+    for (const m of defaultMatches) {
+      let table = m[1];
+      const value = m[2].replace(/^\(+|\)+$/g, '').trim(); // strip wrapping parens
+      const col = m[3];
+
+      // Convert [schema].[table] or ${flyway:defaultSchema}.table → __mj."table"
+      table = convertIdentifiers(table);
+
+      const quotedCol = col.startsWith('"') ? col : `"${col}"`;
+      lines.push(`ALTER TABLE ${table} ALTER COLUMN ${quotedCol} SET DEFAULT ${value};`);
+    }
+
+    // Preserve any standalone DML (UPDATE/INSERT) that follows the default changes
+    const dmlMatch = sql.match(/\b(UPDATE|INSERT)\b[\s\S]*$/im);
+    if (dmlMatch) {
+      let dml = convertIdentifiers(dmlMatch[0]);
+      dml = removeNPrefix(dml);
+      dml = convertCommonFunctions(dml);
+      dml = quotePascalCaseIdentifiers(dml);
+      lines.push('');
+      lines.push(dml.trim());
+    }
+
+    return lines.join('\n');
   }
 }
