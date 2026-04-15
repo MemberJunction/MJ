@@ -135,7 +135,7 @@ export class EntityDesignerPipelineExecutor {
 
         // Step 1: Resolve the entity ID from Entities metadata.
         const entityResult = await rv.RunView<{ ID: string }>({
-            EntityName: 'Entities',
+            EntityName: 'MJ: Entities',
             ExtraFilter: `BaseTable = '${escapeSqlLiteral(tableName)}' AND SchemaName = '${escapeSqlLiteral(schemaName)}'`,
             Fields: ['ID'],
             ResultType: 'simple',

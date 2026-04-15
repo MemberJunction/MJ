@@ -219,7 +219,7 @@ export class EntityDesignerSchemaValidator extends BaseEntityDesignerCodeAgent {
     ): Promise<void> {
         const rv = new RunView();
         const result = await rv.RunView<{ ID: string }>({
-            EntityName: 'Entities',
+            EntityName: 'MJ: Entities',
             ExtraFilter:
                 `(Name = '${escapeSqlLiteral(tableDefinition.EntityName)}' ` +
                 `OR BaseTable = '${escapeSqlLiteral(tableDefinition.TableName)}') ` +

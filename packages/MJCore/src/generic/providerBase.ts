@@ -4,7 +4,7 @@ import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageP
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
-import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
+import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, NormalizeUUID, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
@@ -86,6 +86,12 @@ export const AllMetadataArrays = [
     { key: 'AllRowLevelSecurityFilters', class: RowLevelSecurityFilterInfo },
     { key: 'AllAuditLogTypes', class: AuditLogTypeInfo},
     { key: 'AllAuthorizations', class: AuthorizationInfo},
+    /**
+     * Flat join-table records linking authorizations to roles.
+     * Consumed lazily by `AuthorizationInfo.Roles` — no post-processing
+     * in `GetAllMetadata` is required.  Mirrors the QueryFields pattern.
+     */
+    { key: 'AllAuthorizationRoles', class: AuthorizationRoleInfo},
     { key: 'AllQueryCategories', class: QueryCategoryInfo},
     { key: 'AllQueries', class: QueryInfo },
     { key: 'AllQueryFields', class: QueryFieldInfo },
@@ -2721,6 +2727,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public get Authorizations(): AuthorizationInfo[] {
         return this._localMetadata.AllAuthorizations;
+    }
+    /**
+     * Gets the flat collection of authorization-role assignments.
+     * Consumed lazily by {@link AuthorizationInfo.Roles} — consumers should
+     * prefer accessing roles through `AuthorizationInfo.Roles` rather than
+     * filtering this array directly.
+     * @returns Array of AuthorizationRoleInfo join-table objects
+     */
+    public get AuthorizationRoles(): AuthorizationRoleInfo[] {
+        return this._localMetadata.AllAuthorizationRoles;
     }
     /**
      * Gets all saved queries in the system.

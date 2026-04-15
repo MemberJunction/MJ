@@ -2,7 +2,7 @@ import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, Enti
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
-import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
+import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
@@ -121,6 +121,10 @@ export class Metadata {
 
     public get Authorizations(): AuthorizationInfo[] {
         return Metadata.Provider.Authorizations;
+    }
+
+    public get AuthorizationRoles(): AuthorizationRoleInfo[] {
+        return Metadata.Provider.AuthorizationRoles;
     }
 
     public get Libraries(): LibraryInfo[] {
