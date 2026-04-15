@@ -36,7 +36,7 @@ import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
-import type { BaseIntegrationConnector, FetchContext } from './BaseIntegrationConnector.js';
+import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
 
 /** Default batch size for fetching records from external systems */
 const DEFAULT_BATCH_SIZE = 200;
@@ -536,11 +536,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let currentCursor: string | undefined;
         let batchCount = 0;
         let previousBatchFingerprint: string | undefined;
+        let fetchCompletedCleanly = true; // flipped to false if fetch aborted or errored mid-way
         const MAX_BATCHES_PER_MAP = 5000;
+        const fetchedExternalIDs = new Set<string>(); // Track all IDs seen during this pull for orphan detection
 
         while (hasMore) {
             if (abortSignal?.aborted) {
                 console.log(`[IntegrationEngine] Sync cancelled for ${entityMap.ExternalObjectName} after ${recordsInMap} records — saving watermark`);
+                fetchCompletedCleanly = false;
                 break;
             }
             batchCount++;
@@ -549,6 +552,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     `[IntegrationEngine] Safety limit reached: ${MAX_BATCHES_PER_MAP} batches for ` +
                     `${entityMap.ExternalObjectName}. Stopping to prevent infinite loop.`
                 );
+                fetchCompletedCleanly = false;
                 break;
             }
             const ctx: FetchContext = {
@@ -562,7 +566,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 CurrentCursor: currentCursor,
             };
 
-            const batch = await config.connector.FetchChanges(ctx);
+            let batch: FetchBatchResult;
+            try {
+                batch = await config.connector.FetchChanges(ctx);
+            } catch (fetchErr) {
+                const errMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+                console.error(`[IntegrationEngine] FetchChanges error for ${entityMap.ExternalObjectName}: ${errMsg}`);
+                fetchCompletedCleanly = false;
+                break;
+            }
 
             // If the connector returned more records than MaxBatchSize, log it but never truncate —
             // all records are written, just in sub-batches to keep DB transactions manageable.
@@ -580,9 +592,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         `[IntegrationEngine] Duplicate batch detected for ${entityMap.ExternalObjectName} — ` +
                         `connector returned same records twice. Stopping to prevent infinite loop.`
                     );
+                    fetchCompletedCleanly = false;
                     break;
                 }
                 previousBatchFingerprint = fingerprint;
+            }
+
+            for (const rec of batch.Records) {
+                fetchedExternalIDs.add(rec.ExternalID);
             }
 
             const mapped = this.fieldMappingEngine.Apply(
@@ -631,6 +648,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (currentWatermark) {
             await this.watermarkService.Update(entityMapID, currentWatermark, contextUser, 'Pull');
             result.WatermarkAfter = currentWatermark;
+        }
+
+        // Orphan detection: on full sync, delete MJ records whose external counterpart no longer exists.
+        // Only runs if the fetch completed cleanly — a partial fetch (aborted, errored, safety-limited)
+        // means fetchedExternalIDs is incomplete; running deletion on it would be catastrophic.
+        if (config.fullSync && fetchedExternalIDs.size > 0 && fetchCompletedCleanly) {
+            await this.DeleteOrphanedRecords(
+                config.companyIntegration, entityMap, fetchedExternalIDs, result, contextUser
+            );
         }
 
         await this.CreateRunDetail(run, entityMap, result, contextUser);
@@ -687,6 +713,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const pushFieldMaps = fieldMaps.filter(
             fm => fm.Direction === 'DestToSource' || fm.Direction === 'Both'
         );
+
+        // If no field maps are configured for push, skip this entity entirely
+        if (pushFieldMaps.length === 0) {
+            console.log(`[IntegrationEngine] Push skipped for ${entityMap.ExternalObjectName}: no field maps with push direction`);
+            return this.EmptyResult();
+        }
 
         let latestChangeAt: string | null = null;
 
@@ -755,19 +787,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         if (!result.Success) return [];
 
-        // Dedupe: keep only the latest change per RecordID
+        // Dedupe: keep only the latest change per RecordID.
+        // RecordChange.RecordID format is "fieldName|value" or "f1|v1||f2|v2" for composites.
+        // Normalize to just the value(s) so it matches CompanyIntegrationRecordMap.EntityRecordID.
         const latestByRecord = new Map<string, { RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> }>();
         for (const r of result.Results) {
-            latestByRecord.set(r.RecordID, { ...r, Fields: {} });
+            const normalizedID = this.NormalizeRecordChangeID(r.RecordID);
+            latestByRecord.set(normalizedID, { ...r, RecordID: normalizedID, Fields: {} });
         }
 
         // Load current field values for each changed record
         const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === entityMap.Entity);
+        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
         for (const [recordID, change] of latestByRecord) {
             if (change.Type === 'Delete') continue; // No fields to load for deletes
             try {
                 const entity = await md.GetEntityObject(entityMap.Entity, contextUser);
-                const loaded = await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: recordID }]));
+                const loaded = await entity.InnerLoad(new CompositeKey([{ FieldName: pkFieldName, Value: recordID }]));
                 if (loaded) {
                     change.Fields = entity.GetAll();
                 }
@@ -814,9 +851,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
         }
 
+        const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === entityMap.Entity);
+        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
+
         const now = new Date().toISOString();
         return allResult.Results.map(record => {
-            const recordID = String(record['ID'] ?? '');
+            const recordID = String(record[pkFieldName] ?? '');
             return {
                 RecordID: recordID,
                 Type: existingMaps.has(recordID) ? 'Update' : 'Create',
@@ -839,9 +880,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const externalAttributes: Record<string, unknown> = {};
         for (const fm of pushFieldMaps) {
             const mjValue = change.Fields[fm.DestinationFieldName];
-            if (mjValue !== undefined) {
+            if (mjValue !== undefined && mjValue !== null) {
                 externalAttributes[fm.SourceFieldName] = mjValue;
             }
+        }
+
+        // Nothing to push — all field values were null/undefined. Skip instead of erroring.
+        if (change.Type !== 'Delete' && Object.keys(externalAttributes).length === 0) {
+            result.RecordsSkipped++;
+            return;
         }
 
         // Look up the ExternalID from the record map
@@ -866,26 +913,126 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         if (change.Type === 'Delete' && externalID && config.connector.SupportsDelete) {
             const delResult = await config.connector.DeleteRecord({ ...crudBase, ExternalID: externalID });
-            if (!delResult.Success) throw new Error(delResult.ErrorMessage ?? 'Delete failed');
+            if (!delResult.Success) {
+                if (delResult.StatusCode === 403) {
+                    console.warn(`[IntegrationEngine] Skipping delete — ${delResult.ErrorMessage}`);
+                    result.RecordsSkipped++;
+                    return;
+                }
+                throw new Error(delResult.ErrorMessage ?? 'Delete failed');
+            }
             result.RecordsDeleted++;
         } else if (externalID) {
             // Update existing external record
             const updResult = await config.connector.UpdateRecord({
                 ...crudBase, ExternalID: externalID, Attributes: externalAttributes,
             });
-            if (!updResult.Success) throw new Error(updResult.ErrorMessage ?? 'Update failed');
+            if (!updResult.Success) {
+                if (updResult.StatusCode === 403) {
+                    console.warn(`[IntegrationEngine] Skipping update — ${updResult.ErrorMessage}`);
+                    result.RecordsSkipped++;
+                    return;
+                }
+                throw new Error(updResult.ErrorMessage ?? 'Update failed');
+            }
             result.RecordsUpdated++;
         } else if (config.connector.SupportsCreate) {
             // Create new external record
             const createResult = await config.connector.CreateRecord({
                 ...crudBase, Attributes: externalAttributes,
             });
-            if (!createResult.Success) throw new Error(createResult.ErrorMessage ?? 'Create failed');
+            if (!createResult.Success) {
+                if (createResult.StatusCode === 403) {
+                    console.warn(`[IntegrationEngine] Skipping create — ${createResult.ErrorMessage}`);
+                    result.RecordsSkipped++;
+                    return;
+                }
+                throw new Error(createResult.ErrorMessage ?? 'Create failed');
+            }
+            // Persist the new external ID so future syncs update instead of re-creating
+            if (createResult.ExternalID) {
+                await this.SaveRecordMap(
+                    config.companyIntegration.Get('ID') as string,
+                    createResult.ExternalID,
+                    entityMap.EntityID,
+                    change.RecordID,
+                    contextUser
+                );
+            }
             result.RecordsCreated++;
         } else {
             result.RecordsSkipped++;
         }
     }
+
+    /**
+     * Full-sync orphan detection: finds MJ records that have a record map entry
+     * but were NOT returned by the external system during this full pull.
+     * These records were deleted externally and should be removed from MJ.
+     */
+    private async DeleteOrphanedRecords(
+        companyIntegration: MJCompanyIntegrationEntity,
+        entityMap: ICompanyIntegrationEntityMap,
+        fetchedExternalIDs: Set<string>,
+        result: SyncResult,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const rv = new RunView();
+        const mapResult = await rv.RunView<{ EntityRecordID: string; ExternalSystemRecordID: string }>({
+            EntityName: 'MJ: Company Integration Record Maps',
+            ExtraFilter:
+                `CompanyIntegrationID='${companyIntegration.Get('ID')}' ` +
+                `AND EntityID='${entityMap.EntityID}'`,
+            Fields: ['EntityRecordID', 'ExternalSystemRecordID'],
+            ResultType: 'simple',
+        }, contextUser);
+
+        if (!mapResult.Success) return;
+
+        const orphans = mapResult.Results.filter(m => !fetchedExternalIDs.has(m.ExternalSystemRecordID));
+        if (orphans.length === 0) return;
+
+        console.log(`[IntegrationEngine] Orphan detection for ${entityMap.ExternalObjectName}: ${orphans.length} records in MJ not found in external system`);
+
+        const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === entityMap.Entity);
+        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+
+        for (const orphan of orphans) {
+            try {
+                const entity = await md.GetEntityObject(entityMap.Entity, contextUser);
+                const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(orphan.EntityRecordID, pkFields));
+                if (!loaded) {
+                    console.log(`[IntegrationEngine] Orphan ${orphan.EntityRecordID} already deleted from MJ`);
+                    continue;
+                }
+                const deleted = await entity.Delete();
+                if (deleted) {
+                    result.RecordsDeleted++;
+                    console.log(`[IntegrationEngine] Deleted orphan ${entityMap.Entity} ${orphan.EntityRecordID} (external ${orphan.ExternalSystemRecordID} no longer exists)`);
+                } else {
+                    const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
+                    console.warn(`[IntegrationEngine] Orphan delete blocked for ${entityMap.Entity} ${orphan.EntityRecordID} — ${reason}`);
+                }
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.warn(`[IntegrationEngine] Orphan delete failed for ${entityMap.Entity} ${orphan.EntityRecordID}: ${msg}`);
+            }
+        }
+    }
+
+    /**
+     * Strips field-name prefixes from a RecordChange.RecordID to get the raw entity record ID.
+     * "hs_object_id|465950833372" → "465950833372"
+     * "contact_id|123||deal_id|456" → "123|456"
+     */
+    private NormalizeRecordChangeID(recordID: string): string {
+        return recordID
+            .split('||')
+            .map(part => { const i = part.indexOf('|'); return i >= 0 ? part.substring(i + 1) : part; })
+            .join('|');
+    }
+
 
     /** Returns an empty SyncResult. */
     private EmptyResult(): SyncResult {
@@ -1106,7 +1253,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo
     ): Promise<void> {
         if (!record.MatchedMJRecordID) {
-            throw new Error('Cannot delete record without MatchedMJRecordID');
+            console.log(`[IntegrationEngine] Skipping delete for ${record.ExternalRecord.ObjectType} ExternalID=${record.ExternalRecord.ExternalID} — no MJ record map entry (record was never synced)`);
+            return;
         }
 
         if (entityMap.DeleteBehavior === 'DoNothing') return;
@@ -1117,12 +1265,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
-            throw new Error(`Failed to load ${record.MJEntityName} for deletion: ${record.MatchedMJRecordID}`);
+            console.log(`[IntegrationEngine] Skipping delete for ${record.MJEntityName} ${record.MatchedMJRecordID} — record not found in MJ DB (may have been deleted already)`);
+            return;
         }
 
         const deleted = await entity.Delete();
         if (!deleted) {
-            throw new Error(`Failed to delete ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
+            const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
+            console.warn(`[IntegrationEngine] Delete blocked for ${record.MJEntityName} ${record.MatchedMJRecordID} — ${reason}`);
         }
     }
 

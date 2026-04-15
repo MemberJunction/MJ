@@ -3120,8 +3120,9 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            if (message.includes('HTTP 404')) {
-                console.warn(`[YM] '${ctx.ObjectName}' returned 404. Skipping.`);
+            if (message.includes('HTTP 404') || message.includes('HTTP 400') || message.includes('HTTP 500')) {
+                const code = message.includes('HTTP 404') ? '404' : message.includes('HTTP 400') ? '400' : '500';
+                console.warn(`[YM] '${ctx.ObjectName}' returned ${code}. Skipping.`);
                 return { Records: [], HasMore: false };
             }
             throw err;
@@ -4036,7 +4037,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
      */
     private async FetchAllGroupIDs(
         auth: RESTAuthContext,
-        config: YMConnectionConfig
+        _config: YMConnectionConfig
     ): Promise<string[]> {
         try {
             const json = await this.MakeYMRequest(auth as YMAuthContext, 'Groups');
