@@ -8,25 +8,32 @@
  * Entity Designer is a Loop agent that orchestrates a pipeline:
  *   Requirements Analyst → Schema Designer → show prototype → validate → build
  *
- * The approval step — where the user reviews a schema prototype and clicks
- * "Looks good — create it" — is safety-critical. When the user approves, the
- * ONLY valid action is to call Entity Schema Validator immediately.
+ * Two transitions in this pipeline are safety-critical and must be made
+ * deterministic — the LLM cannot be relied upon to get them right consistently:
  *
- * In practice the LLM fails this reliably on the first attempt: it sees
- * `SchemaDesign` in the payload with no `ValidationResult` and pattern-matches
- * to "show the prototype with approval form", ignoring the approval that is
- * already in the user message. Prompt engineering alone cannot eliminate this
- * because the payload-state pattern is too strong.
+ *   1. **Approval → Validator**: When the user clicks "Looks good — create it",
+ *      the ONLY valid action is to call Entity Schema Validator immediately.
+ *      In practice, the LLM sees `SchemaDesign` in the payload with no
+ *      `ValidationResult` and pattern-matches to "show the prototype with
+ *      approval form", ignoring the approval that is already in the user message.
+ *
+ *   2. **Validator → Builder**: When the Schema Validator returns with
+ *      `ValidationResult.Valid = true`, the ONLY valid action is to call Entity
+ *      Schema Builder immediately. Without an intercept the LLM may respond
+ *      with a chat message ("Your schema has been validated!") instead of
+ *      actually triggering the build pipeline.
  *
  * ## Solution
  *
  * Override `determineNextStep()` — the hook the Loop framework calls AFTER
  * every LLM invocation to translate raw output into an executable step. By
- * intercepting here we can inspect the last user message deterministically
- * and force the correct Sub-Agent call before the LLM's decision is ever
- * acted upon. All other decisions remain fully LLM-driven.
+ * intercepting here we can inspect state deterministically and force the
+ * correct Sub-Agent call before the LLM's decision is ever acted upon.
+ * All other decisions (gathering requirements, presenting designs, handling
+ * validation failures, reporting build results) remain fully LLM-driven.
  *
  * @see entity-designer-agent-plan.md § "create_now approval loop — code fix"
+ * @see entity-designer-agent-plan.md § "Schema Builder Invocation Bug"
  */
 
 import { BaseAgent } from '@memberjunction/ai-agents';
@@ -60,6 +67,12 @@ const CREATE_NOW_SENTINEL = 'create_now';
 const SCHEMA_VALIDATOR_AGENT_NAME = 'Entity Schema Validator';
 
 /**
+ * The registered Name of the Schema Builder sub-agent as defined in
+ * `metadata/agents/.entity-designer.json`.
+ */
+const SCHEMA_BUILDER_AGENT_NAME = 'Entity Schema Builder';
+
+/**
  * The validation message sent to the Schema Validator sub-agent. Matches
  * the message used in the Entity Designer prompt template so that code and
  * prompt stay consistent.
@@ -69,15 +82,28 @@ const SCHEMA_VALIDATOR_MESSAGE =
     'Check authorization, schema blocklist, naming conflicts, and structural validity. ' +
     'Return ValidationResult.';
 
+/**
+ * The build message sent to the Schema Builder sub-agent.
+ * The builder is code-only and reads entirely from the payload (it ignores
+ * the message body), so this message serves as documentation for log output.
+ */
+const SCHEMA_BUILDER_MESSAGE =
+    'Execute the RSU pipeline to materialise the validated schema in ' +
+    'SchemaDesign.TableDefinition. Write EntityDesignerResult to payload.';
+
 // ─── Driver class ──────────────────────────────────────────────────────────────
 
 /**
  * Entity Designer driver class.
  *
- * Extends `BaseAgent` with a single focused override of `determineNextStep()`
- * to make the user-approval transition deterministic. Everything else — gathering
- * requirements, presenting the schema, handling modifications, reporting results
- * — remains LLM-driven through the standard Loop agent mechanism.
+ * Extends `BaseAgent` with an override of `determineNextStep()` that enforces
+ * two safety-critical transitions deterministically so the LLM cannot bypass them:
+ *
+ *   - User approves schema  → always calls Entity Schema Validator
+ *   - Validation passes     → always calls Entity Schema Builder
+ *
+ * Everything else — gathering requirements, presenting the schema, handling
+ * validation failures, reporting the build result — remains fully LLM-driven.
  *
  * Registered as `"EntityDesignerAgent"` via `@RegisterClass` so the MJ agent
  * framework resolves this class when the Entity Designer agent's `DriverClass`
@@ -90,20 +116,26 @@ export class EntityDesignerAgent extends BaseAgent {
      * Post-LLM intercept hook.
      *
      * Called by the Loop framework after every prompt invocation, receiving the
-     * LLM's proposed next step. This override runs a single check before
-     * delegating:
+     * LLM's proposed next step. This override runs two safety-critical checks
+     * before delegating to the LLM's decision:
      *
-     *   1. Did the last user message contain `create_now`?
-     *      YES → discard the LLM's decision entirely and return a hard-wired
-     *            Sub-Agent call to Entity Schema Validator (terminateAfter: true).
-     *      NO  → pass through to `super.determineNextStep()` so the LLM drives.
+     *   1. **User approved creation** — last user message contains `create_now`?
+     *      YES → discard the LLM's decision and hard-wire a call to
+     *            Entity Schema Validator (`terminateAfter: false`, so Entity
+     *            Designer gets another turn to react to the result).
+     *
+     *   2. **Validation passed, build not yet started** — payload has
+     *      `ValidationResult.Valid = true` and no `EntityDesignerResult`?
+     *      YES → discard the LLM's decision and hard-wire a call to Entity
+     *            Schema Builder (`terminateAfter: false`, so Entity Designer
+     *            gets a final turn to present the build outcome to the user).
+     *
+     *   Both checks must return false for the LLM's decision to stand.
      *
      * Why override here rather than using `validateSuccessNextStep` or
      * `validateNextStep`? Those hooks run only when the LLM already chose
      * "Success" or a specific step type. We need to intercept unconditionally —
-     * regardless of what step the LLM proposed — because it will produce a
-     * "Chat" step (re-showing the design) rather than a "Sub-Agent" step,
-     * making the per-step validators unreachable.
+     * regardless of what step the LLM proposed.
      *
      * @param params        Full agent execution context including conversation history
      * @param agentType     The Loop agent type configuration (passed to super)
@@ -123,10 +155,20 @@ export class EntityDesignerAgent extends BaseAgent {
                 true,
                 params,
             );
-            return this.buildValidatorSubAgentStep<P>(currentPayload);
+            return this.buildSubAgentStep(SCHEMA_VALIDATOR_AGENT_NAME, SCHEMA_VALIDATOR_MESSAGE, currentPayload);
         }
 
-        // No approval signal — let the LLM's decision stand as normal
+        if (this.validationPassedNeedsBuilding(currentPayload)) {
+            this.logStatus(
+                `🔒 EntityDesignerAgent: ValidationResult.Valid = true and no EntityDesignerResult ` +
+                `— overriding LLM decision with deterministic call to "${SCHEMA_BUILDER_AGENT_NAME}"`,
+                true,
+                params,
+            );
+            return this.buildSubAgentStep(SCHEMA_BUILDER_AGENT_NAME, SCHEMA_BUILDER_MESSAGE, currentPayload);
+        }
+
+        // Neither safety intercept fired — let the LLM's decision stand as normal
         return super.determineNextStep(params, agentType, promptResult, currentPayload);
     }
 
@@ -161,28 +203,58 @@ export class EntityDesignerAgent extends BaseAgent {
     }
 
     /**
-     * Builds the deterministic `BaseAgentNextStep` that triggers Entity Schema
-     * Validator as a sub-agent.
+     * Returns true when validation has passed but the build pipeline has not
+     * yet started — this is the trigger condition for calling Schema Builder.
      *
-     * `terminateAfter: true` means the validator's output is delivered directly
-     * to the user without running another Entity Designer prompt turn. This is
-     * intentional — the validator is a code-based agent that writes a structured
-     * `ValidationResult` to the payload; Entity Designer does not need to react
-     * to it further (the user sees the result immediately).
+     * Guards against:
+     * - Null/undefined payload — on the very first turn, no payload exists yet
+     * - No ValidationResult — Validator hasn't run yet
+     * - Validation failed (`Valid = false`) — LLM handles error reporting
+     * - Build already attempted (`EntityDesignerResult` present) — don't re-run
      *
-     * @param currentPayload The payload at the time of approval — passed through
-     *   unchanged so the validator receives the full `SchemaDesign.TableDefinition`
+     * @param currentPayload The current typed payload (may be null/undefined on first turn)
      */
-    private buildValidatorSubAgentStep<P>(currentPayload: P): BaseAgentNextStep<P> {
+    private validationPassedNeedsBuilding<P>(currentPayload: P): boolean {
+        // Guard: payload may be null/undefined on the very first agent turn
+        if (currentPayload == null) return false;
+
+        const payload = currentPayload as unknown as EntityDesignerPayload;
+        return (
+            payload.ValidationResult?.Valid === true &&
+            !payload.EntityDesignerResult
+        );
+    }
+
+    /**
+     * Builds a `BaseAgentNextStep` that triggers a named code sub-agent.
+     *
+     * Both deterministic intercepts — Validator and Builder — share the same
+     * step structure:
+     *   - `terminate: false` so the Loop framework continues after the sub-agent
+     *   - `terminateAfter: false` so Entity Designer gets another turn to react
+     *     (inspect ValidationResult, or present the build outcome to the user)
+     *
+     * The payload is passed through unchanged; the sub-agents read what they
+     * need directly from `SchemaDesign` and `ValidationResult`.
+     *
+     * @param agentName     Registered agent Name from MJ metadata
+     * @param message       Descriptive message for log output (code agents ignore it)
+     * @param currentPayload Current payload — forwarded to the sub-agent as-is
+     */
+    private buildSubAgentStep<P>(
+        agentName: string,
+        message: string,
+        currentPayload: P,
+    ): BaseAgentNextStep<P> {
         return {
             step: 'Sub-Agent',
-            terminate: false,          // framework continues after sub-agent returns
+            terminate: false,           // Entity Designer runs again after sub-agent returns
             previousPayload: currentPayload,
             newPayload: currentPayload,
             subAgent: {
-                name: SCHEMA_VALIDATOR_AGENT_NAME,
-                message: SCHEMA_VALIDATOR_MESSAGE,
-                terminateAfter: true,  // validator speaks directly to the user
+                name: agentName,
+                message,
+                terminateAfter: false,  // Entity Designer handles the next user-facing turn
             },
         };
     }

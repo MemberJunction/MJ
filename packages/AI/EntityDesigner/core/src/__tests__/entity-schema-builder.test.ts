@@ -158,7 +158,10 @@ describe('EntityDesignerSchemaBuilder', () => {
             expect(mockCreateEntity).toHaveBeenCalledWith(
                 VALID_TABLE_DEFINITION,
                 expect.anything(),
-                expect.objectContaining({ SkipGitCommit: false, SkipRestart: false })
+                // SkipRestart must be true — the builder runs inside a live MJAPI request
+                // and a full server restart would kill the in-flight agent run.
+                // Metadata.Refresh() handles entity registration without a restart.
+                expect.objectContaining({ SkipGitCommit: false, SkipRestart: true })
             );
         });
 

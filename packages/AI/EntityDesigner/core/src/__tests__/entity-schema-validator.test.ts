@@ -25,6 +25,20 @@ vi.mock('@memberjunction/core', () => ({
             }),
         };
     }),
+    /**
+     * AuthorizationEvaluator is used by EntityDesignerSchemaValidator to check
+     * whether the context user has the required authorization. We delegate to
+     * the `UserCanExecute` stub on the auth object so existing test fixtures
+     * continue working without changes.
+     */
+    AuthorizationEvaluator: vi.fn().mockImplementation(function(this: unknown) {
+        return {
+            UserCanExecuteWithAncestors: vi.fn().mockImplementation(
+                (auth: { UserCanExecute?: (u: unknown) => boolean }, user: unknown) =>
+                    auth?.UserCanExecute?.(user) ?? false
+            ),
+        };
+    }),
     UserInfo: vi.fn(),
 }));
 
