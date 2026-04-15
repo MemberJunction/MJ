@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, CodeNameFromString } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, CodeNameFromString } from '@memberjunction/core';
 import {
     CodeGenDatabaseProvider,
     CRUDType,
@@ -7,13 +7,12 @@ import {
     FullTextSearchResult,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
-import { logIf, sortBySequenceAndCreatedAt } from '../../../Misc/util';
-import { configInfo, dbDatabase } from '../../../Config/config';
-import { sqlConfig, MSSQLConnection } from '../../../Config/db-connection';
-import { logError, logMessage, logWarning } from '../../../Misc/status_logging';
+import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
+import { dbDatabase } from '../../../Config/config';
+import { MSSQLConnection } from '../../../Config/db-connection';
+import { logError, logWarning } from '../../../Misc/status_logging';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync, spawn } from 'child_process';
 
 const ssDialect = new SQLServerDialect();
 
@@ -1507,192 +1506,31 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
      * `trustServerCertificate`. Returns `true` on successful execution, `false` on failure.
      */
     async executeSQLFileViaShell(filePath: string): Promise<boolean> {
-        // Prefer in-process execution via mssql connection pool.
-        // This works on Azure App Service (no sqlcmd binary) and everywhere else.
-        // Falls back to sqlcmd CLI for environments where in-process fails.
         try {
-            return await this.executeSQLFileInProcess(filePath);
-        } catch (inProcessErr) {
-            logWarning(`[CodeGen] In-process SQL execution failed for ${filePath}, falling back to sqlcmd: ${inProcessErr instanceof Error ? inProcessErr.message : inProcessErr}`);
-            try {
-                this.validateSqlConfig();
-                const serverSpec = this.buildServerSpec();
-                const absoluteFilePath = this.resolveAndShortPathConvert(filePath);
-                const args = this.buildSqlcmdArgs(serverSpec, absoluteFilePath);
-                return await this.spawnSqlcmd(args, filePath);
-            } catch (e) {
-                this.logSqlcmdError(e);
-                return false;
-            }
-        }
-    }
+            const sql = fs.readFileSync(filePath, 'utf-8');
+            if (!sql.trim()) return true;
 
-    /**
-     * Executes a SQL file in-process via the mssql connection pool.
-     * Splits on GO batch separators and executes each batch sequentially.
-     * Same pattern used by RuntimeSchemaManager.executeMigration().
-     */
-    private async executeSQLFileInProcess(filePath: string): Promise<boolean> {
-        const sql = fs.readFileSync(filePath, 'utf-8');
-        if (!sql.trim()) return true;
+            const batches = sql
+                .split(/^\s*GO\s*$/gim)
+                .map(b => b.trim())
+                .filter(b => b.length > 0);
 
-        const batches = sql
-            .split(/^\s*GO\s*$/gim)
-            .map(b => b.trim())
-            .filter(b => b.length > 0);
+            const pool = await MSSQLConnection();
 
-        const pool = await MSSQLConnection();
-
-        for (const batch of batches) {
-            try {
-                await pool.request().query(batch);
-            } catch (err) {
-                // Log but continue — some generated SQL may reference objects
-                // created later in the batch sequence
-                const msg = err instanceof Error ? err.message : String(err);
-                logWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Validates that required SQL Server connection configuration is present.
-     */
-    private validateSqlConfig(): void {
-        if (sqlConfig.user === undefined || sqlConfig.password === undefined || sqlConfig.database === undefined) {
-            throw new Error('SQL Server user, password, and database must be provided in the configuration');
-        }
-    }
-
-    /**
-     * Builds the server specification string for sqlcmd (server[,port][\instance]).
-     */
-    private buildServerSpec(): string {
-        let serverSpec = sqlConfig.server;
-        if (sqlConfig.port) {
-            serverSpec += `,${sqlConfig.port}`;
-        }
-        if (sqlConfig.options?.instanceName) {
-            serverSpec += `\\${sqlConfig.options.instanceName}`;
-        }
-        return serverSpec;
-    }
-
-    /**
-     * Resolves the file path to absolute and converts to 8.3 short path on Windows if needed.
-     */
-    private resolveAndShortPathConvert(filePath: string): string {
-        const cwd = path.resolve(process.cwd());
-        let absoluteFilePath = path.resolve(cwd, filePath);
-
-        const isWindows = process.platform === 'win32';
-        if (isWindows && absoluteFilePath.includes(' ')) {
-            absoluteFilePath = this.tryConvertToShortPath(absoluteFilePath);
-        }
-        return absoluteFilePath;
-    }
-
-    /**
-     * Attempts to convert a Windows path to 8.3 short format to avoid quoting issues.
-     */
-    private tryConvertToShortPath(absoluteFilePath: string): string {
-        try {
-            const result = execSync(`for %I in ("${absoluteFilePath}") do @echo %~sI`, {
-                encoding: 'utf8',
-                shell: 'cmd.exe'
-            }).trim();
-            if (result && !result.includes('ERROR') && !result.includes('%~sI')) {
-                logIf(configInfo.verboseOutput, `Converted path to short format: ${result}`);
-                return result;
-            }
-        } catch (e) {
-            logIf(configInfo.verboseOutput, `Could not convert to short path, using original: ${e}`);
-        }
-        return absoluteFilePath;
-    }
-
-    /**
-     * Builds the argument array for the sqlcmd CLI tool.
-     */
-    private buildSqlcmdArgs(serverSpec: string, absoluteFilePath: string): string[] {
-        const args = [
-            '-S', serverSpec,
-            '-U', sqlConfig.user!,
-            '-P', sqlConfig.password!,
-            '-d', sqlConfig.database!,
-            '-I',       // Enable QUOTED_IDENTIFIER
-            '-V', '17', // Only fail on severity >= 17
-            '-i', absoluteFilePath
-        ];
-        if (sqlConfig.options?.trustServerCertificate) {
-            args.push('-C');
-        }
-        return args;
-    }
-
-    /**
-     * Spawns the sqlcmd process and waits for completion.
-     */
-    private async spawnSqlcmd(args: string[], filePath: string): Promise<boolean> {
-        logIf(
-            configInfo.verboseOutput,
-            `Executing SQL file: ${filePath} as ${sqlConfig.user}@${sqlConfig.server}:${sqlConfig.port}/${sqlConfig.database}`
-        );
-        const isWindows = process.platform === 'win32';
-        const sqlcmdCommand = isWindows ? 'sqlcmd.exe' : 'sqlcmd';
-
-        const spawnOptions: Record<string, unknown> = { shell: false };
-        if (isWindows) {
-            spawnOptions['windowsVerbatimArguments'] = true;
-        }
-
-        const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-            const child = spawn(sqlcmdCommand, args, spawnOptions as Parameters<typeof spawn>[2]);
-            let stdout = '';
-            let stderr = '';
-
-            child.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
-            child.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
-            child.on('error', (error: Error) => { reject(error); });
-            child.on('close', (code: number | null) => {
-                if (code === 0) {
-                    resolve({ stdout, stderr });
-                } else {
-                    const error = new Error(`sqlcmd exited with code ${code}`);
-                    Object.assign(error, { stdout, stderr, code });
-                    reject(error);
+            for (const batch of batches) {
+                try {
+                    await pool.request().query(batch);
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    logWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
                 }
-            });
-        });
+            }
 
-        if (result.stdout && result.stdout.trim().length > 0) {
-            logWarning(`SQL Server message: ${result.stdout.trim()}`);
+            return true;
+        } catch (e) {
+            logError(`[CodeGen] Failed to execute SQL file ${filePath}: ${e instanceof Error ? e.message : e}`);
+            return false;
         }
-        if (result.stderr && result.stderr.trim().length > 0) {
-            logWarning(`SQL Server stderr: ${result.stderr.trim()}`);
-        }
-        return true;
     }
 
-    /**
-     * Logs a sqlcmd execution error, masking the password in the output.
-     */
-    private logSqlcmdError(e: unknown): void {
-        const errRecord = e as Record<string, unknown>;
-        let message = (e instanceof Error) ? e.message : String(e);
-
-        if (errRecord['stdout']) {
-            message += `\n SQL Server message: ${errRecord['stdout']}`;
-        }
-        if (errRecord['stderr']) {
-            message += `\n SQL Server error: ${errRecord['stderr']}`;
-        }
-
-        const errorMessage = sqlConfig.password
-            ? message.replace(sqlConfig.password, 'XXXXX')
-            : message;
-        logError('Error executing batch SQL file: ' + errorMessage);
-    }
 }
