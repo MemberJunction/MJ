@@ -1,9 +1,9 @@
-import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy, Input } from '@angular/core';
+import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy, Input, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
-import { NavigationRequest } from '@memberjunction/ng-artifacts';
-import { UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
+import { AnalyzeArtifactService, NavigationRequest } from '@memberjunction/ng-artifacts';
+import { DataSnapshot, UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 
 /**
@@ -59,7 +59,8 @@ import { Subject } from 'rxjs';
               [refreshTrigger]="refreshTrigger"
               (navigateToLink)="onNavigateToLink($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"
-              (navigationRequest)="onNavigationRequest($event)">
+              (navigationRequest)="onNavigationRequest($event)"
+              (analyzeRequested)="onAnalyzeRequested($event)">
             </mj-artifact-viewer-panel>
           }
         </div>
@@ -255,6 +256,33 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
             event.queryParams,
             false
         );
+    }
+
+    private analyzeService = inject(AnalyzeArtifactService);
+
+    /**
+     * Handler for the Analyze button on the embedded artifact viewer.
+     * Captures the live DataSnapshot, creates an analysis conversation with
+     * the snapshot attached as input, and emits a navigation request to open
+     * the new conversation in the host application.
+     */
+    public async onAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+        try {
+            const result = await this.analyzeService.StartAnalysisConversation({
+                snapshot: event.snapshot,
+                currentUser: this.currentUser,
+                environmentId: this.environmentId,
+            });
+
+            this.RequestOpenNavItem(
+                'Conversations',
+                undefined,
+                { conversationId: result.conversationId },
+                false,
+            );
+        } catch (error) {
+            this.setError(error instanceof Error ? error.message : 'Failed to start analysis conversation');
+        }
     }
 
     protected override cleanup(): void {
