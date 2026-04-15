@@ -2,7 +2,7 @@ import { Component, ViewEncapsulation, inject } from '@angular/core';
 import { DataSnapshot, Metadata, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
+import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { AnalyzeArtifactService } from '@memberjunction/ng-artifacts';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -57,8 +57,12 @@ export class ArtifactResource extends BaseResourceComponent {
       this.artifactId = this.Data.ResourceRecordID;
     }
 
-    // Get environment ID (default to empty string if not available)
-    this.environmentId = '';  // TODO: Get from configuration if needed
+    // Environment ID — use the configured environment if present, otherwise
+    // fall back to the default environment. Must be a valid UUID since
+    // downstream saves (e.g. AnalyzeArtifactService creating artifacts)
+    // require a non-empty EnvironmentID.
+    this.environmentId = (this.Data?.Configuration?.['environmentId'] as string | undefined)
+        || MJEnvironmentEntityExtended.DefaultEnvironmentID;
 
     setTimeout(() => this.NotifyLoadComplete(), 100);
   }
