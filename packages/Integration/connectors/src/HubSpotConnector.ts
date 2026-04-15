@@ -1374,9 +1374,9 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const auth = await this.Authenticate(companyIntegration, contextUser);
         const headers = this.BuildHeaders(auth);
 
-        // Non-CRM objects don't have /crm/v3/properties — discover fields dynamically
+        // Non-CRM objects have fixed schemas — return static PK field; IntrospectSchema supplements from DB
         if (!this.IsCRMObject(objectName)) {
-            return this.DiscoverNonCRMFields(auth, headers, objectName);
+            return this.DiscoverNonCRMFields(objectName);
         }
 
         // CRM objects: live field discovery via Properties API
@@ -1427,71 +1427,25 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
      * and inferring field names/types from the response.
      */
     /**
-     * Discovers fields for T3 (non-CRM) objects by sampling up to 10 live records
-     * and unioning all keys across the sample. This catches undocumented fields,
-     * computed fields, and metadata fields that the API spec doesn't enumerate.
-     *
-     * Falls back gracefully:
-     * - Parameterized endpoints (parentObject set): return [] — no parent IDs at discovery time
-     * - Scope-restricted endpoints (403): return [] — IntrospectSchema uses DB-cached static fields
-     * - Empty endpoints (no data yet): return [] — static metadata is the fallback
+     * Non-CRM objects have fixed, documented schemas. Return the PK field from the
+     * static NON_CRM_OBJECTS config so IntrospectSchema always gets at least the key
+     * field. IntrospectSchema's DB-fallback then supplements with the full static field
+     * list from the metadata JSON. No live API sampling needed.
      */
-    private async DiscoverNonCRMFields(
-        auth: RESTAuthContext,
-        _headers: Record<string, string>,
-        objectName: string
-    ): Promise<ExternalFieldSchema[]> {
+    private DiscoverNonCRMFields(objectName: string): ExternalFieldSchema[] {
         const objConfig = this.GetNonCRMObject(objectName);
-        // Parameterized endpoints require parent IDs — can't call at discovery time
-        if (!objConfig || objConfig.parentObject) return [];
-
-        try {
-            const url = `${HUBSPOT_API_BASE}${objConfig.apiPath}?limit=10`;
-            const response = await this.MakeHTTPRequest(auth, url, 'GET', this.BuildHeaders(auth));
-            if (response.Status !== 200) return [];
-
-            const body = response.Body as Record<string, unknown>;
-            const results = (body['Resources'] ?? body['results'] ?? body['objects'] ?? []) as Array<Record<string, unknown>>;
-            if (results.length === 0) return [];
-
-            // Union all field keys across all sampled records for maximum coverage
-            const allKeys = new Map<string, unknown>();
-            for (const raw of results) {
-                // Flatten properties envelope if present
-                const props = raw['properties'] as Record<string, unknown> | undefined;
-                const flat = props ? { ...raw, ...props } : raw;
-                for (const [k, v] of Object.entries(flat)) {
-                    if (!allKeys.has(k)) allKeys.set(k, v);
-                }
-            }
-
-            return [...allKeys.entries()].map(([name, sample]) => ({
-                Name: name,
-                Label: name,
-                DataType: this.InferFieldType(sample),
-                IsRequired: false,
-                IsUniqueKey: name === objConfig.pkField,
-                IsReadOnly: false,
-                Description: undefined,
-            }));
-        } catch {
-            return [];
-        }
+        if (!objConfig) return [];
+        return [{
+            Name: objConfig.pkField,
+            Label: objConfig.pkField,
+            Description: `Primary key for ${objConfig.label}`,
+            DataType: 'string',
+            IsRequired: true,
+            IsUniqueKey: true,
+            IsReadOnly: true,
+        }];
     }
 
-    /**
-     * Infer a MJ-compatible type string from a JavaScript value.
-     */
-    private InferFieldType(value: unknown): string {
-        if (value === null || value === undefined) return 'string';
-        if (typeof value === 'boolean') return 'bool';
-        if (typeof value === 'number') return Number.isInteger(value) ? 'number' : 'number';
-        if (typeof value === 'string') {
-            if (/^\d{4}-\d{2}-\d{2}/.test(value)) return 'datetime';
-            return 'string';
-        }
-        return 'string';
-    }
 
     /**
      * Full schema introspection — discovers all objects and their fields from the live API.
