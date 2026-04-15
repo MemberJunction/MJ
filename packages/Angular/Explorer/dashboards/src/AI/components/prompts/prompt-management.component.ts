@@ -444,7 +444,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
 
     // Apply sorting
     this.filteredPrompts = this.applySorting(this.filteredPrompts);
-    this.cdr.detectChanges();
+    this.cdr.markForCheck();
   }
 
   /**
