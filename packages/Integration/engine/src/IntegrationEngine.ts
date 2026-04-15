@@ -122,7 +122,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         for (const run of orphanedRuns.Results) {
             const companyIntegrationID = run.CompanyIntegrationID;
-            const runID = run.Get('ID') as string;
+            const runID = run.ID;
 
             try {
                 // Find which entity maps already completed in this run
@@ -272,7 +272,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         try {
             const result = await this.ExecuteEntityMaps(config, run, contextUser, onProgress, abortSignal);
-            result.RunID = run.Get('ID') as string;
+            result.RunID = run.ID;
             result.Duration = Date.now() - startTime;
             if (result.RecordsErrored > 0) {
                 result.ErrorMessage = `Sync completed with ${result.RecordsErrored} error(s)`;
@@ -323,7 +323,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
 
         const integration = (integrationsResult.Results as MJIntegrationEntity[])
-            .find(i => i.Get('ID') === companyIntegration.IntegrationID);
+            .find(i => i.ID === companyIntegration.IntegrationID);
         if (!integration) {
             throw new Error(`Integration not found for CompanyIntegration: ${companyIntegrationID}`);
         }
@@ -335,7 +335,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Filter to specific entity maps if requested
         if (options?.EntityMapIDs && options.EntityMapIDs.length > 0) {
             const requestedIDs = new Set(options.EntityMapIDs.map(id => id.toLowerCase()));
-            entityMaps = entityMaps.filter(m => requestedIDs.has((m.Get('ID') as string).toLowerCase()));
+            entityMaps = entityMaps.filter(m => requestedIDs.has(m.ID.toLowerCase()));
         }
 
         return {
@@ -363,7 +363,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             contextUser
         );
         run.NewRecord();
-        run.CompanyIntegrationID = companyIntegration.Get('ID');
+        run.CompanyIntegrationID = companyIntegration.ID;
         run.RunByUserID = contextUser.ID;
         run.StartedAt = new Date();
         run.Status = 'In Progress';
@@ -424,7 +424,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 this.MergeResult(aggregate, mapResult);
                 aggregate.EntityMapResults!.push(this.buildEntityMapResult(entityMap, mapResult, Date.now() - mapStartTime));
             } catch (err) {
-                const objName = entityMap.ExternalObjectName ?? String(entityMap.Get('ID'));
+                const objName = entityMap.ExternalObjectName ?? entityMap.ID;
                 const errMsg = err instanceof Error ? err.message : String(err);
                 console.error(`[IntegrationEngine] Entity map '${objName}' failed: ${errMsg}`);
                 aggregate.RecordsErrored++;
@@ -437,7 +437,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     ExternalRecord: { ExternalID: objName, ObjectType: objName, Fields: {} },
                 });
                 aggregate.EntityMapResults!.push({
-                    EntityMapID: entityMap.Get('ID') as string,
+                    EntityMapID: entityMap.ID,
                     ExternalObjectName: objName,
                     EntityName: entityMap.Entity ?? '',
                     Success: false,
@@ -501,7 +501,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         onProgress?: OnProgressCallback,
         abortSignal?: AbortSignal
     ): Promise<SyncResult> {
-        const entityMapID = entityMap.Get('ID') as string;
+        const entityMapID = entityMap.ID;
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
         const watermark = await this.watermarkService.Load(entityMapID, contextUser, 'Pull');
 
@@ -511,7 +511,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const watermarkType = (watermark.WatermarkType ?? 'Timestamp') as WatermarkType;
             if (!this.watermarkService.ValidateWatermark(initialWatermark, watermarkType)) {
                 console.warn(
-                    `[IntegrationEngine] Invalid watermark '${initialWatermark}' for EntityMap ${entityMap.Get('ID')}, resetting to full fetch`
+                    `[IntegrationEngine] Invalid watermark '${initialWatermark}' for EntityMap ${entityMap.ID}, resetting to full fetch`
                 );
                 initialWatermark = null;
             }
@@ -675,12 +675,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMap: ICompanyIntegrationEntityMap,
         run: MJCompanyIntegrationRunEntity,
         contextUser: UserInfo,
-        entityMapIndex: number,
-        totalEntityMaps: number,
-        onProgress?: OnProgressCallback,
+        _entityMapIndex: number,
+        _totalEntityMaps: number,
+        _onProgress?: OnProgressCallback,
         _abortSignal?: AbortSignal
     ): Promise<SyncResult> {
-        const entityMapID = entityMap.Get('ID') as string;
+        const entityMapID = entityMap.ID;
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
         const pushWatermark = await this.watermarkService.Load(entityMapID, contextUser, 'Push');
         const lastPushAt = pushWatermark?.WatermarkValue ?? null;
@@ -839,7 +839,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Load existing record maps to know which records already exist externally
         const mapResult = await rv.RunView<{ EntityRecordID: string; ExternalSystemRecordID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
-            ExtraFilter: `CompanyIntegrationID='${companyIntegration.Get('ID')}' AND EntityID='${entityMap.EntityID}'`,
+            ExtraFilter: `CompanyIntegrationID='${companyIntegration.ID}' AND EntityID='${entityMap.EntityID}'`,
             Fields: ['EntityRecordID', 'ExternalSystemRecordID'],
             ResultType: 'simple',
         }, contextUser);
@@ -895,7 +895,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const rv = new RunView();
         const mapResult = await rv.RunView<{ ExternalSystemRecordID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
-            ExtraFilter: `EntityRecordID='${change.RecordID}' AND CompanyIntegrationID='${config.companyIntegration.Get('ID')}'`,
+            ExtraFilter: `EntityRecordID='${change.RecordID}' AND CompanyIntegrationID='${config.companyIntegration.ID}'`,
             Fields: ['ExternalSystemRecordID'],
             MaxRows: 1,
             ResultType: 'simple',
@@ -952,7 +952,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // Persist the new external ID so future syncs update instead of re-creating
             if (createResult.ExternalID) {
                 await this.SaveRecordMap(
-                    config.companyIntegration.Get('ID') as string,
+                    config.companyIntegration.ID as string,
                     createResult.ExternalID,
                     entityMap.EntityID,
                     change.RecordID,
@@ -981,7 +981,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const mapResult = await rv.RunView<{ EntityRecordID: string; ExternalSystemRecordID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
             ExtraFilter:
-                `CompanyIntegrationID='${companyIntegration.Get('ID')}' ` +
+                `CompanyIntegrationID='${companyIntegration.ID}' ` +
                 `AND EntityID='${entityMap.EntityID}'`,
             Fields: ['EntityRecordID', 'ExternalSystemRecordID'],
             ResultType: 'simple',
@@ -1166,7 +1166,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         // Use the external ID as the entity record identifier in the record map
         await this.SaveRecordMap(
-            companyIntegration.Get('ID'),
+            companyIntegration.ID,
             record.ExternalRecord.ExternalID,
             entityMap.EntityID,
             record.ExternalRecord.ExternalID,
@@ -1371,7 +1371,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             contextUser
         );
         detail.NewRecord();
-        detail.CompanyIntegrationRunID = run.Get('ID');
+        detail.CompanyIntegrationRunID = run.ID;
         detail.EntityID = entityMap.EntityID;
         detail.RecordID = `Processed:${result.RecordsProcessed}`;
         detail.Action = result.RecordsCreated > 0 ? 'INSERT' : 'UPDATE';
@@ -1406,7 +1406,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         duration?: number
     ): EntityMapSyncResult {
         return {
-            EntityMapID: entityMap.Get('ID') as string,
+            EntityMapID: entityMap.ID,
             ExternalObjectName: entityMap.ExternalObjectName ?? '',
             EntityName: entityMap.Entity ?? '',
             Success: mapResult.RecordsErrored === 0,
@@ -1494,7 +1494,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             Event: event,
             Severity: severity,
             CompanyIntegrationID: run.CompanyIntegrationID,
-            RunID: run.Get('ID') as string,
+            RunID: run.ID,
             Subject: subject,
             Body: body,
             Result: result,
@@ -1524,7 +1524,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             Event: 'SyncFailed',
             Severity: 'Error',
             CompanyIntegrationID: run.CompanyIntegrationID,
-            RunID: run.Get('ID') as string,
+            RunID: run.ID,
             Subject: subject,
             Body: body,
             Result: result,

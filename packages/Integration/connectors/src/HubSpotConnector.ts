@@ -2202,7 +2202,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             ApiVersion: credentials.ApiVersion,
         };
 
-        const configJson = companyIntegration.Get('Configuration') as string | null;
+        const configJson = companyIntegration.Configuration;
         if (configJson) {
             this.ApplyConfigOverrides(config, configJson);
         }
@@ -2243,14 +2243,14 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         contextUser: UserInfo
     ): Promise<HubSpotCredentials> {
         // Try loading from linked Credential entity first
-        const credentialID = companyIntegration.Get('CredentialID') as string | null;
+        const credentialID = companyIntegration.CredentialID;
         if (credentialID) {
             const creds = await this.LoadFromCredentialEntity(credentialID, contextUser);
             if (creds) return creds;
         }
 
         // Fallback: read from CompanyIntegration Configuration JSON
-        const configJson = companyIntegration.Get('Configuration') as string | null;
+        const configJson = companyIntegration.Configuration;
         if (configJson) {
             const creds = this.ParseCredentialJson(configJson);
             if (creds) return creds;

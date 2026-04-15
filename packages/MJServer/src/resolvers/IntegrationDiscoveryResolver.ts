@@ -1890,7 +1890,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                             .GetIntegrationObjectsByIntegrationID(companyIntegration.IntegrationID);
                         const customObjects = sourceSchema.Objects
                             .filter(o => !engineObjects
-                                .some(ex => ex.Name.toLowerCase() === o.ExternalName.toLowerCase() && !ex.Get('IsCustom')))
+                                .some(ex => ex.Name.toLowerCase() === o.ExternalName.toLowerCase() && !ex.IsCustom))
                             .map(o => ({
                                 Name: o.ExternalName,
                                 DisplayName: o.ExternalLabel || o.ExternalName,

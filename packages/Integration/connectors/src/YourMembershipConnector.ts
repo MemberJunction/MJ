@@ -2961,7 +2961,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         if (ymAuth.Config?.ClientID) {
             return `${YM_API_BASE}/Ams/${ymAuth.Config.ClientID}`;
         }
-        const configJson = companyIntegration.Get('Configuration') as string | null;
+        const configJson = companyIntegration.Configuration;
         if (configJson) {
             const parsed = JSON.parse(configJson) as Record<string, string>;
             const clientId = parsed['ClientID'] || parsed['clientId'] || parsed['ClientId'];
@@ -3717,13 +3717,13 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser?: UserInfo
     ): Promise<YMConnectionConfig> {
-        const credentialID = companyIntegration.Get('CredentialID') as string | null;
+        const credentialID = companyIntegration.CredentialID;
         if (credentialID && contextUser) {
             const config = await this.LoadFromCredential(credentialID, contextUser);
             if (config) return config;
         }
 
-        const configJson = companyIntegration.Get('Configuration') as string | null;
+        const configJson = companyIntegration.Configuration;
         if (configJson) {
             return this.ParseConfigJson(configJson);
         }
