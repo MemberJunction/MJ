@@ -1,25 +1,3 @@
--- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
@@ -73,24 +51,24 @@ CREATE TABLE __mj."TestRunOutput" (
 );
 
 ALTER TABLE __mj."TestRunOutput"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."TestRunOutput" */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."TestRunOutput" */
 
 ALTER TABLE __mj."TestRunOutput"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_CreatedAt to entity __mj."TestRunOutputType" */;
-
-ALTER TABLE __mj."TestRunOutputType"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."TestRunOutputType" */;
+/* SQL text to add special date field __mj_CreatedAt to entity __mj."TestRunOutputType" */
 
 ALTER TABLE __mj."TestRunOutputType"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to insert new entity field */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."TestRunOutputType" */
+
+ALTER TABLE __mj."TestRunOutputType"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+/* SQL text to insert new entity field */
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_TestRunOutput_TestRunID" ON __mj."TestRunOutput" ("TestRunID");
 
@@ -570,7 +548,7 @@ INSERT INTO __mj."EntityPermission"
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
                                                    ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
-/* SQL text to add special date field "__mj_CreatedAt" to entity __mj."TestRunOutput" */
+/* SQL text to add special date field __mj_CreatedAt to entity __mj."TestRunOutput" */
 
 DO $$
 BEGIN
@@ -2450,7 +2428,7 @@ GRANT SELECT ON __mj."vwTestRunOutputTypes" TO "cdp_UI", "cdp_Developer", "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRunOutputType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Test Run Output Types */;
+/* spCreate Permissions for MJ: Test Run Output Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRunOutputType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Test Run Output Types */
@@ -2484,7 +2462,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTestRunOutputType" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRunOutputType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Test Run Output Types */;
+/* spDelete Permissions for MJ: Test Run Output Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRunOutputType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Index for Foreign Keys for TestRunOutput */
@@ -2528,7 +2506,7 @@ GRANT SELECT ON __mj."vwTestRunOutputs" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRunOutput" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Test Run Outputs */;
+/* spCreate Permissions for MJ: Test Run Outputs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRunOutput" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Test Run Outputs */
@@ -2562,10 +2540,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTestRunOutput" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRunOutput" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Test Run Outputs */;
+/* spDelete Permissions for MJ: Test Run Outputs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRunOutput" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* SQL text to insert new entity field */;
+/* SQL text to insert new entity field */
 
 
 -- ===================== Comments =====================

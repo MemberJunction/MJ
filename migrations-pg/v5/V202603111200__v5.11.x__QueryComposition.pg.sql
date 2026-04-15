@@ -1,25 +1,3 @@
--- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
@@ -61,14 +39,14 @@ CREATE TABLE __mj."QueryDependency" (
 );
 
 ALTER TABLE __mj."QueryDependency"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."QueryDependency" */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."QueryDependency" */
 
 ALTER TABLE __mj."QueryDependency"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to insert new entity field */;
+/* SQL text to insert new entity field */
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_QueryDependency_QueryID" ON __mj."QueryDependency" ("QueryID");
 
@@ -2008,7 +1986,7 @@ GRANT SELECT ON __mj."vwQueryDependencies" TO "cdp_UI", "cdp_Developer", "cdp_In
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryDependency" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Query Dependencies */;
+/* spCreate Permissions for MJ: Query Dependencies */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryDependency" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Query Dependencies */
@@ -2042,7 +2020,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateQueryDependency" TO "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryDependency" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Query Dependencies */;
+/* spDelete Permissions for MJ: Query Dependencies */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryDependency" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Index for Foreign Keys for Query */
@@ -2085,7 +2063,7 @@ GRANT SELECT ON __mj."vwQueries" TO "cdp_Developer", "cdp_UI", "cdp_Integration"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQuery" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Queries */;
+/* spCreate Permissions for MJ: Queries */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQuery" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Queries */
@@ -2119,10 +2097,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateQuery" TO "cdp_Developer", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQuery" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Queries */;
+/* spDelete Permissions for MJ: Queries */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQuery" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* SQL text to insert new entity field */;
+/* SQL text to insert new entity field */
 
 
 -- ===================== Comments =====================

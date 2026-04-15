@@ -1,25 +1,3 @@
--- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
@@ -42645,7 +42623,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '6C6A6186-10F2-41B4-85D5-E1F44ADAC380' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Conversation Detail Ratings."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Conversation Detail Ratings.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -42654,7 +42632,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '49C7ADAE-9D03-4347-B477-6DE824021056' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Conversation Detail Ratings."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Conversation Detail Ratings.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -42856,7 +42834,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '281A4C5E-0BE9-48EC-9AFE-2CAB36118447' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Conversations."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Conversations.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -42865,7 +42843,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '6B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Conversations."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Conversations.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -42884,7 +42862,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'FA73433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: AI Result Cache."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: AI Result Cache.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -42893,7 +42871,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '0774433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: AI Result Cache."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: AI Result Cache.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43267,7 +43245,7 @@ SET
    "CodeType" = 'Other'
 WHERE 
    "ID" = 'DD7A82BD-C269-434B-9BB4-BBAC6064AF98' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: AI Agent Run Steps."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: AI Agent Run Steps.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43276,7 +43254,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '576FE9EC-53A5-47F3-B194-6F32981B92D8' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: AI Agent Run Steps."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: AI Agent Run Steps.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43351,7 +43329,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'CB7692F5-554C-48A6-B88B-207DD35A3072' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Conversation Detail Artifacts."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Conversation Detail Artifacts.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43360,7 +43338,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'DDB7A2FA-6D08-4DC3-B69A-6851901A4F79' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Conversation Detail Artifacts."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Conversation Detail Artifacts.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43506,7 +43484,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '3C4417F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Duplicate Run Details."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Duplicate Run Details.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43515,7 +43493,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '835817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Duplicate Run Details."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Duplicate Run Details.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43592,7 +43570,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'C94D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Employee Company Integrations."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Employee Company Integrations.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43601,7 +43579,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'A05817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Employee Company Integrations."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Employee Company Integrations.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43658,7 +43636,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '5E4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Employee Roles."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Employee Roles.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43667,7 +43645,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '014D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Employee Roles."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Employee Roles.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43726,7 +43704,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '5F4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Employee Skills."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Employee Skills.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43735,7 +43713,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '034D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Employee Skills."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Employee Skills.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43926,7 +43904,7 @@ SET
    "CodeType" = 'Other'
 WHERE 
    "ID" = '7D4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Error Logs."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Error Logs.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43935,7 +43913,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '4D5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Error Logs."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Error Logs.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -43993,7 +43971,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '6B8CB4D2-E847-4F20-9D22-3577FE43B627' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Entity Communication Fields."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Entity Communication Fields.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44002,7 +43980,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'E15717F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Entity Communication Fields."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Entity Communication Fields.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44048,7 +44026,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '7E4C17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Entity Action Invocations."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Entity Action Invocations.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44057,7 +44035,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '1C4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Entity Action Invocations."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Entity Action Invocations.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44156,7 +44134,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '5E5717F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Entity Action Filters."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Entity Action Filters.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44165,7 +44143,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'DD5717F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Entity Action Filters."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Entity Action Filters.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44250,7 +44228,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '9B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Entity Action Params."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Entity Action Params.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44259,7 +44237,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '9C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Entity Action Params."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Entity Action Params.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44378,7 +44356,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '135917F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Recommendation Items."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Recommendation Items.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44387,7 +44365,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '035917F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Recommendation Items."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Recommendation Items.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44452,7 +44430,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'DE4C17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Recommendations."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Recommendations.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44461,7 +44439,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'FD5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Recommendations."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Recommendations.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44545,7 +44523,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'D5D4F701-DD24-41F4-B62C-C5EFD4676B92' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: MCP Server Connection Tools."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: MCP Server Connection Tools.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44554,7 +44532,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '3DC2DCEC-6F1E-421A-BE51-578F7D2F091E' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: MCP Server Connection Tools."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: MCP Server Connection Tools.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44910,7 +44888,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'B0BE70A8-D2E8-46A6-B746-57528E095F81' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: MCP Tool Execution Logs."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: MCP Tool Execution Logs.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -44919,7 +44897,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '78A09C32-7FE6-408A-862A-71BD7E0042F7' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: MCP Tool Execution Logs."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: MCP Tool Execution Logs.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -45103,7 +45081,7 @@ SET
    "CodeType" = 'SQL'
 WHERE 
    "ID" = '7321B323-7F8B-4DCD-AE44-01FCE8AAB7EF' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Template Params."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Template Params.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -45112,7 +45090,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '945817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Template Params."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Template Params.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -45385,7 +45363,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'F74D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Reports."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Reports.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -45394,7 +45372,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'B55817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Reports."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Reports.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -45460,7 +45438,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '6536EA2E-ACFC-4880-9A29-C65383CBDBB0' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Record Merge Deletion Logs."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Record Merge Deletion Logs.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -45469,7 +45447,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '755817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Record Merge Deletion Logs."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Record Merge Deletion Logs.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -45488,7 +45466,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'FD227316-95F3-468B-8DB8-AEA5E3A4C431' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Tasks."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Tasks.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -45497,7 +45475,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '7B6A3F29-48A9-41B8-8374-214F12A5659C' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Tasks."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Tasks.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -45769,7 +45747,7 @@ GRANT SELECT ON __mj."vwActionAuthorizations" TO "cdp_UI", "cdp_Integration", "c
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionAuthorization" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Action Authorizations */;
+/* spCreate Permissions for MJ: Action Authorizations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionAuthorization" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Action Authorizations */
@@ -45803,7 +45781,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateActionAuthorization" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionAuthorization" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Action Authorizations */;
+/* spDelete Permissions for MJ: Action Authorizations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionAuthorization" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Action Contexts */
@@ -45853,7 +45831,7 @@ GRANT SELECT ON __mj."vwActionContexts" TO "cdp_Integration", "cdp_UI", "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionContext" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Action Contexts */;
+/* spCreate Permissions for MJ: Action Contexts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionContext" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Action Contexts */
@@ -45887,7 +45865,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateActionContext" TO "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionContext" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Action Contexts */;
+/* spDelete Permissions for MJ: Action Contexts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionContext" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Action Categories */
@@ -45937,7 +45915,7 @@ GRANT SELECT ON __mj."vwActionCategories" TO "cdp_UI", "cdp_Integration", "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionCategory" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Action Categories */;
+/* spCreate Permissions for MJ: Action Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionCategory" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Action Categories */
@@ -45971,7 +45949,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateActionCategory" TO "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionCategory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Action Categories */;
+/* spDelete Permissions for MJ: Action Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionCategory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Access Control Rules */
@@ -46021,7 +45999,7 @@ GRANT SELECT ON __mj."vwAccessControlRules" TO "cdp_UI", "cdp_Developer", "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAccessControlRule" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Access Control Rules */;
+/* spCreate Permissions for MJ: Access Control Rules */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAccessControlRule" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Access Control Rules */
@@ -46055,7 +46033,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAccessControlRule" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAccessControlRule" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Access Control Rules */;
+/* spDelete Permissions for MJ: Access Control Rules */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAccessControlRule" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Action Execution Logs */
@@ -46105,7 +46083,7 @@ GRANT SELECT ON __mj."vwActionExecutionLogs" TO "cdp_UI", "cdp_Integration", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionExecutionLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Action Execution Logs */;
+/* spCreate Permissions for MJ: Action Execution Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionExecutionLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Action Execution Logs */
@@ -46139,7 +46117,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateActionExecutionLog" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionExecutionLog" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Action Execution Logs */;
+/* spDelete Permissions for MJ: Action Execution Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionExecutionLog" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Action Result Codes */
@@ -46189,7 +46167,7 @@ GRANT SELECT ON __mj."vwActionResultCodes" TO "cdp_Integration", "cdp_Developer"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionResultCode" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Action Result Codes */;
+/* spCreate Permissions for MJ: Action Result Codes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionResultCode" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Action Result Codes */
@@ -46223,7 +46201,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateActionResultCode" TO "cdp_In
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionResultCode" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Action Result Codes */;
+/* spDelete Permissions for MJ: Action Result Codes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionResultCode" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Action Params */
@@ -46273,7 +46251,7 @@ GRANT SELECT ON __mj."vwActionParams" TO "cdp_Integration", "cdp_UI", "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionParam" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Action Params */;
+/* spCreate Permissions for MJ: Action Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionParam" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Action Params */
@@ -46307,7 +46285,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateActionParam" TO "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Action Params */;
+/* spDelete Permissions for MJ: Action Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Action Libraries */
@@ -46357,7 +46335,7 @@ GRANT SELECT ON __mj."vwActionLibraries" TO "cdp_UI", "cdp_Integration", "cdp_De
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionLibrary" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Action Libraries */;
+/* spCreate Permissions for MJ: Action Libraries */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateActionLibrary" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Action Libraries */
@@ -46391,7 +46369,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateActionLibrary" TO "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionLibrary" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Action Libraries */;
+/* spDelete Permissions for MJ: Action Libraries */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteActionLibrary" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Configurations */
@@ -46441,7 +46419,7 @@ GRANT SELECT ON __mj."vwAIAgentConfigurations" TO "cdp_UI", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentConfiguration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Configurations */;
+/* spCreate Permissions for MJ: AI Agent Configurations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentConfiguration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Configurations */
@@ -46475,7 +46453,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentConfiguration" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentConfiguration" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Configurations */;
+/* spDelete Permissions for MJ: AI Agent Configurations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentConfiguration" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Artifact Types */
@@ -46525,7 +46503,7 @@ GRANT SELECT ON __mj."vwAIAgentArtifactTypes" TO "cdp_UI", "cdp_Developer", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentArtifactType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Artifact Types */;
+/* spCreate Permissions for MJ: AI Agent Artifact Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentArtifactType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Artifact Types */
@@ -46559,7 +46537,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentArtifactType" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentArtifactType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Artifact Types */;
+/* spDelete Permissions for MJ: AI Agent Artifact Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentArtifactType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Actions */
@@ -46609,7 +46587,7 @@ GRANT SELECT ON __mj."vwAIAgentActions" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentAction" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Actions */;
+/* spCreate Permissions for MJ: AI Agent Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentAction" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Actions */
@@ -46643,7 +46621,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentAction" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentAction" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Actions */;
+/* spDelete Permissions for MJ: AI Agent Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentAction" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Actions */
@@ -46693,7 +46671,7 @@ GRANT SELECT ON __mj."vwAIActions" TO "cdp_Developer", "cdp_Integration", "cdp_U
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAction" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Actions */;
+/* spCreate Permissions for MJ: AI Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAction" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Actions */
@@ -46727,7 +46705,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAction" TO "cdp_Developer"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAction" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Actions */;
+/* spDelete Permissions for MJ: AI Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAction" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Actions */
@@ -46777,7 +46755,7 @@ GRANT SELECT ON __mj."vwActions" TO "cdp_UI", "cdp_Integration", "cdp_Developer"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAction" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Actions */;
+/* spCreate Permissions for MJ: Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAction" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Actions */
@@ -46811,7 +46789,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAction" TO "cdp_Integration"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAction" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Actions */;
+/* spDelete Permissions for MJ: Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAction" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Learning Cycles */
@@ -46861,7 +46839,7 @@ GRANT SELECT ON __mj."vwAIAgentLearningCycles" TO "cdp_UI", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentLearningCycle" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Learning Cycles */;
+/* spCreate Permissions for MJ: AI Agent Learning Cycles */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentLearningCycle" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Learning Cycles */
@@ -46895,7 +46873,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentLearningCycle" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentLearningCycle" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Learning Cycles */;
+/* spDelete Permissions for MJ: AI Agent Learning Cycles */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentLearningCycle" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Examples */
@@ -46945,7 +46923,7 @@ GRANT SELECT ON __mj."vwAIAgentExamples" TO "cdp_UI", "cdp_Developer", "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentExample" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Examples */;
+/* spCreate Permissions for MJ: AI Agent Examples */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentExample" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Examples */
@@ -46979,7 +46957,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentExample" TO "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentExample" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Examples */;
+/* spDelete Permissions for MJ: AI Agent Examples */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentExample" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Data Sources */
@@ -47029,7 +47007,7 @@ GRANT SELECT ON __mj."vwAIAgentDataSources" TO "cdp_UI", "cdp_Developer", "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentDataSource" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Data Sources */;
+/* spCreate Permissions for MJ: AI Agent Data Sources */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentDataSource" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Data Sources */
@@ -47063,7 +47041,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentDataSource" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentDataSource" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Data Sources */;
+/* spDelete Permissions for MJ: AI Agent Data Sources */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentDataSource" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Modalities */
@@ -47113,7 +47091,7 @@ GRANT SELECT ON __mj."vwAIAgentModalities" TO "cdp_UI", "cdp_Developer", "cdp_In
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentModality" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Modalities */;
+/* spCreate Permissions for MJ: AI Agent Modalities */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentModality" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Modalities */
@@ -47147,7 +47125,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentModality" TO "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentModality" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Modalities */;
+/* spDelete Permissions for MJ: AI Agent Modalities */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentModality" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Models */
@@ -47197,7 +47175,7 @@ GRANT SELECT ON __mj."vwAIAgentModels" TO "cdp_UI", "cdp_Developer", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentModel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Models */;
+/* spCreate Permissions for MJ: AI Agent Models */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentModel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Models */
@@ -47231,7 +47209,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentModel" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentModel" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Models */;
+/* spDelete Permissions for MJ: AI Agent Models */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentModel" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Prompts */
@@ -47281,7 +47259,7 @@ GRANT SELECT ON __mj."vwAIAgentPrompts" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentPrompt" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Prompts */;
+/* spCreate Permissions for MJ: AI Agent Prompts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentPrompt" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Prompts */
@@ -47315,7 +47293,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentPrompt" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentPrompt" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Prompts */;
+/* spDelete Permissions for MJ: AI Agent Prompts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentPrompt" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Notes */
@@ -47365,7 +47343,7 @@ GRANT SELECT ON __mj."vwAIAgentNotes" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentNote" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Notes */;
+/* spCreate Permissions for MJ: AI Agent Notes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentNote" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Notes */
@@ -47399,7 +47377,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentNote" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentNote" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Notes */;
+/* spDelete Permissions for MJ: AI Agent Notes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentNote" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Relationships */
@@ -47449,7 +47427,7 @@ GRANT SELECT ON __mj."vwAIAgentRelationships" TO "cdp_UI", "cdp_Developer", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRelationship" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Relationships */;
+/* spCreate Permissions for MJ: AI Agent Relationships */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRelationship" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Relationships */
@@ -47483,7 +47461,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentRelationship" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRelationship" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Relationships */;
+/* spDelete Permissions for MJ: AI Agent Relationships */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRelationship" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Permissions */
@@ -47533,7 +47511,7 @@ GRANT SELECT ON __mj."vwAIAgentPermissions" TO "cdp_UI", "cdp_Developer", "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Permissions */;
+/* spCreate Permissions for MJ: AI Agent Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Permissions */
@@ -47567,7 +47545,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentPermission" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Permissions */;
+/* spDelete Permissions for MJ: AI Agent Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Requests */
@@ -47617,7 +47595,7 @@ GRANT SELECT ON __mj."vwAIAgentRequests" TO "cdp_UI", "cdp_Developer", "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRequest" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Requests */;
+/* spCreate Permissions for MJ: AI Agent Requests */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRequest" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Requests */
@@ -47651,7 +47629,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentRequest" TO "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRequest" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Requests */;
+/* spDelete Permissions for MJ: AI Agent Requests */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRequest" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Run Medias */
@@ -47701,7 +47679,7 @@ GRANT SELECT ON __mj."vwAIAgentRunMedias" TO "cdp_UI", "cdp_Developer", "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRunMedia" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Run Medias */;
+/* spCreate Permissions for MJ: AI Agent Run Medias */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRunMedia" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Run Medias */
@@ -47735,7 +47713,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentRunMedia" TO "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRunMedia" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Run Medias */;
+/* spDelete Permissions for MJ: AI Agent Run Medias */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRunMedia" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Runs */
@@ -47785,7 +47763,7 @@ GRANT SELECT ON __mj."vwAIAgentRuns" TO "cdp_UI", "cdp_Developer", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Runs */;
+/* spCreate Permissions for MJ: AI Agent Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Runs */
@@ -47851,7 +47829,7 @@ GRANT SELECT ON __mj."vwAIAgentRunSteps" TO "cdp_UI", "cdp_Developer", "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRunStep" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Run Steps */;
+/* spCreate Permissions for MJ: AI Agent Run Steps */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRunStep" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Run Steps */
@@ -47917,7 +47895,7 @@ GRANT SELECT ON __mj."vwAIAgentStepPaths" TO "cdp_UI", "cdp_Developer", "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentStepPath" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Step Paths */;
+/* spCreate Permissions for MJ: AI Agent Step Paths */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentStepPath" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Step Paths */
@@ -47951,7 +47929,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentStepPath" TO "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentStepPath" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Step Paths */;
+/* spDelete Permissions for MJ: AI Agent Step Paths */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentStepPath" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: AI Agent Run Steps */
@@ -47969,7 +47947,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentStepPath" TO "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRunStep" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Run Steps */;
+/* spDelete Permissions for MJ: AI Agent Run Steps */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRunStep" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: AI Agent Runs */
@@ -47987,7 +47965,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRunStep" TO "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Runs */;
+/* spDelete Permissions for MJ: AI Agent Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Architectures */
@@ -48037,7 +48015,7 @@ GRANT SELECT ON __mj."vwAIArchitectures" TO "cdp_UI", "cdp_Developer", "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIArchitecture" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Architectures */;
+/* spCreate Permissions for MJ: AI Architectures */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIArchitecture" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Architectures */
@@ -48071,7 +48049,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIArchitecture" TO "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIArchitecture" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Architectures */;
+/* spDelete Permissions for MJ: AI Architectures */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIArchitecture" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Steps */
@@ -48121,7 +48099,7 @@ GRANT SELECT ON __mj."vwAIAgentSteps" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentStep" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Steps */;
+/* spCreate Permissions for MJ: AI Agent Steps */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentStep" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Steps */
@@ -48155,7 +48133,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentStep" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentStep" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Steps */;
+/* spDelete Permissions for MJ: AI Agent Steps */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentStep" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agent Types */
@@ -48205,7 +48183,7 @@ GRANT SELECT ON __mj."vwAIAgentTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Types */;
+/* spCreate Permissions for MJ: AI Agent Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agent Types */
@@ -48239,7 +48217,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentType" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Types */;
+/* spDelete Permissions for MJ: AI Agent Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Agents */
@@ -48289,7 +48267,7 @@ GRANT SELECT ON __mj."vwAIAgents" TO "cdp_UI", "cdp_Developer", "cdp_Integration
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgent" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agents */;
+/* spCreate Permissions for MJ: AI Agents */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgent" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Agents */
@@ -48355,7 +48333,7 @@ GRANT SELECT ON __mj."vwAIConfigurationParams" TO "cdp_UI", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIConfigurationParam" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Configuration Params */;
+/* spCreate Permissions for MJ: AI Configuration Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIConfigurationParam" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Configuration Params */
@@ -48389,7 +48367,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIConfigurationParam" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIConfigurationParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Configuration Params */;
+/* spDelete Permissions for MJ: AI Configuration Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIConfigurationParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: AI Agents */
@@ -48407,7 +48385,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIConfigurationParam" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgent" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agents */;
+/* spDelete Permissions for MJ: AI Agents */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgent" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Configurations */
@@ -48457,7 +48435,7 @@ GRANT SELECT ON __mj."vwAIConfigurations" TO "cdp_UI", "cdp_Developer", "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIConfiguration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Configurations */;
+/* spCreate Permissions for MJ: AI Configurations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIConfiguration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Configurations */
@@ -48523,7 +48501,7 @@ GRANT SELECT ON __mj."vwAIModelActions" TO "cdp_Integration", "cdp_Developer", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelAction" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Model Actions */;
+/* spCreate Permissions for MJ: AI Model Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelAction" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Model Actions */
@@ -48557,7 +48535,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIModelAction" TO "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelAction" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Model Actions */;
+/* spDelete Permissions for MJ: AI Model Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelAction" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Credential Bindings */
@@ -48607,7 +48585,7 @@ GRANT SELECT ON __mj."vwAICredentialBindings" TO "cdp_UI", "cdp_Developer", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAICredentialBinding" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Credential Bindings */;
+/* spCreate Permissions for MJ: AI Credential Bindings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAICredentialBinding" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Credential Bindings */
@@ -48641,7 +48619,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAICredentialBinding" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAICredentialBinding" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Credential Bindings */;
+/* spDelete Permissions for MJ: AI Credential Bindings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAICredentialBinding" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Model Architectures */
@@ -48691,7 +48669,7 @@ GRANT SELECT ON __mj."vwAIModelArchitectures" TO "cdp_UI", "cdp_Developer", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelArchitecture" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Model Architectures */;
+/* spCreate Permissions for MJ: AI Model Architectures */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelArchitecture" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Model Architectures */
@@ -48725,7 +48703,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIModelArchitecture" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelArchitecture" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Model Architectures */;
+/* spDelete Permissions for MJ: AI Model Architectures */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelArchitecture" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: AI Configurations */
@@ -48743,7 +48721,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelArchitecture" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIConfiguration" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Configurations */;
+/* spDelete Permissions for MJ: AI Configurations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIConfiguration" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Model Costs */
@@ -48793,7 +48771,7 @@ GRANT SELECT ON __mj."vwAIModelCosts" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelCost" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Model Costs */;
+/* spCreate Permissions for MJ: AI Model Costs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelCost" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Model Costs */
@@ -48827,7 +48805,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIModelCost" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelCost" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Model Costs */;
+/* spDelete Permissions for MJ: AI Model Costs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelCost" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Model Modalities */
@@ -48877,7 +48855,7 @@ GRANT SELECT ON __mj."vwAIModelModalities" TO "cdp_UI", "cdp_Developer", "cdp_In
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelModality" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Model Modalities */;
+/* spCreate Permissions for MJ: AI Model Modalities */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelModality" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Model Modalities */
@@ -48911,7 +48889,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIModelModality" TO "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelModality" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Model Modalities */;
+/* spDelete Permissions for MJ: AI Model Modalities */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelModality" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Model Types */
@@ -48961,7 +48939,7 @@ GRANT SELECT ON __mj."vwAIModelTypes" TO "cdp_Integration", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelType" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Model Types */;
+/* spCreate Permissions for MJ: AI Model Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelType" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Model Types */
@@ -48995,7 +48973,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIModelType" TO "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelType" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Model Types */;
+/* spDelete Permissions for MJ: AI Model Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelType" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Prompt Categories */
@@ -49045,7 +49023,7 @@ GRANT SELECT ON __mj."vwAIPromptCategories" TO "cdp_UI", "cdp_UI", "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIPromptCategory" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Prompt Categories */;
+/* spCreate Permissions for MJ: AI Prompt Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIPromptCategory" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Prompt Categories */
@@ -49079,7 +49057,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIPromptCategory" TO "cdp_De
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIPromptCategory" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Prompt Categories */;
+/* spDelete Permissions for MJ: AI Prompt Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIPromptCategory" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Prompt Run Medias */
@@ -49129,7 +49107,7 @@ GRANT SELECT ON __mj."vwAIPromptRunMedias" TO "cdp_UI", "cdp_Developer", "cdp_In
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIPromptRunMedia" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Prompt Run Medias */;
+/* spCreate Permissions for MJ: AI Prompt Run Medias */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIPromptRunMedia" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Prompt Run Medias */
@@ -49163,7 +49141,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIPromptRunMedia" TO "cdp_De
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIPromptRunMedia" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Prompt Run Medias */;
+/* spDelete Permissions for MJ: AI Prompt Run Medias */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIPromptRunMedia" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Prompt Models */
@@ -49213,7 +49191,7 @@ GRANT SELECT ON __mj."vwAIPromptModels" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIPromptModel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Prompt Models */;
+/* spCreate Permissions for MJ: AI Prompt Models */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIPromptModel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Prompt Models */
@@ -49247,7 +49225,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIPromptModel" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIPromptModel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Prompt Models */;
+/* spDelete Permissions for MJ: AI Prompt Models */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIPromptModel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Model Vendors */
@@ -49297,7 +49275,7 @@ GRANT SELECT ON __mj."vwAIModelVendors" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelVendor" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Model Vendors */;
+/* spCreate Permissions for MJ: AI Model Vendors */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModelVendor" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Model Vendors */
@@ -49331,7 +49309,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIModelVendor" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelVendor" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Model Vendors */;
+/* spDelete Permissions for MJ: AI Model Vendors */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelVendor" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Prompt Runs */
@@ -49381,7 +49359,7 @@ GRANT SELECT ON __mj."vwAIPromptRuns" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIPromptRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Prompt Runs */;
+/* spCreate Permissions for MJ: AI Prompt Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIPromptRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Prompt Runs */
@@ -49476,7 +49454,7 @@ GRANT SELECT ON __mj."vwAIPrompts" TO "cdp_UI", "cdp_Integration", "cdp_UI", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIPrompt" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Prompts */;
+/* spCreate Permissions for MJ: AI Prompts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIPrompt" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Prompts */
@@ -49510,7 +49488,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIPrompt" TO "cdp_Developer"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIPromptRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Prompt Runs */;
+/* spDelete Permissions for MJ: AI Prompt Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIPromptRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: AI Prompts */
@@ -49528,7 +49506,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIPromptRun" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIPrompt" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Prompts */;
+/* spDelete Permissions for MJ: AI Prompts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIPrompt" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Vendor Types */
@@ -49578,7 +49556,7 @@ GRANT SELECT ON __mj."vwAIVendorTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIVendorType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Vendor Types */;
+/* spCreate Permissions for MJ: AI Vendor Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIVendorType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Vendor Types */
@@ -49612,7 +49590,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIVendorType" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIVendorType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Vendor Types */;
+/* spDelete Permissions for MJ: AI Vendor Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIVendorType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: AI Vendors */
@@ -49662,7 +49640,7 @@ GRANT SELECT ON __mj."vwAIVendors" TO "cdp_UI", "cdp_Developer", "cdp_Integratio
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIVendor" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Vendors */;
+/* spCreate Permissions for MJ: AI Vendors */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIVendor" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Vendors */
@@ -49696,7 +49674,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIVendor" TO "cdp_Developer"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIVendor" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Vendors */;
+/* spDelete Permissions for MJ: AI Vendors */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIVendor" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: API Application Scopes */
@@ -49746,7 +49724,7 @@ GRANT SELECT ON __mj."vwAPIApplicationScopes" TO "cdp_UI", "cdp_Developer", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIApplicationScope" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: API Application Scopes */;
+/* spCreate Permissions for MJ: API Application Scopes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIApplicationScope" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: API Application Scopes */
@@ -49780,7 +49758,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAPIApplicationScope" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIApplicationScope" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: API Application Scopes */;
+/* spDelete Permissions for MJ: API Application Scopes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIApplicationScope" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: API Key Applications */
@@ -49830,7 +49808,7 @@ GRANT SELECT ON __mj."vwAPIKeyApplications" TO "cdp_UI", "cdp_Developer", "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKeyApplication" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: API Key Applications */;
+/* spCreate Permissions for MJ: API Key Applications */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKeyApplication" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: API Key Applications */
@@ -49864,7 +49842,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAPIKeyApplication" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKeyApplication" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: API Key Applications */;
+/* spDelete Permissions for MJ: API Key Applications */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKeyApplication" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: API Key Scopes */
@@ -49914,7 +49892,7 @@ GRANT SELECT ON __mj."vwAPIKeyScopes" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKeyScope" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: API Key Scopes */;
+/* spCreate Permissions for MJ: API Key Scopes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKeyScope" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: API Key Scopes */
@@ -49948,7 +49926,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAPIKeyScope" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKeyScope" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: API Key Scopes */;
+/* spDelete Permissions for MJ: API Key Scopes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKeyScope" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: API Key Usage Logs */
@@ -49998,7 +49976,7 @@ GRANT SELECT ON __mj."vwAPIKeyUsageLogs" TO "cdp_UI", "cdp_Developer", "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKeyUsageLog" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: API Key Usage Logs */;
+/* spCreate Permissions for MJ: API Key Usage Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKeyUsageLog" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: API Key Usage Logs */
@@ -50032,7 +50010,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAPIKeyUsageLog" TO "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKeyUsageLog" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: API Key Usage Logs */;
+/* spDelete Permissions for MJ: API Key Usage Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKeyUsageLog" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: API Keys */
@@ -50082,7 +50060,7 @@ GRANT SELECT ON __mj."vwAPIKeys" TO "cdp_UI", "cdp_Developer", "cdp_Integration"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKey" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: API Keys */;
+/* spCreate Permissions for MJ: API Keys */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKey" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: API Keys */
@@ -50116,7 +50094,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAPIKey" TO "cdp_Developer", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKey" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: API Keys */;
+/* spDelete Permissions for MJ: API Keys */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKey" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: API Scopes */
@@ -50166,7 +50144,7 @@ GRANT SELECT ON __mj."vwAPIScopes" TO "cdp_UI", "cdp_Developer", "cdp_Integratio
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIScope" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: API Scopes */;
+/* spCreate Permissions for MJ: API Scopes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIScope" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: API Scopes */
@@ -50200,7 +50178,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAPIScope" TO "cdp_Developer"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIScope" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: API Scopes */;
+/* spDelete Permissions for MJ: API Scopes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIScope" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Application Settings */
@@ -50250,7 +50228,7 @@ GRANT SELECT ON __mj."vwApplicationSettings" TO "cdp_UI", "cdp_Integration", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateApplicationSetting" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Application Settings */;
+/* spCreate Permissions for MJ: Application Settings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateApplicationSetting" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Application Settings */
@@ -50284,7 +50262,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateApplicationSetting" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteApplicationSetting" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Application Settings */;
+/* spDelete Permissions for MJ: Application Settings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteApplicationSetting" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Artifact Types */
@@ -50334,7 +50312,7 @@ GRANT SELECT ON __mj."vwArtifactTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifactType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Artifact Types */;
+/* spCreate Permissions for MJ: Artifact Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifactType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Artifact Types */
@@ -50368,7 +50346,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateArtifactType" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifactType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Artifact Types */;
+/* spDelete Permissions for MJ: Artifact Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifactType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Artifact Permissions */
@@ -50418,7 +50396,7 @@ GRANT SELECT ON __mj."vwArtifactPermissions" TO "cdp_UI", "cdp_Developer", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifactPermission" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Artifact Permissions */;
+/* spCreate Permissions for MJ: Artifact Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifactPermission" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Artifact Permissions */
@@ -50452,7 +50430,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateArtifactPermission" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifactPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Artifact Permissions */;
+/* spDelete Permissions for MJ: Artifact Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifactPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Artifact Uses */
@@ -50502,7 +50480,7 @@ GRANT SELECT ON __mj."vwArtifactUses" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifactUse" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Artifact Uses */;
+/* spCreate Permissions for MJ: Artifact Uses */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifactUse" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Artifact Uses */
@@ -50536,7 +50514,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateArtifactUse" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifactUse" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Artifact Uses */;
+/* spDelete Permissions for MJ: Artifact Uses */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifactUse" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Artifact Versions */
@@ -50586,7 +50564,7 @@ GRANT SELECT ON __mj."vwArtifactVersions" TO "cdp_UI", "cdp_Developer", "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifactVersion" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Artifact Versions */;
+/* spCreate Permissions for MJ: Artifact Versions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifactVersion" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Artifact Versions */
@@ -50620,7 +50598,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateArtifactVersion" TO "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifactVersion" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Artifact Versions */;
+/* spDelete Permissions for MJ: Artifact Versions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifactVersion" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Artifact Version Attributes */
@@ -50670,7 +50648,7 @@ GRANT SELECT ON __mj."vwArtifactVersionAttributes" TO "cdp_UI", "cdp_Developer",
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifactVersionAttribute" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Artifact Version Attributes */;
+/* spCreate Permissions for MJ: Artifact Version Attributes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifactVersionAttribute" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Artifact Version Attributes */
@@ -50704,7 +50682,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateArtifactVersionAttribute" TO
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifactVersionAttribute" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Artifact Version Attributes */;
+/* spDelete Permissions for MJ: Artifact Version Attributes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifactVersionAttribute" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Artifacts */
@@ -50754,7 +50732,7 @@ GRANT SELECT ON __mj."vwArtifacts" TO "cdp_UI", "cdp_Developer", "cdp_Integratio
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifact" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Artifacts */;
+/* spCreate Permissions for MJ: Artifacts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateArtifact" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Artifacts */
@@ -50788,7 +50766,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateArtifact" TO "cdp_UI", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifact" TO "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Artifacts */;
+/* spDelete Permissions for MJ: Artifacts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteArtifact" TO "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Audit Log Types */
@@ -50838,7 +50816,7 @@ GRANT SELECT ON __mj."vwAuditLogTypes" TO "cdp_Developer", "cdp_UI", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAuditLogType" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Audit Log Types */;
+/* spCreate Permissions for MJ: Audit Log Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAuditLogType" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Audit Log Types */
@@ -50872,7 +50850,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAuditLogType" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAuditLogType" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Audit Log Types */;
+/* spDelete Permissions for MJ: Audit Log Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAuditLogType" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Audit Logs */
@@ -50922,7 +50900,7 @@ GRANT SELECT ON __mj."vwAuditLogs" TO "cdp_UI", "cdp_Developer", "cdp_Integratio
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAuditLog" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Audit Logs */;
+/* spCreate Permissions for MJ: Audit Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAuditLog" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Audit Logs */
@@ -50956,7 +50934,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAuditLog" TO "cdp_Developer"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAuditLog" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Audit Logs */;
+/* spDelete Permissions for MJ: Audit Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAuditLog" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Authorization Roles */
@@ -51006,7 +50984,7 @@ GRANT SELECT ON __mj."vwAuthorizationRoles" TO "cdp_UI", "cdp_Developer", "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAuthorizationRole" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Authorization Roles */;
+/* spCreate Permissions for MJ: Authorization Roles */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAuthorizationRole" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Authorization Roles */
@@ -51040,7 +51018,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAuthorizationRole" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAuthorizationRole" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Authorization Roles */;
+/* spDelete Permissions for MJ: Authorization Roles */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAuthorizationRole" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Authorizations */
@@ -51090,7 +51068,7 @@ GRANT SELECT ON __mj."vwAuthorizations" TO "cdp_Developer", "cdp_Integration", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAuthorization" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Authorizations */;
+/* spCreate Permissions for MJ: Authorizations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAuthorization" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Authorizations */
@@ -51153,7 +51131,7 @@ GRANT SELECT ON __mj."vwCollectionPermissions" TO "cdp_UI", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCollectionPermission" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Collection Permissions */;
+/* spCreate Permissions for MJ: Collection Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCollectionPermission" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Collection Permissions */
@@ -51187,7 +51165,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCollectionPermission" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCollectionPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Collection Permissions */;
+/* spDelete Permissions for MJ: Collection Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCollectionPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Collection Artifacts */
@@ -51237,7 +51215,7 @@ GRANT SELECT ON __mj."vwCollectionArtifacts" TO "cdp_UI", "cdp_Developer", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCollectionArtifact" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Collection Artifacts */;
+/* spCreate Permissions for MJ: Collection Artifacts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCollectionArtifact" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Collection Artifacts */
@@ -51271,7 +51249,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCollectionArtifact" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCollectionArtifact" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Collection Artifacts */;
+/* spDelete Permissions for MJ: Collection Artifacts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCollectionArtifact" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Collections */
@@ -51321,7 +51299,7 @@ GRANT SELECT ON __mj."vwCollections" TO "cdp_UI", "cdp_Developer", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCollection" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Collections */;
+/* spCreate Permissions for MJ: Collections */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCollection" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Collections */
@@ -51355,7 +51333,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCollection" TO "cdp_UI", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCollection" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Collections */;
+/* spDelete Permissions for MJ: Collections */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCollection" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Communication Provider Message Types */
@@ -51405,7 +51383,7 @@ GRANT SELECT ON __mj."vwCommunicationProviderMessageTypes" TO "cdp_Integration",
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCommunicationProviderMessageType" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Communication Provider Message Types */;
+/* spCreate Permissions for MJ: Communication Provider Message Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCommunicationProviderMessageType" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Communication Provider Message Types */
@@ -51439,7 +51417,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCommunicationProviderMessage
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCommunicationProviderMessageType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Communication Provider Message Types */;
+/* spDelete Permissions for MJ: Communication Provider Message Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCommunicationProviderMessageType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Communication Logs */
@@ -51489,7 +51467,7 @@ GRANT SELECT ON __mj."vwCommunicationLogs" TO "cdp_Developer", "cdp_Integration"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCommunicationLog" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Communication Logs */;
+/* spCreate Permissions for MJ: Communication Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCommunicationLog" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Communication Logs */
@@ -51523,7 +51501,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCommunicationLog" TO "cdp_De
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCommunicationLog" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Communication Logs */;
+/* spDelete Permissions for MJ: Communication Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCommunicationLog" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Communication Runs */
@@ -51573,7 +51551,7 @@ GRANT SELECT ON __mj."vwCommunicationRuns" TO "cdp_Developer", "cdp_UI", "cdp_In
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCommunicationRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Communication Runs */;
+/* spCreate Permissions for MJ: Communication Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCommunicationRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Communication Runs */
@@ -51607,7 +51585,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCommunicationRun" TO "cdp_De
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCommunicationRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Communication Runs */;
+/* spDelete Permissions for MJ: Communication Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCommunicationRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Company Integration Record Maps */
@@ -51657,7 +51635,7 @@ GRANT SELECT ON __mj."vwCompanyIntegrationRecordMaps" TO "cdp_UI", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCompanyIntegrationRecordMap" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Company Integration Record Maps */;
+/* spCreate Permissions for MJ: Company Integration Record Maps */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCompanyIntegrationRecordMap" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Company Integration Record Maps */
@@ -51691,7 +51669,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCompanyIntegrationRecordMap"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationRecordMap" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Company Integration Record Maps */;
+/* spDelete Permissions for MJ: Company Integration Record Maps */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationRecordMap" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Company Integration Run API Logs */
@@ -51741,7 +51719,7 @@ GRANT SELECT ON __mj."vwCompanyIntegrationRunAPILogs" TO "cdp_UI", "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCompanyIntegrationRunAPILog" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Company Integration Run API Logs */;
+/* spCreate Permissions for MJ: Company Integration Run API Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCompanyIntegrationRunAPILog" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Company Integration Run API Logs */
@@ -51775,7 +51753,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCompanyIntegrationRunAPILog"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationRunAPILog" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Company Integration Run API Logs */;
+/* spDelete Permissions for MJ: Company Integration Run API Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationRunAPILog" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Component Library Links */
@@ -51825,7 +51803,7 @@ GRANT SELECT ON __mj."vwComponentLibraryLinks" TO "cdp_UI", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateComponentLibraryLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Component Library Links */;
+/* spCreate Permissions for MJ: Component Library Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateComponentLibraryLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Component Library Links */
@@ -51859,7 +51837,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateComponentLibraryLink" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteComponentLibraryLink" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Component Library Links */;
+/* spDelete Permissions for MJ: Component Library Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteComponentLibraryLink" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Component Dependencies */
@@ -51909,7 +51887,7 @@ GRANT SELECT ON __mj."vwComponentDependencies" TO "cdp_UI", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateComponentDependency" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Component Dependencies */;
+/* spCreate Permissions for MJ: Component Dependencies */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateComponentDependency" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Component Dependencies */
@@ -51943,7 +51921,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateComponentDependency" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteComponentDependency" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Component Dependencies */;
+/* spDelete Permissions for MJ: Component Dependencies */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteComponentDependency" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Content Item Attributes */
@@ -51993,7 +51971,7 @@ GRANT SELECT ON __mj."vwContentItemAttributes" TO "cdp_UI", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentItemAttribute" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Content Item Attributes */;
+/* spCreate Permissions for MJ: Content Item Attributes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentItemAttribute" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Content Item Attributes */
@@ -52027,7 +52005,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateContentItemAttribute" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentItemAttribute" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Content Item Attributes */;
+/* spDelete Permissions for MJ: Content Item Attributes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentItemAttribute" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Content Item Tags */
@@ -52077,7 +52055,7 @@ GRANT SELECT ON __mj."vwContentItemTags" TO "cdp_UI", "cdp_Developer", "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentItemTag" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Content Item Tags */;
+/* spCreate Permissions for MJ: Content Item Tags */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentItemTag" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Content Item Tags */
@@ -52111,7 +52089,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateContentItemTag" TO "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentItemTag" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Content Item Tags */;
+/* spDelete Permissions for MJ: Content Item Tags */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentItemTag" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Components */
@@ -52161,7 +52139,7 @@ GRANT SELECT ON __mj."vwComponents" TO "cdp_UI", "cdp_Developer", "cdp_Integrati
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateComponent" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Components */;
+/* spCreate Permissions for MJ: Components */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateComponent" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Components */
@@ -52195,7 +52173,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateComponent" TO "cdp_Developer
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteComponent" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Components */;
+/* spDelete Permissions for MJ: Components */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteComponent" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Content Items */
@@ -52245,7 +52223,7 @@ GRANT SELECT ON __mj."vwContentItems" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentItem" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Content Items */;
+/* spCreate Permissions for MJ: Content Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentItem" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Content Items */
@@ -52279,7 +52257,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateContentItem" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentItem" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Content Items */;
+/* spDelete Permissions for MJ: Content Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentItem" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Content Process Runs */
@@ -52329,7 +52307,7 @@ GRANT SELECT ON __mj."vwContentProcessRuns" TO "cdp_UI", "cdp_Developer", "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentProcessRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Content Process Runs */;
+/* spCreate Permissions for MJ: Content Process Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentProcessRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Content Process Runs */
@@ -52363,7 +52341,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateContentProcessRun" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentProcessRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Content Process Runs */;
+/* spDelete Permissions for MJ: Content Process Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentProcessRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Content Source Params */
@@ -52413,7 +52391,7 @@ GRANT SELECT ON __mj."vwContentSourceParams" TO "cdp_UI", "cdp_Developer", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentSourceParam" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Content Source Params */;
+/* spCreate Permissions for MJ: Content Source Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentSourceParam" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Content Source Params */
@@ -52447,7 +52425,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateContentSourceParam" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentSourceParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Content Source Params */;
+/* spDelete Permissions for MJ: Content Source Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentSourceParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Content Sources */
@@ -52497,7 +52475,7 @@ GRANT SELECT ON __mj."vwContentSources" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentSource" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Content Sources */;
+/* spCreate Permissions for MJ: Content Sources */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentSource" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Content Sources */
@@ -52531,7 +52509,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateContentSource" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentSource" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Content Sources */;
+/* spDelete Permissions for MJ: Content Sources */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentSource" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Content Types */
@@ -52581,7 +52559,7 @@ GRANT SELECT ON __mj."vwContentTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Content Types */;
+/* spCreate Permissions for MJ: Content Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateContentType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Content Types */
@@ -52615,7 +52593,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateContentType" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Content Types */;
+/* spDelete Permissions for MJ: Content Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteContentType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Conversation Artifact Permissions */
@@ -52665,7 +52643,7 @@ GRANT SELECT ON __mj."vwConversationArtifactPermissions" TO "cdp_UI", "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationArtifactPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Conversation Artifact Permissions */;
+/* spCreate Permissions for MJ: Conversation Artifact Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationArtifactPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Conversation Artifact Permissions */
@@ -52699,7 +52677,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationArtifactPermissi
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationArtifactPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Conversation Artifact Permissions */;
+/* spDelete Permissions for MJ: Conversation Artifact Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationArtifactPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Conversation Artifact Versions */
@@ -52749,7 +52727,7 @@ GRANT SELECT ON __mj."vwConversationArtifactVersions" TO "cdp_UI", "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationArtifactVersion" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Conversation Artifact Versions */;
+/* spCreate Permissions for MJ: Conversation Artifact Versions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationArtifactVersion" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Conversation Artifact Versions */
@@ -52815,7 +52793,7 @@ GRANT SELECT ON __mj."vwConversationArtifacts" TO "cdp_UI", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationArtifact" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Conversation Artifacts */;
+/* spCreate Permissions for MJ: Conversation Artifacts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationArtifact" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Conversation Artifacts */
@@ -52849,7 +52827,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationArtifact" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationArtifactVersion" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Conversation Artifact Versions */;
+/* spDelete Permissions for MJ: Conversation Artifact Versions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationArtifactVersion" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: Conversation Artifacts */
@@ -52867,7 +52845,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationArtifactVersion"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationArtifact" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Conversation Artifacts */;
+/* spDelete Permissions for MJ: Conversation Artifacts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationArtifact" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Conversation Details */
@@ -52917,7 +52895,7 @@ GRANT SELECT ON __mj."vwConversationDetails" TO "cdp_Developer", "cdp_UI", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetail" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Conversation Details */;
+/* spCreate Permissions for MJ: Conversation Details */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetail" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Conversation Details */
@@ -52983,7 +52961,7 @@ GRANT SELECT ON __mj."vwConversationDetailArtifacts" TO "cdp_UI", "cdp_Developer
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetailArtifact" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Conversation Detail Artifacts */;
+/* spCreate Permissions for MJ: Conversation Detail Artifacts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetailArtifact" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Conversation Detail Artifacts */
@@ -53017,7 +52995,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetailArtifact" 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetailArtifact" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Conversation Detail Artifacts */;
+/* spDelete Permissions for MJ: Conversation Detail Artifacts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetailArtifact" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Conversation Detail Ratings */
@@ -53067,7 +53045,7 @@ GRANT SELECT ON __mj."vwConversationDetailRatings" TO "cdp_UI", "cdp_Developer",
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetailRating" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Conversation Detail Ratings */;
+/* spCreate Permissions for MJ: Conversation Detail Ratings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetailRating" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Conversation Detail Ratings */
@@ -53101,7 +53079,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetailRating" TO
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetailRating" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Conversation Detail Ratings */;
+/* spDelete Permissions for MJ: Conversation Detail Ratings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetailRating" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Conversation Detail Attachments */
@@ -53151,7 +53129,7 @@ GRANT SELECT ON __mj."vwConversationDetailAttachments" TO "cdp_UI", "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetailAttachment" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Conversation Detail Attachments */;
+/* spCreate Permissions for MJ: Conversation Detail Attachments */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetailAttachment" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Conversation Detail Attachments */
@@ -53185,7 +53163,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetailAttachment
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetailAttachment" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Conversation Detail Attachments */;
+/* spDelete Permissions for MJ: Conversation Detail Attachments */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetailAttachment" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Conversations */
@@ -53235,7 +53213,7 @@ GRANT SELECT ON __mj."vwConversations" TO "cdp_Developer", "cdp_UI", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversation" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Conversations */;
+/* spCreate Permissions for MJ: Conversations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversation" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Conversations */
@@ -53269,7 +53247,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateConversation" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversation" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Conversations */;
+/* spDelete Permissions for MJ: Conversations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversation" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: Conversation Details */
@@ -53287,7 +53265,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversation" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Conversation Details */;
+/* spDelete Permissions for MJ: Conversation Details */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Credential Categories */
@@ -53337,7 +53315,7 @@ GRANT SELECT ON __mj."vwCredentialCategories" TO "cdp_UI", "cdp_Developer", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCredentialCategory" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Credential Categories */;
+/* spCreate Permissions for MJ: Credential Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCredentialCategory" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Credential Categories */
@@ -53371,7 +53349,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCredentialCategory" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCredentialCategory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Credential Categories */;
+/* spDelete Permissions for MJ: Credential Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCredentialCategory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Credentials */
@@ -53421,7 +53399,7 @@ GRANT SELECT ON __mj."vwCredentials" TO "cdp_UI", "cdp_Developer", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCredential" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Credentials */;
+/* spCreate Permissions for MJ: Credentials */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCredential" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Credentials */
@@ -53455,7 +53433,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCredential" TO "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCredential" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Credentials */;
+/* spDelete Permissions for MJ: Credentials */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCredential" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Dashboard Categories */
@@ -53505,7 +53483,7 @@ GRANT SELECT ON __mj."vwDashboardCategories" TO "cdp_Developer", "cdp_Integratio
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardCategory" TO "cdp_Developer", "cdp_Integration", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Dashboard Categories */;
+/* spCreate Permissions for MJ: Dashboard Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardCategory" TO "cdp_Developer", "cdp_Integration", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Dashboard Categories */
@@ -53539,7 +53517,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDashboardCategory" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardCategory" TO "cdp_Developer", "cdp_Integration", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Dashboard Categories */;
+/* spDelete Permissions for MJ: Dashboard Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardCategory" TO "cdp_Developer", "cdp_Integration", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Dashboard Category Links */
@@ -53589,7 +53567,7 @@ GRANT SELECT ON __mj."vwDashboardCategoryLinks" TO "cdp_UI", "cdp_Developer", "c
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardCategoryLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Dashboard Category Links */;
+/* spCreate Permissions for MJ: Dashboard Category Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardCategoryLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Dashboard Category Links */
@@ -53623,7 +53601,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDashboardCategoryLink" TO "c
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardCategoryLink" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Dashboard Category Links */;
+/* spDelete Permissions for MJ: Dashboard Category Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardCategoryLink" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Dashboard Category Permissions */
@@ -53673,7 +53651,7 @@ GRANT SELECT ON __mj."vwDashboardCategoryPermissions" TO "cdp_UI", "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardCategoryPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Dashboard Category Permissions */;
+/* spCreate Permissions for MJ: Dashboard Category Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardCategoryPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Dashboard Category Permissions */
@@ -53707,7 +53685,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDashboardCategoryPermission"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardCategoryPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Dashboard Category Permissions */;
+/* spDelete Permissions for MJ: Dashboard Category Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardCategoryPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Dashboard Permissions */
@@ -53757,7 +53735,7 @@ GRANT SELECT ON __mj."vwDashboardPermissions" TO "cdp_UI", "cdp_Developer", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Dashboard Permissions */;
+/* spCreate Permissions for MJ: Dashboard Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Dashboard Permissions */
@@ -53791,7 +53769,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDashboardPermission" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Dashboard Permissions */;
+/* spDelete Permissions for MJ: Dashboard Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Dashboard User Preferences */
@@ -53841,7 +53819,7 @@ GRANT SELECT ON __mj."vwDashboardUserPreferences" TO "cdp_UI", "cdp_Developer", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardUserPreference" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Dashboard User Preferences */;
+/* spCreate Permissions for MJ: Dashboard User Preferences */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardUserPreference" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Dashboard User Preferences */
@@ -53875,7 +53853,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDashboardUserPreference" TO 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardUserPreference" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Dashboard User Preferences */;
+/* spDelete Permissions for MJ: Dashboard User Preferences */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardUserPreference" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Dashboard User States */
@@ -53925,7 +53903,7 @@ GRANT SELECT ON __mj."vwDashboardUserStates" TO "cdp_UI", "cdp_Developer", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardUserState" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Dashboard User States */;
+/* spCreate Permissions for MJ: Dashboard User States */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboardUserState" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Dashboard User States */
@@ -53959,7 +53937,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDashboardUserState" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardUserState" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Dashboard User States */;
+/* spDelete Permissions for MJ: Dashboard User States */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboardUserState" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Dashboards */
@@ -54009,7 +53987,7 @@ GRANT SELECT ON __mj."vwDashboards" TO "cdp_Integration", "cdp_Developer", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboard" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Dashboards */;
+/* spCreate Permissions for MJ: Dashboards */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDashboard" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Dashboards */
@@ -54043,7 +54021,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDashboard" TO "cdp_Integrati
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboard" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Dashboards */;
+/* spDelete Permissions for MJ: Dashboards */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDashboard" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Data Context Items */
@@ -54093,7 +54071,7 @@ GRANT SELECT ON __mj."vwDataContextItems" TO "cdp_UI", "cdp_Integration", "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDataContextItem" TO "cdp_UI", "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Data Context Items */;
+/* spCreate Permissions for MJ: Data Context Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDataContextItem" TO "cdp_UI", "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Data Context Items */
@@ -54127,7 +54105,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDataContextItem" TO "cdp_UI"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDataContextItem" TO "cdp_UI", "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Data Context Items */;
+/* spDelete Permissions for MJ: Data Context Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDataContextItem" TO "cdp_UI", "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Data Contexts */
@@ -54177,7 +54155,7 @@ GRANT SELECT ON __mj."vwDataContexts" TO "cdp_Integration", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDataContext" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Data Contexts */;
+/* spCreate Permissions for MJ: Data Contexts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDataContext" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Data Contexts */
@@ -54211,7 +54189,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDataContext" TO "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDataContext" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Data Contexts */;
+/* spDelete Permissions for MJ: Data Contexts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDataContext" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Dataset Items */
@@ -54290,7 +54268,7 @@ GRANT SELECT ON __mj."vwDuplicateRunDetails" TO "cdp_UI", "cdp_Developer", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDuplicateRunDetail" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Duplicate Run Details */;
+/* spCreate Permissions for MJ: Duplicate Run Details */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDuplicateRunDetail" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Duplicate Run Details */
@@ -54324,7 +54302,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDuplicateRunDetail" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDuplicateRunDetail" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Duplicate Run Details */;
+/* spDelete Permissions for MJ: Duplicate Run Details */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDuplicateRunDetail" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Duplicate Run Detail Matches */
@@ -54374,7 +54352,7 @@ GRANT SELECT ON __mj."vwDuplicateRunDetailMatches" TO "cdp_UI", "cdp_Integration
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDuplicateRunDetailMatch" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Duplicate Run Detail Matches */;
+/* spCreate Permissions for MJ: Duplicate Run Detail Matches */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDuplicateRunDetailMatch" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Duplicate Run Detail Matches */
@@ -54408,7 +54386,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDuplicateRunDetailMatch" TO 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDuplicateRunDetailMatch" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Duplicate Run Detail Matches */;
+/* spDelete Permissions for MJ: Duplicate Run Detail Matches */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDuplicateRunDetailMatch" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Duplicate Runs */
@@ -54458,7 +54436,7 @@ GRANT SELECT ON __mj."vwDuplicateRuns" TO "cdp_Developer", "cdp_UI", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDuplicateRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Duplicate Runs */;
+/* spCreate Permissions for MJ: Duplicate Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateDuplicateRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Duplicate Runs */
@@ -54492,7 +54470,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateDuplicateRun" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDuplicateRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Duplicate Runs */;
+/* spDelete Permissions for MJ: Duplicate Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteDuplicateRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Employee Company Integrations */
@@ -54542,7 +54520,7 @@ GRANT SELECT ON __mj."vwEmployeeCompanyIntegrations" TO "cdp_Developer", "cdp_UI
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEmployeeCompanyIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Employee Company Integrations */;
+/* spCreate Permissions for MJ: Employee Company Integrations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEmployeeCompanyIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Employee Company Integrations */
@@ -54576,7 +54554,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEmployeeCompanyIntegration" 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEmployeeCompanyIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Employee Company Integrations */;
+/* spDelete Permissions for MJ: Employee Company Integrations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEmployeeCompanyIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Employee Roles */
@@ -54626,7 +54604,7 @@ GRANT SELECT ON __mj."vwEmployeeRoles" TO "cdp_UI", "cdp_Integration", "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEmployeeRole" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Employee Roles */;
+/* spCreate Permissions for MJ: Employee Roles */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEmployeeRole" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Employee Roles */
@@ -54660,7 +54638,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEmployeeRole" TO "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEmployeeRole" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Employee Roles */;
+/* spDelete Permissions for MJ: Employee Roles */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEmployeeRole" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Employee Skills */
@@ -54710,7 +54688,7 @@ GRANT SELECT ON __mj."vwEmployeeSkills" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEmployeeSkill" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Employee Skills */;
+/* spCreate Permissions for MJ: Employee Skills */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEmployeeSkill" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Employee Skills */
@@ -54744,7 +54722,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEmployeeSkill" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEmployeeSkill" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Employee Skills */;
+/* spDelete Permissions for MJ: Employee Skills */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEmployeeSkill" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Encryption Keys */
@@ -54794,7 +54772,7 @@ GRANT SELECT ON __mj."vwEncryptionKeys" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEncryptionKey" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Encryption Keys */;
+/* spCreate Permissions for MJ: Encryption Keys */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEncryptionKey" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Encryption Keys */
@@ -54828,7 +54806,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEncryptionKey" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEncryptionKey" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Encryption Keys */;
+/* spDelete Permissions for MJ: Encryption Keys */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEncryptionKey" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Index for Foreign Keys for Entity */
@@ -54900,7 +54878,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEncryptionKey" TO "cdp_Integ
 ------------------------------------------------------------
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entities */;
+/* spDelete Permissions for MJ: Entities */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity Action Invocations */
@@ -54950,7 +54928,7 @@ GRANT SELECT ON __mj."vwEntityActionInvocations" TO "cdp_Integration", "cdp_UI",
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityActionInvocation" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity Action Invocations */;
+/* spCreate Permissions for MJ: Entity Action Invocations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityActionInvocation" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Action Invocations */
@@ -54984,7 +54962,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityActionInvocation" TO "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityActionInvocation" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity Action Invocations */;
+/* spDelete Permissions for MJ: Entity Action Invocations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityActionInvocation" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity Action Filters */
@@ -55034,7 +55012,7 @@ GRANT SELECT ON __mj."vwEntityActionFilters" TO "cdp_Integration", "cdp_UI", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityActionFilter" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity Action Filters */;
+/* spCreate Permissions for MJ: Entity Action Filters */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityActionFilter" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Action Filters */
@@ -55068,7 +55046,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityActionFilter" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityActionFilter" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity Action Filters */;
+/* spDelete Permissions for MJ: Entity Action Filters */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityActionFilter" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity Action Params */
@@ -55118,7 +55096,7 @@ GRANT SELECT ON __mj."vwEntityActionParams" TO "cdp_Developer", "cdp_Integration
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityActionParam" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity Action Params */;
+/* spCreate Permissions for MJ: Entity Action Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityActionParam" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Action Params */
@@ -55152,7 +55130,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityActionParam" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityActionParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity Action Params */;
+/* spDelete Permissions for MJ: Entity Action Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityActionParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity Communication Fields */
@@ -55202,7 +55180,7 @@ GRANT SELECT ON __mj."vwEntityCommunicationFields" TO "cdp_UI", "cdp_Developer",
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityCommunicationField" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity Communication Fields */;
+/* spCreate Permissions for MJ: Entity Communication Fields */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityCommunicationField" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Communication Fields */
@@ -55236,7 +55214,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityCommunicationField" TO
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityCommunicationField" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity Communication Fields */;
+/* spDelete Permissions for MJ: Entity Communication Fields */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityCommunicationField" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity Actions */
@@ -55286,7 +55264,7 @@ GRANT SELECT ON __mj."vwEntityActions" TO "cdp_UI", "cdp_Integration", "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityAction" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity Actions */;
+/* spCreate Permissions for MJ: Entity Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityAction" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Actions */
@@ -55320,7 +55298,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityAction" TO "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityAction" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity Actions */;
+/* spDelete Permissions for MJ: Entity Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityAction" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity AI Actions */
@@ -55370,7 +55348,7 @@ GRANT SELECT ON __mj."vwEntityAIActions" TO "cdp_Integration", "cdp_UI", "cdp_De
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityAIAction" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity AI Actions */;
+/* spCreate Permissions for MJ: Entity AI Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityAIAction" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity AI Actions */
@@ -55404,7 +55382,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityAIAction" TO "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityAIAction" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity AI Actions */;
+/* spDelete Permissions for MJ: Entity AI Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityAIAction" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity Communication Message Types */
@@ -55454,7 +55432,7 @@ GRANT SELECT ON __mj."vwEntityCommunicationMessageTypes" TO "cdp_Integration", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityCommunicationMessageType" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity Communication Message Types */;
+/* spCreate Permissions for MJ: Entity Communication Message Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityCommunicationMessageType" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Communication Message Types */
@@ -55488,7 +55466,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityCommunicationMessageTy
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityCommunicationMessageType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity Communication Message Types */;
+/* spDelete Permissions for MJ: Entity Communication Message Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityCommunicationMessageType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity Document Runs */
@@ -55538,7 +55516,7 @@ GRANT SELECT ON __mj."vwEntityDocumentRuns" TO "cdp_UI", "cdp_Integration", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityDocumentRun" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity Document Runs */;
+/* spCreate Permissions for MJ: Entity Document Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityDocumentRun" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Document Runs */
@@ -55572,7 +55550,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityDocumentRun" TO "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityDocumentRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity Document Runs */;
+/* spDelete Permissions for MJ: Entity Document Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityDocumentRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity Document Settings */
@@ -55622,7 +55600,7 @@ GRANT SELECT ON __mj."vwEntityDocumentSettings" TO "cdp_UI", "cdp_Developer", "c
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityDocumentSetting" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity Document Settings */;
+/* spCreate Permissions for MJ: Entity Document Settings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityDocumentSetting" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Document Settings */
@@ -55656,7 +55634,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityDocumentSetting" TO "c
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityDocumentSetting" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity Document Settings */;
+/* spDelete Permissions for MJ: Entity Document Settings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityDocumentSetting" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity Documents */
@@ -55706,7 +55684,7 @@ GRANT SELECT ON __mj."vwEntityDocuments" TO "cdp_Integration", "cdp_UI", "cdp_De
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityDocument" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity Documents */;
+/* spCreate Permissions for MJ: Entity Documents */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityDocument" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Documents */
@@ -55740,7 +55718,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityDocument" TO "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityDocument" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity Documents */;
+/* spDelete Permissions for MJ: Entity Documents */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityDocument" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity Record Documents */
@@ -55790,7 +55768,7 @@ GRANT SELECT ON __mj."vwEntityRecordDocuments" TO "cdp_Developer", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityRecordDocument" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity Record Documents */;
+/* spCreate Permissions for MJ: Entity Record Documents */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityRecordDocument" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Record Documents */
@@ -55824,7 +55802,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityRecordDocument" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityRecordDocument" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity Record Documents */;
+/* spDelete Permissions for MJ: Entity Record Documents */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityRecordDocument" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Entity Settings */
@@ -55874,7 +55852,7 @@ GRANT SELECT ON __mj."vwEntitySettings" TO "cdp_Integration", "cdp_Developer", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntitySetting" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Entity Settings */;
+/* spCreate Permissions for MJ: Entity Settings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntitySetting" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Settings */
@@ -55908,7 +55886,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntitySetting" TO "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntitySetting" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Entity Settings */;
+/* spDelete Permissions for MJ: Entity Settings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntitySetting" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: File Categories */
@@ -55958,7 +55936,7 @@ GRANT SELECT ON __mj."vwFileCategories" TO "cdp_UI", "cdp_Integration", "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateFileCategory" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: File Categories */;
+/* spCreate Permissions for MJ: File Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateFileCategory" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: File Categories */
@@ -55992,7 +55970,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateFileCategory" TO "cdp_UI", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteFileCategory" TO "cdp_UI", "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: File Categories */;
+/* spDelete Permissions for MJ: File Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteFileCategory" TO "cdp_UI", "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Error Logs */
@@ -56042,7 +56020,7 @@ GRANT SELECT ON __mj."vwErrorLogs" TO "cdp_UI", "cdp_Integration", "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateErrorLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Error Logs */;
+/* spCreate Permissions for MJ: Error Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateErrorLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Error Logs */
@@ -56076,7 +56054,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateErrorLog" TO "cdp_Integratio
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteErrorLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Error Logs */;
+/* spDelete Permissions for MJ: Error Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteErrorLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: File Entity Record Links */
@@ -56126,7 +56104,7 @@ GRANT SELECT ON __mj."vwFileEntityRecordLinks" TO "cdp_UI", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateFileEntityRecordLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: File Entity Record Links */;
+/* spCreate Permissions for MJ: File Entity Record Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateFileEntityRecordLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: File Entity Record Links */
@@ -56160,7 +56138,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateFileEntityRecordLink" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteFileEntityRecordLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: File Entity Record Links */;
+/* spDelete Permissions for MJ: File Entity Record Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteFileEntityRecordLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Files */
@@ -56210,7 +56188,7 @@ GRANT SELECT ON __mj."vwFiles" TO "cdp_Integration", "cdp_UI", "cdp_Developer";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateFile" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Files */;
+/* spCreate Permissions for MJ: Files */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateFile" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Files */
@@ -56244,7 +56222,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateFile" TO "cdp_Integration", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteFile" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Files */;
+/* spDelete Permissions for MJ: Files */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteFile" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: File Storage Accounts */
@@ -56294,7 +56272,7 @@ GRANT SELECT ON __mj."vwFileStorageAccounts" TO "cdp_UI", "cdp_Developer", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateFileStorageAccount" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: File Storage Accounts */;
+/* spCreate Permissions for MJ: File Storage Accounts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateFileStorageAccount" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: File Storage Accounts */
@@ -56328,7 +56306,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateFileStorageAccount" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteFileStorageAccount" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: File Storage Accounts */;
+/* spDelete Permissions for MJ: File Storage Accounts */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteFileStorageAccount" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Generated Code Categories */
@@ -56378,7 +56356,7 @@ GRANT SELECT ON __mj."vwGeneratedCodeCategories" TO "cdp_UI", "cdp_Developer", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateGeneratedCodeCategory" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Generated Code Categories */;
+/* spCreate Permissions for MJ: Generated Code Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateGeneratedCodeCategory" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Generated Code Categories */
@@ -56412,7 +56390,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateGeneratedCodeCategory" TO "c
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteGeneratedCodeCategory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Generated Code Categories */;
+/* spDelete Permissions for MJ: Generated Code Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteGeneratedCodeCategory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Generated Codes */
@@ -56462,7 +56440,7 @@ GRANT SELECT ON __mj."vwGeneratedCodes" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateGeneratedCode" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Generated Codes */;
+/* spCreate Permissions for MJ: Generated Codes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateGeneratedCode" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Generated Codes */
@@ -56496,7 +56474,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateGeneratedCode" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteGeneratedCode" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Generated Codes */;
+/* spDelete Permissions for MJ: Generated Codes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteGeneratedCode" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Library Items */
@@ -56546,7 +56524,7 @@ GRANT SELECT ON __mj."vwLibraryItems" TO "cdp_Developer", "cdp_UI", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateLibraryItem" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Library Items */;
+/* spCreate Permissions for MJ: Library Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateLibraryItem" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Library Items */
@@ -56580,7 +56558,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateLibraryItem" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteLibraryItem" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Library Items */;
+/* spDelete Permissions for MJ: Library Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteLibraryItem" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: List Categories */
@@ -56630,7 +56608,7 @@ GRANT SELECT ON __mj."vwListCategories" TO "cdp_Developer", "cdp_Integration", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateListCategory" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: List Categories */;
+/* spCreate Permissions for MJ: List Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateListCategory" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: List Categories */
@@ -56664,7 +56642,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateListCategory" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteListCategory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: List Categories */;
+/* spDelete Permissions for MJ: List Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteListCategory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: List Invitations */
@@ -56714,7 +56692,7 @@ GRANT SELECT ON __mj."vwListInvitations" TO "cdp_UI", "cdp_Developer", "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateListInvitation" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: List Invitations */;
+/* spCreate Permissions for MJ: List Invitations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateListInvitation" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: List Invitations */
@@ -56748,7 +56726,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateListInvitation" TO "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteListInvitation" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: List Invitations */;
+/* spDelete Permissions for MJ: List Invitations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteListInvitation" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Lists */
@@ -56798,7 +56776,7 @@ GRANT SELECT ON __mj."vwLists" TO "cdp_Integration", "cdp_Developer", "cdp_UI";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateList" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Lists */;
+/* spCreate Permissions for MJ: Lists */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateList" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Lists */
@@ -56832,7 +56810,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateList" TO "cdp_Integration", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteList" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Lists */;
+/* spDelete Permissions for MJ: Lists */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteList" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: List Details */
@@ -56882,7 +56860,7 @@ GRANT SELECT ON __mj."vwListDetails" TO "cdp_Integration", "cdp_UI", "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateListDetail" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: List Details */;
+/* spCreate Permissions for MJ: List Details */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateListDetail" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: List Details */
@@ -56916,7 +56894,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateListDetail" TO "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteListDetail" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: List Details */;
+/* spDelete Permissions for MJ: List Details */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteListDetail" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: List Shares */
@@ -56966,7 +56944,7 @@ GRANT SELECT ON __mj."vwListShares" TO "cdp_UI", "cdp_Developer", "cdp_Integrati
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateListShare" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: List Shares */;
+/* spCreate Permissions for MJ: List Shares */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateListShare" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: List Shares */
@@ -57000,7 +56978,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateListShare" TO "cdp_Developer
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteListShare" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: List Shares */;
+/* spDelete Permissions for MJ: List Shares */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteListShare" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: MCP Server Connection Permissions */
@@ -57050,7 +57028,7 @@ GRANT SELECT ON __mj."vwMCPServerConnectionPermissions" TO "cdp_UI", "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPServerConnectionPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: MCP Server Connection Permissions */;
+/* spCreate Permissions for MJ: MCP Server Connection Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPServerConnectionPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: MCP Server Connection Permissions */
@@ -57084,7 +57062,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateMCPServerConnectionPermissio
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPServerConnectionPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: MCP Server Connection Permissions */;
+/* spDelete Permissions for MJ: MCP Server Connection Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPServerConnectionPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: MCP Server Connection Tools */
@@ -57134,7 +57112,7 @@ GRANT SELECT ON __mj."vwMCPServerConnectionTools" TO "cdp_UI", "cdp_Developer", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPServerConnectionTool" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: MCP Server Connection Tools */;
+/* spCreate Permissions for MJ: MCP Server Connection Tools */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPServerConnectionTool" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: MCP Server Connection Tools */
@@ -57168,7 +57146,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateMCPServerConnectionTool" TO 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPServerConnectionTool" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: MCP Server Connection Tools */;
+/* spDelete Permissions for MJ: MCP Server Connection Tools */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPServerConnectionTool" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: MCP Servers */
@@ -57218,7 +57196,7 @@ GRANT SELECT ON __mj."vwMCPServers" TO "cdp_UI", "cdp_Developer", "cdp_Integrati
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPServer" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: MCP Servers */;
+/* spCreate Permissions for MJ: MCP Servers */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPServer" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: MCP Servers */
@@ -57252,7 +57230,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateMCPServer" TO "cdp_Developer
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPServer" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: MCP Servers */;
+/* spDelete Permissions for MJ: MCP Servers */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPServer" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: MCP Server Connections */
@@ -57302,7 +57280,7 @@ GRANT SELECT ON __mj."vwMCPServerConnections" TO "cdp_UI", "cdp_Developer", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPServerConnection" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: MCP Server Connections */;
+/* spCreate Permissions for MJ: MCP Server Connections */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPServerConnection" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: MCP Server Connections */
@@ -57336,7 +57314,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateMCPServerConnection" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPServerConnection" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: MCP Server Connections */;
+/* spDelete Permissions for MJ: MCP Server Connections */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPServerConnection" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: MCP Server Tools */
@@ -57386,7 +57364,7 @@ GRANT SELECT ON __mj."vwMCPServerTools" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPServerTool" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: MCP Server Tools */;
+/* spCreate Permissions for MJ: MCP Server Tools */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPServerTool" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: MCP Server Tools */
@@ -57420,7 +57398,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateMCPServerTool" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPServerTool" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: MCP Server Tools */;
+/* spDelete Permissions for MJ: MCP Server Tools */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPServerTool" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: MCP Tool Execution Logs */
@@ -57470,7 +57448,7 @@ GRANT SELECT ON __mj."vwMCPToolExecutionLogs" TO "cdp_UI", "cdp_Developer", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPToolExecutionLog" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: MCP Tool Execution Logs */;
+/* spCreate Permissions for MJ: MCP Tool Execution Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateMCPToolExecutionLog" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: MCP Tool Execution Logs */
@@ -57504,7 +57482,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateMCPToolExecutionLog" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPToolExecutionLog" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: MCP Tool Execution Logs */;
+/* spDelete Permissions for MJ: MCP Tool Execution Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteMCPToolExecutionLog" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: O Auth Tokens */
@@ -57554,7 +57532,7 @@ GRANT SELECT ON __mj."vwOAuthTokens" TO "cdp_UI", "cdp_Developer", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOAuthToken" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: O Auth Tokens */;
+/* spCreate Permissions for MJ: O Auth Tokens */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOAuthToken" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: O Auth Tokens */
@@ -57588,7 +57566,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateOAuthToken" TO "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOAuthToken" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: O Auth Tokens */;
+/* spDelete Permissions for MJ: O Auth Tokens */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOAuthToken" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: O Auth Authorization States */
@@ -57638,7 +57616,7 @@ GRANT SELECT ON __mj."vwOAuthAuthorizationStates" TO "cdp_UI", "cdp_Developer", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOAuthAuthorizationState" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: O Auth Authorization States */;
+/* spCreate Permissions for MJ: O Auth Authorization States */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOAuthAuthorizationState" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: O Auth Authorization States */
@@ -57672,7 +57650,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateOAuthAuthorizationState" TO 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOAuthAuthorizationState" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: O Auth Authorization States */;
+/* spDelete Permissions for MJ: O Auth Authorization States */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOAuthAuthorizationState" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: O Auth Client Registrations */
@@ -57722,7 +57700,7 @@ GRANT SELECT ON __mj."vwOAuthClientRegistrations" TO "cdp_UI", "cdp_Developer", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOAuthClientRegistration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: O Auth Client Registrations */;
+/* spCreate Permissions for MJ: O Auth Client Registrations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOAuthClientRegistration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: O Auth Client Registrations */
@@ -57756,7 +57734,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateOAuthClientRegistration" TO 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOAuthClientRegistration" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: O Auth Client Registrations */;
+/* spDelete Permissions for MJ: O Auth Client Registrations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOAuthClientRegistration" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Public Links */
@@ -57806,7 +57784,7 @@ GRANT SELECT ON __mj."vwPublicLinks" TO "cdp_UI", "cdp_Developer", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreatePublicLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Public Links */;
+/* spCreate Permissions for MJ: Public Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreatePublicLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Public Links */
@@ -57840,7 +57818,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdatePublicLink" TO "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeletePublicLink" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Public Links */;
+/* spDelete Permissions for MJ: Public Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeletePublicLink" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Queries */
@@ -57890,7 +57868,7 @@ GRANT SELECT ON __mj."vwQueries" TO "cdp_Developer", "cdp_UI", "cdp_Integration"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQuery" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Queries */;
+/* spCreate Permissions for MJ: Queries */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQuery" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Queries */
@@ -57956,7 +57934,7 @@ GRANT SELECT ON __mj."vwProjects" TO "cdp_UI", "cdp_Developer", "cdp_Integration
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateProject" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Projects */;
+/* spCreate Permissions for MJ: Projects */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateProject" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Projects */
@@ -57990,7 +57968,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateProject" TO "cdp_Developer",
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteProject" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Projects */;
+/* spDelete Permissions for MJ: Projects */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteProject" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Query Categories */
@@ -58040,7 +58018,7 @@ GRANT SELECT ON __mj."vwQueryCategories" TO "cdp_Integration", "cdp_Developer", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryCategory" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Query Categories */;
+/* spCreate Permissions for MJ: Query Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryCategory" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Query Categories */
@@ -58074,7 +58052,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateQueryCategory" TO "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryCategory" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Query Categories */;
+/* spDelete Permissions for MJ: Query Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryCategory" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Query Entities */
@@ -58124,7 +58102,7 @@ GRANT SELECT ON __mj."vwQueryEntities" TO "cdp_UI", "cdp_Developer", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Query Entities */;
+/* spCreate Permissions for MJ: Query Entities */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Query Entities */
@@ -58158,7 +58136,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateQueryEntity" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryEntity" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Query Entities */;
+/* spDelete Permissions for MJ: Query Entities */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryEntity" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: Queries */
@@ -58176,7 +58154,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryEntity" TO "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQuery" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Queries */;
+/* spDelete Permissions for MJ: Queries */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQuery" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Query Fields */
@@ -58226,7 +58204,7 @@ GRANT SELECT ON __mj."vwQueryFields" TO "cdp_UI", "cdp_Developer", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryField" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Query Fields */;
+/* spCreate Permissions for MJ: Query Fields */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryField" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Query Fields */
@@ -58260,7 +58238,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateQueryField" TO "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryField" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Query Fields */;
+/* spDelete Permissions for MJ: Query Fields */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryField" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Queue Tasks */
@@ -58310,7 +58288,7 @@ GRANT SELECT ON __mj."vwQueueTasks" TO "cdp_UI";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueueTask" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Queue Tasks */;
+/* spCreate Permissions for MJ: Queue Tasks */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueueTask" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Queue Tasks */
@@ -58357,7 +58335,7 @@ GRANT SELECT ON __mj."vwQueryParameters" TO "cdp_UI", "cdp_Developer", "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryParameter" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Query Parameters */;
+/* spCreate Permissions for MJ: Query Parameters */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryParameter" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Query Parameters */
@@ -58391,7 +58369,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateQueryParameter" TO "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryParameter" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Query Parameters */;
+/* spDelete Permissions for MJ: Query Parameters */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryParameter" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Query Permissions */
@@ -58441,7 +58419,7 @@ GRANT SELECT ON __mj."vwQueryPermissions" TO "cdp_UI", "cdp_Developer", "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Query Permissions */;
+/* spCreate Permissions for MJ: Query Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueryPermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Query Permissions */
@@ -58475,7 +58453,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateQueryPermission" TO "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Query Permissions */;
+/* spDelete Permissions for MJ: Query Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQueryPermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Recommendation Items */
@@ -58525,7 +58503,7 @@ GRANT SELECT ON __mj."vwRecommendationItems" TO "cdp_UI", "cdp_Developer", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecommendationItem" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Recommendation Items */;
+/* spCreate Permissions for MJ: Recommendation Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecommendationItem" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Recommendation Items */
@@ -58559,7 +58537,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateRecommendationItem" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecommendationItem" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Recommendation Items */;
+/* spDelete Permissions for MJ: Recommendation Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecommendationItem" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Queues */
@@ -58609,7 +58587,7 @@ GRANT SELECT ON __mj."vwQueues" TO "cdp_UI";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueue" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Queues */;
+/* spCreate Permissions for MJ: Queues */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQueue" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Queues */
@@ -58656,7 +58634,7 @@ GRANT SELECT ON __mj."vwRecommendationRuns" TO "cdp_Integration", "cdp_UI", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecommendationRun" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Recommendation Runs */;
+/* spCreate Permissions for MJ: Recommendation Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecommendationRun" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Recommendation Runs */
@@ -58690,7 +58668,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateRecommendationRun" TO "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecommendationRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Recommendation Runs */;
+/* spDelete Permissions for MJ: Recommendation Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecommendationRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Recommendations */
@@ -58740,7 +58718,7 @@ GRANT SELECT ON __mj."vwRecommendations" TO "cdp_Developer", "cdp_Integration", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecommendation" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Recommendations */;
+/* spCreate Permissions for MJ: Recommendations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecommendation" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Recommendations */
@@ -58774,7 +58752,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateRecommendation" TO "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecommendation" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Recommendations */;
+/* spDelete Permissions for MJ: Recommendations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecommendation" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Record Changes */
@@ -58824,7 +58802,7 @@ GRANT SELECT ON __mj."vwRecordChanges" TO "cdp_Developer", "cdp_UI", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecordChange" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Record Changes */;
+/* spCreate Permissions for MJ: Record Changes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecordChange" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Record Changes */
@@ -58887,7 +58865,7 @@ GRANT SELECT ON __mj."vwRecordChangeReplayRuns" TO "cdp_UI", "cdp_Integration", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecordChangeReplayRun" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Record Change Replay Runs */;
+/* spCreate Permissions for MJ: Record Change Replay Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecordChangeReplayRun" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Record Change Replay Runs */
@@ -58921,7 +58899,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateRecordChangeReplayRun" TO "c
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecordChangeReplayRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Record Change Replay Runs */;
+/* spDelete Permissions for MJ: Record Change Replay Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecordChangeReplayRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Record Links */
@@ -58971,7 +58949,7 @@ GRANT SELECT ON __mj."vwRecordLinks" TO "cdp_UI", "cdp_Developer", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecordLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Record Links */;
+/* spCreate Permissions for MJ: Record Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecordLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Record Links */
@@ -59005,7 +58983,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateRecordLink" TO "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecordLink" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Record Links */;
+/* spDelete Permissions for MJ: Record Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecordLink" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Record Merge Deletion Logs */
@@ -59055,7 +59033,7 @@ GRANT SELECT ON __mj."vwRecordMergeDeletionLogs" TO "cdp_Integration", "cdp_UI",
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecordMergeDeletionLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Record Merge Deletion Logs */;
+/* spCreate Permissions for MJ: Record Merge Deletion Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecordMergeDeletionLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Record Merge Deletion Logs */
@@ -59089,7 +59067,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateRecordMergeDeletionLog" TO "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecordMergeDeletionLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Record Merge Deletion Logs */;
+/* spDelete Permissions for MJ: Record Merge Deletion Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecordMergeDeletionLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Record Merge Logs */
@@ -59139,7 +59117,7 @@ GRANT SELECT ON __mj."vwRecordMergeLogs" TO "cdp_Integration", "cdp_Developer", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecordMergeLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Record Merge Logs */;
+/* spCreate Permissions for MJ: Record Merge Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateRecordMergeLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Record Merge Logs */
@@ -59173,7 +59151,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateRecordMergeLog" TO "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecordMergeLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Record Merge Logs */;
+/* spDelete Permissions for MJ: Record Merge Logs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecordMergeLog" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Report Categories */
@@ -59223,7 +59201,7 @@ GRANT SELECT ON __mj."vwReportCategories" TO "cdp_Integration", "cdp_Developer",
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateReportCategory" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Report Categories */;
+/* spCreate Permissions for MJ: Report Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateReportCategory" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Report Categories */
@@ -59257,7 +59235,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateReportCategory" TO "cdp_Inte
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteReportCategory" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Report Categories */;
+/* spDelete Permissions for MJ: Report Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteReportCategory" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Report Snapshots */
@@ -59307,7 +59285,7 @@ GRANT SELECT ON __mj."vwReportSnapshots" TO "cdp_UI";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateReportSnapshot" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Report Snapshots */;
+/* spCreate Permissions for MJ: Report Snapshots */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateReportSnapshot" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Report Snapshots */
@@ -59341,7 +59319,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateReportSnapshot" TO "cdp_UI";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteReportSnapshot" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Report Snapshots */;
+/* spDelete Permissions for MJ: Report Snapshots */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteReportSnapshot" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Report User States */
@@ -59391,7 +59369,7 @@ GRANT SELECT ON __mj."vwReportUserStates" TO "cdp_UI", "cdp_Developer", "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateReportUserState" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Report User States */;
+/* spCreate Permissions for MJ: Report User States */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateReportUserState" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Report User States */
@@ -59425,7 +59403,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateReportUserState" TO "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteReportUserState" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Report User States */;
+/* spDelete Permissions for MJ: Report User States */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteReportUserState" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Report Versions */
@@ -59475,7 +59453,7 @@ GRANT SELECT ON __mj."vwReportVersions" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateReportVersion" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Report Versions */;
+/* spCreate Permissions for MJ: Report Versions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateReportVersion" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Report Versions */
@@ -59509,7 +59487,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateReportVersion" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteReportVersion" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Report Versions */;
+/* spDelete Permissions for MJ: Report Versions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteReportVersion" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Reports */
@@ -59559,7 +59537,7 @@ GRANT SELECT ON __mj."vwReports" TO "cdp_Developer", "cdp_UI";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateReport" TO "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Reports */;
+/* spCreate Permissions for MJ: Reports */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateReport" TO "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Reports */
@@ -59593,7 +59571,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateReport" TO "cdp_Developer", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteReport" TO "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Reports */;
+/* spDelete Permissions for MJ: Reports */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteReport" TO "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Resource Permissions */
@@ -59643,7 +59621,7 @@ GRANT SELECT ON __mj."vwResourcePermissions" TO "cdp_UI", "cdp_Developer", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateResourcePermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Resource Permissions */;
+/* spCreate Permissions for MJ: Resource Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateResourcePermission" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Resource Permissions */
@@ -59677,7 +59655,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateResourcePermission" TO "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteResourcePermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Resource Permissions */;
+/* spDelete Permissions for MJ: Resource Permissions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteResourcePermission" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Resource Links */
@@ -59727,7 +59705,7 @@ GRANT SELECT ON __mj."vwResourceLinks" TO "cdp_UI", "cdp_Developer", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateResourceLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Resource Links */;
+/* spCreate Permissions for MJ: Resource Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateResourceLink" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Resource Links */
@@ -59761,7 +59739,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateResourceLink" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteResourceLink" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Resource Links */;
+/* spDelete Permissions for MJ: Resource Links */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteResourceLink" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Resource Types */
@@ -59811,7 +59789,7 @@ GRANT SELECT ON __mj."vwResourceTypes" TO "cdp_UI";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateResourceType" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Resource Types */;
+/* spCreate Permissions for MJ: Resource Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateResourceType" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Resource Types */
@@ -59845,7 +59823,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateResourceType" TO "cdp_UI"; E
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteResourceType" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Resource Types */;
+/* spDelete Permissions for MJ: Resource Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteResourceType" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Scheduled Actions */
@@ -59895,7 +59873,7 @@ GRANT SELECT ON __mj."vwScheduledActions" TO "cdp_UI", "cdp_Integration", "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateScheduledAction" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Scheduled Actions */;
+/* spCreate Permissions for MJ: Scheduled Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateScheduledAction" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Scheduled Actions */
@@ -59929,7 +59907,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateScheduledAction" TO "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteScheduledAction" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Scheduled Actions */;
+/* spDelete Permissions for MJ: Scheduled Actions */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteScheduledAction" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Scheduled Action Params */
@@ -59979,7 +59957,7 @@ GRANT SELECT ON __mj."vwScheduledActionParams" TO "cdp_Developer", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateScheduledActionParam" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Scheduled Action Params */;
+/* spCreate Permissions for MJ: Scheduled Action Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateScheduledActionParam" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Scheduled Action Params */
@@ -60013,7 +59991,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateScheduledActionParam" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteScheduledActionParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Scheduled Action Params */;
+/* spDelete Permissions for MJ: Scheduled Action Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteScheduledActionParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Scheduled Job Runs */
@@ -60063,7 +60041,7 @@ GRANT SELECT ON __mj."vwScheduledJobRuns" TO "cdp_UI", "cdp_Developer", "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateScheduledJobRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Scheduled Job Runs */;
+/* spCreate Permissions for MJ: Scheduled Job Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateScheduledJobRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Scheduled Job Runs */
@@ -60097,7 +60075,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateScheduledJobRun" TO "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteScheduledJobRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Scheduled Job Runs */;
+/* spDelete Permissions for MJ: Scheduled Job Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteScheduledJobRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Scheduled Jobs */
@@ -60147,7 +60125,7 @@ GRANT SELECT ON __mj."vwScheduledJobs" TO "cdp_UI", "cdp_Developer", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateScheduledJob" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Scheduled Jobs */;
+/* spCreate Permissions for MJ: Scheduled Jobs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateScheduledJob" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Scheduled Jobs */
@@ -60181,7 +60159,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateScheduledJob" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteScheduledJob" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Scheduled Jobs */;
+/* spDelete Permissions for MJ: Scheduled Jobs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteScheduledJob" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Tagged Items */
@@ -60231,7 +60209,7 @@ GRANT SELECT ON __mj."vwTaggedItems" TO "cdp_UI";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTaggedItem" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Tagged Items */;
+/* spCreate Permissions for MJ: Tagged Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTaggedItem" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Tagged Items */
@@ -60265,7 +60243,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTaggedItem" TO "cdp_UI"; EXC
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTaggedItem" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Tagged Items */;
+/* spDelete Permissions for MJ: Tagged Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTaggedItem" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Skills */
@@ -60315,7 +60293,7 @@ GRANT SELECT ON __mj."vwSkills" TO "cdp_Developer", "cdp_Integration", "cdp_UI";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateSkill" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Skills */;
+/* spCreate Permissions for MJ: Skills */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateSkill" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Skills */
@@ -60349,7 +60327,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateSkill" TO "cdp_Developer", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteSkill" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Skills */;
+/* spDelete Permissions for MJ: Skills */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteSkill" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Tags */
@@ -60399,7 +60377,7 @@ GRANT SELECT ON __mj."vwTags" TO "cdp_UI";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTag" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Tags */;
+/* spCreate Permissions for MJ: Tags */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTag" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Tags */
@@ -60433,7 +60411,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTag" TO "cdp_UI"; EXCEPTION 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTag" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Tags */;
+/* spDelete Permissions for MJ: Tags */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTag" TO "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Task Dependencies */
@@ -60483,7 +60461,7 @@ GRANT SELECT ON __mj."vwTaskDependencies" TO "cdp_UI", "cdp_Developer", "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTaskDependency" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Task Dependencies */;
+/* spCreate Permissions for MJ: Task Dependencies */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTaskDependency" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Task Dependencies */
@@ -60517,7 +60495,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTaskDependency" TO "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTaskDependency" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Task Dependencies */;
+/* spDelete Permissions for MJ: Task Dependencies */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTaskDependency" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Template Categories */
@@ -60567,7 +60545,7 @@ GRANT SELECT ON __mj."vwTemplateCategories" TO "cdp_Integration", "cdp_UI", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTemplateCategory" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Template Categories */;
+/* spCreate Permissions for MJ: Template Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTemplateCategory" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Template Categories */
@@ -60601,7 +60579,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTemplateCategory" TO "cdp_In
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTemplateCategory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Template Categories */;
+/* spDelete Permissions for MJ: Template Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTemplateCategory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Tasks */
@@ -60651,7 +60629,7 @@ GRANT SELECT ON __mj."vwTasks" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTask" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Tasks */;
+/* spCreate Permissions for MJ: Tasks */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTask" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Tasks */
@@ -60685,7 +60663,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTask" TO "cdp_Developer", "c
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTask" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Tasks */;
+/* spDelete Permissions for MJ: Tasks */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTask" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Template Contents */
@@ -60735,7 +60713,7 @@ GRANT SELECT ON __mj."vwTemplateContents" TO "cdp_Integration", "cdp_UI", "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTemplateContent" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Template Contents */;
+/* spCreate Permissions for MJ: Template Contents */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTemplateContent" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Template Contents */
@@ -60769,7 +60747,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTemplateContent" TO "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTemplateContent" TO "cdp_Integration", "cdp_UI", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Template Contents */;
+/* spDelete Permissions for MJ: Template Contents */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTemplateContent" TO "cdp_Integration", "cdp_UI", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Template Params */
@@ -60819,7 +60797,7 @@ GRANT SELECT ON __mj."vwTemplateParams" TO "cdp_UI", "cdp_Integration", "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTemplateParam" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Template Params */;
+/* spCreate Permissions for MJ: Template Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTemplateParam" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Template Params */
@@ -60853,7 +60831,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTemplateParam" TO "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTemplateParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Template Params */;
+/* spDelete Permissions for MJ: Template Params */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTemplateParam" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Test Rubrics */
@@ -60903,7 +60881,7 @@ GRANT SELECT ON __mj."vwTestRubrics" TO "cdp_UI", "cdp_Developer", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRubric" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Test Rubrics */;
+/* spCreate Permissions for MJ: Test Rubrics */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRubric" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Test Rubrics */
@@ -60937,7 +60915,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTestRubric" TO "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRubric" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Test Rubrics */;
+/* spDelete Permissions for MJ: Test Rubrics */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRubric" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Templates */
@@ -60987,7 +60965,7 @@ GRANT SELECT ON __mj."vwTemplates" TO "cdp_Developer", "cdp_UI", "cdp_Integratio
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTemplate" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Templates */;
+/* spCreate Permissions for MJ: Templates */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTemplate" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Templates */
@@ -61021,7 +60999,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTemplate" TO "cdp_Developer"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTemplate" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Templates */;
+/* spDelete Permissions for MJ: Templates */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTemplate" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Test Runs */
@@ -61071,7 +61049,7 @@ GRANT SELECT ON __mj."vwTestRuns" TO "cdp_UI", "cdp_Developer", "cdp_Integration
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Test Runs */;
+/* spCreate Permissions for MJ: Test Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Test Runs */
@@ -61105,7 +61083,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTestRun" TO "cdp_Developer",
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Test Runs */;
+/* spDelete Permissions for MJ: Test Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Test Run Feedbacks */
@@ -61155,7 +61133,7 @@ GRANT SELECT ON __mj."vwTestRunFeedbacks" TO "cdp_UI", "cdp_Developer", "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRunFeedback" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Test Run Feedbacks */;
+/* spCreate Permissions for MJ: Test Run Feedbacks */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRunFeedback" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Test Run Feedbacks */
@@ -61189,7 +61167,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTestRunFeedback" TO "cdp_Dev
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRunFeedback" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Test Run Feedbacks */;
+/* spDelete Permissions for MJ: Test Run Feedbacks */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRunFeedback" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Test Suite Tests */
@@ -61239,7 +61217,7 @@ GRANT SELECT ON __mj."vwTestSuiteTests" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestSuiteTest" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Test Suite Tests */;
+/* spCreate Permissions for MJ: Test Suite Tests */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestSuiteTest" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Test Suite Tests */
@@ -61273,7 +61251,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTestSuiteTest" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestSuiteTest" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Test Suite Tests */;
+/* spDelete Permissions for MJ: Test Suite Tests */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestSuiteTest" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Test Suite Runs */
@@ -61323,7 +61301,7 @@ GRANT SELECT ON __mj."vwTestSuiteRuns" TO "cdp_UI", "cdp_Developer", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestSuiteRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Test Suite Runs */;
+/* spCreate Permissions for MJ: Test Suite Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestSuiteRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Test Suite Runs */
@@ -61357,7 +61335,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTestSuiteRun" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestSuiteRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Test Suite Runs */;
+/* spDelete Permissions for MJ: Test Suite Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestSuiteRun" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Tests */
@@ -61407,7 +61385,7 @@ GRANT SELECT ON __mj."vwTests" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTest" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Tests */;
+/* spCreate Permissions for MJ: Tests */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTest" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Tests */
@@ -61441,7 +61419,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTest" TO "cdp_Developer", "c
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTest" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Tests */;
+/* spDelete Permissions for MJ: Tests */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTest" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Test Suites */
@@ -61491,7 +61469,7 @@ GRANT SELECT ON __mj."vwTestSuites" TO "cdp_UI", "cdp_Developer", "cdp_Integrati
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestSuite" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Test Suites */;
+/* spCreate Permissions for MJ: Test Suites */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestSuite" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Test Suites */
@@ -61525,7 +61503,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTestSuite" TO "cdp_Developer
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestSuite" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Test Suites */;
+/* spDelete Permissions for MJ: Test Suites */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestSuite" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: User Notification Types */
@@ -61575,7 +61553,7 @@ GRANT SELECT ON __mj."vwUserNotificationTypes" TO "cdp_UI", "cdp_Developer", "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserNotificationType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: User Notification Types */;
+/* spCreate Permissions for MJ: User Notification Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserNotificationType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: User Notification Types */
@@ -61609,7 +61587,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateUserNotificationType" TO "cd
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserNotificationType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: User Notification Types */;
+/* spDelete Permissions for MJ: User Notification Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserNotificationType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: User Applications */
@@ -61659,7 +61637,7 @@ GRANT SELECT ON __mj."vwUserApplications" TO "cdp_Integration", "cdp_UI", "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserApplication" TO "cdp_Integration", "cdp_UI", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: User Applications */;
+/* spCreate Permissions for MJ: User Applications */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserApplication" TO "cdp_Integration", "cdp_UI", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: User Applications */
@@ -61693,7 +61671,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateUserApplication" TO "cdp_Int
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserApplication" TO "cdp_Integration", "cdp_UI", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: User Applications */;
+/* spDelete Permissions for MJ: User Applications */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserApplication" TO "cdp_Integration", "cdp_UI", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: User Notification Preferences */
@@ -61743,7 +61721,7 @@ GRANT SELECT ON __mj."vwUserNotificationPreferences" TO "cdp_UI", "cdp_Developer
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserNotificationPreference" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: User Notification Preferences */;
+/* spCreate Permissions for MJ: User Notification Preferences */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserNotificationPreference" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: User Notification Preferences */
@@ -61777,7 +61755,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateUserNotificationPreference" 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserNotificationPreference" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: User Notification Preferences */;
+/* spDelete Permissions for MJ: User Notification Preferences */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserNotificationPreference" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: User Roles */
@@ -61827,7 +61805,7 @@ GRANT SELECT ON __mj."vwUserRoles" TO "cdp_Developer", "cdp_UI", "cdp_Integratio
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserRole" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: User Roles */;
+/* spCreate Permissions for MJ: User Roles */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserRole" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: User Roles */
@@ -61861,7 +61839,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateUserRole" TO "cdp_Developer"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserRole" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: User Roles */;
+/* spDelete Permissions for MJ: User Roles */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserRole" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: User Notifications */
@@ -61911,7 +61889,7 @@ GRANT SELECT ON __mj."vwUserNotifications" TO "cdp_Integration", "cdp_Developer"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserNotification" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: User Notifications */;
+/* spCreate Permissions for MJ: User Notifications */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserNotification" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: User Notifications */
@@ -61974,7 +61952,7 @@ GRANT SELECT ON __mj."vwUserViewCategories" TO "cdp_UI", "cdp_Developer", "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserViewCategory" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: User View Categories */;
+/* spCreate Permissions for MJ: User View Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserViewCategory" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: User View Categories */
@@ -62008,7 +61986,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateUserViewCategory" TO "cdp_UI
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserViewCategory" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: User View Categories */;
+/* spDelete Permissions for MJ: User View Categories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserViewCategory" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: User Settings */
@@ -62058,7 +62036,7 @@ GRANT SELECT ON __mj."vwUserSettings" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserSetting" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: User Settings */;
+/* spCreate Permissions for MJ: User Settings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserSetting" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: User Settings */
@@ -62092,7 +62070,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateUserSetting" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserSetting" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: User Settings */;
+/* spDelete Permissions for MJ: User Settings */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserSetting" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: User View Runs */
@@ -62142,7 +62120,7 @@ GRANT SELECT ON __mj."vwUserViewRuns" TO "cdp_Developer", "cdp_UI", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserViewRun" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: User View Runs */;
+/* spCreate Permissions for MJ: User View Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateUserViewRun" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: User View Runs */
@@ -62176,7 +62154,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateUserViewRun" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserViewRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: User View Runs */;
+/* spDelete Permissions for MJ: User View Runs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteUserViewRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Vector Indexes */
@@ -62226,7 +62204,7 @@ GRANT SELECT ON __mj."vwVectorIndexes" TO "cdp_Integration", "cdp_UI", "cdp_Deve
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateVectorIndex" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Vector Indexes */;
+/* spCreate Permissions for MJ: Vector Indexes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateVectorIndex" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Vector Indexes */
@@ -62260,7 +62238,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateVectorIndex" TO "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteVectorIndex" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Vector Indexes */;
+/* spDelete Permissions for MJ: Vector Indexes */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteVectorIndex" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Version Label Restores */
@@ -62310,7 +62288,7 @@ GRANT SELECT ON __mj."vwVersionLabelRestores" TO "cdp_UI", "cdp_Developer", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateVersionLabelRestore" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Version Label Restores */;
+/* spCreate Permissions for MJ: Version Label Restores */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateVersionLabelRestore" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Version Label Restores */
@@ -62344,7 +62322,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateVersionLabelRestore" TO "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteVersionLabelRestore" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Version Label Restores */;
+/* spDelete Permissions for MJ: Version Label Restores */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteVersionLabelRestore" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Version Label Items */
@@ -62394,7 +62372,7 @@ GRANT SELECT ON __mj."vwVersionLabelItems" TO "cdp_UI", "cdp_Developer", "cdp_In
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateVersionLabelItem" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Version Label Items */;
+/* spCreate Permissions for MJ: Version Label Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateVersionLabelItem" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Version Label Items */
@@ -62428,7 +62406,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateVersionLabelItem" TO "cdp_De
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteVersionLabelItem" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Version Label Items */;
+/* spDelete Permissions for MJ: Version Label Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteVersionLabelItem" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Version Labels */
@@ -62478,7 +62456,7 @@ GRANT SELECT ON __mj."vwVersionLabels" TO "cdp_UI", "cdp_Developer", "cdp_Integr
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateVersionLabel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Version Labels */;
+/* spCreate Permissions for MJ: Version Labels */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateVersionLabel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Version Labels */
@@ -62512,7 +62490,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateVersionLabel" TO "cdp_Develo
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteVersionLabel" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Version Labels */;
+/* spDelete Permissions for MJ: Version Labels */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteVersionLabel" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Workspace Items */
@@ -62562,7 +62540,7 @@ GRANT SELECT ON __mj."vwWorkspaceItems" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateWorkspaceItem" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Workspace Items */;
+/* spCreate Permissions for MJ: Workspace Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateWorkspaceItem" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Workspace Items */
@@ -62596,7 +62574,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateWorkspaceItem" TO "cdp_UI", 
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteWorkspaceItem" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Workspace Items */;
+/* spDelete Permissions for MJ: Workspace Items */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteWorkspaceItem" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View SQL for MJ: Workspaces */
@@ -62646,7 +62624,7 @@ GRANT SELECT ON __mj."vwWorkspaces" TO "cdp_UI", "cdp_Developer", "cdp_Integrati
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateWorkspace" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Workspaces */;
+/* spCreate Permissions for MJ: Workspaces */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateWorkspace" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Workspaces */
@@ -62680,10 +62658,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateWorkspace" TO "cdp_UI", "cdp
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteWorkspace" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Workspaces */;
+/* spDelete Permissions for MJ: Workspaces */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteWorkspace" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* SQL text to insert new entity field */;
+/* SQL text to insert new entity field */
 
 
 -- ===================== Other =====================

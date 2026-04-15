@@ -1,25 +1,3 @@
--- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
@@ -114,34 +92,34 @@ CREATE TABLE __mj."OpenAppDependency" (
 );
 
 ALTER TABLE __mj."OpenAppDependency"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."OpenAppDependency" */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."OpenAppDependency" */
 
 ALTER TABLE __mj."OpenAppDependency"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_CreatedAt to entity __mj."OpenApp" */;
-
-ALTER TABLE __mj."OpenApp"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."OpenApp" */;
+/* SQL text to add special date field __mj_CreatedAt to entity __mj."OpenApp" */
 
 ALTER TABLE __mj."OpenApp"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_CreatedAt to entity __mj."OpenAppInstallHistory" */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."OpenApp" */
+
+ALTER TABLE __mj."OpenApp"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+/* SQL text to add special date field __mj_CreatedAt to entity __mj."OpenAppInstallHistory" */
 
 ALTER TABLE __mj."OpenAppInstallHistory"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."OpenAppInstallHistory" */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."OpenAppInstallHistory" */
 
 ALTER TABLE __mj."OpenAppInstallHistory"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to insert new entity field */;
+/* SQL text to insert new entity field */
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_OpenAppDependency_OpenAppID" ON __mj."OpenAppDependency" ("OpenAppID");
 
@@ -944,7 +922,7 @@ INSERT INTO __mj."EntityPermission"
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
                                                    ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
-/* SQL text to add special date field "__mj_CreatedAt" to entity __mj."OpenAppDependency" */
+/* SQL text to add special date field __mj_CreatedAt to entity __mj."OpenAppDependency" */
 
 DO $$
 BEGIN
@@ -4415,7 +4393,7 @@ GRANT SELECT ON __mj."vwOpenAppDependencies" TO "cdp_UI", "cdp_Developer", "cdp_
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOpenAppDependency" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Open App Dependencies */;
+/* spCreate Permissions for MJ: Open App Dependencies */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOpenAppDependency" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Open App Dependencies */
@@ -4449,7 +4427,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateOpenAppDependency" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOpenAppDependency" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Open App Dependencies */;
+/* spDelete Permissions for MJ: Open App Dependencies */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOpenAppDependency" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Index for Foreign Keys for OpenAppInstallHistory */
@@ -4493,7 +4471,7 @@ GRANT SELECT ON __mj."vwOpenApps" TO "cdp_UI", "cdp_Developer", "cdp_Integration
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOpenApp" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Open Apps */;
+/* spCreate Permissions for MJ: Open Apps */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOpenApp" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Open Apps */
@@ -4527,10 +4505,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateOpenApp" TO "cdp_Developer",
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOpenApp" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Open Apps */;
+/* spDelete Permissions for MJ: Open Apps */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOpenApp" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* SQL text to update entity field related entity name field map for entity field ID 0D4EC1C7-D177-454E-93FF-C97AB42BDDFF */;
+/* SQL text to update entity field related entity name field map for entity field ID 0D4EC1C7-D177-454E-93FF-C97AB42BDDFF */
 
 GRANT SELECT ON __mj."vwOpenAppInstallHistories" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
     
@@ -4562,7 +4540,7 @@ GRANT SELECT ON __mj."vwOpenAppInstallHistories" TO "cdp_UI", "cdp_Developer", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOpenAppInstallHistory" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Open App Install Histories */;
+/* spCreate Permissions for MJ: Open App Install Histories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateOpenAppInstallHistory" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Open App Install Histories */
@@ -4596,10 +4574,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateOpenAppInstallHistory" TO "c
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOpenAppInstallHistory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Open App Install Histories */;
+/* spDelete Permissions for MJ: Open App Install Histories */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteOpenAppInstallHistory" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* SQL text to insert new entity field */;
+/* SQL text to insert new entity field */
 
 
 -- ===================== Comments =====================

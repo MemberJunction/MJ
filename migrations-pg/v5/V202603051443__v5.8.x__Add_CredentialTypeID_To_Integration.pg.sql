@@ -1,25 +1,3 @@
--- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
@@ -602,7 +580,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '0D5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Integrations."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Integrations.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -611,7 +589,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '495817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Integrations."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Integrations.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -849,7 +827,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '3C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Company Integrations."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -858,7 +836,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '0D5917F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Company Integrations."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -942,7 +920,7 @@ ADD CONSTRAINT FK_CompanyIntegration_Credential
 ------------------------------------------------------------
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Company Integrations */;
+/* spDelete Permissions for MJ: Company Integrations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Index for Foreign Keys for Integration */
@@ -985,7 +963,7 @@ GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Integrations */;
+/* spCreate Permissions for MJ: Integrations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Integrations */
@@ -1019,10 +997,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateIntegration" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Integrations */;
+/* spDelete Permissions for MJ: Integrations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* SQL text to insert new entity field */;
+/* SQL text to insert new entity field */
 
 
 -- ===================== Comments =====================

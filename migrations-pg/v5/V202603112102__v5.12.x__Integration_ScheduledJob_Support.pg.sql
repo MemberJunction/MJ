@@ -1,0 +1,947 @@
+
+-- ===================== DDL: Tables, PKs, Indexes =====================
+
+-- =============================================================================
+-- Migration: Integration Scheduled Job Support
+-- Version:   5.12.x
+-- Purpose:   1. Add ScheduledJobRunID FK to CompanyIntegrationRun for traceability
+--            2. Add ScheduledJobID FK to CompanyIntegration for association
+-- =============================================================================
+
+-- 1a. Add ScheduledJobRunID to CompanyIntegrationRun
+ALTER TABLE __mj."CompanyIntegrationRun"
+ ADD COLUMN "ScheduledJobRunID" UUID NULL;
+
+-- 1b. Add ScheduledJobID to CompanyIntegration
+ALTER TABLE __mj."CompanyIntegration"
+ ADD COLUMN "ScheduledJobID" UUID NULL;
+
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_CompanyIntegrationRun_CompanyIntegrationID" ON __mj."CompanyIntegrationRun" ("CompanyIntegrationID");
+
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_CompanyIntegrationRun_RunByUserID" ON __mj."CompanyIntegrationRun" ("RunByUserID");
+
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_CompanyIntegration_CompanyID" ON __mj."CompanyIntegration" ("CompanyID");
+
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_CompanyIntegration_IntegrationID" ON __mj."CompanyIntegration" ("IntegrationID");
+
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_CompanyIntegration_SourceTypeID" ON __mj."CompanyIntegration" ("SourceTypeID");
+
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_CompanyIntegration_CredentialID" ON __mj."CompanyIntegration" ("CredentialID");
+
+
+-- ===================== Stored Procedures (sp*) =====================
+
+-- SKIPPED: References view "vwCompanyIntegrationRuns" not created in this file (CodeGen will recreate)
+
+-- SKIPPED: References view "vwCompanyIntegrationRuns" not created in this file (CodeGen will recreate)
+
+-- SKIPPED: References view "vwCompanyIntegrations" not created in this file (CodeGen will recreate)
+
+-- SKIPPED: References view "vwCompanyIntegrations" not created in this file (CodeGen will recreate)
+
+CREATE OR REPLACE FUNCTION __mj."spDeleteCompanyIntegrationRun"(
+    IN p_ID UUID
+)
+RETURNS TABLE("_result_id" UUID) AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+DELETE FROM
+        __mj."CompanyIntegrationRun"
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT NULL::UUID AS "_result_id";
+    ELSE
+        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION __mj."spDeleteCompanyIntegration"(
+    IN p_ID UUID
+)
+RETURNS TABLE("_result_id" UUID) AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+DELETE FROM
+        __mj."CompanyIntegration"
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT NULL::UUID AS "_result_id";
+    ELSE
+        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- ===================== Triggers =====================
+
+CREATE OR REPLACE FUNCTION __mj."trgUpdateCompanyIntegrationRun_func"()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."__mj_UpdatedAt" = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trgUpdateCompanyIntegrationRun" ON __mj."CompanyIntegrationRun";
+CREATE TRIGGER "trgUpdateCompanyIntegrationRun"
+    BEFORE UPDATE ON __mj."CompanyIntegrationRun"
+    FOR EACH ROW
+    EXECUTE FUNCTION __mj."trgUpdateCompanyIntegrationRun_func"();
+
+CREATE OR REPLACE FUNCTION __mj."trgUpdateCompanyIntegration_func"()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."__mj_UpdatedAt" = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trgUpdateCompanyIntegration" ON __mj."CompanyIntegration";
+CREATE TRIGGER "trgUpdateCompanyIntegration"
+    BEFORE UPDATE ON __mj."CompanyIntegration"
+    FOR EACH ROW
+    EXECUTE FUNCTION __mj."trgUpdateCompanyIntegration_func"();
+
+
+-- ===================== Data (INSERT/UPDATE/DELETE) =====================
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'df93b894-b6db-4928-825f-3ec8efbc9521' OR ("EntityID" = 'DE238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'ScheduledJobID')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'df93b894-b6db-4928-825f-3ec8efbc9521',
+        'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integrations"
+        100067,
+        'ScheduledJobID',
+        'Scheduled Job ID',
+        'Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.',
+        'UUID',
+        16,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        'F48D2E6C-61C8-46B8-A617-C8228601EB3C',
+        'ID',
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '98758b73-bcf9-4f1d-84d2-5c897f46eff3' OR ("EntityID" = 'E5238F34-2837-EF11-86D4-6045BDEE16E6' AND "Name" = 'ScheduledJobRunID')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '98758b73-bcf9-4f1d-84d2-5c897f46eff3',
+        'E5238F34-2837-EF11-86D4-6045BDEE16E6', -- "Entity": "MJ": "Company" "Integration" "Runs"
+        100029,
+        'ScheduledJobRunID',
+        'Scheduled Job Run ID',
+        'Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.',
+        'UUID',
+        16,
+        0,
+        0,
+        1,
+        NULL,
+        0,
+        1,
+        0,
+        '05853432-5E13-4F2A-8618-77857ADF17FA',
+        'ID',
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+UPDATE __mj."EntityFieldValue" SET "Sequence"=3 WHERE "ID"='5978FE3A-1BE9-4CFB-83B6-E9B34CBB587E';
+/* SQL text to update entity field value sequence */
+
+UPDATE __mj."EntityFieldValue" SET "Sequence"=4 WHERE "ID"='EA37F71B-6463-4D68-996C-BD69CC10EC21';
+/* SQL text to update entity field value sequence */
+
+UPDATE __mj."EntityFieldValue" SET "Sequence"=5 WHERE "ID"='7DDC2EF5-7E08-490C-8409-F576A303E3DE';
+/* Create Entity Relationship: MJ: Scheduled Job Runs -> MJ: Company Integration Runs (One To Many via ScheduledJobRunID) */
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'f63d8578-c310-4de2-9bf2-15b047c0397f'
+    ) THEN
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
+        VALUES ('f63d8578-c310-4de2-9bf2-15b047c0397f', '05853432-5E13-4F2A-8618-77857ADF17FA', 'E5238F34-2837-EF11-86D4-6045BDEE16E6', 'ScheduledJobRunID', 'One To Many', 1, 1, 4, NOW(), NOW());
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '10b4a3f3-9b46-4fa9-ae66-eef4a3c43d2f'
+    ) THEN
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
+        VALUES ('10b4a3f3-9b46-4fa9-ae66-eef4a3c43d2f', 'F48D2E6C-61C8-46B8-A617-C8228601EB3C', 'DE238F34-2837-EF11-86D4-6045BDEE16E6', 'ScheduledJobID', 'One To Many', 1, 1, 6, NOW(), NOW());
+    END IF;
+END $$;
+
+UPDATE __mj."EntityField"
+               SET "DefaultInView" = 1
+               WHERE "ID" = '4D811E36-6C67-4927-957C-CF3692941C43'
+               AND "AutoUpdateDefaultInView" = 1;
+
+UPDATE __mj."EntityField"
+                  SET "IncludeInUserSearchAPI" = 1
+                  WHERE "ID" = '385817F0-6F36-EF11-86D4-6045BDEE16E6'
+                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+/* Set categories for 16 fields */
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."ID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '6C4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."CompanyIntegrationID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '6D4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."RunByUserID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "DisplayName" = 'Run By User ID',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '6E4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."Integration"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '1C2E756D-4457-495D-B7BF-43402A1E4E4E' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."Company"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '2C8D1AD8-7743-46C2-9B40-A7C6C9F0765B' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."RunByUser"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'C55717F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."ScheduledJobRunID"
+
+UPDATE __mj."EntityField"
+SET 
+   "Category" = 'Run Overview',
+   "GeneratedFormSection" = 'Category',
+   "DisplayName" = 'Scheduled Job Run',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '98758B73-BCF9-4F1D-84D2-5C897F46EFF3' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."StartedAt"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '6F4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."EndedAt"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '704D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."TotalRecords"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '714D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."Status"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '7D91381D-ABC9-46DD-AA66-3E1909BE1CB2' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."Comments"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '724D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."ErrorLog"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '429C9B37-8575-4F2D-9E19-F39378EC3A12' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs."ConfigData"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "DisplayName" = 'Configuration Data',
+   "ExtendedType" = 'Code',
+   "CodeType" = 'Other'
+WHERE 
+   "ID" = 'CB3F1399-7741-4882-99D6-F6CDE80E3897' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.__mj_CreatedAt
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '4B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integration Runs.__mj_UpdatedAt
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '4C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+/* Set categories for 37 fields */
+-- UPDATE Entity Field Category Info MJ: Company Integrations."ID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '115817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."CompanyID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '125817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."IntegrationID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '135817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."IsActive"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '145817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."Name"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '64799DD4-A537-4B9C-897F-EC2AFE9A28D0' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."SourceTypeID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'F647023E-D909-4ECB-B59D-EE477C274827' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."IsExternalSystemReadOnly"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "DisplayName" = 'Is Read Only',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'B24217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."Company"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "DisplayName" = 'Company Name',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '365817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."Integration"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "DisplayName" = 'Integration Name',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '375817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."AccessToken"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '155817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."RefreshToken"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '165817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."TokenExpirationDate"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '175817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."APIKey"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '185817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."ClientID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'B34217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."ClientSecret"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'B44217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."CredentialID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '131B9CC4-3755-46F6-925A-7E3A13BCDFD6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."ExternalSystemID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '425817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."CustomAttribute1"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'C44217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."Configuration"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = 'Code',
+   "CodeType" = 'Other'
+WHERE 
+   "ID" = '987EAF20-227F-4043-BD87-06C9E01598F4' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."DriverClassName"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '385817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."DriverImportPath"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '395817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."ScheduleEnabled"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '4D811E36-6C67-4927-957C-CF3692941C43' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."ScheduleType"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '91E87B89-A40E-49CE-8464-75EC06BFF1A7' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."ScheduleIntervalMinutes"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '801D0E7D-4FCB-4249-9052-4E929307F070' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."CronExpression"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'FA43CB1D-7A04-40D8-AC9A-2036E3F06252' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."NextScheduledRunAt"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '45E7C880-19C4-45FB-BA3C-9FFD9533FB12' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."LastScheduledRunAt"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'CAC39331-FA43-46BD-ABC0-11AE683EA5EC' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."ScheduledJobID"
+
+UPDATE __mj."EntityField"
+SET 
+   "Category" = 'Sync Scheduling',
+   "GeneratedFormSection" = 'Category',
+   "DisplayName" = 'Scheduled Job',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'DF93B894-B6DB-4928-825F-3EC8EFBC9521' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."IsLocked"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '6E0A21B0-0039-4ACC-B40A-3B8E1767D4D4' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."LockedAt"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '8B9EDF01-96FE-4506-97D8-1971830F101E' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."LockedByInstance"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '186EB537-B916-46AC-82F3-DCE1789B572F' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."LockExpiresAt"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'F9E35F33-7ED2-4413-922F-12BA98E60355' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."LastRunID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "DisplayName" = 'Last Run',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '3A5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."LastRunStartedAt"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '3B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations."LastRunEndedAt"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '3C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_CreatedAt
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '0D5917F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+-- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_UpdatedAt
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'E85817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+
+
+-- ===================== FK & CHECK Constraints =====================
+
+ALTER TABLE __mj."CompanyIntegrationRun"
+ADD CONSTRAINT FK_CompanyIntegrationRun_ScheduledJobRun
+    FOREIGN KEY ("ScheduledJobRunID")
+    REFERENCES __mj."ScheduledJobRun"("ID") DEFERRABLE INITIALLY DEFERRED;
+
+ALTER TABLE __mj."CompanyIntegration"
+ADD CONSTRAINT FK_CompanyIntegration_ScheduledJob
+    FOREIGN KEY ("ScheduledJobID")
+    REFERENCES __mj."ScheduledJob"("ID") DEFERRABLE INITIALLY DEFERRED;
+
+
+-- ===================== Grants =====================
+
+-- SKIPPED (view not created): GRANT SELECT ON __mj."vwCompanyIntegrationRuns" TO "cdp_Developer", "cdp_UI", "cdp_Integration"
+
+/* spCreate SQL for MJ: Company Integration Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integration Runs
+-- Item: spCreateCompanyIntegrationRun
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR CompanyIntegrationRun
+------------------------------------------------------------
+
+-- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateCompanyIntegrationRun" TO "cdp_Developer", "cdp_Integration"
+    
+
+/* spCreate Permissions for MJ: Company Integration Runs */
+
+-- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateCompanyIntegrationRun" TO "cdp_Developer", "cdp_Integration"
+
+
+/* spUpdate SQL for MJ: Company Integration Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integration Runs
+-- Item: spUpdateCompanyIntegrationRun
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR CompanyIntegrationRun
+------------------------------------------------------------
+
+-- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateCompanyIntegrationRun" TO "cdp_Developer", "cdp_Integration"
+
+-- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateCompanyIntegrationRun" TO "cdp_Developer", "cdp_Integration"
+
+
+/* Index for Foreign Keys for CompanyIntegration */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integrations
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key CompanyID in table CompanyIntegration
+
+-- SKIPPED (view not created): GRANT SELECT ON __mj."vwCompanyIntegrations" TO "cdp_UI", "cdp_Integration", "cdp_Developer"
+
+/* spCreate SQL for MJ: Company Integrations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integrations
+-- Item: spCreateCompanyIntegration
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR CompanyIntegration
+------------------------------------------------------------
+
+-- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
+    
+
+/* spCreate Permissions for MJ: Company Integrations */
+
+-- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
+
+
+/* spUpdate SQL for MJ: Company Integrations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integrations
+-- Item: spUpdateCompanyIntegration
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR CompanyIntegration
+------------------------------------------------------------
+
+-- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
+
+-- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
+
+
+/* spDelete SQL for MJ: Company Integration Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integration Runs
+-- Item: spDeleteCompanyIntegrationRun
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR CompanyIntegrationRun
+------------------------------------------------------------
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spDelete Permissions for MJ: Company Integration Runs */
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spDelete SQL for MJ: Company Integrations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Company Integrations
+-- Item: spDeleteCompanyIntegration
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR CompanyIntegration
+------------------------------------------------------------;
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spDelete Permissions for MJ: Company Integrations */
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
+/* Set field properties for entity */
+
+
+-- ===================== Comments =====================
+
+COMMENT ON COLUMN __mj."CompanyIntegrationRun"."ScheduledJobRunID" IS 'Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.';
+
+COMMENT ON COLUMN __mj."CompanyIntegration"."ScheduledJobID" IS 'Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.';
+
+
+-- ===================== Other =====================
+
+-- Extended properties
+
+/* spUpdate Permissions for MJ: Company Integration Runs */
+
+/* spUpdate Permissions for MJ: Company Integrations */

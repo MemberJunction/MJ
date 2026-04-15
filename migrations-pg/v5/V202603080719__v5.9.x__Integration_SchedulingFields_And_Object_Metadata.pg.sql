@@ -1,25 +1,3 @@
--- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
@@ -109,24 +87,24 @@ CREATE TABLE __mj."IntegrationObjectField" (
 -- =============================================================================;
 
 ALTER TABLE __mj."IntegrationObjectField"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."IntegrationObjectField" */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."IntegrationObjectField" */
 
 ALTER TABLE __mj."IntegrationObjectField"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_CreatedAt to entity __mj."IntegrationObject" */;
-
-ALTER TABLE __mj."IntegrationObject"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."IntegrationObject" */;
+/* SQL text to add special date field __mj_CreatedAt to entity __mj."IntegrationObject" */
 
 ALTER TABLE __mj."IntegrationObject"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to insert new entity field */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."IntegrationObject" */
+
+ALTER TABLE __mj."IntegrationObject"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+/* SQL text to insert new entity field */
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_CompanyIntegration_CompanyID" ON __mj."CompanyIntegration" ("CompanyID");
 
@@ -804,7 +782,7 @@ INSERT INTO __mj."EntityPermission"
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
                                                    ('3630cbfd-4c85-4b24-8a51-88d67389373e', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
-/* SQL text to add special date field "__mj_CreatedAt" to entity __mj."IntegrationObjectField" */
+/* SQL text to add special date field __mj_CreatedAt to entity __mj."IntegrationObjectField" */
 
 DO $$
 BEGIN
@@ -4832,7 +4810,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'E48963CB-3027-4554-BF48-52ECA282D983' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Integration Objects."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Integration Objects.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -4842,7 +4820,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '4C7B2511-B32A-4E05-AD8F-71A8D7438E96' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Integration Objects."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Integration Objects.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -5088,7 +5066,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '82D4929E-1BBF-4EB5-AFC4-40D1DA3D01D4' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Integration Object Fields."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Integration Object Fields.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -5098,7 +5076,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'A40B0908-76CC-4D93-B7FF-659D450CDF19' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Integration Object Fields."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Integration Object Fields.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -5267,7 +5245,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'C44217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Company Integrations."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -5276,7 +5254,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '0D5917F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Company Integrations."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -5507,14 +5485,14 @@ UPDATE __mj."EntitySetting"
 -- Add constraint for ScheduleType values
 ALTER TABLE __mj."CompanyIntegration"
     ADD CONSTRAINT CK_CompanyIntegration_ScheduleType
-    CHECK ("ScheduleType" IN ('Manual', 'Interval', 'Cron'));
+    CHECK ("ScheduleType" IN ('Manual', 'Interval', 'Cron')) NOT VALID;
 
 -- Add distributed locking fields to prevent concurrent execution
 ALTER TABLE __mj."CompanyIntegration"
  ADD COLUMN "IsLocked" BOOLEAN NOT NULL DEFAULT 0,
  ADD COLUMN "LockedAt" TIMESTAMPTZ NULL,
  ADD COLUMN "LockedByInstance" VARCHAR(200) NULL,
- ADD COLUMN "LockExpiresAt" TIMESTAMPTZ NULL NOT VALID;
+ ADD COLUMN "LockExpiresAt" TIMESTAMPTZ NULL;
 
 
 -- ===================== Grants =====================
@@ -5577,7 +5555,7 @@ ALTER TABLE __mj."CompanyIntegration"
 ------------------------------------------------------------
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Company Integrations */;
+/* spDelete Permissions for MJ: Company Integrations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Index for Foreign Keys for IntegrationObjectField */
@@ -5620,7 +5598,7 @@ GRANT SELECT ON __mj."vwIntegrationObjects" TO "cdp_UI", "cdp_Developer", "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateIntegrationObject" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Integration Objects */;
+/* spCreate Permissions for MJ: Integration Objects */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateIntegrationObject" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Integration Objects */
@@ -5654,10 +5632,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateIntegrationObject" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteIntegrationObject" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Integration Objects */;
+/* spDelete Permissions for MJ: Integration Objects */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteIntegrationObject" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* SQL text to update entity field related entity name field map for entity field ID 22A62BF2-861B-4B29-A7E1-B69B476E706E */;
+/* SQL text to update entity field related entity name field map for entity field ID 22A62BF2-861B-4B29-A7E1-B69B476E706E */
 
 GRANT SELECT ON __mj."vwIntegrationObjectFields" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
 
@@ -5688,7 +5666,7 @@ GRANT SELECT ON __mj."vwIntegrationObjectFields" TO "cdp_UI", "cdp_Developer", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateIntegrationObjectField" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Integration Object Fields */;
+/* spCreate Permissions for MJ: Integration Object Fields */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateIntegrationObjectField" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Integration Object Fields */
@@ -5722,10 +5700,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateIntegrationObjectField" TO "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteIntegrationObjectField" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Integration Object Fields */;
+/* spDelete Permissions for MJ: Integration Object Fields */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteIntegrationObjectField" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* SQL text to insert new entity field */;
+/* SQL text to insert new entity field */
 
 
 -- ===================== Comments =====================

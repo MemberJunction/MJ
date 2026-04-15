@@ -1,25 +1,3 @@
--- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
@@ -82,24 +60,24 @@ ALTER TABLE __mj."Query"
     CONSTRAINT "FK_Query_SQLDialect" REFERENCES __mj."SQLDialect"("ID");
 
 ALTER TABLE __mj."SQLDialect"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."SQLDialect" */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."SQLDialect" */
 
 ALTER TABLE __mj."SQLDialect"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_CreatedAt to entity __mj."QuerySQL" */;
-
-ALTER TABLE __mj."QuerySQL"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."QuerySQL" */;
+/* SQL text to add special date field __mj_CreatedAt to entity __mj."QuerySQL" */
 
 ALTER TABLE __mj."QuerySQL"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to insert new entity field */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."QuerySQL" */
+
+ALTER TABLE __mj."QuerySQL"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+/* SQL text to insert new entity field */
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_QuerySQL_QueryID" ON __mj."QuerySQL" ("QueryID");
 
@@ -799,7 +777,7 @@ ALTER TABLE __mj."Query"
 ALTER COLUMN "SQLDialectID" SET NOT NULL;
 
 ALTER TABLE __mj."Query"
-ALTER COLUMN "SQLDialectID" SET DEFAULT '1F203987-A37B-4BC1-85B3-BA50DC33C3E0';
+  ALTER COLUMN "SQLDialectID" SET DEFAULT '1F203987-A37B-4BC1-85B3-BA50DC33C3E0';
 
 INSERT INTO "__mj"."Entity" (
          "ID",
@@ -923,7 +901,7 @@ INSERT INTO __mj."EntityPermission"
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
                                                    ('fe37218e-259f-47f2-909d-9aecbe5385db', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
-/* SQL text to add special date field "__mj_CreatedAt" to entity __mj."SQLDialect" */
+/* SQL text to add special date field __mj_CreatedAt to entity __mj."SQLDialect" */
 
 DO $$
 BEGIN
@@ -2498,7 +2476,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '29663992-2B7E-4B22-B726-F23ABEA906D2' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: SQL Dialects."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: SQL Dialects.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -2508,7 +2486,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '52676912-1FBE-4FC2-A7EE-D816BF3CEBE0' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: SQL Dialects."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: SQL Dialects.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -2602,7 +2580,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = 'E3CDAC73-8B3E-4C31-9C81-F5E780C68436' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Query SQLs."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Query SQLs.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -2612,7 +2590,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '4EA8CF6E-D64F-4741-816E-61DE1B337B0E' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Query SQLs."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Query SQLs.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -2864,7 +2842,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '5B241317-2875-4E3C-B80E-952C7270A308' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Queries."__mj_CreatedAt"
+-- UPDATE Entity Field Category Info MJ: Queries.__mj_CreatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -2873,7 +2851,7 @@ SET
    "CodeType" = NULL
 WHERE 
    "ID" = '274D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Queries."__mj_UpdatedAt"
+-- UPDATE Entity Field Category Info MJ: Queries.__mj_UpdatedAt
 
 UPDATE "__mj"."EntityField"
 SET 
@@ -2916,7 +2894,7 @@ GRANT SELECT ON __mj."vwQuerySQLs" TO "cdp_UI", "cdp_Developer", "cdp_Integratio
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQuerySQL" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Query SQLs */;
+/* spCreate Permissions for MJ: Query SQLs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQuerySQL" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Query SQLs */
@@ -2950,7 +2928,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateQuerySQL" TO "cdp_Developer"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQuerySQL" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Query SQLs */;
+/* spDelete Permissions for MJ: Query SQLs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQuerySQL" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Index for Foreign Keys for SQLDialect */
@@ -3011,7 +2989,7 @@ GRANT SELECT ON __mj."vwSQLDialects" TO "cdp_UI", "cdp_Developer", "cdp_Integrat
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateSQLDialect" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: SQL Dialects */;
+/* spCreate Permissions for MJ: SQL Dialects */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateSQLDialect" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: SQL Dialects */
@@ -3045,7 +3023,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateSQLDialect" TO "cdp_Develope
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteSQLDialect" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: SQL Dialects */;
+/* spDelete Permissions for MJ: SQL Dialects */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteSQLDialect" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Index for Foreign Keys for Query */
@@ -3089,7 +3067,7 @@ GRANT SELECT ON __mj."vwQueries" TO "cdp_Developer", "cdp_UI", "cdp_Integration"
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQuery" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Queries */;
+/* spCreate Permissions for MJ: Queries */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateQuery" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Queries */
@@ -3123,10 +3101,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateQuery" TO "cdp_Developer", "
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQuery" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Queries */;
+/* spDelete Permissions for MJ: Queries */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteQuery" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* SQL text to insert new entity field */;
+/* SQL text to insert new entity field */
 
 
 -- ===================== Comments =====================
