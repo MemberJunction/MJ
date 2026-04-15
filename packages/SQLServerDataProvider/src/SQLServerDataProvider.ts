@@ -52,6 +52,7 @@ import {
   RunViewsWithCacheCheckResponse,
   RunViewWithCacheCheckResult,
   RunQueryWithCacheCheckParams,
+  SaveContext,
 } from '@memberjunction/core';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
@@ -1295,7 +1296,8 @@ export class SQLServerDataProvider
     saveSQLResult: SaveSQLResult,
     user: UserInfo,
     options: EntitySaveOptions,
-  ): Promise<void> {
+    _context: SaveContext,
+  ): Promise<Record<string, unknown> | null> {
     const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
       | { changesJSON: string; changesDescription: string }
       | undefined;
@@ -1314,6 +1316,7 @@ export class SQLServerDataProvider
         transaction ? { connectionSource: transaction } : undefined,
       );
     }
+    return null;
   }
 
   protected override OnSuspendRefresh(): void {

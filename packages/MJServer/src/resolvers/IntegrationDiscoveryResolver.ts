@@ -88,6 +88,7 @@ class ApplyAllInput {
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips the sync step after schema + entity maps are created' }) StartSync?: boolean;
     @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
     @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
+    @Field({ nullable: true, defaultValue: 'Pull', description: 'SyncDirection applied to all created entity maps: Pull | Push | Bidirectional. Defaults to Pull.' }) DefaultSyncDirection?: string;
 }
 
 @ObjectType()
@@ -138,6 +139,7 @@ class ApplyAllBatchConnectorInput {
     /** Optional per-connector schedule. Applied on success. */
     @Field({ nullable: true }) CronExpression?: string;
     @Field({ nullable: true }) ScheduleTimezone?: string;
+    @Field({ nullable: true, defaultValue: 'Pull', description: 'SyncDirection applied to all created entity maps for this connector: Pull | Push | Bidirectional. Defaults to Pull.' }) DefaultSyncDirection?: string;
 }
 
 @InputType()
@@ -1997,7 +1999,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (skipRestart) {
                 await Metadata.Provider.Refresh();
                 const entityMapsCreated = await this.createEntityAndFieldMaps(
-                    input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user
+                    input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user,
+                    input.DefaultSyncDirection ?? 'Pull'
                 );
                 const createdMapIDs = entityMapsCreated.map(em => em.EntityMapID).filter(Boolean);
                 const scopedMapIDs = input.SyncScope === 'all' ? undefined : createdMapIDs;
@@ -2079,14 +2082,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         connector: BaseIntegrationConnector,
         companyIntegration: MJCompanyIntegrationEntity,
         schemaName: string,
-        user: UserInfo
+        user: UserInfo,
+        defaultSyncDirection: string = 'Pull'
     ): Promise<ApplyAllEntityMapCreated[]> {
         const md = new Metadata();
         const results: ApplyAllEntityMapCreated[] = [];
 
         for (const obj of objects) {
             const entityMapResult = await this.createSingleEntityMap(
-                companyIntegrationID, obj, connector, companyIntegration, schemaName, user, md
+                companyIntegrationID, obj, connector, companyIntegration, schemaName, user, md, defaultSyncDirection
             );
             if (entityMapResult) {
                 results.push(entityMapResult);
@@ -2103,7 +2107,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         companyIntegration: MJCompanyIntegrationEntity,
         schemaName: string,
         user: UserInfo,
-        md: Metadata
+        md: Metadata,
+        defaultSyncDirection: string = 'Pull'
     ): Promise<ApplyAllEntityMapCreated | null> {
         // Find the entity by schema + table name
         const entityInfo = md.Entities.find(
@@ -2121,8 +2126,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         em.CompanyIntegrationID = companyIntegrationID;
         em.ExternalObjectName = obj.SourceObjectName;
         em.EntityID = entityInfo.ID;
-        em.SyncDirection = 'Pull';
-        em.Priority = 0;
+        em.SyncDirection = isValidSyncDirection(defaultSyncDirection) ? defaultSyncDirection : 'Pull';
+        em.Priority = obj.SourceObjectName.startsWith('assoc_') ? 10 : 0;
         em.Status = 'Active';
         em.SyncEnabled = true;
 
@@ -3226,7 +3231,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     await Metadata.Provider.Refresh();
                     const entityMapsCreated = await this.createEntityAndFieldMaps(
                         build.connInput.CompanyIntegrationID, build.objects, build.connector,
-                        build.companyIntegration, build.schemaName, user
+                        build.companyIntegration, build.schemaName, user,
+                        build.connInput.DefaultSyncDirection ?? 'Pull'
                     );
                     connResult.EntityMapsCreated = entityMapsCreated;
 

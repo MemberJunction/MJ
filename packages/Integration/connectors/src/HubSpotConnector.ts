@@ -1230,39 +1230,39 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
      */
     private static readonly ASSOCIATION_OBJECTS: Array<{
         name: string; label: string; description: string;
-        apiPath: string;
+        apiPath: string; pkFields: [string, string];
     }> = [
-        { name: 'assoc_contacts_companies', label: 'Contact ↔ Company', description: 'Associations between contacts and companies', apiPath: '/crm/v4/associations/contacts/companies' },
-        { name: 'assoc_contacts_deals', label: 'Contact ↔ Deal', description: 'Associations between contacts and deals', apiPath: '/crm/v4/associations/contacts/deals' },
-        { name: 'assoc_contacts_tickets', label: 'Contact ↔ Ticket', description: 'Associations between contacts and tickets', apiPath: '/crm/v4/associations/contacts/tickets' },
-        { name: 'assoc_contacts_calls', label: 'Contact ↔ Call', description: 'Associations between contacts and calls', apiPath: '/crm/v4/associations/contacts/calls' },
-        { name: 'assoc_contacts_emails', label: 'Contact ↔ Email', description: 'Associations between contacts and emails', apiPath: '/crm/v4/associations/contacts/emails' },
-        { name: 'assoc_contacts_meetings', label: 'Contact ↔ Meeting', description: 'Associations between contacts and meetings', apiPath: '/crm/v4/associations/contacts/meetings' },
-        { name: 'assoc_contacts_notes', label: 'Contact ↔ Note', description: 'Associations between contacts and notes', apiPath: '/crm/v4/associations/contacts/notes' },
-        { name: 'assoc_contacts_tasks', label: 'Contact ↔ Task', description: 'Associations between contacts and tasks', apiPath: '/crm/v4/associations/contacts/tasks' },
-        { name: 'assoc_contacts_feedback_submissions', label: 'Contact ↔ Feedback Submission', description: 'Associations between contacts and feedback submissions', apiPath: '/crm/v4/associations/contacts/feedback_submissions' },
-        { name: 'assoc_companies_deals', label: 'Company ↔ Deal', description: 'Associations between companies and deals', apiPath: '/crm/v4/associations/companies/deals' },
-        { name: 'assoc_companies_tickets', label: 'Company ↔ Ticket', description: 'Associations between companies and tickets', apiPath: '/crm/v4/associations/companies/tickets' },
-        { name: 'assoc_companies_calls', label: 'Company ↔ Call', description: 'Associations between companies and calls', apiPath: '/crm/v4/associations/companies/calls' },
-        { name: 'assoc_companies_emails', label: 'Company ↔ Email', description: 'Associations between companies and emails', apiPath: '/crm/v4/associations/companies/emails' },
-        { name: 'assoc_companies_meetings', label: 'Company ↔ Meeting', description: 'Associations between companies and meetings', apiPath: '/crm/v4/associations/companies/meetings' },
-        { name: 'assoc_companies_notes', label: 'Company ↔ Note', description: 'Associations between companies and notes', apiPath: '/crm/v4/associations/companies/notes' },
-        { name: 'assoc_companies_tasks', label: 'Company ↔ Task', description: 'Associations between companies and tasks', apiPath: '/crm/v4/associations/companies/tasks' },
-        { name: 'assoc_deals_calls', label: 'Deal ↔ Call', description: 'Associations between deals and calls', apiPath: '/crm/v4/associations/deals/calls' },
-        { name: 'assoc_deals_emails', label: 'Deal ↔ Email', description: 'Associations between deals and emails', apiPath: '/crm/v4/associations/deals/emails' },
-        { name: 'assoc_deals_meetings', label: 'Deal ↔ Meeting', description: 'Associations between deals and meetings', apiPath: '/crm/v4/associations/deals/meetings' },
-        { name: 'assoc_deals_notes', label: 'Deal ↔ Note', description: 'Associations between deals and notes', apiPath: '/crm/v4/associations/deals/notes' },
-        { name: 'assoc_deals_tasks', label: 'Deal ↔ Task', description: 'Associations between deals and tasks', apiPath: '/crm/v4/associations/deals/tasks' },
-        { name: 'assoc_deals_quotes', label: 'Deal ↔ Quote', description: 'Associations between deals and quotes', apiPath: '/crm/v4/associations/deals/quotes' },
-        { name: 'assoc_deals_line_items', label: 'Deal ↔ Line Item', description: 'Associations between deals and line items', apiPath: '/crm/v4/associations/deals/line_items' },
-        { name: 'assoc_tickets_calls', label: 'Ticket ↔ Call', description: 'Associations between tickets and calls', apiPath: '/crm/v4/associations/tickets/calls' },
-        { name: 'assoc_tickets_emails', label: 'Ticket ↔ Email', description: 'Associations between tickets and emails', apiPath: '/crm/v4/associations/tickets/emails' },
-        { name: 'assoc_tickets_meetings', label: 'Ticket ↔ Meeting', description: 'Associations between tickets and meetings', apiPath: '/crm/v4/associations/tickets/meetings' },
-        { name: 'assoc_tickets_notes', label: 'Ticket ↔ Note', description: 'Associations between tickets and notes', apiPath: '/crm/v4/associations/tickets/notes' },
-        { name: 'assoc_tickets_tasks', label: 'Ticket ↔ Task', description: 'Associations between tickets and tasks', apiPath: '/crm/v4/associations/tickets/tasks' },
-        { name: 'assoc_tickets_feedback_submissions', label: 'Ticket ↔ Feedback Submission', description: 'Associations between tickets and feedback submissions', apiPath: '/crm/v4/associations/tickets/feedback_submissions' },
-        { name: 'assoc_quotes_contacts', label: 'Quote ↔ Contact', description: 'Associations between quotes and contacts', apiPath: '/crm/v4/associations/quotes/contacts' },
-        { name: 'assoc_quotes_line_items', label: 'Quote ↔ Line Item', description: 'Associations between quotes and line items', apiPath: '/crm/v4/associations/quotes/line_items' },
+        { name: 'assoc_contacts_companies', label: 'Contact ↔ Company', description: 'Associations between contacts and companies', apiPath: '/crm/v4/associations/contacts/companies', pkFields: ['contact_id', 'company_id'] },
+        { name: 'assoc_contacts_deals', label: 'Contact ↔ Deal', description: 'Associations between contacts and deals', apiPath: '/crm/v4/associations/contacts/deals', pkFields: ['contact_id', 'deal_id'] },
+        { name: 'assoc_contacts_tickets', label: 'Contact ↔ Ticket', description: 'Associations between contacts and tickets', apiPath: '/crm/v4/associations/contacts/tickets', pkFields: ['contact_id', 'ticket_id'] },
+        { name: 'assoc_contacts_calls', label: 'Contact ↔ Call', description: 'Associations between contacts and calls', apiPath: '/crm/v4/associations/contacts/calls', pkFields: ['contact_id', 'call_id'] },
+        { name: 'assoc_contacts_emails', label: 'Contact ↔ Email', description: 'Associations between contacts and emails', apiPath: '/crm/v4/associations/contacts/emails', pkFields: ['contact_id', 'email_id'] },
+        { name: 'assoc_contacts_meetings', label: 'Contact ↔ Meeting', description: 'Associations between contacts and meetings', apiPath: '/crm/v4/associations/contacts/meetings', pkFields: ['contact_id', 'meeting_id'] },
+        { name: 'assoc_contacts_notes', label: 'Contact ↔ Note', description: 'Associations between contacts and notes', apiPath: '/crm/v4/associations/contacts/notes', pkFields: ['contact_id', 'note_id'] },
+        { name: 'assoc_contacts_tasks', label: 'Contact ↔ Task', description: 'Associations between contacts and tasks', apiPath: '/crm/v4/associations/contacts/tasks', pkFields: ['contact_id', 'task_id'] },
+        { name: 'assoc_contacts_feedback_submissions', label: 'Contact ↔ Feedback Submission', description: 'Associations between contacts and feedback submissions', apiPath: '/crm/v4/associations/contacts/feedback_submissions', pkFields: ['contact_id', 'feedback_submission_id'] },
+        { name: 'assoc_companies_deals', label: 'Company ↔ Deal', description: 'Associations between companies and deals', apiPath: '/crm/v4/associations/companies/deals', pkFields: ['company_id', 'deal_id'] },
+        { name: 'assoc_companies_tickets', label: 'Company ↔ Ticket', description: 'Associations between companies and tickets', apiPath: '/crm/v4/associations/companies/tickets', pkFields: ['company_id', 'ticket_id'] },
+        { name: 'assoc_companies_calls', label: 'Company ↔ Call', description: 'Associations between companies and calls', apiPath: '/crm/v4/associations/companies/calls', pkFields: ['company_id', 'call_id'] },
+        { name: 'assoc_companies_emails', label: 'Company ↔ Email', description: 'Associations between companies and emails', apiPath: '/crm/v4/associations/companies/emails', pkFields: ['company_id', 'email_id'] },
+        { name: 'assoc_companies_meetings', label: 'Company ↔ Meeting', description: 'Associations between companies and meetings', apiPath: '/crm/v4/associations/companies/meetings', pkFields: ['company_id', 'meeting_id'] },
+        { name: 'assoc_companies_notes', label: 'Company ↔ Note', description: 'Associations between companies and notes', apiPath: '/crm/v4/associations/companies/notes', pkFields: ['company_id', 'note_id'] },
+        { name: 'assoc_companies_tasks', label: 'Company ↔ Task', description: 'Associations between companies and tasks', apiPath: '/crm/v4/associations/companies/tasks', pkFields: ['company_id', 'task_id'] },
+        { name: 'assoc_deals_calls', label: 'Deal ↔ Call', description: 'Associations between deals and calls', apiPath: '/crm/v4/associations/deals/calls', pkFields: ['deal_id', 'call_id'] },
+        { name: 'assoc_deals_emails', label: 'Deal ↔ Email', description: 'Associations between deals and emails', apiPath: '/crm/v4/associations/deals/emails', pkFields: ['deal_id', 'email_id'] },
+        { name: 'assoc_deals_meetings', label: 'Deal ↔ Meeting', description: 'Associations between deals and meetings', apiPath: '/crm/v4/associations/deals/meetings', pkFields: ['deal_id', 'meeting_id'] },
+        { name: 'assoc_deals_notes', label: 'Deal ↔ Note', description: 'Associations between deals and notes', apiPath: '/crm/v4/associations/deals/notes', pkFields: ['deal_id', 'note_id'] },
+        { name: 'assoc_deals_tasks', label: 'Deal ↔ Task', description: 'Associations between deals and tasks', apiPath: '/crm/v4/associations/deals/tasks', pkFields: ['deal_id', 'task_id'] },
+        { name: 'assoc_deals_quotes', label: 'Deal ↔ Quote', description: 'Associations between deals and quotes', apiPath: '/crm/v4/associations/deals/quotes', pkFields: ['deal_id', 'quote_id'] },
+        { name: 'assoc_deals_line_items', label: 'Deal ↔ Line Item', description: 'Associations between deals and line items', apiPath: '/crm/v4/associations/deals/line_items', pkFields: ['deal_id', 'line_item_id'] },
+        { name: 'assoc_tickets_calls', label: 'Ticket ↔ Call', description: 'Associations between tickets and calls', apiPath: '/crm/v4/associations/tickets/calls', pkFields: ['ticket_id', 'call_id'] },
+        { name: 'assoc_tickets_emails', label: 'Ticket ↔ Email', description: 'Associations between tickets and emails', apiPath: '/crm/v4/associations/tickets/emails', pkFields: ['ticket_id', 'email_id'] },
+        { name: 'assoc_tickets_meetings', label: 'Ticket ↔ Meeting', description: 'Associations between tickets and meetings', apiPath: '/crm/v4/associations/tickets/meetings', pkFields: ['ticket_id', 'meeting_id'] },
+        { name: 'assoc_tickets_notes', label: 'Ticket ↔ Note', description: 'Associations between tickets and notes', apiPath: '/crm/v4/associations/tickets/notes', pkFields: ['ticket_id', 'note_id'] },
+        { name: 'assoc_tickets_tasks', label: 'Ticket ↔ Task', description: 'Associations between tickets and tasks', apiPath: '/crm/v4/associations/tickets/tasks', pkFields: ['ticket_id', 'task_id'] },
+        { name: 'assoc_tickets_feedback_submissions', label: 'Ticket ↔ Feedback Submission', description: 'Associations between tickets and feedback submissions', apiPath: '/crm/v4/associations/tickets/feedback_submissions', pkFields: ['ticket_id', 'feedback_submission_id'] },
+        { name: 'assoc_quotes_contacts', label: 'Quote ↔ Contact', description: 'Associations between quotes and contacts', apiPath: '/crm/v4/associations/quotes/contacts', pkFields: ['quote_id', 'contact_id'] },
+        { name: 'assoc_quotes_line_items', label: 'Quote ↔ Line Item', description: 'Associations between quotes and line items', apiPath: '/crm/v4/associations/quotes/line_items', pkFields: ['quote_id', 'line_item_id'] },
     ];
 
     /**
@@ -1353,6 +1353,13 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
      */
     private GetNonCRMObject(objectName: string): typeof HubSpotConnector.NON_CRM_OBJECTS[number] | undefined {
         return HubSpotConnector.NON_CRM_OBJECTS.find(o => o.name === objectName);
+    }
+
+    /**
+     * Returns association object config if objectName is an association table, null otherwise.
+     */
+    private GetAssociationObject(objectName: string): typeof HubSpotConnector.ASSOCIATION_OBJECTS[number] | undefined {
+        return HubSpotConnector.ASSOCIATION_OBJECTS.find(a => a.name === objectName);
     }
 
     /**
@@ -1499,7 +1506,10 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         for (const obj of objects) {
             try {
                 const nonCrmConfig = this.GetNonCRMObject(obj.Name);
-                const pkFieldName = nonCrmConfig ? nonCrmConfig.pkField : 'hs_object_id';
+                const assocConfig = this.GetAssociationObject(obj.Name);
+                const pkFieldNames: string[] = assocConfig
+                    ? assocConfig.pkFields
+                    : [nonCrmConfig ? nonCrmConfig.pkField : 'hs_object_id'];
 
                 let liveFields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
 
@@ -1520,20 +1530,22 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                                 Description: f.Description ?? undefined,
                                 DataType: f.Type ?? 'string',
                                 IsRequired: f.IsRequired ?? false,
-                                IsUniqueKey: f.IsPrimaryKey || f.Name === pkFieldName,
+                                IsUniqueKey: f.IsPrimaryKey || pkFieldNames.includes(f.Name),
                                 IsReadOnly: false,
                             }));
-                            // Guarantee pkField is present — DB records may not include it
-                            if (pkFieldName && !liveFields.some(f => f.Name === pkFieldName)) {
-                                liveFields.unshift({
-                                    Name: pkFieldName,
-                                    Label: pkFieldName,
-                                    Description: `Primary key for ${obj.Name}`,
-                                    DataType: 'string',
-                                    IsRequired: true,
-                                    IsUniqueKey: true,
-                                    IsReadOnly: true,
-                                });
+                            // Guarantee PK fields are present — DB records may not include them
+                            for (const pkName of pkFieldNames) {
+                                if (!liveFields.some(f => f.Name === pkName)) {
+                                    liveFields.unshift({
+                                        Name: pkName,
+                                        Label: pkName,
+                                        Description: `Primary key for ${obj.Name}`,
+                                        DataType: 'string',
+                                        IsRequired: true,
+                                        IsUniqueKey: true,
+                                        IsReadOnly: true,
+                                    });
+                                }
                             }
                         }
                     } catch {
@@ -1547,7 +1559,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                     Description: f.Description,
                     SourceType: f.DataType,
                     IsRequired: f.IsRequired,
-                    IsPrimaryKey: f.IsUniqueKey || f.Name === pkFieldName,
+                    IsPrimaryKey: f.IsUniqueKey || pkFieldNames.includes(f.Name),
                     IsForeignKey: false,
                     ForeignKeyTarget: null,
                     MaxLength: null,
@@ -1571,8 +1583,11 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
                 // Unexpected exception path — try DB as last resort
                 try {
-                    const nonCrmConfig = this.GetNonCRMObject(obj.Name);
-                    const pkFieldName = nonCrmConfig ? nonCrmConfig.pkField : 'hs_object_id';
+                    const nonCrmConfig2 = this.GetNonCRMObject(obj.Name);
+                    const assocConfig2 = this.GetAssociationObject(obj.Name);
+                    const pkFieldNames2: string[] = assocConfig2
+                        ? assocConfig2.pkFields
+                        : [nonCrmConfig2 ? nonCrmConfig2.pkField : 'hs_object_id'];
                     const integrationObj = this.GetCachedObject(companyIntegration.IntegrationID, obj.Name);
                     const dbFields = this.GetCachedFields(integrationObj.ID);
                     if (dbFields.length > 0) {
@@ -1582,7 +1597,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                             Description: f.Description ?? undefined,
                             SourceType: f.Type ?? 'string',
                             IsRequired: f.IsRequired ?? false,
-                            IsPrimaryKey: f.IsPrimaryKey || f.Name === pkFieldName,
+                            IsPrimaryKey: f.IsPrimaryKey || pkFieldNames2.includes(f.Name),
                             IsForeignKey: false,
                             ForeignKeyTarget: null,
                             MaxLength: null,
@@ -1635,8 +1650,14 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Creates a new record in HubSpot.
+     * Routes association objects to the v4 batch/create endpoint instead of v3 objects.
      */
     public override async CreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> {
+        const assocConfig = this.GetAssociationObject(ctx.ObjectName);
+        if (assocConfig) {
+            return this.CreateAssociation(ctx.CompanyIntegration, ctx.ContextUser, ctx.ObjectName, ctx.Attributes, assocConfig);
+        }
+
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
@@ -1660,8 +1681,16 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Updates an existing record in HubSpot by ExternalID.
+     * For association objects, re-creates the association (idempotent in HubSpot).
      */
     public override async UpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> {
+        const assocConfig = this.GetAssociationObject(ctx.ObjectName);
+        if (assocConfig) {
+            // Associations have no updatable properties — the IDs ARE the relationship.
+            // Re-creating is idempotent: HubSpot ignores duplicates.
+            return this.CreateAssociation(ctx.CompanyIntegration, ctx.ContextUser, ctx.ObjectName, ctx.Attributes, assocConfig);
+        }
+
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
@@ -1685,8 +1714,14 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Deletes (archives) a record in HubSpot by ExternalID.
+     * Routes association objects to the v4 batch/archive endpoint instead of v3 objects.
      */
     public override async DeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> {
+        const assocConfig = this.GetAssociationObject(ctx.ObjectName);
+        if (assocConfig) {
+            return this.DeleteAssociation(ctx.CompanyIntegration, ctx.ContextUser, ctx.ObjectName, ctx.ExternalID, assocConfig);
+        }
+
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
@@ -1704,6 +1739,94 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         }
 
         return this.BuildCRUDErrorResult(response, 'DeleteRecord', ctx.ObjectName);
+    }
+
+    /**
+     * Creates an association in HubSpot using the v4 batch/create endpoint.
+     * ExternalID returned is "{leftID}|{rightID}" matching the pull ExternalID format.
+     */
+    private async CreateAssociation(
+        rawCompanyIntegration: unknown,
+        rawContextUser: unknown,
+        objectName: string,
+        attributes: Record<string, unknown>,
+        assocConfig: typeof HubSpotConnector.ASSOCIATION_OBJECTS[number]
+    ): Promise<CRUDResult> {
+        const companyIntegration = rawCompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = rawContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+
+        const [leftField, rightField] = assocConfig.pkFields;
+        const leftID = String(attributes[leftField] ?? '');
+        const rightID = String(attributes[rightField] ?? '');
+
+        if (!leftID || !rightID) {
+            return {
+                Success: false,
+                ExternalID: '',
+                StatusCode: 400,
+                ErrorMessage: `CreateAssociation ${objectName}: missing PK fields '${leftField}' or '${rightField}' in attributes`,
+            };
+        }
+
+        const pathParts = assocConfig.apiPath.split('/').filter(Boolean);
+        const fromType = pathParts[pathParts.length - 2];
+        const toType = pathParts[pathParts.length - 1];
+
+        const url = `${HUBSPOT_API_BASE}/crm/v4/associations/${fromType}/${toType}/batch/create`;
+        const body = { inputs: [{ from: { id: leftID }, to: { id: rightID }, types: [] }] };
+        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
+
+        if (response.Status >= 200 && response.Status < 300) {
+            return { Success: true, ExternalID: `${leftID}|${rightID}`, StatusCode: response.Status };
+        }
+
+        return this.BuildCRUDErrorResult(response, 'CreateAssociation', objectName);
+    }
+
+    /**
+     * Removes an association in HubSpot using the v4 batch/archive endpoint.
+     * ExternalID must be "{leftID}|{rightID}" — the same format stored by pull sync.
+     */
+    private async DeleteAssociation(
+        rawCompanyIntegration: unknown,
+        rawContextUser: unknown,
+        objectName: string,
+        externalID: string,
+        assocConfig: typeof HubSpotConnector.ASSOCIATION_OBJECTS[number]
+    ): Promise<CRUDResult> {
+        const companyIntegration = rawCompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = rawContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+
+        const pipeIndex = externalID.indexOf('|');
+        if (pipeIndex < 0) {
+            return {
+                Success: false,
+                ExternalID: externalID,
+                StatusCode: 400,
+                ErrorMessage: `DeleteAssociation ${objectName}: cannot parse composite ExternalID '${externalID}' — expected 'leftID|rightID'`,
+            };
+        }
+        const leftID = externalID.substring(0, pipeIndex);
+        const rightID = externalID.substring(pipeIndex + 1);
+
+        const pathParts = assocConfig.apiPath.split('/').filter(Boolean);
+        const fromType = pathParts[pathParts.length - 2];
+        const toType = pathParts[pathParts.length - 1];
+
+        const url = `${HUBSPOT_API_BASE}/crm/v4/associations/${fromType}/${toType}/batch/archive`;
+        const body = { inputs: [{ from: { id: leftID }, to: { id: rightID } }] };
+        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
+
+        // batch/archive returns 204 No Content on success
+        if (response.Status === 204 || (response.Status >= 200 && response.Status < 300)) {
+            return { Success: true, ExternalID: externalID, StatusCode: response.Status };
+        }
+
+        return this.BuildCRUDErrorResult(response, 'DeleteAssociation', objectName);
     }
 
     /**
@@ -1803,9 +1926,15 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     /** Builds a CRUDResult for error responses. */
     private BuildCRUDErrorResult(response: RESTResponse, operation: string, objectName: string): CRUDResult {
         const bodyObj = response.Body as Record<string, unknown> | undefined;
-        const message = bodyObj?.['message']
-            ? String(bodyObj['message'])
-            : `[HubSpot] ${operation} on ${objectName} failed (HTTP ${response.Status})`;
+        let message: string;
+        if (response.Status === 403) {
+            message = `[HubSpot] 403 Forbidden — OAuth scope missing for ${operation} on '${objectName}'. ` +
+                `Add the required scope to your HubSpot app and reconnect.`;
+        } else {
+            message = bodyObj?.['message']
+                ? String(bodyObj['message'])
+                : `[HubSpot] ${operation} on ${objectName} failed (HTTP ${response.Status})`;
+        }
         return {
             Success: false,
             ErrorMessage: message,
@@ -2890,7 +3019,6 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const assocTypes = record['associationTypes'] as Array<{ label?: string }> | undefined;
         const rightValue = String(record['toObjectId']);
         return {
-            hs_object_id: `${leftValue}|${rightValue}`,
             [leftFieldName]: leftValue,
             [rightFieldName]: rightValue,
             association_type: assocTypes?.[0]?.label ?? null,
