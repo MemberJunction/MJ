@@ -170,8 +170,7 @@
                     (conversationRenamed)="onConversationRenamed($event)"
                     (intentCheckStarted)="onIntentCheckStarted()"
                     (intentCheckCompleted)="onIntentCheckCompleted()"
-                    (uploadStateChanged)="onUploadStateChanged($event)"
-                    (artifactPickerRequested)="onArtifactPickerRequested()">
+                    (uploadStateChanged)="onUploadStateChanged($event)">
                   </mj-message-input>
                 }
               </div>
@@ -370,55 +369,6 @@
     (saved)="onCollectionPickerSaved($event)"
     (cancelled)="onCollectionPickerCancelled()">
   </mj-artifact-collection-picker-modal>
-}
-
-<!-- Artifact Picker Slide-in Panel -->
-@if (showArtifactPickerPanel) {
-  <div class="artifact-picker-overlay" (click)="CloseArtifactPicker()"></div>
-  <div class="artifact-picker-panel">
-    <div class="artifact-picker-header">
-      <h3>Attach Artifact</h3>
-      <button class="artifact-picker-close" (click)="CloseArtifactPicker()">
-        <i class="fa-solid fa-times"></i>
-      </button>
-    </div>
-    <div class="artifact-picker-body">
-      @if (isLoadingArtifactPicker) {
-        <mj-loading text="Loading artifacts..." size="medium"></mj-loading>
-      } @else if (artifactPickerItems.length === 0) {
-        <div class="artifact-picker-empty">
-          <i class="fa-solid fa-cube" style="font-size: 2rem; opacity: 0.3;"></i>
-          <p>No file artifacts found</p>
-          <p class="artifact-picker-hint">File artifacts are created when agents generate PDF, Excel, or Word documents.</p>
-        </div>
-      } @else {
-        <div class="artifact-picker-list">
-          @for (item of artifactPickerItems; track item.artifactVersionId) {
-            <button class="artifact-picker-item" (click)="OnArtifactSelected(item)">
-              @if (item.contentMode === 'File') {
-                <i class="fa-solid" [class.fa-file-pdf]="item.mimeType === 'application/pdf'"
-                  [class.fa-file-excel]="item.mimeType && item.mimeType.includes('spreadsheet')"
-                  [class.fa-file-word]="item.mimeType && item.mimeType.includes('wordprocessing')"
-                  [class.fa-file]="!item.mimeType || (!item.mimeType.includes('pdf') && !item.mimeType.includes('spreadsheet') && !item.mimeType.includes('wordprocessing'))">
-                </i>
-              } @else {
-                <i class="fa-solid fa-file-lines"></i>
-              }
-              <div class="artifact-picker-item-info">
-                <span class="artifact-picker-item-name">{{ item.name }}</span>
-                <span class="artifact-picker-item-meta">
-                  {{ item.contentMode === 'File' ? (item.fileName || '') : 'Text artifact' }}
-                  @if (item.sizeBytes) {
-                    · {{ (item.sizeBytes / 1024) | number:'1.0-0' }} KB
-                  }
-                </span>
-              </div>
-            </button>
-          }
-        </div>
-      }
-    </div>
-  </div>
 }
 
 <!-- Test Feedback Dialog -->

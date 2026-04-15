@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
-import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity,sdf MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentStateService } from '../../services/agent-state.service';
