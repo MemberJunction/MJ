@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy, Input, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
@@ -157,7 +157,13 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         return this.EnvironmentId || '';
     }
 
-    constructor(cdr: ChangeDetectorRef) {
+    constructor(cdr: ChangeDetectorRef, private analyzeService: AnalyzeArtifactService) {
+        // Note: this component is instantiated twice — once via bare `new` by
+        // ClassFactory.CreateInstanceAsync (just to extract the constructor
+        // reference), then properly via createComponent() with a full injector.
+        // Constructor parameters are undefined on the bare path but Angular DI
+        // populates them on the real path. Field initializers calling inject()
+        // would throw on the bare path, so we use constructor injection.
         super(cdr);
     }
 
@@ -257,8 +263,6 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
             false
         );
     }
-
-    private analyzeService = inject(AnalyzeArtifactService);
 
     /**
      * Handler for the Analyze button on the embedded artifact viewer.
