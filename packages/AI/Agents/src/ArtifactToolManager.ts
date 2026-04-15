@@ -1,4 +1,4 @@
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from './artifact-tools/BaseArtifactToolLibrary';
 import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
@@ -580,7 +580,7 @@ export class ArtifactToolManager {
         if (lib) chain.push(lib);
       }
       current = current.ParentID
-        ? engine.ArtifactTypes.find((t) => t.ID === current!.ParentID)
+        ? engine.ArtifactTypes.find((t) => UUIDsEqual(t.ID, current!.ParentID!))
         : undefined;
     }
     return chain;
