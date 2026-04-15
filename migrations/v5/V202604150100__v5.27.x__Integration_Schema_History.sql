@@ -1,5 +1,6 @@
--- Migration: Integration schema history table + IsCustom flag on IntegrationObject/Field
--- =====================================================================
+-- Create __mj_integration schema + SchemaHistory table for tracking integration DDL history.
+-- Add IsCustom flag to IntegrationObject and IntegrationObjectField to distinguish
+-- static metadata (mj-sync push) from objects/fields discovered at runtime by IntrospectSchema.
 
 -- Create the __mj_integration schema if it doesn't already exist
 IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '__mj_integration')
