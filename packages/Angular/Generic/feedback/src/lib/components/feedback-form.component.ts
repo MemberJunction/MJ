@@ -210,6 +210,14 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
               <span>{{ ErrorMessage }}</span>
             </div>
           }
+
+          <!-- Certification checkbox -->
+          <label class="certification-label">
+            <input type="checkbox" class="mj-checkbox" [(ngModel)]="CertificationAccepted" />
+            <span class="certification-text">
+              I certify that I am authorized to submit this on behalf of my organization and that this submission does not contain confidential or sensitive information. This will be posted to a public GitHub repository.
+            </span>
+          </label>
         </div>
       }
 
@@ -390,6 +398,29 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
       font-size: var(--mj-text-sm);
     }
 
+    /* Certification checkbox */
+    .certification-label {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--mj-space-2);
+      cursor: pointer;
+      padding: var(--mj-space-3);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      background: var(--mj-bg-surface-sunken);
+    }
+
+    .certification-label input {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .certification-text {
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-secondary);
+      line-height: 1.5;
+    }
+
     /* Screenshot preview */
     .screenshot-preview {
       position: relative;
@@ -515,6 +546,7 @@ export class FeedbackFormComponent implements OnInit {
   ScreenshotDataUrl?: string;
   ScreenshotIncluded = false;
   IsCapturingScreenshot = true;
+  CertificationAccepted = false;
   private classifyTimeout?: ReturnType<typeof setTimeout>;
 
   // Merged field config
@@ -626,6 +658,9 @@ export class FeedbackFormComponent implements OnInit {
       return false;
     }
     if (!this.Category) {
+      return false;
+    }
+    if (!this.CertificationAccepted) {
       return false;
     }
     return true;
