@@ -175,22 +175,30 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
             </div>
           }
 
-          <!-- Screenshot preview -->
-          @if (ScreenshotDataUrl) {
+          <!-- Screenshot opt-in -->
+          @if (ScreenshotIncluded && ScreenshotDataUrl) {
             <div class="feedback-section">
-              <label class="feedback-label">Screenshot (auto-captured)</label>
+              <label class="feedback-label">Screenshot</label>
               <div class="screenshot-preview">
                 <img [src]="ScreenshotDataUrl" alt="Screenshot of current view" />
                 <button class="screenshot-remove" (click)="RemoveScreenshot()" type="button" title="Remove screenshot">
                   <i class="fa-solid fa-xmark"></i>
                 </button>
               </div>
+              <div class="screenshot-public-notice">
+                <i class="fa-solid fa-eye"></i> This screenshot will be included in the public GitHub issue.
+              </div>
+            </div>
+          } @else if (ScreenshotDataUrl && !ScreenshotIncluded) {
+            <div class="feedback-section">
+              <button class="screenshot-include-btn" (click)="IncludeScreenshot()" type="button">
+                <i class="fa-solid fa-camera"></i> Include screenshot of current view
+              </button>
             </div>
           } @else if (IsCapturingScreenshot) {
             <div class="feedback-section">
-              <label class="feedback-label">Screenshot</label>
               <div class="screenshot-loading">
-                <i class="fas fa-spinner fa-spin"></i> Capturing screenshot...
+                <i class="fas fa-spinner fa-spin"></i> Preparing screenshot...
               </div>
             </div>
           }
@@ -340,6 +348,37 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
       color: var(--mj-status-warning);
     }
 
+    .screenshot-include-btn {
+      display: flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      width: 100%;
+      padding: var(--mj-space-2-5) var(--mj-space-3);
+      border: 1px dashed var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+      font-family: var(--mj-font-family);
+      cursor: pointer;
+      transition: var(--mj-transition-fast);
+    }
+
+    .screenshot-include-btn:hover {
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+    }
+
+    .screenshot-public-notice {
+      display: flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      font-size: var(--mj-text-xs);
+      color: var(--mj-status-warning-text);
+      margin-top: var(--mj-space-1);
+    }
+
     .screenshot-loading {
       display: flex;
       align-items: center;
@@ -474,6 +513,7 @@ export class FeedbackFormComponent implements OnInit {
   IssueNumber?: number;
   IssueUrl?: string;
   ScreenshotDataUrl?: string;
+  ScreenshotIncluded = false;
   IsCapturingScreenshot = true;
   private classifyTimeout?: ReturnType<typeof setTimeout>;
 
@@ -496,17 +536,29 @@ export class FeedbackFormComponent implements OnInit {
     if (this.PrefilledTitle) {
       this.Title = this.PrefilledTitle;
     }
-    // Extract screenshot from context data if provided
+    // Extract screenshot from context data — store locally but don't include in submission until user opts in
     if (this.ContextData?.['screenshot'] && typeof this.ContextData['screenshot'] === 'string') {
       this.ScreenshotDataUrl = this.ContextData['screenshot'] as string;
+      delete this.ContextData['screenshot'];
     }
   }
 
   /**
-   * Remove the attached screenshot
+   * User opts in to include the screenshot
+   */
+  IncludeScreenshot(): void {
+    this.ScreenshotIncluded = true;
+    if (this.ScreenshotDataUrl && this.ContextData) {
+      this.ContextData['screenshot'] = this.ScreenshotDataUrl;
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Remove the attached screenshot (opt back out)
    */
   RemoveScreenshot(): void {
-    this.ScreenshotDataUrl = undefined;
+    this.ScreenshotIncluded = false;
     if (this.ContextData) {
       delete this.ContextData['screenshot'];
     }

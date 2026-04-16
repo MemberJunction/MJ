@@ -144,10 +144,7 @@ export class FeedbackDialogService {
       const instance = this.activeComponentRef.instance;
       instance.ScreenshotDataUrl = screenshotDataUrl;
       instance.IsCapturingScreenshot = false;
-      if (!instance.ContextData) {
-        instance.ContextData = {};
-      }
-      instance.ContextData['screenshot'] = screenshotDataUrl;
+      // Don't add to ContextData — user must opt in via IncludeScreenshot()
       this.activeComponentRef.changeDetectorRef.detectChanges();
     }
   }
