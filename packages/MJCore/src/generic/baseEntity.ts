@@ -612,6 +612,10 @@ export class BaseEntityEvent {
 export abstract class BaseEntity<T = unknown> {
     private _EntityInfo: EntityInfo;
     private _Fields: EntityField[] = [];
+    /**
+     * Bolt Optimization: O(1) cache for fast field lookups by name instead of linear array scans
+     */
+    private _fieldMapByName: Map<string, EntityField> = new Map();
     private _recordLoaded: boolean = false;
     private _contextCurrentUser: UserInfo = null;
     private _transactionGroup: TransactionGroupBase = null;
@@ -1326,7 +1330,7 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
-        return this.Fields.find(f => f.Name.trim().toLowerCase() === lcase);
+        return this._fieldMapByName.get(lcase) || null;
     }
 
     /**
@@ -1731,12 +1735,14 @@ export abstract class BaseEntity<T = unknown> {
         this._resultHistory = [];
         this._recordLoaded = false;
         this._Fields = [];
+        this._fieldMapByName.clear();
         if (this.EntityInfo) {
             for (const rawField of this.EntityInfo.Fields) {
                 const key = this.EntityInfo.Name + '.' + rawField.Name;
                 // support for sub-classes of the EntityField class
                 const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(EntityField, key, rawField);
                 this.Fields.push(newField);
+                this._fieldMapByName.set(rawField.Name.trim().toLowerCase(), newField);
             }
         }
     }
