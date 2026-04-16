@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 // ── Interfaces ──
@@ -590,7 +591,7 @@ export class AnalyticsModelPerformanceComponent implements OnInit, OnDestroy {
         // Look up model API name from engine
         let apiId = '';
         try {
-            const model = AIEngineBase.Instance.Models.find(m => m.ID === modelId);
+            const model = AIEngineBase.Instance.Models.find(m => UUIDsEqual(m.ID, modelId));
             apiId = model?.APIName ?? '';
         } catch {
             // engine might not be ready

@@ -423,8 +423,8 @@
 <!-- Test Feedback Dialog -->
 @if (testFeedbackDialogData) {
   <mj-test-feedback-dialog
-    [visible]="showTestFeedbackDialog"
     [data]="testFeedbackDialogData"
+    [visible]="showTestFeedbackDialog"
     (closed)="onTestFeedbackDialogClosed($event)">
   </mj-test-feedback-dialog>
 }
