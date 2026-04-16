@@ -61,7 +61,7 @@ export default class MigrateConvert extends Command {
 
     const fs = await import('node:fs');
     const path = await import('node:path');
-    const { convertFile, getRulesForDialects, createConversionStats } = await import('@memberjunction/sql-converter');
+    const { convertFile, getRulesForDialects, createConversionStats, deduplicateEntityFieldSequences } = await import('@memberjunction/sql-converter');
 
     const sourceDir = path.resolve(flags['source-dir']);
     const outputDir = path.resolve(flags['output-dir']);
@@ -153,6 +153,19 @@ export default class MigrateConvert extends Command {
 
     if (errorCount > 0) {
       this.error(`Conversion completed with errors in ${errorCount} file(s)`);
+    }
+
+    // Post-conversion: deduplicate EntityField Sequence values across files
+    // to prevent UQ_EntityField_EntityID_Sequence violations on PG
+    this.log('\nRunning EntityField Sequence deduplication...');
+    const dedupResult = deduplicateEntityFieldSequences(outputDir);
+    if (dedupResult.totalCollisions > 0) {
+      this.log(`  Fixed ${dedupResult.totalCollisions} sequence collision(s) across ${dedupResult.fixes.length} INSERT(s):`);
+      for (const fix of dedupResult.fixes) {
+        this.log(`    ${fix.file} line ${fix.line}: ${fix.originalSequence} → ${fix.newSequence}`);
+      }
+    } else {
+      this.log(`  No collisions found (${dedupResult.totalInserts} EntityField INSERTs scanned).`);
     }
   }
 

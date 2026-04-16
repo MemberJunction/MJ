@@ -220,9 +220,13 @@ export class AlterTableRule implements IConversionRule {
    * PostgreSQL: ALTER TABLE t ALTER COLUMN "col" SET NOT NULL
    */
   private convertAlterColumnNotNull(sql: string): string {
+    // After convertIdentifiers, types may be quoted: "nvarchar"(100), "UUID", etc.
+    // Match both quoted and unquoted type names.
+    const typePattern = '"?\\w+"?(?:\\s*\\([^)]*\\))?';
+
     // T-SQL: ALTER COLUMN col TYPE NOT NULL → PG: ALTER COLUMN "col" SET NOT NULL
     let result = sql.replace(
-      /ALTER\s+COLUMN\s+("?\w+"?)\s+\w+(?:\s*\([^)]*\))?\s+NOT\s+NULL/gi,
+      new RegExp(`ALTER\\s+COLUMN\\s+("?\\w+"?)\\s+${typePattern}\\s+NOT\\s+NULL`, 'gi'),
       (_match, col: string) => {
         const quotedCol = col.startsWith('"') ? col : `"${col}"`;
         return `ALTER COLUMN ${quotedCol} SET NOT NULL`;
@@ -232,7 +236,7 @@ export class AlterTableRule implements IConversionRule {
     // T-SQL: ALTER COLUMN col TYPE NULL → PG: ALTER COLUMN "col" DROP NOT NULL
     // (T-SQL requires repeating the type when changing nullability; PG just uses DROP NOT NULL)
     result = result.replace(
-      /ALTER\s+COLUMN\s+("?\w+"?)\s+\w+(?:\s*\([^)]*\))?\s+NULL\b(?!\s*,)/gi,
+      new RegExp(`ALTER\\s+COLUMN\\s+("?\\w+"?)\\s+${typePattern}\\s+NULL\\b(?!\\s*,)`, 'gi'),
       (_match, col: string) => {
         const quotedCol = col.startsWith('"') ? col : `"${col}"`;
         return `ALTER COLUMN ${quotedCol} DROP NOT NULL`;

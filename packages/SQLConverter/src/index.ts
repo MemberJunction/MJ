@@ -74,3 +74,7 @@ export type {
   DialectHeaderBuilder,
   ParsedType,
 } from './rules/index.js';
+
+// Post-conversion validation/fixup
+export { deduplicateEntityFieldSequences } from './rules/SequenceDeduplicator.js';
+export type { SequenceFix, DeduplicationResult } from './rules/SequenceDeduplicator.js';
