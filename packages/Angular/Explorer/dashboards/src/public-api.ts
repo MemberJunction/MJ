@@ -27,7 +27,26 @@ export {
   AgentRequestsResourceComponent,
   AutotaggingPipelineResourceComponent,
   VectorManagementResourceComponent,
-  DuplicateDetectionResourceComponent
+  DuplicateDetectionResourceComponent,
+  AIAnalyticsResourceComponent,
+  LoadAIAnalyticsResource,
+  AnalyticsFilterBarComponent,
+  AIOverviewHubComponent,
+  LoadAIOverviewHub,
+  AnalyticsExecutiveSummaryComponent,
+  LoadAnalyticsExecutiveSummary,
+  AnalyticsPromptRunsComponent,
+  LoadAnalyticsPromptRuns,
+  AnalyticsAgentRunsComponent,
+  LoadAnalyticsAgentRuns,
+  AnalyticsModelPerformanceComponent,
+  LoadAnalyticsModelPerformance,
+  AnalyticsCostBudgetComponent,
+  LoadAnalyticsCostBudget,
+  AnalyticsErrorAnalysisComponent,
+  LoadAnalyticsErrorAnalysis,
+  AnalyticsUsagePatternsComponent,
+  LoadAnalyticsUsagePatterns
 } from './AI/index';
 
 // Knowledge Hub components
