@@ -152,7 +152,7 @@ export class BaseUserMenu {
                 group: 'primary',
                 order: 25,
                 developerOnly: false,
-                visible: true,
+                visible: this._context?.feedbackEnabled !== false,
                 enabled: true,
                 tooltip: 'Report a bug or request a feature'
             },

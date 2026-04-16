@@ -262,11 +262,7 @@ export class FeedbackResolver {
    * Check feedbackSettings.enabled in config (defaults to true if not specified)
    */
   private isFeedbackEnabled(): boolean {
-    const feedbackSettings = (configInfo as Record<string, unknown>).feedbackSettings as Record<string, unknown> | undefined;
-    if (feedbackSettings && feedbackSettings.enabled === false) {
-      return false;
-    }
-    return true;
+    return configInfo.feedbackSettings.enabled !== false;
   }
 
   @Mutation(() => FeedbackResponseType)
@@ -437,28 +433,26 @@ Step 2 — SEVERITY. Strictly follow these rules:
       return null;
     }
 
-    // Check for feedbackSettings in configInfo (if defined in mj.config.cjs)
-    const feedbackSettings = (configInfo as Record<string, unknown>).feedbackSettings as Record<string, unknown> | undefined;
-    const githubSettings = feedbackSettings?.github as Record<string, unknown> | undefined;
+    const githubSettings = configInfo.feedbackSettings?.github;
 
     return {
-      owner: (githubSettings?.owner as string) || process.env.GITHUB_FEEDBACK_OWNER || 'MemberJunction',
-      repo: (githubSettings?.repo as string) || process.env.GITHUB_FEEDBACK_REPO || 'MJ',
+      owner: githubSettings?.owner || process.env.GITHUB_FEEDBACK_OWNER || 'MemberJunction',
+      repo: githubSettings?.repo || process.env.GITHUB_FEEDBACK_REPO || 'MJ',
       auth,
-      defaultLabels: (githubSettings?.defaultLabels as string[]) || ['user-submitted'],
-      categoryLabels: (githubSettings?.categoryLabels as Record<string, string>) || {
+      defaultLabels: githubSettings?.defaultLabels || ['user-submitted'],
+      categoryLabels: githubSettings?.categoryLabels || {
         bug: 'bug',
         feature: 'enhancement',
         question: 'question',
         other: 'triage',
       },
-      severityLabels: (githubSettings?.severityLabels as Record<string, string>) || {
+      severityLabels: githubSettings?.severityLabels || {
         critical: 'priority: critical',
         major: 'priority: high',
         minor: 'priority: medium',
         trivial: 'priority: low',
       },
-      assignees: githubSettings?.assignees as string[] | undefined,
+      assignees: githubSettings?.assignees,
     };
   }
 

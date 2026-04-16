@@ -580,7 +580,10 @@ export class FeedbackFormComponent implements OnInit {
    */
   IncludeScreenshot(): void {
     this.ScreenshotIncluded = true;
-    if (this.ScreenshotDataUrl && this.ContextData) {
+    if (this.ScreenshotDataUrl) {
+      if (!this.ContextData) {
+        this.ContextData = {};
+      }
       this.ContextData['screenshot'] = this.ScreenshotDataUrl;
     }
     this.cdr.detectChanges();

@@ -1918,6 +1918,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.developerModeService.Initialize(this.userEntity);
     }
 
+    // Check org-level feedback kill switch (defaults to enabled on error)
+    const feedbackEnabled = await this.feedbackService.IsEnabled();
+
     // Build context for the menu
     const context: UserMenuContext = {
       user: new Metadata().CurrentUser,
@@ -1933,7 +1936,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       openSettings: () => this.openSettingsDialog(),
       themePreference: this.themeService.Preference,
       availableThemes: this.themeService.AvailableThemes,
-      appliedTheme: this.themeService.AppliedTheme
+      appliedTheme: this.themeService.AppliedTheme,
+      feedbackEnabled
     };
 
     // Initialize menu
