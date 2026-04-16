@@ -21,6 +21,15 @@ const CLASSIFY_FEEDBACK_MUTATION = gql`
 `;
 
 /**
+ * GraphQL query for checking if feedback is enabled
+ */
+const FEEDBACK_ENABLED_QUERY = gql`
+  query FeedbackEnabled {
+    FeedbackEnabled
+  }
+`;
+
+/**
  * GraphQL mutation for submitting feedback
  */
 const SUBMIT_FEEDBACK_MUTATION = gql`
@@ -54,6 +63,19 @@ export class FeedbackService {
    */
   public GetConfig(): FeedbackConfig {
     return this.config;
+  }
+
+  /**
+   * Check if feedback is enabled for this organization.
+   */
+  public async IsEnabled(): Promise<boolean> {
+    try {
+      const provider = Metadata.Provider as GraphQLDataProvider;
+      const result = await provider.ExecuteGQL(FEEDBACK_ENABLED_QUERY, {}) as { FeedbackEnabled: boolean };
+      return result?.FeedbackEnabled ?? true;
+    } catch {
+      return true; // Default to enabled if check fails
+    }
   }
 
   /**

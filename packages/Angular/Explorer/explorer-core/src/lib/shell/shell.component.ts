@@ -29,7 +29,7 @@ import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMen
 import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
-import { FeedbackDialogService } from '@memberjunction/ng-feedback';
+import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -163,7 +163,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private themeService: ThemeService,
     private homePinService: HomeAppPinService,
     private fileOpenService: FileOpenService,
-    private feedbackDialogService: FeedbackDialogService
+    private feedbackDialogService: FeedbackDialogService,
+    private feedbackService: FeedbackService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -2573,7 +2574,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Open the feedback dialog with current workspace context.
    * Captures a screenshot in the background and attaches it once ready.
    */
-  ShowFeedbackDialog(): void {
+  async ShowFeedbackDialog(): Promise<void> {
+    // Check if feedback is enabled for this org
+    const enabled = await this.feedbackService.IsEnabled();
+    if (!enabled) {
+      return;
+    }
+
     const config = this.workspaceManager.GetConfiguration();
     const currentPage = config?.tabs
       ?.map(t => t.title)

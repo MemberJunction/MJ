@@ -1,4 +1,4 @@
-import { Resolver, Mutation, Arg, Ctx, Field, InputType, ObjectType } from 'type-graphql';
+import { Resolver, Mutation, Query, Arg, Ctx, Field, InputType, ObjectType } from 'type-graphql';
 import { Octokit } from '@octokit/rest';
 import { createAppAuth } from '@octokit/auth-app';
 import { LogError, LogStatus } from '@memberjunction/core';
@@ -250,12 +250,35 @@ export class FeedbackResolver {
   /**
    * Submit feedback and create a GitHub issue
    */
+  /**
+   * Check if the feedback feature is enabled for this org.
+   */
+  @Query(() => Boolean)
+  FeedbackEnabled(): boolean {
+    return this.isFeedbackEnabled();
+  }
+
+  /**
+   * Check feedbackSettings.enabled in config (defaults to true if not specified)
+   */
+  private isFeedbackEnabled(): boolean {
+    const feedbackSettings = (configInfo as Record<string, unknown>).feedbackSettings as Record<string, unknown> | undefined;
+    if (feedbackSettings && feedbackSettings.enabled === false) {
+      return false;
+    }
+    return true;
+  }
+
   @Mutation(() => FeedbackResponseType)
   async SubmitFeedback(
     @Arg('input') input: SubmitFeedbackInput,
     @Ctx() ctx: AppContext
   ): Promise<FeedbackResponseType> {
     try {
+      if (!this.isFeedbackEnabled()) {
+        return { Success: false, Error: 'Feedback is disabled for this organization.' };
+      }
+
       // Get configuration
       const config = this.getConfig();
       if (!config) {
@@ -309,6 +332,10 @@ export class FeedbackResolver {
     @Ctx() ctx: AppContext
   ): Promise<FeedbackClassificationResult> {
     try {
+      if (!this.isFeedbackEnabled()) {
+        return { Success: false, Error: 'Feedback is disabled for this organization.' };
+      }
+
       // Get the current context user for AIEngine config
       const contextUser = ctx.userPayload?.userRecord;
       await AIEngine.Instance.Config(false, contextUser);
