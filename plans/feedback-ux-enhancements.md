@@ -72,10 +72,29 @@ If both approaches are enabled, the issue gets: (1) a rendered image for humans,
 3. Save — the app installation may need to be re-approved by the org
 4. No code changes needed — the upload will work once the permission is granted
 
-## Remaining Work
+## Remaining Work (Manager Feedback — Must Do Before Ship)
 
-### Multi-repo feedback routing — SPECCED, NOT IMPLEMENTED
+### 1. Screenshot opt-in (not opt-out)
+Currently the screenshot is auto-captured and shown. Change to:
+- Still capture the screenshot when dialog opens (have it ready)
+- **Don't show it or include it by default**
+- Add an "Include screenshot" button the user clicks to opt-in
+- When opted in, show the preview AND a notice below it: "This screenshot will be included in the public GitHub issue"
+- User can remove it after opting in
+
+### 2. Submission certification checkbox
+Before the Submit button, add a **required checkbox**:
+> "I certify that I am authorized to submit this on behalf of my organization and that this submission does not contain confidential or sensitive information. This will be posted to a public GitHub repository."
+
+Submit button stays disabled until this checkbox is checked (in addition to existing title/description requirements).
+
+### 3. Org-level kill switch
+Add an MJ configuration setting that allows organizations to disable the feedback feature entirely:
+- Setting in `mj.config.cjs`: `feedbackSettings.enabled: true|false` (default: true)
+- When disabled: feedback button doesn't appear in user menu, GraphQL mutations return graceful error
+- This lets orgs that don't want public issue creation turn it off completely
+
+**Why this matters:** End users could easily share screenshots of customer records, internal data, or other sensitive information in what becomes a public GitHub issue. The opt-in screenshot, certification checkbox, and org kill switch are safety nets against accidental data exposure.
+
+### 4. Multi-repo feedback routing — SPECCED, NOT IMPLEMENTED
 See `plans/multi-repo-feedback-routing.md` for the full spec. Allows each app to target a different GitHub repo for its feedback issues.
-
-### Screenshot not appearing in dialog
-The screenshot capture (`CaptureActiveThumbnail`) runs async after the dialog opens, but the dialog's backdrop overlay may be blocking the capture. Needs investigation — the capture may need to happen before the dialog opens (which adds a brief delay) or the capture method needs to ignore overlays.
