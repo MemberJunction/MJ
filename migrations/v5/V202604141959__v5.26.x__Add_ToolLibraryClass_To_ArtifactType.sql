@@ -15,30 +15,8 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'ArtifactType',
     @level2type = N'COLUMN', @level2name = N'ToolLibraryClass';
 
--- Seed known tool library classes for core artifact types
-UPDATE ${flyway:defaultSchema}.ArtifactType
-    SET ToolLibraryClass = 'DataSnapshotToolLibrary'
-    WHERE Name = 'Data Snapshot';
-
-UPDATE ${flyway:defaultSchema}.ArtifactType
-    SET ToolLibraryClass = 'JSONToolLibrary'
-    WHERE Name = 'JSON';
-
-UPDATE ${flyway:defaultSchema}.ArtifactType
-    SET ToolLibraryClass = 'TextToolLibrary'
-    WHERE Name IN ('Text', 'Code', 'Markdown');
-
-UPDATE ${flyway:defaultSchema}.ArtifactType
-    SET ToolLibraryClass = 'PDFToolLibrary'
-    WHERE Name = 'PDF';
-
-UPDATE ${flyway:defaultSchema}.ArtifactType
-    SET ToolLibraryClass = 'ExcelToolLibrary'
-    WHERE Name IN ('Excel', 'Spreadsheet');
-
-UPDATE ${flyway:defaultSchema}.ArtifactType
-    SET ToolLibraryClass = 'DocxToolLibrary'
-    WHERE Name IN ('Word', 'Document');
+-- Tool library class assignments for seed artifact types live in
+-- /metadata/artifact-types/ (source of truth), synced via `mj sync push`.
 GO
 
 

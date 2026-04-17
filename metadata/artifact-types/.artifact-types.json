@@ -58,6 +58,7 @@
       "ParentID": null,
       "ContentType": "application/json",
       "DriverClass": "JsonArtifactViewerPlugin",
+      "ToolLibraryClass": "JSONToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-solid fa-brackets-curly"
     },
@@ -275,6 +276,7 @@
       "ParentID": null,
       "ContentType": "text/markdown",
       "DriverClass": "MarkdownArtifactViewerPlugin",
+      "ToolLibraryClass": "TextToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-brands fa-markdown"
     },
@@ -294,6 +296,7 @@
       "ContentType": "application/pdf",
       "ContentCategory": "File",
       "DriverClass": "PdfArtifactViewerPlugin",
+      "ToolLibraryClass": "PDFToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-file-pdf"
     },
@@ -313,6 +316,7 @@
       "ContentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "ContentCategory": "File",
       "DriverClass": "XlsxArtifactViewerPlugin",
+      "ToolLibraryClass": "ExcelToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-file-excel"
     },
@@ -332,6 +336,7 @@
       "ContentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "ContentCategory": "File",
       "DriverClass": "DocxArtifactViewerPlugin",
+      "ToolLibraryClass": "DocxToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-file-word"
     },
