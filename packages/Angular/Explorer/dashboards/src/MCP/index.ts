@@ -7,9 +7,6 @@
 // Module
 export { MCPModule } from './mcp.module';
 
-// Resource Component (wrapper for MCPDashboardComponent)
-export { MCPResourceComponent } from './mcp-resource.component';
-
 // Dashboard Component
 export {
     MCPDashboardComponent,

@@ -3,6 +3,8 @@
  *
  * Resource wrapper for the MCP Dashboard that allows it to be used
  * as a nav item in applications (like the AI Application).
+ *
+ * @module MCP Resource
  */
 
 import { Component, OnInit } from '@angular/core';
@@ -11,13 +13,10 @@ import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
- * MCP Resource Component — wrapper that hosts the MCP Dashboard.
- * Registered as 'MCPResource' for use with ResourceType: "Custom" nav items.
+ * MCP Resource Component
  *
- * The wrapper pattern is required because the resource container creates components
- * via createComponent() without the MCPModule's injector context. The wrapper's
- * template reference to <mj-mcp-dashboard> resolves through MCPModule's declarations,
- * ensuring all child standalone imports (mj-dialog, mjButton, etc.) are available.
+ * Wrapper that hosts the MCP Dashboard for use in application nav items.
+ * Registered as 'MCPResource' for use with ResourceType: "Custom" nav items.
  */
 @RegisterClass(BaseResourceComponent, 'MCPResource')
 @Component({
@@ -37,6 +36,8 @@ export class MCPResourceComponent extends BaseResourceComponent implements OnIni
 
     ngOnInit(): void {
         super.ngOnInit();
+        // Signal that the resource has finished loading
+        // This is required for the shell's loading screen to dismiss
         this.NotifyLoadComplete();
     }
 

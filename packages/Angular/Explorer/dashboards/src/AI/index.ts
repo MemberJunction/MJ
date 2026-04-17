@@ -25,18 +25,3 @@ export * from './components/vectors/vector-management-resource.component';
 
 // Duplicate Detection
 export * from './components/duplicates/duplicate-detection-resource.component';
-
-// AI Analytics
-export * from './interfaces/analytics-preferences.interface';
-export * from './components/analytics/analytics-filter-bar.component';
-export * from './components/analytics/ai-analytics-resource.component';
-export * from './components/analytics/executive-summary/executive-summary.component';
-export * from './components/analytics/prompt-runs/prompt-run-analysis.component';
-export * from './components/analytics/agent-runs/agent-run-analysis.component';
-export * from './components/analytics/model-performance/model-performance.component';
-export * from './components/analytics/cost-budget/cost-budget.component';
-export * from './components/analytics/error-analysis/error-analysis.component';
-export * from './components/analytics/usage-patterns/usage-patterns.component';
-
-// Overview Hub
-export * from './components/overview/ai-overview-hub.component';
