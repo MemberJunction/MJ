@@ -39,12 +39,30 @@ export class OpenAILLM extends BaseLLM {
 
     /**
      * OpenAI supports image file inputs natively via vision.
+     *
+     * Values reflect OpenAI's documented chat-completions vision API hard limits
+     * (https://platform.openai.com/docs/guides/images-vision):
+     *   - 512 MB total payload per request
+     *   - 1500 individual image inputs per request
+     *   - Supported formats: PNG, JPEG, WEBP, non-animated GIF
+     *
+     * Note: the docs specify NO per-image size cap — only the request-level
+     * payload ceiling. We therefore set MaxFileSize to the same 512 MB value
+     * so this layer never rejects a single file OpenAI would accept; the
+     * effective constraint is that the SUM of all files in a request stays
+     * under 512 MB, which callers must enforce.
+     *
+     * These are API-level constraints — consistent across vision-capable chat
+     * models (gpt-4o, gpt-4.1, gpt-4-turbo, etc.), not per-model — so returning
+     * them from the shared driver is correct. Subclasses/wrappers that target
+     * non-standard endpoints (Azure OpenAI with its 50 MB cap, OpenAI-compatible
+     * gateways, etc.) should override this method if their limits differ.
      */
     public override GetFileCapabilities(): FileCapabilities | null {
         return {
             SupportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-            MaxFileSize: 20 * 1024 * 1024,
-            MaxFilesPerRequest: 10,
+            MaxFileSize: 512 * 1024 * 1024,
+            MaxFilesPerRequest: 1500,
             HasFileAPI: false,
         };
     }
