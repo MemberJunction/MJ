@@ -1,0 +1,4 @@
+## 2024-05-18 - XSS bypass in regex-based sanitization
+**Vulnerability:** A regex-based HTML sanitization function (`stripJavaScript`) in the markdown component was susceptible to XSS bypasses (e.g., using newlines in `java\nscript:`, encoded characters, unquoted attributes, and `xlink:href` on SVGs).
+**Learning:** Regex is rarely sufficient for safely sanitizing HTML because it fails to understand DOM tree structure and browser parsing quirks (e.g., how browsers collapse whitespace or handle entities in attributes).
+**Prevention:** Always use `DOMParser` to parse the HTML and recursively strip unsafe tags and attributes. Ensure control characters and whitespaces are stripped from attribute values before validation to prevent `java\nscript:` bypasses, and always check SVG-specific attributes like `xlink:href`.
