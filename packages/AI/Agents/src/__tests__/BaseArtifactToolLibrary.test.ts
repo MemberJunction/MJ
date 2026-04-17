@@ -3,7 +3,7 @@ import {
     BaseArtifactToolLibrary,
     ArtifactToolDefinition,
     ArtifactToolResult
-} from '../artifact-tools/BaseArtifactToolLibrary';
+} from '@memberjunction/ai-core-plus';
 
 // Concrete test implementation
 class TestToolLibrary extends BaseArtifactToolLibrary {

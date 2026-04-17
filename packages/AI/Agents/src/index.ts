@@ -19,7 +19,6 @@ export * from './PayloadManager';
 export * from './ScratchpadManager';
 export * from './ArtifactToolManager';
 export * from './file-input-resolver';
-export * from './artifact-tools/BaseArtifactToolLibrary';
 export * from './artifact-tools/DataSnapshotToolLibrary';
 export * from './artifact-tools/JSONToolLibrary';
 export * from './artifact-tools/TextToolLibrary';

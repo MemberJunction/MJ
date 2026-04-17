@@ -5,7 +5,7 @@
  * searching pages, and reading metadata.
  */
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, type ArtifactToolDefinition, type ArtifactToolResult } from './BaseArtifactToolLibrary';
+import { BaseArtifactToolLibrary, type ArtifactToolDefinition, type ArtifactToolResult } from '@memberjunction/ai-core-plus';
 
 // ---------------------------------------------------------------------------
 // Minimal pdfjs type shims (no `any`)

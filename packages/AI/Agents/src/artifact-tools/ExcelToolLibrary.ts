@@ -5,7 +5,7 @@
  * sheets, reading rows, searching cells, aggregating columns, and listing formulas.
  */
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, type ArtifactToolDefinition, type ArtifactToolResult } from './BaseArtifactToolLibrary';
+import { BaseArtifactToolLibrary, type ArtifactToolDefinition, type ArtifactToolResult } from '@memberjunction/ai-core-plus';
 
 // ---------------------------------------------------------------------------
 // Local interfaces for exceljs types (no `any`)

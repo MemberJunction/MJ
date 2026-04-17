@@ -5,7 +5,7 @@
  * HTML, searching, reading lines, and splitting into sections.
  */
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, type ArtifactToolDefinition, type ArtifactToolResult } from './BaseArtifactToolLibrary';
+import { BaseArtifactToolLibrary, type ArtifactToolDefinition, type ArtifactToolResult } from '@memberjunction/ai-core-plus';
 
 interface MammothModule {
   default: {

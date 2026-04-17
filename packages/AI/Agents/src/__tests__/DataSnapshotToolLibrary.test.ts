@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { DataSnapshotToolLibrary } from '../artifact-tools/DataSnapshotToolLibrary';
-import type { ArtifactToolResult } from '../artifact-tools/BaseArtifactToolLibrary';
+import type { ArtifactToolResult } from '@memberjunction/ai-core-plus';
 
 // ---------------------------------------------------------------------------
 // Test-data helper

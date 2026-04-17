@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from './BaseArtifactToolLibrary';
+import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 
 interface LineMatch {
     lineNumber: number;

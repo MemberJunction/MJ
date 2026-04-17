@@ -1,10 +1,9 @@
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from './artifact-tools/BaseArtifactToolLibrary';
+import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult, NativeFileInput } from '@memberjunction/ai-core-plus';
 import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
 import { JSONToolLibrary } from './artifact-tools/JSONToolLibrary';
 import { TextToolLibrary } from './artifact-tools/TextToolLibrary';
-import { NativeFileInput } from '@memberjunction/ai-core-plus';
 
 /**
  * An input artifact provided to an agent run.
@@ -420,7 +419,21 @@ export class ArtifactToolManager {
         return;
       }
 
-      const result = await entry.library.InvokeTool(call.tool, call.input, entry.content);
+      // Wrap InvokeTool so any exception inside a handler becomes a structured
+      // error result instead of propagating up to the agent loop. Without this,
+      // a single malformed artifact (e.g. a table missing `rows`) crashes the
+      // entire run via `executePromptStep`'s catch → isConfigurationError.
+      let result: ArtifactToolResult;
+      try {
+        result = await entry.library.InvokeTool(call.tool, call.input, entry.content);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        result = {
+          success: false,
+          data: null,
+          errorMessage: `Tool "${call.tool}" on artifact ${entry.alphaId} threw: ${msg}. The artifact content may be malformed for this tool — try a different tool or a different artifact.`,
+        };
+      }
       this.toolResults.push({
         artifactId: call.artifactId,
         tool: call.tool,

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ArtifactToolManager, InputArtifact } from '../ArtifactToolManager';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '../artifact-tools/BaseArtifactToolLibrary';
+import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 

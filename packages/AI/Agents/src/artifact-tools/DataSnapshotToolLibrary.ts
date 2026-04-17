@@ -5,11 +5,12 @@
  * table metadata, slicing rows, searching, and aggregating values.
  */
 import { RegisterClass } from '@memberjunction/global';
+import { NormalizeToTables } from '@memberjunction/core';
 import {
     BaseArtifactToolLibrary,
     type ArtifactToolDefinition,
     type ArtifactToolResult,
-} from './BaseArtifactToolLibrary';
+} from '@memberjunction/ai-core-plus';
 
 // ---------------------------------------------------------------------------
 // Internal types (kept local — no `any`)
@@ -133,7 +134,14 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
         let payload: SnapshotPayload;
         try {
-            payload = JSON.parse(contentStr) as SnapshotPayload;
+            const raw = JSON.parse(contentStr) as Record<string, unknown>;
+            // NormalizeToTables handles both multi-table snapshots and
+            // legacy single-table format ({ columns, rows, metadata }).
+            const tables = NormalizeToTables(raw);
+            if (tables.length === 0) {
+                return this.errorResult('Artifact content contains no table data.');
+            }
+            payload = { tables: tables as SnapshotTable[] };
         } catch {
             return this.errorResult(`Failed to parse artifact content as JSON.`);
         }

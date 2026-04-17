@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DocxToolLibrary } from '../artifact-tools/DocxToolLibrary';
-import type { ArtifactToolResult } from '../artifact-tools/BaseArtifactToolLibrary';
+import type { ArtifactToolResult } from '@memberjunction/ai-core-plus';
 
 describe('DocxToolLibrary', () => {
   const lib = new DocxToolLibrary();

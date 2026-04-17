@@ -1,5 +1,5 @@
 /**
- * Base class for artifact type-specific tool libraries.
+ * Base class and contract types for artifact type-specific tool libraries.
  * Each artifact type can register a subclass that provides
  * tools for agents to explore artifacts of that type.
  *
@@ -7,6 +7,9 @@
  * an agent run includes input artifacts of the corresponding type.
  * Tools from parent artifact types are inherited — child types
  * can override or add additional tools.
+ *
+ * These types live in ai-core-plus so they can be referenced from
+ * both server and client code paths (e.g. future in-browser inference).
  */
 
 export interface ArtifactToolDefinition {
