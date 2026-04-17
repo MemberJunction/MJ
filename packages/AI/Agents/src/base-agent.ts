@@ -1129,9 +1129,9 @@ export class BaseAgent {
             const inputArtifacts = (wrappedParams.data as Record<string, unknown>)?.__inputArtifacts as InputArtifact[] | undefined;
             if (inputArtifacts?.length) {
                 this._artifactToolManager.Initialize(inputArtifacts);
-                LogStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`);
+                this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
             } else {
-                LogStatus(`[ArtifactTools] No input artifacts found for this run`);
+                this.logStatus(`[ArtifactTools] No input artifacts found for this run`, true, params);
             }
 
             // Initialize starting payload — must complete before AgentRun creation since the
@@ -2002,9 +2002,9 @@ export class BaseAgent {
                 promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
                 promptParams.data['_ARTIFACT_TOOL_RESULTS'] = this._artifactToolManager.GetPendingResults();
                 promptParams.data['_ARTIFACT_TOOL_SUMMARY'] = this._artifactToolManager.GetSummary();
-                LogStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`);
+                this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
             } else if (this._artifactToolManager.HasArtifacts()) {
-                LogStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`);
+                this.logStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`, true, params);
             }
 
             // Pass file artifacts as candidate native file inputs.
@@ -2975,14 +2975,38 @@ export class BaseAgent {
         errorMessage: string,
         config?: AgentConfiguration
     ): { isConfigError: boolean; detailedMessage: string } {
+        // Extract the property name from the error up front — used by the
+        // narrowed classifier below to decide whether this is a genuine config
+        // issue or a generic runtime exception that should bubble up normally.
+        const propertyMatch = errorMessage.match(/reading '(\w+)'/i);
+        const accessedProperty = propertyMatch ? propertyMatch[1].toLowerCase() : '';
+
+        // Only `.map/.x on undefined` errors that reference config-related
+        // properties are treated as configuration errors. Generic runtime
+        // errors (e.g. a tool handler crashing on `rows.map`) should not
+        // terminate the run as "unrecoverable config issue" — they should
+        // fail the step and let the agent try to recover.
+        const CONFIG_RELATED_PROPERTIES = new Set([
+            'prompt', 'childprompt', 'systemprompt', 'prompts',
+            'agent', 'agents', 'agenttype', 'agenttypes',
+            'model', 'models', 'vendor', 'vendors',
+            'template', 'templates',
+        ]);
+        const isConfigRelatedProperty = accessedProperty !== ''
+            && CONFIG_RELATED_PROPERTIES.has(accessedProperty);
+
         // Check for common configuration error patterns
         const configErrorPatterns = [
             {
-                pattern: /cannot read propert(y|ies) of (undefined|null)/i,
+                // Only match when the accessed property is config-related.
+                // Without this guard, any runtime `.map on undefined` (e.g.
+                // in an artifact tool handler) gets misclassified as a fatal
+                // configuration error and the agent run terminates.
+                pattern: isConfigRelatedProperty
+                    ? /cannot read propert(y|ies) of (undefined|null)/i
+                    : /__NEVER_MATCH_GENERIC_UNDEFINED_ACCESS__/,
                 getMessage: () => {
-                    // Try to extract what property was being accessed
-                    const propertyMatch = errorMessage.match(/reading '(\w+)'/i);
-                    const property = propertyMatch ? propertyMatch[1] : 'unknown property';
+                    const property = accessedProperty || 'unknown property';
 
                     let details = `Attempted to access property '${property}' on an undefined or null object.`;
 
@@ -5810,10 +5834,10 @@ The context is now within limits. Please retry your request with the recovered c
             const artifactToolCalls = initialNextStep.artifactToolCalls as ArtifactToolCall[] | undefined;
             const artifactToolsExecutedThisTurn = !!(artifactToolCalls?.length);
             if (artifactToolsExecutedThisTurn) {
-                LogStatus(`[ArtifactTools] LLM requested ${artifactToolCalls!.length} tool call(s): ${artifactToolCalls!.map(c => `${c.artifactId}.${c.tool}`).join(', ')}`);
+                this.logStatus(`[ArtifactTools] LLM requested ${artifactToolCalls!.length} tool call(s): ${artifactToolCalls!.map(c => `${c.artifactId}.${c.tool}`).join(', ')}`, true, params);
                 await this._artifactToolManager.ExecuteToolCalls(artifactToolCalls!);
             } else if (this._artifactToolManager.HasArtifacts()) {
-                LogStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`);
+                this.logStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`, true, params);
             }
 
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if
@@ -5887,7 +5911,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // Without this, the tool results are wasted because the run exits before
                 // the LLM ever sees them.
                 if (artifactToolsExecutedThisTurn && this._artifactToolManager.HasArtifacts()) {
-                    LogStatus(`[ArtifactTools] Chat step included tool calls — forcing one more turn so LLM can use results`);
+                    this.logStatus(`[ArtifactTools] Chat step included tool calls — forcing one more turn so LLM can use results`, true, params);
                     return { ...updatedNextStep, terminate: false, step: 'Retry' as BaseAgentNextStep<P>['step'] };
                 }
 
