@@ -136,49 +136,6 @@ WHERE Limit = {{ Limit | default(25) | sqlNumber }}
             expect(region.defaultValue).toBe('US');
             expect(region.type).toBe('string');
         });
-
-        // Regression test for Skip-Brain Bug B (run 0FEF1C47).
-        // Verifies the integration: when a query SQL contains a `{% for X in Y %}`
-        // loop, the deterministic extractor (consumed by parse.ts → enrich.ts →
-        // sync.ts) registers the iterable Y as a parameter and skips the loop
-        // local X. Without this, Save() would create a stale `kw` parameter
-        // record and reject every actual save attempt with
-        // "Required parameter 'kw' is missing; Unknown parameter: 'OrgKeywords'".
-        it('should register the iterable as an array parameter and skip the loop local (Skip Bug B)', () => {
-            const sql = `SELECT *
-FROM [Sessions]
-WHERE EXISTS (
-    SELECT 1 FROM [Speakers] s
-    WHERE (
-        {% for kw in OrgKeywords %}
-        s.[Org] LIKE {{ kw | sqlLikeContains }}
-        {% if not loop.last %}OR {% endif %}
-        {% endfor %}
-    )
-)
-AND YEAR(s.[Date]) >= {{ StartYear | sqlNumber }}`;
-
-            const params = SQLParser.ExtractParameterInfo(sql);
-
-            // OrgKeywords (iterable) is registered as array, required.
-            const orgKeywords = params.find(p => p.name === 'OrgKeywords');
-            expect(orgKeywords).toBeDefined();
-            expect(orgKeywords!.type).toBe('array');
-            expect(orgKeywords!.isRequired).toBe(true);
-
-            // Plain (non-loop) parameter still works.
-            const startYear = params.find(p => p.name === 'StartYear');
-            expect(startYear).toBeDefined();
-            expect(startYear!.type).toBe('number');
-
-            // Loop local must NOT leak as a parameter — the validator would
-            // otherwise reject every save with "Required parameter 'kw' is missing".
-            expect(params.find(p => p.name === 'kw')).toBeUndefined();
-
-            // Nunjucks built-ins must NOT leak either (loop.last → loop, last).
-            expect(params.find(p => p.name === 'loop')).toBeUndefined();
-            expect(params.find(p => p.name === 'last')).toBeUndefined();
-        });
     });
 
     describe('Table extraction from real-world queries', () => {

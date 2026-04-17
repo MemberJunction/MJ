@@ -12,7 +12,6 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 
 // ── Interfaces ──
@@ -735,7 +734,7 @@ export class AnalyticsAgentRunsComponent implements OnInit, OnDestroy {
         // Group prompt runs by agent run, then by vendor
         for (const pr of this.promptRuns) {
             if (!pr.AgentRunID) continue;
-            const agentRun = this.agentRuns.find(ar => UUIDsEqual(ar.ID, pr.AgentRunID));
+            const agentRun = this.agentRuns.find(ar => ar.ID === pr.AgentRunID);
             if (!agentRun) continue;
 
             const agentKey = agentRun.AgentID;
