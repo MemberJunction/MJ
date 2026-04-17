@@ -15,7 +15,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MJExplorerAppComponent } from './explorer-app.component';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJ_STARTUP_VALIDATION } from '@memberjunction/ng-bootstrap';
-import { ShellModule, StartupValidationService, SystemValidationBannerComponent } from '@memberjunction/ng-explorer-core';
+import { ShellModule, StartupValidationService, SystemValidationBannerComponent, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 
 @NgModule({
@@ -27,6 +27,7 @@ import { ConversationsModule } from '@memberjunction/ng-conversations';
     RouterModule,
     ShellModule,
     SystemValidationBannerComponent,  // Standalone component
+    ServerConnectivityBannerComponent,  // Standalone component
     ConversationsModule
   ],
   exports: [

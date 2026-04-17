@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core-entities
 
+## 5.26.0
+
+### Patch Changes
+
+- 55de456: Fix missing dependencies across 17 packages that accumulated while knip dependency checking was silently broken. Repair knip infrastructure: disable crashing vitest plugin, harden CI workflow to fail-fast on tool crashes instead of silently passing, and fix hardcoded Angular version in auto-fix script.
+- a1002f4: - Entities now expose AllowCaching as the runtime source of truth for
+- Updated dependencies [a1002f4]
+  - @memberjunction/core@5.26.0
+  - @memberjunction/interactive-component-types@5.26.0
+  - @memberjunction/ai@5.26.0
+  - @memberjunction/global@5.26.0
+
 ## 5.25.0
 
 ### Minor Changes

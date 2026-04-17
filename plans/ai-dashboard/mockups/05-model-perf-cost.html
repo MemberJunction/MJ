@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Model Performance + Cost &amp; Budget — 3 Options</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="shared-tokens.css">
+<style>
+.analytics-shell { display: flex; height: calc(100vh - 78px); background: var(--mj-bg-page); }
+.left-nav { width: 220px; background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); flex-shrink: 0; overflow-y: auto; }
+.nav-header { padding: 20px 16px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--mj-text-disabled); }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--mj-text-secondary); cursor: pointer; border-left: 3px solid transparent; }
+.nav-item:hover { background: var(--mj-bg-surface-hover); }
+.nav-item.active { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); color: var(--mj-brand-primary); font-weight: 600; border-left-color: var(--mj-brand-primary); }
+.nav-item i { width: 18px; text-align: center; }
+.nav-divider { height: 1px; background: var(--mj-border-subtle); margin: 8px 16px; }
+.content-area { flex: 1; overflow-y: auto; padding: 24px; }
+
+.filter-bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+.filter-label { font-size: 12px; font-weight: 600; color: var(--mj-text-muted); }
+.filter-select { padding: 6px 12px; border: 1px solid var(--mj-border-default); border-radius: 6px; font-size: 12px; background: var(--mj-bg-surface-card); color: var(--mj-text-primary); }
+.time-chips { display: flex; gap: 4px; margin-left: auto; }
+.time-chip { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; background: var(--mj-bg-surface-card); color: var(--mj-text-muted); border: 1px solid transparent; cursor: pointer; }
+.time-chip.active { background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent); }
+
+.panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+.panel-title { font-size: 14px; font-weight: 700; color: var(--mj-text-primary); display: flex; align-items: center; gap: 8px; }
+.panel-title i { color: var(--mj-brand-primary); font-size: 13px; }
+.panel-body { padding: 18px; }
+.panel-action { font-size: 11px; color: var(--mj-text-link); cursor: pointer; font-weight: 600; background: none; border: none; }
+
+/* Leaderboard table */
+.lb-table { width: 100%; border-collapse: collapse; }
+.lb-table th { padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--mj-text-muted); text-align: left; background: var(--mj-bg-surface-card); border-bottom: 1px solid var(--mj-border-default); }
+.lb-table td { padding: 12px 14px; font-size: 12px; color: var(--mj-text-primary); border-bottom: 1px solid var(--mj-border-subtle); }
+.lb-table tr:hover { background: var(--mj-bg-surface-hover); }
+
+.rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; font-size: 11px; font-weight: 800; }
+.rank-1 { background: linear-gradient(135deg, #ffd700, #f0c000); color: #7a6200; }
+.rank-2 { background: linear-gradient(135deg, #e0e0e0, #c0c0c0); color: #555; }
+.rank-3 { background: linear-gradient(135deg, #e8a87c, #d4845c); color: #6b3a1e; }
+.rank-other { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
+
+.model-name-cell { display: flex; align-items: center; gap: 10px; }
+.model-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+
+.metric-good { color: var(--mj-status-success); font-weight: 700; }
+.metric-ok { color: var(--mj-text-primary); font-weight: 600; }
+.metric-bad { color: var(--mj-status-error); font-weight: 700; }
+
+.mini-bar-cell { display: flex; align-items: center; gap: 6px; }
+.mini-bar-track { width: 60px; height: 6px; background: var(--mj-bg-surface-sunken); border-radius: 3px; overflow: hidden; }
+.mini-bar-fill { height: 100%; border-radius: 3px; }
+
+/* Cost breakdown */
+.cost-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.cost-kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 18px; text-align: center; }
+.cost-kpi-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--mj-text-muted); margin-bottom: 6px; }
+.cost-kpi-value { font-size: 24px; font-weight: 800; color: var(--mj-text-primary); }
+.cost-kpi-sub { font-size: 11px; color: var(--mj-text-muted); margin-top: 4px; }
+.cost-kpi-projected { color: var(--mj-brand-primary); }
+
+/* Treemap placeholder */
+.treemap { display: grid; grid-template-columns: 3fr 2fr 1fr; grid-template-rows: auto auto; gap: 4px; height: 200px; }
+.treemap-cell { border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-direction: column; color: var(--mj-text-inverse); font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+.treemap-cell:hover { opacity: 0.85; }
+.treemap-cell .tm-label { font-size: 12px; }
+.treemap-cell .tm-value { font-size: 16px; font-weight: 800; }
+.treemap-cell .tm-pct { font-size: 10px; opacity: 0.8; }
+
+/* Cost trend chart */
+.chart-placeholder { height: 200px; background: var(--mj-bg-surface-card); border-radius: 8px; position: relative; overflow: hidden; }
+.chart-placeholder svg { width: 100%; height: 100%; }
+
+/* Anomaly highlight */
+.anomaly-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface)); color: var(--mj-status-error); }
+
+@media (max-width: 1200px) { .cost-kpi-row { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 768px) { .analytics-shell { flex-direction: column; } .left-nav { width: 100%; flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--mj-border-default); } .nav-header { display: none; } }
+</style>
+</head>
+<body>
+<div class="mockup-label">MOCKUP: Model Performance + Cost &amp; Budget — 3 Design Options</div>
+<div class="option-tabs">
+  <button class="option-tab active" onclick="showOption('a')">Option A — Model Leaderboard</button>
+  <button class="option-tab" onclick="showOption('b')">Option B — Cost &amp; Budget</button>
+  <button class="option-tab" onclick="showOption('c')">Option C — Combined View</button>
+</div>
+
+<div class="options-container">
+
+<!-- ==================== OPTION A: Model Performance Leaderboard ==================== -->
+<div id="option-a" class="option-content active">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item"><i class="fa-solid fa-comment-dots"></i> Prompt Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item active"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+  <div class="content-area">
+    <div class="filter-bar">
+      <span class="filter-label">Sort by:</span>
+      <select class="filter-select"><option>Cost Efficiency</option><option>Speed</option><option>Reliability</option><option>Usage Volume</option></select>
+      <select class="filter-select"><option>All Vendors</option><option>Anthropic</option><option>OpenAI</option><option>Google</option></select>
+      <div class="time-chips"><button class="time-chip active">7D</button><button class="time-chip">30D</button><button class="time-chip">90D</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title"><i class="fa-solid fa-trophy"></i> Model Leaderboard</span>
+        <button class="panel-action"><i class="fa-solid fa-download"></i> Export</button>
+      </div>
+      <div class="panel-body" style="padding:0">
+        <table class="lb-table">
+          <thead><tr>
+            <th style="width:40px">#</th>
+            <th>Model</th>
+            <th>Vendor</th>
+            <th>Runs</th>
+            <th>Avg Latency</th>
+            <th>P95 Latency</th>
+            <th>Success Rate</th>
+            <th>$/1K Tokens</th>
+            <th>Total Cost</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="rank-badge rank-1">1</span></td>
+              <td><div class="model-name-cell"><div class="model-icon" style="background:color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));color:var(--mj-brand-primary)"><i class="fa-solid fa-microchip"></i></div><div><div style="font-weight:700">Claude Sonnet 4</div><div style="font-size:10px;color:var(--mj-text-muted)">claude-sonnet-4-20250514</div></div></div></td>
+              <td>Anthropic</td>
+              <td style="font-weight:600">1,204</td>
+              <td><span class="metric-good">1.2s</span></td>
+              <td>3.1s</td>
+              <td><div class="mini-bar-cell"><span class="metric-good">99.1%</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:99%;background:var(--mj-status-success)"></div></div></div></td>
+              <td><span class="metric-good">$0.0048</span></td>
+              <td style="font-weight:700">$5.78</td>
+            </tr>
+            <tr>
+              <td><span class="rank-badge rank-2">2</span></td>
+              <td><div class="model-name-cell"><div class="model-icon" style="background:color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface));color:var(--mj-status-success)"><i class="fa-solid fa-microchip"></i></div><div><div style="font-weight:700">GPT-4o</div><div style="font-size:10px;color:var(--mj-text-muted)">gpt-4o-2024-11-20</div></div></div></td>
+              <td>OpenAI</td>
+              <td style="font-weight:600">892</td>
+              <td><span class="metric-ok">1.8s</span></td>
+              <td>4.2s</td>
+              <td><div class="mini-bar-cell"><span class="metric-ok">97.2%</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:97%;background:var(--mj-status-success)"></div></div></div></td>
+              <td><span class="metric-ok">$0.0062</span></td>
+              <td style="font-weight:700">$5.53</td>
+            </tr>
+            <tr>
+              <td><span class="rank-badge rank-3">3</span></td>
+              <td><div class="model-name-cell"><div class="model-icon" style="background:color-mix(in srgb, var(--mj-color-violet-500) 12%, var(--mj-bg-surface));color:var(--mj-color-violet-500)"><i class="fa-solid fa-microchip"></i></div><div><div style="font-weight:700">Gemini 2.5 Pro</div><div style="font-size:10px;color:var(--mj-text-muted)">gemini-2.5-pro</div></div></div></td>
+              <td>Google</td>
+              <td style="font-weight:600">312</td>
+              <td><span class="metric-ok">2.1s</span></td>
+              <td>5.8s</td>
+              <td><div class="mini-bar-cell"><span class="metric-ok">96.8%</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:97%;background:var(--mj-status-success)"></div></div></div></td>
+              <td><span class="metric-good">$0.0035</span></td>
+              <td style="font-weight:700">$1.09</td>
+            </tr>
+            <tr>
+              <td><span class="rank-badge rank-other">4</span></td>
+              <td><div class="model-name-cell"><div class="model-icon" style="background:color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));color:var(--mj-brand-primary)"><i class="fa-solid fa-microchip"></i></div><div><div style="font-weight:700">Claude Opus 4</div><div style="font-size:10px;color:var(--mj-text-muted)">claude-opus-4-20250514</div></div></div></td>
+              <td>Anthropic</td>
+              <td style="font-weight:600">268</td>
+              <td><span class="metric-bad">4.8s</span></td>
+              <td><span class="metric-bad">12.3s</span></td>
+              <td><div class="mini-bar-cell"><span class="metric-good">99.6%</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:100%;background:var(--mj-status-success)"></div></div></div></td>
+              <td><span class="metric-bad">$0.024</span></td>
+              <td style="font-weight:700">$6.43</td>
+            </tr>
+            <tr>
+              <td><span class="rank-badge rank-other">5</span></td>
+              <td><div class="model-name-cell"><div class="model-icon" style="background:color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));color:var(--mj-status-warning)"><i class="fa-solid fa-microchip"></i></div><div><div style="font-weight:700">GPT-4o Mini</div><div style="font-size:10px;color:var(--mj-text-muted)">gpt-4o-mini</div></div></div></td>
+              <td>OpenAI</td>
+              <td style="font-weight:600">487</td>
+              <td><span class="metric-good">0.6s</span></td>
+              <td>1.4s</td>
+              <td><div class="mini-bar-cell"><span class="metric-bad">94.1%</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:94%;background:var(--mj-status-warning)"></div></div></div></td>
+              <td><span class="metric-good">$0.0008</span></td>
+              <td style="font-weight:700">$0.39</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== OPTION B: Cost & Budget ==================== -->
+<div id="option-b" class="option-content">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item"><i class="fa-solid fa-comment-dots"></i> Prompt Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item active"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+  <div class="content-area">
+    <div class="filter-bar">
+      <span class="filter-label">View:</span>
+      <select class="filter-select"><option>All Models</option></select>
+      <select class="filter-select"><option>All Vendors</option></select>
+      <div class="time-chips"><button class="time-chip">Today</button><button class="time-chip active">7D</button><button class="time-chip">30D</button><button class="time-chip">MTD</button></div>
+    </div>
+
+    <!-- Cost KPIs -->
+    <div class="cost-kpi-row">
+      <div class="cost-kpi">
+        <div class="cost-kpi-label">Today's Spend</div>
+        <div class="cost-kpi-value">$12.34</div>
+        <div class="cost-kpi-sub" style="color:var(--mj-status-error)">+18% vs yesterday</div>
+      </div>
+      <div class="cost-kpi">
+        <div class="cost-kpi-label">This Week</div>
+        <div class="cost-kpi-value">$67.82</div>
+        <div class="cost-kpi-sub" style="color:var(--mj-status-success)">-5% vs last week</div>
+      </div>
+      <div class="cost-kpi">
+        <div class="cost-kpi-label">This Month</div>
+        <div class="cost-kpi-value">$289.14</div>
+        <div class="cost-kpi-sub">42% through month</div>
+      </div>
+      <div class="cost-kpi">
+        <div class="cost-kpi-label">Projected Monthly</div>
+        <div class="cost-kpi-value cost-kpi-projected">~$688</div>
+        <div class="cost-kpi-sub">Based on 7-day trend</div>
+      </div>
+    </div>
+
+    <!-- Cost trend + Breakdown side by side -->
+    <div style="display:grid; grid-template-columns:3fr 2fr; gap:16px; margin-bottom:16px;">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title"><i class="fa-solid fa-chart-line"></i> Daily Cost Trend</span>
+          <span class="anomaly-badge"><i class="fa-solid fa-exclamation"></i> Anomaly Apr 10</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-placeholder">
+            <svg viewBox="0 0 700 170" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="costGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--mj-status-warning)" stop-opacity="0.15"/>
+                  <stop offset="100%" stop-color="var(--mj-status-warning)" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <!-- Avg line -->
+              <line x1="0" y1="100" x2="700" y2="100" stroke="var(--mj-border-default)" stroke-dasharray="4,4"/>
+              <text x="705" y="104" fill="var(--mj-text-disabled)" font-size="9" font-weight="600">Avg $9.70</text>
+              <!-- Cost bars -->
+              <rect x="10" y="80" width="80" height="90" rx="4" fill="color-mix(in srgb, var(--mj-status-warning) 25%, transparent)"/>
+              <rect x="110" y="90" width="80" height="80" rx="4" fill="color-mix(in srgb, var(--mj-status-warning) 25%, transparent)"/>
+              <rect x="210" y="70" width="80" height="100" rx="4" fill="color-mix(in srgb, var(--mj-status-warning) 25%, transparent)"/>
+              <rect x="310" y="20" width="80" height="150" rx="4" fill="color-mix(in srgb, var(--mj-status-error) 35%, transparent)"/> <!-- anomaly -->
+              <rect x="410" y="85" width="80" height="85" rx="4" fill="color-mix(in srgb, var(--mj-status-warning) 25%, transparent)"/>
+              <rect x="510" y="95" width="80" height="75" rx="4" fill="color-mix(in srgb, var(--mj-status-warning) 25%, transparent)"/>
+              <rect x="610" y="60" width="80" height="110" rx="4" fill="color-mix(in srgb, var(--mj-brand-primary) 30%, transparent)"/>
+            </svg>
+            <div style="position:absolute;bottom:6px;left:0;right:0;display:flex;justify-content:space-around;font-size:9px;color:var(--mj-text-disabled);padding:0 10px;">
+              <span>Apr 7</span><span>Apr 8</span><span>Apr 9</span><span style="color:var(--mj-status-error);font-weight:700">Apr 10</span><span>Apr 11</span><span>Apr 12</span><span style="font-weight:600;color:var(--mj-text-muted)">Today</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cost treemap -->
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-sitemap"></i> Cost Breakdown</span></div>
+        <div class="panel-body">
+          <div class="treemap">
+            <div class="treemap-cell" style="background:var(--mj-brand-primary);grid-row:span 2">
+              <span class="tm-label">Anthropic</span>
+              <span class="tm-value">$42.18</span>
+              <span class="tm-pct">62%</span>
+            </div>
+            <div class="treemap-cell" style="background:var(--mj-status-success)">
+              <span class="tm-label">OpenAI</span>
+              <span class="tm-value">$15.92</span>
+              <span class="tm-pct">23%</span>
+            </div>
+            <div class="treemap-cell" style="background:var(--mj-color-violet-500)">
+              <span class="tm-label">Google</span>
+              <span class="tm-value">$6.14</span>
+              <span class="tm-pct">9%</span>
+            </div>
+            <div class="treemap-cell" style="background:var(--mj-status-warning);grid-column:span 2">
+              <span class="tm-label">Groq + Others</span>
+              <span class="tm-value">$3.58</span>
+              <span class="tm-pct">6%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detailed cost table -->
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-table"></i> Cost by Model</span><button class="panel-action"><i class="fa-solid fa-download"></i> Export CSV</button></div>
+      <div class="panel-body" style="padding:0">
+        <table class="lb-table">
+          <thead><tr><th>Model</th><th>Vendor</th><th>Runs</th><th>Input Tokens</th><th>Output Tokens</th><th>Input Cost</th><th>Output Cost</th><th>Total Cost</th><th>% of Total</th></tr></thead>
+          <tbody>
+            <tr><td style="font-weight:600">Claude Opus 4</td><td>Anthropic</td><td>268</td><td>842K</td><td>267K</td><td>$4.21</td><td>$2.22</td><td style="font-weight:700">$6.43</td><td>9.5%</td></tr>
+            <tr><td style="font-weight:600">Claude Sonnet 4</td><td>Anthropic</td><td>1,204</td><td>1.4M</td><td>412K</td><td>$3.92</td><td>$1.86</td><td style="font-weight:700">$5.78</td><td>8.5%</td></tr>
+            <tr><td style="font-weight:600">GPT-4o</td><td>OpenAI</td><td>892</td><td>1.1M</td><td>380K</td><td>$3.72</td><td>$1.81</td><td style="font-weight:700">$5.53</td><td>8.2%</td></tr>
+            <tr><td style="font-weight:600">Gemini 2.5 Pro</td><td>Google</td><td>312</td><td>456K</td><td>142K</td><td>$0.73</td><td>$0.36</td><td style="font-weight:700">$1.09</td><td>1.6%</td></tr>
+            <tr><td style="font-weight:600">GPT-4o Mini</td><td>OpenAI</td><td>487</td><td>892K</td><td>312K</td><td>$0.27</td><td>$0.12</td><td style="font-weight:700">$0.39</td><td>0.6%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== OPTION C: Combined View ==================== -->
+<div id="option-c" class="option-content">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item"><i class="fa-solid fa-comment-dots"></i> Prompt Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item active"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+  <div class="content-area">
+    <div class="filter-bar">
+      <select class="filter-select"><option>All Vendors</option></select>
+      <div class="time-chips"><button class="time-chip active">7D</button><button class="time-chip">30D</button></div>
+    </div>
+
+    <!-- Model health cards in a row -->
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px;">
+      <div style="background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:10px;padding:16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div class="model-icon" style="background:color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));color:var(--mj-brand-primary);width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px"><i class="fa-solid fa-microchip"></i></div>
+          <div><div style="font-size:13px;font-weight:700">Claude Sonnet 4</div><div style="font-size:10px;color:var(--mj-text-muted)">Anthropic</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Runs</div><div style="font-size:16px;font-weight:800;color:var(--mj-text-primary)">1,204</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Success</div><div style="font-size:16px;font-weight:800;color:var(--mj-status-success)">99.1%</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Latency</div><div style="font-size:16px;font-weight:800;color:var(--mj-text-primary)">1.2s</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Cost</div><div style="font-size:16px;font-weight:800;color:var(--mj-text-primary)">$5.78</div></div>
+        </div>
+      </div>
+      <div style="background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:10px;padding:16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div class="model-icon" style="background:color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface));color:var(--mj-status-success);width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px"><i class="fa-solid fa-microchip"></i></div>
+          <div><div style="font-size:13px;font-weight:700">GPT-4o</div><div style="font-size:10px;color:var(--mj-text-muted)">OpenAI</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Runs</div><div style="font-size:16px;font-weight:800;color:var(--mj-text-primary)">892</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Success</div><div style="font-size:16px;font-weight:800;color:var(--mj-status-success)">97.2%</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Latency</div><div style="font-size:16px;font-weight:800;color:var(--mj-text-primary)">1.8s</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Cost</div><div style="font-size:16px;font-weight:800;color:var(--mj-text-primary)">$5.53</div></div>
+        </div>
+      </div>
+      <div style="background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:10px;padding:16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div class="model-icon" style="background:color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));color:var(--mj-brand-primary);width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px"><i class="fa-solid fa-microchip"></i></div>
+          <div><div style="font-size:13px;font-weight:700">Claude Opus 4</div><div style="font-size:10px;color:var(--mj-text-muted)">Anthropic</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Runs</div><div style="font-size:16px;font-weight:800;color:var(--mj-text-primary)">268</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Success</div><div style="font-size:16px;font-weight:800;color:var(--mj-status-success)">99.6%</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Latency</div><div style="font-size:16px;font-weight:800;color:var(--mj-status-error)">4.8s</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Cost</div><div style="font-size:16px;font-weight:800;color:var(--mj-status-error)">$6.43</div></div>
+        </div>
+      </div>
+      <div style="background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:10px;padding:16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div class="model-icon" style="background:color-mix(in srgb, var(--mj-color-violet-500) 12%, var(--mj-bg-surface));color:var(--mj-color-violet-500);width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px"><i class="fa-solid fa-microchip"></i></div>
+          <div><div style="font-size:13px;font-weight:700">Gemini 2.5 Pro</div><div style="font-size:10px;color:var(--mj-text-muted)">Google</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Runs</div><div style="font-size:16px;font-weight:800;color:var(--mj-text-primary)">312</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Success</div><div style="font-size:16px;font-weight:800;color:var(--mj-status-success)">96.8%</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Latency</div><div style="font-size:16px;font-weight:800;color:var(--mj-text-primary)">2.1s</div></div>
+          <div><div style="font-size:9px;text-transform:uppercase;color:var(--mj-text-disabled);font-weight:600">Cost</div><div style="font-size:16px;font-weight:800;color:var(--mj-status-success)">$1.09</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cost projection + trend -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-chart-line"></i> Cost Trend (7 Days)</span></div>
+        <div class="panel-body">
+          <div class="chart-placeholder" style="height:180px">
+            <svg viewBox="0 0 500 150" preserveAspectRatio="none">
+              <defs><linearGradient id="costGrad2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--mj-status-warning)" stop-opacity="0.15"/><stop offset="100%" stop-color="var(--mj-status-warning)" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0,100 L70,90 L140,95 L210,70 L280,85 L350,75 L420,80 L500,60 L500,150 L0,150Z" fill="url(#costGrad2)"/>
+              <path d="M0,100 L70,90 L140,95 L210,70 L280,85 L350,75 L420,80 L500,60" fill="none" stroke="var(--mj-status-warning)" stroke-width="2.5"/>
+              <!-- Projected dotted -->
+              <path d="M500,60 L600,45" fill="none" stroke="var(--mj-brand-primary)" stroke-width="2" stroke-dasharray="5,3"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-calculator"></i> Cost Projection</span></div>
+        <div class="panel-body">
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--mj-bg-surface-card);border-radius:8px;">
+              <span style="font-size:12px;color:var(--mj-text-muted)">Daily Average (7d)</span>
+              <span style="font-size:16px;font-weight:800;color:var(--mj-text-primary)">$9.69</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--mj-bg-surface-card);border-radius:8px;">
+              <span style="font-size:12px;color:var(--mj-text-muted)">Weekly Projected</span>
+              <span style="font-size:16px;font-weight:800;color:var(--mj-text-primary)">$67.82</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));border-radius:8px;border:1px solid color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);">
+              <span style="font-size:12px;color:var(--mj-brand-primary);font-weight:600">Monthly Projected</span>
+              <span style="font-size:20px;font-weight:800;color:var(--mj-brand-primary)">~$688</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--mj-bg-surface-card);border-radius:8px;">
+              <span style="font-size:12px;color:var(--mj-text-muted)">Most Expensive Model</span>
+              <span style="font-size:13px;font-weight:700;color:var(--mj-text-primary)">Claude Opus 4</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--mj-bg-surface-card);border-radius:8px;">
+              <span style="font-size:12px;color:var(--mj-text-muted)">Most Cost-Efficient</span>
+              <span style="font-size:13px;font-weight:700;color:var(--mj-status-success)">GPT-4o Mini</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<script>
+function showOption(id) {
+  document.querySelectorAll('.option-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.option-tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('option-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
