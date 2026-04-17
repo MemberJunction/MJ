@@ -1,5 +1,48 @@
 # Scoped Entity Regeneration in CodeGen
 
+## Prerequisites
+
+Two foundational pieces land before the optimization work in this plan starts:
+
+### 1. Telemetry (opt-in)
+
+CodeGen currently has sparse logging and no way to attribute time to specific phases or LLM calls. Before we claim any perf win from the scoping work below, we need the ability to measure it. An opt-in `CodeGenReporter` captures:
+
+- Phase timings (nested spans for `manageMetadata`, `manageSQLScriptsAndExecution`, etc.)
+- Per-entity work inside each phase
+- Per-LLM-call data (prompt, model, tokens, latency, cost)
+- Counters from `ManageMetadataBase` static lists (new / modified / regen entities)
+
+Writes one JSON artifact per run to `~/.mj/codegen-state/`, mirroring the file-based pattern from `metadata-sync` rather than extending MJCore's runtime `TelemetryManager` (which is session-scoped for live apps and the wrong fit for a CLI build tool).
+
+**Off by default.** Enabled via one of:
+- `--report` CLI flag on `mj codegen`
+- `codegen.report.enabled: true` in `mj.config.cjs`
+- `MJ_CODEGEN_REPORT=1` env var
+
+When off, the reporter is a no-op. Retention defaults to the last 20 runs.
+
+### 2. E2E regression suite
+
+CodeGen has had minor and significant silent regressions while adding new features or fixing unrelated issues. The scoping work in this plan touches hot paths; shipping it without a regression safety net is risky.
+
+A golden-fixture E2E suite runs in CI against a seeded SQL Server (via the docker workbench so it doesn't interfere with anyone's local DB) and asserts generator output is stable across canonical schema operations:
+
+- No-change run: zero migration output, zero file diffs
+- Add column: only the affected entity's view/SP/entity subclass diff
+- Rename column: stale field deleted, new field created, dependents regenerated
+- Add FK: relationship auto-created, FK index generated, nothing else touched
+- New entity from schema: spCreate/Update/Delete + view + permissions generated
+- IS-A chain: parent/child view regeneration still correct after column change on parent
+- Virtual entity fields: not orphaned during scoped field deletion
+- Cascade delete SPs: regenerated when FK relationships change
+- Form generation: picks up new virtual fields from scoped regen
+- Custom base views (`BaseViewGenerated=false`): not affected by scoped regen
+
+Comparison is file-diff-based against golden fixtures, re-generatable via `--update-snapshots`.
+
+> These prerequisites ship as their own PR(s) ahead of the scoping work below. The existing "Testing Strategy" section later in this doc is subsumed by the regression suite.
+
 ## Problem Statement
 
 CodeGen's `manageEntityFields()` runs against ALL entities in both phases, even though most entities haven't changed. On large databases (500+ entities), this is expensive — especially the LLM-powered advanced generation pass. Additionally, late-phase changes (like setting `SupportsGeoCoding = 1` during advanced generation) produce stale views that require a full second CodeGen run to pick up.
@@ -349,6 +392,7 @@ AS ...
 
 ### Rollout Plan
 
+0. **Prerequisites** (see top of doc): opt-in telemetry + E2E regression suite. These land first so Phases A/C/D can be benchmarked and regression-checked.
 1. **Phase A**: Add `@EntityID` to SPs (backward compatible, zero risk)
 2. **Phase B**: Implement Phase 2.5 late-regen (fixes the geo bug, low risk) — **DONE** (merged in `search-geo-phase-3`, commit `0f3c217015`)
 3. **Phase C**: Scope Phase 2 manageEntityFields to changed entities only (performance win, medium risk)
