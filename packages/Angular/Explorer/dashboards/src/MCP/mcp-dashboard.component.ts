@@ -13,7 +13,7 @@ import { Component, OnDestroy, ChangeDetectorRef, AfterViewInit, OnInit } from '
 import { Subject, BehaviorSubject, Subscription } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
-import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
+import { BaseDashboard } from '@memberjunction/ng-shared';
 import {
     ResourceData,
     MJMCPServerEntity,
@@ -445,18 +445,20 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         return 'MCP Management';
     }
 
-    // Required by BaseDashboard
+    async GetResourceIconClass(data: ResourceData): Promise<string> {
+        return 'fa-solid fa-plug-circle-bolt';
+    }
+
     protected initDashboard(): void {
         this.setupFilterSubscription();
     }
 
-    // Required by BaseDashboard
     protected loadData(): void {
         this.loadAllData();
     }
 
     ngAfterViewInit(): void {
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
     }
 
     override ngOnDestroy(): void {
@@ -480,7 +482,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public async loadAllData(forceRefresh: boolean = false): Promise<void> {
         this.IsLoading = true;
         this.ErrorMessage = null;
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
 
         try {
             // Initialize MCPEngine and load execution logs in parallel
