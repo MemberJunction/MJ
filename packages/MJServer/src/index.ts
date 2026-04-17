@@ -713,8 +713,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   // Health check endpoint - registered before auth middleware so cloud
   // platform probes (Azure App Service, AWS ALB, k8s, etc.) don't
-  // generate noisy auth errors in the logs.
-  app.get('/healthcheck', (_req, res) => {
+  // generate noisy auth errors in the logs. CORS is enabled so browser-based
+  // clients (e.g. MJExplorer's connectivity poller) can read the response.
+  app.get('/healthcheck', cors<cors.CorsRequest>(), (_req, res) => {
     res.status(200).json({ status: 'ok' });
   });
 
