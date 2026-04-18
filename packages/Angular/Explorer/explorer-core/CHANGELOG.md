@@ -1,5 +1,54 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.27.0
+
+### Patch Changes
+
+- 6fd2886: Add server connectivity heartbeat service with warning banner that alerts users when the API connection is lost.
+- Updated dependencies [a642e3f]
+- Updated dependencies [348decb]
+- Updated dependencies [4357090]
+- Updated dependencies [6fd2886]
+  - @memberjunction/ng-search@5.27.0
+  - @memberjunction/ng-dashboards@5.27.0
+  - @memberjunction/ng-conversations@5.27.0
+  - @memberjunction/ng-artifacts@5.27.0
+  - @memberjunction/ng-dashboard-viewer@5.27.0
+  - @memberjunction/ai-engine-base@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/ng-auth-services@5.27.0
+  - @memberjunction/ng-base-application@5.27.0
+  - @memberjunction/ng-entity-form-dialog@5.27.0
+  - @memberjunction/ng-entity-permissions@5.27.0
+  - @memberjunction/ng-explorer-settings@5.27.0
+  - @memberjunction/ng-list-detail-grid@5.27.0
+  - @memberjunction/ng-shared@5.27.0
+  - @memberjunction/ng-ai-test-harness@5.27.0
+  - @memberjunction/ng-base-forms@5.27.0
+  - @memberjunction/ng-container-directives@5.27.0
+  - @memberjunction/ng-entity-viewer@5.27.0
+  - @memberjunction/ng-export-service@5.27.0
+  - @memberjunction/ng-file-storage@5.27.0
+  - @memberjunction/ng-generic-dialog@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/ng-query-viewer@5.27.0
+  - @memberjunction/ng-record-changes@5.27.0
+  - @memberjunction/ng-record-selector@5.27.0
+  - @memberjunction/ng-record-tags@5.27.0
+  - @memberjunction/ng-resource-permissions@5.27.0
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/ng-ui-components@5.27.0
+  - @memberjunction/ng-user-avatar@5.27.0
+  - @memberjunction/ng-word-cloud@5.27.0
+  - @memberjunction/communication-types@5.27.0
+  - @memberjunction/entity-communications-client@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/export-engine@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/templates-base-types@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

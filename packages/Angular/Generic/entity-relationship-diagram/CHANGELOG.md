@@ -1,5 +1,13 @@
 # @memberjunction/ng-entity-relationship-diagram
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/global@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

@@ -1,5 +1,24 @@
 # @memberjunction/generic-database-provider
 
+## 5.27.0
+
+### Patch Changes
+
+- 4357090: Repair three query composition pipeline regressions surfaced by Skip-Brain, clear test feedback dialog state when switching conversations, strip tag IDs from taxonomy context injected into LLM prompts, exclude in-progress runs from last-run-date lookups, and replace direct UUID equality checks with `UUIDsEqual()` in the AI analytics dashboards to comply with the cross-platform UUID compliance test.
+- Updated dependencies [4357090]
+  - @memberjunction/sql-parser@5.27.0
+  - @memberjunction/aiengine@5.27.0
+  - @memberjunction/actions-base@5.27.0
+  - @memberjunction/actions@5.27.0
+  - @memberjunction/encryption@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/queue@5.27.0
+  - @memberjunction/query-processor@5.27.0
+  - @memberjunction/sql-dialect@5.27.0
+  - @memberjunction/geo-core@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 5.27.0
+
+### Patch Changes
+
+- 4357090: Repair three query composition pipeline regressions surfaced by Skip-Brain, clear test feedback dialog state when switching conversations, strip tag IDs from taxonomy context injected into LLM prompts, exclude in-progress runs from last-run-date lookups, and replace direct UUID equality checks with `UUIDsEqual()` in the AI analytics dashboards to comply with the cross-platform UUID compliance test.
+  - @memberjunction/ai@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/aiengine@5.27.0
+  - @memberjunction/tag-engine@5.27.0
+  - @memberjunction/tag-engine-base@5.27.0
+  - @memberjunction/ai-prompts@5.27.0
+  - @memberjunction/ai-provider-bundle@5.27.0
+  - @memberjunction/ai-vectors@5.27.0
+  - @memberjunction/ai-vectordb@5.27.0
+  - @memberjunction/ai-vector-sync@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/storage@5.27.0
+  - @memberjunction/templates@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes
