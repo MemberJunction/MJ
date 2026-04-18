@@ -503,13 +503,45 @@ export class SQLParser {
      * falls back to paren-depth scanning if AST fails (e.g., Nunjucks-templated SQL).
      */
     static ExtractCTEs(sql: string, dialect: string = 'TransactSQL'): SQLCTEExtraction | null {
-        const trimmed = sql.trimStart();
-        if (!/^WITH\s/i.test(trimmed)) return null;
+        // Strip leading whitespace + SQL comments (/* */ and --) so that
+        // queries with a descriptive header block are recognized as CTEs.
+        // The AST parser handles comments natively, but when it fails
+        // (e.g. TRY_CAST, Nunjucks templates) the regex fallback needs
+        // the comments gone to see the WITH keyword.
+        const stripped = SQLParser.skipLeadingCommentsAndWhitespace(sql);
+        if (!/^WITH\s/i.test(stripped)) return null;
 
-        const astResult = SQLParser.extractCTEsViaAST(trimmed, dialect);
+        const astResult = SQLParser.extractCTEsViaAST(stripped, dialect);
         if (astResult) return astResult;
 
-        return SQLParser.extractCTEsViaRegex(trimmed);
+        return SQLParser.extractCTEsViaRegex(stripped);
+    }
+
+    /**
+     * Strips leading whitespace AND SQL comments from a string.
+     * Handles block comments and line comments (-- ...).
+     * Returns the remainder starting at the first non-whitespace, non-comment character.
+     */
+    private static skipLeadingCommentsAndWhitespace(sql: string): string {
+        let i = 0;
+        const len = sql.length;
+        while (i < len) {
+            const ch = sql[i];
+            if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') { i++; continue; }
+            if (ch === '/' && i + 1 < len && sql[i + 1] === '*') {
+                i += 2;
+                while (i < len - 1 && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
+                if (i < len - 1) i += 2; else i = len;
+                continue;
+            }
+            if (ch === '-' && i + 1 < len && sql[i + 1] === '-') {
+                i += 2;
+                while (i < len && sql[i] !== '\n') i++;
+                continue;
+            }
+            break;
+        }
+        return sql.substring(i);
     }
 
     // ─── MJ Template Extraction ────────────────────────
@@ -697,31 +729,124 @@ export class SQLParser {
 
     /**
      * Extract parameter metadata from template expressions.
+     *
+     * Walks tokens with a lexical-scope stack so that loop-local variables
+     * introduced by `{% for X in Y %}` blocks are NOT registered as query
+     * parameters (they're rebound on each iteration; callers can't supply
+     * them). The iterable side of `{% for %}` (`Y`) IS registered as a
+     * parameter — typically `array` and required, unless wrapped in
+     * `{% if Y %}` which makes it optional.
+     *
+     * Skip-Brain Bug B: previously this function treated `{{ kw }}` inside
+     * `{% for kw in OrgKeywords %}` as a required parameter and failed to
+     * register `OrgKeywords` at all. See `__tests__/extract-parameter-info-loops.test.ts`
+     * and `SKIP-QUERY-RENDERING-BUGS.md` (Bug B) at the repo root.
+     *
      * Infers type from filters, isRequired from conditional block context.
      */
     static ExtractParameterInfo(sql: string): MJParameterInfo[] {
         const tokens = MJLexer.Tokenize(sql);
         const paramMap = new Map<string, MJParameterInfo>();
 
+        // Lexical scope stack: each entry is the set of loop-local variable
+        // names introduced by an enclosing {% for %} block.
+        const loopScopes: Set<string>[] = [];
+        // Set of every loop-local identifier ever introduced during the walk
+        // (across all scopes). Used to filter out names that
+        // `findConditionalVariables` may have picked up from {% if %} guards
+        // surrounding a {{ loopLocal }} expression.
+        const everSeenLoopLocals = new Set<string>();
+        const isLoopLocal = (variable: string): boolean => {
+            // Match the root identifier (e.g. `kw` in `kw.foo`, `kw` in `kw|filter`).
+            const root = variable.split(/[.\s|]/, 1)[0];
+            for (const scope of loopScopes) {
+                if (scope.has(root)) return true;
+            }
+            return false;
+        };
+
+        // Track which iterables appear in {% for X in Y %} so we can register
+        // them as array parameters even if Y is never used in a {{ }} expression.
+        // Maps iterable name → whether it appears outside a containing {% if %}
+        // block (used only to differentiate required vs optional later).
+        const loopIterables = new Map<string, { isRequired: boolean }>();
+        let conditionalDepth = 0;
+
         for (const token of tokens) {
-            if (token.type === 'MJ_TEMPLATE_EXPR') {
-                const parsed = token.parsed as MJTemplateExprContent;
-                const varName = parsed.variable;
-
-                if (!paramMap.has(varName)) {
-                    paramMap.set(varName, {
-                        name: varName,
-                        type: SQLParser.inferTypeFromFilters(parsed.filters),
-                        isRequired: true,
-                        defaultValue: SQLParser.extractDefaultValue(parsed.filters),
-                        filters: parsed.filters,
-                        usageLocations: [],
-                    });
+            switch (token.type) {
+                case 'MJ_FOR_OPEN': {
+                    const parsed = token.parsed as MJBlockTagContent;
+                    loopScopes.push(new Set(parsed.loopVariable ? [parsed.loopVariable] : []));
+                    if (parsed.loopVariable) {
+                        everSeenLoopLocals.add(parsed.loopVariable);
+                    }
+                    if (parsed.loopIterable) {
+                        // Iterable identifier — strip filters/whitespace so
+                        // `tags | sort` becomes `tags`.
+                        const iterableName = parsed.loopIterable.split(/[.\s|]/, 1)[0];
+                        if (iterableName && !SQLParser.JINJA_KEYWORDS.has(iterableName.toLowerCase())) {
+                            const existing = loopIterables.get(iterableName);
+                            // Required only when the for tag is at the top level
+                            // (not wrapped in any {% if %}). If wrapped, the iterable
+                            // becomes optional — same convention as condition-only vars.
+                            const isRequired = existing
+                                ? existing.isRequired || conditionalDepth === 0
+                                : conditionalDepth === 0;
+                            loopIterables.set(iterableName, { isRequired });
+                        }
+                    }
+                    break;
                 }
+                case 'MJ_ENDFOR':
+                    loopScopes.pop();
+                    break;
+                case 'MJ_IF_OPEN':
+                    conditionalDepth++;
+                    break;
+                case 'MJ_ENDIF':
+                    conditionalDepth = Math.max(0, conditionalDepth - 1);
+                    break;
+                case 'MJ_TEMPLATE_EXPR': {
+                    const parsed = token.parsed as MJTemplateExprContent;
+                    const varName = parsed.variable;
 
-                paramMap.get(varName)!.usageLocations.push(token.raw);
+                    // Skip if the variable's root is a loop local, or if the
+                    // variable is a Nunjucks built-in (loop, loop.last, etc.).
+                    if (isLoopLocal(varName)) break;
+                    const root = varName.split(/[.\s]/, 1)[0];
+                    if (root.toLowerCase() === 'loop') break;
+
+                    if (!paramMap.has(varName)) {
+                        paramMap.set(varName, {
+                            name: varName,
+                            type: SQLParser.inferTypeFromFilters(parsed.filters),
+                            isRequired: true,
+                            defaultValue: SQLParser.extractDefaultValue(parsed.filters),
+                            filters: parsed.filters,
+                            usageLocations: [],
+                        });
+                    }
+
+                    paramMap.get(varName)!.usageLocations.push(token.raw);
+                    break;
+                }
             }
         }
+
+        // Predicates used to filter out names that look like parameters but
+        // are actually loop locals or Nunjucks built-ins.
+        const isLoopBuiltin = (varName: string): boolean => {
+            const root = varName.split(/[.\s]/, 1)[0].toLowerCase();
+            // `loop` is the Nunjucks-provided namespace inside {% for %} blocks
+            // (`loop.last`, `loop.first`, `loop.index`, etc.). Members of the
+            // namespace get extracted as bare identifiers (`last`, `first`,
+            // `index`) by addConditionVariables's regex split.
+            return root === 'loop'
+                || root === 'last' || root === 'first'
+                || root === 'index' || root === 'index0'
+                || root === 'revindex' || root === 'revindex0'
+                || root === 'length' || root === 'cycle';
+        };
 
         const conditionalVars = SQLParser.findConditionalVariables(tokens);
         for (const [varName, param] of paramMap) {
@@ -733,12 +858,43 @@ export class SQLParser {
         // Variables that appear only in {% if %}/{% elif %} condition expressions
         // (never in a {{ }} template expression) still need to be surfaced as
         // optional parameters so callers can supply them at runtime.
+        // EXCEPT: loop locals (introduced by {% for %}), Nunjucks loop built-ins
+        // (loop, loop.last, etc.), and identifiers we've already classified as
+        // loop iterables.
         for (const varName of conditionalVars.onlyInConditional) {
-            if (!paramMap.has(varName)) {
-                paramMap.set(varName, {
-                    name: varName,
-                    type: 'string',
-                    isRequired: false,
+            if (paramMap.has(varName)) continue;
+            const root = varName.split(/[.\s]/, 1)[0];
+            if (everSeenLoopLocals.has(root)) continue;
+            if (isLoopBuiltin(varName)) continue;
+            if (loopIterables.has(varName)) continue;
+            paramMap.set(varName, {
+                name: varName,
+                type: 'string',
+                isRequired: false,
+                defaultValue: null,
+                filters: [],
+                usageLocations: [],
+            });
+        }
+
+        // Register loop iterables that aren't already in the param map.
+        // If the iterable is also referenced as a {{ }} expression elsewhere
+        // (already in paramMap), keep its existing entry but ensure it's marked
+        // as array type — the {% for %} usage is a stronger type signal.
+        for (const [iterableName, { isRequired }] of loopIterables) {
+            const existing = paramMap.get(iterableName);
+            if (existing) {
+                existing.type = 'array';
+                // If the iterable also appears inside an {% if %} guard, keep
+                // it optional; if it's at top level somewhere, mark required.
+                if (!conditionalVars.onlyInConditional.has(iterableName)) {
+                    existing.isRequired = existing.isRequired && isRequired;
+                }
+            } else {
+                paramMap.set(iterableName, {
+                    name: iterableName,
+                    type: 'array',
+                    isRequired,
                     defaultValue: null,
                     filters: [],
                     usageLocations: [],

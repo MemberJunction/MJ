@@ -507,6 +507,16 @@ Actions are **server-side tools** — they run on the server with direct access 
 Execute multiple in parallel if independent. Retry failed actions up to 3x with adjusted parameters.
 {{ actionDetails | safe }}
 {%- endif -%}
+
+{% if actionDetails and 'Create Document' in actionDetails %}
+### Document Creation Workflow
+When creating PDF, Word, or Excel documents, you **MUST** follow this exact 3-step sequence:
+1. **Create Document** — creates a handle for the new document
+2. **Add Document Content** — adds content sections using the handle
+3. **Finalize Document** — renders the document to a file and saves it to storage
+
+**CRITICAL**: You must ALWAYS call **Finalize Document** after adding content. Without finalization, the document is never created. Never return Success after Add Document Content — always continue to Finalize Document as the next step.
+{%- endif %}
 {%- endif %}
 
 {% if clientToolDetails %}

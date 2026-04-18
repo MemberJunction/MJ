@@ -183,13 +183,13 @@ export class EntityOrganicKeyInfo extends BaseInfo {
         return this.MatchFieldNames ? this.MatchFieldNames.split(',').map(f => f.trim()) : [];
     }
 
-    constructor(initData: {EntityOrganicKeyRelatedEntities?: unknown[]; _RelatedEntities?: unknown[]} & Record<string, unknown> = null) {
+    constructor(initData: {EntityOrganicKeyRelatedEntities?: unknown[]; _RelatedEntities?: unknown[]; RelatedEntities?: unknown[]} & Record<string, unknown> = null) {
         super();
         if (initData) {
             this.copyInitData(initData);
 
             this._RelatedEntities = [];
-            const re = initData.EntityOrganicKeyRelatedEntities || initData._RelatedEntities;
+            const re = initData.EntityOrganicKeyRelatedEntities || initData._RelatedEntities || initData.RelatedEntities;
             if (re && Array.isArray(re)) {
                 // sort by sequence
                 const sorted = [...re] as Record<string, unknown>[];
@@ -203,6 +203,28 @@ export class EntityOrganicKeyInfo extends BaseInfo {
                 }
             }
         }
+    }
+
+    /**
+     * Returns a plain object suitable for JSON serialization.
+     * Called automatically by JSON.stringify().
+     * Produces PascalCase property names matching the MJ convention.
+     */
+    toJSON(): Record<string, unknown> {
+        return {
+            ID: this.ID,
+            EntityID: this.EntityID,
+            Name: this.Name,
+            Description: this.Description,
+            MatchFieldNames: this.MatchFieldNames,
+            NormalizationStrategy: this.NormalizationStrategy,
+            CustomNormalizationExpression: this.CustomNormalizationExpression,
+            AutoCreateRelatedViewOnForm: this.AutoCreateRelatedViewOnForm,
+            Sequence: this.Sequence,
+            Status: this.Status,
+            Entity: this.Entity,
+            RelatedEntities: this.RelatedEntities.map(re => re.toJSON()),
+        };
     }
 }
 
@@ -275,6 +297,31 @@ export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
         if (initData) {
             this.copyInitData(initData);
         }
+    }
+
+    /**
+     * Returns a plain object suitable for JSON serialization.
+     * Called automatically by JSON.stringify().
+     * Produces PascalCase property names matching the MJ convention.
+     */
+    toJSON(): Record<string, unknown> {
+        return {
+            ID: this.ID,
+            EntityOrganicKeyID: this.EntityOrganicKeyID,
+            RelatedEntityID: this.RelatedEntityID,
+            RelatedEntityFieldNames: this.RelatedEntityFieldNames,
+            TransitiveObjectName: this.TransitiveObjectName,
+            TransitiveObjectMatchFieldNames: this.TransitiveObjectMatchFieldNames,
+            TransitiveObjectOutputFieldName: this.TransitiveObjectOutputFieldName,
+            RelatedEntityJoinFieldName: this.RelatedEntityJoinFieldName,
+            DisplayName: this.DisplayName,
+            DisplayLocation: this.DisplayLocation,
+            DisplayComponentID: this.DisplayComponentID,
+            DisplayComponentConfiguration: this.DisplayComponentConfiguration,
+            Sequence: this.Sequence,
+            EntityOrganicKey: this.EntityOrganicKey,
+            RelatedEntity: this.RelatedEntity,
+        };
     }
 }
 
@@ -1369,6 +1416,14 @@ export class EntityInfo extends BaseInfo {
      */
     TrustServerCacheCompletely: boolean = true
     /**
+     * Controls whether this entity participates in server-side and client-side
+     * caching at all. When false (default for non-__mj entities), the entire
+     * cache code path is short-circuited: no PreRunView cache check, no
+     * auto-cache storage, no HandleBaseEntityEvent fingerprint scan, no
+     * client-side IndexedDB cache. Zero overhead on hot save/query paths.
+     */
+    AllowCaching: boolean = false
+    /**
      * Whether this entity is available through the GraphQL API
      */
     IncludeInAPI: boolean = false
@@ -2314,7 +2369,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Organic Keys (sorted by sequence inside EntityOrganicKeyInfo constructor)
             this._OrganicKeys = [];
-            const ok = initData.EntityOrganicKeys || initData._OrganicKeys;
+            const ok = initData.EntityOrganicKeys || initData._OrganicKeys || initData.OrganicKeys;
             if (ok && Array.isArray(ok)) {
                 for (const item of ok) {
                     this._OrganicKeys.push(new EntityOrganicKeyInfo(item));
@@ -2340,6 +2395,7 @@ export class EntityInfo extends BaseInfo {
             BaseView: this.BaseView,
             Fields: this.Fields.map(f => f.toJSON()),
             RelatedEntities: this.RelatedEntities.map(r => r.toJSON()),
+            OrganicKeys: this.OrganicKeys.filter(ok => ok.Status === 'Active').map(ok => ok.toJSON()),
             RowsToPackWithSchema: this.RowsToPackWithSchema,
             RowsToPackSampleMethod: this.RowsToPackSampleMethod,
         };

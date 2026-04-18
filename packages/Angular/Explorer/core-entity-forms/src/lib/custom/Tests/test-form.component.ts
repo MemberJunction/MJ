@@ -110,7 +110,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
 
   // Service injections
   private navigationService = inject(NavigationService);
-  private testingDialogService = inject(TestingDialogService);
+  public testingDialogService = inject(TestingDialogService);
   private evalPrefsService = inject(EvaluationPreferencesService);
   private viewContainerRef = inject(ViewContainerRef);
   private appManager = inject(ApplicationManager);
@@ -125,6 +125,13 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
       .subscribe(prefs => {
         this.evalPreferences = prefs;
         this.cdr.markForCheck();
+      });
+
+    // Subscribe to panel state changes so the slide panel renders in this form
+    this.testingDialogService.PanelStateChanged$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.cdr.detectChanges();
       });
 
     if (this.record && this.record.ID) {
@@ -446,6 +453,11 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
     if (this.record?.ID) {
       this.testingDialogService.OpenTestPanel(this.record.ID);
     }
+  }
+
+  OnPanelClosed(): void {
+    this.testingDialogService.ClosePanel();
+    this.cdr.markForCheck();
   }
 
   async refresh() {

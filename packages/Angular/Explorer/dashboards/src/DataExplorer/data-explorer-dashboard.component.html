@@ -499,7 +499,9 @@
           (gridStateChanged)="onGridStateChanged($event)"
           (selectionChanged)="onSelectionChanged($event)"
           (addToListRequested)="onAddToListRequested($event)"
+          [mapRenderMode]="state.mapRenderMode || 'point'"
           [mapDisplayState]="mapDisplayState"
+          (mapRenderModeChange)="onMapRenderModeChange($event)"
           (mapDisplayStateChange)="onMapDisplayStateChange($event)">
         </mj-entity-viewer>
       }

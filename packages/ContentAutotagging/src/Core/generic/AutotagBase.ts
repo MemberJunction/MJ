@@ -12,5 +12,8 @@ export abstract class AutotagBase {
      * @param onProgress - Optional progress callback
      * @param contentSourceIDs - Optional filter: only process these specific source IDs. If omitted, processes all sources for this type.
      */
-    public abstract Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[]): Promise<void>;
+    /**
+     * @returns the number of content items processed (new + retried)
+     */
+    public abstract Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[]): Promise<number>;
 }

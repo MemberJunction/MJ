@@ -11,25 +11,29 @@ export interface StorageAccountWithProvider {
 }
 
 /**
- * FileStorageEngine provides centralized, cached access to file storage accounts and providers.
+ * FileStorageEngineBase provides centralized, cached access to file storage accounts and providers.
  * This engine eliminates redundant database calls by caching the data and making it available
- * across the application.
+ * across the application. It is safe to use on both client and server — it only deals with
+ * cached metadata, not file I/O.
+ *
+ * For server-side file operations (upload, download, driver initialization), use the
+ * `FileStorageEngine` class from `@memberjunction/storage` which wraps this base via containment.
  *
  * Usage:
  * ```typescript
- * const engine = FileStorageEngine.Instance;
+ * const engine = FileStorageEngineBase.Instance;
  * await engine.Config(false);  // Use cached data if available
  * const accounts = engine.AccountsWithProviders;
  * ```
  */
-export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
+export class FileStorageEngineBase extends BaseEngine<FileStorageEngineBase> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only
      * one instance of it in the application. Do not directly create new instances of it,
      * always use this method to get the instance.
      */
-    public static get Instance(): FileStorageEngine {
-        return super.getInstance<FileStorageEngine>();
+    public static get Instance(): FileStorageEngineBase {
+        return super.getInstance<FileStorageEngineBase>();
     }
 
     private _accounts: MJFileStorageAccountEntity[] = [];
@@ -115,6 +119,24 @@ export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
      */
     public GetProviderById(providerId: string): MJFileStorageProviderEntity | undefined {
         return this.Providers.find(p => UUIDsEqual(p.ID, providerId));
+    }
+
+    /**
+     * Gets a file storage account by its name (case-insensitive).
+     * @param name - The name of the account to find
+     * @returns The account entity or undefined if not found
+     */
+    public GetAccountByName(name: string): MJFileStorageAccountEntity | undefined {
+        return this.Accounts.find(a => a.Name?.trim().toLowerCase() === name.trim().toLowerCase());
+    }
+
+    /**
+     * Gets file storage accounts linked to a given provider ID.
+     * @param providerId - The provider ID to match against account.ProviderID
+     * @returns Array of matching accounts (may be empty)
+     */
+    public GetAccountsByProviderID(providerId: string): MJFileStorageAccountEntity[] {
+        return this.Accounts.filter(a => UUIDsEqual(a.ProviderID, providerId));
     }
 
     /**

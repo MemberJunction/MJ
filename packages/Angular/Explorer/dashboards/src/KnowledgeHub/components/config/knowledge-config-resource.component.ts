@@ -9,7 +9,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, MJCredentialEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -45,6 +45,8 @@ interface VectorDBRecord {
     Name: string;
     ClassKey: string;
     Description: string;
+    CredentialID: string | null;
+    CredentialName: string | null;
 }
 
 /** Vector index display record */
@@ -135,6 +137,10 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public EmbeddingModels: EmbeddingModelRecord[] = [];
     public get HasEmbeddingModel(): boolean { return this.EmbeddingModels.length > 0; }
     public get EmbeddingModelName(): string { return this.EmbeddingModels.length > 0 ? this.EmbeddingModels[0].Name : ''; }
+
+    // --- Credentials (for vector DB provider binding) ---
+    public AvailableCredentials: { ID: string; Name: string }[] = [];
+    public IsSavingCredential = false;
 
     // --- Entity Documents (for persisting thresholds) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
@@ -326,6 +332,47 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         }
     }
 
+    /** Update the credential linked to a vector database provider */
+    public async SaveProviderCredential(provider: VectorDBRecord): Promise<void> {
+        this.IsSavingCredential = true;
+        this.cdr.detectChanges();
+
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<MJVectorDatabaseEntity>('MJ: Vector Databases');
+            const loaded = await entity.Load(provider.ID);
+            if (!loaded) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Could not load vector database "${provider.Name}"`, 'error', 3000
+                );
+                return;
+            }
+
+            entity.CredentialID = provider.CredentialID || null;
+            const saved = await entity.Save();
+            if (saved) {
+                provider.CredentialName = this.AvailableCredentials.find(c => UUIDsEqual(c.ID, provider.CredentialID))?.Name ?? null;
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    provider.CredentialID
+                        ? `Credential linked to "${provider.Name}"`
+                        : `Credential removed from "${provider.Name}"`,
+                    'success', 2000
+                );
+            } else {
+                const msg = entity.LatestResult?.CompleteMessage ?? 'Unknown error';
+                console.error('[KnowledgeConfig] Save credential failed:', msg);
+                MJNotificationService.Instance.CreateSimpleNotification(`Save failed: ${msg}`, 'error', 5000);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[KnowledgeConfig] Error saving credential:', msg);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
+        } finally {
+            this.IsSavingCredential = false;
+            this.cdr.detectChanges();
+        }
+    }
+
     // ================================================================
     // Private Methods
     // ================================================================
@@ -343,13 +390,15 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             this.loadVectorIndexesFromEngine(engine.VectorIndexes);
             this.loadEntityDocumentsAndThresholds(engine.GetActiveEntityDocuments());
 
-            // AI Models come from a different domain — fetch via RunView
+            // AI Models and Credentials come from different domains — fetch via RunView
             const rv = new RunView();
-            const modelsResult = await rv.RunView({
-                EntityName: 'MJ: AI Models',
-                ResultType: 'simple'
-            });
+            const [modelsResult, credentialsResult] = await rv.RunViews([
+                { EntityName: 'MJ: AI Models', ResultType: 'simple' },
+                { EntityName: 'MJ: Credentials', ExtraFilter: 'IsActive = 1', Fields: ['ID', 'Name'], ResultType: 'simple' }
+            ]);
             this.loadEmbeddingModels(modelsResult.Success ? modelsResult.Results : []);
+            this.AvailableCredentials = (credentialsResult.Success ? credentialsResult.Results : [])
+                .map((c: Record<string, unknown>) => ({ ID: String(c['ID']), Name: String(c['Name']) }));
         } catch (error) {
             console.error('[KnowledgeConfig] Error loading configuration:', error);
         } finally {
@@ -416,7 +465,9 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             ID: db.ID,
             Name: db.Name,
             ClassKey: db.ClassKey || '',
-            Description: db.Description || ''
+            Description: db.Description || '',
+            CredentialID: db.CredentialID,
+            CredentialName: db.Credential ?? null
         }));
     }
 

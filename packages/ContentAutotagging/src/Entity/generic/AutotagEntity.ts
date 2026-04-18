@@ -36,7 +36,7 @@ export class AutotagEntity extends AutotagBase {
     /** Cached content source entities keyed by normalized source ID for ERD lookups */
     private contentSourceMap = new Map<string, MJContentSourceEntity>();
 
-    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[]): Promise<void> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[]): Promise<number> {
         this.contextUser = contextUser;
         this.engine = AutotagBaseEngine.Instance;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Entity');
@@ -55,15 +55,33 @@ export class AutotagEntity extends AutotagBase {
 
         const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
 
+        // Also pick up previously failed items — ContentItems that exist but have
+        // no tags (LLM call failed due to rate limits, network errors, etc.)
+        const retryItems = await this.GetUntaggedContentItems(contentSources);
+        if (retryItems.length > 0) {
+            LogStatus(`AutotagEntity: found ${retryItems.length} previously failed items to retry`);
+        }
+
+        // Merge new + retry items, deduplicating by ID
+        const seen = new Set(contentItemsToProcess.map(ci => ci.ID));
+        for (const item of retryItems) {
+            if (!seen.has(item.ID)) {
+                contentItemsToProcess.push(item);
+                seen.add(item.ID);
+            }
+        }
+
         if (contentItemsToProcess.length > 0) {
             await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, contextUser, undefined, undefined, onProgress);
         } else {
-            LogStatus('AutotagEntity: no new or modified entity records to process');
+            LogStatus('AutotagEntity: no new, modified, or failed entity records to process');
         }
 
         // Clean up engine state
         this.engine.TaxonomyContext = null;
         this.engine.OnContentItemTagSaved = null;
+
+        return contentItemsToProcess.length;
     }
 
     /**
@@ -104,7 +122,9 @@ export class AutotagEntity extends AutotagBase {
                 .filter((id): id is string => id != null);
             const taxonomyRoot = rootIDs.length === 1 ? rootIDs[0] : undefined;
             const tree = TagEngine.Instance.GetTaxonomyTree(taxonomyRoot);
-            this.engine.TaxonomyContext = JSON.stringify(tree, null, 2);
+            // Strip IDs from the tree before injecting into the LLM prompt.
+            // The LLM occasionally returns UUIDs as tag names when it sees them.
+            this.engine.TaxonomyContext = JSON.stringify(tree, (key, value) => key === 'ID' ? undefined : value, 2);
         }
 
         // Set up the bridge callback for tag taxonomy linking
@@ -193,6 +213,27 @@ export class AutotagEntity extends AutotagBase {
             contentItemTag.Weight,
             contextUser
         );
+    }
+
+    /**
+     * Find ContentItems that exist for these sources but have no ContentItemTag records.
+     * These are items where the LLM tagging failed on a previous run (rate limits, network errors, etc.).
+     */
+    private async GetUntaggedContentItems(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
+        if (contentSources.length === 0) return [];
+
+        const sourceIDs = contentSources.map(s => `'${s.ID}'`).join(',');
+        const rv = new RunView();
+        const result = await rv.RunView<MJContentItemEntity>({
+            EntityName: 'MJ: Content Items',
+            ExtraFilter: `ContentSourceID IN (${sourceIDs}) AND NOT EXISTS (SELECT 1 FROM [__mj].vwContentItemTags cit WHERE cit.ItemID = [__mj].vwContentItems.ID)`,
+            ResultType: 'entity_object'
+        }, this.contextUser);
+
+        if (result.Success) {
+            return result.Results;
+        }
+        return [];
     }
 
     public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {

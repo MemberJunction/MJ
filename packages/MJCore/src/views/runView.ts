@@ -340,6 +340,18 @@ export class RunView  {
     }
 
     /**
+     * Creates a RunView instance from an IMetadataProvider. At runtime the provider object
+     * (ProviderBase) implements both IMetadataProvider and IRunViewProvider, but TypeScript
+     * doesn't know that statically. This factory centralizes the cast so callers don't need
+     * their own helper methods.
+     * @param provider An IMetadataProvider instance (typically from Metadata.Provider or a contextUser's provider)
+     * @returns A new RunView wired to the given provider
+     */
+    public static FromMetadataProvider(provider: IMetadataProvider): RunView {
+        return new RunView(provider as unknown as IRunViewProvider);
+    }
+
+    /**
      * This property is used to get the IRunViewProvider implementation that is used by this instance of the RunView class. If a provider was specified to the constructor, that provider is used, otherwise the static RunView.Provider property is used.
      */
     public get ProviderToUse(): IRunViewProvider {
@@ -409,7 +421,7 @@ export class RunView  {
         }
         else if (params.ViewID || params.ViewName) {
             // we don't have a view entity loaded, so load it up now
-            const rv = new RunView(<IRunViewProvider><any>p);
+            const rv = RunView.FromMetadataProvider(p);
             const result = await rv.RunView({
                 EntityName: "MJ: User Views",
                 ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,
