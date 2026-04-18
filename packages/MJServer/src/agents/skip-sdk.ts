@@ -24,7 +24,7 @@ import {
     SkipAPIArtifactType
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityFieldValueInfo } from '@memberjunction/core';
+import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityFieldValueInfo, DatabaseProviderBase } from '@memberjunction/core';
 import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
 import { gzip as gzipCompress, createGunzip } from 'zlib';
@@ -390,7 +390,7 @@ export class SkipSDK {
         includeCallbackAuth: boolean,
         additionalTokenInfo: any = {}
     ): Promise<Partial<SkipAPIRequest>> {
-        const entities = includeEntities ? await this.buildEntities(dataSource, forceEntityRefresh) : [];
+        const entities = includeEntities ? await this.buildEntities(forceEntityRefresh) : [];
         const queries = includeQueries ? this.buildQueries() : [];
         // Always build the lightweight query catalog for collision detection,
         // regardless of whether full queries are included
@@ -436,7 +436,7 @@ export class SkipSDK {
      * Build entity metadata for Skip
      * Copied from AskSkipResolver.BuildSkipEntities - uses cached metadata with refresh logic
      */
-    private async buildEntities(dataSource: mssql.ConnectionPool, forceRefresh: boolean, refreshIntervalMinutes: number = 15): Promise<EntityInfo[]> {
+    private async buildEntities(forceRefresh: boolean, refreshIntervalMinutes: number = 15): Promise<EntityInfo[]> {
         try {
             const now = Date.now();
             const cacheExpired = (now - SkipSDK.__lastRefreshTime) > (refreshIntervalMinutes * 60 * 1000);
@@ -444,7 +444,7 @@ export class SkipSDK {
             // If force refresh is requested OR cache expired OR cache is empty, refresh
             if (forceRefresh || cacheExpired || SkipSDK.__skipEntitiesCache$.value === null) {
                 LogStatus(`[SkipSDK] Refreshing Skip entities cache (force: ${forceRefresh}, expired: ${cacheExpired})`);
-                const newData = this.refreshSkipEntities(dataSource);
+                const newData = this.refreshSkipEntities();
                 SkipSDK.__skipEntitiesCache$.next(newData);
             }
 
@@ -854,7 +854,7 @@ export class SkipSDK {
      * filters fields by AI scope, and enriches field values from the database.
      * Returns EntityInfo objects directly — no intermediate Skip-specific types needed.
      */
-    private async refreshSkipEntities(dataSource: mssql.ConnectionPool): Promise<EntityInfo[]> {
+    private async refreshSkipEntities(): Promise<EntityInfo[]> {
         try {
             const md = new Metadata();
 
@@ -888,7 +888,7 @@ export class SkipSDK {
             }
 
             // Build enriched EntityInfo objects with filtered fields and packed values
-            const result = await Promise.all(entities.map((e) => this.buildEntityForSkip(e, dataSource)));
+            const result = await Promise.all(entities.map((e) => this.buildEntityForSkip(e)));
 
             LogStatus(`[SkipSDK.refreshSkipEntities] Successfully packed ${result.length} entities for Skip`);
 
@@ -906,7 +906,7 @@ export class SkipSDK {
      * enriching field values from the database. Returns a new EntityInfo
      * constructed from a plain object so it serializes cleanly via toJSON().
      */
-    private async buildEntityForSkip(e: EntityInfo, dataSource: mssql.ConnectionPool): Promise<EntityInfo> {
+    private async buildEntityForSkip(e: EntityInfo): Promise<EntityInfo> {
         try {
             // Filter fields by scope (only include fields visible to AI)
             const filteredFields = e.Fields.filter(f => {
@@ -915,7 +915,7 @@ export class SkipSDK {
             });
 
             // Enrich each field with packed possible values
-            const enrichedFields = await Promise.all(filteredFields.map(f => this.enrichFieldValues(f, dataSource)));
+            const enrichedFields = await Promise.all(filteredFields.map(f => this.enrichFieldValues(f)));
 
             // Clone the entity via toJSON, then swap in filtered+enriched fields and Skip-specific
             // Active-only organic keys. Any future EntityInfo properties flow through automatically.
@@ -935,10 +935,10 @@ export class SkipSDK {
      * Enriches a field's EntityFieldValues with possible values from the database.
      * Returns a plain object that can be used to construct an EntityFieldInfo.
      */
-    private async enrichFieldValues(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<Record<string, unknown>> {
+    private async enrichFieldValues(f: EntityFieldInfo): Promise<Record<string, unknown>> {
         return {
             ...f.toJSON(),
-            EntityFieldValues: await this.packFieldValues(f, dataSource),
+            EntityFieldValues: await this.packFieldValues(f),
         };
     }
 
@@ -946,20 +946,20 @@ export class SkipSDK {
      * Packs possible values for an entity field based on the ValuesToPackWithSchema setting.
      * Returns EntityFieldValueInfo-compatible objects.
      */
-    private async packFieldValues(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<EntityFieldValueInfo[]> {
+    private async packFieldValues(f: EntityFieldInfo): Promise<EntityFieldValueInfo[]> {
         try {
             if (f.ValuesToPackWithSchema === 'None') {
                 return [];
             }
             else if (f.ValuesToPackWithSchema === 'All') {
-                return await this.getFieldDistinctValues(f, dataSource);
+                return await this.getFieldDistinctValues(f);
             }
             else if (f.ValuesToPackWithSchema === 'Auto') {
                 if (f.ValueListTypeEnum === 'List') {
                     return f.EntityFieldValues.map((v) => new EntityFieldValueInfo({ Value: v.Value, Code: v.Value }));
                 }
                 else if (f.ValueListTypeEnum === 'ListOrUserEntry') {
-                    const values = await this.getFieldDistinctValues(f, dataSource);
+                    const values = await this.getFieldDistinctValues(f);
                     if (!values || values.length === 0) {
                         return f.EntityFieldValues.map((v) => new EntityFieldValueInfo({ Value: v.Value, Code: v.Value }));
                     }
@@ -981,17 +981,16 @@ export class SkipSDK {
      * Gets distinct values for a field from the database.
      * Returns EntityFieldValueInfo objects.
      */
-    private async getFieldDistinctValues(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<EntityFieldValueInfo[]> {
+    private async getFieldDistinctValues(f: EntityFieldInfo): Promise<EntityFieldValueInfo[]> {
         try {
+            // Uses the provider's ExecuteSQL so this works on both SQL Server and PostgreSQL.
+            const provider = Metadata.Provider as DatabaseProviderBase;
             const sql = `SELECT DISTINCT ${f.Name} FROM ${f.SchemaName}.${f.BaseView}`;
-            const request = new mssql.Request(dataSource);
-            const result = await request.query(sql);
-            if (!result || !result.recordset) {
+            const rows = await provider.ExecuteSQL<Record<string, unknown>>(sql);
+            if (!rows || rows.length === 0) {
                 return [];
             }
-            else {
-                return result.recordset.map((r) => new EntityFieldValueInfo({ Value: r[f.Name], Code: r[f.Name] }));
-            }
+            return rows.map((r) => new EntityFieldValueInfo({ Value: r[f.Name] as string, Code: r[f.Name] as string }));
         }
         catch (e) {
             LogError(`[SkipSDK] getFieldDistinctValues error: ${e}`);
