@@ -16,6 +16,7 @@ import {
     HostListener
 } from '@angular/core';
 import { RunView } from '@memberjunction/core';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import {
     TreeNode,
     TreeBranchConfig,
@@ -1260,12 +1261,13 @@ export class TreeComponent implements OnInit, OnDestroy {
         parent: TreeNode,
         nodeMap: Map<string, TreeNode>
     ): boolean {
-        if (node.ID === parent.ID) return true;
-        const visited = new Set<string>([node.ID]);
+        if (UUIDsEqual(node.ID, parent.ID)) return true;
+        const visited = new Set<string>([NormalizeUUID(node.ID)]);
         let cursor: TreeNode | undefined = parent;
         while (cursor) {
-            if (visited.has(cursor.ID)) return true;
-            visited.add(cursor.ID);
+            const cursorKey = NormalizeUUID(cursor.ID);
+            if (visited.has(cursorKey)) return true;
+            visited.add(cursorKey);
             if (!cursor.ParentID) return false;
             cursor = nodeMap.get(cursor.ParentID);
         }
@@ -1366,17 +1368,18 @@ export class TreeComponent implements OnInit, OnDestroy {
     }
 
     private cloneNode(node: TreeNode, ancestors: Set<string>): TreeNode {
-        if (ancestors.has(node.ID)) {
+        const key = NormalizeUUID(node.ID);
+        if (ancestors.has(key)) {
             console.warn(`[TreeComponent] cloneNode: cycle detected at ${node.ID} (${node.Label}); truncating`);
             return { ...node, Data: { ...node.Data }, Children: [] };
         }
-        ancestors.add(node.ID);
+        ancestors.add(key);
         const cloned: TreeNode = {
             ...node,
             Data: { ...node.Data },
             Children: node.Children.map(c => this.cloneNode(c, ancestors))
         };
-        ancestors.delete(node.ID);
+        ancestors.delete(key);
         return cloned;
     }
 
