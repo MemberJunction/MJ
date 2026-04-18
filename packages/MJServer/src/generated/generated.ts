@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentClientToolEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchProviderEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentClientToolEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchProviderEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -50069,6 +50069,9 @@ export class MJMCPServerTool_ {
     @Field(() => [MJMCPServerConnectionTool_])
     MJMCPServerConnectionTools_MCPServerToolIDArray: MJMCPServerConnectionTool_[]; // Link to MJMCPServerConnectionTools
     
+    @Field(() => [MJMCPToolFavorite_])
+    MJMCPToolFavorites_MCPServerToolIDArray: MJMCPToolFavorite_[]; // Link to MJMCPToolFavorites
+    
     @Field(() => [MJMCPToolExecutionLog_])
     MJMCPToolExecutionLogs_MCPServerToolIDArray: MJMCPToolExecutionLog_[]; // Link to MJMCPToolExecutionLogs
     
@@ -50232,6 +50235,16 @@ export class MJMCPServerToolResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPServerConnectionTools')} WHERE ${provider.QuoteIdentifier('MCPServerToolID')}='${mjmcpservertool_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connection Tools', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connection Tools', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPToolFavorite_])
+    async MJMCPToolFavorites_MCPServerToolIDArray(@Root() mjmcpservertool_: MJMCPServerTool_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Tool Favorites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPToolFavorites')} WHERE ${provider.QuoteIdentifier('MCPServerToolID')}='${mjmcpservertool_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Tool Favorites', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -50897,6 +50910,159 @@ export class MJMCPToolExecutionLogResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: MCP Tool Execution Logs', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: MCP Tool Favorites
+//****************************************************************************
+@ObjectType({ description: `Per-user favorite marker for an MCP Server Tool. Lets users star tools for quick access in the MCP Dashboard and Test dialog.` })
+export class MJMCPToolFavorite_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    UserID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    MCPServerToolID: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    MCPServerTool?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Tool Favorites
+//****************************************************************************
+@InputType()
+export class CreateMJMCPToolFavoriteInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    MCPServerToolID?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Tool Favorites
+//****************************************************************************
+@InputType()
+export class UpdateMJMCPToolFavoriteInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    MCPServerToolID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: MCP Tool Favorites
+//****************************************************************************
+@ObjectType()
+export class RunMJMCPToolFavoriteViewResult {
+    @Field(() => [MJMCPToolFavorite_])
+    Results: MJMCPToolFavorite_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMCPToolFavorite_)
+export class MJMCPToolFavoriteResolver extends ResolverBase {
+    @Query(() => RunMJMCPToolFavoriteViewResult)
+    async RunMJMCPToolFavoriteViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPToolFavoriteViewResult)
+    async RunMJMCPToolFavoriteViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPToolFavoriteViewResult)
+    async RunMJMCPToolFavoriteDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: MCP Tool Favorites';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMCPToolFavorite_, { nullable: true })
+    async MJMCPToolFavorite(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMCPToolFavorite_ | null> {
+        this.CheckUserReadPermissions('MJ: MCP Tool Favorites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPToolFavorites')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: MCP Tool Favorites', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMCPToolFavorite_)
+    async CreateMJMCPToolFavorite(
+        @Arg('input', () => CreateMJMCPToolFavoriteInput) input: CreateMJMCPToolFavoriteInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: MCP Tool Favorites', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMCPToolFavorite_)
+    async UpdateMJMCPToolFavorite(
+        @Arg('input', () => UpdateMJMCPToolFavoriteInput) input: UpdateMJMCPToolFavoriteInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: MCP Tool Favorites', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMCPToolFavorite_)
+    async DeleteMJMCPToolFavorite(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: MCP Tool Favorites', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -71000,14 +71166,17 @@ export class MJUser_ {
     @Field(() => [MJContentItemDuplicate_])
     MJContentItemDuplicates_ResolvedByUserIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
     
+    @Field(() => [MJTagAuditLog_])
+    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
+    
     @Field(() => [MJContentProcessRun_])
     MJContentProcessRuns_StartedByUserIDArray: MJContentProcessRun_[]; // Link to MJContentProcessRuns
     
     @Field(() => [MJKnowledgeHubSavedSearch_])
     MJKnowledgeHubSavedSearches_UserIDArray: MJKnowledgeHubSavedSearch_[]; // Link to MJKnowledgeHubSavedSearches
     
-    @Field(() => [MJTagAuditLog_])
-    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
+    @Field(() => [MJMCPToolFavorite_])
+    MJMCPToolFavorites_UserIDArray: MJMCPToolFavorite_[]; // Link to MJMCPToolFavorites
     
     @Field(() => [MJResourcePermission_])
     MJResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
@@ -71860,6 +72029,16 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJTagAuditLog_])
+    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJContentProcessRun_])
     async MJContentProcessRuns_StartedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Process Runs', userPayload);
@@ -71880,13 +72059,13 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJTagAuditLog_])
-    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
+    @FieldResolver(() => [MJMCPToolFavorite_])
+    async MJMCPToolFavorites_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Tool Favorites', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPToolFavorites')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Favorites', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Tool Favorites', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

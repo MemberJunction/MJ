@@ -17748,6 +17748,47 @@ export const MJMCPToolExecutionLogSchema = z.object({
 export type MJMCPToolExecutionLogEntityType = z.infer<typeof MJMCPToolExecutionLogSchema>;
 
 /**
+ * zod schema definition for the entity MJ: MCP Tool Favorites
+ */
+export const MJMCPToolFavoriteSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    MCPServerToolID: z.string().describe(`
+        * * Field Name: MCPServerToolID
+        * * Display Name: MCP Server Tool ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    MCPServerTool: z.string().nullable().describe(`
+        * * Field Name: MCPServerTool
+        * * Display Name: MCP Server Tool
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMCPToolFavoriteEntityType = z.infer<typeof MJMCPToolFavoriteSchema>;
+
+/**
  * zod schema definition for the entity MJ: O Auth Auth Server Metadata Caches
  */
 export const MJOAuthAuthServerMetadataCacheSchema = z.object({
@@ -71522,6 +71563,115 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
     */
     get User(): string {
         return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: MCP Tool Favorites - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MCPToolFavorite
+ * * Base View: vwMCPToolFavorites
+ * * @description Per-user favorite marker for an MCP Server Tool. Lets users star tools for quick access in the MCP Dashboard and Test dialog.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: MCP Tool Favorites')
+export class MJMCPToolFavoriteEntity extends BaseEntity<MJMCPToolFavoriteEntityType> {
+    /**
+    * Loads the MJ: MCP Tool Favorites record from the database
+    * @param ID: string - primary key value to load the MJ: MCP Tool Favorites record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMCPToolFavoriteEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: MCPServerToolID
+    * * Display Name: MCP Server Tool ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
+    */
+    get MCPServerToolID(): string {
+        return this.Get('MCPServerToolID');
+    }
+    set MCPServerToolID(value: string) {
+        this.Set('MCPServerToolID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: MCPServerTool
+    * * Display Name: MCP Server Tool
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MCPServerTool(): string | null {
+        return this.Get('MCPServerTool');
     }
 }
 

@@ -20,13 +20,16 @@ import {
     MJMCPServerConnectionEntity,
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
+    MJMCPToolFavoriteEntity,
     MCPEngine,
     UserInfoEngine,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
-    MJOAuthTokenEntity
+    MJOAuthTokenEntity,
+    MJCredentialEntity
 } from '@memberjunction/core-entities';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
 
 /**
@@ -83,6 +86,7 @@ export interface MCPConnectionData {
     Description: string | null;
     Status: string;
     CompanyID: string | null;
+    CredentialID: string | null;
     AutoSyncTools: boolean;
     LogToolCalls: boolean;
     LastConnectedAt: Date | null;
@@ -112,6 +116,20 @@ export interface MCPServerGroup {
     server: MCPServerData;
     tools: MCPToolData[];
     expanded: boolean;
+}
+
+/**
+ * MCP tool summary returned by paginated GraphQL query (Part 3.2 scale path).
+ * Omits heavy fields like InputSchema so thousands of rows stay light.
+ */
+export interface MCPToolSummary {
+    ID: string;
+    MCPServerID: string;
+    ToolName: string;
+    ToolTitle: string | null;
+    ToolDescription: string | null;
+    Status: string;
+    ServerName: string | null;
 }
 
 /**
@@ -154,6 +172,12 @@ export interface MCPDashboardFilters {
     connectionStatus: string;
     toolStatus: string;
     logStatus: string;
+    /** Part 3.3 — tools tab server filter (ID of selected server, or 'all') */
+    toolsServer?: string;
+    /** Part 3.3 — tools tab category filter (derived from snake_case ToolName prefix, or 'all') */
+    toolsCategory?: string;
+    /** Part 3.6 — restrict Tools tab to favorited tools only */
+    favoritesOnly?: boolean;
 }
 
 /**
@@ -174,6 +198,15 @@ export interface MCPDashboardStats {
  * Active tab type
  */
 export type MCPDashboardTab = 'servers' | 'connections' | 'tools' | 'logs';
+
+/** Parameter config for the inline test tool form */
+interface TestParamConfig {
+    name: string;
+    type: string;
+    description: string;
+    required: boolean;
+    enumValues: unknown[];
+}
 
 /**
  * MCP Management Dashboard Component
@@ -214,6 +247,31 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public filteredTools: MCPToolData[] = [];
     public filteredLogs: MCPExecutionLogData[] = [];
 
+    /** Part 3.2 — paginated tools (scales to thousands). Appended as user scrolls. */
+    public pagedTools: MCPToolSummary[] = [];
+    public toolsTotalCount = 0;
+    public toolsLoading = false;
+    public toolsSkip = 0;
+    public toolsPageSize = 50;
+    public useScalablePagination = false;
+
+    /** Part 3.6 — favorited tool IDs for the current user. */
+    public favoritedToolIDs = new Set<string>();
+
+    /** Part 3.5 — Test dialog search string for tool combobox-style filter */
+    public TestToolSearch = '';
+
+    /** Part 3.3 — derived data for the filter panel */
+    public toolsAvailableServers: Array<{ ID: string; Name: string }> = [];
+    public toolsAvailableCategories: Array<{ category: string; count: number }> = [];
+
+    /** Part 3.4 — tool counts from GetMCPToolCounts (global, respects search) */
+    public toolsGlobalCount: number = 0;
+    /** Per-server tool count map used for "(N tools)" badge on group headers */
+    public toolCountByServer: Record<string, number> = {};
+    /** Part 3.4 — auto-collapse threshold for server groups */
+    public readonly AUTO_COLLAPSE_THRESHOLD = 100;
+
     public stats: MCPDashboardStats = {
         totalServers: 0,
         activeServers: 0,
@@ -244,10 +302,49 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public EditingServer: MCPServerData | null = null;
     public EditingConnection: MCPConnectionData | null = null;
 
-    // Test tool dialog pre-selection
+    // Inline server form state (avoids sub-component DI issues)
+    public ServerForm = {
+        Name: '', Description: '', TransportType: 'StreamableHTTP',
+        ServerURL: '', Command: '', DefaultAuthType: 'None', Status: 'Active',
+        RateLimitPerMinute: null as number | null,
+        RateLimitPerHour: null as number | null,
+        RequestTimeoutMs: 60000
+    };
+    public ServerFormSaving = false;
+    public ServerFormError: string | null = null;
+    public readonly TransportTypes = [
+        { value: 'StreamableHTTP', label: 'Streamable HTTP' },
+        { value: 'SSE', label: 'Server-Sent Events' },
+        { value: 'Stdio', label: 'Standard I/O' },
+        { value: 'WebSocket', label: 'WebSocket' }
+    ];
+    public readonly AuthTypes = [
+        { value: 'None', label: 'None' },
+        { value: 'Bearer', label: 'Bearer Token' },
+        { value: 'APIKey', label: 'API Key' },
+        { value: 'OAuth2', label: 'OAuth 2.0' },
+        { value: 'Basic', label: 'Basic Auth' }
+    ];
+
+    // Inline connection form state
+    public ConnectionForm = {
+        MCPServerID: '', Name: '', Description: '', BearerToken: '', Status: 'Active'
+    };
+    public ConnectionFormSaving = false;
+    public ConnectionFormError: string | null = null;
+
+    // Inline test tool form state
+    public TestStep: 'select' | 'configure' | 'results' = 'select';
     public TestToolServerID: string | null = null;
     public TestToolConnectionID: string | null = null;
     public TestToolID: string | null = null;
+    public TestFilteredConnections: MCPConnectionData[] = [];
+    public TestFilteredTools: MCPToolData[] = [];
+    public TestSelectedTool: MCPToolData | null = null;
+    public TestParamConfigs: TestParamConfig[] = [];
+    public TestParamValues: Record<string, string> = {};
+    public TestIsExecuting = false;
+    public TestExecutionResult: { Success: boolean; ErrorMessage?: string; Result?: string; DurationMs?: number } | null = null;
 
     // Log detail panel state
     public ShowLogDetailPanel = false;
@@ -529,6 +626,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 Description: c.Description,
                 Status: c.Status,
                 CompanyID: c.CompanyID,
+                CredentialID: c.CredentialID ?? null,
                 AutoSyncTools: c.AutoSyncTools,
                 LogToolCalls: c.LogToolCalls,
                 LastConnectedAt: c.LastConnectedAt,
@@ -563,6 +661,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
             // Apply filters
             this.applyFilters();
+
+            // Load user's favorites (Part 3.6) — fire and forget
+            this.loadFavorites();
 
         } catch (error) {
             this.ErrorMessage = `Failed to load data: ${error instanceof Error ? error.message : String(error)}`;
@@ -771,6 +872,11 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public onFiltersChange(filters: MCPDashboardFilters): void {
         this.filters$.next(filters);
         this.saveUserPreferencesDebounced();
+        // Part 3.3/3.4 — when Tools tab is active in scale mode, reload the paginated list + counts
+        if (this.ActiveTab === 'tools' && this.useScalablePagination) {
+            this.loadToolsPage(true);
+            this.loadToolCounts();
+        }
     }
 
     /**
@@ -837,12 +943,27 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     public createServer(): void {
         this.EditingServer = null;
+        this.ServerForm = { Name: '', Description: '', TransportType: 'StreamableHTTP', ServerURL: '', Command: '', DefaultAuthType: 'None', Status: 'Active', RateLimitPerMinute: null, RateLimitPerHour: null, RequestTimeoutMs: 60000 };
+        this.ServerFormError = null;
         this.ShowServerDialog = true;
         this.cdr.detectChanges();
     }
 
     public editServer(server: MCPServerData): void {
         this.EditingServer = server;
+        this.ServerForm = {
+            Name: server.Name,
+            Description: server.Description ?? '',
+            TransportType: server.TransportType,
+            ServerURL: server.ServerURL ?? '',
+            Command: server.Command ?? '',
+            DefaultAuthType: server.DefaultAuthType,
+            Status: server.Status,
+            RateLimitPerMinute: server.RateLimitPerMinute,
+            RateLimitPerHour: server.RateLimitPerHour,
+            RequestTimeoutMs: 60000
+        };
+        this.ServerFormError = null;
         this.ShowServerDialog = true;
         this.cdr.detectChanges();
     }
@@ -1085,14 +1206,139 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
+    public cancelServerForm(): void {
+        this.ShowServerDialog = false;
+        this.ServerFormError = null;
+        this.cdr.detectChanges();
+    }
+
+    public async saveServerForm(): Promise<void> {
+        if (!this.ServerForm.Name?.trim()) {
+            this.ServerFormError = 'Name is required';
+            this.cdr.detectChanges();
+            return;
+        }
+        if ((this.ServerForm.TransportType === 'StreamableHTTP' || this.ServerForm.TransportType === 'SSE' || this.ServerForm.TransportType === 'WebSocket') && !this.ServerForm.ServerURL?.trim()) {
+            this.ServerFormError = 'Server URL is required for this transport type';
+            this.cdr.detectChanges();
+            return;
+        }
+        this.ServerFormSaving = true;
+        this.ServerFormError = null;
+        this.cdr.detectChanges();
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<MJMCPServerEntity>('MJ: MCP Servers');
+            if (this.EditingServer?.ID) {
+                await entity.Load(this.EditingServer.ID);
+            } else {
+                entity.NewRecord();
+            }
+            entity.Name = this.ServerForm.Name.trim();
+            entity.Description = this.ServerForm.Description?.trim() || null;
+            entity.TransportType = this.ServerForm.TransportType as MJMCPServerEntity['TransportType'];
+            entity.ServerURL = this.ServerForm.ServerURL?.trim() || null;
+            entity.Command = this.ServerForm.Command?.trim() || null;
+            entity.DefaultAuthType = this.ServerForm.DefaultAuthType as MJMCPServerEntity['DefaultAuthType'];
+            entity.Status = this.ServerForm.Status as MJMCPServerEntity['Status'];
+            entity.RateLimitPerMinute = this.ServerForm.RateLimitPerMinute ?? null;
+            entity.RateLimitPerHour = this.ServerForm.RateLimitPerHour ?? null;
+            entity.RequestTimeoutMs = this.ServerForm.RequestTimeoutMs ?? 60000;
+            const saved = await entity.Save();
+            if (!saved) {
+                throw new Error(entity.LatestResult?.CompleteMessage ?? 'Save failed');
+            }
+            this.ShowServerDialog = false;
+            await this.loadAllData();
+        } catch (err) {
+            this.ServerFormError = err instanceof Error ? err.message : String(err);
+        } finally {
+            this.ServerFormSaving = false;
+            this.cdr.detectChanges();
+        }
+    }
+
     // ========================================
     // Connection Operations
     // ========================================
 
     public createConnection(): void {
         this.EditingConnection = null;
+        this.ConnectionForm = { MCPServerID: this.servers[0]?.ID ?? '', Name: '', Description: '', BearerToken: '', Status: 'Active' };
+        this.ConnectionFormError = null;
         this.ShowConnectionDialog = true;
         this.cdr.detectChanges();
+    }
+
+    public cancelConnectionForm(): void {
+        this.ShowConnectionDialog = false;
+        this.ConnectionFormError = null;
+        this.cdr.detectChanges();
+    }
+
+    public async saveConnectionForm(): Promise<void> {
+        if (!this.ConnectionForm.MCPServerID) {
+            this.ConnectionFormError = 'Please select a server';
+            this.cdr.detectChanges();
+            return;
+        }
+        if (!this.ConnectionForm.Name?.trim()) {
+            this.ConnectionFormError = 'Name is required';
+            this.cdr.detectChanges();
+            return;
+        }
+        this.ConnectionFormSaving = true;
+        this.ConnectionFormError = null;
+        this.cdr.detectChanges();
+        try {
+            const md = new Metadata();
+            let credentialID: string | null = null;
+
+            // If a bearer token was provided, create a Credential record for it
+            if (this.ConnectionForm.BearerToken?.trim()) {
+                const rv = new RunView();
+                const typeResult = await rv.RunView<{ID: string; Name: string}>({
+                    EntityName: 'MJ: Credential Types',
+                    ExtraFilter: `Name LIKE '%Bearer%' OR Name LIKE '%API%'`,
+                    Fields: ['ID', 'Name'],
+                    OrderBy: 'Name',
+                    MaxRows: 1,
+                    ResultType: 'simple'
+                });
+                const credTypeID = typeResult.Success && typeResult.Results.length > 0 ? typeResult.Results[0].ID : null;
+                if (credTypeID) {
+                    const cred = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials');
+                    cred.NewRecord();
+                    cred.CredentialTypeID = credTypeID;
+                    cred.Name = `${this.ConnectionForm.Name.trim()} Token`;
+                    cred.Values = JSON.stringify({ apiKey: this.ConnectionForm.BearerToken.trim() });
+                    const credSaved = await cred.Save();
+                    if (!credSaved) throw new Error(cred.LatestResult?.CompleteMessage ?? 'Failed to save credential');
+                    credentialID = cred.ID;
+                }
+            }
+
+            const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>('MJ: MCP Server Connections');
+            entity.NewRecord();
+            entity.MCPServerID = this.ConnectionForm.MCPServerID;
+            entity.Name = this.ConnectionForm.Name.trim();
+            entity.Description = this.ConnectionForm.Description?.trim() || null;
+            entity.Status = this.ConnectionForm.Status as MJMCPServerConnectionEntity['Status'];
+            entity.CredentialID = credentialID;
+            entity.AutoSyncTools = true;
+            entity.LogToolCalls = true;
+            entity.LogInputParameters = true;
+            entity.LogOutputContent = true;
+            const saved = await entity.Save();
+            if (!saved) throw new Error(entity.LatestResult?.CompleteMessage ?? 'Save failed');
+            this.ShowConnectionDialog = false;
+            await this.loadAllData();
+        } catch (err) {
+            this.ConnectionFormError = err instanceof Error ? err.message : String(err);
+        } finally {
+            this.ConnectionFormSaving = false;
+            this.cdr.detectChanges();
+        }
     }
 
     public editConnection(connection: MCPConnectionData): void {
@@ -1216,10 +1462,12 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 // Sort tools within group
                 this.sortTools(tools);
 
+                // Part 3.4 — auto-collapse groups exceeding the threshold
+                const startExpanded = tools.length <= this.AUTO_COLLAPSE_THRESHOLD;
                 this.ServerGroups.push({
                     server,
                     tools,
-                    expanded: true // Start expanded
+                    expanded: startExpanded
                 });
             }
         }
@@ -1287,6 +1535,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             this.TestToolConnectionID = null;
         }
 
+        this.TestStep = 'select';
+        this.TestExecutionResult = null;
+        this.testUpdateFilteredLists();
         this.ShowTestToolDialog = true;
         this.cdr.detectChanges();
     }
@@ -1295,11 +1546,401 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Close Test Tool dialog
      */
     public onTestToolDialogClose(): void {
-        this.ShowTestToolDialog = false;
-        this.TestToolServerID = null;
+        this.testCloseDialog();
+    }
+
+    // ========================================
+    // Inline Test Tool Methods
+    // ========================================
+
+    private testUpdateFilteredLists(): void {
+        if (this.TestToolServerID) {
+            this.TestFilteredConnections = this.connections.filter(
+                c => UUIDsEqual(c.MCPServerID, this.TestToolServerID!) && c.Status === 'Active'
+            );
+            this.TestFilteredTools = this.tools.filter(
+                t => UUIDsEqual(t.MCPServerID, this.TestToolServerID!) && t.Status === 'Active'
+            );
+            if (this.TestFilteredConnections.length > 0 && !this.TestToolConnectionID) {
+                this.TestToolConnectionID = this.TestFilteredConnections[0].ID;
+            }
+        } else {
+            this.TestFilteredConnections = [];
+            this.TestFilteredTools = [];
+        }
+    }
+
+    public onTestServerChange(value: string): void {
+        this.TestToolServerID = value || null;
         this.TestToolConnectionID = null;
         this.TestToolID = null;
+        this.testUpdateFilteredLists();
         this.cdr.detectChanges();
+    }
+
+    public onTestConnectionChange(value: string): void {
+        this.TestToolConnectionID = value || null;
+    }
+
+    public onTestToolSelectChange(value: string): void {
+        this.TestToolID = value || null;
+    }
+
+    public get TestCanProceed(): boolean {
+        return !!this.TestToolServerID && !!this.TestToolConnectionID && !!this.TestToolID;
+    }
+
+    public testProceedToConfig(): void {
+        if (!this.TestCanProceed) return;
+        this.TestSelectedTool = this.tools.find(t => UUIDsEqual(t.ID, this.TestToolID!)) ?? null;
+        if (!this.TestSelectedTool) return;
+        this.testParseSchema();
+        this.TestStep = 'configure';
+        this.cdr.detectChanges();
+    }
+
+    private testParseSchema(): void {
+        this.TestParamConfigs = [];
+        this.TestParamValues = {};
+        if (!this.TestSelectedTool?.InputSchema) return;
+        try {
+            const schema = JSON.parse(this.TestSelectedTool.InputSchema) as {
+                properties?: Record<string, { type?: string | string[]; description?: string; enum?: unknown[] }>;
+                required?: string[];
+            };
+            const required = schema.required ?? [];
+            for (const [name, prop] of Object.entries(schema.properties ?? {})) {
+                const rawType = prop.type;
+                const type = Array.isArray(rawType)
+                    ? (rawType.filter(t => t !== 'null')[0] ?? 'string')
+                    : (rawType ?? 'string');
+                this.TestParamConfigs.push({
+                    name, type, description: prop.description ?? '',
+                    required: required.includes(name), enumValues: prop.enum ?? []
+                });
+                this.TestParamValues[name] = '';
+            }
+            this.TestParamConfigs.sort((a, b) => (a.required === b.required ? 0 : a.required ? -1 : 1));
+        } catch (e) {
+            console.error('Failed to parse tool schema', e);
+        }
+    }
+
+    public testSetParam(name: string, value: string): void {
+        this.TestParamValues[name] = value;
+    }
+
+    public get TestIsValid(): boolean {
+        return this.TestParamConfigs.filter(p => p.required).every(p => !!this.TestParamValues[p.name]);
+    }
+
+    public async testExecuteTool(): Promise<void> {
+        if (!this.TestIsValid || !this.TestToolConnectionID || !this.TestToolID) return;
+        this.TestIsExecuting = true;
+        this.cdr.detectChanges();
+
+        const inputArgs: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(this.TestParamValues)) {
+            if (v !== '') inputArgs[k] = v;
+        }
+
+        const mutation = gql`
+            mutation ExecuteMCPTool($input: ExecuteMCPToolInput!) {
+                ExecuteMCPTool(input: $input) { Success ErrorMessage Result DurationMs }
+            }
+        `;
+
+        try {
+            const result = await GraphQLDataProvider.Instance.ExecuteGQL(mutation, {
+                input: {
+                    ConnectionID: this.TestToolConnectionID,
+                    ToolID: this.TestToolID,
+                    ToolName: this.TestSelectedTool?.ToolName,
+                    InputArgs: JSON.stringify(inputArgs)
+                }
+            });
+            this.TestExecutionResult = result?.ExecuteMCPTool ?? { Success: false, ErrorMessage: 'No result returned' };
+        } catch (e) {
+            this.TestExecutionResult = { Success: false, ErrorMessage: e instanceof Error ? e.message : String(e) };
+        } finally {
+            this.TestIsExecuting = false;
+            this.TestStep = 'results';
+            this.cdr.detectChanges();
+        }
+    }
+
+    public testGoBack(): void {
+        this.TestStep = this.TestStep === 'results' ? 'configure' : 'select';
+        this.cdr.detectChanges();
+    }
+
+    public testRunAgain(): void {
+        this.TestExecutionResult = null;
+        this.TestStep = 'configure';
+        this.cdr.detectChanges();
+    }
+
+    public testCloseDialog(): void {
+        this.ShowTestToolDialog = false;
+        this.TestStep = 'select';
+        this.TestSelectedTool = null;
+        this.TestParamConfigs = [];
+        this.TestParamValues = {};
+        this.TestExecutionResult = null;
+        this.cdr.detectChanges();
+    }
+
+    public formatTestResult(result: unknown): string {
+        if (result == null) return '';
+        if (typeof result === 'string') return result;
+        try {
+            return JSON.stringify(result, null, 2);
+        } catch {
+            return String(result);
+        }
+    }
+
+    /**
+     * Part 3.2 — loads a page of tools via the paginated resolver.
+     * Uses the same GraphQLDataProvider + gql pattern as testExecuteTool above.
+     */
+    public async loadToolsPage(reset: boolean = true): Promise<void> {
+        if (this.toolsLoading) return;
+        this.toolsLoading = true;
+        if (reset) {
+            this.toolsSkip = 0;
+            this.pagedTools = [];
+        }
+        try {
+            const filters = this.filters$.value;
+            const query = gql`
+                query GetMCPToolsPage($skip: Int!, $take: Int!, $searchText: String, $serverID: String, $category: String) {
+                    GetMCPToolsPage(skip: $skip, take: $take, searchText: $searchText, serverID: $serverID, category: $category) {
+                        items { ID MCPServerID ToolName ToolTitle ToolDescription Status ServerName }
+                        totalCount
+                        hasMore
+                    }
+                }
+            `;
+            const result = await GraphQLDataProvider.Instance.ExecuteGQL(query, {
+                skip: this.toolsSkip,
+                take: this.toolsPageSize,
+                searchText: filters.searchTerm || null,
+                serverID: (filters.toolsServer && filters.toolsServer !== 'all') ? filters.toolsServer : null,
+                category: (filters.toolsCategory && filters.toolsCategory !== 'all') ? filters.toolsCategory : null
+            });
+            const page = result?.GetMCPToolsPage;
+            if (page) {
+                this.pagedTools = reset ? page.items : [...this.pagedTools, ...page.items];
+                this.toolsTotalCount = page.totalCount;
+                this.toolsSkip = this.pagedTools.length;
+            }
+        } catch (e) {
+            console.error('[MCPDashboard] loadToolsPage failed:', e);
+        } finally {
+            this.toolsLoading = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public onToolsScrolledIndexChange(index: number): void {
+        if (!this.useScalablePagination || this.toolsLoading) return;
+        if (this.pagedTools.length >= this.toolsTotalCount) return;
+        if (index + 20 >= this.pagedTools.length) {
+            this.loadToolsPage(false);
+        }
+    }
+
+    public toggleScalableMode(enabled: boolean): void {
+        this.useScalablePagination = enabled;
+        if (enabled && this.pagedTools.length === 0) {
+            this.loadToolsPage(true);
+            this.loadToolCounts();
+        }
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Part 3.4 — fetch global + per-server + per-category counts (used for badges
+     * and to populate the category filter dropdown). Respects current search filter.
+     */
+    public async loadToolCounts(): Promise<void> {
+        try {
+            const filters = this.filters$.value;
+            const query = gql`
+                query GetMCPToolCounts($serverID: String, $searchText: String) {
+                    GetMCPToolCounts(serverID: $serverID, searchText: $searchText) {
+                        totalCount
+                        countByServer { serverID serverName count }
+                        countByCategory { category count }
+                    }
+                }
+            `;
+            const result = await GraphQLDataProvider.Instance.ExecuteGQL(query, {
+                serverID: (filters.toolsServer && filters.toolsServer !== 'all') ? filters.toolsServer : null,
+                searchText: filters.searchTerm || null
+            });
+            const counts = result?.GetMCPToolCounts;
+            if (counts) {
+                this.toolsGlobalCount = counts.totalCount;
+                this.toolCountByServer = {};
+                (counts.countByServer || []).forEach((r: { serverID: string; count: number }) => {
+                    this.toolCountByServer[r.serverID] = r.count;
+                });
+                this.toolsAvailableCategories = (counts.countByCategory || [])
+                    .filter((c: { category: string }) => c.category && c.category.length > 0)
+                    .sort((a: { category: string }, b: { category: string }) => a.category.localeCompare(b.category));
+                // Available servers derived from the servers list (already loaded)
+                this.toolsAvailableServers = this.servers.map(s => ({ ID: s.ID, Name: s.Name }));
+                this.cdr.detectChanges();
+            }
+        } catch (e) {
+            console.warn('[MCPDashboard] loadToolCounts failed:', e);
+        }
+    }
+
+    /** Part 3.4 — returns tool count for a server (falls back to ServerGroups length for legacy view) */
+    public getServerToolCount(serverID: string): number {
+        return this.toolCountByServer[serverID] ?? this.tools.filter(t => UUIDsEqual(t.MCPServerID, serverID)).length;
+    }
+
+    public trackPagedTool(_index: number, tool: MCPToolSummary): string {
+        return tool.ID;
+    }
+
+    /** Part 3.6 — client-side favorites-only filter applied to the currently loaded page */
+    public get visiblePagedTools(): MCPToolSummary[] {
+        const f = this.filters$.value;
+        if (f.favoritesOnly) {
+            return this.pagedTools.filter(t => this.favoritedToolIDs.has(t.ID));
+        }
+        return this.pagedTools;
+    }
+
+    /** Part 3.5 — recently used tool IDs derived from execution logs (dedup, max 5) */
+    public get TestRecentToolIDs(): string[] {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const log of this.executionLogs) {
+            if (!log.ToolID) continue;
+            if (seen.has(log.ToolID)) continue;
+            seen.add(log.ToolID);
+            out.push(log.ToolID);
+            if (out.length >= 5) break;
+        }
+        return out;
+    }
+
+    /** Part 3.5 — Test dialog combobox: filtered tools with recent-first ordering */
+    public get TestComboboxTools(): MCPToolData[] {
+        const term = this.TestToolSearch.trim().toLowerCase();
+        const base = this.TestFilteredTools.filter(t =>
+            !term ||
+            t.ToolName.toLowerCase().includes(term) ||
+            (t.ToolTitle && t.ToolTitle.toLowerCase().includes(term)) ||
+            (t.ToolDescription && t.ToolDescription.toLowerCase().includes(term))
+        );
+        const recentSet = new Set(this.TestRecentToolIDs);
+        const recent = base.filter(t => recentSet.has(t.ID));
+        const rest = base.filter(t => !recentSet.has(t.ID));
+        return [...recent, ...rest];
+    }
+
+    public isRecentTestTool(toolID: string): boolean {
+        return this.TestRecentToolIDs.includes(toolID);
+    }
+
+    public onTestToolSearchChange(value: string): void {
+        this.TestToolSearch = value;
+        this.cdr.detectChanges();
+    }
+
+    public pickTestTool(toolID: string): void {
+        this.TestToolID = toolID;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Part 3.6 — load the current user's favorited tool IDs.
+     */
+    public async loadFavorites(): Promise<void> {
+        try {
+            const md = new Metadata();
+            const currentUserID = md.CurrentUser?.ID;
+            if (!currentUserID) return;
+            const rv = new RunView();
+            const result = await rv.RunView<{ MCPServerToolID: string }>({
+                EntityName: 'MJ: MCP Tool Favorites',
+                ExtraFilter: `UserID='${currentUserID}'`,
+                Fields: ['MCPServerToolID'],
+                ResultType: 'simple'
+            });
+            if (result.Success) {
+                this.favoritedToolIDs = new Set((result.Results || []).map(r => r.MCPServerToolID));
+                this.cdr.detectChanges();
+            }
+        } catch (e) {
+            console.warn('[MCPDashboard] loadFavorites failed:', e);
+        }
+    }
+
+    public isFavorited(toolID: string): boolean {
+        return this.favoritedToolIDs.has(toolID);
+    }
+
+    public async toggleFavorite(toolID: string, event?: Event): Promise<void> {
+        if (event) event.stopPropagation();
+        const md = new Metadata();
+        const currentUserID = md.CurrentUser?.ID;
+        if (!currentUserID) return;
+        const isFav = this.favoritedToolIDs.has(toolID);
+        try {
+            if (isFav) {
+                // Delete the favorite row
+                const rv = new RunView();
+                const existing = await rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ: MCP Tool Favorites',
+                    ExtraFilter: `UserID='${currentUserID}' AND MCPServerToolID='${toolID}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple'
+                });
+                if (existing.Success && existing.Results.length > 0) {
+                    const entity = await md.GetEntityObject<MJMCPToolFavoriteEntity>('MJ: MCP Tool Favorites');
+                    await entity.Load(existing.Results[0].ID);
+                    const deleted = await entity.Delete();
+                    if (!deleted) {
+                        console.warn('[MCPDashboard] Delete favorite failed:', entity.LatestResult?.CompleteMessage);
+                        return;
+                    }
+                }
+                this.favoritedToolIDs.delete(toolID);
+            } else {
+                const entity = await md.GetEntityObject<MJMCPToolFavoriteEntity>('MJ: MCP Tool Favorites');
+                entity.NewRecord();
+                entity.UserID = currentUserID;
+                entity.MCPServerToolID = toolID;
+                const saved = await entity.Save();
+                if (!saved) {
+                    console.warn('[MCPDashboard] Save favorite failed:', entity.LatestResult?.CompleteMessage);
+                    return;
+                }
+                this.favoritedToolIDs.add(toolID);
+            }
+            // Force a new Set instance so Angular change detection picks it up
+            this.favoritedToolIDs = new Set(this.favoritedToolIDs);
+            this.cdr.detectChanges();
+        } catch (e) {
+            console.error('[MCPDashboard] toggleFavorite failed:', e);
+        }
+    }
+
+    public formatLogJson(value: string | null | undefined): string {
+        if (!value) return '';
+        try {
+            return JSON.stringify(JSON.parse(value), null, 2);
+        } catch {
+            return value;
+        }
     }
 
     /**
