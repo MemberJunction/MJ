@@ -1,5 +1,89 @@
 # @memberjunction/sql-converter
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.27.0
+- @memberjunction/sqlglot-ts@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.26.0
+- @memberjunction/sqlglot-ts@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.25.0
+- @memberjunction/sqlglot-ts@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.24.0
+- @memberjunction/sqlglot-ts@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.23.0
+- @memberjunction/sqlglot-ts@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.22.0
+- @memberjunction/sqlglot-ts@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.21.0
+- @memberjunction/sqlglot-ts@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.20.0
+- @memberjunction/sqlglot-ts@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.19.0
+- @memberjunction/sqlglot-ts@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.18.0
+- @memberjunction/sqlglot-ts@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.17.0
+- @memberjunction/sqlglot-ts@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.16.0
+- @memberjunction/sqlglot-ts@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

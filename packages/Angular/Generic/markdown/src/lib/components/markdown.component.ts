@@ -11,16 +11,11 @@ import {
   ViewEncapsulation,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
-  AfterViewInit
+  AfterViewInit,
 } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MarkdownService } from '../services/markdown.service';
-import {
-  MarkdownConfig,
-  DEFAULT_MARKDOWN_CONFIG,
-  MarkdownRenderEvent,
-  HeadingInfo
-} from '../types/markdown.types';
+import { MarkdownConfig, DEFAULT_MARKDOWN_CONFIG, MarkdownRenderEvent, HeadingInfo } from '../types/markdown.types';
 // Collapsible section toggle is handled inline in setupCollapsibleListeners
 
 /**
@@ -48,16 +43,10 @@ import {
 @Component({
   selector: 'mj-markdown',
   standalone: false,
-  template: `
-    <div
-      class="mj-markdown-container"
-      [class]="containerClass"
-      [innerHTML]="renderedContent">
-    </div>
-  `,
+  template: ` <div class="mj-markdown-container" [class]="containerClass" [innerHTML]="renderedContent"></div> `,
   styleUrls: ['./markdown.component.css'],
   encapsulation: ViewEncapsulation.None, // Allow styles to penetrate into rendered content
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   /**
@@ -157,9 +146,10 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Input() containerClass: string = '';
 
   /**
-   * Mermaid theme
+   * Mermaid theme.
+   * 'auto' (default) detects light/dark from the document's data-theme attribute.
    */
-  @Input() mermaidTheme: 'default' | 'dark' | 'forest' | 'neutral' | 'base' = DEFAULT_MARKDOWN_CONFIG.mermaidTheme;
+  @Input() mermaidTheme: 'auto' | 'default' | 'dark' | 'forest' | 'neutral' | 'base' = DEFAULT_MARKDOWN_CONFIG.mermaidTheme;
 
   /**
    * Whether to sanitize HTML output
@@ -197,12 +187,13 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   private renderStartTime: number = 0;
   private hasMermaid: boolean = false;
   private hasCodeBlocks: boolean = false;
+  private themeObserver: MutationObserver | null = null;
 
   constructor(
     private elementRef: ElementRef<HTMLElement>,
     private sanitizer: DomSanitizer,
     private markdownService: MarkdownService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -236,10 +227,13 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     if (this.data) {
       this.postRenderProcessing();
     }
+
+    this.setupThemeObserver();
   }
 
   ngOnDestroy(): void {
-    // Cleanup any event listeners
+    this.themeObserver?.disconnect();
+    this.themeObserver = null;
     this.cleanupEventListeners();
   }
 
@@ -272,7 +266,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       enableHeadingIds: this.enableHeadingIds,
       headingIdPrefix: this.headingIdPrefix,
       mermaidTheme: this.mermaidTheme,
-      sanitize: this.sanitize
+      sanitize: this.sanitize,
     };
 
     // Configure service and parse
@@ -349,7 +343,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       renderTime,
       hasMermaid: this.hasMermaid,
       hasCodeBlocks: this.hasCodeBlocks,
-      headingIds
+      headingIds,
     });
   }
 
@@ -525,7 +519,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
           id,
           text,
           level,
-          raw: text
+          raw: text,
         });
       });
     });
@@ -546,6 +540,39 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
         }
       });
     });
+  }
+
+  /**
+   * Watch the document's data-theme attribute for changes.
+   * When the app theme switches (light ↔ dark) and mermaidTheme is 'auto',
+   * re-render so mermaid diagrams pick up the new theme.
+   */
+  private setupThemeObserver(): void {
+    if (typeof MutationObserver === 'undefined') return;
+
+    this.themeObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'data-theme') {
+          this.onThemeAttributeChanged();
+          break;
+        }
+      }
+    });
+
+    this.themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+  }
+
+  /**
+   * Called when data-theme changes on the document root.
+   * Triggers a full re-render when mermaid auto-theming is active.
+   */
+  private onThemeAttributeChanged(): void {
+    if (this.mermaidTheme === 'auto' && this.enableMermaid && this.hasMermaid && this.data) {
+      this.render();
+    }
   }
 
   /**
@@ -592,6 +619,59 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
    * Removes <script> tags, on* event handlers, and javascript: URLs.
    */
   private stripJavaScript(html: string): string {
+    if (typeof DOMParser === 'undefined') {
+      // Fallback for environments without DOMParser
+      return this.fallbackStripJavaScript(html);
+    }
+
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString('<body>' + html + '</body>', 'text/html');
+
+      const cleanNode = (node: Element) => {
+        const tagName = node.tagName.toLowerCase();
+
+        // Remove unsafe elements completely
+        if (tagName === 'script' || tagName === 'iframe' || tagName === 'object' || tagName === 'embed' || tagName === 'base') {
+          node.parentNode?.removeChild(node);
+          return;
+        }
+
+        if (node.attributes) {
+          const attrs = Array.from(node.attributes);
+          for (const attr of attrs) {
+            const name = attr.name.toLowerCase();
+            // Remove whitespace and control chars from value to prevent bypasses like "java\nscript:"
+            // eslint-disable-next-line no-control-regex
+            const valueStr = attr.value.toLowerCase().replace(/[\s\x00-\x20]/g, '');
+
+            if (
+              name.startsWith('on') ||
+              ((name === 'href' || name === 'xlink:href' || name === 'src' || name === 'action' || name === 'formaction') &&
+                (valueStr.startsWith('javascript:') || valueStr.startsWith('vbscript:') || valueStr.startsWith('data:text/html')))
+            ) {
+              node.removeAttribute(attr.name);
+            }
+          }
+        }
+
+        // Recursively clean children (Array.from prevents issues with live collections when removing nodes)
+        Array.from(node.children).forEach(cleanNode);
+      };
+
+      Array.from(doc.body.children).forEach(cleanNode);
+      return doc.body.innerHTML;
+    } catch (e) {
+      // If parsing fails completely, fall back to aggressive regex
+      return this.fallbackStripJavaScript(html);
+    }
+  }
+
+  /**
+   * Fallback regex-based sanitization when DOMParser is unavailable.
+   * Note: This is less robust than DOM parsing and should only be a fallback.
+   */
+  private fallbackStripJavaScript(html: string): string {
     // Remove <script> tags and their content
     html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
 
@@ -600,11 +680,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     html = html.replace(/\s+on\w+\s*=\s*[^\s>]+/gi, '');
 
     // Remove javascript: URLs from href and src attributes
-    html = html.replace(/\s+href\s*=\s*["']javascript:[^"']*["']/gi, '');
-    html = html.replace(/\s+src\s*=\s*["']javascript:[^"']*["']/gi, '');
+    html = html.replace(/\s+href\s*=\s*["']?javascript:[^"'>\s]*["']?/gi, '');
+    html = html.replace(/\s+src\s*=\s*["']?javascript:[^"'>\s]*["']?/gi, '');
 
     // Remove data: URLs that could contain scripts (data:text/html, etc.)
-    html = html.replace(/\s+src\s*=\s*["']data:text\/html[^"']*["']/gi, '');
+    html = html.replace(/\s+src\s*=\s*["']?data:text\/html[^"'>\s]*["']?/gi, '');
 
     return html;
   }

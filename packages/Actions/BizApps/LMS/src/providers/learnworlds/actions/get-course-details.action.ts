@@ -264,8 +264,8 @@ export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
         courseDetails.totalModules = courseDetails.modules.length;
         courseDetails.totalLessons = courseDetails.modules.reduce((sum, mod) => sum + (mod.lessons?.length || 0), 0);
       }
-    } catch {
-      // Sections endpoint might not be available for this course type
+    } catch (error) {
+      console.warn(`Sections endpoint unavailable for course ${courseId}:`, error instanceof Error ? error.message : error);
     }
   }
 
@@ -283,8 +283,8 @@ export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
       if (rawInstructors.length > 0) {
         courseDetails.instructors = this.formatInstructors(rawInstructors);
       }
-    } catch {
-      // Instructors endpoint might not be available
+    } catch (error) {
+      console.warn(`Instructors endpoint unavailable for course ${courseId}:`, error instanceof Error ? error.message : error);
     }
   }
 
@@ -306,8 +306,8 @@ export class GetLearnWorldsCourseDetailsAction extends LearnWorldsBaseAction {
           totalRevenue: statsData.total_revenue || 0,
         } satisfies CourseStats;
       }
-    } catch {
-      // Stats endpoint might not be available for all plan types
+    } catch (error) {
+      console.warn(`Stats endpoint unavailable for course ${courseId}:`, error instanceof Error ? error.message : error);
     }
   }
 

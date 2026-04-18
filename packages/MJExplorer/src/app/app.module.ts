@@ -98,6 +98,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
       provide: APP_INITIALIZER,
       useFactory: (lazyRegistry: LazyModuleRegistry) => () => {
         lazyRegistry.RegisterBulk(LAZY_FEATURE_CONFIG);
+        lazyRegistry.WireToClassFactory();
       },
       deps: [LazyModuleRegistry],
       multi: true

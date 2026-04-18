@@ -46,6 +46,13 @@
   line-height: 34px;
 }
 
+.optional-hint {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  font-weight: 400;
+  margin-left: 4px;
+}
+
 .no-items-message, .no-views-message {
   padding: 12px;
   background-color: var(--mj-bg-surface-card);

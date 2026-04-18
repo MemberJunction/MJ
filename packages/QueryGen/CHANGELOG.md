@@ -1,5 +1,201 @@
 # @memberjunction/query-gen
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/sqlserver-dataprovider@5.27.0
+- @memberjunction/ai@5.27.0
+- @memberjunction/ai-core-plus@5.27.0
+- @memberjunction/aiengine@5.27.0
+- @memberjunction/ai-prompts@5.27.0
+- @memberjunction/ai-vectors-memory@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/aiengine@5.26.0
+  - @memberjunction/ai-prompts@5.26.0
+  - @memberjunction/sqlserver-dataprovider@5.26.0
+  - @memberjunction/ai-vectors-memory@5.26.0
+  - @memberjunction/ai@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/aiengine@5.25.0
+  - @memberjunction/ai-prompts@5.25.0
+  - @memberjunction/ai-vectors-memory@5.25.0
+  - @memberjunction/sqlserver-dataprovider@5.25.0
+  - @memberjunction/ai@5.25.0
+  - @memberjunction/global@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/ai-prompts@5.24.0
+  - @memberjunction/ai-vectors-memory@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/aiengine@5.24.0
+  - @memberjunction/sqlserver-dataprovider@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ai-prompts@5.23.0
+  - @memberjunction/sqlserver-dataprovider@5.23.0
+  - @memberjunction/ai-vectors-memory@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/ai@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ai-prompts@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ai-vectors-memory@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/sqlserver-dataprovider@5.22.0
+  - @memberjunction/ai@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+- Updated dependencies [76cd2bc]
+- Updated dependencies [845c980]
+  - @memberjunction/ai-vectors-memory@5.21.0
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/ai-prompts@5.21.0
+  - @memberjunction/sqlserver-dataprovider@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/ai@5.21.0
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/sqlserver-dataprovider@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/ai-prompts@5.20.0
+  - @memberjunction/ai-vectors-memory@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/ai-prompts@5.19.0
+- @memberjunction/ai-vectors-memory@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/sqlserver-dataprovider@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [322dac6]
+- Updated dependencies [48f7296]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/ai-prompts@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/sqlserver-dataprovider@5.18.0
+  - @memberjunction/ai@5.18.0
+  - @memberjunction/ai-vectors-memory@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [9881045]
+  - @memberjunction/core@5.17.0
+  - @memberjunction/sqlserver-dataprovider@5.17.0
+  - @memberjunction/ai-core-plus@5.17.0
+  - @memberjunction/aiengine@5.17.0
+  - @memberjunction/ai-prompts@5.17.0
+  - @memberjunction/ai-vectors-memory@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/ai@5.17.0
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/ai-core-plus@5.16.0
+  - @memberjunction/aiengine@5.16.0
+  - @memberjunction/ai-prompts@5.16.0
+  - @memberjunction/ai-vectors-memory@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/sqlserver-dataprovider@5.16.0
+  - @memberjunction/ai@5.16.0
+  - @memberjunction/global@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

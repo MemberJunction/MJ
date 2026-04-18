@@ -8,37 +8,36 @@
     
     <div class="filters-row">
       <div class="search-container">
-        <kendo-textbox 
-          placeholder="Search actions..." 
-          [value]="searchTerm$.value"
-          (valueChange)="onSearchChange($event)">
-          <ng-template kendoTextBoxPrefixTemplate>
-            <i class="fa-solid fa-search"></i>
-          </ng-template>
-        </kendo-textbox>
+        <div class="search-input-wrapper">
+          <i class="fa-solid fa-search search-icon"></i>
+          <input type="text" class="mj-input"
+            placeholder="Search actions..."
+            [value]="searchTerm$.value"
+            (input)="onSearchChange($any($event.target).value)" />
+        </div>
       </div>
       
       <div class="filter-group">
-        <kendo-dropdownlist 
-          [data]="statusOptions"
-          textField="text"
-          valueField="value"
-          [valuePrimitive]="true"
-          [value]="selectedStatus$.value"
-          (valueChange)="onStatusFilterChange($event)">
-        </kendo-dropdownlist>
+        <mj-dropdown
+          [Data]="statusOptions"
+          TextField="text"
+          ValueField="value"
+          [ValuePrimitive]="true"
+          [ngModel]="selectedStatus$.value"
+          (ValueChange)="onStatusFilterChange($any($event))">
+        </mj-dropdown>
+
+        <mj-dropdown
+          [Data]="typeOptions"
+          TextField="text"
+          ValueField="value"
+          [ValuePrimitive]="true"
+          [ngModel]="selectedType$.value"
+          (ValueChange)="onTypeFilterChange($any($event))">
+        </mj-dropdown>
         
-        <kendo-dropdownlist 
-          [data]="typeOptions"
-          textField="text"
-          valueField="value"
-          [valuePrimitive]="true"
-          [value]="selectedType$.value"
-          (valueChange)="onTypeFilterChange($event)">
-        </kendo-dropdownlist>
-        
-        <button kendoButton
-          [fillMode]="'outline'"
+        <button mjButton
+          variant="outline"
           (click)="toggleCategoryTree()"
           class="category-filter-button">
           <i class="fa-solid fa-folder-tree"></i>
@@ -58,18 +57,18 @@
     <div class="category-tree-panel">
       <div class="tree-header">
         <h3>Select Category</h3>
-        <button kendoButton
-          [fillMode]="'flat'"
-          [size]="'small'"
+        <button mjButton
+          variant="flat"
+          size="sm"
           (click)="toggleCategoryTree()">
           <i class="fa-solid fa-times"></i>
         </button>
       </div>
       
       <div class="tree-actions">
-        <button kendoButton
-          [fillMode]="'flat'"
-          [size]="'small'"
+        <button mjButton
+          variant="flat"
+          size="sm"
           (click)="selectCategory('all')"
           [class.selected]="selectedCategory$.value === 'all'">
           <i class="fa-solid fa-folder-open"></i>
@@ -85,17 +84,17 @@
       <ng-template #categoryTreeTemplate let-nodes="nodes">
         @for (node of nodes; track node.category.ID) {
           <div class="tree-node" [style.padding-left.px]="node.level * 20">
-            <button kendoButton
-              [fillMode]="'flat'"
-              [size]="'small'"
+            <button mjButton
+              variant="flat"
+              size="sm"
               class="tree-node-button"
               [class.selected]="selectedCategory$.value === node.category.ID"
               (click)="selectCategory(node.category.ID)">
               
               @if (node.children.length > 0) {
-                <button kendoButton
-                  [fillMode]="'flat'"
-                  [size]="'small'"
+                <button mjButton
+                  variant="flat"
+                  size="sm"
                   class="expand-button"
                   (click)="toggleCategoryExpanded(node.category.ID); $event.stopPropagation()">
                   @if (isCategoryExpanded(node.category.ID)) {
@@ -135,17 +134,13 @@
             <div class="action-header">
               <h3 class="action-name">{{ action.Name }}</h3>
               <div class="action-badges">
-                <kendo-chip 
-                  [themeColor]="getStatusColor(action.Status)"
-                  [size]="'small'">
+                <span class="status-chip" [attr.data-color]="getStatusColor(action.Status)">
                   {{ action.Status }}
-                </kendo-chip>
+                </span>
                 @if (action.Type === 'Generated') {
-                  <kendo-chip 
-                    themeColor="info"
-                    [size]="'small'">
+                  <span class="status-chip" data-color="info">
                     <i class="fa-solid fa-robot"></i> AI Generated
-                  </kendo-chip>
+                  </span>
                 }
               </div>
             </div>
@@ -175,8 +170,8 @@
           </div>
           
           <div class="action-actions">
-            <button kendoButton 
-              [fillMode]="'flat'"
+            <button mjButton
+              variant="flat"
               (click)="$event.stopPropagation()">
               <i class="fa-solid fa-ellipsis-vertical"></i>
             </button>

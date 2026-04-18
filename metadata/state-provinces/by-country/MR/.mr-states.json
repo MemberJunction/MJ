@@ -1,0 +1,275 @@
+[
+  {
+    "fields": {
+      "Name": "Adrar",
+      "Code": "07",
+      "ISO3166_2": "MR-07",
+      "Latitude": 20.7634,
+      "Longitude": -10.3339,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-07.geojson",
+      "CommonAliases": [
+        "Adrar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "C66B81EF-7F1B-4182-8FDF-A6AEADD12CF9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.971Z",
+      "checksum": "c369acace90fc61ec89057cc32e8f84a2a3b054c01fb5ac264673217a5014592"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Assaba",
+      "Code": "03",
+      "ISO3166_2": "MR-03",
+      "Latitude": 16.5835,
+      "Longitude": -11.7106,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-03.geojson",
+      "CommonAliases": [
+        "Assaba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "FF9E243C-998A-445C-891C-CB9201C985A6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.987Z",
+      "checksum": "927584ded47ae9771df503cc21066e550e42cd062eff1e95bff9c5bc2a0640d6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brakna",
+      "Code": "05",
+      "ISO3166_2": "MR-05",
+      "Latitude": 17.0824,
+      "Longitude": -13.6298,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-05.geojson",
+      "CommonAliases": [
+        "Brakna"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "7E64B372-6B6F-4DE8-8628-71BC910319E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.001Z",
+      "checksum": "3c168b48695c5adf0b6486c1d39702793a2460dd18648e2e3deb834a50239549"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dakhlet Nouādhibou",
+      "Code": "08",
+      "ISO3166_2": "MR-08",
+      "Latitude": 20.8429,
+      "Longitude": -16.1354,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-08.geojson",
+      "CommonAliases": [
+        "Dakhlet Nouādhibou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "6F18DC2E-E249-4056-B59D-CD691F517016"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.017Z",
+      "checksum": "6a3798cd58502d328e3b017c4a9756446c0789c77364802e43605e105c2b3dd7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gorgol",
+      "Code": "04",
+      "ISO3166_2": "MR-04",
+      "Latitude": 16.0296,
+      "Longitude": -12.8565,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-04.geojson",
+      "CommonAliases": [
+        "Gorgol"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "15FEEFE8-264F-48B2-A86B-029B556B6CF3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.033Z",
+      "checksum": "aedfc58f1ddc342f7370feedba169a80ab59f77601e1ac9e973480f763d84b97"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guidimaka",
+      "Code": "10",
+      "ISO3166_2": "MR-10",
+      "Latitude": 15.3352,
+      "Longitude": -12.1235,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-10.geojson",
+      "CommonAliases": [
+        "Guidimaka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "5AF3113F-8AE8-4AF5-A097-B15C104DF1CF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.048Z",
+      "checksum": "3923acff46eb5192c4f5838ff694c9b3696d439e4ff7391ba0616f14d06b1862"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hodh ech Chargui",
+      "Code": "01",
+      "ISO3166_2": "MR-01",
+      "Latitude": 18.0225,
+      "Longitude": -7.1916,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-01.geojson",
+      "CommonAliases": [
+        "Hodh ech Chargui"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "E024E452-591A-467F-A0C8-57D86C779BCE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.062Z",
+      "checksum": "14cdba9dacbdd55768db35d276844f7caeb8a2186d8e40fcd9f41052e7d4e400"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hodh el Gharbi",
+      "Code": "02",
+      "ISO3166_2": "MR-02",
+      "Latitude": 16.4832,
+      "Longitude": -9.6914,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-02.geojson",
+      "CommonAliases": [
+        "Hodh el Gharbi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "E52D1911-9BAB-40CC-A21A-148C9BD95151"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.078Z",
+      "checksum": "5ba607adabdfe787da9e92e1043cb5d9e03b20f2a81a9b7d06ac4bf8775f8903"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inchiri",
+      "Code": "12",
+      "ISO3166_2": "MR-12",
+      "Latitude": 20.0734,
+      "Longitude": -15.345,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-12.geojson",
+      "CommonAliases": [
+        "Inchiri"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "EFFE9AB8-F318-4A14-8971-C957337309B5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.094Z",
+      "checksum": "54987bf6cb1c66b27b952a3f027d61f27a502e97e3ac7f7a9cf8694e7afd39d6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nouakchott",
+      "Code": "NKC",
+      "ISO3166_2": "MR-NKC",
+      "Latitude": 18.139,
+      "Longitude": -15.92,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-NKC.geojson",
+      "CommonAliases": [
+        "Nouakchott"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "21F226B6-2BEF-49AE-9D6E-9879ECD688E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.110Z",
+      "checksum": "34eb86f3bec57c13ac8b4f71e96f39395f50173e2cd8b56fc7ce1449717492b3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tagant",
+      "Code": "09",
+      "ISO3166_2": "MR-09",
+      "Latitude": 18.6165,
+      "Longitude": -10.3284,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-09.geojson",
+      "CommonAliases": [
+        "Tagant"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "CCC043A8-B3EE-4A6B-AC82-907C630E45B5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.143Z",
+      "checksum": "54dacb498bbcaae94223160ceaedaf496e37cbcb9cdef164d229f08d6f36faf7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tiris Zemmour",
+      "Code": "11",
+      "ISO3166_2": "MR-11",
+      "Latitude": 24.3349,
+      "Longitude": -8.9942,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-11.geojson",
+      "CommonAliases": [
+        "Tiris Zemmour"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "B3AA93BC-A7DD-4ECE-8836-D5800A8F57F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.160Z",
+      "checksum": "4c06d5154d6ad951e7b53b9f78732f00a8ce2533cea5f3c628a0aea60d56bae3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trarza",
+      "Code": "06",
+      "ISO3166_2": "MR-06",
+      "Latitude": 17.9339,
+      "Longitude": -14.6057,
+      "BoundaryGeoJSON": "@file:by-country/MR/boundaries/MR-06.geojson",
+      "CommonAliases": [
+        "Trarza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MR"
+    },
+    "primaryKey": {
+      "ID": "0C8388ED-B57C-41A1-8154-68BCA91013B6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.174Z",
+      "checksum": "30c63d0cb0cd8a80e96172a98a41a539154273c8dbb4bac74de28431ec589cb3"
+    }
+  }
+]

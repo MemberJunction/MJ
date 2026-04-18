@@ -1,5 +1,77 @@
 # Change Log - @memberjunction/ng-tabstrip
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

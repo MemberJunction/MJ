@@ -33,6 +33,18 @@ export class ApplicationManager {
   private loading$ = new BehaviorSubject<boolean>(false);
   private initialized = false;
 
+  /** Resolves when loadApplications() has completed successfully */
+  private _readyResolve!: () => void;
+  private _readyPromise = new Promise<void>(resolve => { this._readyResolve = resolve; });
+
+  /**
+   * Returns a promise that resolves when applications have been loaded and the manager is ready.
+   * Safe to call multiple times — returns the same promise.
+   */
+  WhenReady(): Promise<void> {
+    return this._readyPromise;
+  }
+
   /**
    * Observable of user's active applications (filtered and ordered by UserApplication)
    */
@@ -80,6 +92,15 @@ export class ApplicationManager {
    */
   GetAllSystemApps(): BaseApplication[] {
     return this.allApplications$.value;
+  }
+
+  /**
+   * Get all applications the current user's roles grant access to.
+   * Filters out apps where ApplicationRole records exist but the user's roles lack CanAccess.
+   */
+  GetAuthorizedSystemApps(): BaseApplication[] {
+    const engine = UserInfoEngine.Instance;
+    return this.allApplications$.value.filter(app => engine.UserHasApplicationAccess(app.ID));
   }
 
   /**
@@ -155,7 +176,7 @@ export class ApplicationManager {
 
     for (const userApp of userApps) {
       const app = appMap.get(userApp.ApplicationID);
-      if (app && userApp.IsActive) {
+      if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,
           userAppId: userApp.ID,
@@ -227,10 +248,10 @@ export class ApplicationManager {
 
         let app: BaseApplication | null;
         if (appInfo.ClassName && appInfo.ClassName.trim().length > 0) {
-          app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
+          app = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseApplication>(
             BaseApplication,
             appInfo.ClassName,
-            args          
+            args
           );
         }
         else {
@@ -251,8 +272,11 @@ export class ApplicationManager {
       await this.loadUserApplicationConfig();
 
       this.initialized = true;
+      this._readyResolve();
 
     } catch (error) {
+      // Resolve even on failure so waiters don't hang forever — they'll see initialized=false
+      this._readyResolve();
       LogError('Failed to load applications:', undefined, error instanceof Error ? error.message : String(error));
       throw error;
     } finally {
@@ -291,7 +315,7 @@ export class ApplicationManager {
 
     for (const userApp of userApps) {
       const app = appMap.get(userApp.ApplicationID);
-      if (app && userApp.IsActive) {
+      if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,
           userAppId: userApp.ID,
@@ -475,6 +499,15 @@ export class ApplicationManager {
         };
       }
 
+      case 'not_authorized':
+        return {
+          status: 'not_authorized',
+          message: `You do not have the required role to access "${appInfo.Name}".`,
+          appName: appInfo.Name,
+          appId: appInfo.ID,
+          canInstall: false
+        };
+
       case 'installed_inactive':
         return {
           status: 'disabled',
@@ -547,7 +580,7 @@ export class ApplicationManager {
  */
 export interface AppAccessResult {
   /** Status of the access check */
-  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled';
+  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled' | 'not_authorized';
   /** Human-readable message describing the access status */
   message: string;
   /** Name of the application (if found) */

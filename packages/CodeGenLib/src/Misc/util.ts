@@ -152,3 +152,46 @@ export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_Cr
         return 0;
     });
 }
+
+/**
+ * Sorts EntityRelationshipInfo items deterministically. Delegates to
+ * {@link sortBySequenceAndCreatedAt} for the primary sort, then applies an
+ * additional tiebreaker on RelatedEntity (the related entity's display name)
+ * before RelatedEntityJoinField. This is needed because EntityRelationshipInfo
+ * has no `Name` property, so the generic sort's Name tiebreaker is skipped,
+ * and batch-inserted relationships often share identical Sequence +
+ * __mj_CreatedAt values.
+ */
+export function sortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt?: Date; RelatedEntity?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
+    return [...items].sort((a, b) => {
+        // Primary sort by Sequence
+        if (a.Sequence !== b.Sequence) {
+            return a.Sequence - b.Sequence;
+        }
+        // Secondary sort by __mj_CreatedAt
+        if (a.__mj_CreatedAt && b.__mj_CreatedAt) {
+            const timeDiff = new Date(a.__mj_CreatedAt).getTime() - new Date(b.__mj_CreatedAt).getTime();
+            if (timeDiff !== 0) return timeDiff;
+        }
+        if (a.__mj_CreatedAt && !b.__mj_CreatedAt) return -1;
+        if (!a.__mj_CreatedAt && b.__mj_CreatedAt) return 1;
+
+        // Tiebreaker: RelatedEntity name (the display name of the related entity)
+        if (a.RelatedEntity != null && b.RelatedEntity != null) {
+            const cmp = a.RelatedEntity.localeCompare(b.RelatedEntity);
+            if (cmp !== 0) return cmp;
+        }
+
+        // Tiebreaker: RelatedEntityJoinField (FK column name)
+        if (a.RelatedEntityJoinField != null && b.RelatedEntityJoinField != null) {
+            const cmp = a.RelatedEntityJoinField.localeCompare(b.RelatedEntityJoinField);
+            if (cmp !== 0) return cmp;
+        }
+
+        // Last resort: ID
+        if (a.ID != null && b.ID != null) {
+            return a.ID.localeCompare(b.ID);
+        }
+        return 0;
+    });
+}

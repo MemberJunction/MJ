@@ -5,7 +5,7 @@
             <input type="checkbox" 
                    [(ngModel)]="showSystem" 
                    (ngModelChange)="onFilterChange()"
-                   kendoCheckBox />
+                   class="mj-checkbox" />
             <span class="filter-label">
                 <i class="fa-solid fa-cog" [style.color]="getRoleColor('system')"></i>
                 System
@@ -16,7 +16,7 @@
             <input type="checkbox" 
                    [(ngModel)]="showUser" 
                    (ngModelChange)="onFilterChange()"
-                   kendoCheckBox />
+                   class="mj-checkbox" />
             <span class="filter-label">
                 <i class="fa-solid fa-user" [style.color]="getRoleColor('user')"></i>
                 User
@@ -27,7 +27,7 @@
             <input type="checkbox" 
                    [(ngModel)]="showAssistant" 
                    (ngModelChange)="onFilterChange()"
-                   kendoCheckBox />
+                   class="mj-checkbox" />
             <span class="filter-label">
                 <i class="fa-solid fa-robot" [style.color]="getRoleColor('assistant')"></i>
                 Assistant
@@ -60,10 +60,15 @@
                                 </span>
                             </div>
                             <div class="message-actions">
-                                <button class="action-button" type="button" 
+                                <button class="action-button" type="button"
                                         (click)="copyMessageContent(item.message.content); $event.stopPropagation()"
                                         title="Copy message content">
                                     <i class="fa-solid fa-copy"></i>
+                                </button>
+                                <button class="action-button" type="button"
+                                        (click)="openFullScreen(getContentString(item.message.content), getContentLanguage(item.message.content), getRoleLabel(item.message.role) + ' #' + item.sequenceNumber); $event.stopPropagation()"
+                                        title="View full screen">
+                                    <i class="fa-solid fa-expand"></i>
                                 </button>
                                 <button class="toggle-button" type="button">
                                     <i [class]="item.expanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
@@ -94,9 +99,16 @@
                                                         <i class="fa-solid fa-tag"></i>
                                                         {{ part.key }}
                                                     </div>
-                                                    <button class="content-part-toggle" type="button">
-                                                        <i [class]="part.expanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
-                                                    </button>
+                                                    <div class="content-part-actions">
+                                                        <button class="content-part-toggle" type="button"
+                                                                (click)="openFullScreen(part.value, part.language, part.key); $event.stopPropagation()"
+                                                                title="View full screen">
+                                                            <i class="fa-solid fa-expand"></i>
+                                                        </button>
+                                                        <button class="content-part-toggle" type="button">
+                                                            <i [class]="part.expanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 @if (part.expanded) {
                                                     <div class="content-part-editor">
@@ -119,4 +131,38 @@
             }
         }
     </div>
+
+    <!-- Full-screen overlay -->
+    @if (FullScreenContent) {
+        <div class="fullscreen-overlay" (click)="closeFullScreen()">
+            <div class="fullscreen-container" (click)="$event.stopPropagation()">
+                <div class="fullscreen-header">
+                    <span class="fullscreen-title">
+                        <i class="fa-solid fa-expand"></i>
+                        {{ FullScreenTitle }}
+                    </span>
+                    <div class="fullscreen-actions">
+                        <button class="action-button" type="button"
+                                (click)="copyToClipboard(FullScreenContent)"
+                                title="Copy content">
+                            <i class="fa-solid fa-copy"></i>
+                        </button>
+                        <button class="action-button" type="button"
+                                (click)="closeFullScreen()"
+                                title="Close">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="fullscreen-body">
+                    <mj-code-editor
+                        [value]="FullScreenContent"
+                        [readonly]="true"
+                        [language]="FullScreenLanguage"
+                        style="height: 100%; width: 100%;">
+                    </mj-code-editor>
+                </div>
+            </div>
+        </div>
+    }
 </div>

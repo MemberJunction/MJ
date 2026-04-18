@@ -171,6 +171,14 @@ const advancedGenerationFeatureSchema = z.object({
 export type AdvancedGeneration = z.infer<typeof advancedGenerationSchema>;
 const advancedGenerationSchema = z.object({
   enableAdvancedGeneration: z.boolean().default(true),
+  /** When false (default), CodeGen will NOT auto-enable FullTextSearchEnabled on entities or fields,
+   *  even if the AI smart field analysis recommends it. FTS requires database-level infrastructure
+   *  (full-text catalogs, indexes, installed FTS components) that may not be present. Admins should
+   *  enable this explicitly only when their database supports full-text search. */
+  allowFullTextSearchAutoUpdate: z.boolean().default(false),
+  /** Number of entities to process in parallel during advanced generation (default: 5).
+   *  Higher values speed up processing but increase concurrent LLM API calls. */
+  batchSize: z.number().min(1).default(5),
   // NOTE: AIVendor and AIModel have been removed. Model configuration is now per-prompt
   // in the AI Prompts table via the MJ: AI Prompt Models relationship.
   features: advancedGenerationFeatureSchema.array().default([
@@ -317,9 +325,42 @@ const sqlOutputConfigSchema = z.object({
   })).optional(),
 });
 
+const applicationRoleDefaultSchema = z.object({
+  RoleName: z.string(),
+  CanAccess: z.boolean(),
+  CanAdmin: z.boolean(),
+});
+
+/**
+ * Settings for an application role default
+ */
+export type ApplicationRoleDefault = z.infer<typeof applicationRoleDefaultSchema>;
+
+const applicationRoleDefaultsSchema = z.object({
+  AutoAddRolesForNewApplications: z.boolean().default(true),
+  Roles: applicationRoleDefaultSchema.array().default([
+    { RoleName: 'UI', CanAccess: true, CanAdmin: false },
+    { RoleName: 'Developer', CanAccess: true, CanAdmin: true },
+    { RoleName: 'Integration', CanAccess: true, CanAdmin: false },
+  ]),
+});
+
+/**
+ * Default role assignment settings for new applications
+ */
+export type ApplicationRoleDefaults = z.infer<typeof applicationRoleDefaultsSchema>;
+
 export type NewSchemaDefaults = z.infer<typeof newSchemaDefaultsSchema>;
 const newSchemaDefaultsSchema = z.object({
   CreateNewApplicationWithSchemaName: z.boolean().default(true),
+  ApplicationRoleDefaults: applicationRoleDefaultsSchema.default({
+    AutoAddRolesForNewApplications: true,
+    Roles: [
+      { RoleName: 'UI', CanAccess: true, CanAdmin: false },
+      { RoleName: 'Developer', CanAccess: true, CanAdmin: true },
+      { RoleName: 'Integration', CanAccess: true, CanAdmin: false },
+    ],
+  }),
 });
 
 const entityPermissionSchema = z.object({
@@ -357,6 +398,12 @@ const newEntityNameRulesBySchema = z.object({
   EntityNameSuffix: z.string().default(''),
 });
 
+export type AllowCachingBySchema = z.infer<typeof allowCachingBySchemaSchema>;
+const allowCachingBySchemaSchema = z.object({
+  SchemaName: z.string(),
+  AllowCaching: z.boolean(),
+});
+
 const newEntityDefaultsSchema = z.object({
   TrackRecordChanges: z.boolean().default(true),
   AuditRecordAccess: z.boolean().default(false),
@@ -366,12 +413,23 @@ const newEntityDefaultsSchema = z.object({
   AllowUpdateAPI: z.boolean().default(true),
   AllowDeleteAPI: z.boolean().default(true),
   AllowUserSearchAPI: z.boolean().default(true),
+  AllowCaching: z.boolean().default(false),
   CascadeDeletes: z.boolean().default(false),
   UserViewMaxRows: z.number().default(1000),
   AddToApplicationWithSchemaName: z.boolean().default(true),
   IncludeFirstNFieldsAsDefaultInView: z.number().default(5),
   PermissionDefaults: newEntityPermissionDefaultsSchema,
   NameRulesBySchema: newEntityNameRulesBySchema.array().default([]),
+  /**
+   * Per-schema overrides for the AllowCaching default. When CodeGen creates a new
+   * Entity row, the schema is matched (case-insensitive) against this list and the
+   * matching entry's AllowCaching value wins over the global AllowCaching default.
+   * Schema names support the `${mj_core_schema}` placeholder. Defaults to enabling
+   * caching for the MJ core schema.
+   */
+  AllowCachingBySchema: allowCachingBySchemaSchema.array().default([
+    { SchemaName: '${mj_core_schema}', AllowCaching: true },
+  ]),
 });
 
 
@@ -533,7 +591,8 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     AllowCreateAPI: true,
     AllowUpdateAPI: true,
     AllowDeleteAPI: true,
-    AllowUserSearchAPI: false,
+    AllowUserSearchAPI: true,
+    AllowCaching: false,
     CascadeDeletes: false,
     UserViewMaxRows: 1000,
     AddToApplicationWithSchemaName: true,
@@ -553,6 +612,9 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
         EntityNameSuffix: '',
       },
     ],
+    AllowCachingBySchema: [
+      { SchemaName: '${mj_core_schema}', AllowCaching: true },
+    ],
   },
   newEntityRelationshipDefaults: {
     AutomaticallyCreateRelationships: true,
@@ -560,6 +622,14 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   },
   newSchemaDefaults: {
     CreateNewApplicationWithSchemaName: true,
+    ApplicationRoleDefaults: {
+      AutoAddRolesForNewApplications: true,
+      Roles: [
+        { RoleName: 'UI', CanAccess: true, CanAdmin: false },
+        { RoleName: 'Developer', CanAccess: true, CanAdmin: true },
+        { RoleName: 'Integration', CanAccess: true, CanAdmin: false },
+      ],
+    },
   },
   excludeSchemas: ['sys', 'staging', '__mj'],
   excludeTables: [
@@ -578,6 +648,8 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   },
   advancedGeneration: {
     enableAdvancedGeneration: true,
+    allowFullTextSearchAutoUpdate: false,
+    batchSize: 5,
     features: [
       {
         name: 'EntityNames',

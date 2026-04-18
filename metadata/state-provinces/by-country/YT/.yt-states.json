@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Mayotte",
+      "Code": "YT",
+      "ISO3166_2": "YT-YT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mayotte"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=YT"
+    },
+    "primaryKey": {
+      "ID": "4C719171-A20E-4262-B3AA-DA23E0B9B585"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.084Z",
+      "checksum": "a22f438c78d87370fffae1c5a4fb9f11401d55c714e96059b12fc7d8df67a12c"
+    }
+  }
+]

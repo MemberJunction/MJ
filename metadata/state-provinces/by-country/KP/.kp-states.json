@@ -1,0 +1,254 @@
+[
+  {
+    "fields": {
+      "Name": "Chagang-do",
+      "Code": "CHA",
+      "ISO3166_2": "KP-CHA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chagang-do"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "8BF0211B-BF39-44DF-AD54-8F39FFF2798D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.775Z",
+      "checksum": "79249630a88eff134e01c901703a992e636b9a37d019d0932e0296c62221b56a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hamgyongbuk-do",
+      "Code": "HAB",
+      "ISO3166_2": "KP-HAB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Hamgyongbuk-do"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "FDD99CAA-FAA9-482F-A3BA-A3AA59534591"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.791Z",
+      "checksum": "872df0d00fc1b94863d27f86b190f3af006a6fbc601d327349a100c941bb304d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hamgyongnam-do",
+      "Code": "HAN",
+      "ISO3166_2": "KP-HAN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Hamgyongnam-do"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "BE0C91E2-AA9E-4BA2-BBEB-0318E43DDE26"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.807Z",
+      "checksum": "a2be1085fcfaeaa59265041db31d0b75084d937b39f3ef9f2d4c6ef2b9b5c988"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hwanghaebuk-do",
+      "Code": "HWB",
+      "ISO3166_2": "KP-HWB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Hwanghaebuk-do"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "07BF50C5-91B6-4E2A-BA7F-FD68719EA0BF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.823Z",
+      "checksum": "2262c77885633778fa9f8e5d4a41992c71c01929e6418c6916419453ae2669f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hwanghaenam-do",
+      "Code": "HWN",
+      "ISO3166_2": "KP-HWN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Hwanghaenam-do"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "A2FB965D-BBEE-4F01-BEC5-0E95B0ADD948"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.839Z",
+      "checksum": "d25c660303c2f79a41e8b70baa8eff418a95747037b7e262fa09efb60ad758db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaesong-si",
+      "Code": "KAE",
+      "ISO3166_2": "KP-KAE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kaesong-si"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "94060ABD-E370-40FB-8233-B3EC6980058B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.855Z",
+      "checksum": "dd0c26ccced1ad9eb3c8641e05c9fa56c0de843abc87568acedcb2a491ac4eb7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kangwon-do",
+      "Code": "KAN",
+      "ISO3166_2": "KP-KAN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kangwon-do"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "5EB0BEF4-33C6-42DA-93C4-3CFD81580D4A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.870Z",
+      "checksum": "eaaef897e3c71df8f951986cf576a840b09d27c8003655cbe87c23a8b234a3b3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nampo-si",
+      "Code": "NAM",
+      "ISO3166_2": "KP-NAM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Nampo-si"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "4E2A5E39-8ABF-42B6-88DE-3056EFC3CA34"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.886Z",
+      "checksum": "b3a100860f2ce893162541514d9f7760cc27db9a31f5bdc40d170e56ef25fef8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pyonganbuk-do",
+      "Code": "PYB",
+      "ISO3166_2": "KP-PYB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pyonganbuk-do"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "FA6F74DD-2E2A-4D87-8019-90608CEB00AD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.902Z",
+      "checksum": "8bc960b18731556adbd61b5d2a61aec15970c02edd8eed3faeb0ae195ad28f3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pyongannam-do",
+      "Code": "PYN",
+      "ISO3166_2": "KP-PYN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pyongannam-do"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "DF9C1D01-CF20-48F0-BFC4-8BD6FCB94FF9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.915Z",
+      "checksum": "632b42498c9d3bdd3741fb7220788f9a77a4abf005b7d74610cb6551aa8c2568"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pyongyang-si",
+      "Code": "PYO",
+      "ISO3166_2": "KP-PYO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pyongyang-si"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "7ACE6584-7334-47CE-9CF2-7A0294B5F18D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.949Z",
+      "checksum": "c9b3b038358a01b3fcfc2a7fcfd5722d06e33e5dc93d15298e5e8960d0eed3a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yanggang-do",
+      "Code": "YAN",
+      "ISO3166_2": "KP-YAN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Yanggang-do"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KP"
+    },
+    "primaryKey": {
+      "ID": "4DDC06DB-9BC2-4999-980F-3E1ED8B4CE4C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.963Z",
+      "checksum": "9a5dfcb3682ce781f389ec83d12e6169535329af9b20c5a1f3bac0226b969024"
+    }
+  }
+]

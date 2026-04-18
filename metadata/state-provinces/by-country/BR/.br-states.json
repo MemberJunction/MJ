@@ -1,0 +1,569 @@
+[
+  {
+    "fields": {
+      "Name": "Acre",
+      "Code": "AC",
+      "ISO3166_2": "BR-AC",
+      "Latitude": -9.0479,
+      "Longitude": -70.5265,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-AC.geojson",
+      "CommonAliases": [
+        "Acre"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "ECC57E41-3F06-4A63-AEAB-7FD2945D6709"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.745Z",
+      "checksum": "b54a746a415248c74ae5ff36b9de0a1f152893fe283bcf773c78ff53983ce1ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Alagoas",
+      "Code": "AL",
+      "ISO3166_2": "BR-AL",
+      "Latitude": -9.6612,
+      "Longitude": -36.6502,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-AL.geojson",
+      "CommonAliases": [
+        "Alagoas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "5A226F50-1A69-48A8-B4A1-7DA16B8DC6F6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.762Z",
+      "checksum": "c893791b062fe8454237fa5f1cdcfd804a8894217a67800d237a9e6e312ec930"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Amapá",
+      "Code": "AP",
+      "ISO3166_2": "BR-AP",
+      "Latitude": 1.3545,
+      "Longitude": -51.9162,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-AP.geojson",
+      "CommonAliases": [
+        "Amapá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "716008B7-BDF7-4A1C-BD47-8AFF29D55807"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.778Z",
+      "checksum": "a43bbd9cfef417a8d4ca5f690da18f67bd326cd811705c5f2717f73b62f608db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Amazonas",
+      "Code": "AM",
+      "ISO3166_2": "BR-AM",
+      "Latitude": -3.2002,
+      "Longitude": -59.4989,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-AM.geojson",
+      "CommonAliases": [
+        "Amazonas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "30A097EF-4C8D-4749-8331-C1ED25398A0C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.795Z",
+      "checksum": "9b77253436b16cfa75176bf745b6701d9e2698afb2b6cef261f8bc1c9710d5ab"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bahia",
+      "Code": "BA",
+      "ISO3166_2": "BR-BA",
+      "Latitude": -12.2853,
+      "Longitude": -41.9295,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-BA.geojson",
+      "CommonAliases": [
+        "Bahia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "FA106CE7-2BB6-4465-A37E-765795BB146F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.813Z",
+      "checksum": "6a9b75d1777d021078409dc26d13c13323a5bb96077b2dd6819021528292a59c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ceará",
+      "Code": "CE",
+      "ISO3166_2": "BR-CE",
+      "Latitude": -5.3265,
+      "Longitude": -39.7156,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-CE.geojson",
+      "CommonAliases": [
+        "Ceará"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "699F6B9A-CDF3-4161-B4A5-1C62FA84D171"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.829Z",
+      "checksum": "01fec6d175f5933c01c3f6bf67205ca63fe5f71aa8e059edd9a71d9c411aa12f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Distrito Federal",
+      "Code": "DF",
+      "ISO3166_2": "BR-DF",
+      "Latitude": -15.7754,
+      "Longitude": -47.7971,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-DF.geojson",
+      "CommonAliases": [
+        "Distrito Federal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "29318BD6-1EF0-4DA6-AAC7-81304428FA69"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.847Z",
+      "checksum": "c311df5cb01d3a8ddb87585b119562e95e1fc039852ca0388204392e5b750a57"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Espírito Santo",
+      "Code": "ES",
+      "ISO3166_2": "BR-ES",
+      "Latitude": -19.5688,
+      "Longitude": -40.1722,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-ES.geojson",
+      "CommonAliases": [
+        "Espírito Santo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "E854D564-50CD-4F3D-8124-AD3E9224517C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.863Z",
+      "checksum": "d3b5448a53193ba3e8ccd1a4940c6c9388a0718f2aaa25f23ccc14795f983de7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Goiás",
+      "Code": "GO",
+      "ISO3166_2": "BR-GO",
+      "Latitude": -15.9324,
+      "Longitude": -50.1393,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-GO.geojson",
+      "CommonAliases": [
+        "Goiás"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "A10C566E-C02D-4781-B2F0-F2181302DE28"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.880Z",
+      "checksum": "ebcbe66eb7cde868a1ce9fdca2e7921c481f1dba913598a583483b895bc394f1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maranhão",
+      "Code": "MA",
+      "ISO3166_2": "BR-MA",
+      "Latitude": -5.2086,
+      "Longitude": -45.393,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-MA.geojson",
+      "CommonAliases": [
+        "Maranhão"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "0C60F1E3-2FF5-48D1-B2FB-112F0FFA7351"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.894Z",
+      "checksum": "c01f983382cc55aa89aed7bfb0075bc3ed818e26f76f747fb32cc00e707eb0f7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mato Grosso",
+      "Code": "MT",
+      "ISO3166_2": "BR-MT",
+      "Latitude": -12.2115,
+      "Longitude": -55.5717,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-MT.geojson",
+      "CommonAliases": [
+        "Mato Grosso"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "638045D8-69EC-4750-9B89-E38071390609"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.950Z",
+      "checksum": "f6786937cf417ef84b27b3bb3b4c1b4f5ec757a4d76c6f5a15143a1939d31691"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mato Grosso do Sul",
+      "Code": "MS",
+      "ISO3166_2": "BR-MS",
+      "Latitude": -19.5853,
+      "Longitude": -54.4795,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-MS.geojson",
+      "CommonAliases": [
+        "Mato Grosso do Sul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "E357683E-EF8B-4A8A-AABC-FF2EBE2AF386"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.968Z",
+      "checksum": "98d64be7b47926b8dc47c890e4e829bf50b6806a6d7e1170422c2436c1fff565"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Minas Gerais",
+      "Code": "MG",
+      "ISO3166_2": "BR-MG",
+      "Latitude": -18.5265,
+      "Longitude": -44.1589,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-MG.geojson",
+      "CommonAliases": [
+        "Minas Gerais"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "5AC059E7-E9B3-4A82-A832-F80BEF999464"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.986Z",
+      "checksum": "452fd2a4cedfa185b3fe5e2f7c437da0ed85f397c9ca1e5a291e9b5bfcfe3234"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Paraná",
+      "Code": "PR",
+      "ISO3166_2": "BR-PR",
+      "Latitude": -24.4842,
+      "Longitude": -51.8149,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-PR.geojson",
+      "CommonAliases": [
+        "Paraná"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "69CF5C24-2C41-4DD5-B4A1-D38CECBD442A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.003Z",
+      "checksum": "45003b9e4846eb9a01cb3e49f728e9b3aed8a02f31fa0756d720aef3bf49a955"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Paraíba",
+      "Code": "PB",
+      "ISO3166_2": "BR-PB",
+      "Latitude": -7.1219,
+      "Longitude": -36.7247,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-PB.geojson",
+      "CommonAliases": [
+        "Paraíba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "7CEFEC08-5200-4E0B-B76A-087B4E70C5FA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.020Z",
+      "checksum": "d34a6be28de02a41dea736460847396bf4c971fdeb787e6a86f61f2644f71f37"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pará",
+      "Code": "PA",
+      "ISO3166_2": "BR-PA",
+      "Latitude": -4.7494,
+      "Longitude": -52.8973,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-PA.geojson",
+      "CommonAliases": [
+        "Pará"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "B4DA6BAC-73DF-4EEF-9823-2F799FE73B45"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.038Z",
+      "checksum": "cdae2a7e1430a0ceee21c179cdc44f900b53e9e5364a7771b35ad83752a4cab1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pernambuco",
+      "Code": "PE",
+      "ISO3166_2": "BR-PE",
+      "Latitude": -8.4116,
+      "Longitude": -37.592,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-PE.geojson",
+      "CommonAliases": [
+        "Pernambuco"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "E5D5766D-A14E-4379-AE2E-06C4A7001A04"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.055Z",
+      "checksum": "7dc452b168ffa565b0a4efe811eb152499bc4ca89625c8b903bd637f1d78a365"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Piauí",
+      "Code": "PI",
+      "ISO3166_2": "BR-PI",
+      "Latitude": -7.6993,
+      "Longitude": -42.5044,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-PI.geojson",
+      "CommonAliases": [
+        "Piauí"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "3590F181-E617-4815-8342-D47677CA1848"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.074Z",
+      "checksum": "465921fbc73f264e999383ea3cd3e486a4d0918dab864884eb6317321cb18832"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rio Grande do Norte",
+      "Code": "RN",
+      "ISO3166_2": "BR-RN",
+      "Latitude": -5.6781,
+      "Longitude": -36.4782,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-RN.geojson",
+      "CommonAliases": [
+        "Rio Grande do Norte"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "8FA130FE-8FFC-4B1C-9909-885ADC74FDBB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.090Z",
+      "checksum": "994b9a19369696d3714c0b8ce683f8d32034860e7f7e5bf66f147abb51828830"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rio Grande do Sul",
+      "Code": "RS",
+      "ISO3166_2": "BR-RS",
+      "Latitude": -29.8425,
+      "Longitude": -53.7681,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-RS.geojson",
+      "CommonAliases": [
+        "Rio Grande do Sul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "3A26509B-6B07-4A01-832E-6DB36B3A3E5E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.110Z",
+      "checksum": "6a7c25ab8eaed75377d1e60eb2f815fa550038fd422fdf1f0d6bea8be5c3b9f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rio de Janeiro",
+      "Code": "RJ",
+      "ISO3166_2": "BR-RJ",
+      "Latitude": -22.911,
+      "Longitude": -43.2094,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-RJ.geojson",
+      "CommonAliases": [
+        "Rio de Janeiro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "2C5C55EE-5A78-4DA5-93A6-3618739B9EBD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.167Z",
+      "checksum": "69df9993968c97f77f630ebbb41fea264f61c5be7b5e478796a06b9349ffada5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rondônia",
+      "Code": "RO",
+      "ISO3166_2": "BR-RO",
+      "Latitude": -10.9431,
+      "Longitude": -62.8278,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-RO.geojson",
+      "CommonAliases": [
+        "Rondônia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "8118AD14-3E99-4E16-81A2-9DD2D5087CE1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.185Z",
+      "checksum": "ca4bcda725bc77cadd32c40ae43efa9eb0145d05a3cf2a78bba8cdeec2182ed1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Roraima",
+      "Code": "RR",
+      "ISO3166_2": "BR-RR",
+      "Latitude": 2.1351,
+      "Longitude": -61.3632,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-RR.geojson",
+      "CommonAliases": [
+        "Roraima"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "4E211AFE-8750-4912-B28D-C5EAF906A009"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.204Z",
+      "checksum": "4fc8034e0fc37a9fbf071c2b5217aaeca3a00f4b1382b11b8b25e2516bde5dc6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santa Catarina",
+      "Code": "SC",
+      "ISO3166_2": "BR-SC",
+      "Latitude": -27.0628,
+      "Longitude": -51.115,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-SC.geojson",
+      "CommonAliases": [
+        "Santa Catarina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "93487008-14A5-440B-9813-131726C707C1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.223Z",
+      "checksum": "33d0142b7c1a514a9c03b6bc09c17647ea94e06f3f3957088490d258102b1785"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sergipe",
+      "Code": "SE",
+      "ISO3166_2": "BR-SE",
+      "Latitude": -10.6744,
+      "Longitude": -37.3774,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-SE.geojson",
+      "CommonAliases": [
+        "Sergipe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "57CA83C8-5263-4B60-922F-029568101155"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.240Z",
+      "checksum": "d41e641c4eb0813670dc7cc241174bfcf26e806774b1e3b34be74ae0456a94e1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "São Paulo",
+      "Code": "SP",
+      "ISO3166_2": "BR-SP",
+      "Latitude": -23.5505,
+      "Longitude": -46.6333,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-SP.geojson",
+      "CommonAliases": [
+        "São Paulo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "5B345BEC-F975-4E06-8321-22D7C631932E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.259Z",
+      "checksum": "91975bc4d9ca519e467d30bd07ca23dc604e1e8a789d4618062b7038f394abcb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tocantins",
+      "Code": "TO",
+      "ISO3166_2": "BR-TO",
+      "Latitude": -10.8855,
+      "Longitude": -48.3717,
+      "BoundaryGeoJSON": "@file:by-country/BR/boundaries/BR-TO.geojson",
+      "CommonAliases": [
+        "Tocantins"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BR"
+    },
+    "primaryKey": {
+      "ID": "1B4440F7-5E8D-43F7-AFD7-BC12C36AA711"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.273Z",
+      "checksum": "b7dad1ace26a9c7f285b8455b999140faf348a381c0cd920653d0b0824e33067"
+    }
+  }
+]

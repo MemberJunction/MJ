@@ -20,12 +20,12 @@
                 <p class="error-message">{{ ErrorMessage }}</p>
                 <div class="button-group">
                     @if (IsRetryable) {
-                        <button kendoButton (click)="onRetry()">
+                        <button mjButton variant="secondary" (click)="onRetry()">
                             <i class="fa-solid fa-rotate-right"></i>
                             Try Again
                         </button>
                     }
-                    <button kendoButton [look]="IsRetryable ? 'outline' : 'default'" (click)="onClose()">
+                    <button mjButton [variant]="IsRetryable ? 'outline' : 'secondary'" (click)="onClose()">
                         <i class="fa-solid fa-arrow-left"></i>
                         Return to Dashboard
                     </button>

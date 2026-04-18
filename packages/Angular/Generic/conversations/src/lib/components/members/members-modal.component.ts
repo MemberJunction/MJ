@@ -17,28 +17,31 @@ interface ConversationMember {
   selector: 'mj-members-modal',
   template: `
     @if (isVisible) {
-      <kendo-dialog
-        [title]="modalTitle"
-        [width]="600"
-        [height]="500"
-        (close)="onCancel()">
+      <mj-dialog
+        [Title]="modalTitle"
+        [Width]="600"
+        [Height]="500"
+        [Visible]="true"
+        (Close)="onCancel()">
         <div class="members-modal-content">
           <div class="add-member-section">
             <h4>Add Member</h4>
             <div class="add-member-form">
-              <kendo-textbox
-                [(value)]="newMemberEmail"
+              <input
+                type="text"
+                [(ngModel)]="newMemberEmail"
                 placeholder="Enter email address"
-                [style.flex]="1">
-              </kendo-textbox>
-              <kendo-dropdownlist
+                class="mj-textbox"
+                style="flex: 1;">
+              <select
                 [(ngModel)]="newMemberRole"
-                [data]="roleOptions"
-                [textField]="'label'"
-                [valueField]="'value'"
-                [style.width.px]="120">
-              </kendo-dropdownlist>
-              <button kendoButton [primary]="true" [disabled]="isLoading" (click)="onAddMember()">
+                class="mj-select"
+                style="width: 120px;">
+                @for (option of roleOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+              <button mjButton variant="primary" [disabled]="isLoading" (click)="onAddMember()">
                 Add
               </button>
             </div>
@@ -90,10 +93,10 @@ interface ConversationMember {
             </div>
           }
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton (click)="onCancel()">Close</button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        <mj-dialog-actions>
+          <button mjButton (click)="onCancel()">Close</button>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`
@@ -226,7 +229,7 @@ interface ConversationMember {
       border-radius: 4px;
     }
 
-    kendo-dialog-actions {
+    mj-dialog-actions {
       display: flex;
       justify-content: flex-end;
       padding: 15px 20px;

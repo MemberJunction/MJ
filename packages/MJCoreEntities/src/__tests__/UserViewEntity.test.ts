@@ -87,6 +87,16 @@ vi.mock('../generated/entity_subclasses', () => ({
         Fields: unknown[] = [];
         Set(_name: string, _value: unknown) { /* no-op */ }
         CheckPermissions() { return true; }
+
+        // Mock *Object accessors matching the CodeGen-generated pattern
+        get GridStateObject() { return this.GridState ? JSON.parse(this.GridState) : null; }
+        set GridStateObject(v: unknown) { this.GridState = v != null ? JSON.stringify(v) : null; }
+        get FilterStateObject() { return this.FilterState ? JSON.parse(this.FilterState) : null; }
+        set FilterStateObject(v: unknown) { this.FilterState = v != null ? JSON.stringify(v) : null; }
+        get SortStateObject() { return this.SortState ? JSON.parse(this.SortState) : null; }
+        set SortStateObject(v: unknown) { this.SortState = v != null ? JSON.stringify(v) : null; }
+        get DisplayStateObject() { return this.DisplayState ? JSON.parse(this.DisplayState) : null; }
+        set DisplayStateObject(v: unknown) { this.DisplayState = v != null ? JSON.stringify(v) : null; }
     },
 }));
 
@@ -118,7 +128,7 @@ import type {
     ViewDisplayState,
     ViewDisplayMode,
     ViewTimelineState,
-} from '../custom/UserViewEntity';
+} from '../custom/MJUserViewEntityExtended';
 
 // ============================================================================
 // Helper: create a MJUserViewEntityExtended with optional initial property values

@@ -16,6 +16,21 @@ interface RecordLabel {
   ItemCount: number;
 }
 
+/**
+ * Event payload emitted when the user requests to restore a previous version.
+ * The parent component is responsible for applying the old field values and saving.
+ */
+export interface RestoreVersionEvent {
+  /** The ID of the MJ: Record Changes record being restored */
+  VersionID: string;
+  /** When the version was created */
+  ChangedAt: Date;
+  /** User who made the change */
+  ChangedByUser: string;
+  /** Map of field name to old/new values from this change */
+  FieldChanges: Record<string, { OldValue: unknown; NewValue: unknown }>;
+}
+
 /** A single field change with type-aware rendering info */
 export interface FieldChangeInfo {
   field: string;
@@ -24,6 +39,15 @@ export interface FieldChangeInfo {
   newValue: string;
   fieldType: 'boolean' | 'date' | 'number' | 'text';
   diffHtml?: SafeHtml;
+}
+
+/** A single field in the restore preview, comparing version value vs current record value */
+export interface RestoreFieldDiff {
+  FieldName: string;
+  DisplayName: string;
+  VersionValue: string;
+  CurrentValue: string;
+  IsChanged: boolean;
 }
 
 /** A group of changes that share the same date */
@@ -46,10 +70,28 @@ export class RecordChangesComponent implements OnInit {
   @Output() dialogClosed = new EventEmitter();
   @Input() record!: BaseEntity;
 
+  /** Whether to show a "Restore" button on each historical version row. Default false. */
+  @Input() AllowRestore = false;
+
+  /**
+   * Emitted when the user clicks Restore on a historical version.
+   * The parent is responsible for loading old values into the record and saving.
+   */
+  @Output() RestoreRequested = new EventEmitter<RestoreVersionEvent>();
+
   viewData: MJRecordChangeEntity[] = [];
   filteredData: MJRecordChangeEntity[] = [];
   dateGroups: DateGroup[] = [];
   expandedItems: Set<string> = new Set();
+
+  /** The change record being previewed for restore, or null if no preview is active */
+  RestorePreview: MJRecordChangeEntity | null = null;
+
+  /** Parsed field-level diff for the restore preview */
+  RestorePreviewFields: RestoreFieldDiff[] = [];
+
+  /** Whether the restore operation is in progress */
+  IsRestoring = false;
 
   // Version label state
   RecordLabels: RecordLabel[] = [];
@@ -75,6 +117,18 @@ export class RecordChangesComponent implements OnInit {
       this.cdr.markForCheck();
       this.LoadRecordChanges(this.record.PrimaryKey, '', this.record.EntityInfo.Name);
       this.LoadRecordLabels();
+    }
+  }
+
+  /**
+   * Reloads the record changes list from the database.
+   * Called by the parent container after a save completes while the drawer is open.
+   */
+  public Refresh(): void {
+    if (this.record) {
+      this.IsLoading = true;
+      this.cdr.markForCheck();
+      this.LoadRecordChanges(this.record.PrimaryKey, '', this.record.EntityInfo.Name);
     }
   }
 
@@ -261,6 +315,122 @@ export class RecordChangesComponent implements OnInit {
       event.preventDefault();
       this.toggleExpansion(changeId);
     }
+  }
+
+  /**
+   * Opens the inline restore preview panel for a given change record.
+   * Computes a field-by-field diff between the version's old values and the current record.
+   */
+  OnRestoreVersion(change: MJRecordChangeEntity, event: MouseEvent): void {
+    event.stopPropagation(); // Prevent card toggle
+
+    this.RestorePreview = change;
+    this.RestorePreviewFields = this.buildRestorePreviewFields(change);
+    this.IsRestoring = false;
+    this.cdr.markForCheck();
+  }
+
+  /** Closes the restore preview panel without applying changes. */
+  CancelRestorePreview(): void {
+    this.RestorePreview = null;
+    this.RestorePreviewFields = [];
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Confirms the restore: emits a RestoreVersionEvent with the old field values
+   * so the parent (record-form-container) can apply them and save.
+   */
+  ConfirmRestore(): void {
+    if (!this.RestorePreview) return;
+
+    const change = this.RestorePreview;
+    const fieldChanges = this.parseFieldChanges(change);
+
+    this.IsRestoring = true;
+    this.cdr.markForCheck();
+
+    this.RestoreRequested.emit({
+      VersionID: change.ID,
+      ChangedAt: change.ChangedAt,
+      ChangedByUser: change.User || '',
+      FieldChanges: fieldChanges
+    });
+
+    // The parent will handle the actual save; we close the preview on completion.
+    // A brief delay allows the parent to process, then we reset.
+    setTimeout(() => {
+      this.RestorePreview = null;
+      this.RestorePreviewFields = [];
+      this.IsRestoring = false;
+      this.cdr.markForCheck();
+    }, 500);
+  }
+
+  /**
+   * Builds the diff list comparing version old values vs the current record.
+   */
+  private buildRestorePreviewFields(change: MJRecordChangeEntity): RestoreFieldDiff[] {
+    const changesJson = this.parseChangesJson(change);
+    if (!changesJson) return [];
+
+    const diffs: RestoreFieldDiff[] = [];
+    for (const key of Object.keys(changesJson)) {
+      const entry = changesJson[key];
+      const fieldName = entry.field || key;
+      const entityField = this.record.EntityInfo.Fields.find(
+        (f: EntityFieldInfo) => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase()
+      );
+
+      const isDateField = entityField?.TSType === EntityFieldTSType.Date;
+      const versionValue = this.formatChangeValue(entry.oldValue, isDateField);
+      const currentValue = this.getCurrentFieldValue(fieldName, isDateField);
+
+      diffs.push({
+        FieldName: fieldName,
+        DisplayName: entityField?.DisplayNameOrName || fieldName,
+        VersionValue: versionValue,
+        CurrentValue: currentValue,
+        IsChanged: versionValue !== currentValue
+      });
+    }
+
+    return diffs;
+  }
+
+  /** Gets the current value of a field from the live record, formatted for display. */
+  private getCurrentFieldValue(fieldName: string, isDateField: boolean): string {
+    const field = this.record.Fields.find(
+      f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase()
+    );
+    if (!field) return '';
+    return this.formatChangeValue(field.Value, isDateField);
+  }
+
+  /** Parses ChangesJSON into a structured map, returning null on failure. */
+  private parseChangesJson(change: MJRecordChangeEntity): Record<string, { field?: string; oldValue?: unknown; newValue?: unknown }> | null {
+    try {
+      return JSON.parse(change.ChangesJSON || '{}') as Record<string, { field?: string; oldValue?: unknown; newValue?: unknown }>;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Parses field changes into the RestoreVersionEvent format. */
+  private parseFieldChanges(change: MJRecordChangeEntity): Record<string, { OldValue: unknown; NewValue: unknown }> {
+    const fieldChanges: Record<string, { OldValue: unknown; NewValue: unknown }> = {};
+    const changesJson = this.parseChangesJson(change);
+    if (!changesJson) return fieldChanges;
+
+    for (const key of Object.keys(changesJson)) {
+      const entry = changesJson[key];
+      const fieldName = entry.field || key;
+      fieldChanges[fieldName] = {
+        OldValue: entry.oldValue,
+        NewValue: entry.newValue
+      };
+    }
+    return fieldChanges;
   }
 
   // ─── Date Grouping ─────────────────────────────────────────────

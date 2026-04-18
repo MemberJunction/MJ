@@ -61,13 +61,13 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
   public defaultConfig: ConfigurationWithParams | null = null;
 
   constructor(
-    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.loadData();
   }
 

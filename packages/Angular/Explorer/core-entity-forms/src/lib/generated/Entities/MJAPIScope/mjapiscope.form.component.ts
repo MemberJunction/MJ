@@ -20,8 +20,8 @@ export class MJAPIScopeFormComponent extends BaseFormComponent {
             { sectionKey: 'scopeHierarchy', sectionName: 'Scope Hierarchy', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAPIKeyScopes', sectionName: 'API Key Scopes', isExpanded: false },
-            { sectionKey: 'mJAPIScopes', sectionName: 'API Scopes', isExpanded: false },
-            { sectionKey: 'mJAPIApplicationScopes', sectionName: 'API Application Scopes', isExpanded: false }
+            { sectionKey: 'mJAPIApplicationScopes', sectionName: 'API Application Scopes', isExpanded: false },
+            { sectionKey: 'mJAPIScopes', sectionName: 'API Scopes', isExpanded: false }
         ]);
     }
 }

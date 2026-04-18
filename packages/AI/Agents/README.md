@@ -78,6 +78,7 @@ The core execution engine that all agents use. Handles:
 
 - Hierarchical prompt execution (agent type's system prompt as parent, agent's prompts as children)
 - Action execution through the MJ Actions framework
+- **Client tool invocation** for browser-side UI operations (navigate to records, switch tabs, show search results) via PubSub round-trip
 - Sub-agent orchestration with full context propagation
 - Conversation context management with automatic message compaction
 - Memory retrieval (notes and examples) with optional reranking
@@ -117,7 +118,8 @@ Abstract base that all agent types extend. Defines the `DetermineNextStep()` int
 | Step | Description |
 |---|---|
 | `Chat` | Send a message back to the user |
-| `Actions` | Execute one or more actions |
+| `Actions` | Execute one or more server-side actions |
+| `ClientTools` | Invoke browser-side tools (navigate, switch tabs, show results) |
 | `SubAgents` | Delegate to sub-agents |
 | `MoreInfo` | Ask the user for additional information |
 | `Retry` | Retry the current step (e.g., after validation failure) |
@@ -294,21 +296,22 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
-## Human-in-the-Loop (HITL)
+## Documentation
 
-MemberJunction agents support **human-in-the-loop feedback requests** — a mechanism for agents to pause execution and request human input before proceeding. This enables approval workflows, quality review gates, and collaborative decision-making between agents and humans.
+Detailed guides are available in the [`docs/`](./docs/) directory:
 
-Key capabilities:
-- **Assignment strategies**: 5-level resolution chain (per-invocation → agent type → category tree → request type → fallback) determines who receives each request
-- **Agent categories**: Hierarchical category tree with inherited assignment strategies
-- **Request types**: Configurable request types (Approval, Review, Input, Escalation, Custom) with response schemas
-- **Request lifecycle**: Pending → Assigned → In Progress → Completed/Expired/Cancelled with full audit trail
-
-For the complete guide including architecture diagrams, integration examples, and API reference, see [HUMAN_IN_THE_LOOP.md](./HUMAN_IN_THE_LOOP.md).
-
-## Architecture Documentation
-
-For multi-tenant memory scoping (notes/examples), see [AGENT_MEMORY_SCOPING.md](./AGENT_MEMORY_SCOPING.md).
+| Guide | Description |
+|---|---|
+| [Actions Guide](./docs/actions-guide.md) | Action discovery, execution, result lifecycle, expiration/compaction, context recovery |
+| [Client Tools Guide](./docs/CLIENT_TOOLS_GUIDE.md) | Browser-side tool invocation, runtime decoration, timeout config, prompt design, security |
+| [Sub-Agents Guide](./docs/sub-agents-guide.md) | Child agents, related agents, payload flow, context propagation, loops |
+| [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md) | Feedback requests, assignment strategies, request lifecycle |
+| [Agent Memory Scoping](./docs/AGENT_MEMORY_SCOPING.md) | Multi-tenant memory (notes/examples) with UserScope support |
+| [Iterative Operations](./docs/guide-to-iterative-operations-in-agents.md) | ForEach and While loop patterns, parallel execution |
+| [State Management](./docs/state-management.md) | Payload management, agent type state |
+| [Expression Context (PRD)](./docs/prd-expression-context-phase1.md) | Expression evaluation in agent contexts |
+| [Agent Profiles (Proposal)](./docs/agent-profiles-proposal.md) | Proposed agent profile system |
+| [Code Refactoring Notes](./docs/code-refactoring.md) | Internal refactoring notes |
 
 ## Re-exports
 
@@ -329,6 +332,38 @@ New code should import these directly from `@memberjunction/ai-reranker`.
 - `@memberjunction/aiengine` -- AIEngine for metadata and vector search
 - `@memberjunction/ai-core-plus` -- Shared types (ExecuteAgentParams, ExecuteAgentResult)
 - `@memberjunction/ai-engine-base` -- Base metadata cache and permissions
+## Storage Account Resolution
+
+When agents create file-based artifacts (PDF, Excel, Word), the system resolves which `FileStorageAccount` to use via a hierarchical chain. The first non-null value wins:
+
+| Priority | Source | Field |
+|----------|--------|-------|
+| 1 (highest) | Runtime | `ExecuteAgentParams.override.storageAccountId` |
+| 2 | Agent | `AIAgent.DefaultStorageAccountID` |
+| 3 | Category tree | `AIAgentCategory.DefaultStorageAccountID` (walks up `ParentID`) |
+| 4 (lowest) | Agent Type | `AIAgentType.DefaultStorageAccountID` |
+| Fallback | System | Single active account (if only one exists) |
+
+### How it works
+
+- `BaseAgent.getStorageAccountID(params)` implements the resolution logic. It is `protected` so subclasses can override it for custom routing.
+- The resolved ID is stored in `ExecuteAgentResult.resolvedStorageAccountId` and passed to `AgentRunner.ProcessFileArtifacts()` for upload routing.
+- `AgentRunner.uploadBase64ToStorage()` uses `FileStorageEngine.Instance.GetAccountWithProvider()` to get the account + provider, then `initializeDriverWithAccountCredentials()` for proper OAuth credential handling.
+
+### Startup validation
+
+`AIEngine.validateStorageAccountDefaults()` runs at server startup. If 2+ active storage accounts exist but agent types lack a `DefaultStorageAccountID`, it auto-assigns the highest-priority account and logs a prominent warning.
+
+### Configuration
+
+Set `DefaultStorageAccountID` at any level via the admin UI or metadata sync:
+- **Agent Type** -- broadest default (e.g., all Loop agents → Dropbox)
+- **Agent Category** -- business-domain default (e.g., Marketing → Box, Finance → SharePoint)
+- **Agent** -- per-agent override
+- **Runtime** -- `ExecuteAgentParams.override.storageAccountId` for programmatic callers
+
+## Dependencies
+
 - `@memberjunction/ai` -- Core AI abstractions
 - `@memberjunction/ai-reranker` -- Two-stage retrieval reranking
 - `@memberjunction/actions` -- Server-side action execution

@@ -96,51 +96,51 @@ export class TestHarnessWindowManagerService {
         });
         
         // Set component data
-        componentRef.instance.data = data;
-        
+        componentRef.instance.Data = data;
+
         // Handle window events
-        componentRef.instance.closeWindow.subscribe(() => {
+        componentRef.instance.CloseWindow.subscribe(() => {
             this.closeWindow(windowId);
             resultSubject.next({
                 success: true
             });
             resultSubject.complete();
         });
-        
+
         // Handle minimize event
-        componentRef.instance.minimizeWindow.subscribe(() => {
-            const title = componentRef.instance.windowTitle;
+        componentRef.instance.MinimizeWindow.subscribe(() => {
+            const title = componentRef.instance.WindowTitle;
             let icon: string | undefined = 'fa-solid fa-flask'; // default
             let iconUrl: string | undefined;
-            
+
             // Get the appropriate icon based on mode and entity
-            if (componentRef.instance.mode === 'agent' && componentRef.instance.agent) {
+            if (componentRef.instance.Mode === 'agent' && componentRef.instance.Agent) {
                 // For agents, use LogoURL since MJAIAgentEntityExtended doesn't have IconClass
-                if (componentRef.instance.agent.LogoURL) {
-                    iconUrl = componentRef.instance.agent.LogoURL;
+                if (componentRef.instance.Agent.LogoURL) {
+                    iconUrl = componentRef.instance.Agent.LogoURL;
                     icon = undefined; // Clear icon when using URL
                 } else {
                     icon = 'fa-solid fa-robot'; // Default agent icon
                 }
-            } else if (componentRef.instance.mode === 'prompt') {
+            } else if (componentRef.instance.Mode === 'prompt') {
                 icon = 'fa-solid fa-comment-dots'; // Default prompt icon
             }
-            
+
             // Add to dock with icon or iconUrl
             this.dockService.addWindow(windowId, title, icon, () => {
                 // Restore callback
-                componentRef.instance.restoreFromMinimized();
+                componentRef.instance.RestoreFromMinimized();
             }, iconUrl);
         });
-        
+
         // Handle restore event
-        componentRef.instance.restoreWindow.subscribe(() => {
+        componentRef.instance.RestoreWindow.subscribe(() => {
             // Remove from dock
             this.dockService.removeWindow(windowId);
         });
-        
+
         // Handle execution state changes
-        componentRef.instance.executionStateChange.subscribe((state) => {
+        componentRef.instance.ExecutionStateChange.subscribe((state) => {
             if (state.isExecuting) {
                 // Show indeterminate progress (spinning/pulsing)
                 this.dockService.updateWindowProgress(windowId, 50); // 50% for indeterminate animation

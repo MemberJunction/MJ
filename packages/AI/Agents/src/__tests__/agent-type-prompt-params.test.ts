@@ -170,6 +170,7 @@ const LOOP_AGENT_TYPE_SCHEMA = JSON.stringify({
         "includeMessageExpansionDocs": { "type": "boolean", "default": true, "description": "Include message expansion documentation." },
         "includeVariableRefsDocs": { "type": "boolean", "default": true, "description": "Include variable references documentation." },
         "includePayloadInPrompt": { "type": "boolean", "default": true, "description": "Include current payload state in prompt." },
+        "includeDateTimeInPrompt": { "type": "boolean", "default": true, "description": "Include current date/time in prompt." },
         "maxSubAgentsInPrompt": { "type": "integer", "default": -1, "description": "Max sub-agents to include in prompt." },
         "maxActionsInPrompt": { "type": "integer", "default": -1, "description": "Max actions to include in prompt." }
     }
@@ -371,6 +372,7 @@ describe('DEFAULT_LOOP_AGENT_PROMPT_PARAMS', () => {
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeMessageExpansionDocs).toBe(schemaDefaults.includeMessageExpansionDocs);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeVariableRefsDocs).toBe(schemaDefaults.includeVariableRefsDocs);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includePayloadInPrompt).toBe(schemaDefaults.includePayloadInPrompt);
+        expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeDateTimeInPrompt).toBe(schemaDefaults.includeDateTimeInPrompt);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.maxSubAgentsInPrompt).toBe(schemaDefaults.maxSubAgentsInPrompt);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.maxActionsInPrompt).toBe(schemaDefaults.maxActionsInPrompt);
     });

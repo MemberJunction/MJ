@@ -19,7 +19,7 @@
 
 /* Panel Container */
 .feedback-panel {
-  width: 450px;
+  width: 540px;
   height: 100%;
   background-color: var(--mj-bg-surface, #ffffff);
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
@@ -248,16 +248,38 @@
   align-items: center;
 }
 
+.star-wrapper {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.star-wrapper:hover .star {
+  transform: scale(1.2);
+  filter: brightness(1.1);
+}
+
+.star-zone {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 50%;
+  z-index: 1;
+}
+
+.star-zone-left {
+  left: 0;
+}
+
+.star-zone-right {
+  right: 0;
+}
+
 .star {
   font-size: 32px;
   color: #ffd700;
-  cursor: pointer;
   transition: all 0.2s ease;
-}
-
-.star:hover {
-  transform: scale(1.2);
-  filter: brightness(1.1);
+  pointer-events: none;
 }
 
 .star.fa-regular {

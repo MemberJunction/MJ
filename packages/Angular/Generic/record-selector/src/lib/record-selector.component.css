@@ -1,14 +1,63 @@
-.list-box {
-    width: 300px;
-    height: 300px;
+.record-selector {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
 }
 
-.k-listbox-actions-right {
-    margin-left: 10px;
+.record-selector-list {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  background: var(--mj-bg-surface);
+  overflow: hidden;
+}
+
+.list-header {
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-card);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.list-items {
+  flex: 1;
+  height: 300px;
+  overflow-y: auto;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--mj-text-primary);
+  font-size: 13px;
+  transition: background-color 0.1s;
+}
+
+.list-item:hover {
+  background-color: var(--mj-bg-surface-hover);
+}
+
+.list-item.active {
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 .item-icon {
-    font-size: 16px;
-    width: 25px;
-    margin-right: 5px;
+  font-size: 16px;
+  width: 25px;
+  margin-right: 5px;
+}
+
+.transfer-buttons {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
 }

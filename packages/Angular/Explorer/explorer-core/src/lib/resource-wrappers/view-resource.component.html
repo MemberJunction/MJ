@@ -49,21 +49,10 @@
             [entity]="entityInfo"
             [viewEntity]="viewEntity"
             [gridState]="gridState"
+            [viewMode]="configuredViewMode"
+            [mapRenderMode]="configuredMapRenderMode"
             (recordOpened)="onRecordOpened($any($event))"
             (dataLoaded)="onDataLoaded()">
         </mj-entity-viewer>
-
-        <!-- Hidden Excel Export Component -->
-        <kendo-excelexport
-            #excelExport
-            [data]="exportData"
-            [fileName]="exportFileName">
-            @for (column of exportColumns; track column.Name) {
-                <kendo-excelexport-column
-                    [field]="column.Name"
-                    [title]="column.DisplayName">
-                </kendo-excelexport-column>
-            }
-        </kendo-excelexport>
     }
 </div>

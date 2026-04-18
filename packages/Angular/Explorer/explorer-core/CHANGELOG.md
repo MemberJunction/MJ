@@ -1,5 +1,543 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.27.0
+
+### Patch Changes
+
+- 6fd2886: Add server connectivity heartbeat service with warning banner that alerts users when the API connection is lost.
+- Updated dependencies [a642e3f]
+- Updated dependencies [348decb]
+- Updated dependencies [4357090]
+- Updated dependencies [6fd2886]
+  - @memberjunction/ng-search@5.27.0
+  - @memberjunction/ng-dashboards@5.27.0
+  - @memberjunction/ng-conversations@5.27.0
+  - @memberjunction/ng-artifacts@5.27.0
+  - @memberjunction/ng-dashboard-viewer@5.27.0
+  - @memberjunction/ai-engine-base@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/ng-auth-services@5.27.0
+  - @memberjunction/ng-base-application@5.27.0
+  - @memberjunction/ng-entity-form-dialog@5.27.0
+  - @memberjunction/ng-entity-permissions@5.27.0
+  - @memberjunction/ng-explorer-settings@5.27.0
+  - @memberjunction/ng-list-detail-grid@5.27.0
+  - @memberjunction/ng-shared@5.27.0
+  - @memberjunction/ng-ai-test-harness@5.27.0
+  - @memberjunction/ng-base-forms@5.27.0
+  - @memberjunction/ng-container-directives@5.27.0
+  - @memberjunction/ng-entity-viewer@5.27.0
+  - @memberjunction/ng-export-service@5.27.0
+  - @memberjunction/ng-file-storage@5.27.0
+  - @memberjunction/ng-generic-dialog@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/ng-query-viewer@5.27.0
+  - @memberjunction/ng-record-changes@5.27.0
+  - @memberjunction/ng-record-selector@5.27.0
+  - @memberjunction/ng-record-tags@5.27.0
+  - @memberjunction/ng-resource-permissions@5.27.0
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/ng-ui-components@5.27.0
+  - @memberjunction/ng-user-avatar@5.27.0
+  - @memberjunction/ng-word-cloud@5.27.0
+  - @memberjunction/communication-types@5.27.0
+  - @memberjunction/entity-communications-client@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/export-engine@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/templates-base-types@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/ng-dashboard-viewer@5.26.0
+  - @memberjunction/ng-dashboards@5.26.0
+  - @memberjunction/ng-shared-generic@5.26.0
+  - @memberjunction/ng-ui-components@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-engine-base@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/ng-base-application@5.26.0
+  - @memberjunction/ng-entity-form-dialog@5.26.0
+  - @memberjunction/ng-entity-permissions@5.26.0
+  - @memberjunction/ng-explorer-settings@5.26.0
+  - @memberjunction/ng-list-detail-grid@5.26.0
+  - @memberjunction/ng-shared@5.26.0
+  - @memberjunction/ng-ai-test-harness@5.26.0
+  - @memberjunction/ng-artifacts@5.26.0
+  - @memberjunction/ng-base-forms@5.26.0
+  - @memberjunction/ng-conversations@5.26.0
+  - @memberjunction/ng-entity-viewer@5.26.0
+  - @memberjunction/ng-file-storage@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/ng-query-viewer@5.26.0
+  - @memberjunction/ng-record-changes@5.26.0
+  - @memberjunction/ng-record-selector@5.26.0
+  - @memberjunction/ng-record-tags@5.26.0
+  - @memberjunction/ng-resource-permissions@5.26.0
+  - @memberjunction/ng-search@5.26.0
+  - @memberjunction/ng-user-avatar@5.26.0
+  - @memberjunction/communication-types@5.26.0
+  - @memberjunction/entity-communications-client@5.26.0
+  - @memberjunction/graphql-dataprovider@5.26.0
+  - @memberjunction/templates-base-types@5.26.0
+  - @memberjunction/ng-generic-dialog@5.26.0
+  - @memberjunction/ng-auth-services@5.26.0
+  - @memberjunction/ng-container-directives@5.26.0
+  - @memberjunction/ng-export-service@5.26.0
+  - @memberjunction/ng-word-cloud@5.26.0
+  - @memberjunction/export-engine@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- a24ff53: no metadata/migration
+- 5e2a64f: no migration
+- 1eb9f6e: no migration/metadata
+- Updated dependencies [fc8cd52]
+- Updated dependencies [a24ff53]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [e96f683]
+- Updated dependencies [5e2a64f]
+- Updated dependencies [1eb9f6e]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/ng-conversations@5.25.0
+  - @memberjunction/ng-dashboards@5.25.0
+  - @memberjunction/ng-query-viewer@5.25.0
+  - @memberjunction/ng-ai-test-harness@5.25.0
+  - @memberjunction/ng-dashboard-viewer@5.25.0
+  - @memberjunction/ng-artifacts@5.25.0
+  - @memberjunction/ng-search@5.25.0
+  - @memberjunction/ng-entity-viewer@5.25.0
+  - @memberjunction/ai-engine-base@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/ng-auth-services@5.25.0
+  - @memberjunction/ng-base-application@5.25.0
+  - @memberjunction/ng-entity-form-dialog@5.25.0
+  - @memberjunction/ng-entity-permissions@5.25.0
+  - @memberjunction/ng-explorer-settings@5.25.0
+  - @memberjunction/ng-list-detail-grid@5.25.0
+  - @memberjunction/ng-shared@5.25.0
+  - @memberjunction/ng-base-forms@5.25.0
+  - @memberjunction/ng-container-directives@5.25.0
+  - @memberjunction/ng-file-storage@5.25.0
+  - @memberjunction/ng-notifications@5.25.0
+  - @memberjunction/ng-record-changes@5.25.0
+  - @memberjunction/ng-record-selector@5.25.0
+  - @memberjunction/ng-record-tags@5.25.0
+  - @memberjunction/ng-resource-permissions@5.25.0
+  - @memberjunction/ng-shared-generic@5.25.0
+  - @memberjunction/ng-user-avatar@5.25.0
+  - @memberjunction/communication-types@5.25.0
+  - @memberjunction/entity-communications-client@5.25.0
+  - @memberjunction/templates-base-types@5.25.0
+  - @memberjunction/ng-export-service@5.25.0
+  - @memberjunction/ng-generic-dialog@5.25.0
+  - @memberjunction/ng-ui-components@5.25.0
+  - @memberjunction/ng-word-cloud@5.25.0
+  - @memberjunction/export-engine@5.25.0
+  - @memberjunction/global@5.25.0
+
+## 5.24.0
+
+### Minor Changes
+
+- c318a0c: metadata + migrations in this PR == minor
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [3a35955]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/ng-record-tags@5.24.0
+  - @memberjunction/graphql-dataprovider@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/ng-auth-services@5.24.0
+  - @memberjunction/ng-dashboards@5.24.0
+  - @memberjunction/ng-artifacts@5.24.0
+  - @memberjunction/ai-engine-base@5.24.0
+  - @memberjunction/ng-ai-test-harness@5.24.0
+  - @memberjunction/ng-conversations@5.24.0
+  - @memberjunction/ng-base-forms@5.24.0
+  - @memberjunction/ng-explorer-settings@5.24.0
+  - @memberjunction/ng-shared@5.24.0
+  - @memberjunction/ng-file-storage@5.24.0
+  - @memberjunction/ng-notifications@5.24.0
+  - @memberjunction/entity-communications-client@5.24.0
+  - @memberjunction/ng-base-application@5.24.0
+  - @memberjunction/ng-entity-form-dialog@5.24.0
+  - @memberjunction/ng-entity-permissions@5.24.0
+  - @memberjunction/ng-list-detail-grid@5.24.0
+  - @memberjunction/ng-container-directives@5.24.0
+  - @memberjunction/ng-dashboard-viewer@5.24.0
+  - @memberjunction/ng-entity-viewer@5.24.0
+  - @memberjunction/ng-query-viewer@5.24.0
+  - @memberjunction/ng-record-changes@5.24.0
+  - @memberjunction/ng-record-selector@5.24.0
+  - @memberjunction/ng-resource-permissions@5.24.0
+  - @memberjunction/ng-shared-generic@5.24.0
+  - @memberjunction/ng-user-avatar@5.24.0
+  - @memberjunction/communication-types@5.24.0
+  - @memberjunction/templates-base-types@5.24.0
+  - @memberjunction/ng-export-service@5.24.0
+  - @memberjunction/ng-generic-dialog@5.24.0
+  - @memberjunction/ng-ui-components@5.24.0
+  - @memberjunction/export-engine@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- Updated dependencies [247df16]
+- Updated dependencies [37dc301]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [58af481]
+- Updated dependencies [fb0c69f]
+- Updated dependencies [1d1e02e]
+- Updated dependencies [c17be20]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ng-base-application@5.23.0
+  - @memberjunction/ng-dashboards@5.23.0
+  - @memberjunction/ng-artifacts@5.23.0
+  - @memberjunction/ng-dashboard-viewer@5.23.0
+  - @memberjunction/ng-base-forms@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ng-ui-components@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/ai-engine-base@5.23.0
+  - @memberjunction/ng-auth-services@5.23.0
+  - @memberjunction/ng-entity-form-dialog@5.23.0
+  - @memberjunction/ng-entity-permissions@5.23.0
+  - @memberjunction/ng-explorer-settings@5.23.0
+  - @memberjunction/ng-list-detail-grid@5.23.0
+  - @memberjunction/ng-shared@5.23.0
+  - @memberjunction/ng-ai-test-harness@5.23.0
+  - @memberjunction/ng-container-directives@5.23.0
+  - @memberjunction/ng-conversations@5.23.0
+  - @memberjunction/ng-entity-viewer@5.23.0
+  - @memberjunction/ng-file-storage@5.23.0
+  - @memberjunction/ng-notifications@5.23.0
+  - @memberjunction/ng-query-viewer@5.23.0
+  - @memberjunction/ng-record-changes@5.23.0
+  - @memberjunction/ng-record-selector@5.23.0
+  - @memberjunction/ng-resource-permissions@5.23.0
+  - @memberjunction/ng-shared-generic@5.23.0
+  - @memberjunction/ng-user-avatar@5.23.0
+  - @memberjunction/communication-types@5.23.0
+  - @memberjunction/entity-communications-client@5.23.0
+  - @memberjunction/templates-base-types@5.23.0
+  - @memberjunction/ng-generic-dialog@5.23.0
+  - @memberjunction/ng-export-service@5.23.0
+  - @memberjunction/export-engine@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- e5993ff: Generate config for lazy loading dashboards
+- f2a6bec: Universal lazy loading via ClassFactory async API. Fixes HomeApplication being tree-shaken by moving lazy loading from consumer-specific retry patterns into ClassFactory itself with RegisterLazyLoader, CreateInstanceAsync, and GetRegistrationAsync. Lazy config now uses compound keys (BaseClassName::Key) to support any base class. Adds coverage audit to codegen to detect gaps.
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [e89c3bc]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ng-dashboards@5.22.0
+  - @memberjunction/ng-conversations@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ng-base-application@5.22.0
+  - @memberjunction/ng-artifacts@5.22.0
+  - @memberjunction/ng-dashboard-viewer@5.22.0
+  - @memberjunction/ai-engine-base@5.22.0
+  - @memberjunction/ng-ai-test-harness@5.22.0
+  - @memberjunction/graphql-dataprovider@5.22.0
+  - @memberjunction/ng-auth-services@5.22.0
+  - @memberjunction/ng-entity-form-dialog@5.22.0
+  - @memberjunction/ng-entity-permissions@5.22.0
+  - @memberjunction/ng-explorer-settings@5.22.0
+  - @memberjunction/ng-list-detail-grid@5.22.0
+  - @memberjunction/ng-shared@5.22.0
+  - @memberjunction/ng-base-forms@5.22.0
+  - @memberjunction/ng-container-directives@5.22.0
+  - @memberjunction/ng-entity-viewer@5.22.0
+  - @memberjunction/ng-file-storage@5.22.0
+  - @memberjunction/ng-notifications@5.22.0
+  - @memberjunction/ng-query-viewer@5.22.0
+  - @memberjunction/ng-record-changes@5.22.0
+  - @memberjunction/ng-record-selector@5.22.0
+  - @memberjunction/ng-resource-permissions@5.22.0
+  - @memberjunction/ng-shared-generic@5.22.0
+  - @memberjunction/ng-user-avatar@5.22.0
+  - @memberjunction/communication-types@5.22.0
+  - @memberjunction/entity-communications-client@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/templates-base-types@5.22.0
+  - @memberjunction/ng-generic-dialog@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+- Updated dependencies [76cd2bc]
+- Updated dependencies [5e2f54a]
+- Updated dependencies [c0347d3]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/ng-conversations@5.21.0
+  - @memberjunction/ai-engine-base@5.21.0
+  - @memberjunction/ng-auth-services@5.21.0
+  - @memberjunction/ng-base-application@5.21.0
+  - @memberjunction/ng-dashboards@5.21.0
+  - @memberjunction/ng-entity-form-dialog@5.21.0
+  - @memberjunction/ng-entity-permissions@5.21.0
+  - @memberjunction/ng-explorer-settings@5.21.0
+  - @memberjunction/ng-list-detail-grid@5.21.0
+  - @memberjunction/ng-shared@5.21.0
+  - @memberjunction/ng-ai-test-harness@5.21.0
+  - @memberjunction/ng-artifacts@5.21.0
+  - @memberjunction/ng-base-forms@5.21.0
+  - @memberjunction/ng-container-directives@5.21.0
+  - @memberjunction/ng-dashboard-viewer@5.21.0
+  - @memberjunction/ng-entity-viewer@5.21.0
+  - @memberjunction/ng-file-storage@5.21.0
+  - @memberjunction/ng-notifications@5.21.0
+  - @memberjunction/ng-query-viewer@5.21.0
+  - @memberjunction/ng-record-changes@5.21.0
+  - @memberjunction/ng-record-selector@5.21.0
+  - @memberjunction/ng-resource-permissions@5.21.0
+  - @memberjunction/ng-shared-generic@5.21.0
+  - @memberjunction/ng-user-avatar@5.21.0
+  - @memberjunction/communication-types@5.21.0
+  - @memberjunction/entity-communications-client@5.21.0
+  - @memberjunction/graphql-dataprovider@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/templates-base-types@5.21.0
+  - @memberjunction/ng-generic-dialog@5.21.0
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ai-engine-base@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/ng-auth-services@5.20.0
+  - @memberjunction/ng-base-application@5.20.0
+  - @memberjunction/ng-dashboards@5.20.0
+  - @memberjunction/ng-entity-form-dialog@5.20.0
+  - @memberjunction/ng-entity-permissions@5.20.0
+  - @memberjunction/ng-explorer-settings@5.20.0
+  - @memberjunction/ng-list-detail-grid@5.20.0
+  - @memberjunction/ng-shared@5.20.0
+  - @memberjunction/ng-ai-test-harness@5.20.0
+  - @memberjunction/ng-artifacts@5.20.0
+  - @memberjunction/ng-base-forms@5.20.0
+  - @memberjunction/ng-container-directives@5.20.0
+  - @memberjunction/ng-conversations@5.20.0
+  - @memberjunction/ng-dashboard-viewer@5.20.0
+  - @memberjunction/ng-entity-viewer@5.20.0
+  - @memberjunction/ng-file-storage@5.20.0
+  - @memberjunction/ng-notifications@5.20.0
+  - @memberjunction/ng-query-viewer@5.20.0
+  - @memberjunction/ng-record-changes@5.20.0
+  - @memberjunction/ng-record-selector@5.20.0
+  - @memberjunction/ng-resource-permissions@5.20.0
+  - @memberjunction/ng-shared-generic@5.20.0
+  - @memberjunction/ng-user-avatar@5.20.0
+  - @memberjunction/communication-types@5.20.0
+  - @memberjunction/entity-communications-client@5.20.0
+  - @memberjunction/graphql-dataprovider@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/templates-base-types@5.20.0
+  - @memberjunction/ng-generic-dialog@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/ng-auth-services@5.19.0
+- @memberjunction/ng-base-application@5.19.0
+- @memberjunction/ng-dashboards@5.19.0
+- @memberjunction/ng-entity-form-dialog@5.19.0
+- @memberjunction/ng-entity-permissions@5.19.0
+- @memberjunction/ng-explorer-settings@5.19.0
+- @memberjunction/ng-list-detail-grid@5.19.0
+- @memberjunction/ng-shared@5.19.0
+- @memberjunction/ng-ai-test-harness@5.19.0
+- @memberjunction/ng-artifacts@5.19.0
+- @memberjunction/ng-base-forms@5.19.0
+- @memberjunction/ng-container-directives@5.19.0
+- @memberjunction/ng-conversations@5.19.0
+- @memberjunction/ng-dashboard-viewer@5.19.0
+- @memberjunction/ng-entity-viewer@5.19.0
+- @memberjunction/ng-file-storage@5.19.0
+- @memberjunction/ng-generic-dialog@5.19.0
+- @memberjunction/ng-notifications@5.19.0
+- @memberjunction/ng-query-viewer@5.19.0
+- @memberjunction/ng-record-changes@5.19.0
+- @memberjunction/ng-record-selector@5.19.0
+- @memberjunction/ng-resource-permissions@5.19.0
+- @memberjunction/ng-shared-generic@5.19.0
+- @memberjunction/ng-user-avatar@5.19.0
+- @memberjunction/communication-types@5.19.0
+- @memberjunction/entity-communications-client@5.19.0
+- @memberjunction/graphql-dataprovider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/templates-base-types@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [322dac6]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/ai-engine-base@5.18.0
+  - @memberjunction/ng-dashboards@5.18.0
+  - @memberjunction/ng-ai-test-harness@5.18.0
+  - @memberjunction/ng-conversations@5.18.0
+  - @memberjunction/graphql-dataprovider@5.18.0
+  - @memberjunction/ng-artifacts@5.18.0
+  - @memberjunction/ng-query-viewer@5.18.0
+  - @memberjunction/ng-shared@5.18.0
+  - @memberjunction/ng-explorer-settings@5.18.0
+  - @memberjunction/ng-file-storage@5.18.0
+  - @memberjunction/ng-notifications@5.18.0
+  - @memberjunction/entity-communications-client@5.18.0
+  - @memberjunction/ng-dashboard-viewer@5.18.0
+  - @memberjunction/ng-entity-form-dialog@5.18.0
+  - @memberjunction/ng-entity-permissions@5.18.0
+  - @memberjunction/ng-list-detail-grid@5.18.0
+  - @memberjunction/ng-record-selector@5.18.0
+  - @memberjunction/ng-record-changes@5.18.0
+  - @memberjunction/ng-resource-permissions@5.18.0
+  - @memberjunction/ng-base-forms@5.18.0
+  - @memberjunction/ng-auth-services@5.18.0
+  - @memberjunction/ng-base-application@5.18.0
+  - @memberjunction/ng-container-directives@5.18.0
+  - @memberjunction/ng-entity-viewer@5.18.0
+  - @memberjunction/ng-generic-dialog@5.18.0
+  - @memberjunction/ng-shared-generic@5.18.0
+  - @memberjunction/ng-user-avatar@5.18.0
+  - @memberjunction/communication-types@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+  - @memberjunction/templates-base-types@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [bbfbf5e]
+- Updated dependencies [9881045]
+  - @memberjunction/graphql-dataprovider@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/ng-dashboards@5.17.0
+  - @memberjunction/ng-explorer-settings@5.17.0
+  - @memberjunction/ng-shared@5.17.0
+  - @memberjunction/ng-ai-test-harness@5.17.0
+  - @memberjunction/ng-conversations@5.17.0
+  - @memberjunction/ng-file-storage@5.17.0
+  - @memberjunction/ng-notifications@5.17.0
+  - @memberjunction/entity-communications-client@5.17.0
+  - @memberjunction/ai-engine-base@5.17.0
+  - @memberjunction/ai-core-plus@5.17.0
+  - @memberjunction/ng-auth-services@5.17.0
+  - @memberjunction/ng-base-application@5.17.0
+  - @memberjunction/ng-entity-form-dialog@5.17.0
+  - @memberjunction/ng-entity-permissions@5.17.0
+  - @memberjunction/ng-list-detail-grid@5.17.0
+  - @memberjunction/ng-artifacts@5.17.0
+  - @memberjunction/ng-base-forms@5.17.0
+  - @memberjunction/ng-container-directives@5.17.0
+  - @memberjunction/ng-dashboard-viewer@5.17.0
+  - @memberjunction/ng-entity-viewer@5.17.0
+  - @memberjunction/ng-query-viewer@5.17.0
+  - @memberjunction/ng-record-changes@5.17.0
+  - @memberjunction/ng-record-selector@5.17.0
+  - @memberjunction/ng-resource-permissions@5.17.0
+  - @memberjunction/ng-shared-generic@5.17.0
+  - @memberjunction/ng-user-avatar@5.17.0
+  - @memberjunction/communication-types@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/templates-base-types@5.17.0
+  - @memberjunction/ng-generic-dialog@5.17.0
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [179a4ce]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/graphql-dataprovider@5.16.0
+  - @memberjunction/ai-engine-base@5.16.0
+  - @memberjunction/ai-core-plus@5.16.0
+  - @memberjunction/ng-auth-services@5.16.0
+  - @memberjunction/ng-base-application@5.16.0
+  - @memberjunction/ng-dashboards@5.16.0
+  - @memberjunction/ng-entity-form-dialog@5.16.0
+  - @memberjunction/ng-entity-permissions@5.16.0
+  - @memberjunction/ng-explorer-settings@5.16.0
+  - @memberjunction/ng-list-detail-grid@5.16.0
+  - @memberjunction/ng-shared@5.16.0
+  - @memberjunction/ng-ai-test-harness@5.16.0
+  - @memberjunction/ng-artifacts@5.16.0
+  - @memberjunction/ng-base-forms@5.16.0
+  - @memberjunction/ng-container-directives@5.16.0
+  - @memberjunction/ng-conversations@5.16.0
+  - @memberjunction/ng-dashboard-viewer@5.16.0
+  - @memberjunction/ng-entity-viewer@5.16.0
+  - @memberjunction/ng-file-storage@5.16.0
+  - @memberjunction/ng-notifications@5.16.0
+  - @memberjunction/ng-query-viewer@5.16.0
+  - @memberjunction/ng-record-changes@5.16.0
+  - @memberjunction/ng-record-selector@5.16.0
+  - @memberjunction/ng-resource-permissions@5.16.0
+  - @memberjunction/ng-shared-generic@5.16.0
+  - @memberjunction/ng-user-avatar@5.16.0
+  - @memberjunction/communication-types@5.16.0
+  - @memberjunction/entity-communications-client@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/templates-base-types@5.16.0
+  - @memberjunction/ng-generic-dialog@5.16.0
+  - @memberjunction/global@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

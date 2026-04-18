@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Autotagging Dashboard — World Class UX Mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #0f1729;
+    --mj-bg-surface: #1a2332;
+    --mj-bg-surface-card: #1e2a3a;
+    --mj-bg-surface-sunken: #151e2d;
+    --mj-bg-surface-elevated: #222f42;
+    --mj-bg-surface-hover: #253347;
+    --mj-text-primary: #e2e8f0;
+    --mj-text-secondary: #94a3b8;
+    --mj-text-muted: #64748b;
+    --mj-text-disabled: #475569;
+    --mj-text-inverse: #ffffff;
+    --mj-border-default: #334155;
+    --mj-border-subtle: #1e293b;
+    --mj-brand-primary: #5b8def;
+    --mj-brand-primary-hover: #4a7de0;
+    --mj-status-success: #22c55e;
+    --mj-status-success-bg: rgba(34,197,94,0.12);
+    --mj-status-success-text: #4ade80;
+    --mj-status-success-border: rgba(34,197,94,0.3);
+    --mj-status-warning: #f59e0b;
+    --mj-status-warning-bg: rgba(245,158,11,0.12);
+    --mj-status-warning-text: #fbbf24;
+    --mj-status-error: #ef4444;
+    --mj-status-error-bg: rgba(239,68,68,0.12);
+    --mj-status-error-text: #f87171;
+    --mj-status-error-border: rgba(239,68,68,0.3);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); min-height: 100vh; }
+
+  .dashboard { display: flex; flex-direction: column; height: 100vh; padding: 16px 20px; gap: 16px; overflow: hidden; }
+
+  /* ── Header ── */
+  .dash-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .dash-header-left { display: flex; align-items: center; gap: 12px; }
+  .dash-header-left h2 { font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .dash-header-left h2 i { color: var(--mj-brand-primary); }
+  .dash-header-right { display: flex; align-items: center; gap: 8px; }
+  .action-btn { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid; border-radius: 8px; cursor: pointer; font-size: 0.8rem; font-weight: 500; transition: all 0.15s ease; }
+  .primary-btn { background: var(--mj-brand-primary); color: var(--mj-text-inverse); border-color: var(--mj-brand-primary); }
+  .secondary-btn { background: var(--mj-bg-surface); color: var(--mj-text-secondary); border-color: var(--mj-border-default); }
+
+  /* ── Tab Bar ── */
+  .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--mj-border-default); flex-shrink: 0; }
+  .tab { padding: 10px 20px; font-size: 0.82rem; font-weight: 500; color: var(--mj-text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s ease; display: flex; align-items: center; gap: 6px; }
+  .tab:hover { color: var(--mj-text-secondary); }
+  .tab.active { color: var(--mj-brand-primary); border-bottom-color: var(--mj-brand-primary); }
+  .tab-badge { background: var(--mj-bg-surface-sunken); padding: 1px 7px; border-radius: 10px; font-size: 0.68rem; font-weight: 600; }
+  .tab.active .tab-badge { background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+
+  /* ── KPI Strip ── */
+  .kpi-strip { display: flex; gap: 12px; flex-shrink: 0; }
+  .kpi-card { flex: 1; background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 10px; padding: 14px 16px; }
+  .kpi-value { font-size: 1.4rem; font-weight: 700; }
+  .kpi-label { font-size: 0.72rem; color: var(--mj-text-muted); margin-top: 2px; }
+  .kpi-trend { font-size: 0.68rem; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+  .kpi-trend.up { color: var(--mj-status-success-text); }
+  .kpi-trend.down { color: var(--mj-status-error-text); }
+
+  /* ── Main Content Area ── */
+  .main-content { display: flex; gap: 16px; flex: 1; min-height: 0; overflow: hidden; }
+
+  /* ── Sources Panel (Left) ── */
+  .sources-panel { width: 340px; display: flex; flex-direction: column; gap: 12px; flex-shrink: 0; overflow: hidden; }
+  .panel-card { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .panel-title { font-size: 0.82rem; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .panel-title i { color: var(--mj-brand-primary); font-size: 0.75rem; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 8px; }
+  .add-btn { background: none; border: 1px dashed var(--mj-border-default); border-radius: 6px; padding: 8px; width: 100%; color: var(--mj-text-muted); font-size: 0.75rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.15s ease; margin-top: 4px; }
+  .add-btn:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+
+  /* Source Card */
+  .source-card { padding: 12px; border: 1px solid var(--mj-border-subtle); border-radius: 8px; margin-bottom: 6px; cursor: pointer; transition: all 0.15s ease; }
+  .source-card:hover { border-color: var(--mj-border-default); background: var(--mj-bg-surface-hover); }
+  .source-card.active { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface)); }
+  .source-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .source-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); font-size: 0.75rem; flex-shrink: 0; }
+  .source-name { font-size: 0.82rem; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .source-status { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .source-status.active { background: var(--mj-status-success); }
+  .source-status.inactive { background: var(--mj-text-disabled); }
+  .source-status.error { background: var(--mj-status-error); }
+  .source-meta { display: flex; gap: 12px; font-size: 0.68rem; color: var(--mj-text-muted); }
+  .source-meta-item { display: flex; align-items: center; gap: 3px; }
+  .source-meta-item i { font-size: 0.6rem; }
+
+  /* ── Center Panel ── */
+  .center-panel { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow: hidden; }
+
+  /* Pipeline Stages */
+  .pipeline-stages { display: flex; gap: 0; align-items: center; flex-shrink: 0; background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 10px; padding: 12px 16px; }
+  .pipeline-stage { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; }
+  .pipeline-stage-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.85rem; }
+  .stage-idle .pipeline-stage-icon { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
+  .stage-active .pipeline-stage-icon { background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface)); color: var(--mj-brand-primary); animation: pulse 1.5s infinite; }
+  .stage-complete .pipeline-stage-icon { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+  .stage-error .pipeline-stage-icon { background: var(--mj-status-error-bg); color: var(--mj-status-error-text); }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(91,141,239,0.3); } 50% { box-shadow: 0 0 0 6px rgba(91,141,239,0); } }
+  .pipeline-stage-name { font-size: 0.68rem; font-weight: 600; color: var(--mj-text-secondary); }
+  .pipeline-stage-count { font-size: 0.6rem; color: var(--mj-text-muted); }
+  .pipeline-arrow { width: 30px; text-align: center; color: var(--mj-text-disabled); font-size: 0.65rem; }
+
+  /* Recent Items Feed */
+  .feed-card { flex: 1; }
+  .feed-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--mj-border-subtle); font-size: 0.78rem; }
+  .feed-item:last-child { border-bottom: none; }
+  .feed-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .feed-status-dot.complete { background: var(--mj-status-success); }
+  .feed-status-dot.processing { background: var(--mj-brand-primary); animation: pulse 1.5s infinite; }
+  .feed-status-dot.error { background: var(--mj-status-error); }
+  .feed-item-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .feed-item-source { color: var(--mj-text-muted); font-size: 0.7rem; }
+  .feed-item-tags { display: flex; gap: 4px; }
+  .feed-tag { padding: 1px 6px; border-radius: 3px; font-size: 0.62rem; background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+  .feed-item-time { color: var(--mj-text-muted); font-size: 0.68rem; white-space: nowrap; }
+
+  /* ── Right Panel: Source Detail / Config ── */
+  .detail-panel { width: 360px; flex-shrink: 0; overflow-y: auto; }
+  .detail-card { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+  .detail-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .detail-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); color: var(--mj-brand-primary); font-size: 1rem; flex-shrink: 0; }
+  .detail-title { font-size: 0.95rem; font-weight: 700; }
+  .detail-subtitle { font-size: 0.72rem; color: var(--mj-text-muted); }
+  .detail-section { margin-bottom: 14px; }
+  .detail-section-title { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--mj-text-muted); margin-bottom: 8px; }
+  .detail-field { display: flex; align-items: baseline; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--mj-border-subtle); font-size: 0.78rem; }
+  .detail-field:last-child { border-bottom: none; }
+  .detail-field-label { color: var(--mj-text-muted); font-weight: 500; }
+  .detail-field-value { color: var(--mj-text-primary); font-weight: 500; text-align: right; }
+  .detail-field-value.url { color: var(--mj-brand-primary); font-size: 0.72rem; word-break: break-all; }
+
+  /* Tag Cloud */
+  .tag-cloud { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .tag-pill { padding: 3px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 500; background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); color: var(--mj-text-secondary); border: 1px solid var(--mj-border-subtle); }
+  .tag-count { color: var(--mj-text-muted); font-weight: 400; margin-left: 3px; }
+
+  /* Run History */
+  .run-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--mj-border-subtle); font-size: 0.75rem; }
+  .run-row:last-child { border-bottom: none; }
+  .run-status-badge { padding: 2px 8px; border-radius: 10px; font-size: 0.65rem; font-weight: 600; }
+  .run-status-badge.complete { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+  .run-status-badge.failed { background: var(--mj-status-error-bg); color: var(--mj-status-error-text); }
+  .run-status-badge.running { background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+  .run-items { color: var(--mj-text-muted); margin-left: auto; }
+  .run-time { color: var(--mj-text-muted); font-size: 0.68rem; }
+
+  /* Content Type Config */
+  .content-type-card { padding: 10px 12px; border: 1px solid var(--mj-border-subtle); border-radius: 8px; margin-bottom: 6px; }
+  .ct-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .ct-name { font-size: 0.82rem; font-weight: 600; }
+  .ct-model { font-size: 0.68rem; color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); padding: 1px 7px; border-radius: 10px; }
+  .ct-tags-range { font-size: 0.68rem; color: var(--mj-text-muted); display: flex; align-items: center; gap: 4px; }
+  .ct-tags-range i { font-size: 0.6rem; }
+
+  /* Progress bar */
+  .progress-bar { height: 4px; background: var(--mj-bg-surface-sunken); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--mj-brand-primary); border-radius: 2px; transition: width 0.3s ease; }
+
+  /* Actions row */
+  .detail-actions { display: flex; gap: 6px; margin-top: 10px; }
+  .detail-action-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 7px; border: 1px solid var(--mj-border-default); border-radius: 6px; font-size: 0.72rem; font-weight: 500; cursor: pointer; background: var(--mj-bg-surface); color: var(--mj-text-secondary); transition: all 0.15s ease; }
+  .detail-action-btn:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+  .detail-action-btn.danger:hover { border-color: var(--mj-status-error); color: var(--mj-status-error-text); }
+</style>
+</head>
+<body>
+
+<div class="dashboard">
+  <!-- ── HEADER ── -->
+  <div class="dash-header">
+    <div class="dash-header-left">
+      <h2><i class="fa-solid fa-tags"></i> Content Autotagging</h2>
+    </div>
+    <div class="dash-header-right">
+      <button class="action-btn secondary-btn"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+      <button class="action-btn primary-btn"><i class="fa-solid fa-play"></i> Run Pipeline</button>
+    </div>
+  </div>
+
+  <!-- ── TAB BAR ── -->
+  <div class="tab-bar">
+    <div class="tab active"><i class="fa-solid fa-gauge-high"></i> Pipeline <span class="tab-badge">Live</span></div>
+    <div class="tab"><i class="fa-solid fa-database"></i> Sources <span class="tab-badge">5</span></div>
+    <div class="tab"><i class="fa-solid fa-sliders"></i> Content Types <span class="tab-badge">4</span></div>
+    <div class="tab"><i class="fa-solid fa-tags"></i> Tag Library</div>
+    <div class="tab"><i class="fa-solid fa-clock-rotate-left"></i> Run History</div>
+  </div>
+
+  <!-- ── KPI STRIP ── -->
+  <div class="kpi-strip">
+    <div class="kpi-card">
+      <div class="kpi-value">5</div>
+      <div class="kpi-label">Active Sources</div>
+      <div class="kpi-trend up"><i class="fa-solid fa-arrow-up"></i> 2 added this week</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value">2,847</div>
+      <div class="kpi-label">Content Items</div>
+      <div class="kpi-trend up"><i class="fa-solid fa-arrow-up"></i> +312 today</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value">8,541</div>
+      <div class="kpi-label">Tags Generated</div>
+      <div class="kpi-trend up"><i class="fa-solid fa-arrow-up"></i> 3.0 avg per item</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" style="color: var(--mj-status-error-text)">12</div>
+      <div class="kpi-label">Errors</div>
+      <div class="kpi-trend down"><i class="fa-solid fa-arrow-down"></i> 0.4% error rate</div>
+    </div>
+  </div>
+
+  <!-- ── MAIN CONTENT ── -->
+  <div class="main-content">
+
+    <!-- LEFT: Sources List -->
+    <div class="sources-panel">
+      <div class="panel-card" style="flex: 1">
+        <div class="panel-header">
+          <span class="panel-title"><i class="fa-solid fa-database"></i> Content Sources</span>
+        </div>
+        <div class="panel-body">
+          <div class="source-card active">
+            <div class="source-header">
+              <div class="source-icon"><i class="fa-solid fa-globe"></i></div>
+              <span class="source-name">MJ Documentation Site</span>
+              <div class="source-status active"></div>
+            </div>
+            <div class="source-meta">
+              <span class="source-meta-item"><i class="fa-solid fa-file"></i> 847 items</span>
+              <span class="source-meta-item"><i class="fa-solid fa-tags"></i> 2,541 tags</span>
+              <span class="source-meta-item"><i class="fa-solid fa-clock"></i> 2h ago</span>
+            </div>
+          </div>
+
+          <div class="source-card">
+            <div class="source-header">
+              <div class="source-icon"><i class="fa-solid fa-rss"></i></div>
+              <span class="source-name">Tech Blog RSS Feed</span>
+              <div class="source-status active"></div>
+            </div>
+            <div class="source-meta">
+              <span class="source-meta-item"><i class="fa-solid fa-file"></i> 1,203 items</span>
+              <span class="source-meta-item"><i class="fa-solid fa-tags"></i> 3,609 tags</span>
+              <span class="source-meta-item"><i class="fa-solid fa-clock"></i> 30m ago</span>
+            </div>
+          </div>
+
+          <div class="source-card">
+            <div class="source-header">
+              <div class="source-icon"><i class="fa-solid fa-file-pdf"></i></div>
+              <span class="source-name">Product PDFs</span>
+              <div class="source-status active"></div>
+            </div>
+            <div class="source-meta">
+              <span class="source-meta-item"><i class="fa-solid fa-file"></i> 156 items</span>
+              <span class="source-meta-item"><i class="fa-solid fa-tags"></i> 468 tags</span>
+              <span class="source-meta-item"><i class="fa-solid fa-clock"></i> 1d ago</span>
+            </div>
+          </div>
+
+          <div class="source-card">
+            <div class="source-header">
+              <div class="source-icon"><i class="fa-solid fa-envelope"></i></div>
+              <span class="source-name">Support Emails</span>
+              <div class="source-status error"></div>
+            </div>
+            <div class="source-meta">
+              <span class="source-meta-item"><i class="fa-solid fa-file"></i> 641 items</span>
+              <span class="source-meta-item"><i class="fa-solid fa-tags"></i> 1,923 tags</span>
+              <span class="source-meta-item" style="color: var(--mj-status-error-text)"><i class="fa-solid fa-exclamation-triangle"></i> Auth error</span>
+            </div>
+          </div>
+
+          <div class="source-card">
+            <div class="source-header">
+              <div class="source-icon"><i class="fa-solid fa-code"></i></div>
+              <span class="source-name">API Documentation</span>
+              <div class="source-status inactive"></div>
+            </div>
+            <div class="source-meta">
+              <span class="source-meta-item"><i class="fa-solid fa-file"></i> 0 items</span>
+              <span class="source-meta-item"><i class="fa-solid fa-pause"></i> Paused</span>
+            </div>
+          </div>
+
+          <button class="add-btn"><i class="fa-solid fa-plus"></i> Add Content Source</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER: Pipeline + Feed -->
+    <div class="center-panel">
+      <!-- Pipeline Stages -->
+      <div class="pipeline-stages">
+        <div class="pipeline-stage stage-complete">
+          <div class="pipeline-stage-icon"><i class="fa-solid fa-download"></i></div>
+          <span class="pipeline-stage-name">Ingest</span>
+          <span class="pipeline-stage-count">312 items</span>
+        </div>
+        <div class="pipeline-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+        <div class="pipeline-stage stage-complete">
+          <div class="pipeline-stage-icon"><i class="fa-solid fa-file-lines"></i></div>
+          <span class="pipeline-stage-name">Extract</span>
+          <span class="pipeline-stage-count">312 items</span>
+        </div>
+        <div class="pipeline-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+        <div class="pipeline-stage stage-active">
+          <div class="pipeline-stage-icon"><i class="fa-solid fa-scissors"></i></div>
+          <span class="pipeline-stage-name">Chunk</span>
+          <span class="pipeline-stage-count">187 / 312</span>
+        </div>
+        <div class="pipeline-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+        <div class="pipeline-stage stage-idle">
+          <div class="pipeline-stage-icon"><i class="fa-solid fa-tags"></i></div>
+          <span class="pipeline-stage-name">Tag</span>
+          <span class="pipeline-stage-count">waiting</span>
+        </div>
+        <div class="pipeline-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+        <div class="pipeline-stage stage-idle">
+          <div class="pipeline-stage-icon"><i class="fa-solid fa-vector-square"></i></div>
+          <span class="pipeline-stage-name">Vectorize</span>
+          <span class="pipeline-stage-count">waiting</span>
+        </div>
+      </div>
+
+      <!-- Progress bar for active run -->
+      <div style="background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 8px; padding: 10px 16px;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px;">
+          <span style="color: var(--mj-text-secondary); font-weight: 500;">Processing: Chunk stage</span>
+          <span style="color: var(--mj-brand-primary); font-weight: 600;">60%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width: 60%"></div></div>
+        <div style="font-size: 0.68rem; color: var(--mj-text-muted); margin-top: 4px;">187 of 312 items · Elapsed: 2m 14s · Est. remaining: 1m 30s</div>
+      </div>
+
+      <!-- Recent Processing Feed -->
+      <div class="panel-card feed-card">
+        <div class="panel-header">
+          <span class="panel-title"><i class="fa-solid fa-bolt"></i> Recent Processing</span>
+          <span style="font-size: 0.68rem; color: var(--mj-text-muted);">Last 24 hours</span>
+        </div>
+        <div class="panel-body" style="padding: 0;">
+          <div class="feed-item">
+            <div class="feed-status-dot complete"></div>
+            <span class="feed-item-name">Getting Started with MemberJunction</span>
+            <span class="feed-item-source">MJ Documentation Site</span>
+            <div class="feed-item-tags">
+              <span class="feed-tag">tutorial</span>
+              <span class="feed-tag">setup</span>
+              <span class="feed-tag">beginner</span>
+            </div>
+            <span class="feed-item-time">2m ago</span>
+          </div>
+          <div class="feed-item">
+            <div class="feed-status-dot complete"></div>
+            <span class="feed-item-name">AI Agent Architecture Deep Dive</span>
+            <span class="feed-item-source">Tech Blog RSS</span>
+            <div class="feed-item-tags">
+              <span class="feed-tag">AI</span>
+              <span class="feed-tag">agents</span>
+              <span class="feed-tag">architecture</span>
+            </div>
+            <span class="feed-item-time">5m ago</span>
+          </div>
+          <div class="feed-item">
+            <div class="feed-status-dot processing"></div>
+            <span class="feed-item-name">Q1 2026 Product Roadmap.pdf</span>
+            <span class="feed-item-source">Product PDFs</span>
+            <div class="feed-item-tags"></div>
+            <span class="feed-item-time">processing...</span>
+          </div>
+          <div class="feed-item">
+            <div class="feed-status-dot error"></div>
+            <span class="feed-item-name">Re: Billing Issue #4521</span>
+            <span class="feed-item-source">Support Emails</span>
+            <div class="feed-item-tags"></div>
+            <span class="feed-item-time" style="color: var(--mj-status-error-text)">auth failed</span>
+          </div>
+          <div class="feed-item">
+            <div class="feed-status-dot complete"></div>
+            <span class="feed-item-name">Entity Framework Best Practices</span>
+            <span class="feed-item-source">MJ Documentation Site</span>
+            <div class="feed-item-tags">
+              <span class="feed-tag">entities</span>
+              <span class="feed-tag">best practices</span>
+            </div>
+            <span class="feed-item-time">12m ago</span>
+          </div>
+          <div class="feed-item">
+            <div class="feed-status-dot complete"></div>
+            <span class="feed-item-name">Vector Search Implementation Guide</span>
+            <span class="feed-item-source">Tech Blog RSS</span>
+            <div class="feed-item-tags">
+              <span class="feed-tag">vectors</span>
+              <span class="feed-tag">search</span>
+              <span class="feed-tag">Pinecone</span>
+            </div>
+            <span class="feed-item-time">18m ago</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Selected Source Detail -->
+    <div class="detail-panel">
+      <!-- Source Configuration -->
+      <div class="detail-card">
+        <div class="detail-header">
+          <div class="detail-icon"><i class="fa-solid fa-globe"></i></div>
+          <div>
+            <div class="detail-title">MJ Documentation Site</div>
+            <div class="detail-subtitle">Web Crawler · HTML Pages</div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <div class="detail-section-title">Configuration</div>
+          <div class="detail-field">
+            <span class="detail-field-label">Source Type</span>
+            <span class="detail-field-value">Web Crawler</span>
+          </div>
+          <div class="detail-field">
+            <span class="detail-field-label">Content Type</span>
+            <span class="detail-field-value">Documentation</span>
+          </div>
+          <div class="detail-field">
+            <span class="detail-field-label">File Type</span>
+            <span class="detail-field-value">HTML</span>
+          </div>
+          <div class="detail-field">
+            <span class="detail-field-label">URL</span>
+            <span class="detail-field-value url">https://docs.memberjunction.org</span>
+          </div>
+          <div class="detail-field">
+            <span class="detail-field-label">AI Model</span>
+            <span class="detail-field-value">Gemini 3.1 Flash Lite</span>
+          </div>
+          <div class="detail-field">
+            <span class="detail-field-label">Tag Range</span>
+            <span class="detail-field-value">2 – 8 tags per item</span>
+          </div>
+        </div>
+        <div class="detail-actions">
+          <button class="detail-action-btn"><i class="fa-solid fa-pen"></i> Edit</button>
+          <button class="detail-action-btn"><i class="fa-solid fa-play"></i> Run Now</button>
+          <button class="detail-action-btn"><i class="fa-solid fa-pause"></i> Pause</button>
+          <button class="detail-action-btn danger"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
+
+      <!-- Top Tags for this source -->
+      <div class="detail-card">
+        <div class="detail-section-title" style="margin-bottom: 0;"><i class="fa-solid fa-chart-bar" style="color: var(--mj-brand-primary); margin-right: 6px;"></i> Top Tags</div>
+        <div class="tag-cloud">
+          <span class="tag-pill">tutorial <span class="tag-count">124</span></span>
+          <span class="tag-pill">API <span class="tag-count">98</span></span>
+          <span class="tag-pill">entities <span class="tag-count">87</span></span>
+          <span class="tag-pill">setup <span class="tag-count">72</span></span>
+          <span class="tag-pill">authentication <span class="tag-count">65</span></span>
+          <span class="tag-pill">actions <span class="tag-count">54</span></span>
+          <span class="tag-pill">AI <span class="tag-count">48</span></span>
+          <span class="tag-pill">vectors <span class="tag-count">41</span></span>
+          <span class="tag-pill">migration <span class="tag-count">36</span></span>
+          <span class="tag-pill">Angular <span class="tag-count">31</span></span>
+          <span class="tag-pill">GraphQL <span class="tag-count">28</span></span>
+          <span class="tag-pill">TypeScript <span class="tag-count">25</span></span>
+        </div>
+      </div>
+
+      <!-- Run History for this source -->
+      <div class="detail-card">
+        <div class="detail-section-title" style="margin-bottom: 8px;"><i class="fa-solid fa-clock-rotate-left" style="color: var(--mj-brand-primary); margin-right: 6px;"></i> Run History</div>
+        <div class="run-row">
+          <span class="run-status-badge running"><i class="fa-solid fa-spinner fa-spin" style="font-size: 0.55rem; margin-right: 2px;"></i> Running</span>
+          <span class="run-items">187 / 312</span>
+          <span class="run-time">Started 2m ago</span>
+        </div>
+        <div class="run-row">
+          <span class="run-status-badge complete">Complete</span>
+          <span class="run-items">847 items</span>
+          <span class="run-time">Yesterday, 3:45 PM</span>
+        </div>
+        <div class="run-row">
+          <span class="run-status-badge complete">Complete</span>
+          <span class="run-items">812 items</span>
+          <span class="run-time">Apr 1, 11:20 AM</span>
+        </div>
+        <div class="run-row">
+          <span class="run-status-badge failed">Failed</span>
+          <span class="run-items">0 items</span>
+          <span class="run-time">Mar 30, 9:00 AM</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

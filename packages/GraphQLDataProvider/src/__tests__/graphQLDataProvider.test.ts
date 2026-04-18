@@ -101,19 +101,23 @@ vi.mock('@memberjunction/core-entities', () => ({
   ViewInfo: vi.fn(),
 }));
 
-vi.mock('@memberjunction/global', () => ({
-  RegisterClass: vi.fn(() => (target: Function) => target),
-  MJGlobal: {
-    Instance: {
-      RaiseEvent: vi.fn(),
-      ClassFactory: { CreateInstance: vi.fn() },
+vi.mock('@memberjunction/global', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/global')>();
+  return {
+    ...actual,
+    RegisterClass: vi.fn(() => (target: Function) => target),
+    MJGlobal: {
+      Instance: {
+        RaiseEvent: vi.fn(),
+        ClassFactory: { CreateInstance: vi.fn() },
+      },
     },
-  },
-  MJEventType: { LoggedIn: 'LoggedIn' },
-  SafeJSONParse: vi.fn((str: string) => {
-    try { return JSON.parse(str); } catch { return null; }
-  }),
-}));
+    MJEventType: { LoggedIn: 'LoggedIn' },
+    SafeJSONParse: vi.fn((str: string) => {
+      try { return JSON.parse(str); } catch { return null; }
+    }),
+  };
+});
 
 vi.mock('@tempfix/idb', () => ({
   openDB: vi.fn(),
@@ -128,7 +132,16 @@ vi.mock('../graphQLAIClient', () => ({
 }));
 
 import { GraphQLProviderConfigData, GraphQLDataProvider } from '../graphQLDataProvider';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import { v4 } from 'uuid';
+
+function resetSingleton(): void {
+  const g = GetGlobalObjectStore();
+  const key = '___SINGLETON__GraphQLDataProvider';
+  if (g && g[key]) {
+    delete g[key];
+  }
+}
 
 describe('GraphQLProviderConfigData', () => {
   it('should create config with all required parameters', () => {
@@ -236,22 +249,21 @@ describe('GraphQLDataProvider', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset the singleton
-    (GraphQLDataProvider as Record<string, unknown>)['_instance'] = undefined;
+    resetSingleton();
     provider = new GraphQLDataProvider();
   });
 
   describe('constructor', () => {
     it('should create a singleton instance', () => {
-      // provider is already created in beforeEach, which sets _instance
       expect(GraphQLDataProvider.Instance).toBe(provider);
     });
 
     it('should not replace existing singleton', () => {
       // provider is already the singleton from beforeEach
       const provider2 = new GraphQLDataProvider();
+      // With global store backing, constructor returns the existing instance
+      expect(provider2).toBe(provider);
       expect(GraphQLDataProvider.Instance).toBe(provider);
-      expect(GraphQLDataProvider.Instance).not.toBe(provider2);
     });
   });
 

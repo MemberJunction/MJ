@@ -1,0 +1,117 @@
+@if (IsOpen) {
+    <div class="suggest-dropdown">
+        @if (IsLoading && showPreviewSection) {
+            <div class="suggest-loading">
+                <i class="fa-solid fa-spinner fa-spin suggest-loading-icon"></i>
+                <span>Searching...</span>
+            </div>
+        }
+
+        <!-- Recent searches section -->
+        @if (showRecentSection) {
+            <div class="suggest-section">
+                <div class="suggest-section-header">
+                    <i class="fa-solid fa-clock suggest-section-icon"></i>
+                    <span>Recent Searches</span>
+                    <span class="suggest-clear-link" (mousedown)="OnClearRecentClick($event)">Clear</span>
+                </div>
+                @for (recent of VisibleRecentSearches; track recent.Query; let i = $index) {
+                    <div
+                        class="suggest-item suggest-recent-item"
+                        [class.suggest-item-highlighted]="IsHighlighted(i)"
+                        (mousedown)="OnRecentClick(recent); $event.preventDefault()"
+                        (mouseenter)="HighlightedIndex = i"
+                    >
+                        <i class="fa-solid fa-clock suggest-item-icon"></i>
+                        <span class="suggest-item-text">{{ recent.Query }}</span>
+                        <span class="suggest-item-meta">{{ recent.ResultCount }} results</span>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Preview results section -->
+        @if (showPreviewSection && !IsLoading) {
+            @if (VisiblePreviewResults.length > 0) {
+                <div class="suggest-section">
+                    @for (result of VisiblePreviewResults; track result.ID; let i = $index) {
+                        <div
+                            class="suggest-item suggest-result-item"
+                            [class.suggest-item-highlighted]="IsHighlighted((showRecentSection ? VisibleRecentSearches.length : 0) + i)"
+                            (mousedown)="OnResultClick(result); $event.preventDefault()"
+                            (mouseenter)="HighlightedIndex = (showRecentSection ? VisibleRecentSearches.length : 0) + i"
+                        >
+                            <div class="suggest-result-icon">
+                                <i [class]="result.EntityIcon || result.SourceIcon || 'fa-solid fa-database'"></i>
+                            </div>
+                            <div class="suggest-result-body">
+                                <div class="suggest-result-title">{{ result.RecordName || result.Title }}</div>
+                                <div class="suggest-result-entity">{{ result.EntityName }}</div>
+                            </div>
+                            <span class="suggest-result-score" [class]="'suggest-result-score ' + GetScoreClass(result.Score)">{{ FormatScore(result.Score) }}</span>
+                        </div>
+                    }
+                </div>
+            } @else if (!IsLoading) {
+                <div class="suggest-empty">
+                    <span>No results found</span>
+                </div>
+            }
+
+            <!-- See all footer -->
+            @if (showSeeAllFooter) {
+                <div
+                    class="suggest-see-all"
+                    [class.suggest-item-highlighted]="IsHighlighted((showRecentSection ? VisibleRecentSearches.length : 0) + VisiblePreviewResults.length)"
+                    (mousedown)="OnSeeAllClick(); $event.preventDefault()"
+                    (mouseenter)="HighlightedIndex = (showRecentSection ? VisibleRecentSearches.length : 0) + VisiblePreviewResults.length"
+                >
+                    <i class="fa-solid fa-arrow-right suggest-see-all-icon"></i>
+                    <span>See all {{ TotalCount }} results</span>
+                </div>
+            }
+        }
+
+        <!-- Min relevance filter bar -->
+        @if (showPreviewSection) {
+            <div class="suggest-filter-bar">
+                <div class="suggest-filter-toggle" (mousedown)="ToggleFilter($event)">
+                    <i class="fa-solid fa-sliders suggest-filter-icon"></i>
+                    <span class="suggest-filter-label">
+                        @if (MinRelevancePercent > 0) {
+                            Min relevance: {{ MinRelevancePercent }}%
+                        } @else {
+                            Showing all results
+                        }
+                    </span>
+                    <i class="fa-solid fa-chevron-down suggest-filter-chevron" [class.suggest-filter-chevron-open]="IsFilterOpen"></i>
+                </div>
+
+                @if (IsFilterOpen) {
+                    <div class="suggest-filter-popover">
+                        <div class="suggest-filter-popover-header">Min Relevance</div>
+                        @for (option of MinRelevanceOptions; track option) {
+                            <div
+                                class="suggest-filter-option"
+                                [class.suggest-filter-option-active]="IsSelectedRelevance(option)"
+                                (mousedown)="SetMinRelevance(option, $event)"
+                            >
+                                <span>{{ FormatRelevanceOption(option) }}</span>
+                                @if (IsSelectedRelevance(option)) {
+                                    <i class="fa-solid fa-check suggest-filter-check"></i>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Empty state when no recent and query too short -->
+        @if (!showRecentSection && !showPreviewSection) {
+            <div class="suggest-empty">
+                <span>Type at least {{ MinQueryLength }} characters to search</span>
+            </div>
+        }
+    </div>
+}

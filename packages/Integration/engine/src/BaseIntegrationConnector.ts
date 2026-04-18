@@ -31,6 +31,8 @@ export interface ConnectionTestResult {
 
 /** Schema description of an object/table in an external system */
 export interface ExternalObjectSchema {
+    /** IntegrationObject ID from the MJ database */
+    ID?: string;
     /** API name of the object (e.g., "Contact", "Account") */
     Name: string;
     /** Human-readable label */

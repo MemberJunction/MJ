@@ -1,0 +1,170 @@
+[
+  {
+    "fields": {
+      "Name": "Agadez",
+      "Code": "1",
+      "ISO3166_2": "NE-1",
+      "Latitude": 19.4523,
+      "Longitude": 10.0991,
+      "BoundaryGeoJSON": "@file:by-country/NE/boundaries/NE-1.geojson",
+      "CommonAliases": [
+        "Agadez"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NE"
+    },
+    "primaryKey": {
+      "ID": "9617CD69-6E87-423C-B333-0B386C736559"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.878Z",
+      "checksum": "fab1ed9a8e5d08662be5fa8b3e2d8963edb4949610814d4eab269a5e6da74e5f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diffa",
+      "Code": "2",
+      "ISO3166_2": "NE-2",
+      "Latitude": 15.7652,
+      "Longitude": 13.0899,
+      "BoundaryGeoJSON": "@file:by-country/NE/boundaries/NE-2.geojson",
+      "CommonAliases": [
+        "Diffa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NE"
+    },
+    "primaryKey": {
+      "ID": "C290BB38-AA9C-463B-9551-1798842A7892"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.894Z",
+      "checksum": "f74ef668fb1506811635ee6136f05c05b8e3e951859552b9168a24a48e7ebe26"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dosso",
+      "Code": "3",
+      "ISO3166_2": "NE-3",
+      "Latitude": 12.8124,
+      "Longitude": 3.5502,
+      "BoundaryGeoJSON": "@file:by-country/NE/boundaries/NE-3.geojson",
+      "CommonAliases": [
+        "Dosso"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NE"
+    },
+    "primaryKey": {
+      "ID": "2A7F5C1D-1989-4034-AEBA-FED4CC364083"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.911Z",
+      "checksum": "e8f1ca6de878a6254c55bf43862ec26352d225c2470ebeb150603e020d0ff558"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maradi",
+      "Code": "4",
+      "ISO3166_2": "NE-4",
+      "Latitude": 14.1148,
+      "Longitude": 7.412,
+      "BoundaryGeoJSON": "@file:by-country/NE/boundaries/NE-4.geojson",
+      "CommonAliases": [
+        "Maradi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NE"
+    },
+    "primaryKey": {
+      "ID": "F4CEB6C5-DFFA-4DC9-897D-3109BA1273DE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.927Z",
+      "checksum": "061181f0cd0d34c037e416220904da8309b5e996f1ba6d7ada007fcd78dd7762"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Niamey",
+      "Code": "8",
+      "ISO3166_2": "NE-8",
+      "Latitude": 13.562,
+      "Longitude": 2.1217,
+      "BoundaryGeoJSON": "@file:by-country/NE/boundaries/NE-8.geojson",
+      "CommonAliases": [
+        "Niamey"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NE"
+    },
+    "primaryKey": {
+      "ID": "A975F3F5-0FC9-4B70-9BF6-957B501E6DB0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.944Z",
+      "checksum": "3d79385ae4ce149fd87e295738dedfc9a4ee94b1de025c37073d37736948e7ca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tahoua",
+      "Code": "5",
+      "ISO3166_2": "NE-5",
+      "Latitude": 15.6002,
+      "Longitude": 5.2736,
+      "BoundaryGeoJSON": "@file:by-country/NE/boundaries/NE-5.geojson",
+      "CommonAliases": [
+        "Tahoua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NE"
+    },
+    "primaryKey": {
+      "ID": "F4319F56-D42B-40C7-96E9-1B6ABE34CEA8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.961Z",
+      "checksum": "2c644540e77e11f66e134ba25c177c3dfd133f45e213ed0834c2415563509317"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tillaberi",
+      "Code": "6",
+      "ISO3166_2": "NE-6",
+      "Latitude": 13.8777,
+      "Longitude": 2.1954,
+      "BoundaryGeoJSON": "@file:by-country/NE/boundaries/NE-6.geojson",
+      "CommonAliases": [
+        "Tillaberi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NE"
+    },
+    "primaryKey": {
+      "ID": "F6753D10-90F9-4F8B-9083-FAB19ECE17F4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.977Z",
+      "checksum": "f6d478ef53ed3e08f9d64c705ee408cbbb8f03f259354fd7ff8586f3bdddc2a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zinder",
+      "Code": "7",
+      "ISO3166_2": "NE-7",
+      "Latitude": 14.5314,
+      "Longitude": 9.6623,
+      "BoundaryGeoJSON": "@file:by-country/NE/boundaries/NE-7.geojson",
+      "CommonAliases": [
+        "Zinder"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NE"
+    },
+    "primaryKey": {
+      "ID": "B864FD10-CC22-4336-ACAC-7728A27A3D81"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.992Z",
+      "checksum": "564b6f3a59e3b8b7f0becb4bff0b5a92c23cf85eaf5ef91e64cc4737800e97c9"
+    }
+  }
+]

@@ -1,4 +1,7 @@
+import type { BaseEntity } from "./baseEntity";
+import type { IMetadataProvider } from "./interfaces";
 import { LogError } from "./logging";
+import type { UserInfo } from "./securityInfo";
 
 /**
  * Returns the TypeScript type that corresponds to the SQL type passed in
@@ -357,4 +360,68 @@ export function StripContainingParens(value: string): string {
         return StripContainingParens(value.substring(1, value.length - 1));
     }
     return value;
+}
+
+
+
+/**
+ * Converts an array of plain JavaScript objects into fully-hydrated `BaseEntity`
+ * subclass instances, using `Promise.all` for parallel creation.
+ *
+ * This is the canonical way to batch-convert raw data (e.g. from a custom stored
+ * procedure, RunQuery result, or any non-RunView data source) into typed entity
+ * objects that support `.Save()`, `.Load()`, dirty-tracking, and all other
+ * `BaseEntity` capabilities.
+ *
+ * Items that are already `BaseEntity` instances (detected via `instanceof` or
+ * duck-typing the `.Save()` method) are returned as-is, making this function
+ * safe to call on mixed arrays.
+ *
+ * **Performance note:** All entity creations run in parallel via `Promise.all`.
+ * For large arrays (500+ items), consider chunking to avoid memory pressure.
+ *
+ * @param md - The metadata provider used to create entity instances. On the client
+ *   side this is typically `new Metadata()`; on the server side it is the active
+ *   `IMetadataProvider` (e.g. `Metadata.Provider`).
+ * @param entityName - The MemberJunction entity name, e.g. `'MJ: Conversation Details'`.
+ *   Must match a registered entity exactly (case-insensitive, trimmed).
+ * @param items - Plain objects whose keys map to entity field names. Each object is
+ *   passed to `entity.LoadFromData()` which populates the entity without marking
+ *   fields as dirty (i.e. the entity starts in a "clean" / not-new state).
+ * @param contextUser - Optional user context for server-side operations. Required on
+ *   the server where multiple users are served concurrently; can be omitted on the
+ *   client where user context is already established.
+ * @returns A parallel-resolved array of typed entity objects in the same order as
+ *   the input `items` array.
+ *
+ * @example
+ * ```typescript
+ * import { Metadata, TransformSimpleObjectToEntityObject } from '@memberjunction/core';
+ *
+ * const md = new Metadata();
+ * const rawRows = queryResult.Results as SomeRawType[];
+ * const entities = await TransformSimpleObjectToEntityObject<MyEntity>(
+ *   md, 'My Entity Name', rawRows, contextUser
+ * );
+ * // entities is MyEntity[] — fully usable with .Save(), .Load(), etc.
+ * ```
+ */
+export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(md: IMetadataProvider, entityName: string, items: Array<Record<string, unknown>>, contextUser?: UserInfo): Promise<Array<T>> {
+    // we need to transform each of the items in the result set into a BaseEntity-derived object
+    // Create entities and load data in parallel for better performance
+    const entityPromises = items.map(async (item) => {
+        if (typeof item.Save === 'function') {
+            // duck-typing check — detects BaseEntity instances (and subclasses loaded
+            // from different runtime sources where instanceof would fail)
+            return item as T;
+        }
+        else {
+            // not a base entity sub-class already so convert
+            const entity = await md.GetEntityObject<T>(entityName, contextUser);
+            await entity.LoadFromData(item);
+            return entity;
+        } 
+    });
+    
+    return await Promise.all(entityPromises);
 }

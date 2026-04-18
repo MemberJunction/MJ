@@ -59,20 +59,14 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
     return null;
   }
 
-  // Determines if the route should be reused
+  // Determines if the route should be reused.
+  // Query params are intentionally excluded — the shell handles query param
+  // sub-navigation via NotifyQueryParamsChanged. Including them here would
+  // cause the ResourceResolver to re-run on back/forward query param changes,
+  // racing with the shell's syncWorkspaceWithUrl.
   shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean {
-    // we need to compare the params object from future and curr and see if any differences
-    // and do the same for the queryParams object from each
-    // if there are differences, return false, otherwise return true
-    const futureParams = future.params;
-    const currParams = curr.params;
-    const futureQueryParams = future.queryParams;
-    const currQueryParams = curr.queryParams;
-
-    // only reuse (e.g. return true) when all of these comparisons are the same
-    return this.objectContentsEqual(futureParams, currParams) &&  // route params are the same
-           this.objectContentsEqual(futureQueryParams, currQueryParams) &&  // query params are the same
-           future.routeConfig === curr.routeConfig; // route config object is the same
+    return future.routeConfig === curr.routeConfig &&
+           this.objectContentsEqual(future.params, curr.params);
   }
 
   objectContentsEqual(obj1: any, obj2: any): boolean {
@@ -153,6 +147,8 @@ export class ResourceResolver implements Resolve<void> {
     );
 
     await StartupManager.Instance.Startup();
+
+    await this.appManager.WhenReady();
   }
 
   async resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<void> {
@@ -199,7 +195,6 @@ export class ResourceResolver implements Resolve<void> {
       // Check app access
       const accessResult = this.appManager.CheckAppAccess(appName);
       if (accessResult.status !== 'accessible') {
-        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
         return;
       }
 
@@ -401,7 +396,6 @@ export class ResourceResolver implements Resolve<void> {
       if (accessResult.status !== 'accessible') {
         // User doesn't have access - let the shell component handle the error dialog
         // Don't create any tabs here
-        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
         return;
       }
 
@@ -423,7 +417,6 @@ export class ResourceResolver implements Resolve<void> {
       if (accessResult.status !== 'accessible') {
         // User doesn't have access - let the shell component handle the error dialog
         // Don't create any tabs here
-        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
         return;
       }
 
@@ -625,21 +618,21 @@ export class ResourceResolver implements Resolve<void> {
     }
 
     if (route.params['searchInput'] !== undefined) {
-      // /resource/search/:searchInput
       const searchInput = decodeURIComponent(route.params['searchInput']);
-      const entityName = route.queryParams['Entity'] || '';
 
-      // Queue tab request via TabService
+      // Unified search route: always use SearchResultsResource
+      // Pass Query for the ng-search service, and legacy SearchInput for backward compat
       this.tabService.OpenTab({
         ApplicationId: SYSTEM_APP_ID,
         Title: `Search: ${searchInput}`,
         Configuration: {
-          resourceType: 'Search Results',
-          Entity: entityName,
+          resourceType: 'Custom',
+          driverClass: 'SearchResultsResource',
+          Query: searchInput,
           SearchInput: searchInput,
-          recordId: searchInput
+          recordId: `search-${searchInput}`
         },
-        ResourceRecordId: searchInput,
+        ResourceRecordId: `search-${searchInput}`,
         IsPinned: false
       });
       return;
@@ -738,7 +731,7 @@ const routes: Routes = [
     resolve: { data: ResourceResolver },
     canActivate: [AuthGuard],
     component: SingleRecordComponent,
-  } 
+  }
 ];
 
 interface DetachedRouteHandleExt extends DetachedRouteHandle {

@@ -26,9 +26,17 @@
   background-color: transparent;
 }
 
-.message-item.pinned {
-  border-left: 3px solid var(--mj-brand-primary);
-  background-color: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+/* Jump-to beacon: pulsed amber glow applied programmatically after scroll */
+.message-item.pin-beacon {
+  animation: pinBeacon 1.5s ease-out forwards;
+}
+
+@keyframes pinBeacon {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-status-warning) 60%, transparent); }
+  20%  { box-shadow: 0 0 0 8px color-mix(in srgb, var(--mj-status-warning) 35%, transparent); }
+  50%  { box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-status-warning) 15%, transparent); }
+  70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--mj-status-warning) 20%, transparent); }
+  100% { box-shadow: none; }
 }
 
 .message-item.in-progress {
@@ -1055,10 +1063,49 @@
   color: var(--mj-text-muted);
 }
 
-.inline-actions {
+/* Delete button — always visible on the last message, no hover required */
+.inline-delete {
   display: flex;
-  gap: 4px;
   align-items: center;
+}
+
+.message-item.pinned {
+  border-left: 3px solid var(--mj-status-warning);
+  background-color: color-mix(in srgb, var(--mj-status-warning) 8%, transparent);
+}
+
+/* Wraps pin button + rating component on the right side of the footer */
+.ai-message-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.action-bar-btn.pin-btn {
+  color: var(--mj-text-muted);
+}
+
+.action-bar-btn.pin-btn:hover {
+  color: var(--mj-status-warning);
+  border-color: var(--mj-status-warning);
+}
+
+.action-bar-btn.pin-btn.pinned {
+  opacity: 1;
+  color: var(--mj-status-warning);
+  border-color: var(--mj-status-warning-border);
+  background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+}
+
+/* Delete + Rating + Pin in gear panel for non-last messages — mirrors .message-footer layout */
+.agent-panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 0;
+  margin-top: 8px;
+  border-top: 1px solid var(--mj-border-subtle);
 }
 
 /* Agent details section wrapper */

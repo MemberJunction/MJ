@@ -251,7 +251,17 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     });
   }
 
-  ToggleFeedbackPanel(): void {
+  /**
+   * Component artifacts support feedback when a resolved spec is available.
+   */
+  public override get SupportsFeedback(): boolean {
+    return !!this.resolvedComponentSpec;
+  }
+
+  /**
+   * Toggle the feedback panel open. Called from the artifact viewer header button.
+   */
+  public override AskUserForFeedback(): void {
     this.ShowFeedbackPanel = !this.ShowFeedbackPanel;
   }
 }

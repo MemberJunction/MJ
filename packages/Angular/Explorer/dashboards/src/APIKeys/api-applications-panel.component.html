@@ -141,14 +141,14 @@
       <div class="form-section">
         <div class="form-field">
           <label>Application Name *</label>
-          <input kendoTextBox [(ngModel)]="EditName"
+          <input class="mj-input" [(ngModel)]="EditName"
             placeholder="e.g., MJAPI, MCP Server, Portal"
             class="form-input" />
         </div>
 
         <div class="form-field">
           <label>Description</label>
-          <textarea kendoTextArea [(ngModel)]="EditDescription"
+          <textarea class="mj-textarea" [(ngModel)]="EditDescription"
             placeholder="Describe the application's purpose..."
             [rows]="3"
           class="form-textarea"></textarea>
@@ -156,7 +156,7 @@
 
         <div class="form-field">
           <label class="checkbox-label">
-            <input type="checkbox" kendoCheckBox [(ngModel)]="EditIsActive" />
+            <input type="checkbox" class="mj-checkbox" [(ngModel)]="EditIsActive" />
             <div>
               <span>Active</span>
               <span class="checkbox-hint">Inactive applications cannot be used with API keys</span>
@@ -167,7 +167,7 @@
     </div>
 
     <div class="slideout-footer">
-      <button kendoButton [themeColor]="'primary'"
+      <button mjButton variant="primary"
         [disabled]="!EditName.trim() || IsSaving"
         (click)="saveApplication()">
         @if (IsSaving) {
@@ -180,7 +180,7 @@
           </span>
         }
       </button>
-      <button kendoButton (click)="closePanel()">Cancel</button>
+      <button mjButton (click)="closePanel()">Cancel</button>
     </div>
   </div>
 
@@ -225,20 +225,20 @@
           <div class="form-section">
             <div class="form-field">
               <label>Application Name *</label>
-              <input kendoTextBox [(ngModel)]="EditName"
+              <input class="mj-input" [(ngModel)]="EditName"
                 placeholder="e.g., MJAPI, MCP Server, Portal"
                 class="form-input" />
             </div>
             <div class="form-field">
               <label>Description</label>
-              <textarea kendoTextArea [(ngModel)]="EditDescription"
+              <textarea class="mj-textarea" [(ngModel)]="EditDescription"
                 placeholder="Describe the application's purpose..."
                 [rows]="4"
               class="form-textarea"></textarea>
             </div>
             <div class="form-field">
               <label class="checkbox-label">
-                <input type="checkbox" kendoCheckBox [(ngModel)]="EditIsActive" />
+                <input type="checkbox" class="mj-checkbox" [(ngModel)]="EditIsActive" />
                 <div>
                   <span>Active</span>
                   <span class="checkbox-hint">Inactive applications cannot be used with API keys</span>
@@ -269,7 +269,7 @@
                   </div>
                   <div class="category-right">
                     <label class="category-all-toggle" (click)="$event.stopPropagation()">
-                      <input type="checkbox" kendoCheckBox
+                      <input type="checkbox" class="mj-checkbox"
                         [checked]="category.allSelected"
                         (change)="toggleCategoryAll(category)" />
                       <span>All</span>
@@ -285,7 +285,7 @@
                       <div class="scope-row"
                         [class.selected]="selection.selected">
                         <label class="scope-select">
-                          <input type="checkbox" kendoCheckBox
+                          <input type="checkbox" class="mj-checkbox"
                             [(ngModel)]="selection.selected"
                             (change)="updateCategoryState(category)" />
                           <div class="scope-label">
@@ -311,16 +311,16 @@
                         <!-- Editable pattern config - shown on hover -->
                         @if (selection.selected) {
                           <div class="scope-pattern-config">
-                            <input kendoTextBox [(ngModel)]="selection.pattern"
+                            <input class="mj-input" [(ngModel)]="selection.pattern"
                               placeholder="*"
                               class="pattern-field"
                               title="Resource Pattern" />
-                            <kendo-dropdownlist [(ngModel)]="selection.patternType"
-                              [data]="['Include', 'Exclude']"
-                              [valuePrimitive]="true"
+                            <mj-dropdown [(ngModel)]="selection.patternType"
+                              [Data]="['Include', 'Exclude']"
+                              [ValuePrimitive]="true"
                               class="type-field"
                               title="Pattern Type">
-                            </kendo-dropdownlist>
+                            </mj-dropdown>
                           </div>
                         }
                       </div>
@@ -341,7 +341,7 @@
     </div>
 
     <div class="slideout-footer">
-      <button kendoButton [themeColor]="'primary'"
+      <button mjButton variant="primary"
         [disabled]="!EditName.trim() || IsSaving"
         (click)="saveAll()">
         @if (IsSaving) {
@@ -354,7 +354,7 @@
           </span>
         }
       </button>
-      <button kendoButton (click)="closePanel()">Cancel</button>
+      <button mjButton (click)="closePanel()">Cancel</button>
     </div>
   </div>
 </div>

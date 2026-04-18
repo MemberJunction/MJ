@@ -461,11 +461,12 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         console.log(`[YM] FetchChanges called for '${ctx.ObjectName}' (batchSize=${ctx.BatchSize}, watermark=${ctx.WatermarkValue ?? 'none'}, offset=${ctx.CurrentOffset ?? 'none'})`);
 
-        if (ctx.ObjectName === 'Groups' || ctx.ObjectName === 'GroupTypes') {
+        const objLower = ctx.ObjectName.toLowerCase();
+        if (objLower === 'groups' || objLower === 'grouptypes') {
             return this.FetchGroups(ctx);
         }
 
-        if (ctx.ObjectName === 'Members') {
+        if (objLower === 'members') {
             return this.FetchMemberBatch(ctx);
         }
 
@@ -492,10 +493,17 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             return pageResult;
         }
 
-        // Client-side watermark filtering: YM's MemberList API returns all members
-        // every time (no server-side date filter), so we filter locally by LastUpdated.
+        console.log(`[YM Members] Fetched ${pageResult.Records.length} member IDs, enriching...`);
+
+        // Enrich FIRST — the raw member list doesn't have LastUpdated,
+        // only the detail API returns it. We need it for watermark computation.
+        const enriched = await this.EnrichMembersWithDetails(
+            ctx, pageResult.Records, ctx.CurrentOffset ?? 0, pageResult.Records.length
+        );
+
+        // Now filter by watermark using the enriched records (which have LastUpdated)
         const { changedRecords, newWatermark } = this.FilterByWatermark(
-            pageResult.Records, ctx.WatermarkValue, 'LastUpdated'
+            enriched, ctx.WatermarkValue, 'LastUpdated'
         );
 
         if (changedRecords.length === 0) {
@@ -505,23 +513,19 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
                 NextOffset: pageResult.NextOffset,
                 NextPage: pageResult.NextPage,
                 NextCursor: pageResult.NextCursor,
-                NewWatermarkValue: !pageResult.HasMore ? (newWatermark ?? pageResult.NewWatermarkValue) : undefined,
+                NewWatermarkValue: !pageResult.HasMore ? newWatermark : undefined,
             };
         }
 
-        console.log(`[YM Members] Fetched ${pageResult.Records.length} member IDs, ${changedRecords.length} changed since watermark, enriching...`);
-
-        const enriched = await this.EnrichMembersWithDetails(
-            ctx, changedRecords, ctx.CurrentOffset ?? 0, changedRecords.length
-        );
+        console.log(`[YM Members] ${changedRecords.length}/${enriched.length} changed since watermark`);
 
         return {
-            Records: enriched,
+            Records: changedRecords,
             HasMore: pageResult.HasMore,
             NextOffset: pageResult.NextOffset,
             NextPage: pageResult.NextPage,
             NextCursor: pageResult.NextCursor,
-            NewWatermarkValue: !pageResult.HasMore ? (newWatermark ?? pageResult.NewWatermarkValue) : undefined,
+            NewWatermarkValue: !pageResult.HasMore ? newWatermark : undefined,
         };
     }
 
@@ -713,7 +717,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             return { Records: [], HasMore: false };
         }
 
-        if (ctx.ObjectName === 'GroupTypes') {
+        if (ctx.ObjectName.toLowerCase() === 'grouptypes') {
             return this.BuildGroupTypeRecords(typeList, ctx.ObjectName);
         }
 

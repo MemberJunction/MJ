@@ -1,0 +1,464 @@
+[
+  {
+    "fields": {
+      "Name": "Arhangay",
+      "Code": "073",
+      "ISO3166_2": "MN-073",
+      "Latitude": 48.0061,
+      "Longitude": 100.92,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-073.geojson",
+      "CommonAliases": [
+        "Arhangay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "7C2576AA-D365-4FE4-B48E-824893BEB5C7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.113Z",
+      "checksum": "7be0e183b683ac06551ebc7e3b83cf3a5094941be93ebeef0e144e0d3bf73ab9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bayan-Ölgiy",
+      "Code": "071",
+      "ISO3166_2": "MN-071",
+      "Latitude": 48.8811,
+      "Longitude": 89.8127,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-071.geojson",
+      "CommonAliases": [
+        "Bayan-Ölgiy"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "07C3BC08-F180-4B44-88F1-6C9C10C2115A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.132Z",
+      "checksum": "4d689145b3662fb90dfffc6c9c53d30e95d038d5d4dd9f0ef3f76f98a4735726"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bayanhongor",
+      "Code": "069",
+      "ISO3166_2": "MN-069",
+      "Latitude": 45.8317,
+      "Longitude": 99.6955,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-069.geojson",
+      "CommonAliases": [
+        "Bayanhongor"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "6994068D-AD49-4A30-80A7-39300B2431D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.152Z",
+      "checksum": "8c622d884de5a415935a397fed204abbcaf04990ba9b779f2364118bf986161b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bulgan",
+      "Code": "067",
+      "ISO3166_2": "MN-067",
+      "Latitude": 49.0014,
+      "Longitude": 103.196,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-067.geojson",
+      "CommonAliases": [
+        "Bulgan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "A43FE095-7025-4E17-97DC-063BA3F7E45D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.169Z",
+      "checksum": "4470e02d49c5db277d5308de10ae83e22ea1fb1739b3a62a65e473e87abaebcf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Darhan uul",
+      "Code": "037",
+      "ISO3166_2": "MN-037",
+      "Latitude": 49.3586,
+      "Longitude": 106.306,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-037.geojson",
+      "CommonAliases": [
+        "Darhan uul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "421E238D-746F-452D-A1B5-1F3D1B652B43"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.186Z",
+      "checksum": "210834018f62105de76fef5d798f13ba45fb8efafea5088314dcf0ee5b60b040"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dornod",
+      "Code": "061",
+      "ISO3166_2": "MN-061",
+      "Latitude": 48.7766,
+      "Longitude": 114.261,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-061.geojson",
+      "CommonAliases": [
+        "Dornod"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "60DC0D5B-2AB7-4DAA-95F6-0BF13FDAB428"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.204Z",
+      "checksum": "a97db8c5877585bc2948a4f6f8805ea9b3415c1233ae81d45fcc58437657d657"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dornogovĭ",
+      "Code": "063",
+      "ISO3166_2": "MN-063",
+      "Latitude": 44.4088,
+      "Longitude": 109.825,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-063.geojson",
+      "CommonAliases": [
+        "Dornogovĭ"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "36BCC6B2-9CB6-4063-A589-B67C681E69BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.229Z",
+      "checksum": "dde16af3aa81032e10347e3816307d2855381aa85f4eaf7ce61c5f03c729fbc8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dundgovĭ",
+      "Code": "059",
+      "ISO3166_2": "MN-059",
+      "Latitude": 45.4132,
+      "Longitude": 106.116,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-059.geojson",
+      "CommonAliases": [
+        "Dundgovĭ"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "6679E7CE-A4E6-4CE0-9AC8-8BDD4275F051"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.249Z",
+      "checksum": "b77a8e6382f02a2c8342de5d63b9ae2519394d307637a773b9890ed9c3523260"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dzavhan",
+      "Code": "057",
+      "ISO3166_2": "MN-057",
+      "Latitude": 48.615,
+      "Longitude": 96.1728,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-057.geojson",
+      "CommonAliases": [
+        "Dzavhan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "1493DAFE-E0D0-496E-816E-C05FF18A3703"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.271Z",
+      "checksum": "9e2891324e7e2f3e02b7ed1d3fd9f4127908ac81a7bfae66f978d935726413df"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Govĭ-Altay",
+      "Code": "065",
+      "ISO3166_2": "MN-065",
+      "Latitude": 45.4627,
+      "Longitude": 95.7776,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-065.geojson",
+      "CommonAliases": [
+        "Govĭ-Altay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "0C61B67A-59EB-4209-A888-7D05EBD2E8A3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.289Z",
+      "checksum": "6015c927dc7557d7444f47520e86047c7dd6bb136b1134fb9def0a6787c6dbde"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Govĭ-Sümber",
+      "Code": "064",
+      "ISO3166_2": "MN-064",
+      "Latitude": 47.74,
+      "Longitude": 108.346,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-064.geojson",
+      "CommonAliases": [
+        "Govĭ-Sümber"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "51AB1216-6426-423E-B690-297DD6B71BF8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.351Z",
+      "checksum": "2609f37832dab050d56178e1f9db530ad9f78b43dae6a78af9181120fb93d17d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hentiy",
+      "Code": "039",
+      "ISO3166_2": "MN-039",
+      "Latitude": 47.7116,
+      "Longitude": 110.542,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-039.geojson",
+      "CommonAliases": [
+        "Hentiy"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "F5FDEEBD-AD4C-4EA3-86C2-7A1E072BB985"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.369Z",
+      "checksum": "974ae2ac4fef91bb596121a50dc2febfbdf4bea8de37c4f8a6c1eee5afb898c7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hovd",
+      "Code": "043",
+      "ISO3166_2": "MN-043",
+      "Latitude": 46.8037,
+      "Longitude": 92.4584,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-043.geojson",
+      "CommonAliases": [
+        "Hovd"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "1E45EB7A-A5FE-43A1-A8F8-3E6675EB4EC9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.386Z",
+      "checksum": "1ce47a4f3b9169d46c9ac75514bda13e86a74e6e748e7ea1cbbc64fb19b72f24"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hövsgöl",
+      "Code": "041",
+      "ISO3166_2": "MN-041",
+      "Latitude": 50.1456,
+      "Longitude": 99.8205,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-041.geojson",
+      "CommonAliases": [
+        "Hövsgöl"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "B5E10CA6-81B5-4B14-B9FC-34A447BA359C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.405Z",
+      "checksum": "a9c704f00ce272e59c54fcdd74d1bbb668a23ada918c6c3e1745b848baaa3e61"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ömnögovĭ",
+      "Code": "053",
+      "ISO3166_2": "MN-053",
+      "Latitude": 43.4636,
+      "Longitude": 103.762,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-053.geojson",
+      "CommonAliases": [
+        "Ömnögovĭ"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "39FF7260-CE0A-40BF-98C7-7BAB7166E6FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.421Z",
+      "checksum": "e39f5e264df0fb6433a4867d743d15b4fd1ea44235023144becb16d721d08ef8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Orhon",
+      "Code": "035",
+      "ISO3166_2": "MN-035",
+      "Latitude": 49.0077,
+      "Longitude": 104.286,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-035.geojson",
+      "CommonAliases": [
+        "Orhon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "F769307C-91C0-489A-98C0-8CB174276D27"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.438Z",
+      "checksum": "f3cf4e85edb6c9c38b5a6125771452a001b2bcd02787efc7291da195de8cc4eb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Övörhangay",
+      "Code": "055",
+      "ISO3166_2": "MN-055",
+      "Latitude": 45.7785,
+      "Longitude": 102.857,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-055.geojson",
+      "CommonAliases": [
+        "Övörhangay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "9B8A8300-A27C-4AD6-8E2E-5B2A23EA617C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.455Z",
+      "checksum": "f14bfd5c75ef9cd135b896920d7d5301efa177a54cdf27bcf3c076ff02e7fbbe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Selenge",
+      "Code": "049",
+      "ISO3166_2": "MN-049",
+      "Latitude": 48.8536,
+      "Longitude": 106.46,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-049.geojson",
+      "CommonAliases": [
+        "Selenge"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "D87049CE-4066-4B81-B7C0-AA1829D2585F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.472Z",
+      "checksum": "ce5a30147aeb6e02ec698ab620c08e172038b52a26d2afbd94161dbaa02e76b9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sühbaatar",
+      "Code": "051",
+      "ISO3166_2": "MN-051",
+      "Latitude": 46.1847,
+      "Longitude": 113.904,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-051.geojson",
+      "CommonAliases": [
+        "Sühbaatar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "962D54B2-BBE4-4E85-BD88-6E057CFA4E5E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.488Z",
+      "checksum": "4f79bce1c88a10ef7a1435ef178e3c9692641e2c818bb4707ee66da2e16ed253"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Töv",
+      "Code": "047",
+      "ISO3166_2": "MN-047",
+      "Latitude": 47.1533,
+      "Longitude": 106.554,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-047.geojson",
+      "CommonAliases": [
+        "Töv"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "BAD3B74D-F06F-4C1E-B192-C38B0AB163A2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.501Z",
+      "checksum": "681da796e55cabafd605fcfcd8c29cd5fb08c7ac52371944c74e1d65d6950075"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ulaanbaatar",
+      "Code": "1",
+      "ISO3166_2": "MN-1",
+      "Latitude": 47.9597,
+      "Longitude": 106.967,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-1.geojson",
+      "CommonAliases": [
+        "Ulaanbaatar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "E072D40B-6CF0-424D-A64C-4D0CF7556C66"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.530Z",
+      "checksum": "5a80d0aa7d3468141215131b9b8d26da5d7f780547ccb07ef06abe245228c127"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uvs",
+      "Code": "046",
+      "ISO3166_2": "MN-046",
+      "Latitude": 49.6911,
+      "Longitude": 92.8431,
+      "BoundaryGeoJSON": "@file:by-country/MN/boundaries/MN-046.geojson",
+      "CommonAliases": [
+        "Uvs"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MN"
+    },
+    "primaryKey": {
+      "ID": "040FF810-8F9D-4379-BF32-4E78A723E812"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.545Z",
+      "checksum": "d3c3887bbeb8af17264bc61d3a1e7f4be3d99e516bd415b6e38a24c3f3e7bcc2"
+    }
+  }
+]

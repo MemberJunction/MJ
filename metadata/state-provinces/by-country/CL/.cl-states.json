@@ -1,0 +1,275 @@
+[
+  {
+    "fields": {
+      "Name": "Aisén del General Carlos Ibáñiez del Campo",
+      "Code": "AI",
+      "ISO3166_2": "CL-AI",
+      "Latitude": -46.8716,
+      "Longitude": -73.3899,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-AI.geojson",
+      "CommonAliases": [
+        "Aisén del General Carlos Ibáñiez del Campo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "C0A4B5E5-2428-4D3D-9035-E1108D188A0D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.534Z",
+      "checksum": "c3eaa20db9f53cf01fa207644539824fa4456f02422c3036443973b1f8ff1bf1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Antofagasta",
+      "Code": "AN",
+      "ISO3166_2": "CL-AN",
+      "Latitude": -23.3178,
+      "Longitude": -68.8739,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-AN.geojson",
+      "CommonAliases": [
+        "Antofagasta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "849EF177-423C-46B7-8114-307059FB26F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.549Z",
+      "checksum": "6684d647f4e15ce6d58a7733fbb8dc45f7ed18da058a4b0f0b91532130ab4ff9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Araucanía",
+      "Code": "AR",
+      "ISO3166_2": "CL-AR",
+      "Latitude": -38.738,
+      "Longitude": -72.3806,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-AR.geojson",
+      "CommonAliases": [
+        "Araucanía"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "2FF32CC8-48AC-42E0-BF64-5D27C995189E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.565Z",
+      "checksum": "e79d57871acc9dfcdb83dd7b19f161a3c12c59b1a78af9e148188ae9d2400047"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Atacama",
+      "Code": "AT",
+      "ISO3166_2": "CL-AT",
+      "Latitude": -27.4469,
+      "Longitude": -69.9123,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-AT.geojson",
+      "CommonAliases": [
+        "Atacama"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "6A42D499-4F77-4CB8-877B-FA36BF5DD7DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.581Z",
+      "checksum": "0241a1a301256e825a01fefb4158780076c17bc45184db9b9ed93875bc3e2865"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bío-Bío",
+      "Code": "BI",
+      "ISO3166_2": "CL-BI",
+      "Latitude": -36.9791,
+      "Longitude": -72.3475,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-BI.geojson",
+      "CommonAliases": [
+        "Bío-Bío"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "C9BC3D8B-ACD3-41AE-BAF2-95117ED5E888"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.599Z",
+      "checksum": "9b6bec3671839fa740f30ea9c9e15a7052ad4cb223b62bc222f989c174dd450f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Coquimbo",
+      "Code": "CO",
+      "ISO3166_2": "CL-CO",
+      "Latitude": -30.5838,
+      "Longitude": -70.7749,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-CO.geojson",
+      "CommonAliases": [
+        "Coquimbo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "3E0CFC14-20B9-42B9-8920-0EA9D10CE067"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.616Z",
+      "checksum": "44d806b6bcde13b4371a9429fd7ae6a4306245170d11f905a48223355e87c21a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Libertador General Bernardo O'Higgins",
+      "Code": "LI",
+      "ISO3166_2": "CL-LI",
+      "Latitude": -34.5255,
+      "Longitude": -71.0756,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-LI.geojson",
+      "CommonAliases": [
+        "Libertador General Bernardo O'Higgins"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "1081D3C6-B411-4C74-ADFE-C51C054885AD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.632Z",
+      "checksum": "1de36d98708e26b120c29af45ccc46621fada7b6647497f66a263fe1b144148d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Los Lagos",
+      "Code": "LL",
+      "ISO3166_2": "CL-LL",
+      "Latitude": -41.0592,
+      "Longitude": -72.9043,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-LL.geojson",
+      "CommonAliases": [
+        "Los Lagos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "65000A74-C962-4B18-83F6-8CC2820B31DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.650Z",
+      "checksum": "3f11129c62b783b71de4b52b31234074fb5e8ef151db494190c1e2a03d8baa18"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Magallanes",
+      "Code": "MA",
+      "ISO3166_2": "CL-MA",
+      "Latitude": -53.4723,
+      "Longitude": -71.3975,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-MA.geojson",
+      "CommonAliases": [
+        "Magallanes"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "F28408CC-8FA0-4FA3-BC50-DB70380AFAA9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.671Z",
+      "checksum": "62b672f08dfae7654210cc8afc17211ef4ba27cbaf56178d46c13e5578b12d42"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maule",
+      "Code": "ML",
+      "ISO3166_2": "CL-ML",
+      "Latitude": -35.6067,
+      "Longitude": -71.5811,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-ML.geojson",
+      "CommonAliases": [
+        "Maule"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "F51D0BE8-0B9B-48BB-A0BF-48D2BB7F6171"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.684Z",
+      "checksum": "d54238a959869a851b76a8b2502f7d3ff62203efbb7019b412e1605a08df1621"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Regíon Metropolitana de Santiago",
+      "Code": "RM",
+      "ISO3166_2": "CL-RM",
+      "Latitude": -33.4568,
+      "Longitude": -70.7527,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-RM.geojson",
+      "CommonAliases": [
+        "Regíon Metropolitana de Santiago"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "DB71E068-9DCF-4867-A753-34E41BF5BE1E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.718Z",
+      "checksum": "d2db403fcb8dc6adec2b4c36c4ac799e06fe6af02105274c6bd1e0b9399ba630"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tarapacá",
+      "Code": "TA",
+      "ISO3166_2": "CL-TA",
+      "Latitude": -20.2427,
+      "Longitude": -69.3683,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-TA.geojson",
+      "CommonAliases": [
+        "Tarapacá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "3FF2862D-E50E-4162-A22C-6BE60103047F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.734Z",
+      "checksum": "b114824188c77e7149886a8837c5a45d11bd5a943b3cb4c5a644076de8fa551c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Valparaiso",
+      "Code": "VS",
+      "ISO3166_2": "CL-VS",
+      "Latitude": -32.4884,
+      "Longitude": -70.936,
+      "BoundaryGeoJSON": "@file:by-country/CL/boundaries/CL-VS.geojson",
+      "CommonAliases": [
+        "Valparaiso"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CL"
+    },
+    "primaryKey": {
+      "ID": "99DF140B-8C44-491E-9DEB-DEF0957A721E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.748Z",
+      "checksum": "932580d9a69528961d07a07eb3a4fc22db21b58e82b4cfe0f7b3f14a72af8c01"
+    }
+  }
+]

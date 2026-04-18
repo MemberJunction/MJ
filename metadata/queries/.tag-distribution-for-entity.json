@@ -1,0 +1,25 @@
+[
+  {
+    "fields": {
+      "Name": "Tag Distribution For Entity",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Tags",
+      "UserQuestion": "What tags are most common on records of a given entity?",
+      "Description": "Aggregates tag counts across all records of a given entity, showing how many records have each tag along with average relevance weight and date range. Composable — use as a subquery or join to analyze topic distribution, category breakdowns, and tag popularity.",
+      "SQL": "@file:SQL/tag-distribution-for-entity.sql",
+      "TechnicalDescription": "Groups vwTaggedItems by tag for a given entity name, joining to vwTags for display names and parent hierarchy. Returns COUNT, AVG(Weight), MIN/MAX tagged dates per tag. Only includes Active tags. No ORDER BY for composability — callers should add their own sorting (e.g., ORDER BY RecordCount DESC). Parameters: entityName (entity display name e.g. \"Member Engagement Logs\").",
+      "Status": "Approved",
+      "QualityRank": 8,
+      "ExecutionCostRank": 2,
+      "Reusable": true,
+      "UsesTemplate": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "FEEC35FC-384F-40A1-B49E-2133A6930202"
+    },
+    "sync": {
+      "lastModified": "2026-04-12T22:09:01.256Z",
+      "checksum": "b9692a27499c459a0cfac235acb4b6a988a7a0992fc680299e2a629653359ff8"
+    }
+  }
+]

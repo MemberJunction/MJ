@@ -21,8 +21,8 @@
  * preferences, and contextual information that improves future interactions.
  */
 
+import type { EntityInfo } from '@memberjunction/core';
 import type { SkipConversation } from './conversation-types';
-import type { SkipEntityInfo } from './entity-metadata-types';
 import type { SkipQueryInfo, SkipLearningCycleQueryChange } from './query-types';
 import type { SkipAPIRequestAPIKey } from './auth-types';
 
@@ -166,6 +166,7 @@ export class SkipLearningCycleRequestChange {
 
 /**
  * API Request shape to ask the /learn end point to learn from conversation history and pass back "notes" that can be stored in the database for future requests
+ * @deprecated No longer invoked from the client side, all within Skip
  */
 export class SkipAPILearningCycleRequest {
     /**
@@ -196,7 +197,7 @@ export class SkipAPILearningCycleRequest {
     /**
      * Summary entity metadata that is passed into the Skip Server so that Skip has knowledge of the schema of the calling MJAPI environment
      */
-    entities: SkipEntityInfo[];
+    entities: EntityInfo[];
 
     /**
      * Stored queries in the MJ metadata that Skip can use and learn from

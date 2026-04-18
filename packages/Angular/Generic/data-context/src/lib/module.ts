@@ -2,12 +2,8 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
-// Kendo UI Angular imports
-import { GridModule } from '@progress/kendo-angular-grid';
-import { DialogsModule } from "@progress/kendo-angular-dialog";
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { InputsModule } from '@progress/kendo-angular-inputs';
+// MJ UI Components
+import { MJButtonDirective, MJWindowComponent, MJWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
 
 import { DataContextComponent } from './ng-data-context.component';
 import { DataContextDialogComponent } from './ng-data-context-dialog.component';
@@ -22,11 +18,9 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
   imports: [
     CommonModule,
     FormsModule,
-    GridModule,
-    DialogsModule,
-    ButtonsModule,
-    IndicatorsModule,
-    InputsModule,
+    MJButtonDirective,
+    MJWindowComponent,
+    MJWindowTitlebarComponent,
     ContainerDirectivesModule,
     SharedGenericModule
   ],

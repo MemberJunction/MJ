@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Greenland",
+      "Code": "GL",
+      "ISO3166_2": "GL-GL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Greenland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GL"
+    },
+    "primaryKey": {
+      "ID": "C50DE972-FDBE-439C-9308-E263F686D657"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.054Z",
+      "checksum": "7a924ff3c8175165f48ffee8a48c27f8aedc8cd747b6be26cb0329c2841e3a1c"
+    }
+  }
+]

@@ -1040,7 +1040,47 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         if (obj.Category === 'Association') {
             return this.FetchAssociationChanges(ctx, obj);
         }
-        return super.FetchChanges(ctx);
+        const result = await super.FetchChanges(ctx);
+
+        // Contacts use 'lastmodifieddate', all other objects use 'hs_lastmodifieddate'.
+        const dateField = ctx.ObjectName.toLowerCase() === 'contacts'
+            ? 'lastmodifieddate' : 'hs_lastmodifieddate';
+
+        // Compute new watermark from ALL fetched records BEFORE filtering.
+        // We need the latest date across the full dataset so the watermark advances correctly.
+        const allRecords = result.Records;
+        if (!result.HasMore) {
+            const latest = this.FindLatestDate(allRecords, dateField);
+            if (latest) result.NewWatermarkValue = latest;
+        }
+
+        // Client-side watermark filtering — HubSpot's list API has no server-side date filter.
+        // We fetch all records but only return ones modified after the watermark.
+        if (ctx.WatermarkValue && allRecords.length > 0) {
+            const watermarkDate = new Date(ctx.WatermarkValue);
+            result.Records = allRecords.filter(r => {
+                const val = r.Fields[dateField];
+                if (val == null) return true;
+                const d = new Date(String(val));
+                return isNaN(d.getTime()) || d > watermarkDate;
+            });
+        }
+
+        return result;
+    }
+
+    /** Finds the latest date value across records for a given field name. */
+    private FindLatestDate(records: ExternalRecord[], fieldName: string): string | undefined {
+        let latest: Date | null = null;
+        for (const r of records) {
+            const val = r.Fields[fieldName];
+            if (val == null) continue;
+            const d = new Date(String(val));
+            if (!isNaN(d.getTime()) && (!latest || d > latest)) {
+                latest = d;
+            }
+        }
+        return latest ? latest.toISOString() : undefined;
     }
 
     /**
