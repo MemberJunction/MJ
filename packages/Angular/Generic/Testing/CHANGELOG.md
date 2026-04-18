@@ -1,5 +1,21 @@
 # @memberjunction/ng-testing
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@5.27.0
+- @memberjunction/ng-base-types@5.27.0
+- @memberjunction/ng-code-editor@5.27.0
+- @memberjunction/ng-container-directives@5.27.0
+- @memberjunction/ng-notifications@5.27.0
+- @memberjunction/ng-ui-components@5.27.0
+- @memberjunction/graphql-dataprovider@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+- @memberjunction/testing-engine-base@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

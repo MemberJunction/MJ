@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.27.0
+- @memberjunction/aiengine@5.27.0
+- @memberjunction/ai-vectors@5.27.0
+- @memberjunction/ai-vectordb@5.27.0
+- @memberjunction/ai-vector-sync@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+- @memberjunction/templates@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

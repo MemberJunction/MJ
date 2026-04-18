@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.27.0
+- @memberjunction/interactive-component-types@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/data-context@5.27.0
+- @memberjunction/global@5.27.0
+- @memberjunction/sql-dialect@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

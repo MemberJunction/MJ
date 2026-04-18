@@ -1,5 +1,19 @@
 # @memberjunction/testing-engine
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai-agents@5.27.0
+- @memberjunction/ai@5.27.0
+- @memberjunction/ai-core-plus@5.27.0
+- @memberjunction/aiengine@5.27.0
+- @memberjunction/ai-prompts@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+- @memberjunction/testing-engine-base@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @memberjunction/ng-search
 
+## 5.27.0
+
+### Patch Changes
+
+- a642e3f: Increase search debounce from 200ms to 400ms, add distinctUntilChanged, and add stale-request guards to reduce excessive API calls during typing
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

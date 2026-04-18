@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/aiengine
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.27.0
+- @memberjunction/ai@5.27.0
+- @memberjunction/ai-core-plus@5.27.0
+- @memberjunction/ai-vectors-memory@5.27.0
+- @memberjunction/actions-base@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+- @memberjunction/storage@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes
