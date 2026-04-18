@@ -420,7 +420,7 @@
                                             <i class="fa-solid fa-download"></i> CSV
                                         </button>
                                     }
-                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
                                 </div>
                             </div>
                             @if (IsDrillDownLoading) {
@@ -439,7 +439,7 @@
                                                     @if (DrillDownHasActions) {
                                                         <td class="drill-action-col">
                                                             @if (row['_RecordID']) {
-                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
                                                             }
                                                         </td>
                                                     }
@@ -614,7 +614,7 @@
                                     @if (DrillDownData.length > 0) {
                                         <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
                                     }
-                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
                                 </div>
                             </div>
                             @if (IsDrillDownLoading) {
@@ -633,7 +633,7 @@
                                                     @if (DrillDownHasActions) {
                                                         <td class="drill-action-col">
                                                             @if (row['_RecordID']) {
-                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
                                                             }
                                                         </td>
                                                     }
@@ -749,7 +749,7 @@
                                     @if (DrillDownData.length > 0) {
                                         <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
                                     }
-                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
                                 </div>
                             </div>
                             @if (IsDrillDownLoading) {
@@ -768,7 +768,7 @@
                                                     @if (DrillDownHasActions) {
                                                         <td class="drill-action-col">
                                                             @if (row['_RecordID']) {
-                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
                                                             }
                                                         </td>
                                                     }
@@ -936,7 +936,7 @@
                                     @if (DrillDownData.length > 0) {
                                         <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
                                     }
-                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
                                 </div>
                             </div>
                             @if (IsDrillDownLoading) {
@@ -955,7 +955,7 @@
                                                     @if (DrillDownHasActions) {
                                                         <td class="drill-action-col">
                                                             @if (row['_RecordID']) {
-                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
                                                             }
                                                         </td>
                                                     }
