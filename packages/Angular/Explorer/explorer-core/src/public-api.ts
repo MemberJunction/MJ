@@ -40,6 +40,10 @@ export * from './lib/resource-wrappers/query-resource.component'
 export * from './lib/services/system-validation.service'
 export * from './lib/services/startup-validation.service'
 
+// Server connectivity
+export * from './lib/services/server-connectivity.service'
+export * from './lib/server-connectivity/server-connectivity-banner.component'
+
 // Lazy loading infrastructure
 export * from './lib/services/lazy-module-registry'
 export * from './generated/lazy-feature-config'

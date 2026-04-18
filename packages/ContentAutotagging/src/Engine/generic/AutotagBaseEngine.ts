@@ -963,9 +963,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      */
     public async getContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date> {
         const rv = new RunView();
+        // Exclude 'Running' status to avoid using the current in-progress run's
+        // start time as the cutoff — that would cause the provider to skip all records.
         const results = await rv.RunView<MJContentProcessRunEntity>({
             EntityName: 'MJ: Content Process Runs',
-            ExtraFilter: `SourceID='${contentSourceID}'`,
+            ExtraFilter: `SourceID='${contentSourceID}' AND Status <> 'Running'`,
             ResultType: 'entity_object',
             OrderBy: 'EndTime DESC'
         }, contextUser);

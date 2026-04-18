@@ -1306,8 +1306,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string): string {
         let sUserSearchSQL = '';
+        const safeUserSearchString = userSearchString.replace(/'/g, "''");
         if (entityInfo.FullTextSearchEnabled) {
-            let u = userSearchString;
+            let u = safeUserSearchString;
             const uUpper = u.toUpperCase();
             if (uUpper.includes(' AND ') || uUpper.includes(' OR ') || uUpper.includes(' NOT ')) {
                 u = uUpper.replace(/ /g, '%').replace(/%AND%/g, ' AND ').replace(/%OR%/g, ' OR ').replace(/%NOT%/g, ' NOT ');
@@ -1315,7 +1316,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 u = u.replace(/ /g, '%');
             } else if (u.includes(' ')) {
                 if (!(u.startsWith('"') && u.endsWith('"'))) {
-                    u = StripStopWords(userSearchString);
+                    u = StripStopWords(safeUserSearchString);
                     u = u.replace(/ /g, ' AND ');
                 }
             }
@@ -1327,9 +1328,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     let sParam = '';
                     if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
                     if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0)
-                        sParam = field.UserSearchParamFormatAPI.replace('{0}', userSearchString);
+                        sParam = field.UserSearchParamFormatAPI.replace('{0}', safeUserSearchString);
                     else
-                        sParam = ` LIKE '%${userSearchString}%'`;
+                        sParam = ` LIKE '%${safeUserSearchString}%'`;
                     sUserSearchSQL += `(${field.Name} ${sParam})`;
                 }
             }

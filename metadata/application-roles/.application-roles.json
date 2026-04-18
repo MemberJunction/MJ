@@ -19,14 +19,14 @@
       "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
       "RoleID": "@lookup:MJ: Roles.Name=Integration",
       "CanAccess": true,
-      "CanAdmin": false
+      "CanAdmin": true
     },
     "primaryKey": {
       "ID": "0F9C0499-17FA-46B4-820B-CBF4DE47F0D6"
     },
     "sync": {
-      "lastModified": "2026-04-10T21:04:04.664Z",
-      "checksum": "9b1a43d81265dcfce99a0b528d6ed43fefcfdd7005e5943c2fa7fc4c3dea338b"
+      "lastModified": "2026-04-18T17:50:00.175Z",
+      "checksum": "8ad5606328ec6388a845aadaf736161bd49b7c9db476f242bbfe684107b66bf5"
     }
   },
   {
@@ -64,14 +64,14 @@
       "ApplicationID": "@lookup:MJ: Applications.Name=Home",
       "RoleID": "@lookup:MJ: Roles.Name=Integration",
       "CanAccess": true,
-      "CanAdmin": false
+      "CanAdmin": true
     },
     "primaryKey": {
       "ID": "7A6353E0-1A25-49FF-91EA-5EBA1262122F"
     },
     "sync": {
-      "lastModified": "2026-04-10T21:04:04.701Z",
-      "checksum": "cb1926946448c43971819ea9d98e125870f737509336554d978dbb377d2f70b5"
+      "lastModified": "2026-04-18T17:50:00.191Z",
+      "checksum": "edd22a6f6ba722a3b532026f3388d6cd77d4a73396023403840f24c6b84d97c0"
     }
   },
   {
@@ -109,14 +109,14 @@
       "ApplicationID": "@lookup:MJ: Applications.Name=Data Explorer",
       "RoleID": "@lookup:MJ: Roles.Name=Integration",
       "CanAccess": true,
-      "CanAdmin": false
+      "CanAdmin": true
     },
     "primaryKey": {
       "ID": "73972EC5-10F8-40C7-90E4-039A51F25992"
     },
     "sync": {
-      "lastModified": "2026-04-10T21:04:04.738Z",
-      "checksum": "2190002e4f23e32f9e2e3e91b7a3cb618c79de17f52017ca71faa5c1ff96961d"
+      "lastModified": "2026-04-18T17:50:00.205Z",
+      "checksum": "cbe29efc5110227d043c54a6e8db2e636868534bbc6d382abb15b5f52d460016"
     }
   },
   {
@@ -151,6 +151,21 @@
   },
   {
     "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Chat",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "252A858A-989E-47E9-AFFC-B42DAE7F8FFF"
+    },
+    "sync": {
+      "lastModified": "2026-04-18T17:50:00.242Z",
+      "checksum": "e47ccca5637db717b99782ba4b020fb8689d70082bc07c568e8b1809ea7400e3"
+    }
+  },
+  {
+    "fields": {
       "ApplicationID": "@lookup:MJ: Applications.Name=AI",
       "RoleID": "@lookup:MJ: Roles.Name=Developer",
       "CanAccess": true,
@@ -169,14 +184,14 @@
       "ApplicationID": "@lookup:MJ: Applications.Name=AI",
       "RoleID": "@lookup:MJ: Roles.Name=Integration",
       "CanAccess": true,
-      "CanAdmin": false
+      "CanAdmin": true
     },
     "primaryKey": {
       "ID": "DEB066E1-4635-45D6-9593-CB6A7654870B"
     },
     "sync": {
-      "lastModified": "2026-04-10T21:04:04.796Z",
-      "checksum": "cd7e3d217d7c0bde02b8cc5cf5fc0c8b75ff825523714834579a1d1a2d678512"
+      "lastModified": "2026-04-18T17:50:00.271Z",
+      "checksum": "7f89c17722dcc8f191026feb6ca8371edd06cfdec3ee2ff56153fd29e039c5ce"
     }
   }
 ]

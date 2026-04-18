@@ -23,7 +23,7 @@ import {
     inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { debounceTime, takeUntil } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { SearchService } from './search.service';
 import {
     SearchResultItem,
@@ -76,7 +76,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     }
 
     /** Debounce time in ms before search fires */
-    @Input() DebounceMs = 250;
+    @Input() DebounceMs = 400;
 
     /** Which search sources to include */
     @Input() IncludeSources: ('vector' | 'fulltext' | 'entity')[] = ['vector', 'fulltext', 'entity'];
@@ -110,6 +110,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     public ElapsedMs = 0;
     public HighlightedIndex = -1;
     public HasSearched = false;
+    private searchVersion = 0;
 
     /** All results flattened for keyboard navigation */
     public get FlatResults(): SearchResultItem[] {
@@ -281,6 +282,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
         this.searchInput$
             .pipe(
                 debounceTime(this.DebounceMs),
+                distinctUntilChanged(),
                 takeUntil(this.destroy$)
             )
             .subscribe(() => this.executeSearch());
@@ -302,6 +304,8 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
             return;
         }
 
+        const version = ++this.searchVersion;
+
         const request: SearchRequest = {
             Query: query,
             MaxResults: this.MaxResults,
@@ -310,6 +314,12 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
         };
 
         const response = await this.searchService.ExecuteSearch(request);
+
+        // Discard results if a newer search was triggered while this one was in-flight
+        if (version !== this.searchVersion) {
+            return;
+        }
+
         this.AllResults = response.Results;
         this.ResultGroups = response.Groups;
         this.Filters = response.Filters;
