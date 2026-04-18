@@ -16,6 +16,7 @@ import {
 } from '@angular/core';
 import { SearchResultItem, SearchResultGroup, SearchResultSelectedEvent } from './search-types';
 import { Metadata } from '@memberjunction/core';
+import { EscapeHTML } from '@memberjunction/global';
 
 @Component({
     standalone: false,
@@ -189,28 +190,15 @@ export class SearchResultsComponent {
     }
 
     /**
-     * Escape HTML entities to prevent XSS attacks.
-     */
-    private escapeHtml(text: string): string {
-        if (!text) return text;
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-
-    /**
      * Wrap substrings matching HighlightText in <mark> tags for visual emphasis.
      * The input is regex-escaped so user text is treated as a literal string.
      */
     public HighlightMatch(text: string): string {
         if (!text) return text;
-        const safeText = this.escapeHtml(text);
+        const safeText = EscapeHTML(text);
         if (!this.HighlightText) return safeText;
 
-        const safeHighlightText = this.escapeHtml(this.HighlightText);
+        const safeHighlightText = EscapeHTML(this.HighlightText);
         const escaped = safeHighlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp(`(${escaped})`, 'gi');
         return safeText.replace(regex, '<mark class="search-highlight">$1</mark>');

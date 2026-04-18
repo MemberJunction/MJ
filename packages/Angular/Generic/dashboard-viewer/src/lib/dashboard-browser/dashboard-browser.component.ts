@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { MJDashboardEntity, MJDashboardCategoryEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, EscapeHTML } from '@memberjunction/global';
 
 // ========================================
 // Event Types
@@ -1018,29 +1018,16 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Escape HTML entities to prevent XSS attacks.
-     */
-    private escapeHtml(text: string): string {
-        if (!text) return text;
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-
-    /**
      * Highlight matching search text in a string
      * Returns HTML with <mark> tags around matches
      */
     public HighlightMatch(text: string): string {
         if (!text) return text;
-        const safeText = this.escapeHtml(text);
+        const safeText = EscapeHTML(text);
         if (!this.SearchText.trim()) return safeText;
 
         const search = this.SearchText.trim();
-        const safeSearch = this.escapeHtml(search);
+        const safeSearch = EscapeHTML(search);
         const regex = new RegExp(`(${this.escapeRegex(safeSearch)})`, 'gi');
         return safeText.replace(regex, '<mark>$1</mark>');
     }
