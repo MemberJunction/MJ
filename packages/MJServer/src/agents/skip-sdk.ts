@@ -917,34 +917,12 @@ export class SkipSDK {
             // Enrich each field with packed possible values
             const enrichedFields = await Promise.all(filteredFields.map(f => this.enrichFieldValues(f, dataSource)));
 
-            // Construct a new EntityInfo from a plain object with the enriched data
+            // Clone the entity via toJSON, then swap in filtered+enriched fields and Skip-specific
+            // Active-only organic keys. Any future EntityInfo properties flow through automatically.
             return new EntityInfo({
-                ID: e.ID,
-                Name: e.Name,
-                SchemaName: e.SchemaName,
-                BaseView: e.BaseView,
-                Description: e.Description,
-                RowsToPackWithSchema: e.RowsToPackWithSchema,
-                RowsToPackSampleMethod: e.RowsToPackSampleMethod,
-                // Use 'Fields' which the updated constructor now accepts
+                ...e.toJSON(),
                 Fields: enrichedFields,
-                // Use 'RelatedEntities' which the updated constructor now accepts
-                RelatedEntities: e.RelatedEntities.map(r => ({
-                    EntityID: r.EntityID,
-                    RelatedEntityID: r.RelatedEntityID,
-                    Type: r.Type,
-                    EntityKeyField: r.EntityKeyField,
-                    RelatedEntityJoinField: r.RelatedEntityJoinField,
-                    JoinView: r.JoinView,
-                    JoinEntityJoinField: r.JoinEntityJoinField,
-                    JoinEntityInverseJoinField: r.JoinEntityInverseJoinField,
-                    Entity: r.Entity,
-                    EntityBaseView: r.EntityBaseView,
-                    RelatedEntity: r.RelatedEntity,
-                    RelatedEntityBaseView: r.RelatedEntityBaseView,
-                })),
-                // Skip-specific policy: only surface organic keys that are Active
-                OrganicKeys: e.OrganicKeys.filter(ok => ok.Status === 'Active').map(ok => ok.toJSON()),
+                OrganicKeys: e.OrganicKeys.filter(ok => ok.Status === 'Active'),
             });
         }
         catch (err) {
@@ -958,36 +936,9 @@ export class SkipSDK {
      * Returns a plain object that can be used to construct an EntityFieldInfo.
      */
     private async enrichFieldValues(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<Record<string, unknown>> {
-        const packedValues = await this.packFieldValues(f, dataSource);
         return {
-            EntityID: f.EntityID,
-            Sequence: f.Sequence,
-            Name: f.Name,
-            DisplayName: f.DisplayName,
-            Category: f.Category,
-            Type: f.Type,
-            Description: f.Description,
-            IsPrimaryKey: f.IsPrimaryKey,
-            AllowsNull: f.AllowsNull,
-            IsUnique: f.IsUnique,
-            Length: f.Length,
-            Precision: f.Precision,
-            Scale: f.Scale,
-            SQLFullType: f.SQLFullType,
-            DefaultValue: f.DefaultValue,
-            AutoIncrement: f.AutoIncrement,
-            ValueListType: f.ValueListType,
-            ExtendedType: f.ExtendedType,
-            DefaultInView: f.DefaultInView,
-            DefaultColumnWidth: f.DefaultColumnWidth,
-            IsVirtual: f.IsVirtual,
-            IsNameField: f.IsNameField,
-            RelatedEntityID: f.RelatedEntityID,
-            RelatedEntityFieldName: f.RelatedEntityFieldName,
-            RelatedEntity: f.RelatedEntity,
-            RelatedEntitySchemaName: f.RelatedEntitySchemaName,
-            RelatedEntityBaseView: f.RelatedEntityBaseView,
-            EntityFieldValues: packedValues,
+            ...f.toJSON(),
+            EntityFieldValues: await this.packFieldValues(f, dataSource),
         };
     }
 
