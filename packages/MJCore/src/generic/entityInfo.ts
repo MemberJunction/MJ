@@ -2395,7 +2395,7 @@ export class EntityInfo extends BaseInfo {
             BaseView: this.BaseView,
             Fields: this.Fields.map(f => f.toJSON()),
             RelatedEntities: this.RelatedEntities.map(r => r.toJSON()),
-            OrganicKeys: this.OrganicKeys.filter(ok => ok.Status === 'Active').map(ok => ok.toJSON()),
+            OrganicKeys: this.OrganicKeys.map(ok => ok.toJSON()),
             RowsToPackWithSchema: this.RowsToPackWithSchema,
             RowsToPackSampleMethod: this.RowsToPackSampleMethod,
         };

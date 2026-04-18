@@ -943,6 +943,8 @@ export class SkipSDK {
                     RelatedEntity: r.RelatedEntity,
                     RelatedEntityBaseView: r.RelatedEntityBaseView,
                 })),
+                // Skip-specific policy: only surface organic keys that are Active
+                OrganicKeys: e.OrganicKeys.filter(ok => ok.Status === 'Active').map(ok => ok.toJSON()),
             });
         }
         catch (err) {
