@@ -1351,6 +1351,24 @@ function recursiveReplaceKey(value: any, options: Required<ParseJSONOptions>, de
 }
 
 /**
+ * Escape HTML entities in a string to prevent Cross-Site Scripting (XSS) attacks.
+ * This is particularly important when rendering un-sanitized user input via mechanisms
+ * like Angular's `[innerHTML]`.
+ *
+ * @param text - The string to escape.
+ * @returns The escaped HTML string.
+ */
+export function EscapeHTML(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
  * Checks if two dates differ only by a timezone-like shift.
  * Returns true if the difference is EXACTLY a whole number of hours
  * (no variance in minutes/seconds/milliseconds) and within 23 hours.
