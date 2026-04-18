@@ -251,6 +251,31 @@ describe('CopyScalarsAndArrays', () => {
     expect('data' in result).toBe(false);
   });
 
+  it('should respect toJSON() on class instances', () => {
+    class Serializable {
+      toJSON() {
+        return { Kind: 'custom', N: 7 };
+      }
+    }
+    const input = { item: new Serializable(), name: 'test' };
+    const result = CopyScalarsAndArrays(input);
+    expect(result.name).toBe('test');
+    expect(result.item).toEqual({ Kind: 'custom', N: 7 });
+  });
+
+  it('should recurse into array items and honor toJSON()', () => {
+    class Node {
+      constructor(public n: number) {}
+      toJSON() {
+        return { N: this.n };
+      }
+    }
+    const input = { items: [new Node(1), new Node(2)], scalars: [10, 20] };
+    const result = CopyScalarsAndArrays(input);
+    expect(result.items).toEqual([{ N: 1 }, { N: 2 }]);
+    expect(result.scalars).toEqual([10, 20]);
+  });
+
   describe('with resolveCircularReferences', () => {
     it('should handle circular references', () => {
       const obj: Record<string, unknown> = { name: 'root' };

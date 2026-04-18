@@ -48,4 +48,44 @@ export abstract class BaseInfo {
             this.copyInitData(initData);
         }
     }
+
+    /**
+     * Default JSON serialization for BaseInfo subclasses.
+     *
+     * Emits all non-underscored direct field declarations. For `_`-prefixed private backing fields
+     * (the MJ pattern for collection storage — e.g. `_Fields`, `_RelatedEntities`, `_OrganicKeys`),
+     * emits the value of the corresponding same-named public getter instead. Purely computed getters
+     * without a backing field (display-name formatters, derived flags) are intentionally skipped —
+     * they can throw when source fields are null and don't belong on the wire anyway.
+     *
+     * Nested BaseInfo instances and arrays of them unwrap automatically via JSON.stringify's
+     * native toJSON() protocol.
+     *
+     * Subclasses may override to emit a filtered subset or custom shape (see EntityFieldValueInfo).
+     */
+    toJSON(): Record<string, unknown> {
+        const result: Record<string, unknown> = {};
+        const self = this as unknown as Record<string, unknown>;
+
+        for (const key of Object.keys(this)) {
+            if (!key.startsWith('_')) {
+                result[key] = self[key];
+                continue;
+            }
+            // Private backing field — expose via its public getter if one exists with the same name minus the underscore
+            const publicKey = key.slice(1);
+            if (!publicKey) continue;
+            let proto = Object.getPrototypeOf(this);
+            while (proto && proto !== Object.prototype) {
+                const desc = Object.getOwnPropertyDescriptor(proto, publicKey);
+                if (desc && typeof desc.get === 'function') {
+                    result[publicKey] = self[publicKey];
+                    break;
+                }
+                proto = Object.getPrototypeOf(proto);
+            }
+        }
+
+        return result;
+    }
 }
