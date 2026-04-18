@@ -122,27 +122,6 @@ export class EntityRelationshipInfo extends BaseInfo  {
         super();
         this.copyInitData(initData);
     }
-
-    /**
-     * Returns a plain object suitable for JSON serialization.
-     * Called automatically by JSON.stringify().
-     */
-    toJSON(): Record<string, unknown> {
-        return {
-            EntityID: this.EntityID,
-            RelatedEntityID: this.RelatedEntityID,
-            Type: this.Type,
-            EntityKeyField: this.EntityKeyField,
-            RelatedEntityJoinField: this.RelatedEntityJoinField,
-            JoinView: this.JoinView,
-            JoinEntityJoinField: this.JoinEntityJoinField,
-            JoinEntityInverseJoinField: this.JoinEntityInverseJoinField,
-            Entity: this.Entity,
-            EntityBaseView: this.EntityBaseView,
-            RelatedEntity: this.RelatedEntity,
-            RelatedEntityBaseView: this.RelatedEntityBaseView,
-        };
-    }
 }
 
 /**
@@ -205,27 +184,6 @@ export class EntityOrganicKeyInfo extends BaseInfo {
         }
     }
 
-    /**
-     * Returns a plain object suitable for JSON serialization.
-     * Called automatically by JSON.stringify().
-     * Produces PascalCase property names matching the MJ convention.
-     */
-    toJSON(): Record<string, unknown> {
-        return {
-            ID: this.ID,
-            EntityID: this.EntityID,
-            Name: this.Name,
-            Description: this.Description,
-            MatchFieldNames: this.MatchFieldNames,
-            NormalizationStrategy: this.NormalizationStrategy,
-            CustomNormalizationExpression: this.CustomNormalizationExpression,
-            AutoCreateRelatedViewOnForm: this.AutoCreateRelatedViewOnForm,
-            Sequence: this.Sequence,
-            Status: this.Status,
-            Entity: this.Entity,
-            RelatedEntities: this.RelatedEntities.map(re => re.toJSON()),
-        };
-    }
 }
 
 /**
@@ -299,30 +257,6 @@ export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
         }
     }
 
-    /**
-     * Returns a plain object suitable for JSON serialization.
-     * Called automatically by JSON.stringify().
-     * Produces PascalCase property names matching the MJ convention.
-     */
-    toJSON(): Record<string, unknown> {
-        return {
-            ID: this.ID,
-            EntityOrganicKeyID: this.EntityOrganicKeyID,
-            RelatedEntityID: this.RelatedEntityID,
-            RelatedEntityFieldNames: this.RelatedEntityFieldNames,
-            TransitiveObjectName: this.TransitiveObjectName,
-            TransitiveObjectMatchFieldNames: this.TransitiveObjectMatchFieldNames,
-            TransitiveObjectOutputFieldName: this.TransitiveObjectOutputFieldName,
-            RelatedEntityJoinFieldName: this.RelatedEntityJoinFieldName,
-            DisplayName: this.DisplayName,
-            DisplayLocation: this.DisplayLocation,
-            DisplayComponentID: this.DisplayComponentID,
-            DisplayComponentConfiguration: this.DisplayComponentConfiguration,
-            Sequence: this.Sequence,
-            EntityOrganicKey: this.EntityOrganicKey,
-            RelatedEntity: this.RelatedEntity,
-        };
-    }
 }
 
 export const EntityPermissionType = {
@@ -1159,43 +1093,6 @@ export class EntityFieldInfo extends BaseInfo {
         }
     }
 
-    /**
-     * Returns a plain object suitable for JSON serialization.
-     * Called automatically by JSON.stringify().
-     * Produces PascalCase property names matching the MJ convention.
-     */
-    toJSON(): Record<string, unknown> {
-        return {
-            EntityID: this.EntityID,
-            Sequence: this.Sequence,
-            Name: this.Name,
-            DisplayName: this.DisplayName,
-            Description: this.Description,
-            IsPrimaryKey: this.IsPrimaryKey,
-            IsUnique: this.IsUnique,
-            Category: this.Category,
-            Type: this.Type,
-            Length: this.Length,
-            Precision: this.Precision,
-            Scale: this.Scale,
-            SQLFullType: this.SQLFullType,
-            AllowsNull: this.AllowsNull,
-            DefaultValue: this.DefaultValue,
-            AutoIncrement: this.AutoIncrement,
-            ValueListType: this.ValueListType,
-            ExtendedType: this.ExtendedType,
-            DefaultInView: this.DefaultInView,
-            DefaultColumnWidth: this.DefaultColumnWidth,
-            IsVirtual: this.IsVirtual,
-            IsNameField: this.IsNameField,
-            RelatedEntityID: this.RelatedEntityID,
-            RelatedEntityFieldName: this.RelatedEntityFieldName,
-            RelatedEntity: this.RelatedEntity,
-            RelatedEntitySchemaName: this.RelatedEntitySchemaName,
-            RelatedEntityBaseView: this.RelatedEntityBaseView,
-            EntityFieldValues: this.EntityFieldValues?.map(v => v.toJSON()),
-        };
-    }
 
 
     /**
@@ -2378,27 +2275,6 @@ export class EntityInfo extends BaseInfo {
 
             this.prepareSpecialFields();
         }
-    }
-
-    /**
-     * Returns a plain object suitable for JSON serialization.
-     * Called automatically by JSON.stringify().
-     * Produces PascalCase property names matching the MJ convention.
-     * The output can be reconstructed via `new EntityInfo(jsonData)`.
-     */
-    toJSON(): Record<string, unknown> {
-        return {
-            ID: this.ID,
-            Name: this.Name,
-            Description: this.Description,
-            SchemaName: this.SchemaName,
-            BaseView: this.BaseView,
-            Fields: this.Fields.map(f => f.toJSON()),
-            RelatedEntities: this.RelatedEntities.map(r => r.toJSON()),
-            OrganicKeys: this.OrganicKeys.map(ok => ok.toJSON()),
-            RowsToPackWithSchema: this.RowsToPackWithSchema,
-            RowsToPackSampleMethod: this.RowsToPackSampleMethod,
-        };
     }
 
     private prepareSpecialFields() {
