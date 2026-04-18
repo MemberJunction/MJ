@@ -125,6 +125,32 @@ vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
   },
 }));
 
+// Mock encryption engine for buildEntityFromRow decryption tests.
+// IsEncrypted uses the real prefix check; Decrypt strips a known sentinel so
+// the tests can assert exactly which values went through decryption.
+const mockEncryptionEngine = {
+  Config: vi.fn().mockResolvedValue(undefined),
+  IsEncrypted: vi.fn((value: unknown, marker?: string): boolean => {
+    return typeof value === 'string' && value.startsWith(marker ?? '$ENC$');
+  }),
+  Decrypt: vi.fn().mockImplementation(async (value: string): Promise<string> => {
+    // Strip the $ENC$ prefix and return a deterministic plaintext.
+    // e.g. '$ENC$blob:SECRET' → 'SECRET'
+    if (typeof value === 'string' && value.startsWith('$ENC$')) {
+      const colonIdx = value.lastIndexOf(':');
+      return colonIdx > 4 ? value.substring(colonIdx + 1) : 'DECRYPTED';
+    }
+    return value;
+  }),
+  GetKeyByID: vi.fn().mockReturnValue({ Marker: '$ENC$' }),
+};
+
+vi.mock('@memberjunction/encryption', () => ({
+  EncryptionEngine: {
+    get Instance() { return mockEncryptionEngine; },
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
@@ -351,5 +377,169 @@ describe('ExternalChangeDetectorEngine - DoValuesDiffer', () => {
     const d2 = new Date('2024-01-01T00:00:00Z');
     const result = callDoValuesDiffer(engine, TSType.Date, d1, d2);
     expect(result.differ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildEntityFromRow — decryption of Encrypt=1 fields
+//
+// Regression for https://github.com/MemberJunction/MJ/issues/2367
+//
+// Detection queries run via RunQuery, which does NOT call PostProcessRows, so
+// encrypted fields are returned as raw $ENC$... strings from the database.
+// If we load those values straight into a BaseEntity and call Save(), the
+// provider's EncryptFieldValuesForSave guard (IsEncrypted check) does prevent
+// MJ's own re-encryption — but any application-level Save() override that
+// applies its own encryption will re-encrypt the already-$ENC$ string, and
+// MJ's layer will then wrap that again, producing $ENC$(app_enc($ENC$(...))).
+// Decrypting in buildEntityFromRow means Save() sees plaintext and the normal
+// encrypt-once path runs — identical to a regular Load/Save cycle.
+// ---------------------------------------------------------------------------
+describe('ExternalChangeDetectorEngine - buildEntityFromRow', () => {
+  type RowPayload = Record<string, unknown>;
+
+  const makeEngine = () => {
+    const engine = new ExternalChangeDetectorEngine();
+    // ContextUser is referenced inside buildEntityFromRow → GetEntityObject
+    (engine as unknown as { ContextUser: unknown }).ContextUser = {};
+    return engine;
+  };
+
+  const callBuildEntityFromRow = async (
+    engine: ExternalChangeDetectorEngine,
+    md: unknown,
+    entity: unknown,
+    row: RowPayload
+  ): Promise<{ loadedRow: RowPayload; record: unknown }> => {
+    let loadedRow: RowPayload = {};
+    const record = {
+      LoadFromData: vi.fn().mockImplementation((data: RowPayload) => {
+        loadedRow = data;
+      }),
+    };
+    (md as { GetEntityObject: ReturnType<typeof vi.fn> }).GetEntityObject = vi
+      .fn()
+      .mockResolvedValue(record);
+
+    await (engine as unknown as Record<string, Function>)['buildEntityFromRow'](md, entity, row);
+    return { loadedRow, record };
+  };
+
+  beforeEach(() => {
+    mockEncryptionEngine.Decrypt.mockClear();
+    mockEncryptionEngine.IsEncrypted.mockClear();
+    mockEncryptionEngine.Config.mockClear();
+    mockEncryptionEngine.GetKeyByID.mockClear();
+  });
+
+  it('should decrypt $ENC$ values on encrypted fields before loading into the entity', async () => {
+    const engine = makeEngine();
+    const entity = {
+      ID: 'ent-credentials',
+      Name: 'Credentials',
+      Fields: [
+        { Name: 'ID', Encrypt: false, EncryptionKeyID: null },
+        { Name: 'Name', Encrypt: false, EncryptionKeyID: null },
+        { Name: 'APIKey', Encrypt: true, EncryptionKeyID: 'key-1' },
+      ],
+    };
+
+    const row: RowPayload = {
+      ID: 'cred-1',
+      Name: 'GitHub Token',
+      APIKey: '$ENC$blob:gh_pat_top_secret',
+      __ecd_UpdatedAt: '2026-04-13T00:00:00Z',
+    };
+
+    const { loadedRow } = await callBuildEntityFromRow(engine, {}, entity, row);
+
+    // Plaintext makes it into the entity — Save() will re-encrypt cleanly.
+    expect(loadedRow.APIKey).toBe('gh_pat_top_secret');
+    expect(loadedRow.__ecd_UpdatedAt).toBeUndefined(); // __ecd_ columns stripped
+    expect(mockEncryptionEngine.Decrypt).toHaveBeenCalledTimes(1);
+    expect(mockEncryptionEngine.Decrypt).toHaveBeenCalledWith(
+      '$ENC$blob:gh_pat_top_secret',
+      expect.anything()
+    );
+  });
+
+  it('should skip plaintext values on encrypted fields (idempotent)', async () => {
+    const engine = makeEngine();
+    const entity = {
+      ID: 'ent-credentials',
+      Name: 'Credentials',
+      Fields: [
+        { Name: 'APIKey', Encrypt: true, EncryptionKeyID: 'key-1' },
+      ],
+    };
+
+    const { loadedRow } = await callBuildEntityFromRow(engine, {}, entity, {
+      APIKey: 'already-plaintext',
+    });
+
+    expect(loadedRow.APIKey).toBe('already-plaintext');
+    expect(mockEncryptionEngine.Decrypt).not.toHaveBeenCalled();
+  });
+
+  it('should be a no-op for entities with no encrypted fields', async () => {
+    const engine = makeEngine();
+    const entity = {
+      ID: 'ent-users',
+      Name: 'Users',
+      Fields: [
+        { Name: 'ID', Encrypt: false, EncryptionKeyID: null },
+        { Name: 'Email', Encrypt: false, EncryptionKeyID: null },
+      ],
+    };
+
+    const { loadedRow } = await callBuildEntityFromRow(engine, {}, entity, {
+      ID: 'u-1',
+      Email: 'alice@example.com',
+    });
+
+    expect(loadedRow.Email).toBe('alice@example.com');
+    expect(mockEncryptionEngine.Config).not.toHaveBeenCalled();
+    expect(mockEncryptionEngine.Decrypt).not.toHaveBeenCalled();
+  });
+
+  it('should leave value as $ENC$ if decryption fails (no crash, no corruption)', async () => {
+    mockEncryptionEngine.Decrypt.mockRejectedValueOnce(new Error('bad key'));
+
+    const engine = makeEngine();
+    const entity = {
+      ID: 'ent-credentials',
+      Name: 'Credentials',
+      Fields: [
+        { Name: 'APIKey', Encrypt: true, EncryptionKeyID: 'key-1' },
+      ],
+    };
+
+    const { loadedRow } = await callBuildEntityFromRow(engine, {}, entity, {
+      APIKey: '$ENC$blob:unrecoverable',
+    });
+
+    // Save() will then see the $ENC$ prefix and EncryptFieldValuesForSave
+    // will skip re-encryption via its IsEncrypted guard. DB value is preserved
+    // rather than corrupted.
+    expect(loadedRow.APIKey).toBe('$ENC$blob:unrecoverable');
+  });
+
+  it('should skip fields marked Encrypt=1 but with no EncryptionKeyID configured', async () => {
+    const engine = makeEngine();
+    const entity = {
+      ID: 'ent-weird',
+      Name: 'Misconfigured',
+      Fields: [
+        // Metadata says encrypt but no key — can't decrypt, can't encrypt either.
+        { Name: 'Mystery', Encrypt: true, EncryptionKeyID: null },
+      ],
+    };
+
+    const { loadedRow } = await callBuildEntityFromRow(engine, {}, entity, {
+      Mystery: '$ENC$blob:unknown',
+    });
+
+    expect(loadedRow.Mystery).toBe('$ENC$blob:unknown');
+    expect(mockEncryptionEngine.Decrypt).not.toHaveBeenCalled();
   });
 });

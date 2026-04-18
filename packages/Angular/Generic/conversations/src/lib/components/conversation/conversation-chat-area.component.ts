@@ -2060,6 +2060,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   onTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
     this.showTestFeedbackDialog = false;
+    this.testFeedbackDialogData = null;
     if (result.success) {
       console.log('Test feedback saved successfully:', result.feedbackId);
     }
