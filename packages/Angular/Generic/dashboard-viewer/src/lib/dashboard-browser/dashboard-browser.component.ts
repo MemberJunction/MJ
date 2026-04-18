@@ -1018,15 +1018,31 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
 
     /**
+     * Escape HTML entities to prevent XSS attacks.
+     */
+    private escapeHtml(text: string): string {
+        if (!text) return text;
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    /**
      * Highlight matching search text in a string
      * Returns HTML with <mark> tags around matches
      */
     public HighlightMatch(text: string): string {
-        if (!this.SearchText.trim() || !text) return text;
+        if (!text) return text;
+        const safeText = this.escapeHtml(text);
+        if (!this.SearchText.trim()) return safeText;
 
         const search = this.SearchText.trim();
-        const regex = new RegExp(`(${this.escapeRegex(search)})`, 'gi');
-        return text.replace(regex, '<mark>$1</mark>');
+        const safeSearch = this.escapeHtml(search);
+        const regex = new RegExp(`(${this.escapeRegex(safeSearch)})`, 'gi');
+        return safeText.replace(regex, '<mark>$1</mark>');
     }
 
     /**

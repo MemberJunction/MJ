@@ -189,14 +189,31 @@ export class SearchResultsComponent {
     }
 
     /**
+     * Escape HTML entities to prevent XSS attacks.
+     */
+    private escapeHtml(text: string): string {
+        if (!text) return text;
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    /**
      * Wrap substrings matching HighlightText in <mark> tags for visual emphasis.
      * The input is regex-escaped so user text is treated as a literal string.
      */
     public HighlightMatch(text: string): string {
-        if (!this.HighlightText || !text) return text;
-        const escaped = this.HighlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (!text) return text;
+        const safeText = this.escapeHtml(text);
+        if (!this.HighlightText) return safeText;
+
+        const safeHighlightText = this.escapeHtml(this.HighlightText);
+        const escaped = safeHighlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp(`(${escaped})`, 'gi');
-        return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+        return safeText.replace(regex, '<mark class="search-highlight">$1</mark>');
     }
 
     /** Format a score as a percentage */
