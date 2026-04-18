@@ -1022,11 +1022,28 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      * Returns HTML with <mark> tags around matches
      */
     public HighlightMatch(text: string): string {
-        if (!this.SearchText.trim() || !text) return text;
+        if (!text) return text;
+
+        const escapeHtml = (str: string) => str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+
+        if (!this.SearchText.trim()) return escapeHtml(text);
 
         const search = this.SearchText.trim();
-        const regex = new RegExp(`(${this.escapeRegex(search)})`, 'gi');
-        return text.replace(regex, '<mark>$1</mark>');
+        const escapedSearch = this.escapeRegex(search);
+        const regex = new RegExp(`(${escapedSearch})`, 'gi');
+
+        const parts = text.split(regex);
+        return parts.map(part => {
+            if (part.toLowerCase() === search.toLowerCase()) {
+                return `<mark>${escapeHtml(part)}</mark>`;
+            }
+            return escapeHtml(part);
+        }).join('');
     }
 
     /**

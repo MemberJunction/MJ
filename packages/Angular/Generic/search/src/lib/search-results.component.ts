@@ -193,10 +193,27 @@ export class SearchResultsComponent {
      * The input is regex-escaped so user text is treated as a literal string.
      */
     public HighlightMatch(text: string): string {
-        if (!this.HighlightText || !text) return text;
-        const escaped = this.HighlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(${escaped})`, 'gi');
-        return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+        if (!text) return text;
+
+        const escapeHtml = (str: string) => str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+
+        if (!this.HighlightText) return escapeHtml(text);
+
+        const escapedSearch = this.HighlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(${escapedSearch})`, 'gi');
+
+        const parts = text.split(regex);
+        return parts.map(part => {
+            if (part.toLowerCase() === this.HighlightText.toLowerCase()) {
+                return `<mark class="search-highlight">${escapeHtml(part)}</mark>`;
+            }
+            return escapeHtml(part);
+        }).join('');
     }
 
     /** Format a score as a percentage */

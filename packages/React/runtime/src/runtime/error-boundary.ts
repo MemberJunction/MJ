@@ -137,7 +137,7 @@ export function createErrorBoundary(React: any, options: ErrorBoundaryOptions = 
               },
               this.state.error.toString(),
               '\n\n',
-              'Check console for more details.'
+              this.state.error.stack
             )
           ),
           (showRetry || showReset) && React.createElement(
