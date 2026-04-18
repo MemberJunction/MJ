@@ -50,7 +50,7 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     @Input() ShowShortcutHint = true;
 
     /** Debounce time in milliseconds for query changes */
-    @Input() DebounceMs = 200;
+    @Input() DebounceMs = 400;
 
     /** Minimum query length before preview results are fetched */
     @Input() MinQueryLength = 2;
@@ -88,6 +88,7 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     public RecentSearches: RecentSearch[] = [];
     public PreviewTotalCount = 0;
     public IsPreviewLoading = false;
+    private previewSearchVersion = 0;
 
     ngOnInit(): void {
         this.subscribeToRecentSearches();
@@ -229,22 +230,27 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     }
 
     private async executePreviewSearch(query: string): Promise<void> {
+        const version = ++this.previewSearchVersion;
         this.IsPreviewLoading = true;
         this.cdr.detectChanges();
 
         try {
             const response = await this.searchService.PreviewSearch(query, this.MaxPreviewResults);
-            // Only apply if query hasn't changed since we started
-            if (this.Query === query) {
+            // Only apply if this is still the latest request and query hasn't changed
+            if (version === this.previewSearchVersion && this.Query === query) {
                 this.PreviewResults = response.Results;
                 this.PreviewTotalCount = response.TotalCount;
             }
         } catch {
-            this.PreviewResults = [];
-            this.PreviewTotalCount = 0;
+            if (version === this.previewSearchVersion) {
+                this.PreviewResults = [];
+                this.PreviewTotalCount = 0;
+            }
         } finally {
-            this.IsPreviewLoading = false;
-            this.cdr.detectChanges();
+            if (version === this.previewSearchVersion) {
+                this.IsPreviewLoading = false;
+                this.cdr.detectChanges();
+            }
         }
     }
 
