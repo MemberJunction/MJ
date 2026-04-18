@@ -830,7 +830,7 @@ import {
     MJWorkspaceItemEntity,
 } from '@memberjunction/core-entities';
 
-// @memberjunction/core-entities-server (16 classes)
+// @memberjunction/core-entities-server (15 classes)
 import {
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
@@ -843,7 +843,6 @@ import {
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJQueryEntityServer,
-    MJReportEntityServer,
     MJTagEntityServer,
     MJTemplateContentEntityServer,
     MJUserViewEntityServer,
@@ -1613,7 +1612,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJQueryEntityServer,
-    MJReportEntityServer,
     MJTagEntityServer,
     MJTemplateContentEntityServer,
     MJUserViewEntityServer,
@@ -1675,7 +1673,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 694;
+export const CLASS_REGISTRATIONS_COUNT = 693;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/storage
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/credentials@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

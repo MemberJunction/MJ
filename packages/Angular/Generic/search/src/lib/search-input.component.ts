@@ -19,7 +19,7 @@ import {
     inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { debounceTime, takeUntil } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 
 @Component({
     standalone: false,
@@ -60,7 +60,7 @@ export class SearchInputComponent implements OnInit, OnDestroy {
     @Input() ShortcutHint = 'Ctrl+K';
 
     /** Debounce time in milliseconds before QueryChange emits */
-    @Input() DebounceMs = 200;
+    @Input() DebounceMs = 400;
 
     // --- Outputs ---
 
@@ -162,6 +162,7 @@ export class SearchInputComponent implements OnInit, OnDestroy {
         this.queryInput$
             .pipe(
                 debounceTime(this.DebounceMs),
+                distinctUntilChanged(),
                 takeUntil(this.destroy$)
             )
             .subscribe(value => {

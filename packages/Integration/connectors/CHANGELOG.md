@@ -1,5 +1,14 @@
 # @memberjunction/integration-connectors
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/integration-engine@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes
