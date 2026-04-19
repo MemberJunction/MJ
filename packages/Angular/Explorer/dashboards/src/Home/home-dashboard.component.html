@@ -96,11 +96,7 @@
                 } @else if (pin.ResourceType === 'Actions') {
                   <div class="pin-thumbnail action-mode"
                        [style.background]="'linear-gradient(135deg, ' + GetPinAccentColor(pin) + ' 0%, ' + GetPinAccentColor(pin) + 'cc 100%)'">
-                    @if (GetPinSvgIcon(pin); as svg) {
-                      <div class="pin-action-svg" [innerHTML]="svg"></div>
-                    } @else {
-                      <i [class]="GetPinIcon(pin)"></i>
-                    }
+                    <i [class]="GetPinIcon(pin)"></i>
                     @if (!EditMode) {
                       <div class="pin-overlay">
                         <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Run</button>
@@ -207,11 +203,7 @@
                   } @else if (pin.ResourceType === 'Actions') {
                     <div class="pin-thumbnail action-mode"
                          [style.background]="'linear-gradient(135deg, ' + GetPinAccentColor(pin) + ' 0%, ' + GetPinAccentColor(pin) + 'cc 100%)'">
-                      @if (GetPinSvgIcon(pin); as svg) {
-                        <div class="pin-action-svg" [innerHTML]="svg"></div>
-                      } @else {
-                        <i [class]="GetPinIcon(pin)"></i>
-                      }
+                      <i [class]="GetPinIcon(pin)"></i>
                       @if (!EditMode) {
                         <div class="pin-overlay">
                           <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Run</button>

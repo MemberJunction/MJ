@@ -56,8 +56,6 @@ export interface ActionPinConfiguration {
   presetParams: Record<string, string>;
   /** Names of ActionParams to prompt the user for when the pin is clicked */
   runtimeParamNames: string[];
-  /** Optional AI/user-authored SVG markup used as the pin icon instead of a FA icon */
-  svgIcon?: string;
   /** Hex accent color (e.g. '#4F46E5') used for the pin card background gradient */
   accentColor?: string;
   /** User's custom title (also stored on HomeAppPinnedItem.DisplayName for consistency) */

@@ -20,11 +20,7 @@
       <div class="apc-preview">
         <div class="apc-preview-card" [style.background]="'linear-gradient(135deg, ' + AccentColor + ' 0%, ' + AccentColor + 'cc 100%)'">
           <div class="apc-preview-icon">
-            @if (SafeSvgIcon) {
-              <div class="apc-preview-svg" [innerHTML]="SafeSvgIcon"></div>
-            } @else {
-              <i [class]="FaIcon"></i>
-            }
+            <i [class]="FaIcon"></i>
           </div>
           <div class="apc-preview-title">{{ DisplayName || 'Untitled pin' }}</div>
         </div>
@@ -57,38 +53,12 @@
       </div>
 
       <div class="apc-field">
-        <div class="apc-field-header">
-          <label>Icon</label>
-          <button type="button" class="apc-ai-btn"
-                  [disabled]="IsGeneratingIcon"
-                  (click)="GenerateAiIcon()">
-            @if (IsGeneratingIcon) {
-              <i class="fa-solid fa-spinner fa-spin"></i> Generating…
-            } @else {
-              <i class="fa-solid fa-wand-magic-sparkles"></i> Generate with AI
-            }
-          </button>
-        </div>
-        @if (SafeSvgIcon) {
-          <div class="apc-ai-result">
-            <div class="apc-ai-svg-preview" [style.color]="AccentColor" [innerHTML]="SafeSvgIcon"></div>
-            <div class="apc-ai-result-info">
-              <div class="apc-ai-result-label">AI-generated icon</div>
-              <button type="button" class="apc-link-btn" (click)="ClearSvgIcon()">
-                <i class="fa-solid fa-xmark"></i> Clear and use an icon below
-              </button>
-            </div>
-          </div>
-        }
-        <input type="text" class="mj-input apc-hint-input"
-               [(ngModel)]="AiHint"
-               [disabled]="IsGeneratingIcon"
-               placeholder="Optional: describe the icon style (e.g. 'minimalist rocket')" />
-        <div class="apc-icon-grid" [class.dimmed]="SafeSvgIcon">
+        <label>Icon</label>
+        <div class="apc-icon-grid">
           @for (icon of FaIconPalette; track icon) {
             <button type="button"
                     class="apc-icon-swatch"
-                    [class.selected]="!SafeSvgIcon && FaIcon === icon"
+                    [class.selected]="FaIcon === icon"
                     (click)="SelectFaIcon(icon)">
               <i [class]="icon"></i>
             </button>

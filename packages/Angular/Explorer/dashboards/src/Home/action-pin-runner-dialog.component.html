@@ -3,11 +3,7 @@
   <div class="apr-dialog" role="dialog" aria-modal="true">
     <div class="apr-hero" [style.background]="'linear-gradient(135deg, ' + AccentColor + ' 0%, ' + AccentColor + 'cc 100%)'">
       <div class="apr-hero-icon">
-        @if (SafeSvgIcon) {
-          <div class="apr-hero-svg" [innerHTML]="SafeSvgIcon"></div>
-        } @else {
-          <i [class]="FaIcon"></i>
-        }
+        <i [class]="FaIcon"></i>
       </div>
       <div class="apr-hero-info">
         <div class="apr-hero-title">{{ Pin.DisplayName }}</div>

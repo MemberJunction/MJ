@@ -1,5 +1,4 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Metadata } from '@memberjunction/core';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { ActionParam } from '@memberjunction/actions-base';
@@ -34,9 +33,8 @@ export class ActionPinRunnerDialogComponent implements OnChanges {
     public RunSucceeded: boolean | null = null;
     public ResultMessage: string | null = null;
     public ErrorMessage: string | null = null;
-    public SafeSvgIcon: SafeHtml | null = null;
 
-    constructor(private cdr: ChangeDetectorRef, private sanitizer: DomSanitizer) {}
+    constructor(private cdr: ChangeDetectorRef) {}
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['Visible'] && this.Visible && this.Pin) {
@@ -56,7 +54,6 @@ export class ActionPinRunnerDialogComponent implements OnChanges {
         this.RunSucceeded = null;
         this.ResultMessage = null;
         this.ErrorMessage = null;
-        this.SafeSvgIcon = cfg?.svgIcon ? this.sanitizer.bypassSecurityTrustHtml(cfg.svgIcon) : null;
         this.cdr.markForCheck();
     }
 

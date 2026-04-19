@@ -1,8 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { MJActionParamEntity } from '@memberjunction/core-entities';
-import { GraphQLAIClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
 /**
  * One row in the param configuration table — either a preset-value or a runtime-prompted param.
@@ -27,7 +25,6 @@ export interface ActionPinConfigResult {
         ActionName: string;
         AccentColor: string;
         FaIcon: string;
-        SvgIcon?: string;
         PresetParams: Record<string, string>;
         RuntimeParamNames: string[];
     };
@@ -57,15 +54,6 @@ const FA_ICON_PALETTE = [
     'fa-solid fa-cloud', 'fa-solid fa-cube', 'fa-solid fa-thumbtack'
 ];
 
-const ICON_SYSTEM_PROMPT = `You are an expert icon designer. Generate a single, minimal, modern SVG icon (viewBox="0 0 24 24") that visually represents the user's action.
-
-Strict rules:
-- Output ONLY the raw SVG markup, no markdown fences, no prose, no commentary
-- Use currentColor for strokes/fills so the icon inherits the pin's accent color
-- Keep it simple: at most 6 shapes, stroke-width 1.5, rounded caps
-- Do NOT include <?xml?>, <!DOCTYPE>, or width/height attributes — only viewBox
-- Must start with <svg and end with </svg>`;
-
 @Component({
     standalone: false,
     selector: 'mj-action-pin-config-dialog',
@@ -86,17 +74,13 @@ export class ActionPinConfigDialogComponent implements OnChanges {
     public DisplayName = '';
     public AccentColor: string = COLOR_PALETTE[0].value;
     public FaIcon = FA_ICON_PALETTE[0];
-    public SvgIcon: string | null = null;
-    public SafeSvgIcon: SafeHtml | null = null;
-    public AiHint = '';
 
     public Params: ActionPinParamConfig[] = [];
 
     public IsLoadingParams = false;
-    public IsGeneratingIcon = false;
     public ErrorMessage: string | null = null;
 
-    constructor(private cdr: ChangeDetectorRef, private sanitizer: DomSanitizer) {}
+    constructor(private cdr: ChangeDetectorRef) {}
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['Visible'] && this.Visible && this.ActionID) {
@@ -109,13 +93,9 @@ export class ActionPinConfigDialogComponent implements OnChanges {
         this.DisplayName = this.ActionName ?? '';
         this.AccentColor = COLOR_PALETTE[0].value;
         this.FaIcon = FA_ICON_PALETTE[0];
-        this.SvgIcon = null;
-        this.SafeSvgIcon = null;
-        this.AiHint = '';
         this.Params = [];
         this.ErrorMessage = null;
         this.IsLoadingParams = false;
-        this.IsGeneratingIcon = false;
     }
 
     private async loadParams(): Promise<void> {
@@ -157,70 +137,12 @@ export class ActionPinConfigDialogComponent implements OnChanges {
 
     SelectFaIcon(icon: string): void {
         this.FaIcon = icon;
-        this.SvgIcon = null;
-        this.SafeSvgIcon = null;
-        this.cdr.markForCheck();
-    }
-
-    ClearSvgIcon(): void {
-        this.SvgIcon = null;
-        this.SafeSvgIcon = null;
         this.cdr.markForCheck();
     }
 
     SetParamMode(param: ActionPinParamConfig, mode: 'preset' | 'runtime'): void {
         param.Mode = mode;
         this.cdr.markForCheck();
-    }
-
-    async GenerateAiIcon(): Promise<void> {
-        if (this.IsGeneratingIcon) return;
-        this.IsGeneratingIcon = true;
-        this.ErrorMessage = null;
-        this.cdr.markForCheck();
-        try {
-            const userMessage = this.buildIconPromptMessage();
-            const provider = Metadata.Provider as GraphQLDataProvider;
-            const aiClient = new GraphQLAIClient(provider);
-            const result = await aiClient.ExecuteSimplePrompt({
-                systemPrompt: ICON_SYSTEM_PROMPT,
-                messages: [{ message: userMessage, role: 'user' }],
-                modelPower: 'medium'
-            });
-            if (!result?.success || !result.result) {
-                this.ErrorMessage = result?.error ?? 'AI did not return an icon. Try again or pick one manually.';
-                return;
-            }
-            const svg = this.extractSvg(result.result);
-            if (!svg) {
-                this.ErrorMessage = 'AI response did not contain a valid SVG. Try again.';
-                return;
-            }
-            this.SvgIcon = svg;
-            this.SafeSvgIcon = this.sanitizer.bypassSecurityTrustHtml(svg);
-        } catch (err) {
-            this.ErrorMessage = `Icon generation failed: ${(err as Error).message}`;
-        } finally {
-            this.IsGeneratingIcon = false;
-            this.cdr.markForCheck();
-        }
-    }
-
-    private buildIconPromptMessage(): string {
-        const lines = [`Action name: ${this.ActionName ?? 'Untitled action'}`];
-        if (this.ActionDescription) lines.push(`Action description: ${this.ActionDescription}`);
-        if (this.DisplayName && this.DisplayName !== this.ActionName) {
-            lines.push(`Pin title: ${this.DisplayName}`);
-        }
-        if (this.AiHint.trim()) lines.push(`User hint: ${this.AiHint.trim()}`);
-        lines.push('Return only the SVG markup.');
-        return lines.join('\n');
-    }
-
-    private extractSvg(raw: string): string | null {
-        // Strip common markdown fences and any preamble/trailing text; keep only the <svg>...</svg> block.
-        const match = raw.match(/<svg[\s\S]*?<\/svg>/i);
-        return match ? match[0] : null;
     }
 
     CanSave(): boolean {
@@ -250,7 +172,6 @@ export class ActionPinConfigDialogComponent implements OnChanges {
                 ActionName: this.ActionName,
                 AccentColor: this.AccentColor,
                 FaIcon: this.FaIcon,
-                SvgIcon: this.SvgIcon ?? undefined,
                 PresetParams: presetParams,
                 RuntimeParamNames: runtimeParamNames
             }

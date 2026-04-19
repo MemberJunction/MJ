@@ -1,5 +1,4 @@
 import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild, ChangeDetectionStrategy, inject } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration } from '@memberjunction/ng-shared';
@@ -99,9 +98,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   public ActionRunnerDialogVisible = false;
   public ActionRunnerPin: HomeAppPinnedItem | null = null;
 
-  // Cache of sanitized SVG icons, keyed by pin ID. Rebuilt when Pins$ emits.
-  private pinSvgIconCache = new Map<string, SafeHtml>();
-
   // Collapsible section state for Add Pin panel
   public PanelSectionCollapsed: Record<string, boolean> = {};
 
@@ -153,8 +149,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   constructor(
     private appManager: ApplicationManager,
     private recentAccessService: RecentAccessService,
-    private cdr: ChangeDetectorRef,
-    private sanitizer: DomSanitizer
+    private cdr: ChangeDetectorRef
   ) {
     super();
   }
@@ -929,20 +924,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     }
   }
 
-  /**
-   * Returns a sanitized SafeHtml for the pin's AI-generated SVG icon, or null
-   * if the pin doesn't have one. Cached per pin ID to avoid re-sanitizing on every render.
-   */
-  GetPinSvgIcon(pin: HomeAppPinnedItem): SafeHtml | null {
-    const svg = (pin.Configuration as unknown as ActionPinConfiguration).svgIcon;
-    if (!svg) return null;
-    const cached = this.pinSvgIconCache.get(pin.Id);
-    if (cached) return cached;
-    const safe = this.sanitizer.bypassSecurityTrustHtml(svg);
-    this.pinSvgIconCache.set(pin.Id, safe);
-    return safe;
-  }
-
   /** Accent color for a pin — prefers the stored accentColor in Configuration, falls back to Color, then CSS var */
   GetPinAccentColor(pin: HomeAppPinnedItem): string {
     const fromConfig = (pin.Configuration as unknown as ActionPinConfiguration).accentColor;
@@ -1350,7 +1331,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       presetParams: p.PresetParams,
       runtimeParamNames: p.RuntimeParamNames,
       accentColor: p.AccentColor,
-      svgIcon: p.SvgIcon,
       displayName: p.DisplayName
     };
 
