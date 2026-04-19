@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { MJDashboardEntity, MJDashboardCategoryEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, EscapeHTML } from '@memberjunction/global';
 
 // ========================================
 // Event Types
@@ -1022,11 +1022,14 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      * Returns HTML with <mark> tags around matches
      */
     public HighlightMatch(text: string): string {
-        if (!this.SearchText.trim() || !text) return text;
+        if (!text) return text;
+        const safeText = EscapeHTML(text);
+        if (!this.SearchText.trim()) return safeText;
 
         const search = this.SearchText.trim();
-        const regex = new RegExp(`(${this.escapeRegex(search)})`, 'gi');
-        return text.replace(regex, '<mark>$1</mark>');
+        const safeSearch = EscapeHTML(search);
+        const regex = new RegExp(`(${this.escapeRegex(safeSearch)})`, 'gi');
+        return safeText.replace(regex, '<mark>$1</mark>');
     }
 
     /**

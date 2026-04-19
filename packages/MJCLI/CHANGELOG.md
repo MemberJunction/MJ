@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/cli
 
+## 5.27.1
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@5.27.1
+- @memberjunction/db-auto-doc@5.27.1
+- @memberjunction/core@5.27.1
+- @memberjunction/metadata-sync@5.27.1
+- @memberjunction/query-gen@5.27.1
+- @memberjunction/sqlserver-dataprovider@5.27.1
+- @memberjunction/testing-cli@5.27.1
+- @memberjunction/server-bootstrap-lite@5.27.1
+- @memberjunction/ai-cli@5.27.1
+- @memberjunction/config@5.27.1
+- @memberjunction/installer@5.27.1
+- @memberjunction/sql-converter@5.27.1
+
 ## 5.27.0
 
 ### Patch Changes

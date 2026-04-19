@@ -576,7 +576,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
    * Derive the health check URL from GRAPHQL_URI and start the connectivity polling service.
    */
   private startConnectivityMonitoring(): void {
-    const healthUrl = this.environment.GRAPHQL_URI.replace(/\/graphql\/?$/, '/healthcheck');
+    const healthUrl = new URL('/healthcheck', this.environment.GRAPHQL_URI).toString();
     this.connectivityService.Start(healthUrl);
   }
 

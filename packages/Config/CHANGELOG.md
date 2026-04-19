@@ -1,5 +1,7 @@
 # @memberjunction/config
 
+## 5.27.1
+
 ## 5.27.0
 
 ## 5.26.0
