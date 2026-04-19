@@ -57,7 +57,7 @@ Sage, our ambient agent, becomes the onboarding experience itself. A welcome scr
 - **Integrate Sage with context-aware client tools**; build onboarding into agent behavior rather than modal tutorial flows
 - **Enable semantic search on conversations and artifacts by default** across all of MemberJunction, not just AssociationDB
 - **Audit every standard-ship dashboard and form for client tools** and add ongoing guidance to `CLAUDE.md` as a standing development requirement
-- **Positioning:** v2 is not “our demo database” — it is *the canonical reference implementation of how to build on MemberJunction*
+- **Positioning:** v2 is a *flagship demonstration* of MemberJunction’s composition story — a teaching artifact and lead-capture vehicle, not a product we sell or an officially supported canonical reference implementation
 
 ### 1.3 Why This Matters
 
@@ -92,12 +92,17 @@ The rationale:
 1. **Feedback and telemetry.** With opt-in analytics on the shared instance (privacy-preserving, aggregate only), we get a continuous read on what features prospects actually engage with, which questions they ask Sage, and where they drop off. This informs product prioritization in a way no amount of customer interviews can match.
 1. **Upgrade path is clean.** When an evaluator decides they want their own instance — with their own data, their own branding, their own API keys — that is the natural qualification moment. At that point we ask the qualifying questions and present pricing, and they’re already bought in on the value.
 
-### 2.3 Positioning AssociationDB v2 Within the Open App Ecosystem
+### 2.3 Positioning AssociationDB v2 Within the AMS Ecosystem
 
-A deliberate and critical positioning choice: **AssociationDB v2 is not an AMS competitor, and it is not a product we sell.** It is a demonstration of composition. The distinction matters for several reasons:
+A deliberate and important positioning choice: **AssociationDB v2 is not an AMS competitor, and it is not a product we sell.** It is a demonstration of composition. More importantly, it demonstrates how MemberJunction *amplifies* the AMS and line-of-business systems our customers already rely on, rather than replacing them.
 
-- **We don’t want to threaten AMS vendors** who are our potential integration partners. Our business model depends on being the AI and data layer that sits alongside their systems, not a replacement.
-- **We want to keep AssociationDB v2’s scope disciplined.** If we started selling it, every prospect feature request would pull us into AMS-land. By keeping it as a demo, we preserve its purity as a teaching artifact.
+**AMS vendors are our integration partners, not our competitors.** MJ’s value proposition is the AI and data layer that sits alongside a customer’s battle-hardened AMS — the system they have invested years configuring to handle their core transaction processing, member records, dues, and financial operations. Replacing that system is high-risk, expensive, and rarely justified. Modernizing it *in place* with AI capabilities is exactly what MJ is designed to do. In practice, this **extends the useful life of legacy AMS platforms by years or even decades**: customers get contemporary AI workflows (semantic search, enrichment, agentic automation, research agents, Skip-generated components) without touching the transactional substrate that actually runs their business.
+
+This reframing unlocks a **co-selling motion** with AMS vendors. Rather than "how do we compete with this platform," the conversation becomes "how do we make your customers more valuable to you by enabling capabilities you don’t need to build yourselves." AssociationDB v2 demonstrates this story against a fictional dataset, but the same composition pattern applies to any customer running any AMS. The demo should make this narrative legible to AMS vendor audiences as well as end customers.
+
+Other positioning considerations:
+
+- **We want to keep AssociationDB v2’s scope disciplined.** If we started selling it, every prospect feature request would pull us into AMS-land. By keeping it as a demo, we preserve its usefulness as a teaching artifact.
 - **We are comfortable if third parties use v2 as a starting point for their own applications**, including full AMS builds. That’s downstream of our goals and genuinely useful to the ecosystem. But the “we built and sell an AMS” story is not one we’re telling.
 
 The open apps themselves (biz-apps-common, tasks, committees, payments, subscriptions) are separate commercial/open-source considerations with their own product lifecycles. AssociationDB v2 demonstrates them composed together. Users who want to build on top of those open apps for their own purposes can — that’s the point.
@@ -661,6 +666,36 @@ The golden image is itself a product that needs ongoing care:
 - **Rebuild pipeline**: a CI/CD job in the MJ repo rebuilds the golden image from scratch on each release, validating the full install path
 - **Quality gate**: automated smoke tests against a fresh golden image validate that key demo flows work (welcome screen renders, Sage responds, semantic search returns results, Skip components load)
 
+### 7.6 Abuse & Cost Guardrails for the Shared Instance
+
+A free shared instance is exposed to the open internet, so abuse prevention and cost control are operational requirements — not optional polish. Guardrails operate at three layers:
+
+**Layer 1 — Signup gating (tiered, no hard qualification):**
+
+- **Business-email domains** (inferred by excluding a deny-list of common personal providers: gmail.com, yahoo.com, outlook.com, hotmail.com, icloud.com, and similar) — instant provisioning after standard email verification
+- **Personal-email domains** — email verification plus captcha plus a short cooldown before provisioning, with a clear explanation ("to protect the free shared demo from abuse; business email gets instant access")
+- **Abuse signals** — integrate disposable-email detection, IP rate limiting, and behavioral heuristics via standard third-party services
+- **No qualification questions at this stage.** The only gate is abuse prevention — not lead qualification, which happens later in the funnel when the user clicks "Get My Own Instance"
+
+The intent is to keep friction minimal for legitimate evaluators while making bulk abuse costly. Consultants and individual technologists on personal email still get in; only throwaway spam signups are meaningfully deterred.
+
+**Layer 2 — Per-user application-layer limits:**
+
+- **Daily token budgets** for Sage, Skip, and other agent-driven operations (sized generously for normal exploration; excess triggers polite throttling with an "upgrade for unlimited" prompt)
+- **Concurrent session caps** per user (prevents a single compromised account from spinning up parallel expensive workloads)
+- **Rate limits on expensive operations** — research agents, Skip component generation, bulk vectorization — because these are the cost-dominant actions
+
+**Layer 3 — Cost telemetry from day one:**
+
+Guardrails are only as good as the observability behind them. Shared-instance operations include live cost and usage telemetry from launch, not added reactively after a bill shock:
+
+- **Per-user metrics**: Sage token spend, Skip token spend, agent invocation count, session duration, API call count, vector query count
+- **Aggregate metrics**: daily active users, cost per user per day, cost per user per session, spike detection, anomaly flags
+- **Live operations dashboard** with per-user drilldown for abuse investigation
+- **Alerting thresholds defined before launch**: a per-user daily cost ceiling triggers automatic throttling plus investigation; a daily aggregate-burn threshold triggers team escalation
+
+The cost position today is favorable — embeddings are pre-computed and cached, vector lookups are fractional-cent, shared Pinecone indexes amortize across users. But agent token spend (Sage, Skip, research agents) is real money per session, and unattended abuse can escalate quickly. Monitor, cap, and adjust as actual usage patterns emerge.
+
 -----
 
 ## 8. Onboarding Experience & Sage Integration
@@ -833,6 +868,14 @@ This section is the primary execution reference. Each phase contains tasks with 
 
 **Goal:** Establish the directory structure, repository conventions, and tooling needed for v2 work.
 
+- [ ] **0.0** **Open App Readiness Gate** — v2 work begins only after all five open app dependencies reach production-ready status. Current state (as of plan authoring):
+  - `@memberjunction/biz-apps-common` — ✅ done
+  - `@memberjunction/tasks` — ✅ first cut done
+  - `@memberjunction/committees` — ✅ first cut done
+  - `@memberjunction/subscriptions` — 🚧 in development (**blocking**)
+  - `@memberjunction/payments` — 🚧 in development (**blocking**)
+  
+  **Definition of production-ready for this gate**: migrations stable, entity classes generated and tested, package published to npm under a pinned version, README/CLAUDE.md complete, no known blocker bugs. v2 Phase 1 does not begin until `subscriptions` and `payments` clear this bar — starting earlier forces re-tooling later as those open apps settle.
 - [ ] **0.1** Create `Demos/AssociationDB_v2/` directory with the following structure:
   - `schema/` — DDL migrations
   - `data/` — seed data scripts
@@ -965,9 +1008,13 @@ This section is the primary execution reference. Each phase contains tasks with 
 - [ ] **7.7** Author research report: “Event program review”
 - [ ] **7.8** Author research report: “Learning program effectiveness”
 - [ ] **7.9** Author research report: “Legislative advocacy retrospective”
-- [ ] **7.10** Build a `conversation-export` utility that exports a conversation + all its artifacts + metadata as a JSON seed blob
-- [ ] **7.11** `data/50_preloaded_conversations.sql` — seed conversations, artifacts, and their lineage; owned by system demo user with `IsSharedDemo = TRUE`
-- [ ] **7.12** Verify artifact lineage navigation works in MJ Explorer: user can see an artifact, click to see its source conversation, navigate through the thread
+- [ ] **7.10** **Use `mj-sync` pull/push for preloaded conversation persistence** — do not build a bespoke export utility. Workflow: author conversations and artifacts normally in a dev environment against AssociationDB v2, then `mj sync pull` snapshots them into the `metadata/` folder as version-controlled JSON seed files. `mj sync push` applies them during install on any target DB.
+  - [ ] **7.10a** Validate that mj-sync handles `Conversation`, `ConversationDetail` (messages), `Artifact`, `ArtifactVersion`, and related entities cleanly end-to-end (pull → files → push → verify round-trip equivalence)
+  - [ ] **7.10b** Confirm binary payloads (Skip component bundles, attached files, image assets) externalize correctly via `@file:` references and restore faithfully on push
+  - [ ] **7.10c** Fix any mj-sync coverage gaps surfaced above — these fixes benefit all mj-sync consumers as a side effect and should land in the mj-sync package, not in a v2-local workaround
+- [ ] **7.11** Commit pulled conversation JSON seed files to `Demos/AssociationDB_v2/metadata/conversations/`, with the system demo user as owner and `IsSharedDemo = TRUE` preserved across pull/push cycles
+- [ ] **7.12** **Design and implement fork semantics** for shared demo conversations — the "continue from this point" affordance promised in §6.3. Runtime copy-on-write: the user’s fork creates their own private conversation record that references the shared source as its parent, without mutating the source. This is an app-layer design, not an mj-sync concern, and must be defined before Phase 7 ships or shared demo conversations become read-only dead ends.
+- [ ] **7.13** Verify artifact lineage navigation works in MJ Explorer: user can see an artifact, click to see its source conversation, navigate through the thread, and fork from any point
 
 ### Phase 8 — Welcome Screen & Onboarding Agent Flow
 
@@ -1015,10 +1062,22 @@ This section is the primary execution reference. Each phase contains tasks with 
 - [ ] **11.2** MJCentral deployment flow for private instance: clone DB snapshot, clone Pinecone collection, provision API + Explorer, return URL (target: <60s)
 - [ ] **11.3** Shared instance architecture: provisioned single-instance tenant with shared DB + Pinecone + Box, per-user MJ accounts with row-level security
 - [ ] **11.4** “Deploy Demo” button on MJCentral dashboard: presents user with shared (free, instant) vs private (requires tier) choice
-- [ ] **11.5** Registration flow: no qualifying questions for shared demo; email + password only; automatic provisioning on signup
+- [ ] **11.5** **Registration flow with tiered signup gating** (see §7.6 for rationale):
+  - [ ] **11.5a** Business-email domains — email verification then instant provisioning; no qualifying questions
+  - [ ] **11.5b** Personal-email domains (gmail, yahoo, outlook, hotmail, icloud, and similar deny-list) — email verification + captcha + short cooldown before provisioning, with a clear user-facing explanation
+  - [ ] **11.5c** Integrate disposable-email detection, IP rate limiting, and behavioral abuse heuristics via standard third-party services
 - [ ] **11.6** Shared instance nightly reset job: rolls back mutations to shared data, preserves user-scoped data
-- [ ] **11.7** Telemetry: opt-in aggregated analytics on shared instance usage patterns
-- [ ] **11.8** Smoke tests against a freshly-deployed shared and private demo instance validating welcome screen, Sage, search, and key dashboards
+- [ ] **11.7** **Cost telemetry from day one** (not added reactively):
+  - [ ] **11.7a** Per-user metrics: Sage token spend, Skip token spend, agent invocation count, session duration, API call count, vector query count
+  - [ ] **11.7b** Aggregate metrics: DAU, cost per user per day, cost per user per session, spike detection, anomaly flags
+  - [ ] **11.7c** Live operations dashboard with per-user drilldown for abuse investigation
+  - [ ] **11.7d** Alerting thresholds defined and wired before launch: a per-user daily cost ceiling triggers automatic throttling + investigation; a daily aggregate-burn threshold triggers team escalation
+- [ ] **11.8** **Per-user cost guardrails** enforced at the application layer:
+  - [ ] **11.8a** Daily token budgets for Sage / Skip / research agents (sized generously for normal exploration; excess throttles politely with an "upgrade for unlimited" nudge)
+  - [ ] **11.8b** Concurrent agent-session cap per user
+  - [ ] **11.8c** Rate limits on expensive operations: research agents, Skip component generation, bulk vectorization
+- [ ] **11.9** **Opt-in product analytics** (distinct from cost telemetry): which features prospects engage with, where they drop off, what they ask Sage, conversion-funnel stage tracking. Privacy-preserving, aggregate only, clear opt-out.
+- [ ] **11.10** Smoke tests against a freshly-deployed shared and private demo instance validating welcome screen, Sage, search, and key dashboards
 
 ### Phase 12 — Documentation
 
