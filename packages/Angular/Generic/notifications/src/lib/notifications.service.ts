@@ -4,6 +4,7 @@ import { UserInfoEngine, MJUserNotificationEntity } from '@memberjunction/core-e
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal, GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { map, shareReplay } from 'rxjs/operators';
 
 /**
  * This injectable service is also available as a singleton MJNotificationService.Instance globally within an Angular application/library process space. It is responsible for displaying notifications to the user and also is able to manage the User Notifications entity
@@ -20,9 +21,28 @@ export class MJNotificationService {
   private tabChange = new Subject();
   tabChange$ = this.tabChange.asObservable();
 
-  // Observable for notification changes
-  private static _notifications$ = new BehaviorSubject<MJUserNotificationEntity[]>([]);
-  private static _unreadCount$ = new BehaviorSubject<number>(0);
+  /**
+   * Observable stream of the current user's notifications, derived from
+   * UserInfoEngine.UserNotifications$. Emits immediately on subscribe (shareReplay
+   * buffers the latest value) and re-emits whenever the engine's notifications
+   * cache is mutated — by save, delete, remote-invalidate, or refresh. Each
+   * emission re-runs the engine's per-user filter+sort.
+   */
+  public static readonly Notifications$: Observable<MJUserNotificationEntity[]> =
+    UserInfoEngine.Instance.UserNotifications$.pipe(
+      map(() => UserInfoEngine.Instance.UserNotifications),
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+
+  /**
+   * Observable stream of the current user's unread notification count, derived
+   * from Notifications$. Same emission lifecycle as Notifications$.
+   */
+  public static readonly UnreadCount$: Observable<number> =
+    MJNotificationService.Notifications$.pipe(
+      map((arr) => arr.filter((n) => n.Unread).length),
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
 
   /**
    * Optional callback that consuming apps can set to suppress toast notifications
@@ -64,16 +84,9 @@ export class MJNotificationService {
             });
           }
 
-          // Subscribe to UserInfoEngine's UserNotifications$ observable so that when the
-          // notifications cache mutates (save, delete, remote-invalidate, refresh), we
-          // immediately sync our BehaviorSubjects. BehaviorSubject semantics guarantee an
-          // initial emission with the current cache on subscribe, so this also primes the
-          // local observables without a manual RefreshUserNotifications() call for data
-          // already loaded by StartupManager.
-          UserInfoEngine.Instance.UserNotifications$.subscribe(() => {
-            MJNotificationService._userNotifications = UserInfoEngine.Instance.UserNotifications;
-            MJNotificationService.UpdateNotificationObservables();
-          });
+          // Notifications$ / UnreadCount$ are derived from UserInfoEngine.UserNotifications$
+          // at static-init time, so they auto-update whenever the engine's cache mutates.
+          // No per-login subscription wiring is needed.
 
           // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally
           this.PushStatusUpdates().subscribe( (message: string) => {
@@ -129,29 +142,26 @@ export class MJNotificationService {
     return GetGlobalObjectStore()![MJNotificationService._globalStoreKey] as MJNotificationService;
   }
  
-  private static _userNotifications: MJUserNotificationEntity[] = [];
+  /**
+   * The current user's notifications, delegated to UserInfoEngine which owns the
+   * cache. Applies the per-user filter and newest-first sort on each access.
+   */
   public static get UserNotifications(): MJUserNotificationEntity[] {
-    return MJNotificationService._userNotifications;
+    return UserInfoEngine.Instance.UserNotifications;
   }
+
+  /**
+   * The current user's unread notifications, delegated to UserInfoEngine.
+   */
   public static get UnreadUserNotifications(): MJUserNotificationEntity[] {
-    return MJNotificationService._userNotifications.filter(n => n.Unread);
+    return UserInfoEngine.Instance.UnreadNotifications;
   }
+
+  /**
+   * The current user's unread notification count, delegated to UserInfoEngine.
+   */
   public static get UnreadUserNotificationCount(): number {
-    return MJNotificationService.UnreadUserNotifications.length;
-  }
-
-  /**
-   * Observable that emits the full list of user notifications whenever they change
-   */
-  public static get Notifications$(): Observable<MJUserNotificationEntity[]> {
-    return MJNotificationService._notifications$.asObservable();
-  }
-
-  /**
-   * Observable that emits the unread notification count whenever it changes
-   */
-  public static get UnreadCount$(): Observable<number> {
-    return MJNotificationService._unreadCount$.asObservable();
+    return UserInfoEngine.Instance.UnreadNotificationCount;
   }
 
   /**
@@ -204,22 +214,20 @@ export class MJNotificationService {
   }
 
   /**
-   * Refresh user notifications and re-emit to observables.
+   * Refresh user notifications from the server. Delegates to UserInfoEngine.RefreshItem,
+   * whose successful reload mutates the engine's notifications cache and triggers an
+   * emission on Notifications$/UnreadCount$ via the BaseEngine observable plumbing —
+   * subscribers are updated automatically with no manual re-emit required here.
    *
-   * Uses RefreshItem() to guarantee fresh data from the server.  The global
-   * CACHE_INVALIDATION listener keeps the engine cache updated for background
-   * changes, but when this method is called in response to a PushStatusUpdates
-   * message, the cache invalidation event may not have arrived yet (separate
-   * WebSocket message, potential race).  RefreshItem() eliminates that race by
-   * doing a targeted RunView for just notifications.
+   * Uses RefreshItem() rather than relying solely on the global CACHE_INVALIDATION
+   * listener: when this method is called in response to a PushStatusUpdates message,
+   * the cache-invalidation event may not have arrived yet (separate WebSocket message,
+   * potential race). RefreshItem() eliminates that race by doing a targeted RunView
+   * for just notifications.
    */
   public static async RefreshUserNotifications() {
     try {
-      const engine = UserInfoEngine.Instance;
-      await engine.RefreshItem('_UserNotifications');
-      MJNotificationService._userNotifications = engine.UserNotifications;
-      MJNotificationService._notifications$.next(engine.UserNotifications);
-      MJNotificationService._unreadCount$.next(MJNotificationService.UnreadUserNotificationCount);
+      await UserInfoEngine.Instance.RefreshItem('_UserNotifications');
       MJNotificationService._loaded = true;
     }
     catch (e) {
@@ -228,13 +236,12 @@ export class MJNotificationService {
   }
 
   /**
-   * Update notification observables from existing in-memory data without doing a database query.
-   * This is efficient for cases where notifications have been modified locally (e.g., marking as read)
-   * and we just need to notify subscribers of the change.
+   * @deprecated Kept as a no-op for backward compatibility. Observable emissions are now
+   * driven by UserInfoEngine.UserNotifications$, which auto-emits on save/delete/
+   * remote-invalidate/refresh. External callers no longer need to manually push updates.
    */
   public static UpdateNotificationObservables() {
-    MJNotificationService._notifications$.next(MJNotificationService._userNotifications);
-    MJNotificationService._unreadCount$.next(MJNotificationService.UnreadUserNotificationCount);
+    // No-op — see JSDoc above.
   }
 
   /**
