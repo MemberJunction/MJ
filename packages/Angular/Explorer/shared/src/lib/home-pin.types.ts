@@ -44,6 +44,27 @@ export interface HomeAppPinnedItem {
 }
 
 /**
+ * Configuration shape for pins with ResourceType === 'Actions'.
+ * Stored inside HomeAppPinnedItem.Configuration as a plain object.
+ */
+export interface ActionPinConfiguration {
+  /** ID of the MJ Action to execute */
+  actionId: string;
+  /** Action name at pin time — kept for display in case the Action is renamed */
+  actionName: string;
+  /** Parameter values baked into the pin — passed every time the pin is invoked */
+  presetParams: Record<string, string>;
+  /** Names of ActionParams to prompt the user for when the pin is clicked */
+  runtimeParamNames: string[];
+  /** Optional AI/user-authored SVG markup used as the pin icon instead of a FA icon */
+  svgIcon?: string;
+  /** Hex accent color (e.g. '#4F46E5') used for the pin card background gradient */
+  accentColor?: string;
+  /** User's custom title (also stored on HomeAppPinnedItem.DisplayName for consistency) */
+  displayName?: string;
+}
+
+/**
  * Input for creating a new pin (ID, Sequence, and PinnedAt are auto-generated)
  */
 export type HomeAppPinInput = Omit<HomeAppPinnedItem, 'Id' | 'Sequence' | 'PinnedAt'>;

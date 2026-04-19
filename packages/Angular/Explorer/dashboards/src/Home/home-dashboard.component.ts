@@ -1,13 +1,16 @@
 import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild, ChangeDetectionStrategy, inject } from '@angular/core';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityRecordNameInput, RunView } from '@memberjunction/core';
 import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ActionPinConfigResult } from './action-pin-config-dialog.component';
+import { ActionPinRunResult } from './action-pin-runner-dialog.component';
 
 /**
  * Cached app data with pre-computed values for optimal rendering performance
@@ -83,8 +86,21 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   public AvailableDashboards: { id: string; name: string; pinned: boolean }[] = [];
   public AvailableViews: { id: string; name: string; entityName: string; pinned: boolean }[] = [];
   public AvailableQueries: { id: string; name: string; pinned: boolean }[] = [];
+  public AvailableActions: { id: string; name: string; description: string; pinned: boolean }[] = [];
   public AvailableApps: { appId: string; appName: string; icon: string; color: string; navItems: { label: string; icon: string; pinned: boolean }[] }[] = [];
   public AddPanelLoading = false;
+
+  // Action pin dialog state
+  public ActionConfigDialogVisible = false;
+  public ActionConfigActionId: string | null = null;
+  public ActionConfigActionName: string | null = null;
+  public ActionConfigActionDescription: string | null = null;
+
+  public ActionRunnerDialogVisible = false;
+  public ActionRunnerPin: HomeAppPinnedItem | null = null;
+
+  // Cache of sanitized SVG icons, keyed by pin ID. Rebuilt when Pins$ emits.
+  private pinSvgIconCache = new Map<string, SafeHtml>();
 
   // Collapsible section state for Add Pin panel
   public PanelSectionCollapsed: Record<string, boolean> = {};
@@ -137,7 +153,8 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   constructor(
     private appManager: ApplicationManager,
     private recentAccessService: RecentAccessService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private sanitizer: DomSanitizer
   ) {
     super();
   }
@@ -747,6 +764,17 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         }
         break;
       }
+      case 'Actions': {
+        const actionId = config['actionId'] as string;
+        if (!actionId) {
+          console.warn('[Pin Click] Action pin missing actionId', config);
+          break;
+        }
+        this.ActionRunnerPin = pin;
+        this.ActionRunnerDialogVisible = true;
+        this.cdr.markForCheck();
+        break;
+      }
       default:
         console.warn('[Pin Click] Unrecognized resource type', rt, 'for pin', pin.DisplayName, config);
         break;
@@ -763,7 +791,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     const config = pin.Configuration;
 
     // Already a known canonical type
-    const knownTypes = ['Dashboards', 'User Views', 'Queries', 'Reports', 'Records', 'Custom'];
+    const knownTypes = ['Dashboards', 'User Views', 'Queries', 'Reports', 'Records', 'Custom', 'Actions'];
     if (knownTypes.includes(rt)) return rt;
 
     // Check the config's own resourceType field
@@ -776,6 +804,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (config['queryId']) return 'Queries';
     if (config['reportId']) return 'Reports';
     if ((config['Entity'] || config['entity']) && config['recordId']) return 'Records';
+    if (config['actionId']) return 'Actions';
     if (config['navItemName']) return 'Custom';
 
     return rt; // Give up and return whatever was stored
@@ -879,6 +908,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       case 'Reports': return 'fa-solid fa-chart-bar';
       case 'Records': return entity ? this.getEntityIconByName(entity) : 'fa-solid fa-file';
       case 'Custom': return this.getNavItemIcon(pin) || this.getAppIcon(pin) || 'fa-solid fa-cube';
+      case 'Actions': return 'fa-solid fa-bolt';
       default: return 'fa-solid fa-thumbtack';
     }
   }
@@ -894,8 +924,29 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       case 'Reports': return 'Report';
       case 'Records': return (pin.Configuration?.['Entity'] as string) || (pin.Configuration?.['entity'] as string) || 'Record';
       case 'Custom': return pin.ApplicationName || (pin.Configuration['appName'] as string) || 'App';
+      case 'Actions': return 'Quick Action';
       default: return pin.ResourceType;
     }
+  }
+
+  /**
+   * Returns a sanitized SafeHtml for the pin's AI-generated SVG icon, or null
+   * if the pin doesn't have one. Cached per pin ID to avoid re-sanitizing on every render.
+   */
+  GetPinSvgIcon(pin: HomeAppPinnedItem): SafeHtml | null {
+    const svg = (pin.Configuration as unknown as ActionPinConfiguration).svgIcon;
+    if (!svg) return null;
+    const cached = this.pinSvgIconCache.get(pin.Id);
+    if (cached) return cached;
+    const safe = this.sanitizer.bypassSecurityTrustHtml(svg);
+    this.pinSvgIconCache.set(pin.Id, safe);
+    return safe;
+  }
+
+  /** Accent color for a pin — prefers the stored accentColor in Configuration, falls back to Color, then CSS var */
+  GetPinAccentColor(pin: HomeAppPinnedItem): string {
+    const fromConfig = (pin.Configuration as unknown as ActionPinConfiguration).accentColor;
+    return fromConfig || pin.Color || 'var(--mj-text-muted)';
   }
 
   /**
@@ -1098,8 +1149,8 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   private async loadAvailableResources(): Promise<void> {
     const rv = new RunView();
 
-    // Load dashboards, views, queries in parallel
-    const [dashboards, views, queries] = await Promise.all([
+    // Load dashboards, views, queries, actions in parallel
+    const [dashboards, views, queries, actions] = await Promise.all([
       rv.RunView<{ID: string; Name: string}>({
         EntityName: 'MJ: Dashboards',
         Fields: ['ID', 'Name'],
@@ -1119,6 +1170,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         Fields: ['ID', 'Name'],
         OrderBy: 'Name',
         ResultType: 'simple'
+      }),
+      rv.RunView<{ID: string; Name: string; Description: string}>({
+        EntityName: 'MJ: Actions',
+        Fields: ['ID', 'Name', 'Description'],
+        ExtraFilter: `Status='Active'`,
+        OrderBy: 'Name',
+        ResultType: 'simple'
       })
     ]);
 
@@ -1135,6 +1193,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.AvailableQueries = (queries.Results || []).map(q => ({
       id: q.ID, name: q.Name,
       pinned: this.pinService.IsPinned('Queries', { queryId: q.ID })
+    }));
+
+    // Actions can be pinned multiple times with different configs, so we treat them
+    // as always "not pinned" in the panel — the checkmark would be misleading.
+    this.AvailableActions = (actions.Results || []).map(a => ({
+      id: a.ID, name: a.Name, description: a.Description || '',
+      pinned: false
     }));
 
     // Load apps with their nav items
@@ -1253,6 +1318,68 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         `"${name}" pinned to Home`, 'success', 3000
       );
     }
+  }
+
+  // =============================================
+  // ACTION PIN DIALOGS
+  // =============================================
+
+  /**
+   * Open the Configure Action Pin dialog — triggered when the user clicks an Action
+   * in the Add Pin panel. Actions need extra configuration (preset params, runtime
+   * params, title, theming) before they can be pinned.
+   */
+  OpenActionPinConfig(actionId: string, actionName: string, description: string): void {
+    this.ActionConfigActionId = actionId;
+    this.ActionConfigActionName = actionName;
+    this.ActionConfigActionDescription = description || null;
+    this.ActionConfigDialogVisible = true;
+    this.cdr.markForCheck();
+  }
+
+  /** Callback from the Configure Action Pin dialog */
+  OnActionConfigResult(result: ActionPinConfigResult): void {
+    this.ActionConfigDialogVisible = false;
+    this.cdr.markForCheck();
+    if (result.Action !== 'save' || !result.Pin) return;
+
+    const p = result.Pin;
+    const config: ActionPinConfiguration = {
+      actionId: p.ActionID,
+      actionName: p.ActionName,
+      presetParams: p.PresetParams,
+      runtimeParamNames: p.RuntimeParamNames,
+      accentColor: p.AccentColor,
+      svgIcon: p.SvgIcon,
+      displayName: p.DisplayName
+    };
+
+    const input: HomeAppPinInput = {
+      DisplayName: p.DisplayName,
+      ResourceType: 'Actions',
+      Icon: p.FaIcon,
+      Color: p.AccentColor,
+      Configuration: config as unknown as Record<string, unknown>,
+      Group: this.getSelectedGroup() || undefined
+    };
+
+    const added = this.pinService.AddPin(input);
+    if (added) {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `"${p.DisplayName}" pinned to Home`, 'success', 3000
+      );
+    } else {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'A pin with the same title and config already exists.', 'warning', 3000
+      );
+    }
+  }
+
+  /** Callback from the Run Action Pin dialog */
+  OnActionRunnerResult(_result: ActionPinRunResult): void {
+    this.ActionRunnerDialogVisible = false;
+    this.ActionRunnerPin = null;
+    this.cdr.markForCheck();
   }
 
   /**
