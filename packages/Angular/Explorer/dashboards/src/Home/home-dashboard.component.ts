@@ -5,6 +5,7 @@ import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAc
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityRecordNameInput, RunView } from '@memberjunction/core';
 import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -1130,8 +1131,10 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   private async loadAvailableResources(): Promise<void> {
     const rv = new RunView();
 
-    // Load dashboards, views, queries, actions in parallel
-    const [dashboards, views, queries, actions] = await Promise.all([
+    // Actions come from ActionEngineBase's cache — no RunView needed. Config() is idempotent,
+    // so calling it in parallel with the remaining RunViews is cheap on repeat loads and avoids
+    // a redundant DB round trip when the engine is already primed.
+    const [dashboards, views, queries] = await Promise.all([
       rv.RunView<{ID: string; Name: string}>({
         EntityName: 'MJ: Dashboards',
         Fields: ['ID', 'Name'],
@@ -1152,14 +1155,12 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         OrderBy: 'Name',
         ResultType: 'simple'
       }),
-      rv.RunView<{ID: string; Name: string; Description: string}>({
-        EntityName: 'MJ: Actions',
-        Fields: ['ID', 'Name', 'Description'],
-        ExtraFilter: `Status='Active'`,
-        OrderBy: 'Name',
-        ResultType: 'simple'
-      })
+      ActionEngineBase.Instance.Config()
     ]);
+
+    const cachedActions = ActionEngineBase.Instance.Actions
+      .filter(a => a.Status === 'Active')
+      .sort((a, b) => a.Name.localeCompare(b.Name));
 
     this.AvailableDashboards = (dashboards.Results || []).map(d => ({
       id: d.ID, name: d.Name,
@@ -1178,7 +1179,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
     // Actions can be pinned multiple times with different configs, so we treat them
     // as always "not pinned" in the panel — the checkmark would be misleading.
-    this.AvailableActions = (actions.Results || []).map(a => ({
+    this.AvailableActions = cachedActions.map(a => ({
       id: a.ID, name: a.Name, description: a.Description || '',
       pinned: false
     }));
