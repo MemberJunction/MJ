@@ -380,6 +380,9 @@ export class SearchResultsResource extends BaseResourceComponent {
     /** All results from the last search (before client-side filtering) */
     private allResults: SearchResultItem[] = [];
 
+    /** Selected scope IDs from the search bar (empty = unscoped/global). */
+    private ScopeIDs: string[] = [];
+
     private dataLoaded = false;
 
     // Override Data setter to trigger search when tab container provides the data
@@ -418,6 +421,11 @@ export class SearchResultsResource extends BaseResourceComponent {
             if (!isNaN(mr) && mr >= 0 && mr <= 100) {
                 this.MinScorePercent = mr;
             }
+        }
+
+        // Carry scope selection from the search bar through into the initial query.
+        if (Array.isArray(config?.ScopeIDs)) {
+            this.ScopeIDs = (config.ScopeIDs as unknown[]).filter((x): x is string => typeof x === 'string');
         }
 
         // Sync min relevance to URL query param
@@ -564,6 +572,9 @@ export class SearchResultsResource extends BaseResourceComponent {
             IncludeSources: ['vector', 'fulltext', 'entity', 'storage'],
             MinScore: this.MinScorePercent / 100
         };
+        if (this.ScopeIDs.length > 0) {
+            request.ScopeIDs = [...this.ScopeIDs];
+        }
 
         const response: SearchResponse = await this.searchService.ExecuteSearch(request);
 

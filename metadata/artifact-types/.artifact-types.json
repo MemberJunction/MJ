@@ -351,11 +351,11 @@
   {
     "fields": {
       "Name": "Search Result Set",
-      "Description": "Persisted ranked search results produced by a scoped search (pre-execution RAG or agent-invoked). Shaped as a Data Snapshot (tables/computations/interpretation) so it inherits Data Snapshot + JSON artifact tools once PR #2237 lands. Until then it renders via the JSON viewer. ParentID should be updated to the Data Snapshot ArtifactType once #2237 seeds it.",
-      "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
+      "Description": "Persisted ranked search results produced by a scoped search (pre-execution RAG or agent-invoked). Shaped as a Data artifact so the tabular Results table (Title, Entity, Scope, Source, Score) renders via the Data viewer. Query, scope list, search context, and provider breakdown are stored alongside the tabular data in the artifact spec.",
+      "ParentID": "@lookup:MJ: Artifact Types.Name=Data",
       "ContentType": "application/vnd.mj.search-result-set",
       "ContentCategory": "Text",
-      "DriverClass": "JsonArtifactViewerPlugin",
+      "DriverClass": "DataArtifactViewerPlugin",
       "IsEnabled": true,
       "Icon": "fa-solid fa-magnifying-glass-plus"
     },

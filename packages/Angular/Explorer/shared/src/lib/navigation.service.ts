@@ -651,12 +651,12 @@ export class NavigationService implements OnDestroy {
    * This is the primary way to open search results from anywhere in the application.
    *
    * @param query The search query text
-   * @param searchOptions Optional search-specific options (e.g., minRelevance)
+   * @param searchOptions Optional search-specific options (e.g., minRelevance, scopeIDs)
    * @param options Navigation options
    */
   public OpenSearch(
     query: string,
-    searchOptions?: { minRelevance?: number },
+    searchOptions?: { minRelevance?: number; scopeIDs?: string[] },
     options?: NavigationOptions
   ): string {
     const appId = this.getDefaultApplicationId();
@@ -671,6 +671,9 @@ export class NavigationService implements OnDestroy {
     };
     if (searchOptions?.minRelevance != null) {
       config['MinRelevance'] = searchOptions.minRelevance;
+    }
+    if (searchOptions?.scopeIDs && searchOptions.scopeIDs.length > 0) {
+      config['ScopeIDs'] = searchOptions.scopeIDs;
     }
 
     const request: TabRequest = {

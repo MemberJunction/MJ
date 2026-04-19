@@ -19,6 +19,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
 import { CreateAgentService, CreateAgentResult } from '@memberjunction/ng-agents';
+import { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
 // AgentPermissionsDialogComponent is now from @memberjunction/ng-agents (shown via ShowPermissionsDialog flag)
 
 /**
@@ -253,8 +254,25 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         actions: true,
         learningCycles: true,
         notes: true,
-        customSection: true
+        customSection: true,
+        searchScopes: false
     };
+
+    /** Column spec for the AIAgentSearchScope child grid (mockup #5). */
+    public readonly AgentSearchScopeColumns: SearchScopeChildGridColumn[] = [
+        { Field: 'SearchScopeID', Label: 'Scope', Type: 'lookup', LookupEntityName: 'MJ: Search Scopes', LookupFilter: "Status='Active'", Width: '200px' },
+        { Field: 'Phase', Label: 'Phase', Type: 'select', Options: [
+            { Label: 'Pre-Execution (injected before LLM)', Value: 'PreExecution' },
+            { Label: 'Agent-Invoked (tool-callable)', Value: 'AgentInvoked' },
+            { Label: 'Both', Value: 'Both' },
+        ], Width: '220px' },
+        { Field: 'Priority', Label: 'Priority', Type: 'number', Placeholder: 'e.g. 10', Width: '90px' },
+        { Field: 'MaxResults', Label: 'Max Results', Type: 'number', Placeholder: '10', Width: '110px' },
+        { Field: 'MinScore', Label: 'Min Score', Type: 'number', Placeholder: '0.35', Width: '110px' },
+        { Field: 'QueryTemplateID', Label: 'Query Template', Type: 'lookup', LookupEntityName: 'Templates', Width: '180px' },
+        { Field: 'FusionWeightsOverride', Label: 'Fusion Weights Override', Type: 'code', Placeholder: '{ "vector": 2.0, "fulltext": 1.0 }' },
+        { Field: 'IsDefault', Label: 'Default', Type: 'checkbox', Width: '80px' },
+    ];
 
     // === User Preferences ===
     private static readonly PREFS_KEY = 'ai-agent-form/preferences';
@@ -637,7 +655,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             actions: true,
             learningCycles: true,
             notes: true,
-            customSection: true
+            customSection: true,
+            searchScopes: false
         };
         this.cdr.detectChanges(); // update UI
 
@@ -776,7 +795,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 actions: false,
                 learningCycles: false,
                 notes: false,
-                customSection: false
+                customSection: false,
+                searchScopes: false
             };
             this.cdr.detectChanges();
         }

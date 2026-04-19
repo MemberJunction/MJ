@@ -24,7 +24,7 @@ import { takeUntil } from 'rxjs/operators';
 import { SearchService, RecentSearch } from './search.service';
 import { SearchInputComponent } from './search-input.component';
 import { SearchSuggestComponent } from './search-suggest.component';
-import { SearchResultItem } from './search-types';
+import { SearchResultItem, SearchScopeInfo } from './search-types';
 
 @Component({
     standalone: false,
@@ -64,6 +64,14 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     /** Whether to enable recent searches display */
     @Input() EnableRecent = true;
 
+    /**
+     * Whether to show the scope selector inline with the search input. When true (default),
+     * the composite lazy-loads the list of scopes the current user can see and renders the
+     * selector only if at least one scope exists. When zero scopes are visible the selector
+     * stays hidden and the UX is identical to the pre-scope unscoped behavior.
+     */
+    @Input() EnableScopeSelector = true;
+
     // --- Outputs ---
 
     /** Emitted when a result is selected from the preview dropdown */
@@ -90,9 +98,29 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     public IsPreviewLoading = false;
     private previewSearchVersion = 0;
 
+    /**
+     * Scopes the current user can see. Populated by `SearchService.LoadScopes()` on init.
+     * When empty, the scope selector is not rendered (unscoped-as-before UX).
+     */
+    public AvailableScopes: SearchScopeInfo[] = [];
+
+    /** Whether any scope is visible to the current user — drives selector visibility. */
+    public HasScopes: boolean = false;
+
+    /**
+     * Currently selected scope IDs. Empty array means "Global" / unscoped. Read by the
+     * shell (or any parent) on submit via the exposed getter, and mirrored to the server
+     * through `SearchRequest.ScopeIDs` on the full submitted search.
+     */
+    public SelectedScopeIDs: string[] = [];
+
     ngOnInit(): void {
         this.subscribeToRecentSearches();
         this.searchService.LoadRecentSearches(); // fire-and-forget — loads from UserInfoEngine
+        if (this.EnableScopeSelector) {
+            this.subscribeToScopes();
+            this.searchService.LoadScopes(); // fire-and-forget — populates Scopes$
+        }
     }
 
     ngOnDestroy(): void {
@@ -206,6 +234,15 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
         this.searchService.ClearRecentSearches();
     }
 
+    /**
+     * Relay a selection change from the embedded scope selector to local state. Parents
+     * read `SelectedScopeIDs` directly on submit; no output event is needed because
+     * scope selection doesn't alter the inline preview (preview stays global for speed).
+     */
+    public OnScopeSelectionChange(scopeIDs: string[]): void {
+        this.SelectedScopeIDs = scopeIDs;
+    }
+
     // --- Private ---
 
     private openSuggest(): void {
@@ -225,6 +262,24 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
             .pipe(takeUntil(this.destroy$))
             .subscribe(recents => {
                 this.RecentSearches = recents;
+                this.cdr.detectChanges();
+            });
+    }
+
+    private subscribeToScopes(): void {
+        this.searchService.Scopes$
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(scopes => {
+                this.AvailableScopes = scopes;
+                this.HasScopes = scopes.length > 0;
+                // Drop any previously-selected scope IDs the user can no longer see.
+                if (this.SelectedScopeIDs.length > 0) {
+                    const visible = new Set(scopes.map(s => s.ID));
+                    const next = this.SelectedScopeIDs.filter(id => visible.has(id));
+                    if (next.length !== this.SelectedScopeIDs.length) {
+                        this.SelectedScopeIDs = next;
+                    }
+                }
                 this.cdr.detectChanges();
             });
     }

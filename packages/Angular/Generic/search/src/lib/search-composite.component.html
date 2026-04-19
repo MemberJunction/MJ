@@ -1,4 +1,12 @@
 <div class="search-composite-wrap">
+    @if (EnableScopeSelector && HasScopes) {
+        <mj-search-scope-selector
+            class="search-composite-scope"
+            [SelectedScopeIDs]="SelectedScopeIDs"
+            (SelectionChange)="OnScopeSelectionChange($any($event))">
+        </mj-search-scope-selector>
+    }
+
     <mj-search-input
         #searchInput
         [Placeholder]="Placeholder"
