@@ -2,6 +2,7 @@ import {
   Component,
   EventEmitter,
   Input,
+  OnDestroy,
   OnInit,
   Output,
   ChangeDetectorRef,
@@ -10,8 +11,10 @@ import {
   NgZone,
 } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { Subscription } from 'rxjs';
 import {
   BaseEntity,
+  BaseEntityEvent,
   CompositeKey,
   EntityFieldInfo,
   EntityFieldTSType,
@@ -114,7 +117,7 @@ export interface FilterPill {
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
 })
-export class RecordChangesComponent implements OnInit {
+export class RecordChangesComponent implements OnInit, OnDestroy {
   public IsLoading = false;
   public IsVisible = false;
   @Output() dialogClosed = new EventEmitter();
@@ -169,6 +172,14 @@ export class RecordChangesComponent implements OnInit {
   /** Threshold above which conditional chips collapse into the overflow popover. */
   private readonly OVERFLOW_THRESHOLD = 2;
 
+  /**
+   * Subscription to the record's BaseEntity event stream. We listen for
+   * 'save' events and auto-refresh the timeline so the user immediately
+   * sees the new RecordChange row produced by either a normal save or a
+   * restore. Cleaned up in ngOnDestroy.
+   */
+  private _entitySaveSub: Subscription | null = null;
+
   constructor(
     private cdr: ChangeDetectorRef,
     private ngZone: NgZone,
@@ -183,7 +194,30 @@ export class RecordChangesComponent implements OnInit {
       this.cdr.markForCheck();
       this.LoadRecordChanges(this.record.PrimaryKey, '', this.record.EntityInfo.Name);
       this.LoadRecordLabels();
+      this.subscribeToRecordSaves();
     }
+  }
+
+  ngOnDestroy(): void {
+    this._entitySaveSub?.unsubscribe();
+    this._entitySaveSub = null;
+  }
+
+  /**
+   * Wires up an event handler on the live record so the timeline auto-
+   * refreshes immediately after any save lands — including the one
+   * produced by the restore flow. Without this the user sees their record
+   * update in the form but the panel above still shows the pre-restore
+   * change list, which is confusing.
+   */
+  private subscribeToRecordSaves(): void {
+    if (!this.record) return;
+    this._entitySaveSub?.unsubscribe();
+    this._entitySaveSub = this.record.RegisterEventHandler((event: BaseEntityEvent) => {
+      if (event?.type === 'save') {
+        this.ngZone.run(() => this.Refresh());
+      }
+    });
   }
 
   /**
@@ -654,6 +688,28 @@ export class RecordChangesComponent implements OnInit {
     }
   }
 
+  /**
+   * Badge text for the row's primary type tag. For restore rows we override
+   * the underlying `Type='Update'` and show "Restore" instead — matches the
+   * mockup's intent of treating restore as a first-class operation in the
+   * timeline rather than a flavor of update.
+   */
+  getEffectiveBadgeText(change: MJRecordChangeEntity): string {
+    if (this.isRestoreRow(change)) return 'Restore';
+    return this.getChangeTypeBadgeText(change.Type);
+  }
+
+  /**
+   * Optional restore reason — pulled from the dynamic `RestoreReason`
+   * column added by the lineage migration. Returns null when not present
+   * or not a restore row.
+   */
+  getRestoreReason(change: MJRecordChangeEntity): string | null {
+    if (!this.isRestoreRow(change)) return null;
+    const reason = (change as unknown as { RestoreReason?: string | null }).RestoreReason;
+    return reason && reason.trim().length > 0 ? reason : null;
+  }
+
   getSourceClass(source: string): string {
     if (source === 'Restore') return 'source-restore';
     if (source === 'Internal') return 'source-internal';
@@ -739,6 +795,15 @@ export class RecordChangesComponent implements OnInit {
   // ─── Change Summary ─────────────────────────────────────────────
 
   getChangeSummary(change: MJRecordChangeEntity): string {
+    // Restore rows get a distinctive summary so the timeline reads like a
+    // sentence — "Restored to 5:56 PM version" rather than yet another
+    // "Name and Description changed". The lineage chip carries the full
+    // source-version detail.
+    if (this.isRestoreRow(change)) {
+      const src = this.getRestoredFromSourceChange(change);
+      if (src) return `Restored to ${this.formatTime(src.ChangedAt)} version`;
+      return 'Restored from earlier version';
+    }
     if (change.Type === 'Create') return 'Record created';
     if (change.Type === 'Delete') return 'Record deleted';
     if (change.Type === 'Snapshot') return change.ChangesDescription || 'Snapshot captured';

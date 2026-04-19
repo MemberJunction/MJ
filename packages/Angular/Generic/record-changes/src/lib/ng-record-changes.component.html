@@ -199,7 +199,8 @@
                     <!-- Card Header -->
                     <div class="rc-card-header" (click)="toggleExpansion(change.ID)">
                       <div class="rc-card-header-left">
-                        <span class="rc-card-type-badge">{{ getChangeTypeBadgeText(change.Type) }}</span>
+                        <span class="rc-card-type-badge"
+                              [class.rc-card-type-badge-restore]="isRestoreRow(change)">{{ getEffectiveBadgeText(change) }}</span>
                         <span class="rc-card-summary">{{ getChangeSummary(change) }}</span>
 
                         <!-- Lineage chip — visible when this row was produced by a restore -->
@@ -238,6 +239,18 @@
                     <!-- Card Body (expanded) -->
                     @if (expandedItems.has(change.ID)) {
                       <div class="rc-card-body">
+                        <!-- Restore reason (when present) — Notion/Linear-style
+                             blockquote: a thin violet left bar + italic text,
+                             with a tiny "Reason" prefix. No box, no header,
+                             no large vertical footprint. Reads as a
+                             justification note rather than a callout. -->
+                        @if (getRestoreReason(change); as reason) {
+                          <blockquote class="rc-restore-reason">
+                            <span class="rc-restore-reason-label">Reason</span>
+                            <span class="rc-restore-reason-text">{{ reason }}</span>
+                          </blockquote>
+                        }
+
                         @if (change.Type === 'Create') {
                           @if (change.FullRecordJSON) {
                             @for (field of getCreatedFields(change); track field.name) {

@@ -481,6 +481,11 @@
   gap: 10px;
   min-width: 0;
   flex: 1;
+  /* Allow the lineage chip to wrap to a second line on narrow panel widths
+     instead of squeezing the title text into a "Name and Description c..."
+     truncation. The badge stays on the first line; chip wraps gracefully. */
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
 .rc-card-type-badge {
@@ -1301,6 +1306,10 @@
 
 /* ─── Lineage chip ─── */
 
+/* Lineage chip — outline-only "interactive link" treatment so it reads as
+   distinct from the filled RESTORE badge sitting next to it. The badge says
+   "this row IS a restore" (filled, static); the chip says "click here to
+   see the source version" (outline, hoverable). */
 .rc-restored-chip {
   display: inline-flex;
   align-items: center;
@@ -1310,17 +1319,19 @@
   border-radius: 11px;
   font-size: 11px;
   font-weight: 500;
-  background: color-mix(in srgb, var(--mj-status-info) 10%, var(--mj-bg-surface));
-  color: color-mix(in srgb, var(--mj-status-info) 85%, var(--mj-text-primary));
-  border: 1px solid color-mix(in srgb, var(--mj-status-info) 25%, var(--mj-border-default));
+  background: transparent;
+  color: color-mix(in srgb, var(--mj-status-info) 90%, var(--mj-text-primary));
+  border: 1px solid color-mix(in srgb, var(--mj-status-info) 40%, var(--mj-border-default));
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
 }
 
 .rc-restored-chip:hover {
-  background: color-mix(in srgb, var(--mj-status-info) 18%, var(--mj-bg-surface));
+  background: color-mix(in srgb, var(--mj-status-info) 12%, transparent);
   border-color: var(--mj-status-info);
+  color: var(--mj-status-info);
 }
 
 .rc-restored-chip i {
@@ -1350,4 +1361,51 @@
 @keyframes rc-card-pulse {
   0%, 100% { background: var(--mj-bg-surface); }
   50% { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ *  Restore-row badge override + Restore Reason block
+ *  (mockup-aligned treatment for restore rows in the timeline)
+ * ────────────────────────────────────────────────────────────────── */
+
+/* The base type-update badge styling would otherwise paint a restore row's
+   badge blue with "Update" text. Override to violet + "Restore" text so it
+   matches the source pill, lineage chip, and card border. */
+.rc-card-type-badge.rc-card-type-badge-restore {
+  background: color-mix(in srgb, var(--mj-status-info) 14%, var(--mj-bg-surface));
+  color: var(--mj-status-info);
+}
+
+/* Restore reason — minimal blockquote treatment.
+   A thin violet left bar + italic text reads like a margin note rather than
+   a heavy callout. Visually connected to the restore family (left bar uses
+   the same violet as the badge / source pill / card border) without
+   competing with the field-diff rows that follow. */
+.rc-restore-reason {
+  /* Indented in from the card body edge so it visually nests one level
+     deeper than the field-diff rows that follow, and given generous
+     vertical breathing room so it doesn't crowd the lineage chip above
+     or the first field row below. */
+  margin: 14px 8px 18px 18px;
+  padding: 0 0 0 12px;
+  border-left: 2px solid color-mix(in srgb, var(--mj-status-info) 55%, var(--mj-border-default));
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rc-restore-reason-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--mj-status-info) 75%, var(--mj-text-muted));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rc-restore-reason-text {
+  color: var(--mj-text-secondary);
+  font-style: italic;
 }
