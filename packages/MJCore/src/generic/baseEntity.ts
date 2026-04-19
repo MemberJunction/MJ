@@ -621,6 +621,8 @@ export abstract class BaseEntity<T = unknown> {
     private _everSaved: boolean = false;
     private _isLoading: boolean = false;
     private _pendingDelete$: Observable<boolean> | null = null;
+    private _fieldCache: Map<string, EntityField> | null = null;
+    private _codeNameCache: Map<string, EntityField> | null = null;
 
     /**************************************************************************
      * IS-A Type Relationship — Bidirectional Entity Composition
@@ -1326,7 +1328,43 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
-        return this.Fields.find(f => f.Name.trim().toLowerCase() === lcase);
+
+        if (this._fieldCache === null) {
+            this._fieldCache = new Map<string, EntityField>();
+            for (const f of this.Fields) {
+                if (!this._fieldCache.has(f.Name.trim().toLowerCase())) {
+                    this._fieldCache.set(f.Name.trim().toLowerCase(), f);
+                }
+            }
+        }
+
+        return this._fieldCache.get(lcase) || null;
+    }
+
+    /**
+     * Convenience method to access a field by code name. This method is case-insensitive and will return null if the field is not found.
+     * @param codeName
+     * @returns
+     */
+    public GetFieldByCodeName(codeName: string): EntityField | null {
+        if(!codeName) {
+            return null;
+        }
+
+        const lcase = codeName.trim().toLowerCase();
+
+        if (this._codeNameCache === null) {
+            this._codeNameCache = new Map<string, EntityField>();
+            // First-write-wins on duplicate code names — matches prior Array.find() behavior
+            for (const f of this.Fields) {
+                const codeKey = f.CodeName.trim().toLowerCase();
+                if (!this._codeNameCache.has(codeKey)) {
+                    this._codeNameCache.set(codeKey, f);
+                }
+            }
+        }
+
+        return this._codeNameCache.get(lcase) || null;
     }
 
     /**
@@ -1503,7 +1541,7 @@ export abstract class BaseEntity<T = unknown> {
             else {
                 // if we don't find a match for the field name, check to see if we have a match for the code name
                 // because some objects passed in will use the code name
-                const field = this.Fields.find(f => f.CodeName.trim().toLowerCase() == key.trim().toLowerCase());
+                const field = this.GetFieldByCodeName(key);
                 if (field) {
                     const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
                     if (ignoreActiveStatusAssertions) {
@@ -1731,6 +1769,8 @@ export abstract class BaseEntity<T = unknown> {
         this._resultHistory = [];
         this._recordLoaded = false;
         this._Fields = [];
+        this._fieldCache = null;
+        this._codeNameCache = null;
         if (this.EntityInfo) {
             for (const rawField of this.EntityInfo.Fields) {
                 const key = this.EntityInfo.Name + '.' + rawField.Name;
