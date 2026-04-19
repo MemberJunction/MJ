@@ -33,6 +33,7 @@ import {
   TransactionGroupBase,
   TransactionItem,
   EntityPermissionType,
+  EntitySaveOptions,
   LogError,
   EntityRecordNameInput,
   EntityRecordNameResult,
@@ -51,6 +52,7 @@ import {
   RunViewsWithCacheCheckResponse,
   RunViewWithCacheCheckResult,
   RunQueryWithCacheCheckParams,
+  SaveContext,
   RestoreContext,
   RecordChangePayload,
 } from '@memberjunction/core';
@@ -212,9 +214,18 @@ async function executeSQLCore(
       return executeSQLCore(query, parameters, context, options, true);
     }
 
-    // Build detailed error message with query and parameters
+    // Build detailed error message with query and parameters.
+    // mssql RequestError has a precedingErrors array with the actual root-cause
+    // SQL Server messages (e.g. "object already exists") that precede the
+    // generic "Could not create constraint" wrapper. Always include them.
+    const precedingMsgs: string =
+      Array.isArray(error?.precedingErrors) && error.precedingErrors.length > 0
+        ? `\n    Preceding errors: ${(error.precedingErrors as Array<{ message?: string }>)
+            .map((e) => e?.message ?? String(e))
+            .join(' | ')}`
+        : '';
     const errorMessage = `Error executing SQL
-    Error: ${error?.message ? error.message : error}
+    Error: ${error?.message ? error.message : error}${precedingMsgs}
     Query: ${query}
     Parameters: ${parameters ? JSON.stringify(parameters) : 'None'}`;
 

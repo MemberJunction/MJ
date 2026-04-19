@@ -47580,6 +47580,9 @@ export class MJIntegrationObjectField_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`}) 
+    IsCustom: boolean;
+        
     @Field() 
     @MaxLength(255)
     IntegrationObject: string;
@@ -47658,6 +47661,9 @@ export class CreateMJIntegrationObjectFieldInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    IsCustom?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -47730,6 +47736,9 @@ export class UpdateMJIntegrationObjectFieldInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsCustom?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -47907,6 +47916,9 @@ export class MJIntegrationObject_ {
     @MaxLength(10)
     DeleteMethod?: string;
         
+    @Field(() => Boolean, {description: `When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`}) 
+    IsCustom: boolean;
+        
     @Field() 
     @MaxLength(100)
     Integration: string;
@@ -47984,6 +47996,9 @@ export class CreateMJIntegrationObjectInput {
     @Field({ nullable: true })
     DeleteMethod?: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    IsCustom?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -48053,6 +48068,9 @@ export class UpdateMJIntegrationObjectInput {
 
     @Field({ nullable: true })
     DeleteMethod?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsCustom?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

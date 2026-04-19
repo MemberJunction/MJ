@@ -613,6 +613,52 @@ export class GraphQLIntegrationClient {
     }
 
     /**
+     * Batch Apply All: schema + entity maps + field maps + sync across one or more connectors.
+     * Calls the IntegrationApplyAllBatch resolver.
+     */
+    public async ApplyAllBatch(
+        connectors: Array<{ CompanyIntegrationID: string; SourceObjectIDs: string[] }>,
+        startSync = true,
+        fullSync = false,
+        syncScope = 'created',
+        platform = 'sqlserver',
+        skipGitCommit = false,
+        skipRestart = false
+    ): Promise<ApplyAllResult> {
+        try {
+            const query = gql`mutation($input: ApplyAllBatchInput!, $platform: String!, $skipGitCommit: Boolean!, $skipRestart: Boolean!) {
+                IntegrationApplyAllBatch(input: $input, platform: $platform, skipGitCommit: $skipGitCommit, skipRestart: $skipRestart) {
+                    Success Message SuccessCount FailureCount
+                    ConnectorResults { CompanyIntegrationID IntegrationName Success Message EntityMapsCreated { SourceObjectName EntityName EntityMapID FieldMapCount } SyncRunID Warnings }
+                    PipelineSteps { Name Status DurationMs Message }
+                    GitCommitSuccess APIRestarted
+                }
+            }`;
+            const input = {
+                Connectors: connectors.map(c => ({
+                    CompanyIntegrationID: c.CompanyIntegrationID,
+                    SourceObjects: c.SourceObjectIDs.map(id => ({ SourceObjectID: id }))
+                })),
+                StartSync: startSync,
+                FullSync: fullSync,
+                SyncScope: syncScope
+            };
+            const batchResult = (await this._dataProvider.ExecuteGQL(query, { input, platform, skipGitCommit, skipRestart }))?.IntegrationApplyAllBatch;
+            if (!batchResult) return { Success: false, Message: 'No response' };
+            return {
+                Success: batchResult.Success,
+                Message: batchResult.Message,
+                Steps: batchResult.PipelineSteps,
+                GitCommitSuccess: batchResult.GitCommitSuccess,
+                APIRestarted: batchResult.APIRestarted,
+                EntityMapsCreated: batchResult.ConnectorResults?.[0]?.EntityMapsCreated,
+                SyncRunID: batchResult.ConnectorResults?.[0]?.SyncRunID,
+                Warnings: batchResult.ConnectorResults?.flatMap((r: { Warnings?: string[] }) => r.Warnings ?? [])
+            };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /**
      * Full automatic "Apply All" flow: auto-names schema/tables, runs RSU pipeline,
      * creates entity maps + field maps, and starts sync.
      * @param companyIntegrationID - ID of the CompanyIntegration
@@ -647,12 +693,27 @@ export class GraphQLIntegrationClient {
 
     // ── Sync Execution ─────────────────────────────────────────────────
 
-    public async StartSync(companyIntegrationID: string, webhookURL?: string): Promise<MutationResult & { RunID?: string }> {
+    public async StartSync(
+        companyIntegrationID: string,
+        webhookURL?: string,
+        fullSync?: boolean,
+        syncDirection?: 'Pull' | 'Push' | 'Bidirectional'
+    ): Promise<MutationResult & { RunID?: string }> {
         try {
-            const query = gql`mutation IntegrationStartSync($companyIntegrationID: String!, $webhookURL: String) {
-                IntegrationStartSync(companyIntegrationID: $companyIntegrationID, webhookURL: $webhookURL) { Success Message RunID }
+            const query = gql`mutation IntegrationStartSync(
+                $companyIntegrationID: String!,
+                $webhookURL: String,
+                $fullSync: Boolean,
+                $syncDirection: String
+            ) {
+                IntegrationStartSync(
+                    companyIntegrationID: $companyIntegrationID,
+                    webhookURL: $webhookURL,
+                    fullSync: $fullSync,
+                    syncDirection: $syncDirection
+                ) { Success Message RunID }
             }`;
-            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID, webhookURL });
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID, webhookURL, fullSync, syncDirection });
             return result?.IntegrationStartSync ?? { Success: false, Message: 'No response' };
         } catch (e) { return { Success: false, Message: (e as Error).message }; }
     }
@@ -671,6 +732,7 @@ export class GraphQLIntegrationClient {
 
     public async CreateSchedule(input: {
         CompanyIntegrationID: string; Name: string; CronExpression: string; Timezone?: string; Description?: string;
+        SyncDirection?: 'Pull' | 'Push' | 'Bidirectional'; FullSync?: boolean;
     }): Promise<MutationResult & { ScheduledJobID?: string }> {
         try {
             const query = gql`mutation IntegrationCreateSchedule($input: CreateScheduleInput!) {

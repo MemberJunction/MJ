@@ -16255,7 +16255,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: UI grouping category within the object`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Data Type
         * * SQL Data Type: nvarchar(100)
         * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.`),
     Length: z.number().nullable().describe(`
@@ -16286,31 +16286,31 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Default value from the source system`),
     IsPrimaryKey: z.boolean().describe(`
         * * Field Name: IsPrimaryKey
-        * * Display Name: Primary Key
+        * * Display Name: Is Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this field is part of the object primary key`),
     IsUniqueKey: z.boolean().describe(`
         * * Field Name: IsUniqueKey
-        * * Display Name: Unique Key
+        * * Display Name: Is Unique Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether values must be unique across all records`),
     IsReadOnly: z.boolean().describe(`
         * * Field Name: IsReadOnly
-        * * Display Name: Read Only
+        * * Display Name: Is Read Only
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this field cannot be written back to the source system`),
     IsRequired: z.boolean().describe(`
         * * Field Name: IsRequired
-        * * Display Name: Required
+        * * Display Name: Is Required
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this field is required for create/update operations`),
     RelatedIntegrationObjectID: z.string().nullable().describe(`
         * * Field Name: RelatedIntegrationObjectID
-        * * Display Name: Related Integration Object
+        * * Display Name: Related Integration Object ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
         * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.`),
@@ -16351,6 +16351,12 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    IsCustom: z.boolean().describe(`
+        * * Field Name: IsCustom
+        * * Display Name: Is Custom
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
     IntegrationObject: z.string().describe(`
         * * Field Name: IntegrationObject
         * * Display Name: Integration Object Name
@@ -16499,6 +16505,12 @@ export const MJIntegrationObjectSchema = z.object({
         * * SQL Data Type: nvarchar(10)
         * * Default Value: DELETE
         * * Description: HTTP method for delete operations. Defaults to DELETE.`),
+    IsCustom: z.boolean().describe(`
+        * * Field Name: IsCustom
+        * * Display Name: Is Custom
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration Name
@@ -67747,7 +67759,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Data Type
     * * SQL Data Type: nvarchar(100)
     * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.
     */
@@ -67826,7 +67838,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsPrimaryKey
-    * * Display Name: Primary Key
+    * * Display Name: Is Primary Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this field is part of the object primary key
@@ -67840,7 +67852,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsUniqueKey
-    * * Display Name: Unique Key
+    * * Display Name: Is Unique Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether values must be unique across all records
@@ -67854,7 +67866,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsReadOnly
-    * * Display Name: Read Only
+    * * Display Name: Is Read Only
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this field cannot be written back to the source system
@@ -67868,7 +67880,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsRequired
-    * * Display Name: Required
+    * * Display Name: Is Required
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this field is required for create/update operations
@@ -67882,7 +67894,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: RelatedIntegrationObjectID
-    * * Display Name: Related Integration Object
+    * * Display Name: Related Integration Object ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
     * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.
@@ -67971,6 +67983,20 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: IsCustom
+    * * Display Name: Is Custom
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.
+    */
+    get IsCustom(): boolean {
+        return this.Get('IsCustom');
+    }
+    set IsCustom(value: boolean) {
+        this.Set('IsCustom', value);
     }
 
     /**
@@ -68323,6 +68349,20 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     }
     set DeleteMethod(value: string | null) {
         this.Set('DeleteMethod', value);
+    }
+
+    /**
+    * * Field Name: IsCustom
+    * * Display Name: Is Custom
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.
+    */
+    get IsCustom(): boolean {
+        return this.Get('IsCustom');
+    }
+    set IsCustom(value: boolean) {
+        this.Set('IsCustom', value);
     }
 
     /**
