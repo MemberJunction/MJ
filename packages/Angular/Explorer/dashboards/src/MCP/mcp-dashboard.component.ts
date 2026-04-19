@@ -1974,17 +1974,13 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             const md = new Metadata();
             const currentUserID = md.CurrentUser?.ID;
             if (!currentUserID) return;
-            const rv = new RunView();
-            const result = await rv.RunView<{ MCPServerToolID: string }>({
-                EntityName: 'MJ: MCP Tool Favorites',
-                ExtraFilter: `UserID='${currentUserID}'`,
-                Fields: ['MCPServerToolID'],
-                ResultType: 'simple'
-            });
-            if (result.Success) {
-                this.favoritedToolIDs = new Set((result.Results || []).map(r => NormalizeUUID(r.MCPServerToolID)));
-                this.cdr.detectChanges();
-            }
+            // MCPEngine caches MCP: Tool Favorites via BaseEngine CacheLocal — Config() is
+            // idempotent, and the cache auto-invalidates on Save/Delete via BaseEntity events,
+            // so repeat loads hit the Global Object Store with no DB round-trip.
+            await MCPEngine.Instance.Config();
+            const userFavorites = MCPEngine.Instance.GetFavoritesByUser(currentUserID);
+            this.favoritedToolIDs = new Set(userFavorites.map(f => NormalizeUUID(f.MCPServerToolID)));
+            this.cdr.detectChanges();
         } catch (e) {
             console.warn('[MCPDashboard] loadFavorites failed:', e);
         }
@@ -2015,22 +2011,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         const isFav = this.favoritedToolIDs.has(normalizedID);
         try {
             if (isFav) {
-                // Load existing favorite row as an entity object, then Delete via the entity.
-                const rv = new RunView();
-                const existing = await rv.RunView<MJMCPToolFavoriteEntity>({
-                    EntityName: 'MJ: MCP Tool Favorites',
-                    ExtraFilter: `UserID='${currentUserID}' AND MCPServerToolID='${toolID}'`,
-                    ResultType: 'entity_object'
-                });
-                if (!existing.Success) {
-                    console.warn('[MCPDashboard] Favorite lookup failed:', existing.ErrorMessage);
-                    return;
-                }
-                if (existing.Results.length === 0) {
-                    // DB row missing but client thought it was favorited — just drop from cache
+                // Find the existing favorite in MCPEngine's cache and Delete via the entity —
+                // BaseEngine's event-driven cache sync will drop it from _Favorites automatically.
+                await MCPEngine.Instance.Config();
+                const entity = MCPEngine.Instance.GetFavoriteByUserAndTool(currentUserID, toolID);
+                if (!entity) {
+                    // Cache says it's missing but UI thought it was favorited — drop from the
+                    // local Set so the UI reconciles.
                     this.favoritedToolIDs.delete(normalizedID);
                 } else {
-                    const entity = existing.Results[0];
                     const deleted = await entity.Delete();
                     if (!deleted) {
                         console.warn('[MCPDashboard] Delete favorite failed:', entity.LatestResult?.CompleteMessage);
