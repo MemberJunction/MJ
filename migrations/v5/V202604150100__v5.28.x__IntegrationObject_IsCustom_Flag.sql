@@ -1,42 +1,9 @@
--- Create __mj_integration schema + SchemaHistory table for tracking integration DDL history.
 -- Add IsCustom flag to IntegrationObject and IntegrationObjectField to distinguish
--- static metadata (mj-sync push) from objects/fields discovered at runtime by IntrospectSchema.
+-- static metadata (from mj-sync push) from objects/fields discovered at runtime by
+-- IntrospectSchema. Default is 0 (static). Runtime-discovered rows get IsCustom=1
+-- so downstream logic can re-introspect them on schema drift and exclude them from
+-- metadata export.
 
--- Create the __mj_integration schema if it doesn't already exist
-IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '__mj_integration')
-BEGIN
-    EXEC('CREATE SCHEMA [__mj_integration]');
-END
-GO
-
--- Track DDL history for integration-created tables (HubSpot, YM, Salesforce, etc.)
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '__mj_integration' AND TABLE_NAME = 'SchemaHistory')
-BEGIN
-    CREATE TABLE [__mj_integration].[SchemaHistory] (
-        [ID]               UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-        [IntegrationName]  NVARCHAR(200)    NOT NULL,
-        [SchemaName]       NVARCHAR(200)    NOT NULL,
-        [TableName]        NVARCHAR(200)    NULL,
-        [OperationType]    NVARCHAR(50)     NOT NULL,  -- CREATE_SCHEMA, CREATE_TABLE, ALTER_TABLE, DROP_TABLE
-        [DDLStatement]     NVARCHAR(MAX)    NOT NULL,
-        [ExecutedAt]       DATETIMEOFFSET   NOT NULL DEFAULT GETUTCDATE(),
-        [ExecutedBy]       NVARCHAR(200)    NULL,
-        [Success]          BIT              NOT NULL DEFAULT 1,
-        [ErrorMessage]     NVARCHAR(MAX)    NULL,
-        [MigrationFile]    NVARCHAR(500)    NULL,      -- RSU migration file path
-        [AffectedColumns]  NVARCHAR(MAX)    NULL,      -- JSON array of columns added/modified
-        CONSTRAINT [PK___mj_integration_SchemaHistory] PRIMARY KEY ([ID])
-    );
-
-    CREATE NONCLUSTERED INDEX [IX_SchemaHistory_Integration]
-        ON [__mj_integration].[SchemaHistory] ([IntegrationName], [SchemaName], [ExecutedAt] DESC);
-
-    CREATE NONCLUSTERED INDEX [IX_SchemaHistory_Table]
-        ON [__mj_integration].[SchemaHistory] ([SchemaName], [TableName], [ExecutedAt] DESC);
-END
-GO
-
--- IsCustom flag: distinguishes static metadata (mj-sync push) from runtime-discovered objects/fields
 ALTER TABLE ${flyway:defaultSchema}.IntegrationObject
     ADD [IsCustom] BIT NOT NULL CONSTRAINT [DF_IntegrationObject_IsCustom] DEFAULT 0;
 GO
@@ -60,27 +27,6 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'IntegrationObjectField',
     @level2type = N'COLUMN', @level2name = N'IsCustom';
 GO
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1565,3 +1511,12 @@ SET
 WHERE 
    ID = 'DA3BC5CE-671C-48AC-9CD5-497CA602D0E5' AND AutoUpdateCategory = 1
 
+
+
+
+
+-- NOTE: The `yourmembership.*` physical schema is owned by the RSU (Remote
+-- Schema Update) flow driven by IntegrationSchemaSync + SchemaBuilder. It
+-- reads IntegrationObject/IntegrationObjectField metadata and generates the
+-- correct CREATE/ALTER TABLE DDL at runtime. No hand-written yourmembership
+-- DDL belongs in this history migration — metadata is the source of truth.
