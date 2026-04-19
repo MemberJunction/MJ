@@ -1,6 +1,6 @@
 ---
-"@memberjunction/core": minor
-"@memberjunction/core-entities": minor
+"@memberjunction/core": patch
+"@memberjunction/core-entities": patch
 ---
 
 Hot-path optimizations and a new BaseEngine observable API.

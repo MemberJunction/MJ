@@ -64,15 +64,15 @@ export class MJNotificationService {
             });
           }
 
-          // Subscribe to UserInfoEngine's DataChange$ so that when CACHE_INVALIDATION
-          // updates the _UserNotifications array, we immediately sync our BehaviorSubjects.
-          // This is the primary mechanism for real-time notification updates — it fires
-          // whenever BaseEngine processes a remote-invalidate event for User Notifications.
-          UserInfoEngine.Instance.DataChange$.subscribe(event => {
-            if (event.config.PropertyName === '_UserNotifications') {
-              MJNotificationService._userNotifications = UserInfoEngine.Instance.UserNotifications;
-              MJNotificationService.UpdateNotificationObservables();
-            }
+          // Subscribe to UserInfoEngine's UserNotifications$ observable so that when the
+          // notifications cache mutates (save, delete, remote-invalidate, refresh), we
+          // immediately sync our BehaviorSubjects. BehaviorSubject semantics guarantee an
+          // initial emission with the current cache on subscribe, so this also primes the
+          // local observables without a manual RefreshUserNotifications() call for data
+          // already loaded by StartupManager.
+          UserInfoEngine.Instance.UserNotifications$.subscribe(() => {
+            MJNotificationService._userNotifications = UserInfoEngine.Instance.UserNotifications;
+            MJNotificationService.UpdateNotificationObservables();
           });
 
           // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally
