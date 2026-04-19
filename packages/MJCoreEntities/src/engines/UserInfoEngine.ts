@@ -8,6 +8,7 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { Observable } from 'rxjs';
 
 /**
  * Status indicating why a user can or cannot access an application.
@@ -195,6 +196,37 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
 
     await super.Load(configs, provider, forceRefresh, contextUser);
     this._loadedForUserId = userId;
+  }
+
+  // ========================================================================
+  // OBSERVABLE ACCESSORS
+  // ========================================================================
+
+  /**
+   * Observable stream of the notifications cache array. Emits the current array on subscribe
+   * and re-emits whenever the cache is mutated (save, delete, remote-invalidate, refresh).
+   *
+   * Emits the raw unfiltered cache (all users). Consumers that need per-user filtering should
+   * `pipe(map(...))` — the public {@link UserNotifications} getter applies the current-user filter.
+   */
+  public get UserNotifications$(): Observable<MJUserNotificationEntity[]> {
+    return this.ObserveProperty<MJUserNotificationEntity>('_UserNotifications');
+  }
+
+  /**
+   * Observable stream of the user favorites cache array. Emits the current array on subscribe
+   * and re-emits whenever the cache is mutated.
+   */
+  public get UserFavorites$(): Observable<MJUserFavoriteEntity[]> {
+    return this.ObserveProperty<MJUserFavoriteEntity>('_UserFavorites');
+  }
+
+  /**
+   * Observable stream of the user applications cache array. Emits the current array on subscribe
+   * and re-emits whenever the cache is mutated.
+   */
+  public get UserApplications$(): Observable<MJUserApplicationEntity[]> {
+    return this.ObserveProperty<MJUserApplicationEntity>('_UserApplications');
   }
 
   // ========================================================================
