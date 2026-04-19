@@ -18,6 +18,8 @@ This plan introduces **Search Scopes** — a configurable, permission-aware laye
 
 Each subsystem serves a distinct purpose. Documentation must make this distinction crystal clear.
 
+**Small static reference content stays in memory/notes, not RAG.** Glossaries, acronym lists, FAQs, and short canonical policy snippets are best handled by static Notes injected by the existing memory system — no retrieval overhead, no scope configuration, no re-rank cost. RAG is for corpora large enough that stuffing everything into the prompt is wasteful *and* where the subset relevant to a specific query is a small fraction of the whole. If you can fit the reference content comfortably in every prompt, use a Note; if you cannot, use a Search Scope. Don't build a scope just to avoid prompt-stuffing a 2 KB glossary.
+
 ---
 
 ## Table of Contents
@@ -71,13 +73,13 @@ flowchart TD
     CHECK -->|Multiple scopes| S1
     CHECK -->|Multiple scopes| S2["Scope B"]
 
-    S1 --> S1V["Vector Provider\n(scoped indexes)"]
-    S1 --> S1E["Entity Provider\n(scoped entities + ExtraFilter)"]
-    S1 --> S1F["FullText Provider\n(scoped entities)"]
-    S1 --> S1S["Storage Provider\n(scoped accounts/folders)"]
+    S1 --> S1V["Vector / External-Index Provider\n(scoped indexes + metadata filter\n+ permission push-down)"]
+    S1 --> S1E["Entity Provider\n(scoped entities + ExtraFilter\n+ RLS permission push-down)"]
+    S1 --> S1F["FullText Provider\n(scoped entities\n+ RLS permission push-down)"]
+    S1 --> S1S["Storage Provider\n(scoped accounts/folders\n+ permission push-down)"]
 
-    S2 --> S2V["Vector Provider\n(scoped indexes)"]
-    S2 --> S2E["Entity Provider\n(scoped entities + ExtraFilter)"]
+    S2 --> S2V["Vector / External-Index Provider\n(+ permission push-down)"]
+    S2 --> S2E["Entity Provider\n(+ RLS permission push-down)"]
 
     S1V --> RRF1["Per-Scope RRF\n(Scope A)"]
     S1E --> RRF1
@@ -90,11 +92,22 @@ flowchart TD
     RRF1 --> XRRF["Cross-Scope RRF Fusion"]
     RRF2 --> XRRF
 
-    XRRF --> DD["Dedup"]
-    DD --> PERM["Permission Filter"]
-    PERM --> ENR["Enrich"]
-    ENR --> RES["SearchResult"]
+    XRRF --> RR["Optional Re-Ranker\n(Cohere/BGE/Voyage — Section 8.3)"]
+    RR --> DD["Dedup"]
+    DD --> LATE["Residual Permission\nSafety-Net Filter"]
+    LATE --> ENR["Enrich"]
+    ENR --> RES["SearchResult\n(+ optional Artifact\npersistence — Section 6.3)"]
+
+    style S1V fill:#e3f2fd
+    style S1E fill:#e3f2fd
+    style S1F fill:#e3f2fd
+    style S1S fill:#e3f2fd
+    style S2V fill:#e3f2fd
+    style S2E fill:#e3f2fd
+    style RR stroke-dasharray: 5 5
 ```
+
+Blue provider nodes show **where permission push-down happens** (Section 3.6). The dashed re-ranker is **optional and disabled by default** (Section 8.3). The late filter is a safety net only — if it's removing anything meaningful, provider push-down is incomplete.
 
 ### Agent RAG+ Flow
 
@@ -174,28 +187,48 @@ Controls which search providers participate in a scope.
 | Enabled | bit | NO | 1 | Whether this provider is active for this scope |
 | MaxResultsOverride | int | YES | NULL | Override max results for this provider within this scope. NULL = use provider default. |
 | ProviderConfigOverride | nvarchar(max) | YES | NULL | JSON override for provider-specific config within this scope |
+| QueryTransformTemplateID | uniqueidentifier | YES | NULL | Optional FK to Templates. When set, the user/agent query is rewritten through this MJ Template before being sent to this provider. Lets vector providers get a chunk-shaped rewrite while FTS providers get keyword extraction — in the same scope. NULL = scope-level `QueryTemplateID` (or raw query) is used as-is. |
 
 **Constraints:**
 - `CONSTRAINT FK_SearchScopeProvider_Scope FOREIGN KEY (SearchScopeID) REFERENCES SearchScope(ID)`
 - `CONSTRAINT FK_SearchScopeProvider_Provider FOREIGN KEY (SearchProviderID) REFERENCES SearchProvider(ID)`
+- `CONSTRAINT FK_SearchScopeProvider_QueryTransformTemplate FOREIGN KEY (QueryTransformTemplateID) REFERENCES Template(ID)`
 - `CONSTRAINT UQ_SearchScopeProvider UNIQUE (SearchScopeID, SearchProviderID)`
 
-### 2.3 SearchScopeVectorIndex (New Entity)
+**Per-provider query transform resolution order** (highest priority wins):
+1. `SearchScopeProvider.QueryTransformTemplateID` — provider-specific rewrite
+2. `AIAgentSearchScope.QueryTemplateID` — agent-scoped query generation
+3. Raw `lastUserMessage`
 
-Controls which specific vector indexes a scope queries (subset of what VectorSearchProvider would normally query).
+This makes per-provider rewriting **optional and composable**. Vector providers can resemble their chunks, FTS providers can keyword-extract, entity providers can pass-through — all inside a single scope definition without duplicating scope config.
+
+### 2.3 SearchScopeExternalIndex (New Entity)
+
+Controls which external/provider-owned indexes a scope queries. Intentionally generic — covers vector stores (Pinecone, Qdrant, PGVector), full-text engines (Elasticsearch, OpenSearch), and hybrid engines (Typesense, Azure AI Search). A single scope can mix multiple index types. Renamed from `SearchScopeVectorIndex` to reflect that the same row structure serves non-vector retrievers too.
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | ID | uniqueidentifier | NO | NEWSEQUENTIALID() | Primary key |
 | SearchScopeID | uniqueidentifier | NO | | FK to SearchScope |
-| VectorIndexID | uniqueidentifier | NO | | FK to MJ: Vector Indexes. Which index is included. |
+| IndexType | nvarchar(40) | NO | 'Vector' | `'Vector'`, `'Elasticsearch'`, `'Typesense'`, `'AzureAISearch'`, `'OpenSearch'`, `'Other'`. CHECK constraint. Determines which provider class consumes this row. |
+| VectorIndexID | uniqueidentifier | YES | NULL | FK to MJ: Vector Indexes. Required when `IndexType='Vector'`. NULL for non-vector index types. |
+| ExternalIndexName | nvarchar(400) | YES | NULL | Used for non-vector index types — the remote engine's index/collection/alias name (e.g., Elasticsearch index `kb_docs_v3`, Typesense collection `articles`). NULL for `IndexType='Vector'` (VectorIndexID resolves the name). |
+| ExternalIndexConfig | nvarchar(max) | YES | NULL | JSON with any extra connection/config hints the provider needs (e.g., cluster alias, routing key). Provider-interpreted. |
+| MetadataFilter | nvarchar(max) | YES | NULL | JSON filter expression applied as a native metadata filter on the remote engine. For vector stores: Pinecone/Qdrant/PGVector metadata filter (e.g., `{ "contentType": "policy", "effectiveDate": { "$gte": "2025-01-01" } }`). For Elasticsearch/OpenSearch: a query DSL `filter` clause. The JSON is a **Nunjucks-rendered template** so `SearchContext.PrimaryScopeRecordID` and `SearchContext.SecondaryScopes.*` can be interpolated for multi-tenant filtering. |
 
 **Constraints:**
-- `CONSTRAINT FK_SearchScopeVectorIndex_Scope FOREIGN KEY (SearchScopeID) REFERENCES SearchScope(ID)`
-- `CONSTRAINT FK_SearchScopeVectorIndex_VectorIndex FOREIGN KEY (VectorIndexID) REFERENCES VectorIndex(ID)`
-- `CONSTRAINT UQ_SearchScopeVectorIndex UNIQUE (SearchScopeID, VectorIndexID)`
+- `CONSTRAINT FK_SearchScopeExternalIndex_Scope FOREIGN KEY (SearchScopeID) REFERENCES SearchScope(ID)`
+- `CONSTRAINT FK_SearchScopeExternalIndex_VectorIndex FOREIGN KEY (VectorIndexID) REFERENCES VectorIndex(ID)`
+- `CONSTRAINT UQ_SearchScopeExternalIndex UNIQUE (SearchScopeID, IndexType, VectorIndexID, ExternalIndexName)`
+- `CONSTRAINT CK_SearchScopeExternalIndex_IndexType CHECK (IndexType IN ('Vector','Elasticsearch','Typesense','AzureAISearch','OpenSearch','Other'))`
+- `CONSTRAINT CK_SearchScopeExternalIndex_Identifier CHECK ((IndexType='Vector' AND VectorIndexID IS NOT NULL) OR (IndexType<>'Vector' AND ExternalIndexName IS NOT NULL))`
 
-**Behavior:** When VectorSearchProvider runs within a scope, it queries ONLY the vector indexes listed here. If no rows exist for a scope, VectorSearchProvider is skipped for that scope (unless the scope is Global).
+**Behavior:**
+- When `VectorSearchProvider` runs within a scope, it queries ONLY rows where `IndexType='Vector'` and applies each row's `MetadataFilter` natively.
+- When a 3rd-party index provider runs (e.g., `ElasticsearchSearchProvider`), it queries ONLY rows matching its `IndexType` and uses `ExternalIndexName` + `MetadataFilter`.
+- If no rows exist for a given scope + provider combination, that provider is skipped for that scope (unless the scope is Global).
+
+This generalization means adding an Elasticsearch or Typesense provider requires zero schema changes — just a new row with the right `IndexType`.
 
 ### 2.4 SearchScopeEntity (New Entity)
 
@@ -251,6 +284,7 @@ Many-to-many join between agents and search scopes, with phase and scheduling co
 | MaxResults | int | YES | NULL | Override max results for this scope when used by this agent. NULL = use scope/engine default. |
 | MinScore | decimal(5,4) | YES | NULL | Override min score threshold. NULL = use engine default. |
 | QueryTemplateID | uniqueidentifier | YES | NULL | FK to Templates. MJ Template used to generate the search query from conversation context. NULL = use lastUserMessage as-is. |
+| FusionWeightsOverride | nvarchar(max) | YES | NULL | JSON override for RRF per-provider weights when this agent uses this scope. Resolution order: `AIAgentSearchScope.FusionWeightsOverride` > `SearchScope.ScopeConfig.fusionWeights` > engine defaults. Lets Betty weight vector 2× FTS on the same scope definition that Skip weights evenly. Example: `{ "vector": 2.0, "fulltext": 1.0, "entity": 1.0 }` |
 | IsDefault | bit | NO | 0 | If true, this is the agent's default scope when no scope is specified in a tool call |
 
 **Constraints:**
@@ -350,14 +384,29 @@ search(
 ```typescript
 // New type
 export interface ScopeConstraints {
-    /** For VectorSearchProvider: only query these index IDs */
-    VectorIndexIDs?: string[];
+    /** For VectorSearchProvider and 3rd-party index providers (Elasticsearch, Typesense, AzureAISearch, OpenSearch): only query these external indexes. Each entry carries its IndexType, native identifier, rendered MetadataFilter, and any ExternalIndexConfig. */
+    ExternalIndexes?: ScopeExternalIndexConstraint[];
     /** For EntitySearchProvider/FullTextSearchProvider: only search these entities */
     Entities?: ScopeEntityConstraint[];
     /** For StorageSearchProvider: only search these accounts/folders */
     StorageAccounts?: ScopeStorageConstraint[];
     /** Multi-tenant runtime context — filters results to a specific tenant/dimension */
     Context?: SearchContext;
+    /** Optional per-provider query rewrites. Map key is the provider's DriverClass or ProviderID. Provider uses this in place of the raw query when present. */
+    QueryTransforms?: Record<string, string>;
+}
+
+export interface ScopeExternalIndexConstraint {
+    /** 'Vector' | 'Elasticsearch' | 'Typesense' | 'AzureAISearch' | 'OpenSearch' | 'Other' */
+    IndexType: string;
+    /** Required when IndexType='Vector'. The MJ VectorIndex.ID to target. */
+    VectorIndexID?: string;
+    /** Required when IndexType != 'Vector'. The engine-native index/collection/alias name. */
+    ExternalIndexName?: string;
+    /** Rendered (post-Nunjucks, post-SearchContext-interpolation) native metadata filter. Pinecone/Qdrant/PGVector filter object, or Elasticsearch filter clause, etc. Provider interprets. */
+    MetadataFilter?: unknown;
+    /** Any extra provider-interpreted config (cluster alias, routing key). */
+    ExternalIndexConfig?: unknown;
 }
 
 export interface SearchContext {
@@ -395,6 +444,51 @@ Add scope metadata to `SearchEngineBase` alongside existing provider metadata ca
 When `ScopeIDs` contains a Global scope (or is empty/undefined):
 - All providers run with no constraints (current behavior)
 - This ensures backward compatibility — existing code that doesn't pass `ScopeIDs` works exactly as before
+
+### 3.6 Permission Push-Down (Most Important Piece of the Pipeline)
+
+**The rule:** No result the calling user cannot see should ever enter the RRF or re-ranker stage. Permission filtering is a provider-level responsibility, not a post-processing afterthought.
+
+**Why this matters:** If permissions are applied only at the end, an agent (or user) can issue a query that retrieves the "best" 25 matches globally, then loses all 25 after permission filtering because those documents belong to other tenants or restricted roles. The user sees empty results even though they would have seen plenty of matches within their actual permission set. Fusion and re-ranking compute over the wrong set, dropping valid results off the tail.
+
+**The redesigned pipeline:**
+
+```
+Per provider:
+  1. Build provider-native query (with optional per-provider QueryTransform)
+  2. Apply permission constraints AT THE PROVIDER LEVEL ← NEW ordering
+     - EntitySearchProvider / FullTextSearchProvider: append row-level permission predicate to ExtraFilter (RunView already supports ContextCurrentUser — use it)
+     - VectorSearchProvider: use per-user/role namespace OR require permission metadata on vectors and pass as native metadata filter
+     - StorageSearchProvider: permission check at folder/file list time
+     - 3rd-party index providers (Elasticsearch/Typesense/AzureAISearch): use their native permission/ACL filter mechanisms
+  3. Execute with topK = userTopK * permissionOverfetchFactor (default 2x)
+     - Overfetch compensates for any remaining late filtering; the multiplier is per-provider configurable
+Cross-provider:
+  4. RRF fusion (only over permission-verified results)
+  5. Optional re-ranker (see Section 8.3)
+  6. Deduplicate
+  7. Residual late permission filter (safety net — most results should already be permitted)
+  8. Enrich
+  9. Return
+```
+
+**Per-provider push-down responsibilities:**
+
+| Provider | Push-down mechanism |
+|---|---|
+| EntitySearchProvider / FullTextSearchProvider | RunView already evaluates UserRowLevelSecurity for `ContextCurrentUser`. Ensure provider passes `contextUser` through. Append entity-level CanRead check to `ExtraFilter` if needed. |
+| VectorSearchProvider | Each embedded record must carry `__permissions` or equivalent metadata (role IDs, owner ID, tenant ID). At embedding time (KnowledgeHub ingest), materialize these. At query time, translate contextUser's roles into a metadata filter clause. |
+| StorageSearchProvider | Already folder-path / account-permission bounded. No additional work — verify existing path. |
+| 3rd-party index providers | Same pattern as VectorSearchProvider. Documented in the "how to add a provider" guide — provider authors MUST surface a permission filter hook. |
+
+**Observability:**
+- Log `rawProviderResultCount`, `permittedProviderResultCount`, and `lateFilteredCount` per provider per query. If `lateFilteredCount` is consistently non-zero for a provider, that provider's push-down is incomplete and needs fixing.
+- Emit a warning if any provider's `permittedProviderResultCount == 0` while the user has valid roles — usually signals a misconfigured vector permission metadata or RLS gap.
+
+**Unit test requirements (Phase 1B):**
+- "Heavy-permission corpus": a corpus where 95% of content is restricted and 5% is visible to the test user. Verify the user still gets a full `topK` of visible results, not an empty set.
+- "Cross-tenant isolation": tenant-A user searching with tenant-B content present returns zero tenant-B results even when tenant-B content scores higher.
+- "Overfetch sufficiency": with `permissionOverfetchFactor = 2`, verify the final result count is still `>= userTopK` when half the matches are filtered.
 
 ---
 
@@ -588,6 +682,85 @@ type SearchScope {
 }
 ```
 
+### 6.3 Search Results as Artifacts
+
+Search results are first-class content. When an agent's scoped search produces a result set that will be referenced in the conversation, persist it as an **Artifact** rather than inlining the entire payload in a chat message. This gives the result set the full suite of artifact benefits — including, once PR #2237 merges, full agent-side navigation via inherited Data Snapshot + JSON artifact tools.
+
+> **Dependency:** Full agent-side navigation of Search Result Set artifacts requires **PR #2237 (`Unified Data Layer, Component Events & Agent Integration` — Section 8: Artifact Tools)** to land in `next`. That PR introduces Artifact Tools as a 5th agent primitive with plugin-based tool libraries (`BaseArtifactToolLibrary`) registered per `ArtifactType` and inherited via the `ParentID` hierarchy.
+>
+> **Our Phase 1A–1G does not depend on #2237.** Agents can always CREATE the artifact; users can always view it via the JSON UI. The "agent navigates the artifact across turns" capability lights up **automatically** once #2237 merges, because Search Result Set inherits JSON + Data Snapshot tools — we write zero additional code.
+
+**Shape the payload as a Data Snapshot.** PR #2237 introduces a `Data Snapshot` artifact type with a multi-table structure (`tables[]` + `computations[]` + `interpretation`) and its own tool library (`DataSnapshotToolLibrary`) that extends `JSONToolLibrary`. Make `Search Result Set` a **child of `Data Snapshot`** (via `ArtifactType.ParentID`) and shape the payload accordingly — then all Data Snapshot tools (`get_tables`, `get_schema`, `get_rows`, `search_rows`, `aggregate`, `get_full`) and all JSON tools (`json_path`, `json_keys`, `json_search`, `json_iterate`) are inherited for free.
+
+**Recommended payload shape:**
+```json
+{
+    "title": "Scoped Search: <query> (<timestamp>)",
+    "tables": [
+        {
+            "name": "results",
+            "description": "Ranked search results after RRF fusion, optional re-rank, and permission push-down.",
+            "source": "search",
+            "columns": [
+                { "field": "id",      "displayName": "ID",      "sqlBaseType": "uniqueidentifier" },
+                { "field": "title",   "displayName": "Title",   "sqlBaseType": "nvarchar" },
+                { "field": "snippet", "displayName": "Snippet", "sqlBaseType": "nvarchar" },
+                { "field": "score",   "displayName": "Score",   "sqlBaseType": "decimal", "isSummary": true },
+                { "field": "source",  "displayName": "Source",  "sqlBaseType": "nvarchar" },
+                { "field": "entity",  "displayName": "Entity",  "sqlBaseType": "nvarchar" },
+                { "field": "scopeID", "displayName": "Scope",   "sqlBaseType": "uniqueidentifier" },
+                { "field": "tags",    "displayName": "Tags",    "sqlBaseType": "nvarchar" }
+            ],
+            "rows": [ /* ranked records */ ],
+            "sorting": [{ "field": "score", "direction": "desc" }],
+            "metadata": { "rowCount": 47 }
+        }
+    ],
+    "computations": [
+        { "name": "Total Results",       "type": "count", "value": 47,   "formattedValue": "47" },
+        { "name": "Top Score",           "type": "max",   "field": "score", "value": 0.91 },
+        { "name": "Vector Provider Hits", "type": "count", "value": 22 },
+        { "name": "FTS Provider Hits",    "type": "count", "value": 18 },
+        { "name": "Entity Provider Hits", "type": "count", "value": 7 }
+    ],
+    "interpretation": "Retrieved 47 results across 2 scopes for query 'refund policy'. Top 3 results from HR Policies scope score >0.80.",
+    "scopeIDs": ["<scope-uuid-a>", "<scope-uuid-b>"],
+    "query": "refund policy",
+    "searchContext": { "PrimaryScopeRecordID": "<tenant-id>" },
+    "providerSummaries": [ /* per-provider counts, latencies, raw-vs-permitted-result counts */ ],
+    "searchedAt": "2026-04-19T20:34:00Z"
+}
+```
+
+Multi-provider or multi-scope runs MAY split `tables[]` into one table per provider or per scope if that's more useful — `search_rows` and `aggregate` work across any table shape.
+
+**Pattern:**
+1. Agent runs scoped search (pre-execution RAG or `ScopedSearchAction`).
+2. Agent sets `agentResult.payload` to the Data Snapshot shape above.
+3. `ProcessAgentArtifacts()` in `@memberjunction/ai-agents` serializes the payload to `ArtifactVersion.Content` and links it to the `ConversationDetail` automatically.
+4. Artifact is created with **ArtifactType = "Search Result Set"** (new seed, `ParentID` → Data Snapshot). The Data Snapshot UI viewer renders it as a paginated, filterable multi-table grid.
+
+**Free benefits (available immediately, pre-#2237):**
+- **Versioning**: refining the query produces a new `ArtifactVersion`; older versions remain browsable.
+- **SHA-256 content hash**: identical result sets dedupe automatically.
+- **Conversation anchoring**: users can jump from chat to the result set and back.
+- **Permissions**: inherits artifact owner + `ArtifactPermission` sharing.
+- **Visibility modes**: `ArtifactCreationMode.SystemOnly` (agent-internal) vs `Always` (user-visible) controls whether the result set shows up in the chat UI.
+- **UI rendering**: Data Snapshot viewer from PR #2237 (or the plain JSON viewer until it lands) renders structured columns with filter/sort/pagination.
+
+**Unlocked once PR #2237 merges (no code change on our side):**
+- Agents see the Search Result Set in the per-turn artifact manifest (alpha ID, one token per reference).
+- Agents invoke `get_rows`, `search_rows`, `aggregate`, `get_schema`, `json_path`, `json_iterate` to navigate the result set across turns — no re-search, no full-payload re-ingest.
+- Multiple artifacts can be explored in parallel tool calls in a single turn.
+- MJStorage backing for large result sets (first N rows inline, rest persisted to S3/Blob) is handled by #2237's `ArtifactVersion.FileID` infrastructure.
+
+**Optional future piece (not blocking Phase 1):**
+Phase 2 may add a `SearchResultSetToolLibrary` that extends `DataSnapshotToolLibrary` with genuinely search-specific tools — e.g. `get_records_above_score(threshold)`, `get_records_by_source(sourceType)`, `get_records_by_scope(scopeID)`, `explain_ranking(recordId)`. Nice-to-have; the inherited Data Snapshot tools cover the common cases.
+
+**New seed metadata required (Phase 1A):**
+- One `ArtifactType` row: `Name='Search Result Set'`, `ContentType='application/vnd.mj.search-result-set'`, `DriverClass='DataArtifactViewerPlugin'` (reuses PR #2237's viewer), `ParentID` → the Data Snapshot ArtifactType.
+- Ordering note: if #2237 hasn't seeded Data Snapshot yet, seed `Search Result Set` with `ParentID=NULL` initially; a follow-up metadata sync wires `ParentID` once Data Snapshot exists. Avoids a cross-PR ordering conflict.
+
 ---
 
 ## 7. Template System Integration
@@ -735,6 +908,71 @@ CrossScopeFusion(
 
 This calls `ComputeRRF()` with each scope's results as a separate ranked list, then deduplicates.
 
+### 8.3 Optional Re-Ranker Stage
+
+**Motivation:** RRF merges ranked lists, but each list comes from a different retrieval modality (vector semantic, FTS keyword, entity LIKE). None of them know what the *correct* final ordering is for this specific query. A dedicated re-ranker — typically a cross-encoder LLM call — scores each candidate against the query text and produces a more accurate final ordering. Cohere Rerank, BGE Reranker, and Voyage Rerank are the common implementations. MJ's memory system already uses Cohere Rerank for notes retrieval, so the primitive is proven in-house.
+
+**Design — `BaseReRanker` primitive:**
+
+```typescript
+// New abstract class in packages/SearchEngine/src/generic/
+export abstract class BaseReRanker {
+    /** Registered DriverClass used by ClassFactory to instantiate. */
+    abstract get DriverClass(): string;
+
+    abstract ReRank(
+        query: string,
+        candidates: SearchResultItem[],
+        topN: number,
+        contextUser: UserInfo,
+        config?: Record<string, unknown>
+    ): Promise<SearchResultItem[]>;
+}
+```
+
+Implementations (future work, not blocking Phase 1 — but `BaseReRanker` + wiring lands in Phase 1B):
+- `CohereReRanker` — wraps Cohere Rerank API.
+- `BGEReRanker` — local or hosted BGE reranker model.
+- `NoopReRanker` — registered default, returns candidates unchanged.
+
+**Pipeline placement:**
+```
+per-provider retrieval (with permission push-down, Section 3.6)
+  → per-scope RRF (8.1)
+  → cross-scope RRF (8.2) [if multiple scopes]
+  → re-ranker (8.3) [optional, configurable per scope]
+  → dedup
+  → residual permission safety net
+  → enrich
+  → return
+```
+
+**Configuration — `SearchScope.ScopeConfig.reRanker`:**
+```json
+{
+    "reRanker": {
+        "driverClass": "CohereReRanker",
+        "inputTopN": 100,
+        "outputTopN": 20,
+        "config": { "model": "rerank-v3.5" }
+    }
+}
+```
+
+- `driverClass` NULL / section absent → re-ranking disabled (default).
+- `inputTopN`: how many RRF-fused candidates to feed in.
+- `outputTopN`: final count after rerank (truncated before dedup).
+- `config`: provider-specific options passed to the ReRanker implementation.
+
+**Per-agent override:** Agents can override the re-ranker via `AIAgentSearchScope.FusionWeightsOverride`-style mechanism — a sibling `ReRankerOverride` JSON column could be added later if demand emerges. Not in Phase 1.
+
+**Why optional:** Most scopes do fine with pure RRF. Re-ranking adds latency (tens to hundreds of ms) and cost (per-call LLM pricing). Turn it on only where result quality matters enough to pay for it — typically the high-stakes pre-execution RAG scopes.
+
+**Unit tests (Phase 1B):**
+- `NoopReRanker` wired in and returns candidates unchanged — verifies the pipeline hook works without an actual LLM.
+- Scope with `reRanker` config pulls the correct class via ClassFactory.
+- `inputTopN` and `outputTopN` bounds honored.
+
 ---
 
 ## 9. Multi-Tenant Search Context
@@ -747,6 +985,8 @@ This calls `ComputeRRF()` with each scope's results as a separate ranked list, t
 A Search Scope is like a library catalog — it defines which shelves exist. A Search Context is the library card — it determines which shelves you're allowed to browse based on who you are.
 
 This distinction matters for multi-tenant SaaS platforms built on MJ. A platform might serve hundreds of organizations. They all use the same agent with the same Search Scope ("Knowledge Base"), but each org should only see their own content. Without Search Context, you'd need a separate scope per tenant — which is unmanageable.
+
+> **Type alignment with the memory system.** `SearchContextConfig` and the runtime `SearchContext` interface deliberately reuse the same `SecondaryScopeConfig` / `SecondaryScopeValue` types used by the agent notes/memory subsystem (source: `@memberjunction/ai-core-plus`). A single `ExecuteAgentParams.primaryScopeRecordId` + `secondaryScopes` flows through `AgentContextInjector` (notes), `AgentPreExecutionRAG` (this plan), and `ScopedSearchAction` (this plan) with **no per-subsystem translation**. If any of the subsystems need a tweak to the shared type (e.g., adding a field), we adjust the canonical type in `@memberjunction/ai-core-plus` so every consumer benefits. No local forks.
 
 ### 9.2 How It Works
 
@@ -1029,20 +1269,22 @@ Multi-tenant Search Context is designed as **Phase 1G** — it builds on Phase 1
 
 | File | Change |
 |------|--------|
-| `packages/SearchEngine/src/generic/search.types.ts` | Add `ScopeIDs` and `SearchContext` to `SearchParams`, add `ScopeConstraints` and `SearchContext` types |
-| `packages/SearchEngine/src/generic/SearchEngine.ts` | Add scope resolution logic to `Search()`, pass constraints to providers |
-| `packages/SearchEngine/src/generic/ISearchProvider.ts` | Add optional `scopeConstraints` param to `search()` method |
-| `packages/SearchEngine/src/generic/VectorSearchProvider.ts` | Filter vector indexes by scope constraints |
-| `packages/SearchEngine/src/generic/EntitySearchProvider.ts` | Filter entities by scope constraints, apply ExtraFilter and UserSearchString |
-| `packages/SearchEngine/src/generic/FullTextSearchProvider.ts` | Filter entities by scope constraints |
-| `packages/SearchEngine/src/generic/StorageSearchProvider.ts` | Filter storage accounts by scope constraints |
-| `packages/SearchEngine/src/generic/SearchFusion.ts` | Add cross-scope fusion method |
-| `packages/MJCoreEntities/src/engines/SearchEngineBase.ts` | Add scope metadata caching |
-| `packages/AI/Agents/src/base-agent.ts` | Add `InjectPreExecutionRAG()` to Phase 2 |
-| `packages/AI/Agents/src/agent-pre-execution-rag.ts` | NEW — pre-execution RAG module |
-| `packages/Actions/CoreActions/src/custom/search/scoped-search.action.ts` | NEW — scoped search action |
-| `packages/Angular/Generic/search/src/lib/` | Add scope selector component, update search service |
-| `packages/MJServer/src/resolvers/` | Update search resolver to accept `scopeIDs` |
+| `packages/SearchEngine/src/generic/search.types.ts` | Add `ScopeIDs` and `SearchContext` to `SearchParams`; add `ScopeConstraints`, `ScopeExternalIndexConstraint`, `SearchContext` types. Rename any `VectorIndexIDs` references to `ExternalIndexes`. |
+| `packages/SearchEngine/src/generic/SearchEngine.ts` | Add scope resolution logic to `Search()`, pass constraints (including rendered `MetadataFilter`) to providers; plumb optional re-ranker stage between fusion and dedup. |
+| `packages/SearchEngine/src/generic/ISearchProvider.ts` | Add optional `scopeConstraints` param to `search()` method. Providers MUST surface permission push-down (Section 3.6). |
+| `packages/SearchEngine/src/generic/VectorSearchProvider.ts` | Filter vector indexes by scope constraints; apply `MetadataFilter` as native Pinecone/Qdrant/PGVector filter; apply permission metadata filter. |
+| `packages/SearchEngine/src/generic/EntitySearchProvider.ts` | Filter entities by scope constraints; apply `ExtraFilter` and `UserSearchString`; ensure `contextUser` is passed to RunView so RLS applies (permission push-down). |
+| `packages/SearchEngine/src/generic/FullTextSearchProvider.ts` | Filter entities by scope constraints; pass `contextUser` through for RLS push-down. |
+| `packages/SearchEngine/src/generic/StorageSearchProvider.ts` | Filter storage accounts by scope constraints; verify per-folder permission push-down. |
+| `packages/SearchEngine/src/generic/SearchFusion.ts` | Add cross-scope fusion method; honor per-agent `FusionWeightsOverride` when provided. |
+| `packages/SearchEngine/src/generic/BaseReRanker.ts` | **NEW** — abstract re-ranker primitive (Section 8.3). |
+| `packages/SearchEngine/src/generic/NoopReRanker.ts` | **NEW** — default registered no-op re-ranker so pipeline hook works without external LLM. |
+| `packages/MJCoreEntities/src/engines/SearchEngineBase.ts` | Add scope metadata caching for SearchScope + SearchScopeProvider + SearchScopeExternalIndex + SearchScopeEntity + SearchScopeStorageAccount + AIAgentSearchScope. |
+| `packages/AI/Agents/src/base-agent.ts` | Add `InjectPreExecutionRAG()` to Phase 2; pass `primaryScopeRecordId`/`secondaryScopes` through as `SearchContext`. |
+| `packages/AI/Agents/src/agent-pre-execution-rag.ts` | **NEW** — pre-execution RAG module. Applies per-provider `QueryTransforms`, `FusionWeightsOverride`, optional Search-Result-Set artifact persistence. |
+| `packages/Actions/CoreActions/src/custom/search/scoped-search.action.ts` | **NEW** — scoped search action with SearchScopeAccess enforcement. |
+| `packages/Angular/Generic/search/src/lib/` | Add scope selector component, update search service to pass `scopeIDs`. |
+| `packages/MJServer/src/resolvers/` | Update search resolver to accept `scopeIDs` + `searchContext`. |
 
 ### 11.2 Database Migration
 
@@ -1054,6 +1296,8 @@ Seed data for:
 - The "Global" SearchScope record
 - The `__Scoped_Search` Action and its parameters
 - Template for default search query generation (optional)
+- The `Search Result Set` ArtifactType (Section 6.3) — child of Data Snapshot (PR #2237) via `ParentID`, inheriting Data Snapshot + JSON artifact tools
+- Registered `NoopReRanker` in `MJ: Search Providers`-sibling metadata if/when a ReRanker catalog entity is introduced (Phase 1 uses ClassFactory-only registration)
 
 ### 11.4 CodeGen
 
@@ -1072,24 +1316,40 @@ Create a guide at `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` covering:
 
 1. **The Three Context Subsystems** — Clear explanation of when to use each:
    - Notes & Examples (brain) vs. Data Sources (briefing) vs. Search Scopes (research library)
+   - Short static reference content (glossaries, FAQs, acronyms) → Notes, not scopes
    - Decision tree for choosing the right subsystem
    - Examples of correct and incorrect usage
 
 2. **Search Scope Configuration** — How to create and configure scopes:
    - Creating scopes (org-wide vs personal)
-   - Adding providers, indexes, entities, storage accounts
+   - Adding providers, external indexes (vector + 3rd-party), entities, storage accounts
    - Time-windowed activation
-   - Advanced ScopeConfig options
+   - Advanced ScopeConfig options (RRF weights, re-ranker)
+   - Per-provider query transforms (vector chunk-shape vs FTS keyword-extract in one scope)
 
 3. **Agent Integration** — How to connect scopes to agents:
    - Pre-execution RAG setup
    - Agent-invoked search setup
    - Template creation for query generation
    - SearchScopeAccess settings
+   - Per-agent `FusionWeightsOverride`
 
-4. **Multi-Scope Fusion** — How results from multiple scopes are combined
+4. **Permission Push-Down** — How providers enforce permissions at retrieval time (Section 3.6):
+   - Why late filtering is wrong
+   - Per-provider push-down mechanisms
+   - Permission-aware vector metadata at embedding time
+   - Overfetch factor tuning
+   - Observability signals
 
-5. **Permissions** (Phase 2 preview) — What's coming for scope-level access control
+5. **Multi-Scope Fusion** — How results from multiple scopes are combined; per-agent fusion-weights override
+
+6. **Optional Re-Ranking** (Section 8.3) — when and how to enable Cohere/BGE/Voyage re-ranking
+
+7. **Adding a 3rd-Party Retriever** — step-by-step for Elasticsearch/Typesense/AzureAISearch provider implementations using `SearchScopeExternalIndex.IndexType`
+
+8. **Search Results as Artifacts** (Section 6.3) — persist result sets as `Search Result Set` artifacts (child of Data Snapshot from PR #2237). Once #2237 merges, agents automatically navigate these across turns via inherited Data Snapshot + JSON tool libraries (`get_rows`, `search_rows`, `aggregate`, `json_path`, `json_iterate`) — zero additional code on our side.
+
+9. **Permissions** (Phase 2 preview) — What's coming for scope-level access control
 
 ### 12.2 Inline Code Documentation
 
@@ -1105,51 +1365,60 @@ All new classes, methods, and interfaces must have TSDoc comments explaining:
 
 ### Phase 1A: Entity Model & Database (Foundation)
 
-- [ ] **1A.1** Write SQL migration creating `SearchScope` table with all columns, constraints, and extended properties
-- [ ] **1A.2** Write SQL migration creating `SearchScopeProvider` table with FK constraints and unique constraint
-- [ ] **1A.3** Write SQL migration creating `SearchScopeVectorIndex` table with FK constraints and unique constraint
+- [ ] **1A.1** Write SQL migration creating `SearchScope` table with all columns (including `ScopeConfig`, `SearchContextConfig`), constraints, and extended properties
+- [ ] **1A.2** Write SQL migration creating `SearchScopeProvider` table with FK constraints (including `QueryTransformTemplateID` FK to Template) and unique constraint
+- [ ] **1A.3** Write SQL migration creating `SearchScopeExternalIndex` table (renamed from `SearchScopeVectorIndex`) with `IndexType` CHECK constraint, `VectorIndexID` nullable FK, `ExternalIndexName`, `ExternalIndexConfig` JSON, `MetadataFilter` JSON
 - [ ] **1A.4** Write SQL migration creating `SearchScopeEntity` table with FK constraints and unique constraint (includes `ExtraFilter` and `UserSearchString` columns)
 - [ ] **1A.5** Write SQL migration creating `SearchScopeStorageAccount` table with FK constraints and unique constraint
-- [ ] **1A.6** Write SQL migration creating `AIAgentSearchScope` table with all columns, FK constraints, CHECK constraints
+- [ ] **1A.6** Write SQL migration creating `AIAgentSearchScope` table with all columns (including `FusionWeightsOverride` JSON), FK constraints, CHECK constraints
 - [ ] **1A.7** Write SQL migration adding `SearchScopeAccess` column (nvarchar(20), NOT NULL, DEFAULT 'None', CHECK constraint) to `AIAgent` table
-- [ ] **1A.8** Consolidate migrations 1A.1–1A.7 into a single migration file following MJ naming convention: `VYYYYMMDDHHMM__v[VERSION].x_Add_Search_Scopes_And_Agent_Integration.sql`. Include the `SearchContextConfig` column on `SearchScope` in this migration. Remember: do NOT include `__mj_CreatedAt`/`__mj_UpdatedAt` columns or FK indexes — CodeGen handles those.
+- [ ] **1A.8** Consolidate migrations 1A.1–1A.7 into a single migration file following MJ naming convention: `VYYYYMMDDHHMM__v[VERSION].x_Add_Search_Scopes_And_Agent_Integration.sql`. Remember: do NOT include `__mj_CreatedAt`/`__mj_UpdatedAt` columns or FK indexes — CodeGen handles those. Include `sp_addextendedproperty` for every new column (except PKs/FKs).
 - [ ] **1A.9** Run migration and CodeGen to generate entity subclasses, GraphQL resolvers, and Angular form components
 - [ ] **1A.10** Create metadata sync seed data for the "Global" SearchScope record (`IsGlobal=1`, `IsDefault=1`, `Status='Active'`)
-- [ ] **1A.11** Verify generated entity classes in `entity_subclasses.ts` have correct types and relationships
+- [ ] **1A.11** Create metadata sync seed data for the `Search Result Set` ArtifactType — `ContentType='application/vnd.mj.search-result-set'`, `DriverClass='DataArtifactViewerPlugin'` (reuses PR #2237's Data Snapshot viewer), `ParentID = <Data Snapshot ArtifactType.ID>` if #2237 has already seeded Data Snapshot, else `ParentID=NULL` with a follow-up metadata sync to wire it once #2237 merges. Section 6.3.
+- [ ] **1A.12** Verify generated entity classes in `entity_subclasses.ts` have correct types and relationships
 
 ### Phase 1B: SearchEngine Scope Resolution (Core Engine)
 
 - [ ] **1B.1** Add `ScopeIDs?: string[]` and `SearchContext?: SearchContext` to `SearchParams` interface in `search.types.ts`
-- [ ] **1B.2** Add `ScopeConstraints` interface (including `Context?: SearchContext`), `SearchContext` interface, and sub-interfaces (`ScopeEntityConstraint`, `ScopeStorageConstraint`) to `search.types.ts`
-- [ ] **1B.3** Add optional `scopeConstraints?: ScopeConstraints` parameter to `BaseSearchProvider.search()` in `ISearchProvider.ts`
-- [ ] **1B.4** Add scope metadata loading and caching to `SearchEngineBase.ts` — load `SearchScope` + child tables, cache like provider metadata
-- [ ] **1B.5** Implement scope resolution in `SearchEngine.Search()` — when `ScopeIDs` provided, load scope configs and build `ScopeConstraints` for each provider
+- [ ] **1B.2** Add `ScopeConstraints` interface (including `Context?: SearchContext`, `ExternalIndexes?: ScopeExternalIndexConstraint[]`, `QueryTransforms?: Record<string, string>`), `SearchContext` interface, and sub-interfaces (`ScopeEntityConstraint`, `ScopeStorageConstraint`, `ScopeExternalIndexConstraint`) to `search.types.ts`
+- [ ] **1B.3** Add optional `scopeConstraints?: ScopeConstraints` parameter to `BaseSearchProvider.search()` in `ISearchProvider.ts`. Document that providers MUST implement permission push-down (Section 3.6).
+- [ ] **1B.4** Add scope metadata loading and caching to `SearchEngineBase.ts` — load `SearchScope` + child tables (`SearchScopeProvider`, `SearchScopeExternalIndex`, `SearchScopeEntity`, `SearchScopeStorageAccount`, `AIAgentSearchScope`), cache like provider metadata
+- [ ] **1B.5** Implement scope resolution in `SearchEngine.Search()` — when `ScopeIDs` provided, load scope configs and build `ScopeConstraints` for each provider. Render `MetadataFilter`, `ExtraFilter`, `UserSearchString`, `FolderPath` as Nunjucks templates with `SearchContext` variables before passing to providers.
 - [ ] **1B.6** Handle Global scope behavior — when scope `IsGlobal=true` or `ScopeIDs` is empty/undefined, run with no constraints (backward compatible)
-- [ ] **1B.7** Modify `VectorSearchProvider.search()` to accept `scopeConstraints` and filter vector indexes by `VectorIndexIDs` when provided
-- [ ] **1B.8** Modify `EntitySearchProvider.search()` to accept `scopeConstraints` and filter entities by `ScopeEntityConstraint` list. Apply `ExtraFilter` and `UserSearchString` overrides per entity.
-- [ ] **1B.9** Modify `FullTextSearchProvider.search()` to accept `scopeConstraints` and filter entities by scope
-- [ ] **1B.10** Modify `StorageSearchProvider.search()` to accept `scopeConstraints` and filter by storage account IDs and folder paths
-- [ ] **1B.11** Add `CrossScopeFusion()` method to `SearchFusion.ts` — takes `Map<string, SearchResultItem[]>` (scopeId → results), applies RRF using existing `ComputeRRF()` utility, deduplicates
-- [ ] **1B.12** Integrate cross-scope fusion into `SearchEngine.Search()` flow — when multiple scopes, fuse per-scope results before proceeding to dedup/permissions/enrich
-- [ ] **1B.13** Write unit tests for scope resolution logic — test: single scope, multiple scopes, global scope, empty scope, inactive scope, time-windowed scope
-- [ ] **1B.14** Write unit tests for cross-scope RRF fusion — test: non-overlapping results, overlapping results, single scope (no cross-fusion needed)
-- [ ] **1B.15** Write unit tests for each provider's scope constraint handling — test: VectorSearchProvider with/without index filter, EntitySearchProvider with ExtraFilter and UserSearchString, etc.
-- [ ] **1B.16** Build the `SearchEngine` package (`cd packages/SearchEngine && npm run build`) and verify no compilation errors
+- [ ] **1B.7** Implement per-provider query transform resolution: resolve `SearchScopeProvider.QueryTransformTemplateID` > scope-level query template > raw query; render via TemplateEngine and pass as `ScopeConstraints.QueryTransforms[providerKey]`
+- [ ] **1B.8** Modify `VectorSearchProvider.search()` to accept `scopeConstraints`, filter to `IndexType='Vector'` external index rows, translate `MetadataFilter` to native Pinecone/Qdrant/PGVector filter, and add permission-metadata filter derived from `contextUser` roles (permission push-down)
+- [ ] **1B.9** Modify `EntitySearchProvider.search()` to accept `scopeConstraints` and filter entities by `ScopeEntityConstraint` list. Apply `ExtraFilter` and `UserSearchString` overrides per entity. Ensure `contextUser` is passed through to `RunView` so RLS applies (permission push-down)
+- [ ] **1B.10** Modify `FullTextSearchProvider.search()` to accept `scopeConstraints`, filter entities by scope, pass `contextUser` for RLS push-down
+- [ ] **1B.11** Modify `StorageSearchProvider.search()` to accept `scopeConstraints` and filter by storage account IDs and rendered folder paths. Verify per-folder permission enforcement is in place.
+- [ ] **1B.12** Implement topK overfetch: `effectiveTopK = userTopK * permissionOverfetchFactor` (config default 2). Log `rawProviderResultCount`, `permittedProviderResultCount`, `lateFilteredCount` per provider.
+- [ ] **1B.13** Add `CrossScopeFusion()` method to `SearchFusion.ts` — takes `Map<string, SearchResultItem[]>` (scopeId → results), applies RRF using existing `ComputeRRF()` utility, respects per-agent `FusionWeightsOverride` when passed in, deduplicates
+- [ ] **1B.14** Integrate cross-scope fusion into `SearchEngine.Search()` flow — when multiple scopes, fuse per-scope results BEFORE re-rank (if configured), dedup, residual permission filter, enrich
+- [ ] **1B.15** Create `BaseReRanker` abstract class in `packages/SearchEngine/src/generic/BaseReRanker.ts` (Section 8.3)
+- [ ] **1B.16** Create `NoopReRanker` default implementation and register via `@RegisterClass`
+- [ ] **1B.17** Wire optional re-ranker stage into `SearchEngine.Search()`: when `ScopeConfig.reRanker.driverClass` is set, resolve via ClassFactory, call `ReRank()` with `inputTopN` candidates, truncate to `outputTopN` before dedup
+- [ ] **1B.18** Write unit tests for scope resolution logic — test: single scope, multiple scopes, global scope, empty scope, inactive scope, time-windowed scope, external-index `IndexType` filtering, per-provider query transforms
+- [ ] **1B.19** Write unit tests for cross-scope RRF fusion — test: non-overlapping results, overlapping results, single scope (no cross-fusion needed), `FusionWeightsOverride` applied
+- [ ] **1B.20** Write unit tests for permission push-down (Section 3.6) — test: "heavy-permission corpus" (95% restricted) still returns full topK; cross-tenant isolation; overfetch sufficiency; `lateFilteredCount` should be zero for well-configured providers
+- [ ] **1B.21** Write unit tests for optional re-ranker stage — test: `NoopReRanker` returns candidates unchanged; `inputTopN`/`outputTopN` bounds honored; ClassFactory resolves `driverClass` correctly
+- [ ] **1B.22** Write unit tests for each provider's scope constraint handling — test: VectorSearchProvider with `MetadataFilter` rendering, EntitySearchProvider with ExtraFilter and UserSearchString, StorageSearchProvider with rendered FolderPath
+- [ ] **1B.23** Build the `SearchEngine` package (`cd packages/SearchEngine && npm run build`) and verify no compilation errors
 
 ### Phase 1C: Agent Pre-Execution RAG
 
 - [ ] **1C.1** Create `packages/AI/Agents/src/agent-pre-execution-rag.ts` — `AgentPreExecutionRAG` class with `Execute()` method
 - [ ] **1C.2** Implement scope loading: load `AIAgentSearchScope` rows for agent where `Phase IN ('PreExecution', 'Both')`, filter by Status/StartAt/EndAt, sort by Priority
 - [ ] **1C.3** Implement query generation: for each scope, render `QueryTemplateID` using MJ TemplateEngine with conversation context variables (lastUserMessage, recentMessages, payload, scope metadata). If no template, use lastUserMessage.
-- [ ] **1C.4** Implement search execution: call `SearchEngine.Search()` with `ScopeIDs: [scopeId]` for each scope, respecting MaxResults and MinScore overrides
-- [ ] **1C.5** Implement cross-scope fusion for pre-execution: if multiple scopes produced results, use `SearchFusion.CrossScopeFusion()` to merge
+- [ ] **1C.4** Implement search execution: call `SearchEngine.Search()` with `ScopeIDs: [scopeId]` for each scope, respecting MaxResults and MinScore overrides. Pass `SearchContext` through from `ExecuteAgentParams.primaryScopeRecordId` + `secondaryScopes` (Section 9 type alignment).
+- [ ] **1C.5** Implement cross-scope fusion for pre-execution: if multiple scopes produced results, use `SearchFusion.CrossScopeFusion()` to merge. Honor `AIAgentSearchScope.FusionWeightsOverride` when present.
 - [ ] **1C.6** Implement result formatting: format search results into a `<retrieved_context>` system message block. Include scope name, result count, score range. Each result shows title, snippet, score, source type, entity, tags.
 - [ ] **1C.7** In `base-agent.ts`, add `InjectPreExecutionRAG()` method that calls `AgentPreExecutionRAG.Execute()` and injects the formatted system message via `conversationMessages.unshift()`
 - [ ] **1C.8** In `base-agent.ts`, add `InjectPreExecutionRAG()` call to Phase 2 `Promise.all()` block (alongside config load, data preload, context injection)
 - [ ] **1C.9** Store RAG context in a `_ragContext` property on BaseAgent (similar to `_memoryContext`) for inclusion in agent run results/observability
-- [ ] **1C.10** Write unit tests for `AgentPreExecutionRAG` — test: no scopes configured (no-op), single scope, multiple scopes, time-windowed scope filtering, template rendering, template fallback (null template → lastUserMessage)
-- [ ] **1C.11** Write unit tests for integration with BaseAgent Phase 2 — test: RAG injection happens in parallel, results appear in conversation messages
-- [ ] **1C.12** Build the Agents package (`cd packages/AI/Agents && npm run build`) and verify no compilation errors
+- [ ] **1C.10** Shape the pre-execution RAG output as a `Data Snapshot`-compatible payload (Section 6.3) — `tables[]`, `computations[]`, `interpretation`, plus top-level `scopeIDs`, `query`, `searchContext`, `providerSummaries`, `searchedAt`. When the agent run has `ArtifactCreationMode != SystemOnly`, setting this on `agentResult.payload` causes `ProcessAgentArtifacts()` to persist it as a `Search Result Set` artifact. Once PR #2237 merges, the same artifact becomes agent-navigable via inherited Data Snapshot + JSON tools with zero additional code.
+- [ ] **1C.11** Write unit tests for `AgentPreExecutionRAG` — test: no scopes configured (no-op), single scope, multiple scopes, time-windowed scope filtering, template rendering, template fallback (null template → lastUserMessage), `SearchContext` pass-through from ExecuteAgentParams, per-agent `FusionWeightsOverride` applied
+- [ ] **1C.12** Write unit tests for integration with BaseAgent Phase 2 — test: RAG injection happens in parallel, results appear in conversation messages
+- [ ] **1C.13** Build the Agents package (`cd packages/AI/Agents && npm run build`) and verify no compilation errors
 
 ### Phase 1D: Scoped Search Action
 
@@ -1180,13 +1449,15 @@ All new classes, methods, and interfaces must have TSDoc comments explaining:
 
 ### Phase 1F: Documentation & Testing
 
-- [ ] **1F.1** Create `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` — comprehensive guide covering: the three context subsystems (brain vs briefing vs research library), search scope configuration, agent integration, template creation, multi-scope fusion
+- [ ] **1F.1** Create `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` — comprehensive guide covering: the three context subsystems (brain vs briefing vs research library) + the "use Notes for small static content" rule, search scope configuration, agent integration, template creation, per-provider query transforms, multi-scope fusion, permission push-down, optional re-ranking, search-results-as-artifacts, how to add a 3rd-party retriever (`SearchScopeExternalIndex.IndexType`)
 - [ ] **1F.2** Add inline TSDoc comments to all new classes, methods, and interfaces
 - [ ] **1F.3** Update `plans/search/search-plan.md` or create a cross-reference noting that Search Scopes extend the universal search architecture
-- [ ] **1F.4** End-to-end integration test: create a test scope with specific entities and vector indexes, run a search through the scope, verify only scoped results are returned
+- [ ] **1F.4** End-to-end integration test: create a test scope with specific entities and external indexes, run a search through the scope, verify only scoped results are returned
 - [ ] **1F.5** End-to-end agent test: configure an agent with a pre-execution RAG scope, run the agent, verify RAG context appears in conversation messages and agent run step records
 - [ ] **1F.6** End-to-end scoped action test: configure an agent with `SearchScopeAccess='Assigned'` and specific scopes, invoke the scoped search action, verify scope enforcement works
-- [ ] **1F.7** Performance test: verify pre-execution RAG does not add latency beyond what's already consumed by Phase 2 parallel tasks (it should be "free" since it runs in parallel)
+- [ ] **1F.7** End-to-end permission push-down test: corpus with heavy permissions, assert zero "scoped-out-all" failures
+- [ ] **1F.8** End-to-end artifact test: agent produces search results, verify a `Search Result Set` artifact is created and linked to the conversation with correct visibility
+- [ ] **1F.9** Performance test: verify pre-execution RAG does not add latency beyond what's already consumed by Phase 2 parallel tasks (it should be "free" since it runs in parallel)
 
 ### Phase 1G: Multi-Tenant Search Context
 
@@ -1202,13 +1473,17 @@ All new classes, methods, and interfaces must have TSDoc comments explaining:
 - [ ] **1G.10** Write unit tests for tenant-isolated search results — test: same scope with different contexts returns different results, inheritance modes work correctly, template rendering with context variables
 - [ ] **1G.11** Write unit tests for agent context pass-through — test: agent's primaryScopeRecordId flows to SearchEngine as SearchContext
 
-### Phase 2 (Future): Permissions
+### Phase 2 (Future): Permissions + Search-Specific Artifact Tools + Streaming
 
 - [ ] **2.1** Create `SearchScopePermission` entity with migration
 - [ ] **2.2** Implement permission checking in SearchEngine and GraphQL resolver
 - [ ] **2.3** Update Angular scope selector to filter by user permissions
 - [ ] **2.4** Add admin UI for managing scope permissions
 - [ ] **2.5** Update scoped search action to validate contextUser has scope access
+- [ ] **2.6** Once PR #2237 merges to `next`, verify `Search Result Set` artifacts are agent-navigable via inherited Data Snapshot + JSON tools. Run an end-to-end test: agent creates a Search Result Set artifact on turn 1, navigates it via `get_rows`/`search_rows`/`aggregate` on turn 3 without re-searching.
+- [ ] **2.7** (Optional) Build `SearchResultSetToolLibrary` extending `DataSnapshotToolLibrary` with search-specific tools: `get_records_above_score(threshold)`, `get_records_by_source(sourceType)`, `get_records_by_scope(scopeID)`, `explain_ranking(recordId)`. Register against the `Search Result Set` ArtifactType. Nice-to-have, not required.
+- [ ] **2.8** Progressive/streaming search results — show per-provider results as they land, RRF-update client-side. (Raised by Amith in the original planning call.)
+- [ ] **2.9** ReRanker catalog entity + UI for configuring per-scope re-rankers visually (currently config-only, Section 8.3)
 
 ---
 
@@ -1217,13 +1492,14 @@ All new classes, methods, and interfaces must have TSDoc comments explaining:
 ```mermaid
 erDiagram
     SearchScope ||--o{ SearchScopeProvider : "has"
-    SearchScope ||--o{ SearchScopeVectorIndex : "has"
+    SearchScope ||--o{ SearchScopeExternalIndex : "has"
     SearchScope ||--o{ SearchScopeEntity : "has"
     SearchScope ||--o{ SearchScopeStorageAccount : "has"
     SearchScope ||--o{ AIAgentSearchScope : "assigned to agents via"
     AIAgent ||--o{ AIAgentSearchScope : "has scopes via"
     SearchScopeProvider }o--|| SearchProvider : "references"
-    SearchScopeVectorIndex }o--|| VectorIndex : "references"
+    SearchScopeProvider }o--o| Template : "per-provider query transform"
+    SearchScopeExternalIndex }o--o| VectorIndex : "references (when IndexType=Vector)"
     SearchScopeEntity }o--|| Entity : "references"
     SearchScopeStorageAccount }o--|| FileStorageAccount : "references"
     AIAgentSearchScope }o--o| Template : "query template"
@@ -1251,12 +1527,17 @@ erDiagram
         bit Enabled
         int MaxResultsOverride "nullable"
         nvarchar ProviderConfigOverride "JSON nullable"
+        uniqueidentifier QueryTransformTemplateID FK "nullable - per-provider query rewrite"
     }
 
-    SearchScopeVectorIndex {
+    SearchScopeExternalIndex {
         uniqueidentifier ID PK
         uniqueidentifier SearchScopeID FK
-        uniqueidentifier VectorIndexID FK
+        nvarchar IndexType "Vector|Elasticsearch|Typesense|AzureAISearch|OpenSearch|Other"
+        uniqueidentifier VectorIndexID FK "nullable - required when IndexType=Vector"
+        nvarchar ExternalIndexName "nullable - required when IndexType<>Vector"
+        nvarchar ExternalIndexConfig "JSON nullable"
+        nvarchar MetadataFilter "JSON nullable - Nunjucks template"
     }
 
     SearchScopeEntity {
@@ -1286,6 +1567,7 @@ erDiagram
         int MaxResults "nullable"
         decimal MinScore "nullable"
         uniqueidentifier QueryTemplateID FK "nullable"
+        nvarchar FusionWeightsOverride "JSON nullable"
         bit IsDefault
     }
 
@@ -1306,6 +1588,9 @@ erDiagram
 | FT Provider | `packages/SearchEngine/src/generic/FullTextSearchProvider.ts` | Database FTS (FREETEXT/tsvector) |
 | Storage Provider | `packages/SearchEngine/src/generic/StorageSearchProvider.ts` | File storage search |
 | Search Fusion | `packages/SearchEngine/src/generic/SearchFusion.ts` | RRF fusion and deduplication |
+| Re-Ranker (NEW) | `packages/SearchEngine/src/generic/BaseReRanker.ts` | Abstract primitive for optional cross-encoder re-ranking stage (Section 8.3) |
+| Noop Re-Ranker (NEW) | `packages/SearchEngine/src/generic/NoopReRanker.ts` | Default pass-through re-ranker |
+| Artifact Processing | `packages/AI/Agents/src/AgentRunner.ts` → `ProcessAgentArtifacts()` | Handles converting `agentResult.payload` to Artifact/ArtifactVersion (Section 6.3) |
 | Engine Base | `packages/MJCoreEntities/src/engines/SearchEngineBase.ts` | Metadata caching for search providers |
 | RRF Utility | `@memberjunction/core` → `ComputeRRF()` | Reusable RRF function |
 | Search Action | `packages/Actions/CoreActions/src/custom/search/search.action.ts` | Existing search action for agents |
