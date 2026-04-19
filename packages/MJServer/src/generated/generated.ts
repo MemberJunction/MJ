@@ -57132,6 +57132,13 @@ export class MJRecordChange_ {
     @Field({description: `Field UpdatedAt for entity Record Changes.`}) 
     UpdatedAt: Date;
         
+    @Field({nullable: true, description: `When this RecordChange was produced by a restore operation, points at the historical RecordChange whose state was restored. NULL for ordinary changes. Together with Source='Restore' this builds the version-chain lineage for auditing and timeline navigation.`}) 
+    @MaxLength(36)
+    RestoredFromID?: string;
+        
+    @Field({nullable: true, description: `Optional user-entered explanation captured at restore time. Persisted for audit purposes (regulated industries often require a reason for every reversal). NULL when the user did not enter one or when the change was not a restore.`}) 
+    RestoreReason?: string;
+        
     @Field() 
     @MaxLength(255)
     Entity: string;
@@ -57148,8 +57155,18 @@ export class MJRecordChange_ {
     @MaxLength(100)
     Integration?: string;
         
+    @Field({nullable: true}) 
+    RestoredFrom?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootRestoredFromID?: string;
+        
     @Field(() => [MJVersionLabelItem_])
     MJVersionLabelItems_RecordChangeIDArray: MJVersionLabelItem_[]; // Link to MJVersionLabelItems
+    
+    @Field(() => [MJRecordChange_])
+    MJRecordChanges_RestoredFromIDArray: MJRecordChange_[]; // Link to MJRecordChanges
     
 }
 
@@ -57202,6 +57219,12 @@ export class CreateMJRecordChangeInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field({ nullable: true })
+    RestoredFromID: string | null;
+
+    @Field({ nullable: true })
+    RestoreReason: string | null;
 }
     
 
@@ -57254,6 +57277,12 @@ export class UpdateMJRecordChangeInput {
 
     @Field({ nullable: true })
     Comments?: string | null;
+
+    @Field({ nullable: true })
+    RestoredFromID?: string | null;
+
+    @Field({ nullable: true })
+    RestoreReason?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -57323,6 +57352,16 @@ export class MJRecordChangeResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwVersionLabelItems')} WHERE ${provider.QuoteIdentifier('RecordChangeID')}='${mjrecordchange_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Version Label Items', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Version Label Items', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordChange_])
+    async MJRecordChanges_RestoredFromIDArray(@Root() mjrecordchange_: MJRecordChange_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Changes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordChanges')} WHERE ${provider.QuoteIdentifier('RestoredFromID')}='${mjrecordchange_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Changes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Changes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
