@@ -1,5 +1,14 @@
 # @memberjunction/ai-vertex
 
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ai@5.27.1
+  - @memberjunction/ai-gemini@5.27.1
+
 ## 5.27.0
 
 ### Patch Changes
