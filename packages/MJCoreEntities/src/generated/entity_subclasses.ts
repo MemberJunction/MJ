@@ -19914,7 +19914,7 @@ export const MJRecordChangeSchema = z.object({
     RestoredFrom: z.string().nullable().describe(`
         * * Field Name: RestoredFrom
         * * Display Name: Restored From
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(750)`),
     RootRestoredFromID: z.string().nullable().describe(`
         * * Field Name: RootRestoredFromID
         * * Display Name: Root Restored From ID
@@ -24705,7 +24705,7 @@ export const MJVersionLabelItemSchema = z.object({
     RecordChange: z.string().describe(`
         * * Field Name: RecordChange
         * * Display Name: Record Change
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(750)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -77208,7 +77208,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     /**
     * * Field Name: RestoredFrom
     * * Display Name: Restored From
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(750)
     */
     get RestoredFrom(): string | null {
         return this.Get('RestoredFrom');
@@ -90273,7 +90273,7 @@ export class MJVersionLabelItemEntity extends BaseEntity<MJVersionLabelItemEntit
     /**
     * * Field Name: RecordChange
     * * Display Name: Record Change
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(750)
     */
     get RecordChange(): string {
         return this.Get('RecordChange');

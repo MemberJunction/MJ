@@ -10,7 +10,7 @@
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
-            GetReadOnlyProvider, GetReadWriteProvider } from '@memberjunction/server';
+            GetReadOnlyProvider, GetReadWriteProvider, RestoreContextInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
@@ -124,6 +124,9 @@ export class CreateMJAccessControlRuleInput {
 
     @Field({ nullable: true })
     GrantedByUserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -170,6 +173,9 @@ export class UpdateMJAccessControlRuleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -310,6 +316,9 @@ export class CreateMJActionAuthorizationInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -332,6 +341,9 @@ export class UpdateMJActionAuthorizationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -488,6 +500,9 @@ export class CreateMJActionCategoryInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -513,6 +528,9 @@ export class UpdateMJActionCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -671,6 +689,9 @@ export class CreateMJActionContextTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -690,6 +711,9 @@ export class UpdateMJActionContextTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -841,6 +865,9 @@ export class CreateMJActionContextInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -863,6 +890,9 @@ export class UpdateMJActionContextInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -1034,6 +1064,9 @@ export class CreateMJActionExecutionLogInput {
 
     @Field({ nullable: true })
     Message: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -1071,6 +1104,9 @@ export class UpdateMJActionExecutionLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -1210,6 +1246,9 @@ export class CreateMJActionFilterInput {
 
     @Field({ nullable: true })
     CodeExplanation: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -1235,6 +1274,9 @@ export class UpdateMJActionFilterInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -1385,6 +1427,9 @@ export class CreateMJActionLibraryInput {
 
     @Field({ nullable: true })
     ItemsUsed: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -1407,6 +1452,9 @@ export class UpdateMJActionLibraryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -1588,6 +1636,9 @@ export class CreateMJActionParamInput {
 
     @Field({ nullable: true })
     MediaModality: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -1628,6 +1679,9 @@ export class UpdateMJActionParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -1790,6 +1844,9 @@ export class CreateMJActionResultCodeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -1815,6 +1872,9 @@ export class UpdateMJActionResultCodeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -2119,6 +2179,9 @@ export class CreateMJActionInput {
 
     @Field({ nullable: true })
     Config: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -2195,6 +2258,9 @@ export class UpdateMJActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -2469,6 +2535,9 @@ export class CreateMJAIActionInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -2497,6 +2566,9 @@ export class UpdateMJAIActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -2717,6 +2789,9 @@ export class CreateMJAIAgentActionInput {
 
     @Field({ nullable: true })
     CompactPromptID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -2760,6 +2835,9 @@ export class UpdateMJAIAgentActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -2900,6 +2978,9 @@ export class CreateMJAIAgentArtifactTypeInput {
 
     @Field(() => Int, { nullable: true })
     Sequence: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -2922,6 +3003,9 @@ export class UpdateMJAIAgentArtifactTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -3092,6 +3176,9 @@ export class CreateMJAIAgentCategoryInput {
 
     @Field({ nullable: true })
     DefaultStorageAccountID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -3123,6 +3210,9 @@ export class UpdateMJAIAgentCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -3289,6 +3379,9 @@ export class CreateMJAIAgentClientToolInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -3314,6 +3407,9 @@ export class UpdateMJAIAgentClientToolInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -3487,6 +3583,9 @@ export class CreateMJAIAgentConfigurationInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -3524,6 +3623,9 @@ export class UpdateMJAIAgentConfigurationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -3766,6 +3868,9 @@ export class CreateMJAIAgentDataSourceInput {
 
     @Field({ nullable: true })
     DestinationPath: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -3836,6 +3941,9 @@ export class UpdateMJAIAgentDataSourceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -4116,6 +4224,9 @@ export class CreateMJAIAgentExampleInput {
 
     @Field({ nullable: true })
     ExpiresAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -4192,6 +4303,9 @@ export class UpdateMJAIAgentExampleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -4340,6 +4454,9 @@ export class CreateMJAIAgentLearningCycleInput {
 
     @Field({ nullable: true })
     AgentSummary: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -4368,6 +4485,9 @@ export class UpdateMJAIAgentLearningCycleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -4527,6 +4647,9 @@ export class CreateMJAIAgentModalityInput {
 
     @Field(() => Int, { nullable: true })
     MaxCountPerMessage: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -4558,6 +4681,9 @@ export class UpdateMJAIAgentModalityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -4704,6 +4830,9 @@ export class CreateMJAIAgentModelInput {
 
     @Field(() => Int, { nullable: true })
     Priority: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -4729,6 +4858,9 @@ export class UpdateMJAIAgentModelInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -4870,6 +5002,9 @@ export class CreateMJAIAgentNoteTypeInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -4895,6 +5030,9 @@ export class UpdateMJAIAgentNoteTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -5184,6 +5322,9 @@ export class CreateMJAIAgentNoteInput {
 
     @Field({ nullable: true })
     ExpiresAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -5257,6 +5398,9 @@ export class UpdateMJAIAgentNoteInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -5432,6 +5576,9 @@ export class CreateMJAIAgentPermissionInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -5469,6 +5616,9 @@ export class UpdateMJAIAgentPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -5646,6 +5796,9 @@ export class CreateMJAIAgentPromptInput {
 
     @Field(() => Int, { nullable: true })
     ContextMessageCount: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -5683,6 +5836,9 @@ export class UpdateMJAIAgentPromptInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -5855,6 +6011,9 @@ export class CreateMJAIAgentRelationshipInput {
 
     @Field(() => Int, { nullable: true })
     MaxMessages: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -5892,6 +6051,9 @@ export class UpdateMJAIAgentRelationshipInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -6051,6 +6213,9 @@ export class CreateMJAIAgentRequestTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     RequiresResponse?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -6085,6 +6250,9 @@ export class UpdateMJAIAgentRequestTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -6352,6 +6520,9 @@ export class CreateMJAIAgentRequestInput {
 
     @Field({ nullable: true })
     ResponseSource: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -6419,6 +6590,9 @@ export class UpdateMJAIAgentRequestInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -6650,6 +6824,9 @@ export class CreateMJAIAgentRunMediaInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -6711,6 +6888,9 @@ export class UpdateMJAIAgentRunMediaInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -6966,6 +7146,9 @@ export class CreateMJAIAgentRunStepInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -7036,6 +7219,9 @@ export class UpdateMJAIAgentRunStepInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -7521,6 +7707,9 @@ export class CreateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     ExternalReferenceID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -7660,6 +7849,9 @@ export class UpdateMJAIAgentRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -7909,6 +8101,9 @@ export class CreateMJAIAgentStepPathInput {
 
     @Field({ nullable: true })
     PathPoints: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -7940,6 +8135,9 @@ export class UpdateMJAIAgentStepPathInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -8203,6 +8401,9 @@ export class CreateMJAIAgentStepInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -8276,6 +8477,9 @@ export class UpdateMJAIAgentStepInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -8498,6 +8702,9 @@ export class CreateMJAIAgentTypeInput {
 
     @Field({ nullable: true })
     DefaultStorageAccountID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -8547,6 +8754,9 @@ export class UpdateMJAIAgentTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -9171,6 +9381,9 @@ export class CreateMJAIAgentInput {
 
     @Field({ nullable: true })
     DefaultStorageAccountID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -9367,6 +9580,9 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -9770,6 +9986,9 @@ export class CreateMJAIArchitectureInput {
 
     @Field({ nullable: true })
     KeyPaper: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -9804,6 +10023,9 @@ export class UpdateMJAIArchitectureInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -9984,6 +10206,9 @@ export class CreateMJAIClientToolDefinitionInput {
 
     @Field({ nullable: true })
     RequiresContextType: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -10018,6 +10243,9 @@ export class UpdateMJAIClientToolDefinitionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -10177,6 +10405,9 @@ export class CreateMJAIConfigurationParamInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -10205,6 +10436,9 @@ export class UpdateMJAIConfigurationParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -10422,6 +10656,9 @@ export class CreateMJAIConfigurationInput {
 
     @Field({ nullable: true })
     ParentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -10462,6 +10699,9 @@ export class UpdateMJAIConfigurationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -10717,6 +10957,9 @@ export class CreateMJAICredentialBindingInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -10751,6 +10994,9 @@ export class UpdateMJAICredentialBindingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -10937,6 +11183,9 @@ export class CreateMJAIModalityInput {
 
     @Field(() => Int, { nullable: true })
     DisplayOrder?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -10974,6 +11223,9 @@ export class UpdateMJAIModalityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -11184,6 +11436,9 @@ export class CreateMJAIModelActionInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -11206,6 +11461,9 @@ export class UpdateMJAIModelActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -11369,6 +11627,9 @@ export class CreateMJAIModelArchitectureInput {
 
     @Field({ nullable: true })
     Notes: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -11397,6 +11658,9 @@ export class UpdateMJAIModelArchitectureInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -11604,6 +11868,9 @@ export class CreateMJAIModelCostInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -11653,6 +11920,9 @@ export class UpdateMJAIModelCostInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -11837,6 +12107,9 @@ export class CreateMJAIModelModalityInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -11880,6 +12153,9 @@ export class UpdateMJAIModelModalityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -12008,6 +12284,9 @@ export class CreateMJAIModelPriceTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -12027,6 +12306,9 @@ export class UpdateMJAIModelPriceTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -12172,6 +12454,9 @@ export class CreateMJAIModelPriceUnitTypeInput {
 
     @Field({ nullable: true })
     DriverClass?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -12194,6 +12479,9 @@ export class UpdateMJAIModelPriceUnitTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -12369,6 +12657,9 @@ export class CreateMJAIModelTypeInput {
 
     @Field({ nullable: true })
     PrefillFallbackText: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -12400,6 +12691,9 @@ export class UpdateMJAIModelTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -12655,6 +12949,9 @@ export class CreateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     PrefillFallbackText: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -12713,6 +13010,9 @@ export class UpdateMJAIModelVendorInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -13033,6 +13333,9 @@ export class CreateMJAIModelInput {
 
     @Field(() => Boolean, { nullable: true })
     SupportsEffortLevel: boolean | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -13103,6 +13406,9 @@ export class UpdateMJAIModelInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -13499,6 +13805,9 @@ export class CreateMJAIPromptCategoryInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -13521,6 +13830,9 @@ export class UpdateMJAIPromptCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -13751,6 +14063,9 @@ export class CreateMJAIPromptModelInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -13800,6 +14115,9 @@ export class UpdateMJAIPromptModelInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -14026,6 +14344,9 @@ export class CreateMJAIPromptRunMediaInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -14081,6 +14402,9 @@ export class UpdateMJAIPromptRunMediaInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -14789,6 +15113,9 @@ export class CreateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     AssistantPrefill: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -15048,6 +15375,9 @@ export class UpdateMJAIPromptRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -15226,6 +15556,9 @@ export class CreateMJAIPromptTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -15245,6 +15578,9 @@ export class UpdateMJAIPromptTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -15762,6 +16098,9 @@ export class CreateMJAIPromptInput {
 
     @Field(() => Boolean, { nullable: true })
     RequireSpecificModels?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -15928,6 +16267,9 @@ export class UpdateMJAIPromptInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -16283,6 +16625,9 @@ export class CreateMJAIResultCacheInput {
 
     @Field({ nullable: true })
     PromptRunID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -16332,6 +16677,9 @@ export class UpdateMJAIResultCacheInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -16463,6 +16811,9 @@ export class CreateMJAIVendorTypeDefinitionInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -16482,6 +16833,9 @@ export class UpdateMJAIVendorTypeDefinitionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -16649,6 +17003,9 @@ export class CreateMJAIVendorTypeInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -16674,6 +17031,9 @@ export class UpdateMJAIVendorTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -16834,6 +17194,9 @@ export class CreateMJAIVendorInput {
 
     @Field({ nullable: true })
     CredentialTypeID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -16856,6 +17219,9 @@ export class UpdateMJAIVendorInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -17096,6 +17462,9 @@ export class CreateMJAPIApplicationScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -17127,6 +17496,9 @@ export class UpdateMJAPIApplicationScopeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -17268,6 +17640,9 @@ export class CreateMJAPIApplicationInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -17290,6 +17665,9 @@ export class UpdateMJAPIApplicationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -17454,6 +17832,9 @@ export class CreateMJAPIKeyApplicationInput {
 
     @Field({ nullable: true })
     ApplicationID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -17473,6 +17854,9 @@ export class UpdateMJAPIKeyApplicationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -17633,6 +18017,9 @@ export class CreateMJAPIKeyScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -17664,6 +18051,9 @@ export class UpdateMJAPIKeyScopeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -17872,6 +18262,9 @@ export class CreateMJAPIKeyUsageLogInput {
 
     @Field({ nullable: true })
     DeniedReason: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -17924,6 +18317,9 @@ export class UpdateMJAPIKeyUsageLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -18107,6 +18503,9 @@ export class CreateMJAPIKeyInput {
 
     @Field({ nullable: true })
     CreatedByUserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -18144,6 +18543,9 @@ export class UpdateMJAPIKeyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -18357,6 +18759,9 @@ export class CreateMJAPIScopeInput {
 
     @Field({ nullable: true })
     UIConfig: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -18394,6 +18799,9 @@ export class UpdateMJAPIScopeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -18583,6 +18991,9 @@ export class CreateMJApplicationEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     DefaultForNewUser?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -18608,6 +19019,9 @@ export class UpdateMJApplicationEntityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -18754,6 +19168,9 @@ export class CreateMJApplicationRoleInput {
 
     @Field(() => Boolean, { nullable: true })
     CanAdmin?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -18779,6 +19196,9 @@ export class UpdateMJApplicationRoleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -18921,6 +19341,9 @@ export class CreateMJApplicationSettingInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -18946,6 +19369,9 @@ export class UpdateMJApplicationSettingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -19174,6 +19600,9 @@ export class CreateMJApplicationInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdatePath?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -19232,6 +19661,9 @@ export class UpdateMJApplicationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -19471,6 +19903,9 @@ export class CreateMJArtifactPermissionInput {
 
     @Field({ nullable: true })
     SharedByUserID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -19505,6 +19940,9 @@ export class UpdateMJArtifactPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -19700,6 +20138,9 @@ export class CreateMJArtifactTypeInput {
 
     @Field({ nullable: true })
     ContentCategory?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -19740,6 +20181,9 @@ export class UpdateMJArtifactTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -19937,6 +20381,9 @@ export class CreateMJArtifactUseInput {
 
     @Field({ nullable: true })
     UsageContext: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -19962,6 +20409,9 @@ export class UpdateMJArtifactUseInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20112,6 +20562,9 @@ export class CreateMJArtifactVersionAttributeInput {
 
     @Field({ nullable: true })
     StandardProperty: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20140,6 +20593,9 @@ export class UpdateMJArtifactVersionAttributeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20368,6 +20824,9 @@ export class CreateMJArtifactVersionInput {
 
     @Field(() => Int, { nullable: true })
     ContentSizeBytes: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20423,6 +20882,9 @@ export class UpdateMJArtifactVersionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20640,6 +21102,9 @@ export class CreateMJArtifactInput {
 
     @Field({ nullable: true })
     Visibility?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20674,6 +21139,9 @@ export class UpdateMJArtifactInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20851,6 +21319,9 @@ export class CreateMJAuditLogTypeInput {
 
     @Field({ nullable: true })
     AuthorizationID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20876,6 +21347,9 @@ export class UpdateMJAuditLogTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -21088,6 +21562,9 @@ export class CreateMJAuditLogInput {
 
     @Field({ nullable: true })
     RecordID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -21125,6 +21602,9 @@ export class UpdateMJAuditLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -21266,6 +21746,9 @@ export class CreateMJAuthorizationRoleInput {
 
     @Field({ nullable: true })
     Type?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -21288,6 +21771,9 @@ export class UpdateMJAuthorizationRoleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -21465,6 +21951,9 @@ export class CreateMJAuthorizationInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -21493,6 +21982,9 @@ export class UpdateMJAuthorizationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -21693,6 +22185,9 @@ export class CreateMJCollectionArtifactInput {
 
     @Field({ nullable: true })
     ArtifactVersionID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -21715,6 +22210,9 @@ export class UpdateMJCollectionArtifactInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -21884,6 +22382,9 @@ export class CreateMJCollectionPermissionInput {
 
     @Field({ nullable: true })
     SharedByUserID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -21918,6 +22419,9 @@ export class UpdateMJCollectionPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -22109,6 +22613,9 @@ export class CreateMJCollectionInput {
 
     @Field({ nullable: true })
     OwnerID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -22146,6 +22653,9 @@ export class UpdateMJCollectionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -22325,6 +22835,9 @@ export class CreateMJCommunicationBaseMessageTypeInput {
 
     @Field(() => Int, { nullable: true })
     MaxBytes: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -22353,6 +22866,9 @@ export class UpdateMJCommunicationBaseMessageTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -22550,6 +23066,9 @@ export class CreateMJCommunicationLogInput {
 
     @Field({ nullable: true })
     ErrorMessage: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -22587,6 +23106,9 @@ export class UpdateMJCommunicationLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -22744,6 +23266,9 @@ export class CreateMJCommunicationProviderMessageTypeInput {
 
     @Field({ nullable: true })
     AdditionalAttributes: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -22772,6 +23297,9 @@ export class UpdateMJCommunicationProviderMessageTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -22956,6 +23484,9 @@ export class CreateMJCommunicationProviderInput {
 
     @Field(() => Boolean, { nullable: true })
     SupportsDrafts?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -22996,6 +23527,9 @@ export class UpdateMJCommunicationProviderInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -23180,6 +23714,9 @@ export class CreateMJCommunicationRunInput {
 
     @Field({ nullable: true })
     ErrorMessage: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -23214,6 +23751,9 @@ export class UpdateMJCommunicationRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -23386,6 +23926,9 @@ export class CreateMJCompanyInput {
 
     @Field({ nullable: true })
     Domain: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -23414,6 +23957,9 @@ export class UpdateMJCompanyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -23680,6 +24226,9 @@ export class CreateMJCompanyIntegrationEntityMapInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -23729,6 +24278,9 @@ export class UpdateMJCompanyIntegrationEntityMapInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -23944,6 +24496,9 @@ export class CreateMJCompanyIntegrationFieldMapInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -23993,6 +24548,9 @@ export class UpdateMJCompanyIntegrationFieldMapInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -24141,6 +24699,9 @@ export class CreateMJCompanyIntegrationRecordMapInput {
 
     @Field({ nullable: true })
     EntityRecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -24166,6 +24727,9 @@ export class UpdateMJCompanyIntegrationRecordMapInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -24320,6 +24884,9 @@ export class CreateMJCompanyIntegrationRunAPILogInput {
 
     @Field({ nullable: true })
     Parameters: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -24351,6 +24918,9 @@ export class UpdateMJCompanyIntegrationRunAPILogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -24516,6 +25086,9 @@ export class CreateMJCompanyIntegrationRunDetailInput {
 
     @Field(() => Boolean, { nullable: true })
     IsSuccess?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -24547,6 +25120,9 @@ export class UpdateMJCompanyIntegrationRunDetailInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -24754,6 +25330,9 @@ export class CreateMJCompanyIntegrationRunInput {
 
     @Field({ nullable: true })
     ScheduledJobRunID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -24797,6 +25376,9 @@ export class UpdateMJCompanyIntegrationRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -24982,6 +25564,9 @@ export class CreateMJCompanyIntegrationSyncWatermarkInput {
 
     @Field(() => Int, { nullable: true })
     RecordsSynced?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -25013,6 +25598,9 @@ export class UpdateMJCompanyIntegrationSyncWatermarkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -25344,6 +25932,9 @@ export class CreateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     ScheduledJobID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -25438,6 +26029,9 @@ export class UpdateMJCompanyIntegrationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -25622,6 +26216,9 @@ export class CreateMJComponentDependencyInput {
 
     @Field({ nullable: true })
     DependencyComponentID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -25641,6 +26238,9 @@ export class UpdateMJComponentDependencyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -25837,6 +26437,9 @@ export class CreateMJComponentLibraryInput {
 
     @Field({ nullable: true })
     UsageType?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -25886,6 +26489,9 @@ export class UpdateMJComponentLibraryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -26037,6 +26643,9 @@ export class CreateMJComponentLibraryLinkInput {
 
     @Field({ nullable: true })
     MinVersion: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -26059,6 +26668,9 @@ export class UpdateMJComponentLibraryLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -26215,6 +26827,9 @@ export class CreateMJComponentRegistryInput {
 
     @Field({ nullable: true })
     Status: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -26246,6 +26861,9 @@ export class UpdateMJComponentRegistryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -26546,6 +27164,9 @@ export class CreateMJComponentInput {
 
     @Field(() => Boolean, { nullable: true })
     HasRequiredCustomProps?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -26637,6 +27258,9 @@ export class UpdateMJComponentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -26799,6 +27423,9 @@ export class CreateMJContentFileTypeInput {
 
     @Field({ nullable: true })
     FileExtension: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -26818,6 +27445,9 @@ export class UpdateMJContentFileTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -26974,6 +27604,9 @@ export class CreateMJContentItemAttributeInput {
 
     @Field({ nullable: true })
     Value?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -26996,6 +27629,9 @@ export class UpdateMJContentItemAttributeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -27174,6 +27810,9 @@ export class CreateMJContentItemDuplicateInput {
 
     @Field({ nullable: true })
     Resolution: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -27211,6 +27850,9 @@ export class UpdateMJContentItemDuplicateInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -27358,6 +28000,9 @@ export class CreateMJContentItemTagInput {
 
     @Field({ nullable: true })
     TagID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -27383,6 +28028,9 @@ export class UpdateMJContentItemTagInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -27632,6 +28280,9 @@ export class CreateMJContentItemInput {
 
     @Field({ nullable: true })
     LastTaggedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -27690,6 +28341,9 @@ export class UpdateMJContentItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -27939,6 +28593,9 @@ export class CreateMJContentProcessRunDetailInput {
 
     @Field(() => Float, { nullable: true })
     TotalCost?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -27991,6 +28648,9 @@ export class UpdateMJContentProcessRunDetailInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -28138,6 +28798,9 @@ export class CreateMJContentProcessRunPromptRunInput {
 
     @Field({ nullable: true })
     RunType?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -28160,6 +28823,9 @@ export class UpdateMJContentProcessRunPromptRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -28364,6 +29030,9 @@ export class CreateMJContentProcessRunInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -28416,6 +29085,9 @@ export class UpdateMJContentProcessRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -28562,6 +29234,9 @@ export class CreateMJContentSourceParamInput {
 
     @Field({ nullable: true })
     Value?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -28584,6 +29259,9 @@ export class UpdateMJContentSourceParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -28728,6 +29406,9 @@ export class CreateMJContentSourceTypeParamInput {
 
     @Field(() => Boolean, { nullable: true })
     IsRequired?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -28756,6 +29437,9 @@ export class UpdateMJContentSourceTypeParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -28904,6 +29588,9 @@ export class CreateMJContentSourceTypeInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -28929,6 +29616,9 @@ export class UpdateMJContentSourceTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -29191,6 +29881,9 @@ export class CreateMJContentSourceInput {
 
     @Field({ nullable: true })
     ScheduledActionID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -29237,6 +29930,9 @@ export class UpdateMJContentSourceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -29415,6 +30111,9 @@ export class CreateMJContentTypeAttributeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -29440,6 +30139,9 @@ export class UpdateMJContentTypeAttributeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -29622,6 +30324,9 @@ export class CreateMJContentTypeInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -29659,6 +30364,9 @@ export class UpdateMJContentTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -29816,6 +30524,9 @@ export class CreateMJConversationArtifactPermissionInput {
 
     @Field({ nullable: true })
     AccessLevel?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -29838,6 +30549,9 @@ export class UpdateMJConversationArtifactPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -29988,6 +30702,9 @@ export class CreateMJConversationArtifactVersionInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -30016,6 +30733,9 @@ export class UpdateMJConversationArtifactVersionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -30195,6 +30915,9 @@ export class CreateMJConversationArtifactInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -30226,6 +30949,9 @@ export class UpdateMJConversationArtifactInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -30396,6 +31122,9 @@ export class CreateMJConversationDetailArtifactInput {
 
     @Field({ nullable: true })
     Direction?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -30418,6 +31147,9 @@ export class UpdateMJConversationDetailArtifactInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -30624,6 +31356,9 @@ export class CreateMJConversationDetailAttachmentInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -30676,6 +31411,9 @@ export class UpdateMJConversationDetailAttachmentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -30821,6 +31559,9 @@ export class CreateMJConversationDetailRatingInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -30846,6 +31587,9 @@ export class UpdateMJConversationDetailRatingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -31170,6 +31914,9 @@ export class CreateMJConversationDetailInput {
 
     @Field(() => Boolean, { nullable: true })
     OriginalMessageChanged?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -31255,6 +32002,9 @@ export class UpdateMJConversationDetailInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -31594,6 +32344,9 @@ export class CreateMJConversationInput {
 
     @Field({ nullable: true })
     TestRunID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -31649,6 +32402,9 @@ export class UpdateMJConversationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -31878,6 +32634,9 @@ export class CreateMJCountryInput {
 
     @Field({ nullable: true })
     CommonAliases: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -31915,6 +32674,9 @@ export class UpdateMJCountryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -32088,6 +32850,9 @@ export class CreateMJCredentialCategoryInput {
 
     @Field({ nullable: true })
     IconClass: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -32113,6 +32878,9 @@ export class UpdateMJCredentialCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -32297,6 +33065,9 @@ export class CreateMJCredentialTypeInput {
 
     @Field({ nullable: true })
     ValidationEndpoint: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -32328,6 +33099,9 @@ export class UpdateMJCredentialTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -32579,6 +33353,9 @@ export class CreateMJCredentialInput {
 
     @Field({ nullable: true })
     IconClass: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -32625,6 +33402,9 @@ export class UpdateMJCredentialInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -32858,6 +33638,9 @@ export class CreateMJDashboardCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -32883,6 +33666,9 @@ export class UpdateMJDashboardCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -33081,6 +33867,9 @@ export class CreateMJDashboardCategoryLinkInput {
 
     @Field(() => Int, { nullable: true })
     Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -33109,6 +33898,9 @@ export class UpdateMJDashboardCategoryLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -33278,6 +34070,9 @@ export class CreateMJDashboardCategoryPermissionInput {
 
     @Field({ nullable: true })
     SharedByUserID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -33312,6 +34107,9 @@ export class UpdateMJDashboardCategoryPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -33476,6 +34274,9 @@ export class CreateMJDashboardPartTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -33513,6 +34314,9 @@ export class UpdateMJDashboardPartTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -33682,6 +34486,9 @@ export class CreateMJDashboardPermissionInput {
 
     @Field({ nullable: true })
     SharedByUserID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -33716,6 +34523,9 @@ export class UpdateMJDashboardPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -33874,6 +34684,9 @@ export class CreateMJDashboardUserPreferenceInput {
 
     @Field(() => Int, { nullable: true })
     DisplayOrder?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -33902,6 +34715,9 @@ export class UpdateMJDashboardUserPreferenceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -34042,6 +34858,9 @@ export class CreateMJDashboardUserStateInput {
 
     @Field({ nullable: true })
     UserState: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -34064,6 +34883,9 @@ export class UpdateMJDashboardUserStateInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -34285,6 +35107,9 @@ export class CreateMJDashboardInput {
 
     @Field({ nullable: true })
     EnvironmentID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -34334,6 +35159,9 @@ export class UpdateMJDashboardInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -34575,6 +35403,9 @@ export class CreateMJDataContextItemInput {
 
     @Field({ nullable: true })
     CodeName: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -34621,6 +35452,9 @@ export class UpdateMJDataContextItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -34772,6 +35606,9 @@ export class CreateMJDataContextInput {
 
     @Field({ nullable: true })
     LastRefreshedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -34797,6 +35634,9 @@ export class UpdateMJDataContextInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -34999,6 +35839,9 @@ export class CreateMJDatasetItemInput {
 
     @Field({ nullable: true })
     Columns: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -35036,6 +35879,9 @@ export class UpdateMJDatasetItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -35164,6 +36010,9 @@ export class CreateMJDatasetInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -35183,6 +36032,9 @@ export class UpdateMJDatasetInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -35386,6 +36238,9 @@ export class CreateMJDuplicateRunDetailMatchInput {
 
     @Field({ nullable: true })
     RecordMetadata: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -35432,6 +36287,9 @@ export class UpdateMJDuplicateRunDetailMatchInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -35615,6 +36473,9 @@ export class CreateMJDuplicateRunDetailInput {
 
     @Field({ nullable: true })
     EndedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -35658,6 +36519,9 @@ export class UpdateMJDuplicateRunDetailInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -35895,6 +36759,9 @@ export class CreateMJDuplicateRunInput {
 
     @Field(() => Boolean, { nullable: true })
     CancellationRequested?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -35953,6 +36820,9 @@ export class UpdateMJDuplicateRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -36110,6 +36980,9 @@ export class CreateMJEmployeeCompanyIntegrationInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -36135,6 +37008,9 @@ export class UpdateMJEmployeeCompanyIntegrationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -36269,6 +37145,9 @@ export class CreateMJEmployeeRoleInput {
 
     @Field({ nullable: true })
     RoleID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -36288,6 +37167,9 @@ export class UpdateMJEmployeeRoleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -36422,6 +37304,9 @@ export class CreateMJEmployeeSkillInput {
 
     @Field({ nullable: true })
     SkillID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -36441,6 +37326,9 @@ export class UpdateMJEmployeeSkillInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -36647,6 +37535,9 @@ export class CreateMJEmployeeInput {
 
     @Field(() => Boolean, { nullable: true })
     Active?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -36684,6 +37575,9 @@ export class UpdateMJEmployeeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -36903,6 +37797,9 @@ export class CreateMJEncryptionAlgorithmInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -36937,6 +37834,9 @@ export class UpdateMJEncryptionAlgorithmInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -37108,6 +38008,9 @@ export class CreateMJEncryptionKeySourceInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -37142,6 +38045,9 @@ export class UpdateMJEncryptionKeySourceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -37348,6 +38254,9 @@ export class CreateMJEncryptionKeyInput {
 
     @Field({ nullable: true })
     ExpiresAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -37394,6 +38303,9 @@ export class UpdateMJEncryptionKeyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -38092,6 +39004,9 @@ export class CreateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     DetectExternalChanges?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -38285,6 +39200,9 @@ export class UpdateMJEntityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -38991,6 +39909,9 @@ export class CreateMJEntityActionFilterInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -39016,6 +39937,9 @@ export class UpdateMJEntityActionFilterInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -39150,6 +40074,9 @@ export class CreateMJEntityActionInvocationTypeInput {
 
     @Field(() => Int, { nullable: true })
     DisplaySequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -39172,6 +40099,9 @@ export class UpdateMJEntityActionInvocationTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -39323,6 +40253,9 @@ export class CreateMJEntityActionInvocationInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -39345,6 +40278,9 @@ export class UpdateMJEntityActionInvocationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -39498,6 +40434,9 @@ export class CreateMJEntityActionParamInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -39526,6 +40465,9 @@ export class UpdateMJEntityActionParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -39676,6 +40618,9 @@ export class CreateMJEntityActionInput {
 
     @Field({ nullable: true })
     ID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -39698,6 +40643,9 @@ export class UpdateMJEntityActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -39936,6 +40884,9 @@ export class CreateMJEntityAIActionInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -39985,6 +40936,9 @@ export class UpdateMJEntityAIActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -40131,6 +41085,9 @@ export class CreateMJEntityCommunicationFieldInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -40153,6 +41110,9 @@ export class UpdateMJEntityCommunicationFieldInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -40296,6 +41256,9 @@ export class CreateMJEntityCommunicationMessageTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -40318,6 +41281,9 @@ export class UpdateMJEntityCommunicationMessageTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -40470,6 +41436,9 @@ export class CreateMJEntityDocumentRunInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -40495,6 +41464,9 @@ export class UpdateMJEntityDocumentRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -40637,6 +41609,9 @@ export class CreateMJEntityDocumentSettingInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -40662,6 +41637,9 @@ export class UpdateMJEntityDocumentSettingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -40790,6 +41768,9 @@ export class CreateMJEntityDocumentTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -40809,6 +41790,9 @@ export class UpdateMJEntityDocumentTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -41041,6 +42025,9 @@ export class CreateMJEntityDocumentInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -41087,6 +42074,9 @@ export class UpdateMJEntityDocumentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -41284,6 +42274,9 @@ export class CreateMJEntityFieldValueInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -41312,6 +42305,9 @@ export class UpdateMJEntityFieldValueInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -41833,6 +42829,9 @@ export class CreateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdateExtendedType?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -41993,6 +42992,9 @@ export class UpdateMJEntityFieldInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -42215,6 +43217,9 @@ export class CreateMJEntityOrganicKeyRelatedEntityInput {
 
     @Field(() => Int, { nullable: true })
     Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -42264,6 +43269,9 @@ export class UpdateMJEntityOrganicKeyRelatedEntityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -42442,6 +43450,9 @@ export class CreateMJEntityOrganicKeyInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -42482,6 +43493,9 @@ export class UpdateMJEntityOrganicKeyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -42698,6 +43712,9 @@ export class CreateMJEntityPermissionInput {
 
     @Field({ nullable: true })
     DeleteRLSFilterID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -42741,6 +43758,9 @@ export class UpdateMJEntityPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -42931,6 +43951,9 @@ export class CreateMJEntityRecordDocumentInput {
 
     @Field({ nullable: true })
     EntityRecordUpdatedAt?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -42968,6 +43991,9 @@ export class UpdateMJEntityRecordDocumentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -43113,6 +44139,9 @@ export class CreateMJEntityRelationshipDisplayComponentInput {
 
     @Field({ nullable: true })
     RelationshipType?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -43135,6 +44164,9 @@ export class UpdateMJEntityRelationshipDisplayComponentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -43437,6 +44469,9 @@ export class CreateMJEntityRelationshipInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdateAdditionalFieldsToInclude?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -43513,6 +44548,9 @@ export class UpdateMJEntityRelationshipInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -43665,6 +44703,9 @@ export class CreateMJEntitySettingInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -43690,6 +44731,9 @@ export class UpdateMJEntitySettingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -43848,6 +44892,9 @@ export class CreateMJEnvironmentInput {
 
     @Field({ nullable: true })
     Settings: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -43873,6 +44920,9 @@ export class UpdateMJEnvironmentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -44117,6 +45167,9 @@ export class CreateMJErrorLogInput {
 
     @Field({ nullable: true })
     Details: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -44154,6 +45207,9 @@ export class UpdateMJErrorLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -44323,6 +45379,9 @@ export class CreateMJExplorerNavigationItemInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -44363,6 +45422,9 @@ export class UpdateMJExplorerNavigationItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -44509,6 +45571,9 @@ export class CreateMJFileCategoryInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -44531,6 +45596,9 @@ export class UpdateMJFileCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -44692,6 +45760,9 @@ export class CreateMJFileEntityRecordLinkInput {
 
     @Field({ nullable: true })
     RecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -44714,6 +45785,9 @@ export class UpdateMJFileEntityRecordLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -44878,6 +45952,9 @@ export class CreateMJFileStorageAccountPermissionInput {
 
     @Field(() => Boolean, { nullable: true })
     CanWrite?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -44909,6 +45986,9 @@ export class UpdateMJFileStorageAccountPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -45074,6 +46154,9 @@ export class CreateMJFileStorageAccountInput {
 
     @Field(() => Boolean, { nullable: true })
     IncludeInGlobalSearch?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -45102,6 +46185,9 @@ export class UpdateMJFileStorageAccountInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -45323,6 +46409,9 @@ export class CreateMJFileStorageProviderInput {
 
     @Field(() => Boolean, { nullable: true })
     RequiresOAuth?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -45363,6 +46452,9 @@ export class UpdateMJFileStorageProviderInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -45586,6 +46678,9 @@ export class CreateMJFileInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -45620,6 +46715,9 @@ export class UpdateMJFileInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -45816,6 +46914,9 @@ export class CreateMJGeneratedCodeCategoryInput {
 
     @Field({ nullable: true })
     ParentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -45838,6 +46939,9 @@ export class UpdateMJGeneratedCodeCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -46054,6 +47158,9 @@ export class CreateMJGeneratedCodeInput {
 
     @Field({ nullable: true })
     Language?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -46100,6 +47207,9 @@ export class UpdateMJGeneratedCodeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -46258,6 +47368,9 @@ export class CreateMJInstanceConfigurationInput {
 
     @Field({ nullable: true })
     DefaultValue?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -46292,6 +47405,9 @@ export class UpdateMJInstanceConfigurationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -46541,6 +47657,9 @@ export class CreateMJIntegrationObjectFieldInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -46614,6 +47733,9 @@ export class UpdateMJIntegrationObjectFieldInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -46861,6 +47983,9 @@ export class CreateMJIntegrationObjectInput {
 
     @Field({ nullable: true })
     DeleteMethod?: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -46931,6 +48056,9 @@ export class UpdateMJIntegrationObjectInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -47100,6 +48228,9 @@ export class CreateMJIntegrationSourceTypeInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -47128,6 +48259,9 @@ export class UpdateMJIntegrationSourceTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -47289,6 +48423,9 @@ export class CreateMJIntegrationURLFormatInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -47314,6 +48451,9 @@ export class UpdateMJIntegrationURLFormatInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -47512,6 +48652,9 @@ export class CreateMJIntegrationInput {
 
     @Field({ nullable: true })
     Icon: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -47552,6 +48695,9 @@ export class UpdateMJIntegrationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -47763,6 +48909,9 @@ export class CreateMJKnowledgeHubSavedSearchInput {
 
     @Field(() => Boolean, { nullable: true })
     NotifyOnNewResults?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -47797,6 +48946,9 @@ export class UpdateMJKnowledgeHubSavedSearchInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -47947,6 +49099,9 @@ export class CreateMJLibraryInput {
 
     @Field({ nullable: true })
     SampleCode: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -47975,6 +49130,9 @@ export class UpdateMJLibraryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -48132,6 +49290,9 @@ export class CreateMJLibraryItemInput {
 
     @Field({ nullable: true })
     Type?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -48154,6 +49315,9 @@ export class UpdateMJLibraryItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -48311,6 +49475,9 @@ export class CreateMJListCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -48336,6 +49503,9 @@ export class UpdateMJListCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -48505,6 +49675,9 @@ export class CreateMJListDetailInput {
 
     @Field({ nullable: true })
     AdditionalData: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -48533,6 +49706,9 @@ export class UpdateMJListDetailInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -48701,6 +49877,9 @@ export class CreateMJListInvitationInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -48735,6 +49914,9 @@ export class UpdateMJListInvitationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -48883,6 +50065,9 @@ export class CreateMJListShareInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -48908,6 +50093,9 @@ export class UpdateMJListShareInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -49096,6 +50284,9 @@ export class CreateMJListInput {
 
     @Field({ nullable: true })
     CompanyIntegrationID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -49130,6 +50321,9 @@ export class UpdateMJListInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -49333,6 +50527,9 @@ export class CreateMJMCPServerConnectionPermissionInput {
 
     @Field(() => Boolean, { nullable: true })
     CanViewCredentials?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -49364,6 +50561,9 @@ export class UpdateMJMCPServerConnectionPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -49516,6 +50716,9 @@ export class CreateMJMCPServerConnectionToolInput {
 
     @Field(() => Int, { nullable: true })
     MaxCallsPerMinute: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -49544,6 +50747,9 @@ export class UpdateMJMCPServerConnectionToolInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -49788,6 +50994,9 @@ export class CreateMJMCPServerConnectionInput {
 
     @Field({ nullable: true })
     EnvironmentVars: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -49849,6 +51058,9 @@ export class UpdateMJMCPServerConnectionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -50117,6 +51329,9 @@ export class CreateMJMCPServerToolInput {
 
     @Field({ nullable: true })
     GeneratedActionCategoryID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -50166,6 +51381,9 @@ export class UpdateMJMCPServerToolInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -50455,6 +51673,9 @@ export class CreateMJMCPServerInput {
 
     @Field(() => Boolean, { nullable: true })
     OAuthRequirePKCE?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -50534,6 +51755,9 @@ export class UpdateMJMCPServerInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -50764,6 +51988,9 @@ export class CreateMJMCPToolExecutionLogInput {
 
     @Field(() => Boolean, { nullable: true })
     OutputTruncated?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -50813,6 +52040,9 @@ export class UpdateMJMCPToolExecutionLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -51015,6 +52245,9 @@ export class CreateMJOAuthAuthServerMetadataCacheInput {
 
     @Field({ nullable: true })
     ExpiresAt?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -51070,6 +52303,9 @@ export class UpdateMJOAuthAuthServerMetadataCacheInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -51290,6 +52526,9 @@ export class CreateMJOAuthAuthorizationStateInput {
 
     @Field({ nullable: true })
     FrontendReturnURL: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -51348,6 +52587,9 @@ export class UpdateMJOAuthAuthorizationStateInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -51565,6 +52807,9 @@ export class CreateMJOAuthClientRegistrationInput {
 
     @Field({ nullable: true })
     RegistrationResponse?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -51623,6 +52868,9 @@ export class UpdateMJOAuthClientRegistrationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -51796,6 +53044,9 @@ export class CreateMJOAuthTokenInput {
 
     @Field(() => Int, { nullable: true })
     RefreshCount?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -51833,6 +53084,9 @@ export class UpdateMJOAuthTokenInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -51995,6 +53249,9 @@ export class CreateMJOpenAppDependencyInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -52026,6 +53283,9 @@ export class UpdateMJOpenAppDependencyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -52230,6 +53490,9 @@ export class CreateMJOpenAppInstallHistoryInput {
 
     @Field({ nullable: true })
     ErrorPhase: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -52282,6 +53545,9 @@ export class UpdateMJOpenAppInstallHistoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -52523,6 +53789,9 @@ export class CreateMJOpenAppInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -52587,6 +53856,9 @@ export class UpdateMJOpenAppInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -52745,6 +54017,9 @@ export class CreateMJOutputDeliveryTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -52764,6 +54039,9 @@ export class UpdateMJOutputDeliveryTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -52908,6 +54186,9 @@ export class CreateMJOutputFormatTypeInput {
 
     @Field({ nullable: true })
     DisplayFormat: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -52930,6 +54211,9 @@ export class UpdateMJOutputFormatTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -53068,6 +54352,9 @@ export class CreateMJOutputTriggerTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -53087,6 +54374,9 @@ export class UpdateMJOutputTriggerTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -53277,6 +54567,9 @@ export class CreateMJProjectInput {
 
     @Field(() => Boolean, { nullable: true })
     IsArchived?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -53311,6 +54604,9 @@ export class UpdateMJProjectInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -53516,6 +54812,9 @@ export class CreateMJPublicLinkInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -53556,6 +54855,9 @@ export class UpdateMJPublicLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -53835,6 +55137,9 @@ export class CreateMJQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     Reusable?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -53911,6 +55216,9 @@ export class UpdateMJQueryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -54172,6 +55480,9 @@ export class CreateMJQueryCategoryInput {
 
     @Field(() => Boolean, { nullable: true })
     CacheInheritanceEnabled?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -54209,6 +55520,9 @@ export class UpdateMJQueryCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -54390,6 +55704,9 @@ export class CreateMJQueryDependencyInput {
 
     @Field({ nullable: true })
     DetectionMethod?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -54421,6 +55738,9 @@ export class UpdateMJQueryDependencyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -54568,6 +55888,9 @@ export class CreateMJQueryEntityInput {
 
     @Field(() => Float, { nullable: true })
     AutoDetectConfidenceScore: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -54593,6 +55916,9 @@ export class UpdateMJQueryEntityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -54804,6 +56130,9 @@ export class CreateMJQueryFieldInput {
 
     @Field(() => Float, { nullable: true })
     AutoDetectConfidenceScore: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -54859,6 +56188,9 @@ export class UpdateMJQueryFieldInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -55039,6 +56371,9 @@ export class CreateMJQueryParameterInput {
 
     @Field(() => Float, { nullable: true })
     AutoDetectConfidenceScore: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -55082,6 +56417,9 @@ export class UpdateMJQueryParameterInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -55216,6 +56554,9 @@ export class CreateMJQueryPermissionInput {
 
     @Field({ nullable: true })
     RoleID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -55235,6 +56576,9 @@ export class UpdateMJQueryPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -55375,6 +56719,9 @@ export class CreateMJQuerySQLInput {
 
     @Field({ nullable: true })
     SQL?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -55397,6 +56744,9 @@ export class UpdateMJQuerySQLInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -55569,6 +56919,9 @@ export class CreateMJQueueTaskInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -55609,6 +56962,9 @@ export class UpdateMJQueueTaskInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -55757,6 +57113,9 @@ export class CreateMJQueueTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -55785,6 +57144,9 @@ export class UpdateMJQueueTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -56022,6 +57384,9 @@ export class CreateMJQueueInput {
 
     @Field({ nullable: true })
     LastHeartbeat?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -56083,6 +57448,9 @@ export class UpdateMJQueueInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -56239,6 +57607,9 @@ export class CreateMJRecommendationItemInput {
 
     @Field(() => Float, { nullable: true })
     MatchProbability: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -56264,6 +57635,9 @@ export class UpdateMJRecommendationItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -56392,6 +57766,9 @@ export class CreateMJRecommendationProviderInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -56411,6 +57788,9 @@ export class UpdateMJRecommendationProviderInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -56583,6 +57963,9 @@ export class CreateMJRecommendationRunInput {
 
     @Field({ nullable: true })
     RunByUserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -56614,6 +57997,9 @@ export class UpdateMJRecommendationRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -56767,6 +58153,9 @@ export class CreateMJRecommendationInput {
 
     @Field({ nullable: true })
     SourceEntityRecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -56789,6 +58178,9 @@ export class UpdateMJRecommendationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -56944,6 +58336,9 @@ export class CreateMJRecordChangeReplayRunInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -56969,6 +58364,9 @@ export class UpdateMJRecordChangeReplayRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -57156,6 +58554,7 @@ export class MJRecordChange_ {
     Integration?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(750)
     RestoredFrom?: string;
         
     @Field({nullable: true}) 
@@ -57225,6 +58624,9 @@ export class CreateMJRecordChangeInput {
 
     @Field({ nullable: true })
     RestoreReason: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -57286,6 +58688,9 @@ export class UpdateMJRecordChangeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -57523,6 +58928,9 @@ export class CreateMJRecordGeoCodeInput {
 
     @Field({ nullable: true })
     GeocodingSource: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -57578,6 +58986,9 @@ export class UpdateMJRecordGeoCodeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -57745,6 +59156,9 @@ export class CreateMJRecordLinkInput {
 
     @Field({ nullable: true })
     Metadata: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -57779,6 +59193,9 @@ export class UpdateMJRecordLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -57922,6 +59339,9 @@ export class CreateMJRecordMergeDeletionLogInput {
 
     @Field({ nullable: true })
     ProcessingLog: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -57947,6 +59367,9 @@ export class UpdateMJRecordMergeDeletionLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -58143,6 +59566,9 @@ export class CreateMJRecordMergeLogInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -58186,6 +59612,9 @@ export class UpdateMJRecordMergeLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -58363,6 +59792,9 @@ export class CreateMJReportCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -58388,6 +59820,9 @@ export class UpdateMJReportCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -58548,6 +59983,9 @@ export class CreateMJReportSnapshotInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -58570,6 +60008,9 @@ export class UpdateMJReportSnapshotInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -58710,6 +60151,9 @@ export class CreateMJReportUserStateInput {
 
     @Field({ nullable: true })
     ReportState: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -58732,6 +60176,9 @@ export class UpdateMJReportUserStateInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -58886,6 +60333,9 @@ export class CreateMJReportVersionInput {
 
     @Field(() => Boolean, { nullable: true })
     DataContextUpdated?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -58917,6 +60367,9 @@ export class UpdateMJReportVersionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -59193,6 +60646,9 @@ export class CreateMJReportInput {
 
     @Field({ nullable: true })
     EnvironmentID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -59257,6 +60713,9 @@ export class UpdateMJReportInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -59435,6 +60894,9 @@ export class CreateMJResourceLinkInput {
 
     @Field({ nullable: true })
     FolderID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -59460,6 +60922,9 @@ export class UpdateMJResourceLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -59645,6 +61110,9 @@ export class CreateMJResourcePermissionInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -59685,6 +61153,9 @@ export class UpdateMJResourcePermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -59865,6 +61336,9 @@ export class CreateMJResourceTypeInput {
 
     @Field({ nullable: true })
     DriverClass: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -59899,6 +61373,9 @@ export class UpdateMJResourceTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -60108,6 +61585,9 @@ export class CreateMJRoleInput {
 
     @Field({ nullable: true })
     SQLName: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -60133,6 +61613,9 @@ export class UpdateMJRoleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -60386,6 +61869,9 @@ export class CreateMJRowLevelSecurityFilterInput {
 
     @Field({ nullable: true })
     FilterText: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -60408,6 +61894,9 @@ export class UpdateMJRowLevelSecurityFilterInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -60611,6 +62100,9 @@ export class CreateMJScheduledActionParamInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -60639,6 +62131,9 @@ export class UpdateMJScheduledActionParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -60853,6 +62348,9 @@ export class CreateMJScheduledActionInput {
 
     @Field({ nullable: true })
     CustomCronExpression: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -60905,6 +62403,9 @@ export class UpdateMJScheduledActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -61108,6 +62609,9 @@ export class CreateMJScheduledJobRunInput {
 
     @Field({ nullable: true })
     QueuedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -61148,6 +62652,9 @@ export class UpdateMJScheduledJobRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -61323,6 +62830,9 @@ export class CreateMJScheduledJobTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     NotificationsAvailable?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -61354,6 +62864,9 @@ export class UpdateMJScheduledJobTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -61654,6 +63167,9 @@ export class CreateMJScheduledJobInput {
 
     @Field({ nullable: true })
     ConcurrencyMode?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -61742,6 +63258,9 @@ export class UpdateMJScheduledJobInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -61919,6 +63438,9 @@ export class CreateMJSchemaInfoInput {
 
     @Field({ nullable: true })
     EntityNameSuffix: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -61953,6 +63475,9 @@ export class UpdateMJSchemaInfoInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -62147,6 +63672,9 @@ export class CreateMJSearchProviderInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -62196,6 +63724,9 @@ export class UpdateMJSearchProviderInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -62336,6 +63867,9 @@ export class CreateMJSkillInput {
 
     @Field({ nullable: true })
     ParentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -62355,6 +63889,9 @@ export class UpdateMJSkillInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -62558,6 +64095,9 @@ export class CreateMJSQLDialectInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -62595,6 +64135,9 @@ export class UpdateMJSQLDialectInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -62786,6 +64329,9 @@ export class CreateMJStateProvinceInput {
 
     @Field({ nullable: true })
     CommonAliases: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -62823,6 +64369,9 @@ export class UpdateMJStateProvinceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -62991,6 +64540,9 @@ export class CreateMJTagAuditLogInput {
 
     @Field({ nullable: true })
     RelatedTagID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -63019,6 +64571,9 @@ export class UpdateMJTagAuditLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -63165,6 +64720,9 @@ export class CreateMJTagCoOccurrenceInput {
 
     @Field({ nullable: true })
     LastComputedAt?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -63190,6 +64748,9 @@ export class UpdateMJTagCoOccurrenceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -63337,6 +64898,9 @@ export class CreateMJTaggedItemInput {
 
     @Field(() => Float, { nullable: true })
     Weight?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -63362,6 +64926,9 @@ export class UpdateMJTaggedItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -63555,6 +65122,9 @@ export class CreateMJTagInput {
 
     @Field({ nullable: true })
     MergedIntoTagID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -63586,6 +65156,9 @@ export class UpdateMJTagInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -63807,6 +65380,9 @@ export class CreateMJTaskDependencyInput {
 
     @Field({ nullable: true })
     DependencyType?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -63829,6 +65405,9 @@ export class UpdateMJTaskDependencyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -63957,6 +65536,9 @@ export class CreateMJTaskTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -63976,6 +65558,9 @@ export class UpdateMJTaskTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -64231,6 +65816,9 @@ export class CreateMJTaskInput {
 
     @Field({ nullable: true })
     CompletedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -64286,6 +65874,9 @@ export class UpdateMJTaskInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -64473,6 +66064,9 @@ export class CreateMJTemplateCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -64498,6 +66092,9 @@ export class UpdateMJTemplateCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -64653,6 +66250,9 @@ export class CreateMJTemplateContentTypeInput {
 
     @Field({ nullable: true })
     CodeType?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -64675,6 +66275,9 @@ export class UpdateMJTemplateContentTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -64840,6 +66443,9 @@ export class CreateMJTemplateContentInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -64868,6 +66474,9 @@ export class UpdateMJTemplateContentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -65088,6 +66697,9 @@ export class CreateMJTemplateParamInput {
 
     @Field({ nullable: true })
     TemplateContentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -65140,6 +66752,9 @@ export class UpdateMJTemplateParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -65329,6 +66944,9 @@ export class CreateMJTemplateInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -65366,6 +66984,9 @@ export class UpdateMJTemplateInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -65588,6 +67209,9 @@ export class CreateMJTestRubricInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -65622,6 +67246,9 @@ export class UpdateMJTestRubricInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -65786,6 +67413,9 @@ export class CreateMJTestRunFeedbackInput {
 
     @Field({ nullable: true })
     ReviewedAt?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -65820,6 +67450,9 @@ export class UpdateMJTestRunFeedbackInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -65948,6 +67581,9 @@ export class CreateMJTestRunOutputTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -65967,6 +67603,9 @@ export class UpdateMJTestRunOutputTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -66179,6 +67818,9 @@ export class CreateMJTestRunOutputInput {
 
     @Field({ nullable: true })
     Metadata: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -66231,6 +67873,9 @@ export class UpdateMJTestRunOutputInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -66562,6 +68207,9 @@ export class CreateMJTestRunInput {
 
     @Field({ nullable: true })
     ResolvedVariables: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -66662,6 +68310,9 @@ export class UpdateMJTestRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -67012,6 +68663,9 @@ export class CreateMJTestSuiteRunInput {
 
     @Field({ nullable: true })
     ResolvedVariables: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -67103,6 +68757,9 @@ export class UpdateMJTestSuiteRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -67266,6 +68923,9 @@ export class CreateMJTestSuiteTestInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -67294,6 +68954,9 @@ export class UpdateMJTestSuiteTestInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -67474,6 +69137,9 @@ export class CreateMJTestSuiteInput {
 
     @Field({ nullable: true })
     Variables: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -67511,6 +69177,9 @@ export class UpdateMJTestSuiteInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -67692,6 +69361,9 @@ export class CreateMJTestTypeInput {
 
     @Field({ nullable: true })
     VariablesSchema: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -67720,6 +69392,9 @@ export class UpdateMJTestTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -67949,6 +69624,9 @@ export class CreateMJTestInput {
 
     @Field({ nullable: true })
     Variables: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -68004,6 +69682,9 @@ export class UpdateMJTestInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -68168,6 +69849,9 @@ export class CreateMJUserApplicationEntityInput {
 
     @Field(() => Int, { nullable: true })
     Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -68190,6 +69874,9 @@ export class UpdateMJUserApplicationEntityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -68339,6 +70026,9 @@ export class CreateMJUserApplicationInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -68364,6 +70054,9 @@ export class UpdateMJUserApplicationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -68519,6 +70212,9 @@ export class CreateMJUserFavoriteInput {
 
     @Field({ nullable: true })
     RecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -68541,6 +70237,9 @@ export class UpdateMJUserFavoriteInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -68699,6 +70398,9 @@ export class CreateMJUserNotificationPreferenceInput {
 
     @Field(() => Boolean, { nullable: true })
     Enabled?: boolean | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -68730,6 +70432,9 @@ export class UpdateMJUserNotificationPreferenceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -68934,6 +70639,9 @@ export class CreateMJUserNotificationTypeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -68983,6 +70691,9 @@ export class UpdateMJUserNotificationTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -69186,6 +70897,9 @@ export class CreateMJUserNotificationInput {
 
     @Field({ nullable: true })
     NotificationTypeID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -69226,6 +70940,9 @@ export class UpdateMJUserNotificationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -69401,6 +71118,9 @@ export class CreateMJUserRecordLogInput {
 
     @Field(() => Int, { nullable: true })
     TotalCount?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -69432,6 +71152,9 @@ export class UpdateMJUserRecordLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -69566,6 +71289,9 @@ export class CreateMJUserRoleInput {
 
     @Field({ nullable: true })
     RoleID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -69585,6 +71311,9 @@ export class UpdateMJUserRoleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -69731,6 +71460,9 @@ export class CreateMJUserSettingInput {
 
     @Field({ nullable: true })
     Value: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -69753,6 +71485,9 @@ export class UpdateMJUserSettingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -69921,6 +71656,9 @@ export class CreateMJUserViewCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -69949,6 +71687,9 @@ export class UpdateMJUserViewCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -70103,6 +71844,9 @@ export class CreateMJUserViewRunDetailInput {
 
     @Field({ nullable: true })
     RecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -70122,6 +71866,9 @@ export class UpdateMJUserViewRunDetailInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -70265,6 +72012,9 @@ export class CreateMJUserViewRunInput {
 
     @Field({ nullable: true })
     RunByUserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -70287,6 +72037,9 @@ export class UpdateMJUserViewRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -70566,6 +72319,9 @@ export class CreateMJUserViewInput {
 
     @Field({ nullable: true })
     DisplayState: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -70639,6 +72395,9 @@ export class UpdateMJUserViewInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -71168,6 +72927,9 @@ export class CreateMJUserInput {
 
     @Field({ nullable: true })
     UserImageIconClass: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -71220,6 +72982,9 @@ export class UpdateMJUserInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -72272,6 +74037,9 @@ export class CreateMJVectorDatabaseInput {
 
     @Field({ nullable: true })
     CredentialID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -72303,6 +74071,9 @@ export class UpdateMJVectorDatabaseInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -72508,6 +74279,9 @@ export class CreateMJVectorIndexInput {
 
     @Field({ nullable: true })
     ProviderConfig: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -72545,6 +74319,9 @@ export class UpdateMJVectorIndexInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -72751,6 +74528,9 @@ export class CreateMJVersionInstallationInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -72788,6 +74568,9 @@ export class UpdateMJVersionInstallationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -72912,6 +74695,7 @@ export class MJVersionLabelItem_ {
     VersionLabel: string;
         
     @Field() 
+    @MaxLength(750)
     RecordChange: string;
         
     @Field() 
@@ -72939,6 +74723,9 @@ export class CreateMJVersionLabelItemInput {
 
     @Field({ nullable: true })
     RecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -72964,6 +74751,9 @@ export class UpdateMJVersionLabelItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -73152,6 +74942,9 @@ export class CreateMJVersionLabelRestoreInput {
 
     @Field({ nullable: true })
     PreRestoreLabelID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -73195,6 +74988,9 @@ export class UpdateMJVersionLabelRestoreInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -73409,6 +75205,9 @@ export class CreateMJVersionLabelInput {
 
     @Field(() => Int, { nullable: true })
     CreationDurationMS?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -73455,6 +75254,9 @@ export class UpdateMJVersionLabelInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -73637,6 +75439,9 @@ export class CreateMJWorkflowEngineInput {
 
     @Field({ nullable: true })
     DriverClass?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -73662,6 +75467,9 @@ export class UpdateMJWorkflowEngineInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -73831,6 +75639,9 @@ export class CreateMJWorkflowRunInput {
 
     @Field({ nullable: true })
     Results: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -73862,6 +75673,9 @@ export class UpdateMJWorkflowRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -74036,6 +75850,9 @@ export class CreateMJWorkflowInput {
 
     @Field({ nullable: true })
     SubclassName: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -74073,6 +75890,9 @@ export class UpdateMJWorkflowInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -74259,6 +76079,9 @@ export class CreateMJWorkspaceItemInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -74293,6 +76116,9 @@ export class UpdateMJWorkspaceItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -74438,6 +76264,9 @@ export class CreateMJWorkspaceInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -74463,6 +76292,9 @@ export class UpdateMJWorkspaceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
