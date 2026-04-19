@@ -252,9 +252,13 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
-    const reactState = this.reactComponent?.getCurrentDataState?.();
-    if (reactState && typeof reactState === 'object') {
-      return reactState as DataSnapshot;
+    // First try the component's explicit or auto-captured data state.
+    // MJReactComponent.getCurrentDataState() already includes the fallback
+    // to intercepted RunView/RunQuery results when the React component
+    // doesn't register getCurrentDataState() via callbacks.RegisterMethod.
+    const dataState = this.reactComponent?.getCurrentDataState?.();
+    if (dataState && typeof dataState === 'object') {
+      return dataState as DataSnapshot;
     }
     return null;
   }

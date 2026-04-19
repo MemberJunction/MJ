@@ -30,9 +30,30 @@ import {
   ComponentRegistryService
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
-import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, DataSnapshot } from '@memberjunction/core';
+import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, RunViewParams, RunViewResult, DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { ComponentUtilities, SimpleRunView } from '@memberjunction/interactive-component-types';
+
+/**
+ * A captured RunView/RunQuery result with its original parameters.
+ * Used by the automatic data capture system for components that don't
+ * implement getCurrentDataState().
+ */
+interface CapturedDataResult {
+  /** Entity name or query name */
+  sourceName: string;
+  /** 'view' or 'query' */
+  sourceType: 'view' | 'query';
+  /** Original RunView/RunQuery params */
+  params: Record<string, unknown>;
+  /** Returned rows */
+  rows: Record<string, unknown>[];
+  /** Total available rows (may differ from rows.length due to pagination) */
+  totalRows: number;
+  /** When the data was fetched */
+  fetchedAt: Date;
+}
 
 /**
  * Event emitted by React components
@@ -221,7 +242,12 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Output() initialized = new EventEmitter<void>();
   
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
-  
+
+  // ─── Automatic data capture ───
+  // Stores RunView/RunQuery results for components that don't implement getCurrentDataState().
+  // Cleared on component reinitialize. Used as fallback in GetCurrentDataState().
+  private capturedData: CapturedDataResult[] = [];
+
   private reactRootId: string | null = null;
   private compiledComponent: ComponentObject | null = null;
   private loadedDependencies: Record<string, ComponentObject> = {};
@@ -307,6 +333,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     this.componentVersion = '';
     this.hasError = false;
     this.isInitialized = false;
+    this.capturedData = [];
 
     // Unmount existing React root if present
     if (this.reactRootId) {
@@ -797,9 +824,10 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     const runtimeContext = this.adapter.getRuntimeContext();
     const libraries = runtimeContext.libraries || {};
     
-    // Build props with savedUserSettings pattern
+    // Build props — wrap utilities with data capture for fallback snapshot support
+    const wrappedUtilities = this.wrapUtilitiesWithCapture(this.utilities);
     const props = {
-      utilities: this.utilities, // Now uses getter which auto-initializes if needed
+      utilities: wrappedUtilities,
       callbacks: this.currentCallbacks,
       components,
       styles: this.styles as any,
@@ -1002,6 +1030,95 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     // Re-rendering would cause unnecessary DOM updates and visual flashing.
   }
 
+  // =================================================================
+  // Automatic Data Capture — intercept RunView/RunQuery for fallback
+  // =================================================================
+
+  /**
+   * Wraps a ComponentUtilities object so that every RunView / RunViews / RunQuery
+   * call transparently stores the result in `this.capturedData`. The wrapped
+   * object is referentially distinct from the original and is safe to pass to
+   * multiple renders (results accumulate until the component resets).
+   */
+  private wrapUtilitiesWithCapture(original: ComponentUtilities): ComponentUtilities {
+    const self = this;
+    const wrappedRv: SimpleRunView = {
+      RunView: async (params: RunViewParams, contextUser?: unknown) => {
+        const result = await original.rv.RunView(params, contextUser as undefined);
+        if (result?.Success) {
+          self.capturedData.push({
+            sourceName: String(params.EntityName ?? params.ExtraFilter ?? 'Unknown'),
+            sourceType: 'view',
+            params: params as unknown as Record<string, unknown>,
+            rows: result.Results ?? [],
+            totalRows: result.TotalRowCount ?? result.Results?.length ?? 0,
+            fetchedAt: new Date()
+          });
+        }
+        return result;
+      },
+      RunViews: async (params: RunViewParams[], contextUser?: unknown) => {
+        const results = await original.rv.RunViews(params, contextUser as undefined);
+        results.forEach((result: RunViewResult, i: number) => {
+          if (result?.Success) {
+            self.capturedData.push({
+              sourceName: String(params[i]?.EntityName ?? `View ${i}`),
+              sourceType: 'view',
+              params: params[i] as unknown as Record<string, unknown>,
+              rows: result.Results ?? [],
+              totalRows: result.TotalRowCount ?? result.Results?.length ?? 0,
+              fetchedAt: new Date()
+            });
+          }
+        });
+        return results;
+      }
+    };
+
+    return {
+      ...original,
+      rv: wrappedRv
+      // rq (RunQuery) could be wrapped similarly if needed
+    };
+  }
+
+  /**
+   * Builds a DataSnapshot from captured RunView/RunQuery results.
+   * Returns null if no data was captured.
+   */
+  private BuildCapturedDataSnapshot(): DataSnapshot | null {
+    if (this.capturedData.length === 0) return null;
+
+    const tables: DataTable[] = this.capturedData.map((captured, idx) => {
+      const table = new DataTable();
+      table.name = captured.sourceName || `Table ${idx + 1}`;
+      table.source = captured.sourceType;
+      table.rows = captured.rows;
+      // Infer columns from the first row's keys
+      if (captured.rows.length > 0) {
+        const firstRow = captured.rows[0];
+        table.columns = Object.keys(firstRow).map(key => {
+          const col = new MJColumnDescriptor(key);
+          col.displayName = key;
+          const val = firstRow[key];
+          if (typeof val === 'number') col.sqlBaseType = 'float';
+          else if (val instanceof Date) col.sqlBaseType = 'datetime';
+          else col.sqlBaseType = 'nvarchar';
+          return col;
+        });
+      }
+      table.metadata = {
+        entityName: captured.sourceType === 'view' ? captured.sourceName : undefined,
+        rowCount: captured.rows.length,
+        totalAvailableRows: captured.totalRows,
+        fetchedAt: captured.fetchedAt
+      };
+      return table;
+    });
+
+    return DataSnapshot.FromTables(tables, this.component?.title ?? this.component?.name);
+  }
+
   /**
    * Clean up resources
    */
@@ -1028,6 +1145,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     // Clear references
     this.compiledComponent = null;
     this.isInitialized = false;
+    this.capturedData = [];
 
     // Trigger registry cleanup
     this.adapter.getRegistry().cleanup();
@@ -1063,12 +1181,14 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   // =================================================================
   
   /**
-   * Gets the current data state of the component
-   * Used by AI agents to understand what data is currently displayed
-   * @returns The current data state, or undefined if not implemented
+   * Gets the current data state of the component.
+   * Tries the component's explicit implementation first, then falls back
+   * to a DataSnapshot built from intercepted RunView/RunQuery results.
    */
-  getCurrentDataState(): any {
-    return this.compiledComponent?.getCurrentDataState?.();
+  getCurrentDataState(): DataSnapshot | undefined {
+    const explicit = this.compiledComponent?.getCurrentDataState?.();
+    if (explicit && typeof explicit === 'object') return explicit;
+    return this.BuildCapturedDataSnapshot() ?? undefined;
   }
   
   /**
@@ -1160,10 +1280,11 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
 
   /**
    * Gets the current data state from the hosted React component.
-   * Returns undefined if the component does not implement getCurrentDataState.
+   * Falls back to a DataSnapshot built from intercepted RunView/RunQuery results
+   * when the component does not explicitly implement getCurrentDataState.
    */
   public GetCurrentDataState(): DataSnapshot | undefined {
-    return this.compiledComponent?.getCurrentDataState?.();
+    return this.getCurrentDataState();
   }
 
   /**

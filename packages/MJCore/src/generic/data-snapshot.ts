@@ -89,9 +89,18 @@ export function NormalizeToTables(
 ): DataTable[] {
     const s = snap as Record<string, unknown>;
 
-    // Multi-table: tables array is authoritative
+    // Multi-table: tables array is authoritative.
+    // Ensure each table has `rows: []` and `columns: []` defaults — downstream
+    // consumers (artifact tool handlers, exporters) assume these are arrays.
+    // A plain-JSON table with missing fields will crash `.length` / `.map` /
+    // `.filter` calls otherwise.
     if (Array.isArray(s.tables) && s.tables.length > 0) {
-        return s.tables as DataTable[];
+        return (s.tables as Array<Record<string, unknown>>).map((t) => ({
+            ...t,
+            rows: Array.isArray(t.rows) ? t.rows : [],
+            columns: Array.isArray(t.columns) ? t.columns : [],
+            name: typeof t.name === 'string' ? t.name : defaultTableName,
+        })) as DataTable[];
     }
 
     // Legacy single-table: wrap root-level fields via factory method

@@ -49,7 +49,7 @@ describe('DataSnapshot', () => {
 });
 
 describe('NormalizeToTables', () => {
-    it('returns the tables array unchanged for a multi-table snapshot', () => {
+    it('returns normalized tables for a multi-table snapshot', () => {
         const tables = [makeTable('a', 2), makeTable('b', 3)];
         const snap = DataSnapshot.FromTables(tables);
 
@@ -58,8 +58,30 @@ describe('NormalizeToTables', () => {
         expect(result).toHaveLength(2);
         expect(result[0].name).toBe('a');
         expect(result[1].name).toBe('b');
-        // Same references — not cloned
-        expect(result[0]).toBe(tables[0]);
+        // Deep-equal the source — normalizer defensively fills rows/columns
+        // defaults but passes through every other field.
+        expect(result[0]).toEqual(tables[0]);
+        expect(result[1]).toEqual(tables[1]);
+    });
+
+    it('fills rows and columns defaults when a multi-table entry is malformed', () => {
+        // This guards against runtime crashes in artifact tool handlers that
+        // call .map / .length on these arrays. A legacy JSON blob that has a
+        // `tables` key but a table missing rows/columns must not break downstream.
+        const malformedJson: Record<string, unknown> = {
+            tables: [
+                { name: 'orphan' }, // missing rows and columns entirely
+                { name: 'partial', rows: [{ a: 1 }] }, // missing columns
+            ],
+        };
+
+        const result = NormalizeToTables(malformedJson);
+
+        expect(result).toHaveLength(2);
+        expect(result[0].rows).toEqual([]);
+        expect(result[0].columns).toEqual([]);
+        expect(result[1].rows).toEqual([{ a: 1 }]);
+        expect(result[1].columns).toEqual([]);
     });
 
     it('wraps legacy single-table JSON (no tables[] property) into one DataTable', () => {
