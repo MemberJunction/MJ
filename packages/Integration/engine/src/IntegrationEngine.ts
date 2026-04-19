@@ -1,5 +1,5 @@
 import { CompositeKey, IMetadataProvider, Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
     MJCompanyIntegrationEntity,
@@ -323,7 +323,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
 
         const integration = (integrationsResult.Results as MJIntegrationEntity[])
-            .find(i => i.ID === companyIntegration.IntegrationID);
+            .find(i => UUIDsEqual(i.ID, companyIntegration.IntegrationID));
         if (!integration) {
             throw new Error(`Integration not found for CompanyIntegration: ${companyIntegrationID}`);
         }
