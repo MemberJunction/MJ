@@ -15,7 +15,6 @@ import { HeatmapData } from './charts/performance-heatmap.component';
 import { RunView, CompositeKey } from '@memberjunction/core';
 import { ResourceData } from "@memberjunction/core-entities";
 import { MJAIPromptRunEntityExtended, MJAIAgentRunEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
-import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
 export interface DrillDownTab {
@@ -64,7 +63,7 @@ export interface ExecutionMonitoringState {
  * AI Monitor Resource - displays AI execution monitoring and analytics
  * Extends BaseResourceComponent to work with the resource type system
  */
-@RegisterClass(BaseResourceComponent, 'AIMonitorResource')
+// @RegisterClass removed — AIOverviewHubComponent now registers as 'AIMonitorResource'
 @Component({
   standalone: false,
   selector: 'app-execution-monitoring',
@@ -1765,7 +1764,7 @@ export interface ExecutionMonitoringState {
   `]
 })
 export class ExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private stateChangeSubject$ = new Subject<ExecutionMonitoringState>();
 
   // Configuration
@@ -1821,7 +1820,6 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
   constructor(
     private instrumentationService: AIInstrumentationService,
-    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -1863,6 +1861,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   ngOnInit() {
+    super.ngOnInit();
     // Load initial state if provided from resource configuration
     if (this.Data?.Configuration) {
       this.loadUserState(this.Data.Configuration);
@@ -1897,6 +1896,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
     this.stateChangeSubject$.complete();

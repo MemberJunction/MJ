@@ -1010,4 +1010,21 @@
       </div>
     </div>
   }
+
+  <!-- Slide Panel for Suite Execution -->
+  @if (testingDialogService.IsPanelOpen) {
+    <mj-slide-panel
+      Mode="slide"
+      [Title]="testingDialogService.PanelOptions?.suiteId ? 'Suite Execution' : 'Run Suite'"
+      [Resizable]="true"
+      (Closed)="OnPanelClosed()">
+      <app-test-run-dialog
+        [PanelMode]="true"
+        [selectedTestId]="testingDialogService.PanelOptions?.testId ?? null"
+        [selectedSuiteId]="testingDialogService.PanelOptions?.suiteId ?? null"
+        [runMode]="testingDialogService.PanelOptions?.mode ?? 'suite'"
+        (PanelClose)="OnPanelClosed()">
+      </app-test-run-dialog>
+    </mj-slide-panel>
+  }
 </div>

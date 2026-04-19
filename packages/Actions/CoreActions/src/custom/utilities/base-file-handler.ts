@@ -1,6 +1,8 @@
 import { BaseAction } from "@memberjunction/actions";
 import { RunActionParams } from "@memberjunction/actions-base";
-import { Metadata, RunView, BaseEntity } from "@memberjunction/core";
+import { RunView } from "@memberjunction/core";
+import { MJFileEntity, MJFileStorageAccountEntity } from "@memberjunction/core-entities";
+import { FileStorageEngine } from "@memberjunction/storage";
 
 /**
  * Base class for actions that handle file inputs from multiple sources
@@ -56,7 +58,7 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     }
 
     /**
-     * Load file from MJ Storage (Document Libraries)
+     * Load file from MJ Storage (MJ: Files entity)
      */
     private async loadFromMJStorage(fileId: string, params: RunActionParams): Promise<{
         content: string | Buffer;
@@ -66,24 +68,25 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     }> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<BaseEntity>({
-                EntityName: 'Document Libraries',
+            const fileResult = await rv.RunView<MJFileEntity>({
+                EntityName: 'MJ: Files',
                 ExtraFilter: `ID = '${fileId}'`,
                 ResultType: 'entity_object'
             }, params.ContextUser);
 
-            if (!result.Success || !result.Results || result.Results.length === 0) {
-                throw new Error(`File not found in Document Libraries: ${fileId}`);
+            if (!fileResult.Success || fileResult.Results.length === 0) {
+                throw new Error(`File not found in MJ: Files: ${fileId}`);
             }
 
-            const doc = result.Results[0];
-            
-            // Get the actual file content (this would need implementation based on your storage provider)
-            // For now, returning the file info - actual implementation would fetch from storage
+            const file = fileResult.Results[0];
+            const driver = await this.initializeDriverForFile(file, params);
+            const objectName = file.ProviderKey ?? file.Name;
+            const content = await driver.GetObject({ fullPath: objectName });
+
             return {
-                content: '', // TODO: Implement actual file retrieval based on storage provider
-                fileName: doc.Get('FileName'),
-                mimeType: doc.Get('MimeType'),
+                content,
+                fileName: file.Name,
+                mimeType: file.ContentType ?? undefined,
                 source: 'storage'
             };
         } catch (error) {
@@ -143,39 +146,95 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     }
 
     /**
-     * Save file to MJ Storage
+     * Save file to MJ Storage. Uploads the content to a FileStorageAccount
+     * and creates the corresponding MJ: Files entity record.
+     *
+     * @param content - File content as string or Buffer
+     * @param fileName - Name for the file
+     * @param mimeType - MIME type of the file
+     * @param params - Action parameters (for contextUser)
+     * @param storageAccountName - Optional: name of the storage account to use (falls back to first active)
+     * @param storagePath - Optional: custom storage path prefix (falls back to `artifacts/{date}/{uuid}/`)
+     * @returns The ID of the newly created MJ: Files record
      */
     protected async saveToMJStorage(
         content: string | Buffer,
         fileName: string,
         mimeType: string,
-        params: RunActionParams
+        params: RunActionParams,
+        storageAccountName?: string,
+        storagePath?: string
     ): Promise<string> {
         try {
-            const md = new Metadata();
-            const doc = await md.GetEntityObject<BaseEntity>('Document Libraries', params.ContextUser);
-            
-            if (!doc) {
-                throw new Error('Failed to create Document Library entity');
+            await FileStorageEngine.Instance.Config(false, params.ContextUser);
+
+            // Resolve storage account ID
+            let storageAccountId: string | undefined;
+            if (storageAccountName) {
+                const account = this.loadStorageAccountByName(storageAccountName);
+                storageAccountId = account.ID;
+            } else {
+                storageAccountId = await this.resolveStorageAccountId(params);
             }
 
-            doc.Set('FileName', fileName);
-            doc.Set('MimeType', mimeType);
-            // TODO: Set appropriate fields based on your Document Libraries schema
-            // doc.Set('FileSize', Buffer.byteLength(content));
-            // doc.Set('StorageProvider', 'default');
-            
-            const saveResult = await doc.Save();
-            if (!saveResult) {
-                throw new Error('Failed to save document to library');
-            }
+            const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content);
+            const pathPrefix = storagePath
+                ? storagePath.replace(/\/+$/, '')
+                : undefined;
 
-            // TODO: Actually store the file content to the storage provider
-            
-            return doc.Get('ID');
+            const result = await FileStorageEngine.Instance.UploadFile({
+                content: buffer,
+                fileName,
+                mimeType,
+                contextUser: params.ContextUser,
+                storageAccountId,
+                pathPrefix
+            });
+
+            return result.FileID;
         } catch (error) {
             throw new Error(`Failed to save file to storage: ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    /**
+     * Finds a FileStorageAccount by name using the engine's cached metadata.
+     */
+    private loadStorageAccountByName(accountName: string): MJFileStorageAccountEntity {
+        const account = FileStorageEngine.Instance.GetAccountByName(accountName);
+        if (!account) {
+            throw new Error(`FileStorageAccount "${accountName}" not found. Check account name or use default.`);
+        }
+        return account;
+    }
+
+    /**
+     * Resolves a storage account ID from the agent's resolution chain (via Context)
+     * or falls back to the first active account via FileStorageEngine.
+     */
+    private async resolveStorageAccountId(params: RunActionParams): Promise<string | undefined> {
+        // Check for agent-resolved storage account ID (passed via Context by BaseAgent)
+        const context = params.Context as Record<string, unknown> | undefined;
+        const resolvedId = context?.__resolvedStorageAccountId;
+        if (resolvedId) {
+            return resolvedId.toString();
+        }
+
+        // Fallback: pick first active via engine
+        const resolved = FileStorageEngine.Instance.ResolveStorageAccount();
+        return resolved?.account.ID;
+    }
+
+    /**
+     * Initializes a storage driver for the given file using the engine's cached metadata.
+     */
+    private async initializeDriverForFile(file: MJFileEntity, params: RunActionParams) {
+        const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+        if (accounts.length === 0) {
+            throw new Error(`No FileStorageAccount found for ProviderID ${file.ProviderID}`);
+        }
+
+        return FileStorageEngine.Instance.GetDriver(accounts[0].ID, params.ContextUser);
     }
 
     /**

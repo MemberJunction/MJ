@@ -1,5 +1,58 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 5.27.1
+
+### Patch Changes
+
+- 6c39ff0: Replace 30s polling heartbeat with socket-primary server connectivity, using /healthcheck only as a fallback when the GraphQL socket is disconnected. Fix CORS on the /healthcheck route and derive the health URL via `new URL('/healthcheck', base)` so it resolves correctly regardless of the GRAPHQL_URI suffix.
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/interactive-component-types@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.27.0
+- @memberjunction/actions-base@5.27.0
+- @memberjunction/interactive-component-types@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/actions-base@5.26.0
+  - @memberjunction/interactive-component-types@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/interactive-component-types@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/actions-base@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Minor Changes

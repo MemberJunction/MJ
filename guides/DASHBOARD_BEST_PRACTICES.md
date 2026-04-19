@@ -274,6 +274,45 @@ Tabs within a dashboard content area are fine for **related content within a sin
 
 The key is: **one level of primary navigation** (left panel), with optional secondary organization (tabs within content).
 
+### Query Param Sub-Navigation (URL-Synced State)
+
+When a dashboard needs its internal state reflected in the URL (so back/forward works), use the framework's query param lifecycle methods from `BaseResourceComponent`:
+
+```typescript
+export class DataExplorerDashboardComponent extends BaseDashboard {
+    // 1. Read initial params on load
+    async initDashboard() {
+        await this.loadEntities();
+        const params = this.GetQueryParams();
+        if (Object.keys(params).length > 0) this.applyParams(params);
+    }
+
+    // 2. React to browser back/forward
+    protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+        this.applyParams(params);
+    }
+
+    // 3. Push state changes to URL on user interaction
+    private onEntitySelected(entity: EntityInfo): void {
+        this.selectedEntity = entity;
+        this.UpdateQueryParams({ entity: entity.Name, record: null, filter: null });
+    }
+
+    // 4. Shared method to apply params from any source
+    private applyParams(params: Record<string, string>): void {
+        if (params['entity']) { /* select entity */ }
+        if (params['filter']) { /* apply filter */ }
+    }
+}
+```
+
+**Rules:**
+- **NEVER** subscribe to `Router.events` or `NavigationEnd` in resource components
+- **NEVER** import `Router` or `ActivatedRoute` directly — use `UpdateQueryParams()` and `OnQueryParamsChanged()`
+- The shell handles all URL ↔ workspace synchronization
+- Query param notifications are tab-scoped — two instances of the same dashboard in different tabs won't interfere
+- `UpdateQueryParams` is automatically suppressed during `OnQueryParamsChanged` to prevent loops
+
 ---
 
 ## Component Structure

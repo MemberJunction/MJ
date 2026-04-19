@@ -48,17 +48,17 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     @ViewChild('typeEditPanel') typeEditPanel!: CredentialTypeEditPanelComponent;
 
     constructor(
-        private cdr: ChangeDetectorRef,
-        private navigationService: NavigationService
-    ) {
+        private cdr: ChangeDetectorRef) {
         super();
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         // Cleanup if needed
     }
 

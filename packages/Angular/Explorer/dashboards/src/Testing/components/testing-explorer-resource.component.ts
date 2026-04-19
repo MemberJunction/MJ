@@ -26,10 +26,12 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 export class TestingExplorerResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {

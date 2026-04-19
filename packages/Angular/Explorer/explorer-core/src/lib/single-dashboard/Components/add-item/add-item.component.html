@@ -17,21 +17,26 @@
               (ValueChange)="onEntityChange($any($event))" [(ngModel)]="selectedEntity">
             </mj-dropdown>
           </label>
-          @if (selectedEntity && Views.length) {
-            <label>Views
+          @if (selectedEntity && !showloader) {
+            @if (Views.length) {
+              <label>View
+                <span class="optional-hint">(optional — leave blank for default)</span>
+                <br />
+                <mj-dropdown [Data]="Views" [TextField]="'Name'" [ValueField]="'ID'"
+                  (ValueChange)="onViewChange($any($event))" [(ngModel)]="selectedView">
+                </mj-dropdown>
+              </label>
+            }
+            <!-- View Mode Selector -->
+            <label>View Mode
               <br />
-              <mj-dropdown [Data]="Views" [TextField]="'Name'" [ValueField]="'ID'"
-                (ValueChange)="onViewChange($any($event))" [(ngModel)]="selectedView">
+              <mj-dropdown [Data]="viewModeOptions" [TextField]="'label'" [ValueField]="'value'"
+                [(ngModel)]="selectedViewMode">
               </mj-dropdown>
             </label>
           }
-          @if (selectedEntity && !Views.length && showloader) {
+          @if (selectedEntity && showloader) {
             <mj-loading [showText]="false" size="medium"></mj-loading>
-          }
-          @if (selectedEntity && !Views.length && !showloader) {
-            <div class="no-views-message">
-              No views available for this entity
-            </div>
           }
         }
         @case ('Reports') {

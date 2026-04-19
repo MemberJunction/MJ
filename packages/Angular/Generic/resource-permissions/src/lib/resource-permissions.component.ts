@@ -1,5 +1,5 @@
 import { AfterViewInit, Component, Input } from '@angular/core';
-import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RoleInfo, RunView } from '@memberjunction/core';
+import { LogError, RoleInfo, RunView } from '@memberjunction/core';
 import { ResourcePermissionEngine, MJResourcePermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -108,7 +108,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     this.resourcePermissions = allResourcePermissions.filter((p) => p.Status === 'Approved'); // only include approved permissions in the UI, we don't show requested, rejected, revoked permissions here, just suppress them.
     
     const p = this.ProviderToUse;
-    const rv = new RunView(<IRunViewProvider><any>p)
+    const rv = RunView.FromMetadataProvider(p)
     const result = await rv.RunView<MJUserEntity>({
       EntityName: "MJ: Users",
       ResultType: "entity_object",

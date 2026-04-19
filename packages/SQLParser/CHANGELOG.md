@@ -1,5 +1,21 @@
 # @memberjunction/sql-parser
 
+## 5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- 4357090: Repair three query composition pipeline regressions surfaced by Skip-Brain, clear test feedback dialog state when switching conversations, strip tag IDs from taxonomy context injected into LLM prompts, exclude in-progress runs from last-run-date lookups, and replace direct UUID equality checks with `UUIDsEqual()` in the AI analytics dashboards to comply with the cross-platform UUID compliance test.
+
+## 5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+
 ## 5.24.0
 
 ## 5.23.0

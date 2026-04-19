@@ -56,8 +56,13 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
 
             LogStatus(`[AutotagAction] Autotag=${autotagParam.Value}, Vectorize=${vectorizeParam.Value}`);
 
+            // When the resolver is managing the ContentProcessRun, suppress the
+            // legacy saveProcessRun() in the engine to avoid phantom run records.
+            AutotagBaseEngine.Instance.ExternalRunTrackingActive = !!contentProcessRunID;
+
             // Phase 1: Run autotag providers to create/update ContentItems in the DB.
             // Providers use checksum comparison to skip unchanged items.
+            let hasNewItems = false;
             if (autotagParam.Value === 1) {
                 // Initialize the taxonomy bridge BEFORE providers run so ALL providers
                 // (RSS, Entity, Website, CloudStorage) get tag taxonomy bridging
@@ -71,26 +76,34 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
                 if (forceReprocess) {
                     LogStatus(`[AutotagAction] Force reprocess enabled — skipping checksum comparison`);
                 }
-                await this.RunAutotagProviders(params, onProgress, contentSourceIDs, forceReprocess);
-                LogStatus(`[AutotagAction] Phase 1 complete — providers finished`);
+                hasNewItems = await this.RunAutotagProviders(params, onProgress, contentSourceIDs, forceReprocess);
+                LogStatus(`[AutotagAction] Phase 1 complete — providers finished (hasNewItems=${hasNewItems})`);
 
                 // Clean up the bridge
                 AutotagBaseEngine.Instance.CleanupTaxonomyBridge();
             }
 
-            // Phase 2: Now that items exist in the DB, run LLM tagging and
-            // vectorization in parallel. Both read from the DB independently.
-            // - Tagging: only processes items returned by providers (new/changed)
-            // - Vectorization: processes ALL content items (upserts are idempotent)
+            // Phase 2: Vectorization. Content item vectorization runs when new tags
+            // were created. Entity vector sync only runs when forceReprocess is set,
+            // since entity records don't change during tagging — their vectors were
+            // already synced when first ingested via the Vectors dashboard.
             if (vectorizeParam.Value === 1) {
-                // Phase 2a: Vectorize content items into Pinecone (content-level vectors)
-                // Phase 2b: Sync entity vectors for Entity-type sources (entity-level vectors)
-                // These use different models/services and can run in parallel.
-                LogStatus(`[AutotagAction] Phase 2: Starting vectorization (content items + entity vectors in parallel)...`);
-                await Promise.all([
-                    this.RunDirectVectorization(params, contentProcessRunID),
-                    this.SyncEntitySourceVectors(params, contentSourceIDs),
-                ]);
+                const tasks: Promise<void>[] = [];
+
+                if (hasNewItems) {
+                    tasks.push(this.RunDirectVectorization(params, contentProcessRunID));
+                }
+
+                if (forceReprocess) {
+                    tasks.push(this.SyncEntitySourceVectors(params, contentSourceIDs));
+                }
+
+                if (tasks.length > 0) {
+                    LogStatus(`[AutotagAction] Phase 2: Running ${tasks.length} vectorization task(s)...`);
+                    await Promise.all(tasks);
+                } else {
+                    LogStatus(`[AutotagAction] Phase 2: Skipping vectorization — no new content items and not force-reprocessing`);
+                }
             }
             LogStatus(`[AutotagAction] All tasks completed`);
 
@@ -109,18 +122,22 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
      * Iterates all ContentSourceType records that have a DriverClass set,
      * instantiates the provider via ClassFactory, and runs autotagging for
      * any sources configured for that type.
+     *
+     * @returns true if any content items were processed (new, modified, or retried)
      */
     private async RunAutotagProviders(
         params: RunActionParams,
         onProgress?: AutotagProgressCallback,
         contentSourceIDs?: string[],
         forceReprocess?: boolean
-    ): Promise<void> {
+    ): Promise<boolean> {
         const engine = AutotagBaseEngine.Instance;
         const sourceTypes = engine.ContentSourceTypes;
 
         // Pass forceReprocess to the engine so providers can check it
         engine.ForceReprocess = forceReprocess ?? false;
+
+        let totalItemsProcessed = 0;
 
         for (const sourceType of sourceTypes) {
             if (!sourceType.DriverClass) {
@@ -153,15 +170,17 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             try {
                 const sourceIDsForProvider = sources.map(s => s.ID);
                 LogStatus(`[AutotagAction] >>> Running provider "${sourceType.Name}" (${sourceType.DriverClass}) with ${sources.length} source(s)...`);
-                await provider.Autotag(params.ContextUser, onProgress, contentSourceIDs ? sourceIDsForProvider : undefined);
-                LogStatus(`[AutotagAction] <<< Provider "${sourceType.Name}" (${sourceType.DriverClass}) completed successfully`);
+                const itemCount = await provider.Autotag(params.ContextUser, onProgress, contentSourceIDs ? sourceIDsForProvider : undefined);
+                totalItemsProcessed += itemCount;
+                LogStatus(`[AutotagAction] <<< Provider "${sourceType.Name}" (${sourceType.DriverClass}) completed — ${itemCount} items processed`);
             } catch (providerError) {
                 const msg = providerError instanceof Error ? providerError.message : String(providerError);
                 LogError(`Autotag provider "${sourceType.Name}" (${sourceType.DriverClass}) failed: ${msg}`);
             }
         }
 
-        LogStatus('Autotagging complete.');
+        LogStatus(`Autotagging complete. ${totalItemsProcessed} items processed across all providers.`);
+        return totalItemsProcessed > 0;
     }
 
     /**

@@ -27,7 +27,26 @@ export {
   AgentRequestsResourceComponent,
   AutotaggingPipelineResourceComponent,
   VectorManagementResourceComponent,
-  DuplicateDetectionResourceComponent
+  DuplicateDetectionResourceComponent,
+  AIAnalyticsResourceComponent,
+  LoadAIAnalyticsResource,
+  AnalyticsFilterBarComponent,
+  AIOverviewHubComponent,
+  LoadAIOverviewHub,
+  AnalyticsExecutiveSummaryComponent,
+  LoadAnalyticsExecutiveSummary,
+  AnalyticsPromptRunsComponent,
+  LoadAnalyticsPromptRuns,
+  AnalyticsAgentRunsComponent,
+  LoadAnalyticsAgentRuns,
+  AnalyticsModelPerformanceComponent,
+  LoadAnalyticsModelPerformance,
+  AnalyticsCostBudgetComponent,
+  LoadAnalyticsCostBudget,
+  AnalyticsErrorAnalysisComponent,
+  LoadAnalyticsErrorAnalysis,
+  AnalyticsUsagePatternsComponent,
+  LoadAnalyticsUsagePatterns
 } from './AI/index';
 
 // Knowledge Hub components
@@ -119,6 +138,9 @@ export {
 // Home Application and Dashboard
 export { HomeApplication } from './Home/home-application';
 export { HomeDashboardComponent } from './Home/home-dashboard.component';
+
+// Application Roles
+export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from './ApplicationRoles/application-roles-resource.component';
 
 // API Keys
 export { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';

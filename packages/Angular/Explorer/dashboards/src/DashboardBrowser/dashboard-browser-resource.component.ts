@@ -108,9 +108,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
     constructor(
         private cdr: ChangeDetectorRef,
-        private route: ActivatedRoute,
-        private navigationService: NavigationService
-    ) {
+        private route: ActivatedRoute) {
         super();
     }
 
@@ -119,12 +117,14 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     // ========================================
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadDashboards();
         this.subscribeToQueryParams();
         this.loadViewPreference();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this._destroy$.next();
         this._destroy$.complete();
     }

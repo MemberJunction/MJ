@@ -55,10 +55,19 @@ vi.mock('@memberjunction/global', () => ({
     },
 }));
 
+const mockResolveCountry = vi.fn();
+const mockResolveState = vi.fn();
+
 vi.mock('@memberjunction/core-entities', () => ({
     MJRecordGeoCodeEntity: class {},
     MJCountryEntity: class {},
     MJStateProvinceEntity: class {},
+    GeoDataEngine: {
+        Instance: {
+            ResolveCountry: (...args: unknown[]) => mockResolveCountry(...args),
+            ResolveState: (...args: unknown[]) => mockResolveState(...args),
+        },
+    },
 }));
 
 // Mock fetch for Google API tests
@@ -331,20 +340,18 @@ describe('GeoCodeSyncService', () => {
     });
 
     describe('geocodeViaReferenceData', () => {
-        it('should return state centroid when country and state match', async () => {
-            // First call: country lookup
-            mockRunViewFn
-                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'country-us' }] })
-                // Second call: state lookup
-                .mockResolvedValueOnce({
-                    Success: true,
-                    Results: [{ ID: 'state-co', Latitude: 39.0, Longitude: -105.5 }],
-                });
+        beforeEach(() => {
+            mockResolveCountry.mockReset();
+            mockResolveState.mockReset();
+        });
+
+        it('should return state centroid when country and state match', () => {
+            mockResolveCountry.mockReturnValue({ ID: 'country-us', Latitude: 38.0, Longitude: -97.0 });
+            mockResolveState.mockReturnValue({ ID: 'state-co', Latitude: 39.0, Longitude: -105.5 });
 
             const service = GeoCodeSyncService.Instance;
-            const result = await (service as Record<string, Function>)['geocodeViaReferenceData'](
-                { GeoCountry: 'US', GeoStateProvince: 'CO' },
-                createMockUser()
+            const result = (service as Record<string, Function>)['geocodeViaReferenceData'](
+                { GeoCountry: 'US', GeoStateProvince: 'CO' }
             );
 
             expect(result).not.toBeNull();
@@ -355,22 +362,13 @@ describe('GeoCodeSyncService', () => {
             expect(result.Source).toBe('reference_data');
         });
 
-        it('should fall back to country centroid when state not found', async () => {
-            // Country lookup succeeds
-            mockRunViewFn
-                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'country-us' }] })
-                // State lookup fails
-                .mockResolvedValueOnce({ Success: true, Results: [] })
-                // Country centroid lookup
-                .mockResolvedValueOnce({
-                    Success: true,
-                    Results: [{ ID: 'country-us', Latitude: 38.0, Longitude: -97.0 }],
-                });
+        it('should fall back to country centroid when state not found', () => {
+            mockResolveCountry.mockReturnValue({ ID: 'country-us', Latitude: 38.0, Longitude: -97.0 });
+            mockResolveState.mockReturnValue(null);
 
             const service = GeoCodeSyncService.Instance;
-            const result = await (service as Record<string, Function>)['geocodeViaReferenceData'](
-                { GeoCountry: 'US', GeoStateProvince: 'XX' },
-                createMockUser()
+            const result = (service as Record<string, Function>)['geocodeViaReferenceData'](
+                { GeoCountry: 'US', GeoStateProvince: 'XX' }
             );
 
             expect(result).not.toBeNull();
@@ -378,11 +376,10 @@ describe('GeoCodeSyncService', () => {
             expect(result.CountryID).toBe('country-us');
         });
 
-        it('should return null when no country or state provided', async () => {
+        it('should return null when no country or state provided', () => {
             const service = GeoCodeSyncService.Instance;
-            const result = await (service as Record<string, Function>)['geocodeViaReferenceData'](
-                {},
-                createMockUser()
+            const result = (service as Record<string, Function>)['geocodeViaReferenceData'](
+                {}
             );
             expect(result).toBeNull();
         });

@@ -86,19 +86,21 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
 
     private static readonly PREFS_KEY = 'VersionHistory.Diff.UserPreferences';
     private preferencesLoaded = false;
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
     private metadata = new Metadata();
 
-    constructor(private cdr: ChangeDetectorRef, private navigationService: NavigationService) {
+    constructor(private cdr: ChangeDetectorRef) {
         super();
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadUserPreferences();
         this.LoadLabels();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

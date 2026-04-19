@@ -1,5 +1,44 @@
 # @memberjunction/schema-engine
 
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/queue@5.27.1
+  - @memberjunction/sql-dialect@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/core@5.27.0
+- @memberjunction/global@5.27.0
+- @memberjunction/queue@5.27.0
+- @memberjunction/sql-dialect@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [a1002f4]
+  - @memberjunction/core@5.26.0
+  - @memberjunction/queue@5.26.0
+  - @memberjunction/global@5.26.0
+  - @memberjunction/sql-dialect@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/queue@5.25.0
+  - @memberjunction/global@5.25.0
+  - @memberjunction/sql-dialect@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes

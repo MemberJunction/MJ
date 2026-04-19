@@ -1,5 +1,66 @@
 # @memberjunction/ng-react
 
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ai-vectors-memory@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/react-runtime@5.27.1
+  - @memberjunction/interactive-component-types@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.27.0
+- @memberjunction/ng-notifications@5.27.0
+- @memberjunction/graphql-dataprovider@5.27.0
+- @memberjunction/interactive-component-types@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+- @memberjunction/react-runtime@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/graphql-dataprovider@5.26.0
+  - @memberjunction/react-runtime@5.26.0
+  - @memberjunction/ai-vectors-memory@5.26.0
+  - @memberjunction/interactive-component-types@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [a24ff53]
+- Updated dependencies [d6370e8]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/interactive-component-types@5.25.0
+  - @memberjunction/react-runtime@5.25.0
+  - @memberjunction/ai-vectors-memory@5.25.0
+  - @memberjunction/ng-notifications@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Minor Changes

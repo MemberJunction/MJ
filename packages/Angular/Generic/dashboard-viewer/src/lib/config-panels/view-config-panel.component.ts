@@ -31,7 +31,8 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
     public viewId = '';
     public viewName = '';
     public extraFilter = '';
-    public displayMode: 'grid' | 'cards' | 'timeline' = 'grid';
+    public displayMode: 'grid' | 'cards' | 'timeline' | 'map' = 'grid';
+    public mapRenderMode: 'point' | 'choropleth' | 'heatmap' = 'point';
     public allowModeSwitch = true;
     public enableSelection = true;
     public selectionMode: 'none' | 'single' | 'multiple' = 'single';
@@ -83,7 +84,8 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
             this.entityName = (config['entityName'] as string) || '';
             this.viewId = (config['viewId'] as string) || '';
             this.extraFilter = (config['extraFilter'] as string) || '';
-            this.displayMode = (config['displayMode'] as 'grid' | 'cards' | 'timeline') || 'grid';
+            this.displayMode = (config['displayMode'] as 'grid' | 'cards' | 'timeline' | 'map') || 'grid';
+            this.mapRenderMode = (config['mapRenderMode'] as 'point' | 'choropleth' | 'heatmap') || 'point';
             this.allowModeSwitch = (config['allowModeSwitch'] as boolean) ?? true;
             this.enableSelection = (config['enableSelection'] as boolean) ?? true;
             this.selectionMode = (config['selectionMode'] as 'none' | 'single' | 'multiple') || 'single';
@@ -112,6 +114,7 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
             viewId: this.viewId.trim() || undefined,
             extraFilter: this.extraFilter.trim() || undefined,
             displayMode: this.displayMode,
+            mapRenderMode: this.displayMode === 'map' ? this.mapRenderMode : undefined,
             allowModeSwitch: this.allowModeSwitch,
             enableSelection: this.enableSelection,
             selectionMode: this.selectionMode
@@ -221,6 +224,8 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
                 return 'Display records as cards in a responsive grid layout';
             case 'timeline':
                 return 'Display records chronologically along a timeline';
+            case 'map':
+                return 'Display geo-coded records on an interactive map';
             default:
                 return 'Display records in a traditional table/grid format';
         }

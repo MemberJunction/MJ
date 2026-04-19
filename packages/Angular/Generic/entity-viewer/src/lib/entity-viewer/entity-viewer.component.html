@@ -66,7 +66,6 @@
             title="Map View">
             <i class="fa-solid fa-map-location-dot"></i>
           </button>
-          <span class="geo-debug-marker" style="color:red;font-size:10px;">GEO</span>
         </div>
       }
 
@@ -201,8 +200,10 @@
         [Entity]="effectiveEntity!"
         [Records]="filteredRecords"
         [TotalRecordCount]="totalRecordCount"
+        [RenderMode]="mapRenderMode"
         [DisplayState]="mapDisplayState"
         (MarkerClick)="onMapMarkerClick($event)"
+        (RenderModeChange)="onMapRenderModeChange($event)"
         (DisplayStateChange)="onMapDisplayStateChange($event)">
       </mj-map-view>
     }
