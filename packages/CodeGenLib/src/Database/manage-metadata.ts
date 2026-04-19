@@ -3,7 +3,7 @@ import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatab
 import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, dbType, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
-import { MJApplicationEntity } from "@memberjunction/core-entities";
+import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
@@ -4935,17 +4935,13 @@ export class ManageMetadataBase {
       return existingCategories;
    }
 
-   // CK_EntityField_CodeType on __mj.EntityField.CodeType allows only these values.
-   // LLM-generated codeType values must pass this gate or be coerced to 'Other' before UPDATE.
-   private static readonly ALLOWED_CODE_TYPES: ReadonlySet<string> = new Set([
-      'CSS', 'HTML', 'JavaScript', 'SQL', 'TypeScript', 'Other'
-   ]);
-
    /**
     * Sanitizes an LLM-supplied codeType against the CK_EntityField_CodeType CHECK constraint.
-    * Accepts only the six valid enum values; maps invalid/drift values (e.g. 'Python', 'Markdown',
-    * 'javascript' wrong case) to 'Other', and preserves null/undefined. Logs any coercion so the
-    * underlying prompt drift is visible instead of silently failing the batch UPDATE at the DB.
+    * Uses MJEntityFieldSchema.shape.CodeType from @memberjunction/core-entities as the single
+    * source of truth — no hardcoded enum duplication. Values that fail Zod validation (e.g.
+    * 'Python', 'Markdown', 'javascript' wrong case) coerce to 'Other', preserving null/undefined.
+    * Logs any coercion so the underlying prompt drift is visible instead of silently failing
+    * the batch UPDATE at the DB.
     */
    protected sanitizeCodeType(
       codeType: string | null | undefined,
@@ -4954,8 +4950,9 @@ export class ManageMetadataBase {
    ): string | null | undefined {
       if (codeType === undefined) return undefined;
       if (codeType === null) return null;
-      if (ManageMetadataBase.ALLOWED_CODE_TYPES.has(codeType)) return codeType;
-      logStatus(`         Coerced invalid codeType '${codeType}' -> 'Other' for ${entityName}.${fieldName} (CK_EntityField_CodeType allows: ${Array.from(ManageMetadataBase.ALLOWED_CODE_TYPES).join(', ')})`);
+      const result = MJEntityFieldSchema.shape.CodeType.safeParse(codeType);
+      if (result.success && result.data !== null) return result.data;
+      logStatus(`         Coerced invalid codeType '${codeType}' -> 'Other' for ${entityName}.${fieldName} (validated against MJEntityFieldSchema.CodeType)`);
       return 'Other';
    }
 
