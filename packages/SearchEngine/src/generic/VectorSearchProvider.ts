@@ -231,7 +231,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
             const indexPromises = indexes.map(vectorIndex => {
                 // Merge per-index rendered MetadataFilter (from scope) into the base filter
                 const perIndexRow = scopedRows?.find(
-                    r => r.VectorIndexID && r.VectorIndexID.toLowerCase() === vectorIndex.ID.toLowerCase()
+                    r => r.VectorIndexID && UUIDsEqual(r.VectorIndexID, vectorIndex.ID)
                 );
                 const mergedFilter = this.mergeMetadataFilters(filter, perIndexRow?.MetadataFilter);
                 return this.queryOneIndex(vectorIndex, queryVector!, topK, mergedFilter, contextUser)

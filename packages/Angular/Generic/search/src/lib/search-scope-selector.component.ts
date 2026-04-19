@@ -23,6 +23,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { UUIDsEqual } from '@memberjunction/global';
 import { SearchService } from './search.service';
 import { SearchScopeInfo } from './search-types';
 
@@ -110,11 +111,11 @@ export class SearchScopeSelectorComponent implements OnInit {
 
         let next: string[];
         if (isSelected) {
-            next = this.SelectedScopeIDs.filter(id => id !== scope.ID);
+            next = this.SelectedScopeIDs.filter(id => !UUIDsEqual(id, scope.ID));
         } else {
             // Selecting a specific scope removes any Global selection.
             const withoutGlobal = this.SelectedScopeIDs.filter(id => {
-                const s = this.AvailableScopes.find(x => x.ID === id);
+                const s = this.AvailableScopes.find(x => UUIDsEqual(x.ID, id));
                 return s && !s.IsGlobal;
             });
             next = [...withoutGlobal, scope.ID];
@@ -135,7 +136,7 @@ export class SearchScopeSelectorComponent implements OnInit {
     public get SelectionLabel(): string {
         if (this.SelectedScopeIDs.length === 0) return 'Global';
         if (this.SelectedScopeIDs.length === 1) {
-            const s = this.AvailableScopes.find(x => x.ID === this.SelectedScopeIDs[0]);
+            const s = this.AvailableScopes.find(x => UUIDsEqual(x.ID, this.SelectedScopeIDs[0]));
             return s?.Name ?? 'Scoped';
         }
         return `${this.SelectedScopeIDs.length} scopes`;
@@ -165,7 +166,7 @@ export class SearchScopeSelectorComponent implements OnInit {
     public get SelectionIcon(): string {
         if (this.SelectedScopeIDs.length === 0) return 'fa-solid fa-globe';
         if (this.SelectedScopeIDs.length === 1) {
-            const s = this.AvailableScopes.find(x => x.ID === this.SelectedScopeIDs[0]);
+            const s = this.AvailableScopes.find(x => UUIDsEqual(x.ID, this.SelectedScopeIDs[0]));
             return s?.Icon || 'fa-solid fa-filter';
         }
         return 'fa-solid fa-layer-group';

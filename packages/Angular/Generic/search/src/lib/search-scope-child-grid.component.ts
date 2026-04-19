@@ -35,6 +35,7 @@ import {
     inject
 } from '@angular/core';
 import { BaseEntity, LogError, Metadata, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** Supported inline-edit types for a scope-child grid column. */
 export type SearchScopeChildGridColumnType =
@@ -270,7 +271,7 @@ export class SearchScopeChildGridComponent implements OnDestroy {
         row.Entity.Set(column.Field, value);
         if (column.Type === 'lookup' && typeof value === 'string') {
             const options = column.LookupEntityName ? this.lookupCache.get(column.LookupEntityName) : undefined;
-            const match = options?.find(o => o.ID === value);
+            const match = options?.find(o => UUIDsEqual(o.ID, value));
             row.LookupLabels[column.Field] = match?.Label ?? '';
         }
         await this.SaveRow(row);
@@ -342,7 +343,7 @@ export class SearchScopeChildGridComponent implements OnDestroy {
                 const id = row.Entity.Get(col.Field);
                 if (typeof id !== 'string') continue;
                 const options = this.lookupCache.get(col.LookupEntityName) ?? [];
-                const match = options.find(o => o.ID === id);
+                const match = options.find(o => UUIDsEqual(o.ID, id));
                 row.LookupLabels[col.Field] = match?.Label ?? '';
             }
         }
