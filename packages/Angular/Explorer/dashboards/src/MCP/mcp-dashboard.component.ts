@@ -28,6 +28,7 @@ import {
     MJOAuthTokenEntity,
     MJCredentialEntity
 } from '@memberjunction/core-entities';
+import { CredentialEngine } from '@memberjunction/credentials';
 import { RegisterClass , UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
@@ -1357,16 +1358,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
             // If a bearer token was provided, create a Credential record for it
             if (this.ConnectionForm.BearerToken?.trim()) {
-                const rv = new RunView();
-                const typeResult = await rv.RunView<{ID: string; Name: string}>({
-                    EntityName: 'MJ: Credential Types',
-                    ExtraFilter: `Name LIKE '%Bearer%' OR Name LIKE '%API%'`,
-                    Fields: ['ID', 'Name'],
-                    OrderBy: 'Name',
-                    MaxRows: 1,
-                    ResultType: 'simple'
-                });
-                const credTypeID = typeResult.Success && typeResult.Results.length > 0 ? typeResult.Results[0].ID : null;
+                await CredentialEngine.Instance.Config();
+                const credType = CredentialEngine.Instance.CredentialTypes
+                    .find(t => /bearer|api/i.test(t.Name));
+                const credTypeID = credType?.ID ?? null;
                 if (credTypeID) {
                     const cred = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials');
                     cred.NewRecord();
