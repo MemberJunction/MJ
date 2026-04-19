@@ -1470,7 +1470,23 @@ export class MCPResolver extends ResolverBase {
             }
 
             const rows = result.Results || [];
-            const totalCount = result.TotalRowCount ?? rows.length;
+            // RunView's TotalRowCount can be capped when MaxRows is applied. Do an explicit
+            // count query (ignoring MaxRows) so the client sees the true filtered match total.
+            let totalCount = result.TotalRowCount ?? rows.length;
+            try {
+                const countResult = await rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ: MCP Server Tools',
+                    ExtraFilter: extraFilter,
+                    Fields: ['ID'],
+                    IgnoreMaxRows: true,
+                    ResultType: 'simple'
+                }, user);
+                if (countResult.Success) {
+                    totalCount = countResult.Results.length;
+                }
+            } catch {
+                // fall back to the initial totalCount on any error
+            }
             const items: MCPToolSummary[] = rows.map(r => ({
                 ID: r.ID,
                 MCPServerID: r.MCPServerID,

@@ -113,19 +113,113 @@
 
     <!-- Main Content with Filter Panel -->
     <div class="main-content">
-        <!-- Filter Panel (Left) -->
+        <!-- Filter Panel (Left) — INLINED to avoid module-resolution failures in dynamic component -->
         <div class="filter-panel-container" [class.hidden]="!FilterPanelVisible">
-            <mj-mcp-filter-panel
-                [filters]="CurrentFilters"
-                [activeTab]="ActiveTab"
-                [totalCount]="CurrentTotalCount"
-                [filteredCount]="CurrentFilteredCount"
-                [availableServers]="toolsAvailableServers"
-                [availableCategories]="toolsAvailableCategories"
-                (filtersChange)="onFiltersChange($event)"
-                (closePanel)="toggleFilterPanel()">
-            </mj-mcp-filter-panel>
-            <!-- Resize Handle -->
+            <div style="padding:12px;border-right:1px solid var(--mj-border-default,#e0e0e0);height:100%;box-sizing:border-box;overflow-y:auto;background:var(--mj-bg-surface,#fff);min-width:240px">
+                <!-- Header -->
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <h3 style="margin:0;font-size:0.95rem;font-weight:600">MCP Filters</h3>
+                        @if (activeFilterCount() > 0) {
+                            <span style="padding:2px 8px;background:var(--mj-brand-primary,#264FAF);color:#fff;border-radius:10px;font-size:0.7rem;font-weight:600">{{ activeFilterCount() }}</span>
+                        }
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--mj-text-muted,#888)">{{ CurrentFilteredCount }} / {{ CurrentTotalCount }}</div>
+                </div>
+
+                <!-- Search -->
+                <div style="margin-bottom:12px">
+                    <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-search"></i> Search</label>
+                    <input #fSearch type="text" class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.searchTerm" (input)="onFilterFieldChange('searchTerm', fSearch.value)" placeholder="Search…" />
+                </div>
+
+                <!-- Tool tab filters -->
+                @if (ActiveTab === 'tools') {
+                    <div style="margin-bottom:12px">
+                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-server"></i> Server</label>
+                        <select #fServer class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.toolsServer ?? 'all'" (change)="onFilterFieldChange('toolsServer', fServer.value)">
+                            <option value="all">All Servers</option>
+                            @for (s of toolsAvailableServers; track s.ID) {
+                                <option [value]="s.ID">{{ s.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                    <div style="margin-bottom:12px">
+                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-tags"></i> Category</label>
+                        <select #fCat class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.toolsCategory ?? 'all'" (change)="onFilterFieldChange('toolsCategory', fCat.value)">
+                            <option value="all">All Categories</option>
+                            @for (c of toolsAvailableCategories; track c.category) {
+                                <option [value]="c.category">{{ c.category }} ({{ c.count }})</option>
+                            }
+                        </select>
+                    </div>
+                    <div style="margin-bottom:12px">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem">
+                            <input #fFav type="checkbox" [checked]="CurrentFilters.favoritesOnly === true" (change)="onFilterFieldChange('favoritesOnly', fFav.checked)" />
+                            <i class="fa-solid fa-star" style="color:var(--mj-status-warning,#f59e0b)"></i>
+                            Favorites only
+                        </label>
+                    </div>
+                    <div style="margin-bottom:12px">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem">
+                            <input #fRec type="checkbox" [checked]="CurrentFilters.recentOnly === true" (change)="onFilterFieldChange('recentOnly', fRec.checked)" />
+                            <i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-brand-primary,#264FAF)"></i>
+                            Recently used only
+                        </label>
+                    </div>
+                }
+
+                <!-- Tab-specific status filter -->
+                @if (ActiveTab === 'servers') {
+                    <div style="margin-bottom:12px">
+                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-toggle-on"></i> Server Status</label>
+                        <select #fSStatus class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.serverStatus" (change)="onFilterFieldChange('serverStatus', fSStatus.value)">
+                            <option value="all">All Statuses</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                        </select>
+                    </div>
+                }
+                @if (ActiveTab === 'connections') {
+                    <div style="margin-bottom:12px">
+                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-toggle-on"></i> Connection Status</label>
+                        <select #fCStatus class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.connectionStatus" (change)="onFilterFieldChange('connectionStatus', fCStatus.value)">
+                            <option value="all">All Statuses</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                            <option value="Error">Error</option>
+                        </select>
+                    </div>
+                }
+                @if (ActiveTab === 'tools') {
+                    <div style="margin-bottom:12px">
+                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-toggle-on"></i> Tool Status</label>
+                        <select #fTStatus class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.toolStatus" (change)="onFilterFieldChange('toolStatus', fTStatus.value)">
+                            <option value="all">All Statuses</option>
+                            <option value="Active">Active</option>
+                            <option value="Deprecated">Deprecated</option>
+                        </select>
+                    </div>
+                }
+                @if (ActiveTab === 'logs') {
+                    <div style="margin-bottom:12px">
+                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-circle-check"></i> Log Status</label>
+                        <select #fLStatus class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.logStatus" (change)="onFilterFieldChange('logStatus', fLStatus.value)">
+                            <option value="all">All Statuses</option>
+                            <option value="Success">Success</option>
+                            <option value="Error">Error</option>
+                            <option value="Running">Running</option>
+                        </select>
+                    </div>
+                }
+
+                <!-- Reset -->
+                <div style="margin-top:16px">
+                    <button mjButton variant="flat" style="width:100%" (click)="resetAllFilters()">
+                        <i class="fa-solid fa-undo"></i> Reset Filters
+                    </button>
+                </div>
+            </div>
             <div class="resize-handle"></div>
         </div>
 
@@ -413,10 +507,11 @@
                             </div>
                             @if (useScalablePagination) {
                                 <div style="padding:8px 12px;font-size:0.8rem;color:var(--mj-text-secondary,#475569);background:var(--mj-bg-surface-card,#f8f9fa);border-radius:4px;margin-bottom:6px">
-                                    Showing <strong>{{ visiblePagedTools.length }}</strong> of <strong>{{ toolsGlobalCount || toolsTotalCount }}</strong> tools
+                                    Showing <strong>{{ visiblePagedTools.length }}</strong> of <strong>{{ scaleDenominator() }}</strong> tools
                                 </div>
-                                <cdk-virtual-scroll-viewport itemSize="72" style="height:calc(100vh - 260px);width:100%" (scrolledIndexChange)="onToolsScrolledIndexChange($event)">
-                                    <div *cdkVirtualFor="let tool of visiblePagedTools; trackBy: trackPagedTool" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--mj-border-subtle,#eee);height:72px;box-sizing:border-box">
+                                <div style="height:calc(100vh - 260px);width:100%;overflow-y:auto;border:1px solid var(--mj-border-subtle,#eee);border-radius:4px" (scroll)="onToolsScrollNative($event)">
+                                    @for (tool of visiblePagedTools; track tool.ID) {
+                                    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--mj-border-subtle,#eee);height:72px;box-sizing:border-box">
                                         <i class="fa-solid fa-wrench" style="color:var(--mj-brand-primary,#264FAF)"></i>
                                         <div style="flex:1;min-width:0">
                                             <div style="font-weight:500;font-size:0.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tool.ToolTitle || tool.ToolName }}</div>
@@ -427,10 +522,11 @@
                                         </button>
                                         <span class="status-badge small" [ngClass]="getStatusClass(tool.Status)">{{ tool.Status }}</span>
                                     </div>
+                                    }
                                     @if (toolsLoading) {
                                         <div style="padding:12px;text-align:center;font-size:0.8rem;color:var(--mj-text-muted,#888)">Loading more…</div>
                                     }
-                                </cdk-virtual-scroll-viewport>
+                                </div>
                             } @else if (ServerGroups.length === 0) {
                                 <div class="empty-state">
                                     <i class="fa-solid fa-wrench"></i>
@@ -486,6 +582,9 @@
                                                                     <p class="tool-description">{{ tool.ToolDescription }}</p>
                                                                 }
                                                                 <div class="tool-card-actions">
+                                                                    <button type="button" (click)="toggleFavorite(tool.ID, $event)" [title]="isFavorited(tool.ID) ? 'Unfavorite' : 'Favorite'" style="background:transparent;border:none;cursor:pointer;padding:4px;font-size:1rem" [style.color]="isFavorited(tool.ID) ? 'var(--mj-status-warning, #f59e0b)' : 'var(--mj-text-muted, #bbb)'">
+                                                                        <i [class]="isFavorited(tool.ID) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                                                                    </button>
                                                                     <button mjButton variant="flat" size="sm" (click)="openTestToolDialog(tool)" title="Test this tool">
                                                                         <i class="fa-solid fa-play"></i>
                                                                         Test
@@ -564,6 +663,9 @@
                                                                         </td>
                                                                         <td>{{ formatDate(tool.LastSeenAt) }}</td>
                                                                         <td class="actions-cell">
+                                                                            <button type="button" (click)="toggleFavorite(tool.ID, $event)" [title]="isFavorited(tool.ID) ? 'Unfavorite' : 'Favorite'" style="background:transparent;border:none;cursor:pointer;padding:4px;font-size:0.95rem;margin-right:4px" [style.color]="isFavorited(tool.ID) ? 'var(--mj-status-warning, #f59e0b)' : 'var(--mj-text-muted, #bbb)'">
+                                                                                <i [class]="isFavorited(tool.ID) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                                                                            </button>
                                                                             <button mjButton variant="flat" size="sm" (click)="openTestToolDialog(tool)" title="Test">
                                                                                 <i class="fa-solid fa-play"></i>
                                                                             </button>

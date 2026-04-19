@@ -28,7 +28,7 @@ import {
     MJOAuthTokenEntity,
     MJCredentialEntity
 } from '@memberjunction/core-entities';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
 
@@ -178,6 +178,8 @@ export interface MCPDashboardFilters {
     toolsCategory?: string;
     /** Part 3.6 — restrict Tools tab to favorited tools only */
     favoritesOnly?: boolean;
+    /** Part 3.3 — restrict Tools tab to tools that appear in recent execution logs */
+    recentOnly?: boolean;
 }
 
 /**
@@ -659,6 +661,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // Calculate stats
             this.calculateStats();
 
+            // Populate filter dropdowns from loaded data (needed even outside Scale mode)
+            this.toolsAvailableServers = this.servers.map(s => ({ ID: s.ID, Name: s.Name }));
+            this.toolsAvailableCategories = this.computeCategoriesFromTools();
+
             // Apply filters
             this.applyFilters();
 
@@ -801,14 +807,20 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             return matchesSearch && matchesStatus;
         });
 
-        // Filter tools
+        // Filter tools (legacy grouped view — now also honors Server / Category / Favorites-only filters)
         this.filteredTools = this.tools.filter(t => {
             const matchesSearch = !search ||
                 t.ToolName.toLowerCase().includes(search) ||
                 (t.ToolTitle?.toLowerCase().includes(search) ?? false) ||
                 (t.ToolDescription?.toLowerCase().includes(search) ?? false);
             const matchesStatus = filters.toolStatus === 'all' || t.Status === filters.toolStatus;
-            return matchesSearch && matchesStatus;
+            const matchesServer = !filters.toolsServer || filters.toolsServer === 'all' ||
+                UUIDsEqual(t.MCPServerID, filters.toolsServer);
+            const cat = t.ToolName.indexOf('_') > 0 ? t.ToolName.substring(0, t.ToolName.indexOf('_')) : t.ToolName;
+            const matchesCategory = !filters.toolsCategory || filters.toolsCategory === 'all' || cat === filters.toolsCategory;
+            const matchesFavorite = !filters.favoritesOnly || this.isFavorited(t.ID);
+            const matchesRecent = !filters.recentOnly || this.recentToolIDSet().has(NormalizeUUID(t.ID));
+            return matchesSearch && matchesStatus && matchesServer && matchesCategory && matchesFavorite && matchesRecent;
         });
 
         // Build server groups for the tools tab
@@ -877,6 +889,55 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             this.loadToolsPage(true);
             this.loadToolCounts();
         }
+    }
+
+    /** Inlined filter panel — single-field update helper */
+    public onFilterFieldChange(field: keyof MCPDashboardFilters, value: unknown): void {
+        const updated = { ...this.filters$.value, [field]: value };
+        this.onFiltersChange(updated as MCPDashboardFilters);
+    }
+
+    /** Count of non-default filter dimensions, used for "Filters (N)" badge */
+    public activeFilterCount(): number {
+        const f = this.filters$.value;
+        let n = 0;
+        if (f.searchTerm) n++;
+        if (f.serverStatus && f.serverStatus !== 'all') n++;
+        if (f.connectionStatus && f.connectionStatus !== 'all') n++;
+        if (f.toolStatus && f.toolStatus !== 'all') n++;
+        if (f.logStatus && f.logStatus !== 'all') n++;
+        if (f.toolsServer && f.toolsServer !== 'all') n++;
+        if (f.toolsCategory && f.toolsCategory !== 'all') n++;
+        if (f.favoritesOnly) n++;
+        if (f.recentOnly) n++;
+        return n;
+    }
+
+    /** Derive category list (snake_case prefix) + counts from the currently loaded tools. */
+    public computeCategoriesFromTools(): Array<{ category: string; count: number }> {
+        const counts = new Map<string, number>();
+        for (const t of this.tools) {
+            const idx = t.ToolName.indexOf('_');
+            const cat = idx > 0 ? t.ToolName.substring(0, idx) : t.ToolName;
+            counts.set(cat, (counts.get(cat) ?? 0) + 1);
+        }
+        return Array.from(counts.entries())
+            .map(([category, count]) => ({ category, count }))
+            .sort((a, b) => a.category.localeCompare(b.category));
+    }
+
+    public resetAllFilters(): void {
+        this.onFiltersChange({
+            searchTerm: '',
+            serverStatus: 'all',
+            connectionStatus: 'all',
+            toolStatus: 'all',
+            logStatus: 'all',
+            toolsServer: 'all',
+            toolsCategory: 'all',
+            favoritesOnly: false,
+            recentOnly: false
+        });
     }
 
     /**
@@ -1751,6 +1812,16 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
+    /** Native-scroll infinite-load: triggers next page when user nears the bottom */
+    public onToolsScrollNative(event: Event): void {
+        if (!this.useScalablePagination || this.toolsLoading) return;
+        if (this.pagedTools.length >= this.toolsTotalCount) return;
+        const el = event.target as HTMLElement;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
+            this.loadToolsPage(false);
+        }
+    }
+
     public toggleScalableMode(enabled: boolean): void {
         this.useScalablePagination = enabled;
         if (enabled && this.pagedTools.length === 0) {
@@ -1808,11 +1879,40 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         return tool.ID;
     }
 
-    /** Part 3.6 — client-side favorites-only filter applied to the currently loaded page */
+    /** Part 3.6 — Scale mode display. When a client-side filter (Favorites/Recently-used) is active,
+     *  bypass server pagination and filter the fully-loaded local `this.tools` list so the filter
+     *  considers ALL tools, not just the current 50-row page. */
     public get visiblePagedTools(): MCPToolSummary[] {
         const f = this.filters$.value;
-        if (f.favoritesOnly) {
-            return this.pagedTools.filter(t => this.favoritedToolIDs.has(t.ID));
+        if (f.favoritesOnly || f.recentOnly) {
+            const search = (f.searchTerm || '').toLowerCase();
+            const recent = f.recentOnly ? this.recentToolIDSet() : null;
+            return this.tools
+                .filter(t => {
+                    if (f.favoritesOnly && !this.isFavorited(t.ID)) return false;
+                    if (recent && !recent.has(NormalizeUUID(t.ID))) return false;
+                    if (f.toolsServer && f.toolsServer !== 'all' && !UUIDsEqual(t.MCPServerID, f.toolsServer)) return false;
+                    if (f.toolsCategory && f.toolsCategory !== 'all') {
+                        const idx = t.ToolName.indexOf('_');
+                        const cat = idx > 0 ? t.ToolName.substring(0, idx) : t.ToolName;
+                        if (cat !== f.toolsCategory) return false;
+                    }
+                    if (search && !(
+                        t.ToolName.toLowerCase().includes(search) ||
+                        (t.ToolTitle?.toLowerCase().includes(search) ?? false) ||
+                        (t.ToolDescription?.toLowerCase().includes(search) ?? false)
+                    )) return false;
+                    return true;
+                })
+                .map(t => ({
+                    ID: t.ID,
+                    MCPServerID: t.MCPServerID,
+                    ToolName: t.ToolName,
+                    ToolTitle: t.ToolTitle ?? null,
+                    ToolDescription: t.ToolDescription ?? null,
+                    Status: t.Status,
+                    ServerName: t.ServerName ?? null
+                }));
         }
         return this.pagedTools;
     }
@@ -1876,7 +1976,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 ResultType: 'simple'
             });
             if (result.Success) {
-                this.favoritedToolIDs = new Set((result.Results || []).map(r => r.MCPServerToolID));
+                this.favoritedToolIDs = new Set((result.Results || []).map(r => NormalizeUUID(r.MCPServerToolID)));
                 this.cdr.detectChanges();
             }
         } catch (e) {
@@ -1885,35 +1985,53 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     public isFavorited(toolID: string): boolean {
-        return this.favoritedToolIDs.has(toolID);
+        return this.favoritedToolIDs.has(NormalizeUUID(toolID));
+    }
+
+    /** Part 3.3 — set of tool IDs seen in recent execution logs (last N unique). */
+    public recentToolIDSet(): Set<string> {
+        const out = new Set<string>();
+        for (const log of this.executionLogs) {
+            if (log.ToolID) out.add(NormalizeUUID(log.ToolID));
+        }
+        return out;
     }
 
     public async toggleFavorite(toolID: string, event?: Event): Promise<void> {
         if (event) event.stopPropagation();
         const md = new Metadata();
         const currentUserID = md.CurrentUser?.ID;
-        if (!currentUserID) return;
-        const isFav = this.favoritedToolIDs.has(toolID);
+        if (!currentUserID) {
+            console.warn('[MCPDashboard] toggleFavorite: no current user');
+            return;
+        }
+        const normalizedID = NormalizeUUID(toolID);
+        const isFav = this.favoritedToolIDs.has(normalizedID);
         try {
             if (isFav) {
-                // Delete the favorite row
+                // Load existing favorite row as an entity object, then Delete via the entity.
                 const rv = new RunView();
-                const existing = await rv.RunView<{ ID: string }>({
+                const existing = await rv.RunView<MJMCPToolFavoriteEntity>({
                     EntityName: 'MJ: MCP Tool Favorites',
                     ExtraFilter: `UserID='${currentUserID}' AND MCPServerToolID='${toolID}'`,
-                    Fields: ['ID'],
-                    ResultType: 'simple'
+                    ResultType: 'entity_object'
                 });
-                if (existing.Success && existing.Results.length > 0) {
-                    const entity = await md.GetEntityObject<MJMCPToolFavoriteEntity>('MJ: MCP Tool Favorites');
-                    await entity.Load(existing.Results[0].ID);
+                if (!existing.Success) {
+                    console.warn('[MCPDashboard] Favorite lookup failed:', existing.ErrorMessage);
+                    return;
+                }
+                if (existing.Results.length === 0) {
+                    // DB row missing but client thought it was favorited — just drop from cache
+                    this.favoritedToolIDs.delete(normalizedID);
+                } else {
+                    const entity = existing.Results[0];
                     const deleted = await entity.Delete();
                     if (!deleted) {
                         console.warn('[MCPDashboard] Delete favorite failed:', entity.LatestResult?.CompleteMessage);
                         return;
                     }
+                    this.favoritedToolIDs.delete(normalizedID);
                 }
-                this.favoritedToolIDs.delete(toolID);
             } else {
                 const entity = await md.GetEntityObject<MJMCPToolFavoriteEntity>('MJ: MCP Tool Favorites');
                 entity.NewRecord();
@@ -1924,7 +2042,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                     console.warn('[MCPDashboard] Save favorite failed:', entity.LatestResult?.CompleteMessage);
                     return;
                 }
-                this.favoritedToolIDs.add(toolID);
+                this.favoritedToolIDs.add(normalizedID);
             }
             // Force a new Set instance so Angular change detection picks it up
             this.favoritedToolIDs = new Set(this.favoritedToolIDs);
