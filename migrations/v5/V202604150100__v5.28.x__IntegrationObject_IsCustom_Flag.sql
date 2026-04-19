@@ -1519,4 +1519,4 @@ WHERE
 -- Schema Update) flow driven by IntegrationSchemaSync + SchemaBuilder. It
 -- reads IntegrationObject/IntegrationObjectField metadata and generates the
 -- correct CREATE/ALTER TABLE DDL at runtime. No hand-written yourmembership
--- DDL belongs in this history migration — metadata is the source of truth.
+-- DDL belongs in this migration — metadata is the source of truth.
