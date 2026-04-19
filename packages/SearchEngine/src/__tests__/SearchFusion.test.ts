@@ -284,4 +284,106 @@ describe('SearchFusion', () => {
             expect(deduped).toHaveLength(2);
         });
     });
+
+    // ────────────────────────────────────────────────────────────────
+    // Scope-aware fusion (Phase 1B.13 / 1B.19)
+    // ────────────────────────────────────────────────────────────────
+
+    describe('Fuse (weighted, non-uniform)', () => {
+        it('honors heavy-vector weight when records differ across sources', () => {
+            const vector: SearchResultItem[] = [
+                makeResult({ EntityName: 'E', RecordID: 'A', Score: 0.9, SourceType: 'vector' }),
+            ];
+            const entity: SearchResultItem[] = [
+                makeResult({ EntityName: 'E', RecordID: 'B', Score: 0.9, SourceType: 'entity' }),
+            ];
+            const lists: LabeledResultList[] = [
+                { Source: 'vector', Results: vector },
+                { Source: 'entity', Results: entity },
+            ];
+            const result = fusion.Fuse(lists, 10, { vector: 10, entity: 0.1 });
+            expect(result[0].RecordID).toBe('A');
+        });
+
+        it('uniform weights behave identically to unweighted fusion (uses mocked ComputeRRF)', () => {
+            const vector: SearchResultItem[] = [
+                makeResult({ EntityName: 'E', RecordID: 'A', Score: 0.9, SourceType: 'vector' }),
+                makeResult({ EntityName: 'E', RecordID: 'B', Score: 0.8, SourceType: 'vector' }),
+            ];
+            const entity: SearchResultItem[] = [
+                makeResult({ EntityName: 'E', RecordID: 'C', Score: 0.7, SourceType: 'entity' }),
+            ];
+            const lists: LabeledResultList[] = [
+                { Source: 'vector', Results: vector },
+                { Source: 'entity', Results: entity },
+            ];
+            const unweighted = fusion.Fuse(lists, 10);
+            const uniform = fusion.Fuse(lists, 10, { vector: 1, entity: 1 });
+            expect(uniform.map(r => r.RecordID)).toEqual(unweighted.map(r => r.RecordID));
+        });
+    });
+
+    describe('CrossScopeFusion', () => {
+        it('returns empty when all scopes are empty', () => {
+            expect(fusion.CrossScopeFusion(new Map(), 10)).toEqual([]);
+        });
+
+        it('returns the single scope as-is (no fusion needed)', () => {
+            const map = new Map<string, SearchResultItem[]>();
+            map.set('scope-a', [
+                makeResult({ EntityName: 'E', RecordID: '1', Score: 0.9 }),
+                makeResult({ EntityName: 'E', RecordID: '2', Score: 0.8 }),
+            ]);
+            const result = fusion.CrossScopeFusion(map, 10);
+            expect(result).toHaveLength(2);
+            expect(result[0].RecordID).toBe('1');
+        });
+
+        it('boosts records that appear in multiple scopes', () => {
+            const map = new Map<string, SearchResultItem[]>();
+            map.set('scope-a', [
+                makeResult({ EntityName: 'E', RecordID: 'A', Score: 0.9 }),
+                makeResult({ EntityName: 'E', RecordID: 'B', Score: 0.8 }),
+            ]);
+            map.set('scope-b', [
+                makeResult({ EntityName: 'E', RecordID: 'B', Score: 0.85 }),
+                makeResult({ EntityName: 'E', RecordID: 'C', Score: 0.7 }),
+            ]);
+            const result = fusion.CrossScopeFusion(map, 10);
+            // B appears in both → should rank first
+            expect(result[0].RecordID).toBe('B');
+            expect(result).toHaveLength(3);
+        });
+
+        it('honors per-scope weights (non-uniform path, bypasses ComputeRRF mock)', () => {
+            const map = new Map<string, SearchResultItem[]>();
+            map.set('scope-a', [makeResult({ EntityName: 'E', RecordID: 'A', Score: 0.9 })]);
+            map.set('scope-b', [makeResult({ EntityName: 'E', RecordID: 'B', Score: 0.9 })]);
+            const heavyB = fusion.CrossScopeFusion(map, 10, { 'scope-a': 0.1, 'scope-b': 10 });
+            expect(heavyB[0].RecordID).toBe('B');
+        });
+
+        it('truncates to maxResults', () => {
+            const map = new Map<string, SearchResultItem[]>();
+            map.set('scope-a', [
+                makeResult({ EntityName: 'E', RecordID: '1', Score: 0.9 }),
+                makeResult({ EntityName: 'E', RecordID: '2', Score: 0.8 }),
+                makeResult({ EntityName: 'E', RecordID: '3', Score: 0.7 }),
+            ]);
+            expect(fusion.CrossScopeFusion(map, 2)).toHaveLength(2);
+        });
+
+        it('retains EntityName for records that only live in one scope', () => {
+            const map = new Map<string, SearchResultItem[]>();
+            map.set('scope-a', [
+                makeResult({ EntityName: 'Articles', RecordID: 'r1', Score: 0.9 }),
+            ]);
+            map.set('scope-b', [
+                makeResult({ EntityName: 'Policies', RecordID: 'r2', Score: 0.8 }),
+            ]);
+            const result = fusion.CrossScopeFusion(map, 10);
+            const names = result.map(r => r.EntityName).sort();
+            expect(names).toEqual(['Articles', 'Policies']);
+        });
+    });
 });

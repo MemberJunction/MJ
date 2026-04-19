@@ -1,0 +1,385 @@
+/**
+ * @fileoverview Agent pre-execution RAG — Phase 1C of plans/search-scopes-rag-plus.md.
+ *
+ * Runs in parallel with the rest of `BaseAgent.Execute()` Phase 2 to retrieve and inject
+ * scoped search context before the agent's first LLM call. Follows the same pattern as
+ * `AgentContextInjector` (notes/examples) so the two subsystems coexist cleanly:
+ *
+ *   1. Load the agent's active `AIAgentSearchScope` rows where Phase IN ('PreExecution','Both')
+ *      and the row is within its Status + StartAt/EndAt window.
+ *   2. For each active scope, render the `QueryTemplateID` via MJ TemplateEngineServer
+ *      (or fall back to `lastUserMessage`).
+ *   3. Call `SearchEngine.Search()` with `ScopeIDs: [scopeId]`, honoring per-agent overrides
+ *      (MaxResults, MinScore, FusionWeightsOverride) and the agent's multi-tenant context
+ *      (PrimaryScopeRecordID, SecondaryScopes).
+ *   4. Cross-scope RRF when multiple scopes produced results.
+ *   5. Format results as a `<retrieved_context>` system message and return.
+ *
+ * @module @memberjunction/ai-agents
+ */
+
+import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import {
+    MJAIAgentEntity,
+    MJAIAgentSearchScopeEntity,
+    SearchEngineBase,
+    MJSearchScopeEntity,
+    MJTemplateEntityExtended,
+    MJTemplateContentEntity,
+} from '@memberjunction/core-entities';
+import {
+    SearchEngine,
+    SearchResultItem,
+    SearchContext,
+    FusionWeightsByProvider,
+    SearchFusion,
+} from '@memberjunction/search-engine';
+import { TemplateEngineServer } from '@memberjunction/templates';
+import { ChatMessage } from '@memberjunction/ai';
+import { SecondaryScopeValue } from '@memberjunction/ai-core-plus';
+
+/**
+ * Parameters for executing pre-execution RAG for an agent.
+ */
+export interface AgentPreExecutionRAGParams {
+    /** The agent currently being executed. */
+    agent: MJAIAgentEntity;
+    /** The most recent user message — used as the default query when no template is configured. */
+    lastUserMessage: string;
+    /** Optional recent messages (role + content) for template rendering. */
+    recentMessages?: ChatMessage[];
+    /** Optional conversation summary. */
+    conversationSummary?: string;
+    /** Agent's current payload state. Available to templates under `payload`. */
+    payload?: unknown;
+    /** Multi-tenant primary scope record ID (flows into `SearchContext.PrimaryScopeRecordID`). */
+    primaryScopeRecordId?: string;
+    /** Multi-tenant primary scope entity ID. */
+    primaryScopeEntityId?: string;
+    /** Multi-tenant secondary scope dimensions. */
+    secondaryScopes?: Record<string, SecondaryScopeValue>;
+    /** Calling user — threaded through to SearchEngine + Metadata. */
+    contextUser: UserInfo;
+}
+
+/** Structured result of a single scope's search, used for formatting + artifact persistence. */
+export interface ScopeSearchResult {
+    scopeID: string;
+    scopeName: string;
+    scopeDescription: string | null;
+    scopeIcon: string | null;
+    query: string;
+    results: SearchResultItem[];
+    minScore: number;
+}
+
+/** Final aggregate result of `AgentPreExecutionRAG.Execute()`. */
+export interface AgentPreExecutionRAGResult {
+    /** Formatted `<retrieved_context>` system-message content ready for `unshift()`. */
+    formattedSystemMessage: string;
+    /** Per-scope result detail (for observability + artifact persistence). */
+    perScopeResults: ScopeSearchResult[];
+    /** Cross-scope fused result list (deduped, truncated). */
+    combinedResults: SearchResultItem[];
+    /** Combined search context passed into the engine. */
+    searchContext?: SearchContext;
+    /** Scope IDs actually queried (inactive/expired ones dropped). */
+    queriedScopeIDs: string[];
+    /** Raw agent-scope rows used (for debugging). */
+    agentScopeRows: MJAIAgentSearchScopeEntity[];
+}
+
+/**
+ * Orchestrator for agent pre-execution RAG. Stateless — create a fresh instance per call.
+ */
+export class AgentPreExecutionRAG {
+    /**
+     * Main entry point. Returns a filled-in `AgentPreExecutionRAGResult` when the agent
+     * has any active PreExecution/Both scopes; otherwise returns `null` so callers can
+     * skip injection entirely.
+     */
+    public async Execute(params: AgentPreExecutionRAGParams): Promise<AgentPreExecutionRAGResult | null> {
+        if (!params.agent?.ID) return null;
+
+        // Ensure the scope metadata cache is warm
+        await SearchEngineBase.Instance.Config(false, params.contextUser);
+
+        // 1. Load active PreExecution/Both scope rows for this agent
+        const allAgentScopeRows = SearchEngineBase.Instance.GetAgentScopes(params.agent.ID, 'PreExecution');
+        if (allAgentScopeRows.length === 0) return null;
+
+        // Sort by Priority ascending (lower = higher priority)
+        const agentScopeRows = [...allAgentScopeRows].sort((a, b) => a.Priority - b.Priority);
+
+        const searchContext: SearchContext = {
+            PrimaryScopeEntityID: params.primaryScopeEntityId,
+            PrimaryScopeRecordID: params.primaryScopeRecordId,
+            SecondaryScopes: params.secondaryScopes
+        };
+        const hasContext = !!(searchContext.PrimaryScopeRecordID || (searchContext.SecondaryScopes && Object.keys(searchContext.SecondaryScopes).length > 0));
+
+        // 2–3. For each agent-scope row, render the query and run scoped search.
+        const perScopeResults: ScopeSearchResult[] = [];
+        for (const row of agentScopeRows) {
+            const scope = SearchEngineBase.Instance.GetActiveScopeByID(row.SearchScopeID);
+            if (!scope) {
+                LogStatus(`AgentPreExecutionRAG: Scope "${row.SearchScopeID}" not active — skipping.`);
+                continue;
+            }
+
+            const query = await this.resolveQuery(row, scope, params);
+            if (!query || !query.trim()) continue;
+
+            const fusionWeights = this.parseFusionWeights(row.FusionWeightsOverride);
+            const minScore = row.MinScore ?? 0;
+            const maxResults = row.MaxResults ?? 10;
+
+            try {
+                const sr = await SearchEngine.Instance.Search({
+                    Query: query,
+                    MaxResults: maxResults,
+                    MinScore: minScore,
+                    ScopeIDs: [scope.ID],
+                    SearchContext: hasContext ? searchContext : undefined,
+                    FusionWeightsOverride: fusionWeights,
+                    Mode: 'full'
+                }, params.contextUser);
+
+                if (sr.Success && sr.Results.length > 0) {
+                    perScopeResults.push({
+                        scopeID: scope.ID,
+                        scopeName: scope.Name,
+                        scopeDescription: scope.Description,
+                        scopeIcon: scope.Icon,
+                        query,
+                        results: sr.Results,
+                        minScore
+                    });
+                } else if (!sr.Success) {
+                    LogError(`AgentPreExecutionRAG: Search in scope "${scope.Name}" failed: ${sr.ErrorMessage}`);
+                }
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                LogError(`AgentPreExecutionRAG: Exception searching scope "${scope.Name}": ${msg}`);
+            }
+        }
+
+        if (perScopeResults.length === 0) return null;
+
+        // 4. Cross-scope RRF when multiple scopes contributed
+        let combined: SearchResultItem[];
+        if (perScopeResults.length === 1) {
+            combined = perScopeResults[0].results;
+        } else {
+            const fusion = new SearchFusion();
+            const map = new Map<string, SearchResultItem[]>();
+            for (const s of perScopeResults) map.set(s.scopeID, s.results);
+            const maxAcrossScopes = Math.max(...perScopeResults.map(s => s.results.length));
+            combined = fusion.Deduplicate(fusion.CrossScopeFusion(map, Math.max(10, maxAcrossScopes)));
+        }
+
+        // 5. Format for system-message injection
+        const formatted = this.formatAsSystemMessage(perScopeResults);
+
+        return {
+            formattedSystemMessage: formatted,
+            perScopeResults,
+            combinedResults: combined,
+            searchContext: hasContext ? searchContext : undefined,
+            queriedScopeIDs: perScopeResults.map(s => s.scopeID),
+            agentScopeRows
+        };
+    }
+
+    /**
+     * Shape the result into a Data-Snapshot-compatible payload so `ProcessAgentArtifacts`
+     * can persist it as a `Search Result Set` artifact. See Section 6.3 of the plan.
+     * Returns `undefined` when there is nothing to persist.
+     */
+    public BuildArtifactPayload(
+        result: AgentPreExecutionRAGResult
+    ): Record<string, unknown> | undefined {
+        if (!result || result.combinedResults.length === 0) return undefined;
+        const rows = result.combinedResults.map(r => ({
+            id: r.ID,
+            recordID: r.RecordID,
+            entity: r.EntityName,
+            title: r.Title,
+            snippet: r.Snippet,
+            score: r.Score,
+            source: r.SourceType,
+            tags: r.Tags,
+            matchedAt: r.MatchedAt?.toISOString?.() ?? null,
+            scopeID: r.ProviderId
+        }));
+
+        return {
+            title: `Pre-execution RAG (${result.queriedScopeIDs.length} scope(s))`,
+            tables: [
+                {
+                    name: 'results',
+                    description: 'Ranked search results after per-scope and cross-scope RRF fusion.',
+                    source: 'search',
+                    columns: [
+                        { field: 'id', displayName: 'ID', sqlBaseType: 'nvarchar' },
+                        { field: 'recordID', displayName: 'Record ID', sqlBaseType: 'uniqueidentifier' },
+                        { field: 'entity', displayName: 'Entity', sqlBaseType: 'nvarchar' },
+                        { field: 'title', displayName: 'Title', sqlBaseType: 'nvarchar' },
+                        { field: 'snippet', displayName: 'Snippet', sqlBaseType: 'nvarchar' },
+                        { field: 'score', displayName: 'Score', sqlBaseType: 'decimal', isSummary: true },
+                        { field: 'source', displayName: 'Source', sqlBaseType: 'nvarchar' },
+                        { field: 'tags', displayName: 'Tags', sqlBaseType: 'nvarchar' },
+                        { field: 'matchedAt', displayName: 'Matched At', sqlBaseType: 'datetimeoffset' },
+                        { field: 'scopeID', displayName: 'Scope', sqlBaseType: 'uniqueidentifier' }
+                    ],
+                    rows,
+                    sorting: [{ field: 'score', direction: 'desc' }],
+                    metadata: { rowCount: rows.length }
+                }
+            ],
+            computations: [
+                { name: 'Total Results', type: 'count', value: rows.length, formattedValue: String(rows.length) },
+                { name: 'Top Score', type: 'max', field: 'score', value: rows[0]?.score ?? 0 }
+            ],
+            interpretation: `Retrieved ${rows.length} result(s) across ${result.queriedScopeIDs.length} scope(s) during pre-execution RAG.`,
+            scopeIDs: result.queriedScopeIDs,
+            queries: result.perScopeResults.map(s => ({ scopeID: s.scopeID, scopeName: s.scopeName, query: s.query })),
+            searchContext: result.searchContext,
+            searchedAt: new Date().toISOString()
+        };
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Query resolution
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Resolve the search query for one scope. If the agent-scope row has a QueryTemplateID,
+     * render it via `TemplateEngineServer`. Otherwise fall back to `lastUserMessage`.
+     */
+    private async resolveQuery(
+        row: MJAIAgentSearchScopeEntity,
+        scope: MJSearchScopeEntity,
+        params: AgentPreExecutionRAGParams
+    ): Promise<string> {
+        if (!row.QueryTemplateID) return params.lastUserMessage;
+
+        try {
+            const tmpl = await this.loadTemplate(row.QueryTemplateID, params.contextUser);
+            if (!tmpl) return params.lastUserMessage;
+
+            const content = tmpl.template.GetHighestPriorityContent?.() ?? tmpl.content;
+            if (!content) return params.lastUserMessage;
+
+            const data = {
+                lastUserMessage: params.lastUserMessage,
+                recentMessages: params.recentMessages ?? [],
+                conversationSummary: params.conversationSummary ?? '',
+                payload: params.payload ?? {},
+                agentName: params.agent.Name,
+                agentDescription: params.agent.Description ?? '',
+                scopeName: scope.Name,
+                scopeDescription: scope.Description ?? ''
+            };
+
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data);
+            if (rendered?.Success && rendered.Output) {
+                return rendered.Output.trim();
+            }
+            LogError(`AgentPreExecutionRAG: Template "${row.QueryTemplateID}" render failed: ${rendered?.Message ?? 'unknown'}`);
+            return params.lastUserMessage;
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`AgentPreExecutionRAG: Template "${row.QueryTemplateID}" exception: ${msg}`);
+            return params.lastUserMessage;
+        }
+    }
+
+    /**
+     * Load a Template entity + its highest-priority content row.
+     * Uses the cached `TemplateEngineServer.FindTemplate` when available; falls back to a
+     * direct RunView when not.
+     */
+    private async loadTemplate(
+        templateID: string,
+        contextUser: UserInfo
+    ): Promise<{ template: MJTemplateEntityExtended; content: MJTemplateContentEntity | null } | null> {
+        try {
+            await TemplateEngineServer.Instance.Config(false, contextUser);
+            const t = TemplateEngineServer.Instance.FindTemplate?.(templateID);
+            if (t) {
+                const content = t.GetHighestPriorityContent?.() ?? null;
+                return { template: t, content };
+            }
+        } catch {
+            // fall through to RunView
+        }
+
+        const rv = new RunView();
+        const tResult = await rv.RunView<MJTemplateEntityExtended>({
+            EntityName: 'Templates',
+            ExtraFilter: `ID='${templateID}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        if (!tResult.Success || tResult.Results.length === 0) return null;
+        const template = tResult.Results[0];
+
+        const cResult = await rv.RunView<MJTemplateContentEntity>({
+            EntityName: 'Template Contents',
+            ExtraFilter: `TemplateID='${templateID}'`,
+            OrderBy: 'Priority DESC, __mj_CreatedAt ASC',
+            MaxRows: 1,
+            ResultType: 'entity_object'
+        }, contextUser);
+        const content = cResult.Success && cResult.Results.length > 0 ? cResult.Results[0] : null;
+
+        return { template, content };
+    }
+
+    private parseFusionWeights(raw: string | null): FusionWeightsByProvider | undefined {
+        if (!raw) return undefined;
+        try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed as FusionWeightsByProvider;
+        } catch {
+            LogError(`AgentPreExecutionRAG: Invalid FusionWeightsOverride JSON — ignoring: ${raw.substring(0, 120)}`);
+        }
+        return undefined;
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Output formatting
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Format the per-scope results into a `<retrieved_context>` system-message block.
+     * Matches the shape documented in Section 4.2 of the plan.
+     */
+    private formatAsSystemMessage(perScope: ScopeSearchResult[]): string {
+        const lines: string[] = [];
+        lines.push('<retrieved_context>');
+        lines.push('The following information was retrieved from your configured knowledge scopes based on the current conversation.');
+        lines.push('Use this context to inform your response. If the retrieved information conflicts with your training data, prefer the retrieved information — it may be more current or tenant-specific.');
+        lines.push('');
+
+        let globalIndex = 1;
+        for (const s of perScope) {
+            const header = `--- Results from "${s.scopeName}" (${s.results.length} result(s)${s.minScore > 0 ? `, min score ${s.minScore.toFixed(2)}` : ''}) ---`;
+            lines.push(header);
+            if (s.scopeDescription) lines.push(`(${s.scopeDescription})`);
+            lines.push('');
+
+            for (const r of s.results) {
+                const titleLine = `${globalIndex}. [${r.Title || r.RecordID}] (score: ${r.Score.toFixed(2)}, source: ${r.SourceType}${r.EntityName ? `, entity: ${r.EntityName}` : ''})`;
+                lines.push(titleLine);
+                if (r.Snippet) lines.push(`   ${r.Snippet}`);
+                if (r.Tags && r.Tags.length) lines.push(`   tags: ${r.Tags.join(', ')}`);
+                lines.push('');
+                globalIndex++;
+            }
+        }
+
+        lines.push('</retrieved_context>');
+        return lines.join('\n');
+    }
+}

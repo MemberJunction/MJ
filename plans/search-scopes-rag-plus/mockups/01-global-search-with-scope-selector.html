@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Mockup: Global Search with Scope Selector</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="_tokens.css" />
+    <style>
+        .shell {
+            height: 64px;
+            background: var(--mj-bg-surface);
+            border-bottom: 1px solid var(--mj-border-default);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 32px;
+        }
+        .shell-logo { font-weight: 600; color: var(--mj-text-primary); }
+        .shell-nav { display: flex; gap: 16px; color: var(--mj-text-secondary); font-size: 0.875rem; }
+        .shell-nav a { text-decoration: none; color: inherit; }
+        .shell-nav a.active { color: var(--mj-brand-primary); font-weight: 600; }
+        .shell-user {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--mj-text-secondary);
+        }
+
+        .search-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 10px;
+            padding: 6px 8px 6px 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+            width: 640px;
+            max-width: 100%;
+            position: relative;
+        }
+        .search-bar i.fa-search {
+            color: var(--mj-text-muted);
+        }
+        .search-bar input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 0.9375rem;
+            background: transparent;
+            color: var(--mj-text-primary);
+        }
+        .search-bar kbd {
+            font-size: 0.6875rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-muted);
+            border: 1px solid var(--mj-border-default);
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        .scope-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-primary);
+            font-size: 0.8125rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--mj-border-default);
+        }
+        .scope-chip i.lead { color: var(--mj-brand-primary); }
+        .scope-chip.active {
+            background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+            border-color: var(--mj-brand-primary);
+        }
+
+        .panel {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 48px;
+            width: 380px;
+            background: var(--mj-bg-surface-elevated);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            padding: 8px 0;
+            z-index: 10;
+        }
+        .section-header {
+            padding: 8px 16px 4px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--mj-text-muted);
+        }
+        .option {
+            display: grid;
+            grid-template-columns: 18px 18px 1fr auto;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+        .option:hover { background: var(--mj-bg-surface-hover); }
+        .option input { accent-color: var(--mj-brand-primary); margin: 0; }
+        .option .icon { color: var(--mj-text-secondary); }
+        .option .desc {
+            grid-column: 3 / -1;
+            font-size: 0.75rem;
+            color: var(--mj-text-muted);
+            margin-top: 2px;
+        }
+        .option-badge {
+            font-size: 0.625rem;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+            color: var(--mj-brand-primary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .time-badge {
+            font-size: 0.625rem;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: var(--mj-status-warning-bg);
+            color: var(--mj-status-warning-text);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .panel-footer {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px 4px;
+            border-top: 1px solid var(--mj-border-subtle);
+            margin-top: 4px;
+        }
+        .panel-footer button {
+            background: transparent;
+            border: none;
+            padding: 6px 10px;
+            color: var(--mj-text-link);
+            font-size: 0.8125rem;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .panel-footer button.primary {
+            color: var(--mj-brand-primary);
+            font-weight: 600;
+        }
+
+        .callouts {
+            margin-top: 48px;
+            padding: 20px;
+            background: var(--mj-bg-surface);
+            border-radius: 8px;
+            border: 1px solid var(--mj-border-default);
+        }
+        .callouts h3 { margin: 0 0 12px; font-size: 1rem; }
+        .callouts ol { margin: 0; padding-left: 20px; color: var(--mj-text-secondary); }
+        .callouts li { margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <div class="shell-logo">MemberJunction</div>
+        <nav class="shell-nav">
+            <a class="active">Home</a>
+            <a>Data Explorer</a>
+            <a>AI</a>
+            <a>Admin</a>
+        </nav>
+        <div class="shell-user">
+            <i class="fa-solid fa-bell"></i>
+            <span>amith@bluecypress.io</span>
+        </div>
+    </div>
+
+    <div class="mock-frame">
+        <div class="mock-header">
+            <h1>Global Search — Scope Selector</h1>
+            <span class="mock-breadcrumb">Plans / Search Scopes &amp; RAG+ / Mockup 1/10</span>
+        </div>
+
+        <div class="card" style="display:flex;align-items:center;gap:12px;">
+            <div class="search-bar">
+                <button class="scope-chip active" title="Two scopes selected">
+                    <i class="fa-solid fa-layer-group lead"></i>
+                    <span>2 scopes</span>
+                    <i class="fa-solid fa-chevron-down" style="font-size:0.625rem;"></i>
+                </button>
+                <i class="fa-solid fa-search"></i>
+                <input type="text" placeholder="Search documents, policies, records…" value="refund policy" />
+                <kbd>⌘K</kbd>
+
+                <div class="panel">
+                    <div class="section-header">Default</div>
+                    <label class="option">
+                        <input type="checkbox" />
+                        <i class="fa-solid fa-globe icon"></i>
+                        <span>Global</span>
+                        <span></span>
+                        <span class="desc">All providers, all entities, all storage accounts.</span>
+                    </label>
+                    <div class="section-header">Organization</div>
+                    <label class="option">
+                        <input type="checkbox" checked />
+                        <i class="fa-solid fa-user-tie icon"></i>
+                        <span>HR Policies</span>
+                        <span class="option-badge">Default</span>
+                        <span class="desc">Employee handbook, PTO, benefits FAQ</span>
+                    </label>
+                    <label class="option">
+                        <input type="checkbox" checked />
+                        <i class="fa-solid fa-book icon"></i>
+                        <span>Customer Knowledge Base</span>
+                        <span></span>
+                        <span class="desc">Product docs, support articles, runbooks</span>
+                    </label>
+                    <label class="option">
+                        <input type="checkbox" />
+                        <i class="fa-solid fa-file-contract icon"></i>
+                        <span>Q4 Financial Reports</span>
+                        <span class="time-badge">Oct 1 – Jan 31</span>
+                        <span class="desc">Earnings statements, auditor letters, board materials</span>
+                    </label>
+                    <div class="section-header">Personal</div>
+                    <label class="option">
+                        <input type="checkbox" />
+                        <i class="fa-solid fa-bookmark icon"></i>
+                        <span>My Saved Research</span>
+                        <span></span>
+                        <span class="desc">Pinboards &amp; manually attached docs (you only)</span>
+                    </label>
+                    <div class="panel-footer">
+                        <button>Reset to Global</button>
+                        <button class="primary">Done</button>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn primary"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+        </div>
+
+        <div class="callouts">
+            <h3>What this shows</h3>
+            <ol>
+                <li><strong>Scope chip</strong> — sits to the left of the search input. Shows current selection (Global, one scope, or N scopes).</li>
+                <li><strong>Dropdown</strong> — groups scopes by visibility: Default (Global), Organization (shared), Personal (owner-only).</li>
+                <li><strong>Time-windowed scopes</strong> — show an inline badge noting when they're active (e.g., Q4 Financial Reports).</li>
+                <li><strong>Default scope</strong> — one org scope per user is marked "Default" (via IsDefault=1) and auto-selected.</li>
+                <li><strong>Global reset</strong> — picking Global clears all other selections; selecting any specific scope removes Global.</li>
+                <li><strong>Design tokens only</strong> — all colors route through <code>--mj-*</code> variables so the dark-mode variant (mockup 11) is a zero-code change.</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>

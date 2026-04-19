@@ -5,7 +5,14 @@
  * fuses results with Reciprocal Rank Fusion (RRF), applies enrichment
  * (entity icons, record names, tags), and filters by minimum score.
  *
- * Providers are loaded via @RegisterClass(BaseSearchProvider, DriverClass) and
+ * When `SearchParams.ScopeIDs` is provided, the engine resolves each scope against
+ * `SearchEngineBase` (which caches all `MJ: Search Scope*` metadata), builds a
+ * `ScopeConstraints` object per scope (including Nunjucks-rendered MetadataFilter,
+ * ExtraFilter, UserSearchString, and FolderPath values), runs each scope's providers
+ * in parallel, then fuses the per-scope results via cross-scope RRF. An optional
+ * re-ranker stage (`BaseReRanker`) runs after fusion when configured.
+ *
+ * Providers are loaded via `@RegisterClass(BaseSearchProvider, DriverClass)` and
  * instantiated using the MJ ClassFactory based on active SearchProvider records.
  *
  * Uses BaseSingleton from @memberjunction/global for a truly global instance.
@@ -14,7 +21,12 @@
  */
 
 import { EntityInfo, EntityPermissionType, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { SearchEngineBase, MJSearchProviderEntity } from '@memberjunction/core-entities';
+import {
+    SearchEngineBase,
+    MJSearchProviderEntity,
+    MJSearchScopeEntity,
+    ScopeBundle
+} from '@memberjunction/core-entities';
 import { BaseSingleton, MJGlobal, NormalizeUUID } from '@memberjunction/global';
 import {
     SearchParams,
@@ -22,11 +34,23 @@ import {
     SearchResultItem,
     SearchFilters,
     SearchProviderInfo,
+    SearchContext,
+    ScopeConstraints,
+    ScopeExternalIndexConstraint,
+    ScopeEntityConstraint,
+    ScopeStorageConstraint,
+    FusionWeightsByProvider,
 } from './search.types';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchFusion, LabeledResultList } from './SearchFusion';
 import { SearchEnricher } from './SearchEnricher';
 import { FullTextSearchProvider } from './FullTextSearchProvider';
+import { BaseReRanker } from './BaseReRanker';
+import { NoopReRanker, LoadNoopReRanker } from './NoopReRanker';
+import { RenderScopeTemplate, RenderScopeJsonTemplate } from './ScopeTemplateRenderer';
+
+// Keep the default re-ranker registration alive under tree-shaking
+LoadNoopReRanker();
 
 /**
  * Configuration options for the SearchEngine.
@@ -34,6 +58,12 @@ import { FullTextSearchProvider } from './FullTextSearchProvider';
 export interface SearchEngineConfig {
     /** Default maximum results if not specified in SearchParams (default: 20) */
     DefaultMaxResults?: number;
+    /**
+     * Default multiplier applied to per-provider `topK` to compensate for residual
+     * late permission filtering. Individual calls can override via
+     * `SearchParams.PermissionOverfetchFactor`. Default: 2.
+     */
+    DefaultPermissionOverfetchFactor?: number;
 }
 
 /**
@@ -50,6 +80,16 @@ interface ProviderEntry {
     Priority: number;
     SupportsPreview: boolean;
     MaxResultsOverride: number | null;
+    /** The record's raw entity (for driver-class lookups + future per-scope filtering) */
+    Record: MJSearchProviderEntity;
+}
+
+/** Parsed `SearchScope.ScopeConfig.reRanker` block. */
+interface ReRankerConfig {
+    driverClass?: string;
+    inputTopN?: number;
+    outputTopN?: number;
+    config?: Record<string, unknown>;
 }
 
 /**
@@ -57,18 +97,26 @@ interface ProviderEntry {
  *
  * Providers are discovered from the MJ: Search Providers entity. Each active
  * provider's DriverClass is resolved via ClassFactory to create an instance,
- * which is then initialized with the provider's config from the DB.
+ * which is then initialized with the provider's config from the DB record.
  *
  * Usage:
  * ```typescript
  * // Initialize once at server startup
  * await SearchEngine.Instance.Config({}, contextUser);
  *
- * // Execute searches
+ * // Execute searches (unscoped — original behavior)
  * const result = await SearchEngine.Instance.Search({
  *     Query: 'quarterly revenue',
  *     MaxResults: 20,
  *     MinScore: 0.1
+ * }, contextUser);
+ *
+ * // Scoped search against two scopes with multi-tenant context
+ * const scopedResult = await SearchEngine.Instance.Search({
+ *     Query: 'refund policy',
+ *     MaxResults: 20,
+ *     ScopeIDs: ['hr-scope-id', 'legal-scope-id'],
+ *     SearchContext: { PrimaryScopeRecordID: 'tenant-a' }
  * }, contextUser);
  * ```
  */
@@ -88,6 +136,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     private _fusion = new SearchFusion();
     private _enricher = new SearchEnricher();
     private _defaultMaxResults = 20;
+    private _defaultOverfetchFactor = 2;
 
     /** Access the cached provider metadata from SearchEngineBase */
     protected get Base(): SearchEngineBase {
@@ -113,9 +162,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         if (this._configured && !forceRefresh) return;
 
         this._defaultMaxResults = config.DefaultMaxResults ?? 20;
+        this._defaultOverfetchFactor = Math.max(1, config.DefaultPermissionOverfetchFactor ?? 2);
         this._providerEntries = [];
 
-        // Ensure SearchEngineBase has loaded provider metadata
+        // Ensure SearchEngineBase has loaded provider + scope metadata
         await this.Base.Config(forceRefresh, contextUser);
 
         const providerRecords = this.Base.ActiveProviders;
@@ -136,19 +186,14 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
         this._configured = true;
         const names = this._providerEntries.map(e => e.Provider.SourceType);
-        LogStatus(`SearchEngine: Configured with ${this._providerEntries.length} provider(s): ${names.join(', ')}`);
+        LogStatus(`SearchEngine: Configured with ${this._providerEntries.length} provider(s): ${names.join(', ')} and ${this.Base.Scopes.length} scope(s)`);
     }
 
     /**
      * Execute a multi-source search with RRF fusion and optional enrichment.
      *
-     * Steps:
-     * 1. Run all available providers in parallel
-     * 2. Fuse results with RRF
-     * 3. Deduplicate by EntityName+RecordID
-     * 4. Exclude redundant entity-sourced Content Items
-     * 5. Apply minimum score threshold
-     * 6. Enrich with icons, names, and tags (skipped in preview mode)
+     * When `params.ScopeIDs` is provided, each scope runs independently and the results
+     * are combined via cross-scope RRF before deduplication, re-ranking, and enrichment.
      *
      * @param params - Search parameters
      * @param contextUser - The user performing the search
@@ -170,35 +215,108 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             const topK = params.MaxResults ?? this._defaultMaxResults;
             const mode = params.Mode ?? 'full';
             const isPreview = mode === 'preview';
+            const overfetchFactor = Math.max(1, params.PermissionOverfetchFactor ?? this._defaultOverfetchFactor);
+            const providerTopK = Math.max(topK, Math.ceil(topK * overfetchFactor));
 
-            // Step 1: Run all providers in parallel (respecting preview flag)
-            const labeledLists = await this.executeProviders(params.Query, topK, params.Filters, contextUser, isPreview);
-            const sourceCounts = this.countSources(labeledLists);
+            // ──────────────────────────────────────────────────────────
+            // Resolve scopes (when supplied)
+            // ──────────────────────────────────────────────────────────
+            const resolvedScopes = this.resolveScopes(params.ScopeIDs);
+            const isUnconstrained = resolvedScopes.length === 0 || resolvedScopes.some(s => s.Scope.IsGlobal);
 
-            // Step 2: Fuse with RRF
-            let results = this._fusion.Fuse(labeledLists, topK);
+            // ──────────────────────────────────────────────────────────
+            // Execute providers — either unscoped (original path) or per-scope
+            // ──────────────────────────────────────────────────────────
+            let sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
+            let fusedResults: SearchResultItem[];
 
-            // Step 3: Deduplicate
-            results = this._fusion.Deduplicate(results);
+            if (isUnconstrained) {
+                const labeledLists = await this.executeProviders(
+                    params.Query,
+                    providerTopK,
+                    params.Filters,
+                    contextUser,
+                    isPreview,
+                    undefined
+                );
+                sourceCounts = this.countSources(labeledLists);
+                const defaultFusionWeights = params.FusionWeightsOverride;
+                fusedResults = this._fusion.Fuse(labeledLists, providerTopK, defaultFusionWeights);
+            } else {
+                // Run each scope independently, then cross-scope RRF
+                const perScopeRunResults = await Promise.all(resolvedScopes.map(bundle =>
+                    this.executeScopeBundle(
+                        params.Query,
+                        providerTopK,
+                        params.Filters,
+                        contextUser,
+                        isPreview,
+                        bundle,
+                        params.SearchContext,
+                        params.FusionWeightsOverride
+                    )
+                ));
 
-            // Step 4: Exclude redundant Content Items
+                const sc = { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
+                const perScopeFused = new Map<string, SearchResultItem[]>();
+                for (const r of perScopeRunResults) {
+                    sc.Vector += r.sourceCounts.Vector;
+                    sc.FullText += r.sourceCounts.FullText;
+                    sc.Entity += r.sourceCounts.Entity;
+                    sc.Storage += r.sourceCounts.Storage;
+                    perScopeFused.set(r.scopeID, r.fused);
+                }
+                sourceCounts = sc;
+
+                if (perScopeFused.size > 1) {
+                    fusedResults = this._fusion.CrossScopeFusion(perScopeFused, providerTopK);
+                } else {
+                    const only = perScopeFused.values().next().value;
+                    fusedResults = only ?? [];
+                }
+            }
+
+            // ──────────────────────────────────────────────────────────
+            // Optional re-ranker stage (one per leading scope — pick the first active scope's config)
+            // ──────────────────────────────────────────────────────────
+            const reRankerConfig = this.pickReRankerConfig(resolvedScopes);
+            if (reRankerConfig?.driverClass) {
+                fusedResults = await this.runReRanker(
+                    params.Query,
+                    fusedResults,
+                    reRankerConfig,
+                    contextUser
+                );
+            }
+
+            // ──────────────────────────────────────────────────────────
+            // Dedup → content-item exclusion → permission safety net → score threshold → enrich
+            // ──────────────────────────────────────────────────────────
+            let results = this._fusion.Deduplicate(fusedResults);
             results = await this._enricher.ExcludeEntitySourcedContentItems(results, contextUser);
 
-            // Step 4.5: Filter by entity-level and row-level permissions
+            const beforePermCount = results.length;
             results = await this.filterByPermissions(results, contextUser);
+            const lateFilteredCount = beforePermCount - results.length;
+            if (lateFilteredCount > 0) {
+                // Observability: Section 3.6 — if a provider's push-down is complete, this
+                // number should be zero (the safety net should never trim anything).
+                LogStatus(`SearchEngine: Residual permission filter removed ${lateFilteredCount} result(s) — consider tightening provider push-down.`);
+            }
 
-            // Step 5: Apply minimum score threshold
             const scoreThreshold = params.MinScore ?? 0;
             if (scoreThreshold > 0) {
                 results = results.filter(r => r.Score >= scoreThreshold);
             }
 
-            // Step 6: Enrich (skip in preview mode)
+            // Trim to caller's requested topK (we overfetched earlier)
+            if (results.length > topK) results = results.slice(0, topK);
+
             if (!isPreview) {
                 await this._enricher.Enrich(results, contextUser);
             }
 
-            LogStatus(`SearchEngine: Search complete in ${Date.now() - startTime}ms - ${results.length} results`);
+            LogStatus(`SearchEngine: Search complete in ${Date.now() - startTime}ms - ${results.length} result(s)${resolvedScopes.length ? ` across ${resolvedScopes.length} scope(s)` : ''}`);
 
             return {
                 Success: true,
@@ -235,6 +353,230 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             MaxResults: maxResults,
             Mode: 'preview'
         }, contextUser);
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Scope resolution
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Load `ScopeBundle`s for each requested scope ID, filtering out inactive / expired.
+     * Returns an empty array when no scope IDs are supplied (caller treats as Global).
+     */
+    private resolveScopes(scopeIDs?: string[]): ScopeBundle[] {
+        if (!scopeIDs || scopeIDs.length === 0) return [];
+        const bundles: ScopeBundle[] = [];
+        for (const id of scopeIDs) {
+            const scope = this.Base.GetActiveScopeByID(id);
+            if (!scope) {
+                LogStatus(`SearchEngine: Requested scope "${id}" is not active or does not exist — skipping.`);
+                continue;
+            }
+            const bundle = this.Base.GetScopeBundle(id);
+            if (bundle) bundles.push(bundle);
+        }
+        return bundles;
+    }
+
+    /**
+     * Execute all scoped providers for a single scope bundle and return per-scope fused results.
+     */
+    private async executeScopeBundle(
+        query: string,
+        topK: number,
+        filters: SearchFilters | undefined,
+        contextUser: UserInfo,
+        isPreview: boolean,
+        bundle: ScopeBundle,
+        searchContext: SearchContext | undefined,
+        agentFusionWeights: FusionWeightsByProvider | undefined
+    ): Promise<{
+        scopeID: string;
+        fused: SearchResultItem[];
+        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
+    }> {
+        const scope = bundle.Scope;
+        const scopeConfig = this.parseJson(scope.ScopeConfig);
+        const constraints = this.buildScopeConstraints(bundle, searchContext);
+        const perProviderQueryTransforms = constraints.QueryTransforms ?? {};
+
+        // Determine which providers this scope participates in (SearchScopeProvider rows)
+        const scopeProviderIDs = new Set(bundle.Providers.map(p => NormalizeUUID(p.SearchProviderID)));
+        const allowAllProviders = scopeProviderIDs.size === 0; // empty = scope is IsGlobal or all-inclusive
+
+        const applicableProviders = this._providerEntries.filter(entry => {
+            if (!entry.Provider.IsAvailable()) return false;
+            if (isPreview && !entry.SupportsPreview) return false;
+            if (allowAllProviders) return true;
+            return scopeProviderIDs.has(NormalizeUUID(entry.ID));
+        });
+
+        if (applicableProviders.length === 0) {
+            LogStatus(`SearchEngine: Scope "${scope.Name}" has no applicable providers — skipping.`);
+            return {
+                scopeID: scope.ID,
+                fused: [],
+                sourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 }
+            };
+        }
+
+        // Resolve per-provider `SearchScopeProvider.MaxResultsOverride` if present
+        const promises = applicableProviders.map(async (entry): Promise<LabeledResultList> => {
+            try {
+                const spRow = bundle.Providers.find(r => NormalizeUUID(r.SearchProviderID) === NormalizeUUID(entry.ID));
+                const effectiveTopK = spRow?.MaxResultsOverride ?? entry.MaxResultsOverride ?? topK;
+
+                // If this provider has a per-provider QueryTransform override, stash it
+                // under the provider's SourceType in QueryTransforms so the provider finds it.
+                const perProviderConstraints: ScopeConstraints = {
+                    ...constraints,
+                    QueryTransforms: { ...perProviderQueryTransforms }
+                };
+                // (Note: actual Nunjucks-rendered `QueryTransformTemplateID` resolution for
+                // stored templates lives in AgentPreExecutionRAG/ScopedSearchAction, not here.
+                // This engine only forwards already-rendered strings that the caller provides.)
+
+                const providerResults = await entry.Provider.Search(
+                    query,
+                    effectiveTopK,
+                    filters,
+                    contextUser,
+                    perProviderConstraints
+                );
+                // Stamp provider metadata onto each result
+                for (const r of providerResults) {
+                    r.ProviderId = entry.ID;
+                    r.ProviderLabel = entry.DisplayName;
+                    r.ProviderIcon = entry.Icon;
+                }
+                return { Source: entry.Provider.SourceType, Results: providerResults };
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                LogError(`SearchEngine: Provider "${entry.Provider.SourceType}" failed in scope "${scope.Name}": ${msg}`);
+                return { Source: entry.Provider.SourceType, Results: [] };
+            }
+        });
+
+        const labeled = await Promise.all(promises);
+        const sourceCounts = this.countSources(labeled);
+
+        // Per-scope fusion with weight resolution:
+        //   agent fusion weights > scope.ScopeConfig.fusionWeights > engine defaults
+        const scopeWeights = scopeConfig && typeof scopeConfig.fusionWeights === 'object'
+            ? scopeConfig.fusionWeights as FusionWeightsByProvider
+            : undefined;
+        const fusionWeights = agentFusionWeights ?? scopeWeights;
+
+        const fused = this._fusion.Fuse(labeled, topK, fusionWeights);
+        return { scopeID: scope.ID, fused, sourceCounts };
+    }
+
+    /**
+     * Assemble a `ScopeConstraints` for a single scope: Nunjucks-render each template
+     * field against the `SearchContext`, then hand the rendered values to providers.
+     */
+    private buildScopeConstraints(
+        bundle: ScopeBundle,
+        searchContext: SearchContext | undefined
+    ): ScopeConstraints {
+        const externalIndexes: ScopeExternalIndexConstraint[] = bundle.ExternalIndexes.map(row => ({
+            SearchScopeExternalIndexID: row.ID,
+            IndexType: row.IndexType,
+            VectorIndexID: row.VectorIndexID ?? undefined,
+            ExternalIndexName: row.ExternalIndexName ?? undefined,
+            ExternalIndexConfig: this.parseJson(row.ExternalIndexConfig),
+            MetadataFilter: RenderScopeJsonTemplate(row.MetadataFilter, searchContext)
+        }));
+
+        const entities: ScopeEntityConstraint[] = bundle.Entities.map(row => ({
+            SearchScopeEntityID: row.ID,
+            EntityID: row.EntityID,
+            EntityName: this.lookupEntityName(row.EntityID),
+            ExtraFilter: row.ExtraFilter ? RenderScopeTemplate(row.ExtraFilter, searchContext) : undefined,
+            UserSearchString: row.UserSearchString ? RenderScopeTemplate(row.UserSearchString, searchContext) : undefined
+        }));
+
+        const storage: ScopeStorageConstraint[] = bundle.StorageAccounts.map(row => ({
+            SearchScopeStorageAccountID: row.ID,
+            FileStorageAccountID: row.FileStorageAccountID,
+            FolderPath: row.FolderPath ? RenderScopeTemplate(row.FolderPath, searchContext) : undefined
+        }));
+
+        // Per-provider query transforms: resolved from SearchScopeProvider.QueryTransformTemplateID
+        // For stored template IDs we need the TemplateEngine — that resolution happens in
+        // Phase 1C (AgentPreExecutionRAG) before this engine is called. We still honor any
+        // pre-rendered transforms that upstream callers placed in the scope config bag.
+        const scopeConfig = this.parseJson(bundle.Scope.ScopeConfig);
+        const rawTransforms = scopeConfig?.perProviderQueryTransforms;
+        const queryTransforms = rawTransforms && typeof rawTransforms === 'object'
+            ? { ...rawTransforms as Record<string, string> }
+            : undefined;
+
+        return {
+            ExternalIndexes: externalIndexes.length ? externalIndexes : undefined,
+            Entities: entities.length ? entities : undefined,
+            StorageAccounts: storage.length ? storage : undefined,
+            Context: searchContext,
+            QueryTransforms: queryTransforms,
+            ScopeConfig: scopeConfig ?? undefined
+        };
+    }
+
+    /** Resolve the EntityID → EntityName via MJ Metadata (for passing to providers that key by name). */
+    private lookupEntityName(entityID: string): string {
+        try {
+            const md = new Metadata();
+            const entity = md.Entities.find(e => NormalizeUUID(e.ID) === NormalizeUUID(entityID));
+            return entity?.Name ?? '';
+        } catch {
+            return '';
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Re-ranker
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Pick a re-ranker config for this search. When multiple scopes are in play, we
+     * use the first scope's config (matching task 1B.17: the re-rank stage is one
+     * call applied AFTER cross-scope fusion). A future enhancement could merge
+     * per-scope re-rankers, but the current plan keeps it simple.
+     */
+    private pickReRankerConfig(resolvedScopes: ScopeBundle[]): ReRankerConfig | undefined {
+        for (const bundle of resolvedScopes) {
+            const scopeConfig = this.parseJson(bundle.Scope.ScopeConfig);
+            const rr = scopeConfig?.reRanker as ReRankerConfig | undefined;
+            if (rr?.driverClass) return rr;
+        }
+        return undefined;
+    }
+
+    private async runReRanker(
+        query: string,
+        candidates: SearchResultItem[],
+        cfg: ReRankerConfig,
+        contextUser: UserInfo
+    ): Promise<SearchResultItem[]> {
+        if (!cfg.driverClass || candidates.length === 0) return candidates;
+
+        try {
+            const reRanker = MJGlobal.Instance.ClassFactory.CreateInstance<BaseReRanker>(
+                BaseReRanker,
+                cfg.driverClass
+            ) ?? new NoopReRanker();
+
+            const inputTopN = cfg.inputTopN ?? Math.min(100, candidates.length);
+            const outputTopN = cfg.outputTopN ?? Math.min(20, inputTopN);
+            const trimmed = candidates.slice(0, inputTopN);
+            const ranked = await reRanker.ReRank(query, trimmed, outputTopN, contextUser, cfg.config);
+            LogStatus(`SearchEngine: Re-ranker "${cfg.driverClass}" returned ${ranked.length} result(s) (input=${trimmed.length}, outputTopN=${outputTopN})`);
+            return ranked;
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`SearchEngine: Re-ranker "${cfg.driverClass}" failed, falling back to unranked: ${msg}`);
+            return candidates;
+        }
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -303,6 +645,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     Priority: record.Priority,
                     SupportsPreview: record.SupportsPreview,
                     MaxResultsOverride: record.MaxResultsOverride ?? null,
+                    Record: record,
                 });
                 LogStatus(`SearchEngine: Provider "${record.Name}" (${driverClass}) enabled`);
             } else {
@@ -315,7 +658,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     // ────────────────────────────────────────────────────────────────
-    // Search execution helpers
+    // Search execution helpers (unscoped path)
     // ────────────────────────────────────────────────────────────────
 
     /**
@@ -327,7 +670,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         topK: number,
         filters: SearchFilters | undefined,
         contextUser: UserInfo,
-        isPreview: boolean
+        isPreview: boolean,
+        scopeConstraints: ScopeConstraints | undefined
     ): Promise<LabeledResultList[]> {
         const entries = this._providerEntries.filter(e => {
             if (!e.Provider.IsAvailable()) return false;
@@ -343,7 +687,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         const promises = entries.map(async (entry): Promise<LabeledResultList> => {
             try {
                 const providerTopK = entry.MaxResultsOverride ?? topK;
-                const results = await entry.Provider.Search(query, providerTopK, filters, contextUser);
+                const results = await entry.Provider.Search(query, providerTopK, filters, contextUser, scopeConstraints);
                 // Stamp provider metadata onto each result
                 for (const r of results) {
                     r.ProviderId = entry.ID;
@@ -369,16 +713,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         for (const list of lists) {
             switch (list.Source) {
                 case 'vector':
-                    counts.Vector = list.Results.length;
+                    counts.Vector += list.Results.length;
                     break;
                 case 'fulltext':
-                    counts.FullText = list.Results.length;
+                    counts.FullText += list.Results.length;
                     break;
                 case 'entity':
-                    counts.Entity = list.Results.length;
+                    counts.Entity += list.Results.length;
                     break;
                 case 'storage':
-                    counts.Storage = list.Results.length;
+                    counts.Storage += list.Results.length;
                     break;
             }
         }
@@ -386,11 +730,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     // ────────────────────────────────────────────────────────────────
-    // Permission filtering
+    // Permission filtering (residual late safety net)
     // ────────────────────────────────────────────────────────────────
 
     /**
      * Filter search results by entity-level and row-level security permissions.
+     *
+     * **This is a safety net.** Providers are expected to do per-provider permission
+     * push-down (Section 3.6 of plans/search-scopes-rag-plus.md). If this filter is
+     * removing more than a handful of results in practice, the responsible provider's
+     * push-down is incomplete and should be fixed.
      *
      * Groups results by entity for efficient permission checking:
      * 1. Unknown entities are excluded (fail closed).
@@ -419,6 +768,13 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             );
         }
         await Promise.all(promises);
+
+        // Preserve the input order (which is the RRF/re-rank order). groupResultsByEntity
+        // scrambles by entity; re-sort by original position so consumers still see the
+        // best-ranked result first.
+        const inputIndex = new Map<SearchResultItem, number>();
+        results.forEach((r, i) => inputIndex.set(r, i));
+        permitted.sort((a, b) => (inputIndex.get(a) ?? 0) - (inputIndex.get(b) ?? 0));
 
         return permitted;
     }
@@ -563,5 +919,17 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             SourceType: e.Provider.SourceType,
             Priority: e.Priority,
         }));
+    }
+
+    /** Defensive JSON parse that never throws. Returns `null` on any failure. */
+    private parseJson(value: string | null | undefined): Record<string, unknown> | null {
+        if (!value) return null;
+        try {
+            const parsed = JSON.parse(value);
+            if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>;
+            return null;
+        } catch {
+            return null;
+        }
     }
 }

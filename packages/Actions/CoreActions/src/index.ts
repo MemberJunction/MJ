@@ -124,5 +124,6 @@ export * from './custom/visualization/shared/mermaid-types';
 export * from './custom/mcp';
 
 export * from './custom/search/search.action';
+export * from './custom/search/scoped-search.action';
 
 

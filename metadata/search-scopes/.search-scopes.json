@@ -1,0 +1,19 @@
+[
+  {
+    "fields": {
+      "Name": "Global",
+      "Description": "Built-in global search scope. Includes every configured provider, external index, entity, and storage account with no filtering. This is the default scope used when no specific scope is requested, preserving the original (pre-scope) search behavior.",
+      "Icon": "fa-solid fa-globe",
+      "IsGlobal": true,
+      "IsDefault": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "75EE4F64-B784-402B-B6A0-041A3134ED8D"
+    },
+    "sync": {
+      "lastModified": "2026-04-19T15:33:58.605Z",
+      "checksum": "c0f6617ab9555f35835215b6a3ebf56cb57823cfcdfbdec7d9f5d8270fa8eaa2"
+    }
+  }
+]

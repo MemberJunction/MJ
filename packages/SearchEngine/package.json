@@ -22,10 +22,12 @@
     "@memberjunction/core": "5.30.1",
     "@memberjunction/core-entities": "5.30.1",
     "@memberjunction/global": "5.30.1",
-    "@memberjunction/storage": "5.30.1"
+    "@memberjunction/storage": "5.30.1",
+    "nunjucks": "3.2.4"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
+    "@types/nunjucks": "3.2.6",
     "typescript": "^5.9.3"
   },
   "repository": {

@@ -13,7 +13,7 @@
  */
 
 import { UserInfo } from '@memberjunction/core';
-import { SearchSource, SearchFilters, SearchResultItem } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, ScopeConstraints } from './search.types';
 
 /**
  * Configuration passed to a search provider during initialization.
@@ -89,17 +89,35 @@ export abstract class BaseSearchProvider {
     /**
      * Execute a search and return result items with scores.
      *
+     * When `scopeConstraints` is provided, the provider MUST:
+     * 1. Narrow its retrieval surface to match the constraint (e.g., VectorSearchProvider
+     *    queries only the listed ExternalIndexes with matching IndexType, EntitySearchProvider
+     *    queries only the listed Entities, StorageSearchProvider queries only the listed
+     *    accounts/folders, 3rd-party providers filter by their own IndexType).
+     * 2. Apply any rendered `MetadataFilter` / `ExtraFilter` / `UserSearchString` /
+     *    `FolderPath` values as native filters.
+     * 3. Implement permission push-down (see Section 3.6 of
+     *    plans/search-scopes-rag-plus.md) — never surface results the `contextUser` cannot see.
+     * 4. Honor `scopeConstraints.QueryTransforms` when a per-provider rewrite is supplied —
+     *    look up by your `SourceType` or provider-specific key and use that string in place
+     *    of the raw `query`.
+     *
+     * When `scopeConstraints` is undefined, the provider runs unconstrained (backward
+     * compatible pre-scope behavior).
+     *
      * @param query - The search query text
      * @param topK - Maximum number of results to retrieve
      * @param filters - Optional filters to narrow results
      * @param contextUser - The user performing the search
+     * @param scopeConstraints - Optional per-scope constraint set, pre-rendered with SearchContext values
      * @returns Scored result items from this provider
      */
     abstract Search(
         query: string,
         topK: number,
         filters: SearchFilters | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]>;
 }
 

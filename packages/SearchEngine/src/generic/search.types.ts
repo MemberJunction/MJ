@@ -68,6 +68,163 @@ export interface SearchParams {
     MinScore?: number;
     /** Search mode: 'full' applies enrichment, 'preview' skips it for speed */
     Mode?: SearchMode;
+    /**
+     * Optional array of `MJ: Search Scopes` record IDs. When provided, the engine resolves
+     * each scope's metadata (providers, external indexes, entities, storage accounts) and
+     * runs only those constrained providers. Results from multiple scopes are combined via
+     * cross-scope RRF fusion. When omitted/empty, behaves as if the Global scope was used
+     * (backward compatible). A single scope marked `IsGlobal=true` is also treated as no
+     * filter.
+     */
+    ScopeIDs?: string[];
+    /**
+     * Optional multi-tenant runtime context. Interpolated into each scope's Nunjucks-rendered
+     * MetadataFilter, ExtraFilter, UserSearchString, and FolderPath values so the same scope
+     * definition can serve many tenants. See Section 9 of plans/search-scopes-rag-plus.md.
+     */
+    SearchContext?: SearchContext;
+    /**
+     * Optional per-agent fusion weight override. When set, the engine applies these weights
+     * during cross-scope RRF fusion and honors them per-provider when weighting
+     * within-scope lists. Resolution order: this > SearchScope.ScopeConfig.fusionWeights >
+     * engine defaults. Example: `{ vector: 2.0, fulltext: 1.0, entity: 1.0, storage: 1.0 }`.
+     */
+    FusionWeightsOverride?: FusionWeightsByProvider;
+    /**
+     * Optional per-provider `topK` overfetch multiplier. Compensates for residual late
+     * permission filtering by requesting more candidates from each provider than the caller
+     * strictly wants. The final result count is still bounded by `MaxResults`. Default: 2.
+     */
+    PermissionOverfetchFactor?: number;
+}
+
+/**
+ * Runtime multi-tenant context that flows through every provider so a single
+ * `SearchScope` definition can serve many tenants without per-tenant scope clones.
+ *
+ * Fields are injected into each scope's Nunjucks-rendered values as:
+ * - `{{ context.PrimaryScopeRecordID }}`
+ * - `{{ context.SecondaryScopes.<dimensionName> }}`
+ *
+ * Type-aligned with the agent memory system's `SecondaryScopeConfig` / `SecondaryScopeValue`
+ * in `@memberjunction/ai-core-plus` — the same `ExecuteAgentParams.primaryScopeRecordId` +
+ * `secondaryScopes` flow through notes, pre-execution RAG, and scoped search without any
+ * translation.
+ */
+export interface SearchContext {
+    /** Entity type that represents the tenant (e.g., Organization, Company). Optional — descriptive only. */
+    PrimaryScopeEntityID?: string;
+    /** Specific tenant record ID. NULL = no tenant filtering. */
+    PrimaryScopeRecordID?: string;
+    /** Additional dimensional scoping (e.g., `{ DepartmentID: 'support', ContactID: '...' }`). */
+    SecondaryScopes?: Record<string, SecondaryScopeValue>;
+}
+
+/**
+ * One dimensional scope value. Mirrors the canonical type from `@memberjunction/ai-core-plus`
+ * (`SecondaryScopeValue = string | number | boolean | string[]`) so the same
+ * `ExecuteAgentParams.secondaryScopes` value flows through notes, pre-execution RAG, and
+ * scoped search with zero translation. Re-declared here rather than imported to avoid a
+ * reverse dependency (search-engine → ai-core-plus).
+ *
+ * Per-dimension inheritance mode (strict vs. cascading) lives on the scope's
+ * `SearchContextConfig.dimensions[].inheritanceMode`, not on the runtime value.
+ */
+export type SecondaryScopeValue = string | number | boolean | string[];
+
+/**
+ * Per-provider fusion weights. Keys are the `SearchSource` values.
+ * Weights > 1 amplify a provider's contribution; weights < 1 dampen it.
+ */
+export interface FusionWeightsByProvider {
+    vector?: number;
+    fulltext?: number;
+    entity?: number;
+    storage?: number;
+    /** Catch-all for 3rd-party / custom providers keyed by `SourceType` string. */
+    [key: string]: number | undefined;
+}
+
+/**
+ * Constraints assembled from one or more `SearchScope` records and handed to each provider
+ * so the provider can narrow its retrieval to the scoped surface and apply native
+ * permission / metadata push-down.
+ *
+ * Providers that receive `scopeConstraints` MUST implement permission push-down
+ * (see Section 3.6 of plans/search-scopes-rag-plus.md) — no result the calling user cannot
+ * see should ever enter RRF/re-rank.
+ */
+export interface ScopeConstraints {
+    /**
+     * For vector and 3rd-party index providers (Elasticsearch, Typesense, AzureAISearch,
+     * OpenSearch): only query these external indexes. Each entry carries its IndexType,
+     * native identifier, rendered MetadataFilter, and any ExternalIndexConfig.
+     */
+    ExternalIndexes?: ScopeExternalIndexConstraint[];
+    /** For `EntitySearchProvider` / `FullTextSearchProvider`: only search these entities. */
+    Entities?: ScopeEntityConstraint[];
+    /** For `StorageSearchProvider`: only search these accounts/folders. */
+    StorageAccounts?: ScopeStorageConstraint[];
+    /** Multi-tenant runtime context — filters results to a specific tenant/dimension. */
+    Context?: SearchContext;
+    /**
+     * Optional per-provider query rewrites. Map key is the provider's `DriverClass` or
+     * `SourceType`. Provider uses this in place of the raw query when present.
+     */
+    QueryTransforms?: Record<string, string>;
+    /**
+     * Advanced scope config passed through verbatim. Providers may inspect this for
+     * provider-specific knobs (e.g., vector namespace, route key).
+     */
+    ScopeConfig?: Record<string, unknown>;
+}
+
+/**
+ * One external-index row for a scope, post-template-rendering.
+ */
+export interface ScopeExternalIndexConstraint {
+    /** 'Vector' | 'Elasticsearch' | 'Typesense' | 'AzureAISearch' | 'OpenSearch' | 'Other' */
+    IndexType: string;
+    /** Required when `IndexType='Vector'`. The MJ `VectorIndex.ID` to target. */
+    VectorIndexID?: string;
+    /** Required when `IndexType != 'Vector'`. The engine-native index/collection/alias name. */
+    ExternalIndexName?: string;
+    /**
+     * Rendered (post-Nunjucks, post-SearchContext-interpolation) native metadata filter.
+     * Pinecone/Qdrant/PGVector filter object, or Elasticsearch filter DSL, etc. Provider
+     * interprets. Parsed JSON object when the source was JSON; otherwise the raw rendered
+     * string.
+     */
+    MetadataFilter?: unknown;
+    /** Any extra provider-interpreted config (cluster alias, routing key). */
+    ExternalIndexConfig?: unknown;
+    /** ID of the originating `MJ: Search Scope External Indexes` row (for observability). */
+    SearchScopeExternalIndexID?: string;
+}
+
+/**
+ * One scoped entity, post-template-rendering.
+ */
+export interface ScopeEntityConstraint {
+    EntityID: string;
+    EntityName: string;
+    /** Rendered SQL WHERE fragment (Nunjucks templating already applied). */
+    ExtraFilter?: string;
+    /** Rendered override for RunView's `UserSearchString` (Nunjucks templating already applied). */
+    UserSearchString?: string;
+    /** ID of the originating `MJ: Search Scope Entities` row (for observability). */
+    SearchScopeEntityID?: string;
+}
+
+/**
+ * One scoped storage account/folder, post-template-rendering.
+ */
+export interface ScopeStorageConstraint {
+    FileStorageAccountID: string;
+    /** Rendered folder path (Nunjucks templating already applied). */
+    FolderPath?: string;
+    /** ID of the originating `MJ: Search Scope Storage Accounts` row (for observability). */
+    SearchScopeStorageAccountID?: string;
 }
 
 /**

@@ -11,7 +11,7 @@
 import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
-import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
 
 /**
  * Provides entity-level LIKE-based search using RunView + UserSearchString.
@@ -35,36 +35,52 @@ export class EntitySearchProvider extends BaseSearchProvider {
         query: string,
         topK: number,
         filters: SearchFilters | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
         try {
-            const md = new Metadata();
-            const searchableEntities = this.getSearchableEntities(md, filters);
+            // Honor per-provider query transform (e.g., FTS keyword extraction, AI rewrite)
+            const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
 
-            if (searchableEntities.length === 0) {
-                LogStatus('EntitySearchProvider: No searchable entities found');
+            const md = new Metadata();
+            // Build the scoped subset: if scopeConstraints.Entities is provided, use those
+            // verbatim (they already went through the scope's Nunjucks-rendered ExtraFilter +
+            // UserSearchString pipeline). Otherwise fall back to legacy AllowUserSearchAPI
+            // behavior with optional filters.EntityNames restriction.
+            const scoped = this.buildScopedEntityList(md, scopeConstraints, filters);
+
+            if (scoped.length === 0) {
+                LogStatus('EntitySearchProvider: No searchable entities (scope or metadata match empty)');
                 return [];
             }
 
-            // Debug: log searchable entities and their search fields
-            LogStatus(`EntitySearchProvider: Searching ${searchableEntities.length} entities for "${query}"`);
-            for (const e of searchableEntities.slice(0, 3)) {
-                const entity = md.Entities.find(ent => ent.Name === e.Name);
+            // Debug: log scoped entities and their search fields
+            LogStatus(`EntitySearchProvider: Searching ${scoped.length} entities for "${effectiveQuery}"${scopeConstraints ? ' (scoped)' : ''}`);
+            for (const e of scoped.slice(0, 3)) {
+                const entity = md.Entities.find(ent => ent.Name === e.EntityName);
                 if (entity) {
                     const searchFields = entity.Fields.filter(f => f.IncludeInUserSearchAPI);
-                    LogStatus(`  Entity "${e.Name}": ${searchFields.length} searchable fields [${searchFields.slice(0, 5).map(f => f.Name).join(', ')}${searchFields.length > 5 ? '...' : ''}]`);
+                    LogStatus(`  Entity "${e.EntityName}": ${searchFields.length} searchable fields [${searchFields.slice(0, 5).map(f => f.Name).join(', ')}${searchFields.length > 5 ? '...' : ''}]`);
                 }
             }
 
             // Calculate per-entity limit: distribute topK across entities
-            const perEntityLimit = Math.max(3, Math.ceil(topK / Math.max(1, searchableEntities.length)));
+            const perEntityLimit = Math.max(3, Math.ceil(topK / Math.max(1, scoped.length)));
 
-            // Search all entities in parallel
-            const searchPromises = searchableEntities.map(entity =>
-                this.searchOneEntity(entity.Name, query, perEntityLimit, contextUser)
+            // Search all entities in parallel, threading per-entity ExtraFilter + UserSearchString override
+            const searchPromises = scoped.map(item =>
+                this.searchOneEntity(
+                    item.EntityName,
+                    item.UserSearchString ?? effectiveQuery,
+                    perEntityLimit,
+                    contextUser,
+                    item.ExtraFilter
+                )
             );
 
             const results = await Promise.all(searchPromises);
+            // Re-score against the original query for field-match relevance (not the transform)
+            // to keep snippets/field-match semantics consistent with what the user typed.
             const allResults = results.flat();
 
             // Sort by score descending and limit to topK
@@ -75,6 +91,34 @@ export class EntitySearchProvider extends BaseSearchProvider {
             LogError(`EntitySearchProvider: Search failed: ${msg}`);
             return [];
         }
+    }
+
+    /**
+     * Resolve the entity list to actually search.
+     *
+     * - If `scopeConstraints.Entities` is provided, use those directly (each carries its own
+     *   rendered ExtraFilter + UserSearchString) — this is the "scoped" path.
+     * - Otherwise fall back to the legacy unscoped path (`AllowUserSearchAPI=true` with
+     *   optional `filters.EntityNames` restriction) and wrap each in a trivial constraint.
+     */
+    private buildScopedEntityList(
+        md: Metadata,
+        scopeConstraints: ScopeConstraints | undefined,
+        filters: SearchFilters | undefined
+    ): ScopeEntityConstraint[] {
+        if (scopeConstraints?.Entities?.length) {
+            // Honor the scope's explicit entity list verbatim.
+            return scopeConstraints.Entities;
+        }
+
+        const unscoped = this.getSearchableEntities(md, filters);
+        return unscoped.map(e => {
+            const info = md.Entities.find(x => x.Name === e.Name);
+            return {
+                EntityID: info?.ID ?? '',
+                EntityName: e.Name,
+            } as ScopeEntityConstraint;
+        });
     }
 
     /**
@@ -96,18 +140,24 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
     /**
      * Search a single entity using RunView with UserSearchString.
+     *
+     * Note: `contextUser` is passed to RunView so row-level security (RLS) is applied
+     * automatically — this is the Entity provider's permission push-down per Section 3.6
+     * of plans/search-scopes-rag-plus.md.
      */
     private async searchOneEntity(
         entityName: string,
-        query: string,
+        userSearchString: string,
         maxRows: number,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        extraFilter?: string
     ): Promise<SearchResultItem[]> {
         try {
             const rv = new RunView();
             const result = await rv.RunView<Record<string, unknown>>({
                 EntityName: entityName,
-                UserSearchString: query,
+                UserSearchString: userSearchString,
+                ExtraFilter: extraFilter && extraFilter.trim() ? extraFilter : undefined,
                 MaxRows: maxRows,
                 ResultType: 'simple'
             }, contextUser);
@@ -117,7 +167,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 return [];
             }
 
-            return this.convertResults(result.Results, entityName, query);
+            return this.convertResults(result.Results, entityName, userSearchString);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`EntitySearchProvider: Error searching "${entityName}": ${msg}`);

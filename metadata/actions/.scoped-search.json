@@ -1,0 +1,361 @@
+[
+  {
+    "fields": {
+      "Name": "Scoped Search",
+      "Description": "Scope-aware universal search for AI agents. Enforces the calling agent's SearchScopeAccess ('All' | 'Assigned' | 'None') and resolves the requested scope against the agent's AIAgentSearchScope rows. Supports agent-invoked pre-rendered query templates, per-provider query transforms, multi-scope RRF fusion, and (optional) re-ranking. Returns ranked, scored, and enriched results in the same shape as the universal Search action.",
+      "DriverClass": "__Scoped_Search",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-magnifying-glass-location",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The search query text (required). Natural language query to search within the resolved scope.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "880971F0-C630-420D-B8B4-7E92058B8E3E"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.313Z",
+            "checksum": "6bb0c27dae2bc0d2226811aa0aa72c03d65722460d19a6ca714bc505c0438317"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ScopeID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional. Specific SearchScope ID to use. When omitted, the calling agent's default scope (IsDefault=1) is used, falling back to Global when SearchScopeAccess='All'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D7EA4FC4-DFF6-4AD9-9584-4DB13AAA1AA8"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.344Z",
+            "checksum": "d2b4f9dae3dc5670214207edd68a944653d233a9bfe948b9f59cc4267fce6ff6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "DefaultValue": "25",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results to return. Defaults to 25. Overridden by AIAgentSearchScope.MaxResults if set and smaller.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B658FFBC-8B5C-451C-8CCA-F4A97E7EA862"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.373Z",
+            "checksum": "091a669a3bb7e7ea0882eeb53cfe1dc055820b6b28fd7ef4f72fcffd94a6a190"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinScore",
+            "DefaultValue": "0",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum relevance score threshold (0-1). Results below this score are excluded after RRF fusion. Overridden by AIAgentSearchScope.MinScore if set and greater.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7D890D74-EEDD-4F27-BD2C-953FB9D9CEC6"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.401Z",
+            "checksum": "0c18481d2bdabcb6b4b261add73654f4e396ad44f6d99947586ef9075fa52350"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the AI agent invoking this action. Used to enforce SearchScopeAccess and resolve the agent's AIAgentSearchScope rows. Typically populated automatically from the agent execution context.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AC303EE0-4A61-4D4E-A136-8E1C2AD2D56D"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.428Z",
+            "checksum": "3dfe827b961c2815cd56914a2ea449fc3c661994545c4c536bc25b31328f57c3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Ranked search result objects with the same shape as the universal Search action (ID, EntityName, RecordID, SourceType, ResultType, Title, Snippet, Score, ScoreBreakdown, Tags, EntityIcon, RecordName, MatchedAt, RawMetadata).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6D654D15-0226-4CEA-BC73-7A432812C2A0"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.455Z",
+            "checksum": "26bab3b999475426a04abb2a751730898857bf92d34ca4d5e0927ff6f035ee89"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of results returned after filtering.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BD23FF40-2094-4469-8555-6457D53EBBB2"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.484Z",
+            "checksum": "baf43fac50e74391d6701c8cadf77258326d29c6a1105f0e94610e3cb3f06dfe"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ElapsedMs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total search execution time in milliseconds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EF80F256-3822-46A4-A94A-5B63E0F2801D"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.510Z",
+            "checksum": "903d10aeab9f8158fc465370e7735ac430f4dc9211e02eca07ee1e3574207695"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceCounts",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Object with counts of results contributed by each source before fusion.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A7F72324-61B6-47E0-9711-534BE68D2247"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.536Z",
+            "checksum": "34d0b5525054668a4954c8ff8f0b0aaaf7f82f4f1a222fab0cf8d77950c2382a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ScopeID_Resolved",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The SearchScope ID that was actually used (explicit, default, or Global).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7E845413-42C7-4013-A47B-6D97A31BFF38"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.563Z",
+            "checksum": "385fe5fc90bf122054ab7b88436b1b5cf54614aa556daff470ee945c5398eb6d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ScopeName_Resolved",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The SearchScope Name that was actually used.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8ACC909B-FC90-4E8A-802B-0D2699A229F0"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.598Z",
+            "checksum": "8b45224bb06dabedfb9bb1a053df6b60aa92b2cedbeb8c10e7dbb9126ef45e58"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Scoped search completed successfully."
+          },
+          "primaryKey": {
+            "ID": "599899E6-2F6B-4A47-B7E4-06EC75653E19"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.629Z",
+            "checksum": "653f4cf966d564a1ed3061e06bd6ec6eb8e9f6495939af63109dc8a7401c35ce"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_QUERY",
+            "IsSuccess": false,
+            "Description": "The required Query parameter was not provided."
+          },
+          "primaryKey": {
+            "ID": "6B21CC94-D63B-4F42-B49E-B7C26494130D"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.644Z",
+            "checksum": "23194527677b8d34a512670f2922d10ea0d7699131cf56d63da9b30d5fbc5f5a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_USER_CONTEXT",
+            "IsSuccess": false,
+            "Description": "User context is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "E19D2B2C-80DC-41CC-86D9-ED2CB0379236"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.659Z",
+            "checksum": "d3dc7fb0671e9141140a5fa754e1d15579ddf2337e5cb436bd888fc656c465c7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_AGENT_CONTEXT",
+            "IsSuccess": false,
+            "Description": "Calling agent identity could not be resolved. Scoped search requires an AgentID (from params or execution context)."
+          },
+          "primaryKey": {
+            "ID": "28F8193A-6105-4000-AAA9-9188A8458408"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.672Z",
+            "checksum": "b71eb13756e996a071406a633c441f3d0ba347df9e92a08f2d69fcf7066085bd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ACCESS_DENIED",
+            "IsSuccess": false,
+            "Description": "The agent's SearchScopeAccess is 'None', or the requested scope is not in the agent's Assigned list."
+          },
+          "primaryKey": {
+            "ID": "66CE138F-20E4-40C6-AF06-D0D9DC69CDAF"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.685Z",
+            "checksum": "9e9596a15db8a486f2c7f5e42515fe180b60cb9aaba2303a706fd2f5809519ae"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SCOPE_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The requested scope does not exist or is not active/within its time window."
+          },
+          "primaryKey": {
+            "ID": "84612D67-2EB0-4F02-B7C0-D2F7F7983E5B"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.699Z",
+            "checksum": "f0659504d5ac386d0a4dad65eef3416f48dd15c1acb546e88cebf99cf65e6dc2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_DEFAULT_SCOPE",
+            "IsSuccess": false,
+            "Description": "No ScopeID was provided and the agent has no default scope assigned."
+          },
+          "primaryKey": {
+            "ID": "3CBA6998-B351-4E71-A8FE-B5A2619BEB97"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.713Z",
+            "checksum": "7c3a1b5a36a3f196420d4f1314200953a8d08c80940c4a0b5fe30e6d8d754aad"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SEARCH_FAILED",
+            "IsSuccess": false,
+            "Description": "The search engine returned an error during execution."
+          },
+          "primaryKey": {
+            "ID": "0085785E-AC59-491B-945E-ED49AD4A2264"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.727Z",
+            "checksum": "469ba40eabcf6ffc1a34156e435088e14aea5eeaca9595122d03ae3f7e62bbc3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during scoped search execution."
+          },
+          "primaryKey": {
+            "ID": "254CE504-2AE0-4C2E-94ED-6120BA168355"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T15:34:26.740Z",
+            "checksum": "be8bc902c517378f42a3e8cb2ca48f6b1c74b14b78f198ee0293f4353499001c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3671FCE1-E4A1-4AB2-83E8-552D19E80A4F"
+    },
+    "sync": {
+      "lastModified": "2026-04-19T15:34:26.265Z",
+      "checksum": "7fc3de21314a07384ac339e7c9ee19ea714e8266d5c9dde726470fdcdb587c7c"
+    }
+  }
+]

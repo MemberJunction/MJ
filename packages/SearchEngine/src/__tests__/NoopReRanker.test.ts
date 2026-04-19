@@ -1,0 +1,80 @@
+import { describe, it, expect, vi } from 'vitest';
+import { NoopReRanker } from '../generic/NoopReRanker';
+import { SearchResultItem } from '../generic/search.types';
+import type { UserInfo } from '@memberjunction/core';
+
+vi.mock('@memberjunction/global', async () => {
+    const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/global');
+    return {
+        ...actual,
+        RegisterClass: () => (target: unknown) => target,
+    };
+});
+
+function makeItem(id: string, score: number): SearchResultItem {
+    return {
+        ID: id,
+        EntityName: 'E',
+        RecordID: id,
+        SourceType: 'vector',
+        ResultType: 'entity-record',
+        Title: id,
+        Snippet: '',
+        Score: score,
+        ScoreBreakdown: {},
+        Tags: [],
+        MatchedAt: new Date(),
+    };
+}
+
+describe('NoopReRanker', () => {
+    const fakeUser = { ID: 'u1' } as unknown as UserInfo;
+
+    it('advertises its DriverClass for ClassFactory lookup', () => {
+        const rr = new NoopReRanker();
+        expect(rr.DriverClass).toBe('NoopReRanker');
+    });
+
+    it('returns empty when input is empty', async () => {
+        const rr = new NoopReRanker();
+        const result = await rr.ReRank('q', [], 10, fakeUser);
+        expect(result).toEqual([]);
+    });
+
+    it('returns empty when topN <= 0', async () => {
+        const rr = new NoopReRanker();
+        const items = [makeItem('a', 0.9)];
+        const result = await rr.ReRank('q', items, 0, fakeUser);
+        expect(result).toEqual([]);
+    });
+
+    it('returns candidates unchanged when topN >= candidate count', async () => {
+        const rr = new NoopReRanker();
+        const items = [makeItem('a', 0.9), makeItem('b', 0.8)];
+        const result = await rr.ReRank('q', items, 10, fakeUser);
+        expect(result).toHaveLength(2);
+        expect(result[0].RecordID).toBe('a');
+        expect(result[1].RecordID).toBe('b');
+    });
+
+    it('slices to topN when topN < candidate count', async () => {
+        const rr = new NoopReRanker();
+        const items = [
+            makeItem('a', 0.9),
+            makeItem('b', 0.8),
+            makeItem('c', 0.7),
+            makeItem('d', 0.6),
+        ];
+        const result = await rr.ReRank('q', items, 2, fakeUser);
+        expect(result).toHaveLength(2);
+        expect(result[0].RecordID).toBe('a');
+        expect(result[1].RecordID).toBe('b');
+    });
+
+    it('does not mutate the input array', async () => {
+        const rr = new NoopReRanker();
+        const items = [makeItem('a', 0.9), makeItem('b', 0.8)];
+        await rr.ReRank('q', items, 1, fakeUser);
+        expect(items).toHaveLength(2);
+    });
+});
