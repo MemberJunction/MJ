@@ -17,12 +17,13 @@ export class WatermarkService {
      */
     public async Load(
         entityMapID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        direction: 'Pull' | 'Push' = 'Pull'
     ): Promise<ICompanyIntegrationSyncWatermark | null> {
         const rv = new RunView();
         const result = await rv.RunView<ICompanyIntegrationSyncWatermark>({
             EntityName: 'MJ: Company Integration Sync Watermarks',
-            ExtraFilter: `EntityMapID='${entityMapID}'`,
+            ExtraFilter: `EntityMapID='${entityMapID}' AND Direction='${direction}'`,
             OrderBy: 'LastSyncAt DESC',
             MaxRows: 1,
             ResultType: 'entity_object',
@@ -44,13 +45,14 @@ export class WatermarkService {
     public async Update(
         entityMapID: string,
         newValue: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        direction: 'Pull' | 'Push' = 'Pull'
     ): Promise<void> {
-        const existing = await this.Load(entityMapID, contextUser);
+        const existing = await this.Load(entityMapID, contextUser, direction);
         if (existing) {
             await this.UpdateExistingWatermark(existing, newValue);
         } else {
-            await this.CreateNewWatermark(entityMapID, newValue, contextUser);
+            await this.CreateNewWatermark(entityMapID, newValue, contextUser, direction);
         }
     }
 
@@ -123,7 +125,8 @@ export class WatermarkService {
     private async CreateNewWatermark(
         entityMapID: string,
         newValue: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        direction: 'Pull' | 'Push' = 'Pull'
     ): Promise<void> {
         const md = new Metadata();
         const watermark = await md.GetEntityObject<MJCompanyIntegrationSyncWatermarkEntity>(
@@ -133,7 +136,7 @@ export class WatermarkService {
         watermark.NewRecord();
         watermark.EntityMapID = entityMapID;
         watermark.WatermarkValue = newValue;
-        watermark.Direction = 'Pull';
+        watermark.Direction = direction;
         watermark.WatermarkType = 'Timestamp';
         watermark.LastSyncAt = new Date();
         watermark.RecordsSynced = 0;
