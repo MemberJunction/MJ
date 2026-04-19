@@ -263,6 +263,92 @@ Composite component combining grid, cards, and timeline views.
 | `refreshRequested` | `void` | Refresh button clicked |
 | `exportRequested` | `{ format }` | Export button clicked |
 
+### RecycleBinComponent (`mj-recycle-bin`) and RecycleBinChipComponent (`mj-recycle-bin-chip`)
+
+Slide-in panel that lists hard-deleted records for a single entity and lets a user with `Delete` permission re-create any of them from its historical RecordChange snapshot. The accompanying chip component is a tiny composite that renders a count-badge button and hosts the panel — drop it into any toolbar in three lines.
+
+#### When to use
+
+The chip is **already embedded** in `EntityViewerComponent` and `EntityDataGridComponent` — both expose a `[ShowRecycleBin]` input (default `true`) that you can flip off if you don't want the chip. Use the standalone components only when building a custom entity viewer.
+
+#### Permission model
+
+The chip and panel are gated on `entity.UserPermissions.CanDelete`. Rationale: there is no native "undelete" permission in MemberJunction, but if a user has the higher-trust permission to *delete* records of an entity, restoring deleted ones is well within scope. The actual re-create action additionally requires `CanCreate`; without it the Restore button on each card disables with a tooltip.
+
+The chip auto-hides when:
+- `EntityName` is null/empty
+- The entity has `TrackRecordChanges = false`
+- The user lacks `CanDelete` permission
+- The deleted-record count is zero
+
+#### Soft vs hard deletes
+
+This component only surfaces *hard*-deleted records. Soft-deletes (`IsDeleted` flags, `Status='Inactive'`, etc.) leave the record visible in normal entity views, so the standard Record Changes panel + restore preview already handles them — no Recycle Bin needed.
+
+#### Cancelable Before/After events
+
+Every meaningful action emits a paired `before*` / `after*` event. The `before*` event carries `cancel: boolean` so consumers can intercept — useful for custom approval workflows, audit logging, or to take over the actual restore execution.
+
+```typescript
+onBeforeRecordRestore(e: BeforeRecordRestoreEventArgs) {
+  if (!hasComplianceApproval(e.entry)) {
+    e.cancel = true;
+    e.cancelReason = 'Awaiting compliance approval';
+  }
+}
+```
+
+#### `RecycleBinChipComponent` Inputs
+
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `EntityName` | `string \| null` | `null` | Entity whose deleted records will be listed. Chip hides when null. |
+| `ContextUser` | `UserInfo \| null` | `null` | Optional context user. Falls back to `Metadata.Provider.CurrentUser`. |
+
+#### `RecycleBinChipComponent` / `RecycleBinComponent` Outputs
+
+| Output | Args Type | Cancelable | Description |
+|--------|-----------|------------|-------------|
+| `BeforeRecycleBinOpen` | `BeforeRecycleBinOpenEventArgs` | ✓ | Fires before the deleted-record query runs. |
+| `AfterRecycleBinOpen` | `AfterRecycleBinOpenEventArgs` | | Fires after the query completes; carries `deletedRecordCount`. |
+| `BeforeRecordRestore` | `BeforeRecordRestoreEventArgs` | ✓ | Fires when the user clicks Restore on a card, before the preview opens. |
+| `AfterRecordRestore` | `AfterRecordRestoreEventArgs` | | Fires after the user closes the preview; carries `success`. |
+| `BeforeRestoreCommit` | `BeforeRestoreCommitEventArgs` | ✓ | Fires after the user confirms in the preview but before the insert runs. |
+| `AfterRestoreCommit` | `AfterRestoreCommitEventArgs` | | Fires after the insert; carries `success`, `newRecordID`, `errorMessage`. |
+
+#### `RecycleBinComponent` Inputs (when used directly)
+
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Visible` | `boolean` | `false` | Controls panel visibility. Setting true triggers a load. |
+| `EntityName` | `string \| null` | `null` | **Required.** The entity whose deleted records to list. |
+| `ContextUser` | `UserInfo \| null` | `null` | Optional context user. |
+| `MaxRecords` | `number` | `200` | Max number of cards to load. |
+
+#### Embedded chip control
+
+`EntityViewerComponent` and `EntityDataGridComponent` both expose:
+
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ShowRecycleBin` | `boolean` | `true` | Renders the Recycle Bin chip in the toolbar/header. Auto-hides when entity isn't a candidate (no tracking / no permission / no deleted records). |
+
+```html
+<!-- Composite viewer with the chip turned off -->
+<mj-entity-viewer
+  [entity]="selectedEntity"
+  [ShowRecycleBin]="false">
+</mj-entity-viewer>
+
+<!-- Standalone data grid with explicit chip event handling -->
+<mj-entity-data-grid
+  [entityName]="'Customers'"
+  [ShowRecycleBin]="true">
+</mj-entity-data-grid>
+```
+
+---
+
 ### EntityCardsComponent (`mj-entity-cards`)
 
 Card-based view with auto-generated layout.
@@ -342,6 +428,19 @@ import {
   AfterDataLoadEventArgs,
   AfterSortEventArgs
 } from '@memberjunction/ng-entity-viewer';
+
+// Recycle Bin
+import {
+  RecycleBinComponent,
+  RecycleBinChipComponent,
+  RecycleBinEntry,
+  BeforeRecycleBinOpenEventArgs,
+  AfterRecycleBinOpenEventArgs,
+  BeforeRecordRestoreEventArgs,
+  AfterRecordRestoreEventArgs,
+  BeforeRestoreCommitEventArgs,
+  AfterRestoreCommitEventArgs
+} from '@memberjunction/ng-entity-viewer';
 ```
 
 ## Dependencies
@@ -358,6 +457,8 @@ import {
 | `@memberjunction/ng-timeline` | Timeline view component |
 | `@memberjunction/ng-filter-builder` | Filter builder component |
 | `@memberjunction/ng-export-service` | Export service and dialog |
+| `@memberjunction/ng-record-changes` | Reusable restore preview panel for the Recycle Bin |
+| `@memberjunction/ng-versions` | Provides `mj-slide-panel` for the Recycle Bin slide-in |
 
 ### Peer Dependencies
 

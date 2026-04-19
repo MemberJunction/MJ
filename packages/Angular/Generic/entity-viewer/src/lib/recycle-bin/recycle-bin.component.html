@@ -1,0 +1,109 @@
+<mj-slide-panel
+  [Mode]="'slide'"
+  [Title]="'Recycle Bin · ' + (EntityName || '')"
+  [Visible]="Visible"
+  [Resizable]="true"
+  [MinWidthPx]="480"
+  [MaxWidthRatio]="0.6"
+  (Closed)="OnClose()">
+
+  <div class="rb-container">
+
+    <!-- Header -->
+    <div class="rb-header">
+      <div class="rb-header-icon">
+        <i class="fa-solid fa-trash-can-arrow-up" aria-hidden="true"></i>
+      </div>
+      <div class="rb-header-text">
+        <div class="rb-header-title">Recycle Bin</div>
+        @if (EntityName) {
+          <div class="rb-header-subtitle">{{ HeaderSubtitle }}</div>
+        }
+      </div>
+    </div>
+
+    <!-- No-permission state -->
+    @if (!IsLoading && LoadError && !HasAccess) {
+      <div class="rb-state rb-state-denied">
+        <i class="fa-solid fa-lock" aria-hidden="true"></i>
+        <h3>Access denied</h3>
+        <p>{{ LoadError }}</p>
+      </div>
+    }
+
+    <!-- Loading -->
+    @if (IsLoading) {
+      <mj-loading text="Loading deleted records..." size="medium"></mj-loading>
+    }
+
+    <!-- Generic error -->
+    @if (!IsLoading && LoadError && HasAccess) {
+      <div class="rb-state rb-state-error">
+        <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+        <h3>Could not load deleted records</h3>
+        <p>{{ LoadError }}</p>
+      </div>
+    }
+
+    <!-- Empty state -->
+    @if (!IsLoading && !LoadError && HasAccess && Entries.length === 0) {
+      <div class="rb-state rb-state-empty">
+        <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+        <h3>Recycle Bin is empty</h3>
+        <p>No records have been deleted from this entity, or change tracking
+          isn't enabled here.</p>
+      </div>
+    }
+
+    <!-- Entries -->
+    @if (!IsLoading && !LoadError && Entries.length > 0) {
+      <div class="rb-list">
+        @for (entry of Entries; track entry.RecordChange.ID) {
+          <div class="rb-card">
+            <div class="rb-card-info">
+              <div class="rb-card-name">{{ entry.DisplaySummary }}</div>
+              @if (entry.SupportingFields.length > 0) {
+                <div class="rb-card-fields">
+                  @for (sf of entry.SupportingFields; track sf.Name) {
+                    <span class="rb-card-field">
+                      <strong>{{ sf.DisplayName }}:</strong> {{ sf.Value }}
+                    </span>
+                  }
+                </div>
+              }
+              <div class="rb-card-meta">
+                <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                Deleted {{ formatTimestamp(entry.RecordChange.ChangedAt) }}
+                @if (entry.RecordChange.User) {
+                  by {{ getUserDisplay(entry.RecordChange.User) }}
+                }
+              </div>
+            </div>
+            <div class="rb-card-actions">
+              <button class="rb-btn rb-btn-restore"
+                [disabled]="!CanCreate"
+                [title]="CanCreate ? 'Re-create this record from its snapshot' : 'You do not have Create permission for this entity'"
+                (click)="OnRestoreClicked(entry)"
+                type="button">
+                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                Restore
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+  </div>
+
+  <!-- Restore preview slide-in (reused from ng-record-changes) -->
+  <mj-restore-preview-panel
+    [Visible]="PreviewVisible"
+    [Mode]="'undelete'"
+    [RecordChange]="SelectedEntry?.RecordChange ?? null"
+    [EntityName]="EntityName"
+    (RestoreConfirmed)="OnPreviewConfirmed($event)"
+    (RestoreCancelled)="OnPreviewCancelled()">
+  </mj-restore-preview-panel>
+
+</mj-slide-panel>
