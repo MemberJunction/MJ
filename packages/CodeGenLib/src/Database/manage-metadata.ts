@@ -4935,6 +4935,30 @@ export class ManageMetadataBase {
       return existingCategories;
    }
 
+   // CK_EntityField_CodeType on __mj.EntityField.CodeType allows only these values.
+   // LLM-generated codeType values must pass this gate or be coerced to 'Other' before UPDATE.
+   private static readonly ALLOWED_CODE_TYPES: ReadonlySet<string> = new Set([
+      'CSS', 'HTML', 'JavaScript', 'SQL', 'TypeScript', 'Other'
+   ]);
+
+   /**
+    * Sanitizes an LLM-supplied codeType against the CK_EntityField_CodeType CHECK constraint.
+    * Accepts only the six valid enum values; maps invalid/drift values (e.g. 'Python', 'Markdown',
+    * 'javascript' wrong case) to 'Other', and preserves null/undefined. Logs any coercion so the
+    * underlying prompt drift is visible instead of silently failing the batch UPDATE at the DB.
+    */
+   protected sanitizeCodeType(
+      codeType: string | null | undefined,
+      fieldName: string,
+      entityName: string
+   ): string | null | undefined {
+      if (codeType === undefined) return undefined;
+      if (codeType === null) return null;
+      if (ManageMetadataBase.ALLOWED_CODE_TYPES.has(codeType)) return codeType;
+      logStatus(`         Coerced invalid codeType '${codeType}' -> 'Other' for ${entityName}.${fieldName} (CK_EntityField_CodeType allows: ${Array.from(ManageMetadataBase.ALLOWED_CODE_TYPES).join(', ')})`);
+      return 'Other';
+   }
+
    /**
     * Applies category, display name, extended type, and code type to entity fields.
     * Enforces stability rules: fields with existing categories cannot move to NEW categories.
@@ -4996,9 +5020,12 @@ export class ManageMetadataBase {
                setClauses.push(`ExtendedType = ${extendedType}`);
             }
 
-            if (fieldCategory.codeType !== undefined && field.CodeType !== fieldCategory.codeType) {
-               const codeType = fieldCategory.codeType === null ? 'NULL' : `'${String(fieldCategory.codeType).replace(/'/g, "''")}'`;
-               setClauses.push(`CodeType = ${codeType}`);
+            if (fieldCategory.codeType !== undefined) {
+               const sanitized = this.sanitizeCodeType(fieldCategory.codeType, field.Name, entity.Name);
+               if (field.CodeType !== sanitized) {
+                  const codeType = sanitized == null ? 'NULL' : `'${sanitized.replace(/'/g, "''")}'`;
+                  setClauses.push(`CodeType = ${codeType}`);
+               }
             }
 
             if (setClauses.length > 0) {
