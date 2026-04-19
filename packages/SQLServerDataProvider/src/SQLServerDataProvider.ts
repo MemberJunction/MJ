@@ -1291,34 +1291,6 @@ export class SQLServerDataProvider
     };
   }
 
-  protected override async OnSaveCompleted(
-    entity: BaseEntity,
-    saveSQLResult: SaveSQLResult,
-    user: UserInfo,
-    options: EntitySaveOptions,
-    _context: SaveContext,
-  ): Promise<Record<string, unknown> | null> {
-    const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
-      | { changesJSON: string; changesDescription: string }
-      | undefined;
-    if (
-      overlappingChangeData &&
-      entity.EntityInfo.AllowMultipleSubtypes &&
-      entity.EntityInfo.TrackRecordChanges
-    ) {
-      const transaction = (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-      await this.PropagateRecordChangesToSiblings(
-        entity.EntityInfo,
-        overlappingChangeData,
-        entity.PrimaryKey.Values(),
-        user?.ID ?? '',
-        options.ISAActiveChildEntityName,
-        transaction ? { connectionSource: transaction } : undefined,
-      );
-    }
-    return null;
-  }
-
   protected override OnSuspendRefresh(): void {
     this._bAllowRefresh = false;
   }

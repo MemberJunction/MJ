@@ -24,7 +24,7 @@ module.exports = {
 
   // Include __mj schema for MJ framework development
   // Default excludes __mj since end-users shouldn't modify core entities
-  excludeSchemas: ['sys', 'staging', '__mj_integration'],
+  excludeSchemas: ['sys', 'staging'],
 
   // Default for CodeGen with larger batches, if this 
   // isn't in place, hard default of 5 is fallback, much slower
