@@ -1917,6 +1917,17 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         return this.pagedTools;
     }
 
+    /** Scale-mode denominator. In bypass-pagination mode (favorites/recent filters), the user
+     *  sees the fully filtered local list, so the "of N" reflects that filtered total.
+     *  Otherwise we show the server-side total for the current query. */
+    public scaleDenominator(): number {
+        const f = this.filters$.value;
+        if (f.favoritesOnly || f.recentOnly) {
+            return this.visiblePagedTools.length;
+        }
+        return this.toolsTotalCount;
+    }
+
     /** Part 3.5 — recently used tool IDs derived from execution logs (dedup, max 5) */
     public get TestRecentToolIDs(): string[] {
         const seen = new Set<string>();
