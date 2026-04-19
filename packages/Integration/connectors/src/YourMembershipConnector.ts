@@ -4182,18 +4182,36 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
                 if (resp.Status >= 400 || !resp.Body) continue;
 
                 const raw = resp.Body as Record<string, unknown>;
-                // Find the array in the response
+                // Resolve records from the response shape. YM parent-scoped endpoints
+                // can return three shapes:
+                //   A) A top-level array (rare) — `[{...}, {...}]`
+                //   B) A wrapper with a nested array (most common for list-per-parent) —
+                //      `{ EventId, Sessions: [...], ...other wrapper fields }`
+                //   C) A single detail object (for per-parent detail endpoints) —
+                //      `{ SessionId, EventId, ... }` directly.
+                // For (B), we emit inner array items — NOT the wrapper — so the PK
+                // (SessionId, TicketId, etc.) is actually present on each record. If the
+                // wrapper's nested array is empty, we emit 0 records for that parent
+                // rather than falling back to the wrapper (which has no PK and would be
+                // dropped by EnsurePrimaryKeys).
                 let records: Record<string, unknown>[] = [];
+                let hasArrayProperty = false;
                 if (Array.isArray(resp.Body)) {
                     records = resp.Body as Record<string, unknown>[];
+                    hasArrayProperty = true;
                 } else {
                     for (const val of Object.values(raw)) {
-                        if (Array.isArray(val) && val.length > 0) {
-                            records = val as Record<string, unknown>[];
-                            break;
+                        if (Array.isArray(val)) {
+                            hasArrayProperty = true;
+                            if (val.length > 0) {
+                                records = val as Record<string, unknown>[];
+                                break;
+                            }
                         }
                     }
-                    if (records.length === 0 && Object.keys(raw).length > 0) {
+                    // Only treat whole response as a single record when there's NO
+                    // array property anywhere — i.e., genuinely shape (C).
+                    if (!hasArrayProperty && Object.keys(raw).length > 0) {
                         records = [this.FilterMetadataKeys(raw)];
                     }
                 }
