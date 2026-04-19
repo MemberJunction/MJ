@@ -8,12 +8,13 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
-import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, MJCredentialEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+import { Metadata, RunView, LogError } from '@memberjunction/core';
+import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, MJCredentialEntity, KnowledgeHubMetadataEngine, MJSearchScopeEntity } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
 
 /** Configuration section definition */
 interface ConfigSection {
@@ -101,6 +102,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         { ID: 'fulltext', Label: 'Full-Text Indexes', Icon: 'fa-solid fa-text-width', Description: 'Configure SQL full-text search indexes' },
         { ID: 'embedding', Label: 'Embedding Models', Icon: 'fa-solid fa-microchip', Description: 'Select and configure embedding models' },
         { ID: 'thresholds', Label: 'Thresholds', Icon: 'fa-solid fa-sliders', Description: 'Set scoring thresholds for search and deduplication' },
+        { ID: 'search-scopes', Label: 'Search Scopes', Icon: 'fa-solid fa-compass-drafting', Description: 'Define reusable search scopes — which providers, entities, external indexes, and storage accounts participate in scoped search' },
         { ID: 'scheduling', Label: 'Scheduling', Icon: 'fa-solid fa-clock', Description: 'Manage automated pipeline schedules' },
     ];
 
@@ -179,6 +181,51 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public NewIndexVectorDBID = '';
     public NewIndexEmbeddingModelID = '';
 
+    // --- Search Scopes ---
+    /** All SearchScope rows the current user can manage. */
+    public SearchScopes: MJSearchScopeEntity[] = [];
+    /** Currently-selected scope ID — drives child-grid loading. */
+    public ActiveScopeID: string | null = null;
+    public IsLoadingScopes = false;
+    /** Which sub-tab of the selected scope is open. */
+    public ActiveScopeTab: 'definition' | 'providers' | 'indexes' | 'entities' | 'storage' = 'definition';
+
+    /** Column spec for the Providers child grid. */
+    public readonly ScopeProviderColumns: SearchScopeChildGridColumn[] = [
+        { Field: 'SearchProviderID', Label: 'Provider', Type: 'lookup', LookupEntityName: 'MJ: Search Providers', LookupFilter: "Status='Active'", Width: '200px' },
+        { Field: 'Enabled', Label: 'Enabled', Type: 'checkbox', Width: '80px' },
+        { Field: 'MaxResults', Label: 'Max Results', Type: 'number', Placeholder: 'e.g. 20', Width: '110px' },
+        { Field: 'QueryTransformTemplateID', Label: 'Query Transform', Type: 'lookup', LookupEntityName: 'Templates', Width: '180px' },
+        { Field: 'ProviderConfigOverride', Label: 'Config Override', Type: 'code', Placeholder: 'JSON override (optional)' },
+    ];
+
+    /** Column spec for the External Indexes child grid. */
+    public readonly ScopeExternalIndexColumns: SearchScopeChildGridColumn[] = [
+        { Field: 'IndexType', Label: 'Type', Type: 'select', Options: [
+            { Label: 'Vector', Value: 'Vector' },
+            { Label: 'Elasticsearch', Value: 'Elasticsearch' },
+            { Label: 'OpenSearch', Value: 'OpenSearch' },
+            { Label: 'Typesense', Value: 'Typesense' },
+            { Label: 'Azure AI Search', Value: 'AzureAISearch' },
+        ], Width: '140px' },
+        { Field: 'IndexName', Label: 'Index Name', Type: 'text', Placeholder: 'hr-policies-v2', Width: '200px' },
+        { Field: 'MetadataFilterTemplate', Label: 'Metadata Filter (Nunjucks)', Type: 'code', Placeholder: '{ "tenantId": "{{ context.PrimaryScopeRecordID }}" }' },
+        { Field: 'ExternalIndexConfig', Label: 'Config Override', Type: 'code', Placeholder: 'JSON override (optional)' },
+    ];
+
+    /** Column spec for the Entities child grid. */
+    public readonly ScopeEntityColumns: SearchScopeChildGridColumn[] = [
+        { Field: 'EntityID', Label: 'Entity', Type: 'lookup', LookupEntityName: 'Entities', Width: '220px' },
+        { Field: 'ExtraFilter', Label: 'Extra Filter (SQL + Nunjucks)', Type: 'code', Placeholder: "CategoryID = '<uuid>' AND OrganizationID = '{{ context.PrimaryScopeRecordID }}'" },
+        { Field: 'UserSearchStringOverride', Label: 'Query Rewrite', Type: 'text', Placeholder: '— use raw query —' },
+    ];
+
+    /** Column spec for the Storage Accounts child grid. */
+    public readonly ScopeStorageColumns: SearchScopeChildGridColumn[] = [
+        { Field: 'StorageAccountID', Label: 'Storage Account', Type: 'lookup', LookupEntityName: 'Storage Providers', Width: '220px' },
+        { Field: 'FolderPath', Label: 'Folder Path (Nunjucks)', Type: 'code', Placeholder: '/tenants/{{ context.PrimaryScopeRecordID }}/hr/policies/' },
+    ];
+
     ngAfterViewInit(): void {
         this.loadConfiguration();
         this.navigationService.SetAgentContext(this, {
@@ -199,6 +246,133 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
     public SelectSection(sectionId: string): void {
         this.ActiveSection = sectionId;
+        if (sectionId === 'search-scopes' && this.SearchScopes.length === 0) {
+            void this.LoadSearchScopes();
+        }
+        this.cdr.detectChanges();
+    }
+
+    // ─── Search Scopes ────────────────────────────────────────────────────────
+
+    public async LoadSearchScopes(): Promise<void> {
+        this.IsLoadingScopes = true;
+        this.cdr.detectChanges();
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<MJSearchScopeEntity>({
+                EntityName: 'MJ: Search Scopes',
+                OrderBy: 'IsGlobal DESC, IsDefault DESC, Name ASC',
+                ResultType: 'entity_object'
+            });
+            if (!result.Success) {
+                LogError(`KnowledgeConfig: LoadSearchScopes failed: ${result.ErrorMessage}`);
+                this.SearchScopes = [];
+            } else {
+                this.SearchScopes = result.Results || [];
+                if (!this.ActiveScopeID && this.SearchScopes.length > 0) {
+                    this.ActiveScopeID = this.SearchScopes[0].ID;
+                }
+            }
+        } finally {
+            this.IsLoadingScopes = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public SelectScope(scopeID: string): void {
+        this.ActiveScopeID = scopeID;
+        this.ActiveScopeTab = 'definition';
+        this.cdr.detectChanges();
+    }
+
+    public SelectScopeTab(tab: 'definition' | 'providers' | 'indexes' | 'entities' | 'storage'): void {
+        this.ActiveScopeTab = tab;
+        this.cdr.detectChanges();
+    }
+
+    public get ActiveScope(): MJSearchScopeEntity | null {
+        return this.SearchScopes.find(s => UUIDsEqual(s.ID, this.ActiveScopeID ?? '')) ?? null;
+    }
+
+    public async CreateNewScope(): Promise<void> {
+        try {
+            const md = new Metadata();
+            const scope = await md.GetEntityObject<MJSearchScopeEntity>('MJ: Search Scopes');
+            scope.Name = 'New Search Scope';
+            scope.Description = 'New scope — configure providers, entities, or storage below.';
+            scope.Icon = 'fa-solid fa-filter';
+            scope.Status = 'Active';
+            scope.IsGlobal = false;
+            scope.IsDefault = false;
+            const ok = await scope.Save();
+            if (!ok) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Create scope failed: ${scope.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    'error', 5000
+                );
+                return;
+            }
+            this.SearchScopes = [...this.SearchScopes, scope];
+            this.ActiveScopeID = scope.ID;
+            this.ActiveScopeTab = 'definition';
+            this.cdr.detectChanges();
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error creating scope: ${msg}`, 'error', 5000);
+        }
+    }
+
+    public async SaveActiveScope(): Promise<void> {
+        const scope = this.ActiveScope;
+        if (!scope) return;
+        const ok = await scope.Save();
+        if (ok) {
+            MJNotificationService.Instance.CreateSimpleNotification('Scope saved', 'success', 2000);
+        } else {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Save failed: ${scope.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                'error', 5000
+            );
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Format a scope Date field as the string expected by <input type="datetime-local">. */
+    public FormatScopeDate(value: Date | string | null | undefined): string {
+        if (!value) return '';
+        const d = value instanceof Date ? value : new Date(value);
+        if (isNaN(d.getTime())) return '';
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    /** Write a datetime-local input value back to the scope entity. Empty clears to null. */
+    public SetScopeDate(scope: MJSearchScopeEntity, field: 'StartAt' | 'EndAt', value: string): void {
+        if (!value) {
+            scope[field] = null;
+            return;
+        }
+        const parsed = new Date(value);
+        scope[field] = isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    public async DeleteActiveScope(): Promise<void> {
+        const scope = this.ActiveScope;
+        if (!scope) return;
+        if (scope.IsGlobal) {
+            MJNotificationService.Instance.CreateSimpleNotification('The built-in Global scope cannot be deleted.', 'warning', 3000);
+            return;
+        }
+        const ok = await scope.Delete();
+        if (!ok) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Delete failed: ${scope.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                'error', 5000
+            );
+            return;
+        }
+        this.SearchScopes = this.SearchScopes.filter(s => !UUIDsEqual(s.ID, scope.ID));
+        this.ActiveScopeID = this.SearchScopes.length > 0 ? this.SearchScopes[0].ID : null;
         this.cdr.detectChanges();
     }
 

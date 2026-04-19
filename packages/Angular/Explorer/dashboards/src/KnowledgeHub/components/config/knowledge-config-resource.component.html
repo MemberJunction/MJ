@@ -415,6 +415,172 @@
                 </div>
             }
 
+            <!-- Search Scopes Section -->
+            @if (ActiveSection === 'search-scopes') {
+                <div class="config-section">
+                    <h2 class="config-section-title"><i class="fa-solid fa-compass-drafting"></i> Search Scopes</h2>
+                    <p class="config-section-desc">
+                        Define reusable search scopes that filter which providers, entities, external indexes, and storage accounts participate in a scoped search.
+                        Scopes can be assigned to AI agents for pre-execution RAG or agent-invoked search.
+                    </p>
+
+                    <div class="scope-manager">
+                        <!-- Scope list -->
+                        <aside class="scope-manager-list">
+                            <div class="scope-manager-list-header">
+                                <span>Scopes ({{ SearchScopes.length }})</span>
+                                <button type="button" class="scope-manager-new-btn" (click)="CreateNewScope()">
+                                    <i class="fa-solid fa-plus"></i> New
+                                </button>
+                            </div>
+                            @if (IsLoadingScopes) {
+                                <div class="scope-manager-loading">Loading&hellip;</div>
+                            } @else if (SearchScopes.length === 0) {
+                                <div class="scope-manager-empty">
+                                    No scopes defined yet. Click <strong>New</strong> to create one.
+                                </div>
+                            } @else {
+                                @for (s of SearchScopes; track s.ID) {
+                                    <button
+                                        type="button"
+                                        class="scope-manager-list-item"
+                                        [class.active]="ActiveScopeID === s.ID"
+                                        (click)="SelectScope(s.ID)">
+                                        <i [class]="s.Icon || 'fa-solid fa-filter'" aria-hidden="true"></i>
+                                        <span class="scope-manager-list-name">{{ s.Name }}</span>
+                                        @if (s.IsGlobal) {
+                                            <span class="scope-manager-badge">Global</span>
+                                        } @else if (s.IsDefault) {
+                                            <span class="scope-manager-badge">Default</span>
+                                        }
+                                    </button>
+                                }
+                            }
+                        </aside>
+
+                        <!-- Scope detail -->
+                        <section class="scope-manager-detail">
+                            @if (ActiveScope) {
+                                <!-- Tab strip -->
+                                <div class="scope-manager-tabs">
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'definition'" (click)="SelectScopeTab('definition')">Definition</button>
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'providers'" (click)="SelectScopeTab('providers')">Providers</button>
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'indexes'" (click)="SelectScopeTab('indexes')">External Indexes</button>
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'entities'" (click)="SelectScopeTab('entities')">Entities</button>
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'storage'" (click)="SelectScopeTab('storage')">Storage</button>
+                                    <div class="scope-manager-tab-spacer"></div>
+                                    <button type="button" class="scope-manager-save-btn" (click)="SaveActiveScope()">
+                                        <i class="fa-solid fa-save"></i> Save
+                                    </button>
+                                    @if (!ActiveScope.IsGlobal) {
+                                        <button type="button" class="scope-manager-delete-btn" (click)="DeleteActiveScope()" title="Delete scope">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    }
+                                </div>
+
+                                <!-- Definition tab -->
+                                @if (ActiveScopeTab === 'definition') {
+                                    <div class="scope-definition-grid">
+                                        <label>
+                                            <span>Name</span>
+                                            <input type="text" class="mj-input" [value]="ActiveScope.Name" (change)="ActiveScope.Name = $any($event.target).value">
+                                        </label>
+                                        <label>
+                                            <span>Icon (Font Awesome class)</span>
+                                            <input type="text" class="mj-input" [value]="ActiveScope.Icon || ''" (change)="ActiveScope.Icon = $any($event.target).value">
+                                        </label>
+                                        <label class="scope-definition-full">
+                                            <span>Description</span>
+                                            <textarea rows="2" class="mj-textarea" [value]="ActiveScope.Description || ''" (change)="ActiveScope.Description = $any($event.target).value"></textarea>
+                                        </label>
+                                        <label>
+                                            <span>Status</span>
+                                            <select class="mj-input" [value]="ActiveScope.Status" (change)="ActiveScope.Status = $any($event.target).value">
+                                                <option value="Active">Active</option>
+                                                <option value="Inactive">Inactive</option>
+                                            </select>
+                                        </label>
+                                        <label>
+                                            <span>Start at</span>
+                                            <input type="datetime-local" class="mj-input" [value]="FormatScopeDate(ActiveScope.StartAt)" (change)="SetScopeDate(ActiveScope, 'StartAt', $any($event.target).value)">
+                                        </label>
+                                        <label>
+                                            <span>End at</span>
+                                            <input type="datetime-local" class="mj-input" [value]="FormatScopeDate(ActiveScope.EndAt)" (change)="SetScopeDate(ActiveScope, 'EndAt', $any($event.target).value)">
+                                        </label>
+                                        <label class="scope-definition-toggle">
+                                            <input type="checkbox" [checked]="ActiveScope.IsDefault" (change)="ActiveScope.IsDefault = $any($event.target).checked" [disabled]="ActiveScope.IsGlobal">
+                                            <span>Default scope — picked when users/agents don't specify one</span>
+                                        </label>
+                                        <label class="scope-definition-toggle">
+                                            <input type="checkbox" [checked]="ActiveScope.IsGlobal" disabled>
+                                            <span>Global — reserved for the built-in Global scope (read-only)</span>
+                                        </label>
+                                        <label class="scope-definition-full">
+                                            <span>Scope Config (JSON)</span>
+                                            <textarea rows="4" class="mj-textarea scope-code-block" spellcheck="false" [value]="ActiveScope.ScopeConfig || ''" (change)="ActiveScope.ScopeConfig = $any($event.target).value"></textarea>
+                                        </label>
+                                        <label class="scope-definition-full">
+                                            <span>Search Context Config (JSON)</span>
+                                            <textarea rows="4" class="mj-textarea scope-code-block" spellcheck="false" [value]="ActiveScope.SearchContextConfig || ''" (change)="ActiveScope.SearchContextConfig = $any($event.target).value"></textarea>
+                                        </label>
+                                    </div>
+                                }
+
+                                @if (ActiveScopeTab === 'providers') {
+                                    <mj-search-scope-child-grid
+                                        [ParentID]="ActiveScopeID"
+                                        ChildEntityName="MJ: Search Scope Providers"
+                                        ParentFieldName="SearchScopeID"
+                                        [Columns]="ScopeProviderColumns"
+                                        AddButtonLabel="+ Add provider"
+                                        EmptyMessage="No providers assigned. Without any providers, this scope searches nothing.">
+                                    </mj-search-scope-child-grid>
+                                }
+
+                                @if (ActiveScopeTab === 'indexes') {
+                                    <mj-search-scope-child-grid
+                                        [ParentID]="ActiveScopeID"
+                                        ChildEntityName="MJ: Search Scope External Indexes"
+                                        ParentFieldName="SearchScopeID"
+                                        [Columns]="ScopeExternalIndexColumns"
+                                        AddButtonLabel="+ Add external index"
+                                        EmptyMessage="No external indexes configured for this scope.">
+                                    </mj-search-scope-child-grid>
+                                }
+
+                                @if (ActiveScopeTab === 'entities') {
+                                    <mj-search-scope-child-grid
+                                        [ParentID]="ActiveScopeID"
+                                        ChildEntityName="MJ: Search Scope Entities"
+                                        ParentFieldName="SearchScopeID"
+                                        [Columns]="ScopeEntityColumns"
+                                        AddButtonLabel="+ Add entity"
+                                        EmptyMessage="No entities configured. Scoped entity search will return no rows.">
+                                    </mj-search-scope-child-grid>
+                                }
+
+                                @if (ActiveScopeTab === 'storage') {
+                                    <mj-search-scope-child-grid
+                                        [ParentID]="ActiveScopeID"
+                                        ChildEntityName="MJ: Search Scope Storage Accounts"
+                                        ParentFieldName="SearchScopeID"
+                                        [Columns]="ScopeStorageColumns"
+                                        AddButtonLabel="+ Add storage folder"
+                                        EmptyMessage="No storage accounts linked to this scope.">
+                                    </mj-search-scope-child-grid>
+                                }
+                            } @else {
+                                <div class="scope-manager-empty-detail">
+                                    Select a scope on the left, or click <strong>New</strong> to create one.
+                                </div>
+                            }
+                        </section>
+                    </div>
+                </div>
+            }
+
             <!-- Scheduling Section -->
             @if (ActiveSection === 'scheduling') {
                 <div class="config-section-content">

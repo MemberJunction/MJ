@@ -9,7 +9,7 @@ This plan introduces **Search Scopes** — a configurable, permission-aware laye
 2. Agents can be assigned 1+ Search Scopes with phase control (pre-execution RAG, agent-invoked tool, or both)
 3. Pre-execution RAG runs automatically in parallel with existing Phase 2 initialization — zero added latency
 4. A new `ScopedSearchAction` enforces scope restrictions when agents invoke search as a tool
-5. Search Scope permissions (Phase 2 of this plan) will allow org-level control over who can search what
+5. Search Scope permissions (**critical fast-follow** — see §10) will allow org-level control over who can search what, including per-user control over unscoped/Global search. Phase 1 ships without this gate; closing it is the primary next-milestone blocker for locking down multi-tenant or department-isolated scopes in production.
 
 **What this is NOT:**
 - Notes & Examples (AgentContextInjector) = the agent's **brain** — learned behaviors, personality, few-shot patterns. Shapes *how* the agent thinks.
@@ -33,7 +33,7 @@ Each subsystem serves a distinct purpose. Documentation must make this distincti
 7. [Template System Integration](#7-template-system-integration)
 8. [Multi-Scope RRF Fusion](#8-multi-scope-rrf-fusion)
 9. [Multi-Tenant Search Context](#9-multi-tenant-search-context)
-10. [Search Scope Permissions (Phase 2)](#10-search-scope-permissions-phase-2)
+10. [Search Scope Permissions (Critical Fast-Follow)](#10-search-scope-permissions-critical-fast-follow)
 11. [Existing System Touchpoints](#11-existing-system-touchpoints)
 12. [Documentation Requirements](#12-documentation-requirements)
 13. [Task Breakdown](#13-task-breakdown)
@@ -1223,11 +1223,23 @@ Multi-tenant Search Context is designed as **Phase 1G** — integrated inline wi
 
 ---
 
-## 10. Search Scope Permissions (Phase 2)
+## 10. Search Scope Permissions (Critical Fast-Follow)
 
-> **This section is designed but NOT implemented in Phase 1.** Phase 1 allows all users to see and use all scopes. Phase 2 adds permission control.
+> **Phase 1 status:** Phase 1 ships with **no per-user scope gate**. All users see and use all `Active` scopes; unscoped/Global search is available to everyone. Phase 1 relies entirely on per-entity and row-level permissions (`contextUser` → RLS via RunView) to restrict *what* a search returns.
+>
+> **This section is the CRITICAL FAST-FOLLOW milestone** — the scope-visibility and unscoped-search-control gaps described below are the primary Phase-2 gate that blocks shipping multi-tenant or department-isolated scope configurations to production. It is urgent, not long-term.
 
-### 10.1 SearchScopePermission (Future Entity)
+### 10.1 Phase 1 Gap — What Is Missing
+
+Specifically, Phase 1 does **not** provide:
+
+1. **Per-user scope visibility**: no way to limit which scopes a given user can see in the scope selector dropdown or on the admin form.
+2. **Control over unscoped / Global search**: when scopes exist, every user can still bypass them by deselecting everything (Global) and getting the full corpus. There is no admin control to force a user to stay within a defined scope.
+3. **Per-role management rights**: no separation between users who can *use* a scope vs users who can *edit* its configuration.
+
+Scope definitions in Phase 1 are effectively **org-wide operational conveniences**. They don't constitute a data-access boundary on their own — the boundary is still entity/RLS permissions. For Phase 2, scopes become a first-class coarse permission layer.
+
+### 10.2 SearchScopePermission (Fast-Follow Entity)
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -1237,19 +1249,22 @@ Multi-tenant Search Context is designed as **Phase 1G** — integrated inline wi
 | CanSearch | bit | Can use this scope for searching |
 | CanManage | bit | Can edit this scope's configuration |
 
-### 10.2 Enforcement Points (Future)
+Plus a new boolean on `User` (or a role-driven equivalent): `CanSearchUnscoped` — grants access to Global/unscoped search when at least one scope is defined. Default behavior for existing users: TBD during Phase-2 design (likely `1` for backward compatibility; new users default `0` once scopes exist).
 
-- **GraphQL resolver**: Filter available scopes by user's roles
-- **SearchEngine**: Validate user has `CanSearch` before executing scoped search
-- **Search UI**: Only show scopes the user has access to
-- **Agent action**: Validate the agent's contextUser has access to the requested scope
+### 10.3 Enforcement Points (Fast-Follow)
 
-### 10.3 UX Considerations (Future)
+- **GraphQL resolver**: Filter available scopes by user's roles; reject `scopeIDs` the user cannot see; reject unscoped queries when `CanSearchUnscoped = 0`.
+- **SearchEngine**: Validate user has `CanSearch` on every resolved scope before executing; validate unscoped path against `CanSearchUnscoped`.
+- **Search UI**: Only show scopes the user has permission to use; hide or disable the "Reset to Global" affordance when `CanSearchUnscoped = 0`.
+- **Agent action**: Validate the agent's `contextUser` (not just the agent's `SearchScopeAccess`) has access to the requested scope — the agent's permission model AND the user's permission model must both allow the call.
 
-- Users see only scopes they have permission to use
-- Search results within a scope are STILL filtered by entity/row-level permissions (this already exists)
+### 10.4 UX Considerations (Fast-Follow)
+
+- Users see only scopes they have permission to use.
+- Search results within a scope are STILL filtered by entity/row-level permissions (this already exists in Phase 1 via provider-level push-down).
 - Scope permissions add a coarser layer: "can this user even search this corpus?"
-- Admin UI for managing scope permissions (role assignment)
+- Admin UI for managing scope permissions (role assignment) on the SearchScope admin form — likely a new "Permissions" tab next to Providers / External Indexes / Entities / Storage / Assigned Agents.
+- Agent authoring UI surfaces a warning when an agent's `AIAgentSearchScope` row references a scope the current editing user cannot access, to prevent accidental privilege escalation.
 
 ---
 

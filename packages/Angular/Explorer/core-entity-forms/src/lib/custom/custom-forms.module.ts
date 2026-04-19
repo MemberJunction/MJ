@@ -65,6 +65,7 @@ import { MJTestRubricFormComponentExtended } from "./Tests/test-rubric-form.comp
 import { EntityLinkPillComponent } from "./Tests/entity-link-pill.component";
 import { MJListFormComponentExtended } from "./Lists/list-form.component";
 import { MJContentSourceFormComponentExtended } from "./ContentSources/content-source-form.component";
+import { SearchModule } from "@memberjunction/ng-search";
 
 @NgModule({
     declarations: [
@@ -146,7 +147,8 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         MarkdownModule,
         NgTreesModule,
         AngularSplitModule,
-        VersionsModule
+        VersionsModule,
+        SearchModule
     ],
     exports: [
         MJEntityFormComponentExtended,

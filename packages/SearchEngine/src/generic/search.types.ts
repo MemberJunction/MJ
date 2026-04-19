@@ -40,6 +40,11 @@ export interface SearchScoreBreakdown {
     Entity?: number;
     /** Score from file storage search */
     Storage?: number;
+    /**
+     * Re-rank score from the optional re-ranker stage (post-RRF, pre-dedup).
+     * When present, the top-level `Score` has been replaced by this value.
+     */
+    ReRank?: number;
 }
 
 /**
