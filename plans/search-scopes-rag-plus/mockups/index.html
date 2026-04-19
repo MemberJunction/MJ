@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Search Scopes &amp; RAG+ — Mockups Index</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="_tokens.css" />
+    <style>
+        .hero {
+            background: linear-gradient(135deg, var(--mj-brand-primary) 0%, #1f3f91 100%);
+            color: var(--mj-text-inverse);
+            padding: 48px 32px;
+            border-radius: 12px;
+            margin-bottom: 32px;
+        }
+        .hero h1 { margin: 0 0 12px; font-size: 2rem; font-weight: 700; }
+        .hero p { margin: 0; font-size: 1rem; opacity: 0.95; line-height: 1.6; max-width: 720px; }
+
+        .meta-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .meta-pill {
+            background: rgba(255,255,255,0.15);
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+        }
+
+        .section-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--mj-text-muted);
+            margin: 0 0 8px;
+        }
+
+        .audit-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+        .audit-card {
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 120ms ease, border-color 120ms ease;
+        }
+        .audit-card:hover {
+            border-color: var(--mj-brand-primary);
+            transform: translateY(-2px);
+        }
+        .audit-card .icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+            color: var(--mj-brand-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.125rem;
+        }
+        .audit-card h3 { margin: 0 0 2px; font-size: 0.9375rem; color: var(--mj-text-primary); }
+        .audit-card p { margin: 0; font-size: 0.8125rem; color: var(--mj-text-muted); }
+
+        .mockup-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        @media (max-width: 1080px) { .mockup-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 720px)  { .mockup-grid { grid-template-columns: 1fr; } }
+
+        .mockup-card {
+            display: flex;
+            flex-direction: column;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 10px;
+            overflow: hidden;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 120ms ease, box-shadow 120ms ease;
+        }
+        .mockup-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-color: var(--mj-brand-primary);
+        }
+
+        .mockup-thumb {
+            height: 160px;
+            background: var(--mj-bg-surface-sunken);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--mj-brand-primary);
+            font-size: 3rem;
+            position: relative;
+        }
+        .mockup-thumb::before {
+            content: attr(data-num);
+            position: absolute;
+            top: 12px;
+            left: 14px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--mj-text-muted);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.05em;
+        }
+        .mockup-card.dark .mockup-thumb {
+            background: #0f172a;
+            color: #60a5fa;
+        }
+        .mockup-card.dark .mockup-thumb::before {
+            color: #94a3b8;
+        }
+
+        .mockup-body {
+            padding: 16px 18px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .mockup-body h3 {
+            margin: 0 0 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--mj-text-primary);
+            line-height: 1.3;
+        }
+        .mockup-body p {
+            margin: 0 0 12px;
+            font-size: 0.8125rem;
+            color: var(--mj-text-secondary);
+            line-height: 1.5;
+            flex: 1;
+        }
+        .mockup-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: auto;
+        }
+        .mockup-tag {
+            font-size: 0.6875rem;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-secondary);
+            font-weight: 600;
+            letter-spacing: 0.03em;
+        }
+        .mockup-tag.dark {
+            background: #172033;
+            color: #94a3b8;
+        }
+        .mockup-tag.phase {
+            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+            color: var(--mj-brand-primary);
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            margin: 40px 0 16px;
+            color: var(--mj-text-primary);
+        }
+
+        .footer {
+            margin-top: 48px;
+            padding: 24px;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px;
+            color: var(--mj-text-secondary);
+            font-size: 0.875rem;
+        }
+        .footer strong { color: var(--mj-text-primary); }
+        .footer ul { margin: 8px 0 0; padding-left: 20px; }
+    </style>
+</head>
+<body>
+    <div class="mock-frame">
+        <div class="hero">
+            <h1>Search Scopes &amp; RAG+ — UX Mockups</h1>
+            <p>Phase 1H of <code>plans/search-scopes-rag-plus.md</code>. Nine self-contained HTML mockups covering the end-user search experience, agent administration, chat retrieval context, and the artifact viewer for persisted result sets.</p>
+            <div class="meta-row">
+                <span class="meta-pill"><i class="fa-solid fa-paintbrush"></i> Design tokens only — no hardcoded colors</span>
+                <span class="meta-pill"><i class="fa-brands fa-font-awesome"></i> Font Awesome icons</span>
+                <span class="meta-pill"><i class="fa-solid fa-moon"></i> Dark-mode variants included</span>
+            </div>
+        </div>
+
+        <p class="section-label">Context</p>
+        <div class="audit-row">
+            <a class="audit-card" href="_audit-search-ux.md">
+                <div class="icon"><i class="fa-solid fa-magnifying-glass"></i></div>
+                <div>
+                    <h3>Search UX Audit</h3>
+                    <p>Every search surface in MJExplorer &amp; where the scope selector lands (1H.1)</p>
+                </div>
+            </a>
+            <a class="audit-card" href="_audit-agent-admin-ux.md">
+                <div class="icon"><i class="fa-solid fa-user-gear"></i></div>
+                <div>
+                    <h3>Agent Admin UX Audit</h3>
+                    <p>AI Agent form inventory &amp; the new "Search" tab design (1H.2)</p>
+                </div>
+            </a>
+        </div>
+
+        <h2>Light mode mockups</h2>
+
+        <div class="mockup-grid">
+            <a class="mockup-card" href="01-global-search-with-scope-selector.html">
+                <div class="mockup-thumb" data-num="01"><i class="fa-solid fa-magnifying-glass-location"></i></div>
+                <div class="mockup-body">
+                    <h3>Global Search + Scope Selector</h3>
+                    <p>Shell search bar with the new chip-style scope selector — sections for Default (Global), Organization, and Personal scopes; time-windowed badge.</p>
+                    <div class="mockup-tags">
+                        <span class="mockup-tag phase">Phase 1H.4</span>
+                        <span class="mockup-tag">SearchScopeSelectorComponent</span>
+                    </div>
+                </div>
+            </a>
+
+            <a class="mockup-card" href="02-scope-filtered-results.html">
+                <div class="mockup-thumb" data-num="02"><i class="fa-solid fa-layer-group"></i></div>
+                <div class="mockup-body">
+                    <h3>Scope-Filtered Results</h3>
+                    <p>Full results page — per-scope grouping, provider source chips, re-rank indicator, "Save as artifact" action.</p>
+                    <div class="mockup-tags">
+                        <span class="mockup-tag phase">Phase 1H.5</span>
+                        <span class="mockup-tag">SearchCompositeComponent</span>
+                    </div>
+                </div>
+            </a>
+
+            <a class="mockup-card" href="03-searchscope-admin-form.html">
+                <div class="mockup-thumb" data-num="03"><i class="fa-solid fa-sliders"></i></div>
+                <div class="mockup-body">
+                    <h3>SearchScope Admin Form</h3>
+                    <p>Create/edit a scope — Name, Description, Icon, IsGlobal/Default, time window, ScopeConfig + SearchContextConfig JSON editors.</p>
+                    <div class="mockup-tags">
+                        <span class="mockup-tag phase">Phase 1H.6</span>
+                        <span class="mockup-tag">MJSearchScopeFormComponent</span>
+                    </div>
+                </div>
+            </a>
+
+            <a class="mockup-card" href="04-searchscope-children-grids.html">
+                <div class="mockup-thumb" data-num="04"><i class="fa-solid fa-table-list"></i></div>
+                <div class="mockup-body">
+                    <h3>Children Grids</h3>
+                    <p>Inline grids for Providers / External Indexes / Entities / Storage Accounts with Nunjucks-template values for MetadataFilter, ExtraFilter, FolderPath.</p>
+                    <div class="mockup-tags">
+                        <span class="mockup-tag phase">Phase 1H.7</span>
+                        <span class="mockup-tag">child sub-forms</span>
+                    </div>
+                </div>
+            </a>
+
+            <a class="mockup-card" href="05-ai-agent-search-tab.html">
+                <div class="mockup-thumb" data-num="05"><i class="fa-solid fa-robot"></i></div>
+                <div class="mockup-body">
+                    <h3>AI Agent — Search Tab</h3>
+                    <p>New tab on the AI Agent form — SearchScopeAccess radio cards + AIAgentSearchScope grid with Phase, Priority, Query Template, FusionWeightsOverride.</p>
+                    <div class="mockup-tags">
+                        <span class="mockup-tag phase">Phase 1H.8</span>
+                        <span class="mockup-tag">MJAIAgentFormComponentExtended</span>
+                    </div>
+                </div>
+            </a>
+
+            <a class="mockup-card" href="06-chat-rag-context-badge.html">
+                <div class="mockup-thumb" data-num="06"><i class="fa-solid fa-message"></i></div>
+                <div class="mockup-body">
+                    <h3>Chat RAG Badge</h3>
+                    <p>Conversation view — collapsible <code>&lt;retrieved_context&gt;</code> badge above the first assistant reply + mid-turn Scoped Search tool-call strip.</p>
+                    <div class="mockup-tags">
+                        <span class="mockup-tag phase">Phase 1H.9</span>
+                        <span class="mockup-tag">ng-skip-chat</span>
+                    </div>
+                </div>
+            </a>
+
+            <a class="mockup-card" href="07-search-result-set-artifact.html">
+                <div class="mockup-thumb" data-num="07"><i class="fa-solid fa-file-export"></i></div>
+                <div class="mockup-body">
+                    <h3>Search Result Set Artifact</h3>
+                    <p>Artifact viewer for a persisted Search Result Set — Data-Snapshot–shaped table with filter/sort/pagination and version history.</p>
+                    <div class="mockup-tags">
+                        <span class="mockup-tag phase">Phase 1H.10</span>
+                        <span class="mockup-tag">JsonArtifactViewerPlugin</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <h2>Dark-mode variants</h2>
+
+        <div class="mockup-grid">
+            <a class="mockup-card dark" href="08-global-search-dark.html">
+                <div class="mockup-thumb" data-num="08"><i class="fa-solid fa-magnifying-glass-location"></i></div>
+                <div class="mockup-body">
+                    <h3>Global Search — Dark</h3>
+                    <p>Same markup as mockup 01, flipped via <code>data-theme="dark"</code> on the root element. Verifies token fidelity.</p>
+                    <div class="mockup-tags">
+                        <span class="mockup-tag dark">Dark mode</span>
+                        <span class="mockup-tag phase">Phase 1H.11</span>
+                    </div>
+                </div>
+            </a>
+
+            <a class="mockup-card dark" href="09-ai-agent-search-tab-dark.html">
+                <div class="mockup-thumb" data-num="09"><i class="fa-solid fa-robot"></i></div>
+                <div class="mockup-body">
+                    <h3>AI Agent Search Tab — Dark</h3>
+                    <p>Dark variant of mockup 05. Verifies form, tabs, and grid all adapt via semantic tokens only.</p>
+                    <div class="mockup-tags">
+                        <span class="mockup-tag dark">Dark mode</span>
+                        <span class="mockup-tag phase">Phase 1H.11</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="footer">
+            <strong>Phase 1 status.</strong> All nine mockups (1H.4–1H.11) are shipped. The full implementation plan and Phase 1 completion status live in <code>plans/search-scopes-rag-plus.md</code>, and the technical guide is at <code>guides/SEARCH_SCOPES_AND_RAG_GUIDE.md</code>.
+            <ul>
+                <li><strong>No hardcoded colors.</strong> Every color routes through a semantic <code>--mj-*</code> token.</li>
+                <li><strong>Font Awesome icons only.</strong> No Kendo icon classes anywhere.</li>
+                <li><strong>Self-contained.</strong> No build step — open any HTML file directly.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
