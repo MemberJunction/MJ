@@ -76,7 +76,7 @@ const MAX_RETRIES = 5;
 const REQUEST_TIMEOUT_MS = 30000;
 
 /** Minimum milliseconds between API requests to avoid rate limiting */
-const MIN_REQUEST_INTERVAL_MS = 600;
+const MIN_REQUEST_INTERVAL_MS = 1000;
 
 /** Number of members to enrich per batch before writing to DB */
 const ENRICH_BATCH_SIZE = 500;
@@ -2752,6 +2752,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
     /** Current adaptive request interval — increases on 429, recovers toward resolved MIN */
     private currentRequestIntervalMs = MIN_REQUEST_INTERVAL_MS;
+    /** Successful requests since the last 429 — used to gate interval recovery */
+    private _successesSince429 = 0;
 
     // ── Per-instance config accessors (fall back to module-level defaults) ──
     private get effectiveMaxRetries(): number { return this._config?.MaxRetries ?? MAX_RETRIES; }
@@ -2861,18 +2863,30 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
             if (response.status === 429) {
                 const delayMs = this.CalculateRetryDelay(response, attempt);
-                this.currentRequestIntervalMs = Math.min(this.currentRequestIntervalMs * 2, 10000);
+                // Jump hard on every 429: first 429 goes straight to 3s floor, subsequent
+                // 429s double. Prevents the "ramp up to 10s → shave → hit 429 again" sawtooth.
+                this.currentRequestIntervalMs = Math.min(
+                    Math.max(this.currentRequestIntervalMs * 2, 3000),
+                    15000
+                );
+                this._successesSince429 = 0;
                 console.warn(`YM rate limited (429), retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries}). Interval adjusted to ${this.currentRequestIntervalMs}ms`);
                 await this.Sleep(delayMs);
                 continue;
             }
 
             this.lastRequestTime = Date.now();
-            // Gradually recover interval toward configured minimum on successful requests
+            // Multiplicative recovery (2% per success) is gentler than -50ms linear — a
+            // 15s elevated interval stays above 10s for ~20 successes before recovering,
+            // giving YM's rate limit window time to fully reset instead of re-triggering.
+            // Also delay any recovery until we've seen 30 clean successes since the last
+            // 429, so a brief success streak doesn't immediately drop us back into the
+            // rate-limit zone.
             const minInterval = this.effectiveMinRequestIntervalMs;
-            if (this.currentRequestIntervalMs > minInterval) {
+            this._successesSince429++;
+            if (this._successesSince429 > 30 && this.currentRequestIntervalMs > minInterval) {
                 this.currentRequestIntervalMs = Math.max(
-                    this.currentRequestIntervalMs - 50,
+                    Math.floor(this.currentRequestIntervalMs * 0.98),
                     minInterval
                 );
             }
