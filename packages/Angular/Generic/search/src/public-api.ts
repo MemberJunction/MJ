@@ -10,4 +10,5 @@ export * from './lib/search-filter.component';
 export * from './lib/search-input.component';
 export * from './lib/search-suggest.component';
 export * from './lib/search-composite.component';
+export * from './lib/search-scope-selector.component';
 export * from './lib/module';

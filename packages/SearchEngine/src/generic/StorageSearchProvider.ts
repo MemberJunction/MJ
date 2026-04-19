@@ -22,7 +22,7 @@ import {
     FileStorageEngine
 } from '@memberjunction/storage';
 import { BaseSearchProvider } from './ISearchProvider';
-import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeStorageConstraint } from './search.types';
 
 /**
  * Represents a storage account that is eligible for search, along with
@@ -128,7 +128,8 @@ export class StorageSearchProvider extends BaseSearchProvider {
         query: string,
         topK: number,
         _filters: SearchFilters | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
         if (!this._available || this._searchableAccounts.length === 0) {
             return [];
@@ -136,11 +137,24 @@ export class StorageSearchProvider extends BaseSearchProvider {
 
         const startTime = Date.now();
 
-        // Filter accounts by user permissions
-        const accessibleAccounts = this.filterAccountsByPermissions(
+        // Honor per-provider query transform
+        const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
+
+        // Narrow the account list per scope if provided. Scope folder paths are already
+        // rendered (Nunjucks + SearchContext applied by SearchEngine) — we pass them
+        // through to the driver per-account.
+        const scopedAccounts = this.applyScopeAccountFilter(
             this._searchableAccounts,
-            contextUser
+            scopeConstraints?.StorageAccounts
         );
+
+        if (scopedAccounts.length === 0) {
+            // Scope explicitly says "none of these storage accounts" — return empty.
+            return [];
+        }
+
+        // Filter accounts by user permissions (existing push-down)
+        const accessibleAccounts = this.filterAccountsByPermissions(scopedAccounts, contextUser);
 
         if (accessibleAccounts.length === 0) {
             LogStatus('StorageSearchProvider: User has no access to any searchable storage accounts');
@@ -150,10 +164,13 @@ export class StorageSearchProvider extends BaseSearchProvider {
         // Distribute topK across accounts
         const perAccountLimit = Math.max(3, Math.ceil(topK / accessibleAccounts.length));
 
-        // Search all accounts in parallel
-        const searchPromises = accessibleAccounts.map(entry =>
-            this.searchOneAccount(entry, query, perAccountLimit, contextUser)
-        );
+        // Search all accounts in parallel, threading per-account FolderPath (if any)
+        const searchPromises = accessibleAccounts.map(entry => {
+            const scopeRow = scopeConstraints?.StorageAccounts?.find(
+                r => NormalizeUUID(r.FileStorageAccountID) === NormalizeUUID(entry.Account.ID)
+            );
+            return this.searchOneAccount(entry, effectiveQuery, perAccountLimit, contextUser, scopeRow?.FolderPath);
+        });
 
         const results = await Promise.all(searchPromises);
         const allResults = results.flat();
@@ -168,6 +185,19 @@ export class StorageSearchProvider extends BaseSearchProvider {
         );
 
         return trimmed;
+    }
+
+    /**
+     * Restrict the searchable account list to the scope's allowed set. When the scope
+     * does not restrict (or the list is empty), returns the accounts unchanged.
+     */
+    private applyScopeAccountFilter(
+        accounts: SearchableAccount[],
+        scopeRows: ScopeStorageConstraint[] | undefined
+    ): SearchableAccount[] {
+        if (!scopeRows || scopeRows.length === 0) return accounts;
+        const allowedIDs = new Set(scopeRows.map(r => NormalizeUUID(r.FileStorageAccountID)));
+        return accounts.filter(a => allowedIDs.has(NormalizeUUID(a.Account.ID)));
     }
 
     /**
@@ -216,12 +246,15 @@ export class StorageSearchProvider extends BaseSearchProvider {
 
     /**
      * Search a single storage account using the provider's native SearchFiles API.
+     * If `folderPath` is supplied (from a scope), results are filtered to that prefix
+     * after the driver returns — most drivers do not natively support a path filter.
      */
     private async searchOneAccount(
         entry: SearchableAccount,
         query: string,
         maxResults: number,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        folderPath?: string
     ): Promise<SearchResultItem[]> {
         try {
             const driver = await FileStorageEngine.Instance.GetDriver(entry.Account.ID, contextUser);
@@ -240,7 +273,12 @@ export class StorageSearchProvider extends BaseSearchProvider {
             };
 
             const resultSet = await driver.SearchFiles(query, searchOptions);
-            return this.convertResults(resultSet.results, entry.Account, query);
+            let files = resultSet.results;
+            if (folderPath && folderPath.trim()) {
+                const prefix = folderPath.endsWith('/') ? folderPath : folderPath + '/';
+                files = files.filter(f => (f.path ?? '').startsWith(prefix));
+            }
+            return this.convertResults(files, entry.Account, query);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(

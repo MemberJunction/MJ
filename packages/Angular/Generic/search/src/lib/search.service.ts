@@ -23,7 +23,8 @@ import {
     SearchResultGroup,
     SearchFilter,
     SearchFilterOption,
-    SearchProviderInfo
+    SearchProviderInfo,
+    SearchScopeInfo
 } from './search-types';
 
 /** Default minimum relevance score threshold (0-1). Results below this are filtered out. */
@@ -87,6 +88,11 @@ export class SearchService {
 
     /** Cached provider metadata keyed by SourceType, populated from search responses */
     private providersBySourceType = new Map<string, SearchProviderInfo>();
+
+    /** Cached list of scopes the current user can see. Populated lazily by `LoadScopes()`. */
+    public Scopes$ = new BehaviorSubject<SearchScopeInfo[]>([]);
+    private scopesLoaded = false;
+    private scopesLoadInFlight: Promise<SearchScopeInfo[]> | null = null;
 
     /**
      * Execute a search request via the SearchKnowledge GraphQL mutation.
@@ -390,7 +396,8 @@ export class SearchService {
             Query: request.Query,
             MaxResults: request.MaxResults || 20,
             MinScore: minScore > 0 ? minScore : undefined,
-            Filters: filters
+            Filters: filters,
+            ScopeIDs: request.ScopeIDs && request.ScopeIDs.length > 0 ? request.ScopeIDs : undefined
         });
 
         return this.mapClientResponseToSearchResponse(clientResponse);
@@ -457,6 +464,38 @@ export class SearchService {
             ProviderLabel: r.ProviderLabel,
             ProviderIcon: r.ProviderIcon,
         };
+    }
+
+    /**
+     * Load the list of search scopes available to the current user.
+     * Cached after the first successful call; pass `force=true` to reload.
+     */
+    public async LoadScopes(force: boolean = false): Promise<SearchScopeInfo[]> {
+        if (this.scopesLoaded && !force) return this.Scopes$.value;
+        if (this.scopesLoadInFlight && !force) return this.scopesLoadInFlight;
+
+        const load = (async (): Promise<SearchScopeInfo[]> => {
+            try {
+                const provider = Metadata.Provider;
+                if (!(provider instanceof GraphQLDataProvider)) {
+                    this.Scopes$.next([]);
+                    return [];
+                }
+                const client = new GraphQLSearchClient(provider);
+                const scopes = await client.GetSearchScopes();
+                this.Scopes$.next(scopes);
+                this.scopesLoaded = true;
+                return scopes;
+            } catch {
+                this.Scopes$.next([]);
+                return [];
+            } finally {
+                this.scopesLoadInFlight = null;
+            }
+        })();
+
+        this.scopesLoadInFlight = load;
+        return load;
     }
 
     /** Build the client filters from active filter selections */

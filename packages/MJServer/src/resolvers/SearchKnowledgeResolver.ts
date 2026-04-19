@@ -1,8 +1,10 @@
-import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Float, InputType } from 'type-graphql';
+import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, Float, InputType, ID } from 'type-graphql';
+import GraphQLJSON from 'graphql-type-json';
 import { AppContext } from '../types.js';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { SearchEngine, SearchResult as SearchEngineResult, SearchResultItem as SearchEngineResultItem, SearchProviderInfo } from '@memberjunction/search-engine';
+import { SearchEngine, SearchResult as SearchEngineResult, SearchResultItem as SearchEngineResultItem, SearchProviderInfo, SearchContext } from '@memberjunction/search-engine';
+import { SearchEngineBase } from '@memberjunction/core-entities';
 
 /* ───── GraphQL types ───── */
 
@@ -152,6 +154,46 @@ export class SearchFiltersInput {
     Tags?: string[];
 }
 
+/** Runtime multi-tenant context passed through to `SearchEngine.Search()`. */
+@InputType()
+export class SearchContextInput {
+    @Field({ nullable: true })
+    PrimaryScopeEntityID?: string;
+
+    @Field({ nullable: true })
+    PrimaryScopeRecordID?: string;
+
+    /** JSON-encoded `Record<string, SecondaryScopeValue>`. */
+    @Field(() => GraphQLJSON, { nullable: true })
+    SecondaryScopes?: unknown;
+}
+
+/** Lightweight metadata shape for the scope selector UI. */
+@ObjectType()
+export class SearchScopeInfo {
+    @Field(() => ID)
+    ID: string;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field({ nullable: true })
+    Icon?: string;
+
+    @Field()
+    IsGlobal: boolean;
+
+    @Field()
+    IsDefault: boolean;
+
+    /** True when the scope has an OwnerUserID — rendered as a personal scope in the UI. */
+    @Field()
+    IsPersonal: boolean;
+}
+
 /* ───── Resolver (thin wrapper around SearchEngine) ───── */
 
 @Resolver()
@@ -163,6 +205,8 @@ export class SearchKnowledgeResolver extends ResolverBase {
         @Arg('maxResults', () => Float, { nullable: true }) maxResults: number | undefined,
         @Arg('filters', () => SearchFiltersInput, { nullable: true }) filters: SearchFiltersInput | undefined,
         @Arg('minScore', () => Float, { nullable: true }) minScore: number | undefined,
+        @Arg('scopeIDs', () => [ID], { nullable: true }) scopeIDs: string[] | undefined,
+        @Arg('searchContext', () => SearchContextInput, { nullable: true }) searchContext: SearchContextInput | undefined,
         @Ctx() { userPayload }: AppContext = {} as AppContext
     ): Promise<SearchKnowledgeResult> {
         const startTime = Date.now();
@@ -172,10 +216,20 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 return this.errorResult('Unable to determine current user', startTime);
             }
 
+            const mappedContext: SearchContext | undefined = searchContext
+                ? {
+                    PrimaryScopeEntityID: searchContext.PrimaryScopeEntityID,
+                    PrimaryScopeRecordID: searchContext.PrimaryScopeRecordID,
+                    SecondaryScopes: searchContext.SecondaryScopes as SearchContext['SecondaryScopes']
+                }
+                : undefined;
+
             const result = await SearchEngine.Instance.Search({
                 Query: query,
                 MaxResults: maxResults,
                 MinScore: minScore,
+                ScopeIDs: scopeIDs && scopeIDs.length ? scopeIDs : undefined,
+                SearchContext: mappedContext,
                 Filters: filters ? {
                     EntityNames: filters.EntityNames,
                     SourceTypes: filters.SourceTypes,
@@ -188,6 +242,42 @@ export class SearchKnowledgeResolver extends ResolverBase {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`SearchKnowledge mutation failed: ${msg}`);
             return this.errorResult(msg, startTime);
+        }
+    }
+
+    /**
+     * Returns the list of search scopes the current user can see and use.
+     *
+     * Phase 1 returns all active scopes plus personal scopes owned by the caller.
+     * Phase 2 will layer `SearchScopePermission` filtering on top.
+     */
+    @Query(() => [SearchScopeInfo])
+    async SearchScopes(
+        @Ctx() { userPayload }: AppContext = {} as AppContext
+    ): Promise<SearchScopeInfo[]> {
+        try {
+            const currentUser = this.GetUserFromPayload(userPayload);
+            if (!currentUser) return [];
+
+            await SearchEngineBase.Instance.Config(false, currentUser);
+            const scopes = SearchEngineBase.Instance.ActiveScopes;
+            const userID = currentUser.ID;
+
+            return scopes
+                .filter(s => !s.OwnerUserID || s.OwnerUserID === userID)
+                .map(s => ({
+                    ID: s.ID,
+                    Name: s.Name,
+                    Description: s.Description ?? undefined,
+                    Icon: s.Icon ?? undefined,
+                    IsGlobal: !!s.IsGlobal,
+                    IsDefault: !!s.IsDefault,
+                    IsPersonal: !!s.OwnerUserID
+                }));
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`SearchScopes query failed: ${msg}`);
+            return [];
         }
     }
 

@@ -16,7 +16,7 @@ import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
 import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
-import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
 
 /**
  * Provides vector similarity search across all configured vector indexes.
@@ -70,10 +70,22 @@ export class VectorSearchProvider extends BaseSearchProvider {
         query: string,
         topK: number,
         filters: SearchFilters | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
         try {
             await AIEngine.Instance.Config(false, contextUser);
+
+            // Honor per-provider query transform
+            const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
+
+            // Determine the scoped vector-index subset. When scopeConstraints.ExternalIndexes
+            // is provided, filter to rows where IndexType='Vector' (3rd-party rows are for
+            // other providers) and match the listed VectorIndexIDs. When absent, fall back
+            // to "all configured vector indexes" (unscoped legacy behavior).
+            const scopedVectorRows = scopeConstraints?.ExternalIndexes
+                ? scopeConstraints.ExternalIndexes.filter(r => r.IndexType === 'Vector' && r.VectorIndexID)
+                : undefined;
 
             const rv = new RunView();
             const indexResult = await rv.RunView<MJVectorIndexEntity>({
@@ -86,13 +98,33 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 return [];
             }
 
-            const indexesByModel = this.groupIndexesByModel(indexResult.Results);
-            const metadataFilter = this.buildMetadataFilter(filters);
+            let activeIndexes = indexResult.Results;
+            if (scopedVectorRows !== undefined) {
+                const allowedIDs = new Set(scopedVectorRows.map(r => r.VectorIndexID!.toLowerCase()));
+                activeIndexes = activeIndexes.filter(idx => allowedIDs.has(idx.ID.toLowerCase()));
+                if (activeIndexes.length === 0) {
+                    // Scope explicitly restricts vector indexes and none of the configured
+                    // indexes matched — return empty (scope says "search nothing here").
+                    return [];
+                }
+            }
 
-            // For each model group: embed + query all indexes in parallel
+            const indexesByModel = this.groupIndexesByModel(activeIndexes);
+            const baseFilter = this.buildMetadataFilter(filters);
+
+            // For each model group: embed + query all indexes in parallel, optionally merging
+            // the scope's per-index MetadataFilter into the baseFilter.
             const modelGroupPromises = Array.from(indexesByModel.entries()).map(
                 ([embeddingModelID, indexes]) =>
-                    this.embedAndQueryGroup(query, embeddingModelID, indexes, topK, metadataFilter, contextUser)
+                    this.embedAndQueryGroup(
+                        effectiveQuery,
+                        embeddingModelID,
+                        indexes,
+                        topK,
+                        baseFilter,
+                        scopedVectorRows,
+                        contextUser
+                    )
             );
 
             const groupResults = await Promise.all(modelGroupPromises);
@@ -160,6 +192,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         indexes: MJVectorIndexEntity[],
         topK: number,
         filter: object | undefined,
+        scopedRows: ScopeExternalIndexConstraint[] | undefined,
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
         try {
@@ -195,13 +228,18 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 this.setCachedEmbedding(cacheKey, queryVector);
             }
 
-            const indexPromises = indexes.map(vectorIndex =>
-                this.queryOneIndex(vectorIndex, queryVector, topK, filter, contextUser)
+            const indexPromises = indexes.map(vectorIndex => {
+                // Merge per-index rendered MetadataFilter (from scope) into the base filter
+                const perIndexRow = scopedRows?.find(
+                    r => r.VectorIndexID && r.VectorIndexID.toLowerCase() === vectorIndex.ID.toLowerCase()
+                );
+                const mergedFilter = this.mergeMetadataFilters(filter, perIndexRow?.MetadataFilter);
+                return this.queryOneIndex(vectorIndex, queryVector!, topK, mergedFilter, contextUser)
                     .catch(error => {
                         LogError(`VectorSearchProvider: Error querying index "${vectorIndex.Name}": ${error}`);
                         return [] as SearchResultItem[];
-                    })
-            );
+                    });
+            });
 
             const indexResults = await Promise.all(indexPromises);
             return indexResults.flat();
@@ -358,6 +396,39 @@ export class VectorSearchProvider extends BaseSearchProvider {
         if (parts.length > 0) return parts.join(' · ');
 
         return `Matched from index "${indexName}" with score ${(score ?? 0).toFixed(4)}`;
+    }
+
+    /**
+     * Merge a scope's per-index rendered MetadataFilter into the base filter.
+     * Both sides are optional. Scope filter is combined with the base filter via `$and`
+     * so scope and user filters compose conjunctively. Scope filter may be either an
+     * object (already parsed) or a JSON string — both are accepted.
+     */
+    private mergeMetadataFilters(
+        baseFilter: object | undefined,
+        scopeFilter: unknown
+    ): object | undefined {
+        if (scopeFilter == null) return baseFilter;
+
+        let parsed: object | undefined;
+        if (typeof scopeFilter === 'string') {
+            const trimmed = scopeFilter.trim();
+            if (!trimmed) return baseFilter;
+            try {
+                parsed = JSON.parse(trimmed);
+            } catch {
+                LogError(`VectorSearchProvider: Scope MetadataFilter is not valid JSON — skipping: ${trimmed.substring(0, 120)}`);
+                return baseFilter;
+            }
+        } else if (typeof scopeFilter === 'object') {
+            parsed = scopeFilter as object;
+        } else {
+            return baseFilter;
+        }
+
+        if (!parsed) return baseFilter;
+        if (!baseFilter) return parsed;
+        return { $and: [baseFilter, parsed] };
     }
 
     /** Build metadata filter from SearchFilters for vector DB queries */

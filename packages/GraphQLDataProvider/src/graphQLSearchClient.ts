@@ -18,6 +18,37 @@ export interface SearchClientParams {
     MinScore?: number;
     /** Optional filters to narrow search results */
     Filters?: SearchClientFilters;
+    /**
+     * Optional array of `MJ: Search Scopes` record IDs. When provided, the server
+     * resolves each scope's metadata (providers, external indexes, entities, storage
+     * accounts) and runs only those constrained providers. Results from multiple
+     * scopes are combined via cross-scope RRF fusion. Omit (or pass an empty array) for
+     * backward-compatible unscoped search.
+     */
+    ScopeIDs?: string[];
+    /**
+     * Optional runtime multi-tenant context. Flows to every provider so one scope
+     * definition can serve many tenants.
+     */
+    SearchContext?: {
+        PrimaryScopeEntityID?: string;
+        PrimaryScopeRecordID?: string;
+        SecondaryScopes?: Record<string, unknown>;
+    };
+}
+
+/**
+ * Lightweight metadata returned by the `SearchScopes` query — feeds the scope selector
+ * dropdown / chip group in the search UI.
+ */
+export interface SearchScopeInfo {
+    ID: string;
+    Name: string;
+    Description?: string;
+    Icon?: string;
+    IsGlobal: boolean;
+    IsDefault: boolean;
+    IsPersonal: boolean;
 }
 
 /**
@@ -358,8 +389,8 @@ export class GraphQLSearchClient {
      */
     private buildSearchKnowledgeMutation(): string {
         return gql`
-            mutation SearchKnowledge($query: String!, $maxResults: Float, $filters: SearchFiltersInput, $minScore: Float) {
-                SearchKnowledge(query: $query, maxResults: $maxResults, filters: $filters, minScore: $minScore) {
+            mutation SearchKnowledge($query: String!, $maxResults: Float, $filters: SearchFiltersInput, $minScore: Float, $scopeIDs: [ID!], $searchContext: SearchContextInput) {
+                SearchKnowledge(query: $query, maxResults: $maxResults, filters: $filters, minScore: $minScore, scopeIDs: $scopeIDs, searchContext: $searchContext) {
                     Success
                     Results {
                         ID
@@ -488,8 +519,54 @@ export class GraphQLSearchClient {
         if (params.Filters !== undefined) {
             variables.filters = this.prepareFilters(params.Filters);
         }
+        if (params.ScopeIDs !== undefined && params.ScopeIDs.length > 0) {
+            variables.scopeIDs = params.ScopeIDs;
+        }
+        if (params.SearchContext !== undefined) {
+            variables.searchContext = {
+                PrimaryScopeEntityID: params.SearchContext.PrimaryScopeEntityID,
+                PrimaryScopeRecordID: params.SearchContext.PrimaryScopeRecordID,
+                SecondaryScopes: params.SearchContext.SecondaryScopes
+            };
+        }
 
         return variables;
+    }
+
+    /**
+     * Query the list of `MJ: Search Scopes` the current user can see and use.
+     * Populates the scope selector in the UI. Returns an empty array on any failure.
+     */
+    public async GetSearchScopes(): Promise<SearchScopeInfo[]> {
+        try {
+            const query = gql`
+                query SearchScopes {
+                    SearchScopes {
+                        ID
+                        Name
+                        Description
+                        Icon
+                        IsGlobal
+                        IsDefault
+                        IsPersonal
+                    }
+                }
+            `;
+            const result = await this._dataProvider.ExecuteGQL(query, {});
+            const raw = (result?.SearchScopes as SearchScopeInfo[] | undefined) ?? [];
+            return raw.map(s => ({
+                ID: s.ID,
+                Name: s.Name,
+                Description: s.Description ?? undefined,
+                Icon: s.Icon ?? undefined,
+                IsGlobal: !!s.IsGlobal,
+                IsDefault: !!s.IsDefault,
+                IsPersonal: !!s.IsPersonal
+            }));
+        } catch (e) {
+            LogError(`GraphQLSearchClient.GetSearchScopes failed: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
     }
 
     /**

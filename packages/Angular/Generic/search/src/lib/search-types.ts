@@ -106,6 +106,25 @@ export interface SearchRequest {
      * Default: 0.35 (35%).
      */
     MinScore?: number;
+    /**
+     * Optional array of `MJ: Search Scopes` record IDs selected in the UI scope selector.
+     * When provided, the server resolves each scope and runs only those constrained providers.
+     * When omitted (or all selected scopes are `IsGlobal`), behavior is equivalent to the
+     * pre-scope unconstrained search.
+     */
+    ScopeIDs?: string[];
+}
+
+/** Lightweight scope metadata returned by the `SearchScopes` GraphQL query. */
+export interface SearchScopeInfo {
+    ID: string;
+    Name: string;
+    Description?: string;
+    Icon?: string;
+    IsGlobal: boolean;
+    IsDefault: boolean;
+    /** True when the scope has an OwnerUserID — renders as a personal scope in the UI. */
+    IsPersonal: boolean;
 }
 
 /** Metadata about an active search provider from the server */

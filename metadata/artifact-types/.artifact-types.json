@@ -342,5 +342,24 @@
       "lastModified": "2026-04-06T22:35:44.329Z",
       "checksum": "b6fb6be302c15f5a8e23584c600622290b02f35bc3fa626b291db454a9593f8c"
     }
+  },
+  {
+    "fields": {
+      "Name": "Search Result Set",
+      "Description": "Persisted ranked search results produced by a scoped search (pre-execution RAG or agent-invoked). Shaped as a Data Snapshot (tables/computations/interpretation) so it inherits Data Snapshot + JSON artifact tools once PR #2237 lands. Until then it renders via the JSON viewer. ParentID should be updated to the Data Snapshot ArtifactType once #2237 seeds it.",
+      "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
+      "ContentType": "application/vnd.mj.search-result-set",
+      "ContentCategory": "Text",
+      "DriverClass": "JsonArtifactViewerPlugin",
+      "IsEnabled": true,
+      "Icon": "fa-solid fa-magnifying-glass-plus"
+    },
+    "primaryKey": {
+      "ID": "249B4A72-7A7A-4CBC-BAAE-91DC66853795"
+    },
+    "sync": {
+      "lastModified": "2026-04-19T15:33:58.816Z",
+      "checksum": "f3cd716c5849c74effaf2fafb86124d8eb40c0d707cec188419d859e37f9d65f"
+    }
   }
 ]
