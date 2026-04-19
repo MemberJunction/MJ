@@ -3,7 +3,6 @@ export * from './custom/MJAIPromptRunEntityServer.server';
 export * from './custom/MJConversationDetailEntityServer.server';
 export * from './custom/MJDuplicateRunEntityServer.server';
 export * from './custom/MJQueryEntityServer.server';
-export * from './custom/MJReportEntityServer.server';
 export * from './custom/MJTemplateContentEntityServer.server';
 export * from './custom/MJUserViewEntityServer.server';
 export * from './custom/MJActionEntityServer.server';
