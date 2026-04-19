@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Template Content Section -->
+    <!-- Scope Definition Section -->
     <mj-collapsible-panel
-        SectionKey="templateContent"
-        SectionName="Template Content"
-        Icon="fa fa-pencil-alt"
+        SectionKey="scopeDefinition"
+        SectionName="Scope Definition"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -34,34 +34,51 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="UserPrompt"
-            Type="textarea"
+            FieldName="Icon"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Associations Section -->
+    <!-- Scope Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="associations"
-        SectionName="Associations"
-        Icon="fa fa-link"
+        SectionKey="scopeConfiguration"
+        SectionName="Scope Configuration"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="CategoryID"
-            Type="textbox"
+            FieldName="IsGlobal"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="UserID"
+            FieldName="IsDefault"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Access Control Section -->
+    <mj-collapsible-panel
+        SectionKey="accessControl"
+        SectionName="Access Control"
+        Icon="fa fa-lock"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="OwnerUserID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -70,17 +87,25 @@
 
     </mj-collapsible-panel>
 
-    <!-- Availability & Status Section -->
+    <!-- Lifecycle Management Section -->
     <mj-collapsible-panel
-        SectionKey="availabilityStatus"
-        SectionName="Availability & Status"
+        SectionKey="lifecycleManagement"
+        SectionName="Lifecycle Management"
         Icon="fa fa-clock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ActiveAt"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="StartAt"
             Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -88,16 +113,34 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="DisabledAt"
+            FieldName="EndAt"
             Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Technical Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="technicalConfiguration"
+        SectionName="Technical Configuration"
+        Icon="fa fa-code"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ScopeConfig"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="IsActive"
-            Type="checkbox"
+            FieldName="SearchContextConfig"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -134,75 +177,75 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Template Params Section -->
+    <!-- Search Scope Storage Accounts Section -->
     <mj-collapsible-panel
-        SectionKey="mJTemplateParams"
-        SectionName="Template Params"
-        Icon="fa fa-cog"
+        SectionKey="mJSearchScopeStorageAccounts"
+        SectionName="Search Scope Storage Accounts"
+        Icon="fa fa-folder-open"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTemplateParams')"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeStorageAccounts')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Template Params','TemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: Template Params')"
-                [AllowLoad]="IsSectionExpanded('mJTemplateParams')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Storage Accounts','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Storage Accounts')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeStorageAccounts')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTemplateParams', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeStorageAccounts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- Template Contents Section -->
+    <!-- Search Scope Entities Section -->
     <mj-collapsible-panel
-        SectionKey="mJTemplateContents"
-        SectionName="Template Contents"
-        Icon="fa fa-file-alt"
+        SectionKey="mJSearchScopeEntities"
+        SectionName="Search Scope Entities"
+        Icon="fa fa-search"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTemplateContents')"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeEntities')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Template Contents','TemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: Template Contents')"
-                [AllowLoad]="IsSectionExpanded('mJTemplateContents')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Entities','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Entities')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeEntities')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTemplateContents', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeEntities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- User Notification Types (Email Template) Section -->
+    <!-- Search Scope External Indexes Section -->
     <mj-collapsible-panel
-        SectionKey="mJUserNotificationTypesEmailTemplateID"
-        SectionName="User Notification Types (Email Template)"
-        Icon="fa fa-bell"
+        SectionKey="mJSearchScopeExternalIndexes"
+        SectionName="Search Scope External Indexes"
+        Icon="fa fa-search-plus"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJUserNotificationTypesEmailTemplateID')"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeExternalIndexes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Types','EmailTemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
-                [AllowLoad]="IsSectionExpanded('mJUserNotificationTypesEmailTemplateID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope External Indexes','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope External Indexes')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeExternalIndexes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypesEmailTemplateID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeExternalIndexes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -222,62 +265,12 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Providers','QueryTransformTemplateID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Providers','SearchScopeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Search Scope Providers')"
                 [AllowLoad]="IsSectionExpanded('mJSearchScopeProviders')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSearchScopeProviders', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- AI Prompts Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIPrompts"
-        SectionName="AI Prompts"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIPrompts')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompts','TemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompts')"
-                [AllowLoad]="IsSectionExpanded('mJAIPrompts')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIPrompts', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- User Notification Types (SMS Template) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJUserNotificationTypesSMSTemplateID"
-        SectionName="User Notification Types (SMS Template)"
-        Icon="fa fa-bell"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJUserNotificationTypesSMSTemplateID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Types','SMSTemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
-                [AllowLoad]="IsSectionExpanded('mJUserNotificationTypesSMSTemplateID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypesSMSTemplateID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -297,37 +290,12 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Search Scopes','QueryTemplateID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Search Scopes','SearchScopeID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Search Scopes')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSearchScopes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSearchScopes', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Entity Documents Section -->
-    <mj-collapsible-panel
-        SectionKey="mJEntityDocuments"
-        SectionName="Entity Documents"
-        Icon="fa fa-file-alt"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJEntityDocuments')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Documents','TemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Documents')"
-                [AllowLoad]="IsSectionExpanded('mJEntityDocuments')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJEntityDocuments', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -8,26 +8,46 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Provider Identity Section -->
+    <!-- Entity Relationships Section -->
     <mj-collapsible-panel
-        SectionKey="providerIdentity"
-        SectionName="Provider Identity"
-        Icon="fa fa-id-card"
+        SectionKey="entityRelationships"
+        SectionName="Entity Relationships"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
+            FieldName="AgentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
+            FieldName="SearchScopeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Execution Control Section -->
+    <mj-collapsible-panel
+        SectionKey="executionControl"
+        SectionName="Execution Control"
+        Icon="fa fa-tasks"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Phase"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -42,40 +62,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="DisplayName"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Icon"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Search Behavior Section -->
-    <mj-collapsible-panel
-        SectionKey="searchBehavior"
-        SectionName="Search Behavior"
-        Icon="fa fa-cogs"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DriverClass"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="Priority"
             Type="number"
             [EditMode]="EditMode"
@@ -84,41 +70,67 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="SupportsPreview"
+            FieldName="IsDefault"
             Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MaxResultsOverride"
-            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Configuration & Security Section -->
+    <!-- Scheduling Section -->
     <mj-collapsible-panel
-        SectionKey="configurationSecurity"
-        SectionName="Configuration & Security"
-        Icon="fa fa-key"
+        SectionKey="scheduling"
+        SectionName="Scheduling"
+        Icon="fa fa-calendar-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ProviderConfig"
-            Type="code"
+            FieldName="StartAt"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="CredentialID"
+            FieldName="EndAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Search Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="searchConfiguration"
+        SectionName="Search Configuration"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxResults"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MinScore"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="QueryTemplateID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -127,8 +139,8 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Comments"
-            Type="textarea"
+            FieldName="FusionWeightsOverride"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -139,7 +151,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-database"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -159,35 +171,6 @@
             [FormContext]="formContext"
         ></mj-form-field>
 
-    </mj-collapsible-panel>
-
-    <!-- ========================================
-         RELATED ENTITY PANELS
-         ======================================== -->
-
-    <!-- Search Scope Providers Section -->
-    <mj-collapsible-panel
-        SectionKey="mJSearchScopeProviders"
-        SectionName="Search Scope Providers"
-        Icon="fa fa-search-plus"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJSearchScopeProviders')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Providers','SearchProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: Search Scope Providers')"
-                [AllowLoad]="IsSectionExpanded('mJSearchScopeProviders')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeProviders', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

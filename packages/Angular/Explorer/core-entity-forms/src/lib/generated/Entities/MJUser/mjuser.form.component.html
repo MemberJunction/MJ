@@ -1833,6 +1833,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Search Scopes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopes"
+        SectionName="Search Scopes"
+        Icon="fa fa-search-location"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scopes','OwnerUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scopes')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Resource Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJResourcePermissions"
