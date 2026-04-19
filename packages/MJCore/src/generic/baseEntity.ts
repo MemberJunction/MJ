@@ -610,17 +610,94 @@ export class BaseEntityEvent {
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
 export abstract class BaseEntity<T = unknown> {
+    /**
+     * Metadata describing this entity (name, fields, keys, relationships). Populated during
+     * `SetEntityName()` from `Metadata.EntityByName` and used as the source of truth for
+     * field definitions and schema details throughout this class.
+     */
     private _EntityInfo: EntityInfo;
+
+    /**
+     * Runtime field instances for this record — one `EntityField` per column in `_EntityInfo.Fields`.
+     * Each holds the current value, old value, dirty state, and per-field validation. Populated
+     * in `init()` and used as the primary data store for Get/Set/Save/validate.
+     */
     private _Fields: EntityField[] = [];
+
+    /**
+     * Whether a database record has been loaded into this instance (via `Load`, `NewRecord`,
+     * `LoadFromData`, etc.). Used to gate operations that require loaded state and to distinguish
+     * uninitialized instances from genuinely empty new records.
+     */
     private _recordLoaded: boolean = false;
+
+    /**
+     * The user context to use for server-side operations (permission checks, audit trails).
+     * On the server this MUST be set per-request; on the client it may be null since the
+     * provider knows the logged-in user implicitly.
+     */
     private _contextCurrentUser: UserInfo = null;
+
+    /**
+     * The transaction group this entity is enlisted in, if any. When set, `Save()` and `Delete()`
+     * defer their provider calls to the group's coordinated `Submit()` so a batch of operations
+     * commits atomically.
+     */
     private _transactionGroup: TransactionGroupBase = null;
+
+    /**
+     * RxJS `Subject` that fires `BaseEntityEvent`s (save, delete, field-change,
+     * remote-invalidate). Exposed publicly via `Event$` so engines and UI components can react
+     * to entity lifecycle events.
+     */
     private _eventSubject: Subject<BaseEntityEvent>;
+
+    /**
+     * Append-only log of `BaseEntityResult` objects from each Save/Delete attempt. The most
+     * recent entry is exposed via `LatestResult` for error inspection after a failure.
+     */
     private _resultHistory: BaseEntityResult[] = [];
+
+    /**
+     * The `IEntityDataProvider` routing DB operations for this specific entity. Resolved lazily
+     * via `ProviderToUse` and may differ from `Metadata.Provider` when a custom provider is
+     * configured per-entity (e.g., entities served from an external system).
+     */
     private _provider: IEntityDataProvider | null = null;
+
+    /**
+     * Whether this entity instance has ever been persisted (via a successful Save). Distinct
+     * from `IsSaved` because `NewRecord()` resets dirty state; this flag remains true once set.
+     * Used by `Save()` to decide between spCreate vs spUpdate.
+     */
     private _everSaved: boolean = false;
+
+    /**
+     * Whether a `Load*` operation is currently in flight. Used to suppress field-change events
+     * and dirty-tracking while bulk-populating fields from the provider response.
+     */
     private _isLoading: boolean = false;
+
+    /**
+     * Shared `Observable` for an in-flight `Delete()` call. Concurrent Delete attempts return
+     * this same observable so the actual provider call only runs once, avoiding double-deletes
+     * and duplicate error reporting.
+     */
     private _pendingDelete$: Observable<boolean> | null = null;
+
+    /**
+     * Lazy `Map<fieldName, EntityField>` cache for O(1) `GetFieldByName()` lookups. Populated
+     * on first call and cleared on `init()` so re-initialized entities rebuild fresh. Replaces
+     * the previous O(N) `_Fields.find()` scan that dominated `SetMany`/setter/serialization paths.
+     */
+    private _fieldCache: Map<string, EntityField> | null = null;
+
+    /**
+     * Lazy `Map<codeName, EntityField>` cache for O(1) `GetFieldByCodeName()` lookups. Built the
+     * same way as `_fieldCache` but keyed by the JS-safe `CodeName` rather than the DB field
+     * name. Cleared on `init()`.
+     */
+    private _codeNameCache: Map<string, EntityField> | null = null;
 
     /**************************************************************************
      * IS-A Type Relationship — Bidirectional Entity Composition
@@ -1326,7 +1403,43 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
-        return this.Fields.find(f => f.Name.trim().toLowerCase() === lcase);
+
+        if (this._fieldCache === null) {
+            this._fieldCache = new Map<string, EntityField>();
+            for (const f of this.Fields) {
+                if (!this._fieldCache.has(f.Name.trim().toLowerCase())) {
+                    this._fieldCache.set(f.Name.trim().toLowerCase(), f);
+                }
+            }
+        }
+
+        return this._fieldCache.get(lcase) || null;
+    }
+
+    /**
+     * Convenience method to access a field by code name. This method is case-insensitive and will return null if the field is not found.
+     * @param codeName
+     * @returns
+     */
+    public GetFieldByCodeName(codeName: string): EntityField | null {
+        if(!codeName) {
+            return null;
+        }
+
+        const lcase = codeName.trim().toLowerCase();
+
+        if (this._codeNameCache === null) {
+            this._codeNameCache = new Map<string, EntityField>();
+            // First-write-wins on duplicate code names — matches prior Array.find() behavior
+            for (const f of this.Fields) {
+                const codeKey = f.CodeName.trim().toLowerCase();
+                if (!this._codeNameCache.has(codeKey)) {
+                    this._codeNameCache.set(codeKey, f);
+                }
+            }
+        }
+
+        return this._codeNameCache.get(lcase) || null;
     }
 
     /**
@@ -1503,7 +1616,7 @@ export abstract class BaseEntity<T = unknown> {
             else {
                 // if we don't find a match for the field name, check to see if we have a match for the code name
                 // because some objects passed in will use the code name
-                const field = this.Fields.find(f => f.CodeName.trim().toLowerCase() == key.trim().toLowerCase());
+                const field = this.GetFieldByCodeName(key);
                 if (field) {
                     const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
                     if (ignoreActiveStatusAssertions) {
@@ -1731,6 +1844,8 @@ export abstract class BaseEntity<T = unknown> {
         this._resultHistory = [];
         this._recordLoaded = false;
         this._Fields = [];
+        this._fieldCache = null;
+        this._codeNameCache = null;
         if (this.EntityInfo) {
             for (const rawField of this.EntityInfo.Fields) {
                 const key = this.EntityInfo.Name + '.' + rawField.Name;
