@@ -1,5 +1,25 @@
 # @memberjunction/ng-explorer-app
 
+## 5.27.0
+
+### Patch Changes
+
+- 6fd2886: Add server connectivity heartbeat service with warning banner that alerts users when the API connection is lost.
+- Updated dependencies [4357090]
+- Updated dependencies [6fd2886]
+  - @memberjunction/ng-conversations@5.27.0
+  - @memberjunction/ng-explorer-core@5.27.0
+  - @memberjunction/ng-bootstrap@5.27.0
+  - @memberjunction/ng-workspace-initializer@5.27.0
+  - @memberjunction/ai-agent-client@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/ng-auth-services@5.27.0
+  - @memberjunction/ng-base-application@5.27.0
+  - @memberjunction/ng-shared@5.27.0
+  - @memberjunction/ng-agent-client@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/core@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

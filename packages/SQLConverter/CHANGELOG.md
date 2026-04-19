@@ -1,5 +1,12 @@
 # @memberjunction/sql-converter
 
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.27.0
+- @memberjunction/sqlglot-ts@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes
