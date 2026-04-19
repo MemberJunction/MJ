@@ -863,6 +863,10 @@
   justify-content: flex-end;
   padding-top: 10px;
   margin-top: 10px;
+  /* Breathing room from the card's bottom and right edges so the button
+     doesn't sit flush against the border. */
+  padding-right: 10px;
+  padding-bottom: 10px;
   border-top: 1px solid var(--mj-border-subtle);
 }
 
@@ -1118,4 +1122,232 @@
 .rc-restore-cancel-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ *  Restore lineage + conditional filter chips + overflow popover
+ *  (added with the Restore Prior Version feature)
+ * ────────────────────────────────────────────────────────────────── */
+
+/* ─── Filter pill enhancements ─── */
+
+.rc-filter-pill-count {
+  margin-left: 4px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.rc-filter-pill.active .rc-filter-pill-count {
+  background: color-mix(in srgb, var(--mj-text-inverse, #fff) 22%, transparent);
+}
+
+/* Restore-variant pill: violet treatment to set it apart from type pills */
+.rc-filter-pill-restore {
+  background: color-mix(in srgb, var(--mj-status-info) 8%, var(--mj-bg-surface));
+  color: color-mix(in srgb, var(--mj-status-info) 80%, var(--mj-text-secondary));
+  border-color: color-mix(in srgb, var(--mj-status-info) 30%, var(--mj-border-default));
+}
+.rc-filter-pill-restore:hover {
+  border-color: var(--mj-status-info);
+  color: var(--mj-status-info);
+}
+.rc-filter-pill-restore.active {
+  background: var(--mj-status-info);
+  color: var(--mj-text-inverse, #fff);
+  border-color: var(--mj-status-info);
+}
+
+/* ─── Overflow filter popover ─── */
+
+.rc-filter-overflow-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.rc-filter-pill-overflow {
+  /* Overflow trigger inherits the standard filter pill look */
+}
+
+.rc-filter-overflow-caret {
+  font-size: 9px;
+  margin-left: 2px;
+}
+
+.rc-filter-overflow-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.rc-filter-overflow-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 11;
+  min-width: 240px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
+  padding: 8px;
+}
+
+.rc-filter-overflow-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mj-text-muted);
+  font-weight: 600;
+  padding: 6px 8px 8px;
+}
+
+.rc-filter-overflow-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--mj-text-primary);
+  cursor: pointer;
+}
+
+.rc-filter-overflow-row:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.rc-filter-overflow-row input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--mj-brand-primary);
+}
+
+.rc-filter-overflow-row i {
+  color: var(--mj-text-muted);
+  font-size: 12px;
+  width: 14px;
+  text-align: center;
+}
+
+.rc-filter-overflow-row-restore i {
+  color: var(--mj-status-info);
+}
+
+.rc-filter-overflow-label {
+  flex: 1;
+}
+
+.rc-filter-overflow-count {
+  color: var(--mj-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.rc-filter-overflow-actions {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--mj-border-subtle);
+  padding-top: 8px;
+  margin-top: 6px;
+}
+
+.rc-filter-overflow-clear,
+.rc-filter-overflow-done {
+  background: none;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 5px;
+}
+
+.rc-filter-overflow-clear {
+  color: var(--mj-text-muted);
+}
+.rc-filter-overflow-clear:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.rc-filter-overflow-done {
+  color: var(--mj-brand-primary);
+}
+.rc-filter-overflow-done:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+
+/* ─── Snapshot type badge + card accent ─── */
+
+.type-snapshot .rc-card-type-badge {
+  background: color-mix(in srgb, var(--mj-text-muted) 15%, var(--mj-bg-surface));
+  color: var(--mj-text-secondary);
+}
+
+/* ─── Restore Source pill (in card meta) ─── */
+
+.source-restore {
+  background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
+  color: var(--mj-status-info);
+}
+
+/* ─── Restore card variant: violet left accent ─── */
+
+.rc-card.rc-card-restore {
+  border-left: 3px solid var(--mj-status-info);
+}
+
+/* ─── Lineage chip ─── */
+
+.rc-restored-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--mj-status-info) 10%, var(--mj-bg-surface));
+  color: color-mix(in srgb, var(--mj-status-info) 85%, var(--mj-text-primary));
+  border: 1px solid color-mix(in srgb, var(--mj-status-info) 25%, var(--mj-border-default));
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.rc-restored-chip:hover {
+  background: color-mix(in srgb, var(--mj-status-info) 18%, var(--mj-bg-surface));
+  border-color: var(--mj-status-info);
+}
+
+.rc-restored-chip i {
+  font-size: 10px;
+}
+
+.rc-restored-chip-orphan {
+  cursor: default;
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-muted);
+  border-color: var(--mj-border-default);
+}
+
+.rc-restored-chip-orphan:hover {
+  background: var(--mj-bg-surface-card);
+  border-color: var(--mj-border-default);
+}
+
+/* ─── Card highlight (when jumped-to via lineage chip) ─── */
+
+.rc-card.rc-card-highlight {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: 2px;
+  animation: rc-card-pulse 1.4s ease-in-out;
+}
+
+@keyframes rc-card-pulse {
+  0%, 100% { background: var(--mj-bg-surface); }
+  50% { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); }
 }

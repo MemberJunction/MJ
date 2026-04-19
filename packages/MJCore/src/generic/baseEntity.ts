@@ -439,6 +439,98 @@ export class EntityField {
     }
 }
 
+/**
+ * Context describing a restore operation in progress on a BaseEntity.
+ *
+ * When set on an entity instance via {@link BaseEntity.SetRestoreContext}
+ * prior to calling Save(), the data provider will write the resulting
+ * RecordChange row with `Source='Restore'` and the lineage columns
+ * populated, producing an auditable chain back to the historical change
+ * that was restored.
+ */
+export interface RestoreContext {
+    /**
+     * ID of the historical RecordChange row whose state is being restored.
+     * Persisted to RecordChange.RestoredFromID on the new change row.
+     */
+    SourceChangeID: string;
+
+    /**
+     * Optional user-entered explanation for the restore. Persisted to
+     * RecordChange.RestoreReason. NULL when the user did not enter one.
+     */
+    Reason: string | null;
+}
+
+/**
+ * Discriminator for the `Source` column of a RecordChange row.
+ *
+ * - `Internal`: produced by an ordinary BaseEntity Save() / Delete() call
+ * - `External`: synthesized by an external-change-detection scanner
+ *   (records the platform discovers via direct SQL changes)
+ * - `Restore`: produced by a user-initiated restore — paired with
+ *   `RestoredFromID` and optional `RestoreReason` lineage columns
+ */
+export type RecordChangeSource = 'Internal' | 'External' | 'Restore';
+
+/**
+ * Dialect-agnostic payload for a RecordChange row.
+ *
+ * Built by `DatabaseProviderBase.BuildRecordChangePayload` from an
+ * entity's old/new data plus an optional restore context. Concrete
+ * providers consume the payload to render their dialect-specific SQL —
+ * SQL Server emits `EXEC spCreateRecordChange_Internal @...`, PostgreSQL
+ * emits a parameterized `INSERT INTO "RecordChange"` statement.
+ *
+ * Hoisting this shape into the base class means the diff/JSON/description
+ * assembly happens in exactly one place across providers, and adding new
+ * RecordChange columns in the future requires updating one method instead
+ * of every provider's render path.
+ */
+export interface RecordChangePayload {
+    /** EntityInfo.ID of the entity the change belongs to. */
+    entityID: string;
+    /**
+     * Composite-key serialized RecordID. May be empty when the caller
+     * intends to resolve it lazily from a SQL expression (e.g., PG's
+     * inline CTE save path uses the post-INSERT primary key).
+     */
+    recordID: string;
+    /** Acting user's UserInfo.ID. */
+    userID: string;
+    /** Change type — `Create`, `Update`, or `Delete`. */
+    type: 'Create' | 'Update' | 'Delete';
+    /** Source discriminator. See {@link RecordChangeSource}. */
+    source: RecordChangeSource;
+    /**
+     * JSON-serialized field-level diff. Empty string for `Create` and
+     * `Delete` (those rows are fully described by `fullRecordJSON`).
+     */
+    changesJSON: string;
+    /**
+     * Human-readable summary of the change ("Description set to ...",
+     * "Status changed from X to Y", "Record Created", etc.).
+     */
+    changesDescription: string;
+    /**
+     * Complete snapshot of the record's post-change state (or pre-delete
+     * state for deletes), JSON-encoded with quotes pre-escaped.
+     */
+    fullRecordJSON: string;
+    /**
+     * When `source === 'Restore'`, points at the historical RecordChange
+     * row whose state was restored. Persisted to
+     * `RecordChange.RestoredFromID`. Null otherwise.
+     */
+    restoredFromID: string | null;
+    /**
+     * When `source === 'Restore'`, the optional user-entered reason.
+     * Persisted to `RecordChange.RestoreReason`. Null when the user did
+     * not enter one.
+     */
+    restoreReason: string | null;
+}
+
 export class DataObjectRelatedEntityParam {
     relatedEntityName: string
     filter?: string
@@ -1838,6 +1930,74 @@ export abstract class BaseEntity<T = unknown> {
         return true;
     }
 
+
+
+    // ────────────────────────────────────────────────────────────────────
+    // Restore context — populated by callers immediately before Save() to
+    // mark the resulting RecordChange row as a Restore (Source='Restore'
+    // with RestoredFromID and optional RestoreReason populated).
+    //
+    // The context lives on the entity instance for exactly one Save() and
+    // is consumed by the data provider when it generates the RecordChange
+    // SQL. Callers should set the context, await Save(), then either
+    // explicitly clear it via ClearRestoreContext() or rely on it being
+    // overwritten on the next restore. We deliberately do NOT auto-clear
+    // inside Save() because TransactionGroup execution is deferred — the
+    // provider may capture the context now but use it later.
+    // ────────────────────────────────────────────────────────────────────
+    private _restoreContext: RestoreContext | null = null;
+
+    /**
+     * Returns the active restore context for the next save, if any.
+     *
+     * Read by the data provider when generating the RecordChange SQL: when
+     * non-null, the resulting RecordChange row is written with
+     * `Source='Restore'`, `RestoredFromID = SourceChangeID`, and
+     * `RestoreReason = Reason`. Returns null for ordinary saves.
+     */
+    public get RestoreContext(): RestoreContext | null {
+        return this._restoreContext;
+    }
+
+    /**
+     * Marks the next Save() as a restore from a historical RecordChange row.
+     *
+     * The provider will write a new RecordChange entry with `Source='Restore'`,
+     * `RestoredFromID` pointing at `sourceChangeId`, and `RestoreReason` set to
+     * `reason` (or NULL). This produces an auditable lineage chain that the
+     * timeline UI can render via the `RestoredFromID` foreign key.
+     *
+     * The context is consumed exactly once per Save() and persists on the
+     * entity until either (a) overwritten by a subsequent SetRestoreContext()
+     * call or (b) explicitly cleared via ClearRestoreContext(). It is NOT
+     * auto-cleared inside Save() because TransactionGroup execution is
+     * deferred — see the comment on `_restoreContext` for details.
+     *
+     * @param sourceChangeId The ID of the historical RecordChange row whose
+     *   state is being restored. Required; throws if empty.
+     * @param reason Optional user-entered explanation captured at restore
+     *   time. Persisted to RecordChange.RestoreReason for audit purposes.
+     *
+     * @example
+     *   record.SetRestoreContext(versionId, 'Reverting incorrect Q2 entries');
+     *   const ok = await record.Save();
+     *   record.ClearRestoreContext();
+     */
+    public SetRestoreContext(sourceChangeId: string, reason: string | null = null): void {
+        if (!sourceChangeId || typeof sourceChangeId !== 'string') {
+            throw new Error('BaseEntity.SetRestoreContext: sourceChangeId is required and must be a non-empty string');
+        }
+        this._restoreContext = { SourceChangeID: sourceChangeId, Reason: reason ?? null };
+    }
+
+    /**
+     * Clears any pending restore context. Safe to call when no context is set.
+     * Recommended after Save() returns so a subsequent ordinary save isn't
+     * accidentally tagged as a restore.
+     */
+    public ClearRestoreContext(): void {
+        this._restoreContext = null;
+    }
 
 
     // Holds the current pending save observable (if any)

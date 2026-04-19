@@ -1,5 +1,49 @@
 # Record Changes — Restore Prior Version
 
+## Live progress tracker
+
+This section is the working task list. Updated as each step lands. If a session dies, a new session can pick up by reading this section + the most recent commits on `amith-nagarajan/record-changes-restore`.
+
+**Branch:** `amith-nagarajan/record-changes-restore` (tracks `origin/amith-nagarajan/record-changes-restore`)
+
+| # | Task | Status | Commit |
+|---|---|---|---|
+| 0 | Migration `V202604191500__v5.28.x__Add_Restore_Lineage_To_RecordChange.sql` + CodeGen | ✅ Done | `f536d59` |
+| 0a | Plan + mockup | ✅ Done | `d24ffc1` |
+| 1a | `BaseEntity` restore-context plumbing (`RestoreContext` interface, `SetRestoreContext`/`ClearRestoreContext`) | ✅ Done | (see 1d commit) |
+| 1b | `SQLServerDataProvider.GetLogRecordChangeSQL` writes new columns + SP migration `V202604191502__v5.28.x__Extend_spCreateRecordChange_Internal_For_Restore.sql` (committed `0ef6a17`) | ✅ Done | `0ef6a17` |
+| 1c | `PostgreSQLDataProvider` parity (BuildRecordChangeSQL + computeSaveRecordChangeParams + GenerateDeleteSQL CTE) | ✅ Done | (see 1d commit) |
+| 1d | Build MJCore + provider packages — MJCore 887/887, SQLServer 75/75, PG 60/60 | ✅ Done | uncommitted |
+| 2a | `RestorePreviewPanelComponent` extracted in `ng-record-changes` (slide-in, two-mode, field-level opt-out, reason text area, cancelable BeforeRestoreCommit) | ✅ Done | uncommitted |
+| 2b | Semantic-bug fix — restore now applies `FullRecordJSON` of the source change (not the one-delta rollback). Preview shows full current-vs-snapshot diff. | ✅ Done | uncommitted |
+| 2c | Lineage chip in timeline + conditional/overflow filter chips (data-driven; "More filters ▾" popover when >2 conditional pills) | ✅ Done | uncommitted |
+| 2d | Update `record-changes` tests — 48/48 passing | ✅ Done | uncommitted |
+| 3 | `record-form-container.OnRestoreRequested` rewrite — applies `FieldValues`, calls `SetRestoreContext`/`ClearRestoreContext` around `Save()` | ✅ Done | uncommitted |
+| 4a | RecycleBin event types (`recycle-bin-events.ts`) — Before*/After* cancelable pattern matching `EntityDataGridComponent` convention | ✅ Done | uncommitted |
+| 4b | `RecycleBinComponent` (slide-in) + `RecycleBinChipComponent` (auto-counting toolbar chip) + new `@memberjunction/ng-record-changes` and `@memberjunction/ng-versions` peer dependencies | ✅ Done | uncommitted |
+| 4c | Wire `ShowRecycleBin` (default `true`) into `EntityViewerComponent` (composite header) + `EntityDataGridComponent` (toolbar). Standalone `EntityCardsComponent` has no toolbar — handled by composite. | ✅ Done | uncommitted |
+| 5 | README updates — new `record-changes/README.md` from scratch (mermaid + full API tables); `entity-viewer/README.md` extended with RecycleBin section + types + dep table | ✅ Done | uncommitted |
+| 6 | Final build + test pass — record-changes 48/48, base-forms 33/33, MJCore 887/887, SQLServer 75/75, PG 60/60. Downstream `ng-explorer-core` and `ng-core-entity-forms` build clean. | ✅ Done | uncommitted |
+
+### Follow-up refactor — provider duplication elimination
+
+After the initial implementation landed, both providers carried near-identical dialect-agnostic logic for assembling the RecordChange payload (diff, JSON serialization, change description, restore-context derivation). That logic is now hoisted into `DatabaseProviderBase` so each provider only renders its dialect-specific SQL on top of a shared payload.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| R1 | Add `RecordChangeSource` type + `RecordChangePayload` interface to `baseEntity.ts`; export through `@memberjunction/core` | ✅ Done | Co-located with `RestoreContext` |
+| R2 | Add `protected ShouldTrackRecordChanges()` + `protected BuildRecordChangePayload()` to `DatabaseProviderBase` | ✅ Done | Sits next to `DiffObjects` / `CreateUserDescriptionOfChanges` / `EscapeQuotesInProperties` |
+| R3 | Refactor SQL Server `GetLogRecordChangeSQL` to use the new helper — only T-SQL `EXEC` rendering remains | ✅ Done | Net −15 LOC |
+| R4 | Refactor PostgreSQL `BuildRecordChangeSQL` to use the new helper — only parameterized INSERT remains | ✅ Done | Net −20 LOC |
+| R5 | Refactor PG `GenerateSaveSQL` + `GenerateDeleteSQL` inline CTE paths to use the helper; delete `computeSaveRecordChangeParams` and `shouldTrackRecordChanges` | ✅ Done | Net −55 LOC, two private helpers removed |
+| R6 | Build + retest all three packages | ✅ Done | MJCore 887/887, SQL Server 75/75, PG 60/60 |
+
+**Outcome:** ~85 LOC of duplicated payload-assembly removed across providers; new fields on RecordChange now require updating one base method and two SQL templates instead of four duplicated assembly sites.
+
+## All work complete
+
+The feature is implemented end-to-end and ready for commit. See "Files to be created/modified" near the bottom of this document for the full file list. The remaining open question per the plan — Restore Reason policy (`Entity.RequireRestoreReason BIT` flag) — is intentionally deferred per the plan and can be added later without schema work since `RestorePreviewPanelComponent` already exposes a `RequireReason` input.
+
 ## Goal
 
 Add a first-class "Restore record to this version" capability on top of the existing `RecordChange` history. The infrastructure for tracking changes is already in place; what's missing is (a) a correct point-in-time restore (today's UI rolls back a single delta, not a state), (b) a lineage link from the new change back to the version it was restored from, and (c) an entry point for un-deleting hard-deleted records.
