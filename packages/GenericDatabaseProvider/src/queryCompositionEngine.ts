@@ -615,6 +615,14 @@ export class QueryCompositionEngine {
      * Handles the case where a dependency query's SQL itself contains a WITH clause
      * (inner CTEs). SQL does not allow nested WITH clauses, so inner CTEs are "hoisted"
      * out as sibling CTE definitions preceding the dependency's own CTE.
+     *
+     * Cross-dep CTE name collisions: when two different dependencies each declare
+     * an inner CTE with the same name (e.g. both declare `PoolNameBridge`), the
+     * naive concatenation produces a duplicate CTE error from SQL Server. We
+     * track allocated names across the entire WITH and rename colliding inner
+     * CTEs (and rewrite intra-dep references to the renamed CTE) so the assembled
+     * SQL is valid. See Skip-Brain Bug C in
+     * `__tests__/skip-failure-regressions.test.ts` and `SKIP-QUERY-RENDERING-BUGS.md`.
      */
     private assembleCTEs(cteEntries: CTEEntry[], mainSQL: string, platform: DatabasePlatform): string {
         if (cteEntries.length === 0) return mainSQL;
@@ -624,6 +632,14 @@ export class QueryCompositionEngine {
         const startsWithWith = /^WITH\s/i.test(trimmedMain);
 
         const dialect = this.getDialect(platform);
+
+        // Track every CTE name allocated to the assembled WITH (case-insensitive).
+        // We seed with the outer-CTE names from the entries themselves so that an
+        // inner CTE happening to share a name with another entry's outer CTE
+        // also gets renamed.
+        const allocatedNames = new Set<string>(
+            cteEntries.map(e => this.canonicalCTEName(e.CTEName).toLowerCase())
+        );
 
         // Build CTE definitions, hoisting any inner WITH clauses from dependency SQL
         const cteDefinitions: string[] = [];
@@ -637,8 +653,15 @@ export class QueryCompositionEngine {
                 // Dependency SQL has its own WITH clause — hoist inner CTEs as siblings.
                 // Pass the comment-stripped version so ExtractCTEs can detect the WITH prefix.
                 const { innerCTEDefinitions, mainSelect } = this.hoistInnerCTEs(commentStrippedSQL, platform);
-                cteDefinitions.push(...innerCTEDefinitions);
-                cteDefinitions.push(`${entry.CTEName} AS (\n${mainSelect}\n)`);
+
+                // Rename any inner CTE whose name collides with an already-
+                // allocated name. Rewrites references in (a) other inner CTEs of
+                // this same dep (siblings), and (b) the dep's mainSelect.
+                const { definitions, rewrittenMainSelect } =
+                    this.deconflictInnerCTEs(innerCTEDefinitions, mainSelect, allocatedNames);
+
+                cteDefinitions.push(...definitions);
+                cteDefinitions.push(`${entry.CTEName} AS (\n${rewrittenMainSelect}\n)`);
             } else {
                 cteDefinitions.push(`${entry.CTEName} AS (\n${strippedSQL}\n)`);
             }
@@ -652,6 +675,114 @@ export class QueryCompositionEngine {
         }
 
         return `WITH ${cteDefinitions.join(',\n')}\n${mainSQL}`;
+    }
+
+    /**
+     * Strips the surrounding bracket / quote characters from a CTE name so we
+     * can compare names case-insensitively across quoting styles. `[Foo]`,
+     * `"Foo"`, and bare `Foo` all canonicalize to `Foo`.
+     */
+    private canonicalCTEName(rawName: string): string {
+        return rawName.replace(/^[\["]|[\]"]$/g, '');
+    }
+
+    /**
+     * Walks `innerCTEDefinitions` (each formatted as `Name AS (\nbody\n)` by
+     * `extractCTEsViaRegex`/`extractCTEsViaAST`) and ensures every CTE name is
+     * unique across the assembled WITH. When a collision is detected, the inner
+     * CTE is renamed (`Name` → `Name__2`, `__3`, …) and the new name is
+     * substituted everywhere the original was referenced — both in subsequent
+     * inner CTE bodies (siblings can reference each other) and in the dep's
+     * main SELECT.
+     *
+     * NOTE (Phase 0 trade-off): reference rewriting is a word-boundary regex
+     * over raw SQL. It does NOT skip string literals or comments. Real
+     * dependencies' inner-CTE names are unlikely to appear as quoted text or
+     * column aliases, so this is acceptable for the immediate fix; the
+     * IR-based redesign (see plans/query-rendering-pipeline-redesign.md)
+     * replaces this with a structured walk.
+     */
+    private deconflictInnerCTEs(
+        innerCTEDefinitions: string[],
+        mainSelect: string,
+        allocatedNames: Set<string>
+    ): { definitions: string[]; rewrittenMainSelect: string } {
+        // Pre-compute renames first, so all sibling/main-select rewrites use
+        // the final names regardless of definition order.
+        const renames = new Map<string, string>();   // canonical-old → new bare name
+        const finalDefinitionHeaders: { original: string; rewritten: string }[] = [];
+
+        for (const def of innerCTEDefinitions) {
+            const headerMatch = def.match(/^(\[[^\]]+\]|"[^"]+"|[A-Za-z_]\w*)(\s+AS\s*\()/i);
+            if (!headerMatch) {
+                // Couldn't parse — leave untouched. Future allocations may
+                // still collide, but this preserves existing behavior.
+                finalDefinitionHeaders.push({ original: def, rewritten: def });
+                continue;
+            }
+
+            const rawName = headerMatch[1];
+            const canonical = this.canonicalCTEName(rawName);
+            const lower = canonical.toLowerCase();
+
+            if (!allocatedNames.has(lower)) {
+                allocatedNames.add(lower);
+                finalDefinitionHeaders.push({ original: def, rewritten: def });
+                continue;
+            }
+
+            // Collision — find a fresh name.
+            let suffix = 2;
+            let candidate = `${canonical}__${suffix}`;
+            while (allocatedNames.has(candidate.toLowerCase())) {
+                suffix++;
+                candidate = `${canonical}__${suffix}`;
+            }
+            allocatedNames.add(candidate.toLowerCase());
+            renames.set(canonical, candidate);
+
+            // Replace just the header on the definition; the body will be
+            // rewritten in the next pass alongside other deps' references.
+            const rewrittenDef =
+                candidate + headerMatch[2] + def.substring(headerMatch[0].length);
+            finalDefinitionHeaders.push({ original: def, rewritten: rewrittenDef });
+        }
+
+        if (renames.size === 0) {
+            return { definitions: finalDefinitionHeaders.map(d => d.rewritten), rewrittenMainSelect: mainSelect };
+        }
+
+        // Apply all renames to every inner CTE body and the main SELECT, so
+        // sibling CTEs that reference the renamed CTE point at the new name.
+        const rewriteAll = (sql: string): string => {
+            let result = sql;
+            for (const [oldName, newName] of renames) {
+                result = this.renameSQLIdentifier(result, oldName, newName);
+            }
+            return result;
+        };
+
+        const definitions = finalDefinitionHeaders.map(d => rewriteAll(d.rewritten));
+        const rewrittenMainSelect = rewriteAll(mainSelect);
+        return { definitions, rewrittenMainSelect };
+    }
+
+    /**
+     * Replaces every reference to `oldName` (bare, [bracketed], or "quoted")
+     * with bare `newName`. Case-insensitive. Word-boundary matched so
+     * `MyAcronymBridge` is not affected by renaming `AcronymBridge`.
+     *
+     * Does not attempt to skip string literals or comments — see the note on
+     * `deconflictInnerCTEs` for the trade-off rationale.
+     */
+    private renameSQLIdentifier(sql: string, oldName: string, newName: string): string {
+        const escaped = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Three forms: [Name], "Name", or bare Name (with word boundaries).
+        const pattern = new RegExp(
+            `\\[${escaped}\\]|"${escaped}"|\\b${escaped}\\b`,
+            'gi'
+        );
+        return sql.replace(pattern, newName);
     }
 
     /**
@@ -709,16 +840,17 @@ export class QueryCompositionEngine {
         const astResult = this.stripOrderByViaAST(trimmed, dialect.ParserDialect);
         if (astResult !== null) return astResult;
 
-        // Tier 3: Regex fallback
+        // Tier 3: Position-aware fallback (skips comments, strings, MJ tokens via MJLexer)
         const regexResult = this.stripOrderByViaRegex(trimmed);
         if (regexResult !== trimmed) return regexResult;
 
-        // Tier 4: OFFSET 0 ROWS injection — last resort.
-        // If we reach here, the SQL has an ORDER BY that neither AST nor regex could strip
-        // (e.g. STRING_AGG WITHIN GROUP with a trailing ORDER BY). Rather than returning
-        // the SQL unchanged (which would cause a SQL Server CTE error), inject OFFSET 0 ROWS
-        // after the ORDER BY to make it legal. This is semantically neutral but may affect
-        // query plan shape on large result sets.
+        // Tier 4: OFFSET 0 ROWS injection — last resort, but ONLY when a real
+        // top-level ORDER BY exists. If there is none, returning SQL unchanged is
+        // correct; injecting OFFSET 0 ROWS would itself be an error
+        // (OFFSET requires ORDER BY in the same query level).
+        if (this.findTopLevelOrderByPositions(trimmed).length === 0) {
+            return sql;
+        }
         return this.injectOffset0Rows(trimmed);
     }
 
@@ -914,23 +1046,22 @@ export class QueryCompositionEngine {
     }
 
     /**
-     * Regex-based fallback for stripping trailing ORDER BY.
-     * Uses parenthesis depth counting to avoid stripping ORDER BY inside subqueries.
+     * Position-aware fallback for stripping the last top-level ORDER BY clause.
+     * Delegates to `stripLastTopLevelOrderBy`, which uses MJLexer to skip MJ
+     * template tokens, then scans only SQL_TEXT segments while respecting paren
+     * depth, single-quoted string literals, line comments (--), and block
+     * comments (/* … *​/).
+     *
+     * The previous regex-only implementation matched any literal "ORDER BY" in
+     * the SQL — including text inside leading block comments like
+     * `/* No ORDER BY / TOP — composable. *​/` — and truncated the dep body
+     * mid-comment, producing illegal SQL ("Incorrect syntax near '('").
+     * Skip-Brain hit this against multiple AGRiP composition deps. See
+     * `__tests__/skip-failure-regressions.test.ts` and
+     * `SKIP-QUERY-RENDERING-BUGS.md` (Bug A) at the repo root.
      */
     private stripOrderByViaRegex(sql: string): string {
-        const orderByMatch = sql.match(/\bORDER\s+BY\s+[\s\S]+$/i);
-        if (!orderByMatch) return sql;
-
-        const beforeOrderBy = sql.substring(0, orderByMatch.index);
-        let parenDepth = 0;
-        for (const ch of beforeOrderBy) {
-            if (ch === '(') parenDepth++;
-            else if (ch === ')') parenDepth--;
-        }
-
-        if (parenDepth !== 0) return sql;
-
-        return sql.substring(0, orderByMatch.index).trimEnd();
+        return this.stripLastTopLevelOrderBy(sql);
     }
 
     /**

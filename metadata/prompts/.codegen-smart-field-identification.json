@@ -9,7 +9,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Balanced",
       "OutputType": "object",
@@ -150,8 +150,8 @@
       "ID": "7FF02D68-02AE-49A1-AA5E-843D52367D57"
     },
     "sync": {
-      "lastModified": "2026-04-11T04:10:57.696Z",
-      "checksum": "eaed8e72c0ab46d094f6f33a5be5b957f305d600b3c6fcede1023e06b12bd037"
+      "lastModified": "2026-04-20T14:29:22.521Z",
+      "checksum": "8096983d4586b0ce0e1c8eeae5248438dfa72545861c07bc16f664bcedfc85c5"
     }
   }
 ]

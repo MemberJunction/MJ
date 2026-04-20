@@ -433,6 +433,7 @@ After completing work, use `actionableCommands` for navigation buttons and `auto
 {% endif %}
 
 # **CRITICAL**
+- Your **entire** response must be only JSON with no leading or trailing characters!
 - Must adhere to [LoopAgentResponse](#response-format)
 {% if __agentTypePromptParams.includeResponseFormDocs != false %}- Use `responseForm` when you need user input (replaces old suggestedResponses pattern){% endif %}
 {% if __agentTypePromptParams.includeCommandDocs != false %}- Use `actionableCommands` to provide navigation buttons after completing work
