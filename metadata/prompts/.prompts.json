@@ -206,9 +206,9 @@
       "TemplateText": "@file:templates/system/flow-agent-type-system-prompt.template.md",
       "Status": "Active",
       "ResponseFormat": "Any",
-      "AssistantPrefill": "```json",
-      "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "AssistantPrefill": null,
+      "StopSequences": null,
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -305,8 +305,8 @@
       "ID": "43A6D122-4A76-453F-97D6-82CACC619227"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:40.317Z",
-      "checksum": "46dd9b3726e7a2b0fcfc4ffea7c1a88e6485dee1523584f07b3730ef7556f60f"
+      "lastModified": "2026-04-20T13:29:15.027Z",
+      "checksum": "9691932b72cd4e41ebb8a535e67ecd202e88925c940eaff0df6b146fb225c6ba"
     }
   },
   {
