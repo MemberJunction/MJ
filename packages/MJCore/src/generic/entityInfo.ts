@@ -2218,7 +2218,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Entity Permissions
             this._Permissions = [];
-            const ep = initData.EntityPermissions || initData._Permissions;
+            const ep = initData.EntityPermissions || initData._Permissions || initData.Permissions;
             if (ep) {
                 for (let j = 0; j < ep.length; j++) {
                     this._Permissions.push(new EntityPermissionInfo(ep[j]));
@@ -2227,7 +2227,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Entity settings
             this._Settings = [];
-            const es = initData.EntitySettings || initData._Settings;
+            const es = initData.EntitySettings || initData._Settings || initData.Settings;
             if (es) {
                 es.map((s) => this._Settings.push(new EntitySettingInfo(s)));
             }

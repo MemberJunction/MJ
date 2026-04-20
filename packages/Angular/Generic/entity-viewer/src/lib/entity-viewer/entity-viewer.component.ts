@@ -354,6 +354,15 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    */
   @Input() showAddToListButton: boolean = false;
 
+  /**
+   * Whether to render the Recycle Bin chip in the viewer header.
+   * The chip auto-hides itself when the entity has no deleted records,
+   * doesn't track changes, or the user lacks Delete permission — so it
+   * stays out of the way on entities where it's not relevant.
+   * @default true
+   */
+  @Input() ShowRecycleBin: boolean = true;
+
   // ========================================
   // OUTPUTS
   // ========================================
