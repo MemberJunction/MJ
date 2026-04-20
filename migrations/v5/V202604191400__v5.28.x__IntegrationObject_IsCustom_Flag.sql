@@ -93,7 +93,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a9d98890-7ec2-49fd-97da-4e4432d3f87d' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IsCustom')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ea459761-25b4-4820-b056-e10e04f8ec28' OR (EntityID = '3630CBFD-4C85-4B24-8A51-88D67389373E' AND Name = 'IsCustom')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -125,7 +125,7 @@ GO
          )
          VALUES
          (
-            'a9d98890-7ec2-49fd-97da-4e4432d3f87d',
+            'ea459761-25b4-4820-b056-e10e04f8ec28',
             '3630CBFD-4C85-4B24-8A51-88D67389373E', -- Entity: MJ: Integration Object Fields
             100050,
             'IsCustom',
@@ -156,7 +156,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '71d01820-cb5d-4f6e-99dc-6a92d4a9ac0c' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'IsCustom')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4a4675f9-36f6-4edf-83c0-29dffee0b61e' OR (EntityID = '86D3ED6F-2D1D-43F6-9777-FD9672FA9021' AND Name = 'IsCustom')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -188,7 +188,7 @@ GO
          )
          VALUES
          (
-            '71d01820-cb5d-4f6e-99dc-6a92d4a9ac0c',
+            '4a4675f9-36f6-4edf-83c0-29dffee0b61e',
             '86D3ED6F-2D1D-43F6-9777-FD9672FA9021', -- Entity: MJ: Integration Objects
             100047,
             'IsCustom',
@@ -1165,7 +1165,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '71D01820-CB5D-4F6E-99DC-6A92D4A9AC0C' AND AutoUpdateCategory = 1
+   ID = '4A4675F9-36F6-4EDF-83C0-29DFFEE0B61E' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Objects.APIPath 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -1422,7 +1422,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'A9D98890-7EC2-49FD-97DA-4E4432D3F87D' AND AutoUpdateCategory = 1
+   ID = 'EA459761-25B4-4820-B056-E10E04F8EC28' AND AutoUpdateCategory = 1
 
 -- UPDATE Entity Field Category Info MJ: Integration Object Fields.Type 
 UPDATE [${flyway:defaultSchema}].[EntityField]
