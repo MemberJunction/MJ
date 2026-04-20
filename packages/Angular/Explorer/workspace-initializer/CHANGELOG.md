@@ -1,5 +1,19 @@
 # @memberjunction/ng-workspace-initializer
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [2542615]
+- Updated dependencies [115e4da]
+  - @memberjunction/ng-shared@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/ng-explorer-core@5.28.0
+  - @memberjunction/ng-auth-services@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/global@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

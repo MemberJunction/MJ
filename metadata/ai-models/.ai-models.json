@@ -4434,7 +4434,7 @@
       "Description": "Claude 3.7 Sonnet",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true
@@ -4738,7 +4738,7 @@
       "Description": "Largest Claude 3 Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -6974,7 +6974,7 @@
       "Description": "Claude Medium Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 10,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true
@@ -7106,7 +7106,7 @@
       "Description": "Claude Largest Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 12,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true
@@ -12597,6 +12597,190 @@
     "sync": {
       "lastModified": "2026-04-18T17:48:37.084Z",
       "checksum": "7a655cf3f0a4f80b8beebaa28d3afd62f83700084820ddd36162a1f298caf263"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GLM 5.1",
+      "PowerRank": 21,
+      "Description": "Z.AI's (Zhipu AI) incremental refresh of the GLM 5 frontier model released April 7, 2026. 744B total / 40B active Mixture-of-Experts architecture with 203K input context and 66K output tokens. Open-sourced under MIT license. Notable gains over GLM 5 on SWE-bench Verified and AIME 2026 II; retains the Deep Thinking self-critique mode. Available via Z.AI direct API and OpenRouter.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "ZhipuLLM",
+            "APIName": "glm-5.1",
+            "MaxInputTokens": 203776,
+            "MaxOutputTokens": 67584,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-04-07T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.95,
+            "OutputPricePerUnit": 3.15,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM 5.1 pricing on Z.AI direct API as of April 2026. Cached input tokens ~$0.19/1M. Incremental refresh of GLM 5 with improved benchmarks. 744B total / 40B active MoE, 203K context, 66K output. Open-weights under MIT license."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemma 4 31B Instruct",
+      "PowerRank": 8,
+      "Description": "Google's open-weights Gemma 4 31B instruction-tuned model released April 2, 2026. Dense 31B parameter architecture with 256K context window, multilingual support for 140+ languages, and multimodal vision-input/text-output capability. Available under the Gemma Terms of Use on Vertex AI and third-party hosts.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "VertexLLM",
+            "APIName": "gemma-4-31b-it",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 8192,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-04-02T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.13,
+            "OutputPricePerUnit": 0.38,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemma 4 31B Instruct pricing on Vertex AI as of April 2026. Dense 31B open-weights model under Gemma Terms of Use. 256K context, multilingual (140+), vision-in/text-out."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemma 4 26B A4B Instruct",
+      "PowerRank": 7,
+      "Description": "Google's open-weights Gemma 4 26B A4B (Active-4B MoE) instruction-tuned model released April 2, 2026. 26B total parameters with only 4B active per inference, optimized for fast and cost-efficient inference. 256K context window with multilingual support for 140+ languages. Available under the Gemma Terms of Use on Vertex AI and third-party hosts.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "VertexLLM",
+            "APIName": "gemma-4-26b-a4b-it",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 8192,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-04-02T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.08,
+            "OutputPricePerUnit": 0.35,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemma 4 26B A4B Instruct pricing on Vertex AI as of April 2026. 26B total / 4B active MoE, optimized for speed and cost. 256K context, multilingual (140+). Open-weights under Gemma Terms of Use."
+          }
+        }
+      ]
     }
   }
 ]
