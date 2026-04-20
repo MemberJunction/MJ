@@ -5143,16 +5143,15 @@ WHERE
       entityId: string,
       importance: { defaultForNewUser: boolean; entityCategory: string; confidence: string; reasoning: string }
    ): Promise<void> {
-      const defaultForNewUser = importance.defaultForNewUser ? 1 : 0;
       const updateSQL = `
          UPDATE ${this.qs(mj_core_schema(), 'ApplicationEntity')}
-         SET DefaultForNewUser = ${defaultForNewUser}, __mj_UpdatedAt = ${this.utcNow()}
+         SET DefaultForNewUser = ${this.boolLit(importance.defaultForNewUser)}, __mj_UpdatedAt = ${this.utcNow()}
          WHERE EntityID = '${entityId}'
       `;
 
       try {
          await this.LogSQLAndExecute(pool, updateSQL,
-            `Set DefaultForNewUser=${defaultForNewUser} for NEW entity (category: ${importance.entityCategory}, confidence: ${importance.confidence})`, false);
+            `Set DefaultForNewUser=${importance.defaultForNewUser} for NEW entity (category: ${importance.entityCategory}, confidence: ${importance.confidence})`, false);
 
          logStatus(`  Entity importance (NEW Entity): ${importance.entityCategory} (defaultForNewUser: ${importance.defaultForNewUser}, confidence: ${importance.confidence})`);
          logStatus(`    Reasoning: ${importance.reasoning}`);

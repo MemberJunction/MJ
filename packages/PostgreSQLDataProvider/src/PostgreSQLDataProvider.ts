@@ -445,9 +445,25 @@ SELECT * FROM delete_result`;
      * Replaces bare field names in a token fragment with double-quoted identifiers.
      * Uses word-boundary matching so that callers who write 'userid' still find 'UserID'.
      */
+    /**
+     * Converts PascalCase or camelCase to snake_case.
+     * Must match CodeGen's PostgreSQLCodeGenProvider.toSnakeCase exactly,
+     * otherwise stored function parameter names won't match at call time.
+     */
+    private toSnakeCase(name: string): string {
+        return name
+            .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+            .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+            .toLowerCase()
+            .replace(/__+/g, '_');
+    }
+
     private quoteFieldNamesInToken(token: string, fieldNames: Set<string>): string {
         for (const fieldName of fieldNames) {
-            const re = new RegExp(`\\b${fieldName}\\b`, 'gi');
+            // Negative lookahead: don't quote words followed by ( — those are function calls
+            // (e.g., LENGTH(...), LEFT(...)), not column references. Without this, a field
+            // named "Length" causes LENGTH() to be quoted as "Length"() which PG can't resolve.
+            const re = new RegExp(`\\b${fieldName}\\b(?!\\s*\\()`, 'gi');
             token = token.replace(re, pgDialect.QuoteIdentifier(fieldName));
         }
         return token;
@@ -568,8 +584,10 @@ SELECT * FROM delete_result`;
         for (const [field, value] of fieldValueMap) {
             paramValues.push(PGQueryParameterProcessor.ProcessParameterValue(value));
             // Use named parameter notation (p_fieldname => $N) to avoid
-            // parameter ordering mismatches with the stored functions
-            const paramName = `p_${field.Name.toLowerCase()}`;
+            // parameter ordering mismatches with the stored functions.
+            // Must use snake_case (p_user_id) to match CodeGen's toSnakeCase convention,
+            // NOT simple lowercase (p_userid). PG requires exact parameter name matching.
+            const paramName = `p_${this.toSnakeCase(field.Name)}`;
             placeholders.push(`${paramName} => $${paramIndex + 1}`);
             paramIndex++;
         }

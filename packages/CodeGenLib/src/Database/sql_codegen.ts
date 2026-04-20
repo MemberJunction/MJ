@@ -1513,6 +1513,26 @@ export class SQLCodeGenBase {
         // Result: _RelatedEntityJoinFieldMappings is populated with all fields to be joined from the related entity.
         //         If both old and new configs are set, they work together (new fields extend or replace the NameField).
         const qualifyingFields = entityFields.filter(f => f.RelatedEntityID && (f.IncludeRelatedEntityNameFieldInBaseView || f.RelatedEntityJoinFieldsConfig));
+
+        // PostgreSQL bootstrap fix: on a fresh PG install, vwEntityFields may be a simple
+        // SELECT * without JOINs, so related entity properties (RelatedEntity, RelatedEntityClassName,
+        // RelatedEntitySchemaName, RelatedEntityBaseTable, RelatedEntityBaseView, RelatedEntityCodeName)
+        // are NULL even though ef.RelatedEntityID is populated. Resolve all of them from the loaded
+        // entities list so the first CodeGen run can generate proper JOIN-based views.
+        for (const ef of qualifyingFields) {
+            if (ef.RelatedEntityID && (!ef.RelatedEntity || !ef.RelatedEntityClassName || !ef.RelatedEntitySchemaName || !ef.RelatedEntityBaseTable)) {
+                const relatedEntity = md.Entities.find(e => e.ID.toLowerCase() === ef.RelatedEntityID!.toLowerCase());
+                if (relatedEntity) {
+                    if (!ef.RelatedEntity) ef.RelatedEntity = relatedEntity.Name;
+                    if (!ef.RelatedEntityClassName) ef.RelatedEntityClassName = relatedEntity.ClassName || relatedEntity.BaseTable;
+                    if (!ef.RelatedEntitySchemaName) ef.RelatedEntitySchemaName = relatedEntity.SchemaName;
+                    if (!ef.RelatedEntityBaseTable) ef.RelatedEntityBaseTable = relatedEntity.BaseTable;
+                    if (!ef.RelatedEntityBaseView) ef.RelatedEntityBaseView = relatedEntity.BaseView;
+                    if (!ef.RelatedEntityCodeName) ef.RelatedEntityCodeName = relatedEntity.CodeName;
+                }
+            }
+        }
+
         for (const ef of qualifyingFields) {
             const config = ef.RelatedEntityJoinFieldsConfig || { mode: 'extend' };
             if (config.mode === 'disable') {

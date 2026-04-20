@@ -73,7 +73,12 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 
         const selectParts = this.buildBaseViewSelectParts(context, alias);
         const fromParts = this.buildBaseViewFromParts(context, entity, alias);
+        const quotedView = pgDialect.QuoteSchema(entity.SchemaName, viewName);
 
+        // PostgreSQL's CREATE OR REPLACE VIEW cannot change column order, remove columns,
+        // or add columns in non-trailing positions. DROP VIEW CASCADE first to allow full
+        // regeneration. CASCADE drops dependent functions (fn_create_*, fn_update_*, fn_delete_*)
+        // which CodeGen regenerates in the same run.
         // Permissions are handled separately by sql_codegen.ts via generateViewPermissions()
         return `
 ------------------------------------------------------------
@@ -82,7 +87,8 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 -----               BASE TABLE:  ${entity.BaseTable}
 -----               PRIMARY KEY: ${entity.PrimaryKeys.map((pk: EntityFieldInfo) => pk.Name).join(', ')}
 ------------------------------------------------------------
-CREATE OR REPLACE VIEW ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
+DROP VIEW IF EXISTS ${quotedView} CASCADE;
+CREATE OR REPLACE VIEW ${quotedView}
 AS
 SELECT
     ${selectParts}
@@ -224,6 +230,8 @@ ${trigger}
 
         const { paramDecl, deleteBody, returnType, returnStatement } = this.buildDeleteStrategy(entity, cascadeSQL);
 
+        const needsRecordVar = cascadeSQL.includes('v_rec');
+
         return `
 ------------------------------------------------------------
 ----- DELETE FUNCTION FOR ${entity.BaseTable}
@@ -233,7 +241,7 @@ CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
 ) RETURNS ${returnType} AS $$
 #variable_conflict use_column
 DECLARE
-    v_affected_count INTEGER;
+    v_affected_count INTEGER;${needsRecordVar ? '\n    v_rec RECORD;' : ''}
 BEGIN
 ${cascadeSQL}
 ${deleteBody}
