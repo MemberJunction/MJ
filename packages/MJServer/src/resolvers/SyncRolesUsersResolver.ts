@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { EntityDeleteOptions, EntitySaveOptions, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, EntityDeleteOptions, EntitySaveOptions, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { MJRoleEntity, MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
@@ -87,24 +87,36 @@ export class SyncRolesAndUsersResolver {
     @Arg('data', () => RolesAndUsersInputType ) data: RolesAndUsersInputType,
     @Ctx() context: AppContext
     ) {
+        // Wrap roles + users in one DB transaction so a user-sync failure
+        // rolls back any role changes made earlier in this call. Prior code
+        // attempted this with a TransactionGroup but ran into nesting issues —
+        // direct DB transactions per the plan doc avoid that.
         try {
-            // first we sync the roles, then the users 
-            const roleResult = await this.SyncRoles(data.Roles, context);
-            if (roleResult?.Success) {
-                const usersResult = await this.SyncUsers(data.Users, context);
-                if (usersResult?.Success) {
-                    // refresh the user cache, don't set an auto-refresh
-                    // interval here becuase that is alreayd done at startup
-                    // and will keep going on its own as per the config. This is a
-                    // special one-time refresh since we made changes here.
-                    await UserCache.Instance.Refresh(context.dataSource);
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            await provider.BeginTransaction();
+            try {
+                const roleResult = await this.DoSyncRoles(data.Roles, context.userPayload.userRecord, context.userPayload);
+                if (!roleResult.Success) {
+                    await provider.RollbackTransaction();
+                    return roleResult;
                 }
+
+                const usersResult = await this.DoSyncUsers(data.Users, context.userPayload.userRecord, context.userPayload);
+                if (!usersResult.Success) {
+                    await provider.RollbackTransaction();
+                    return usersResult;
+                }
+
+                await provider.CommitTransaction();
+
+                // refresh the user cache — one-time, since the normal auto-refresh is already scheduled
+                await UserCache.Instance.Refresh(context.dataSource);
                 return usersResult;
+            } catch (txErr) {
+                await provider.RollbackTransaction();
+                throw txErr;
             }
-            else {
-                return roleResult;
-            }
-        } 
+        }
         catch (err) {
             LogError(err);
             throw new Error('Error syncing roles and users\n\n' + err);
@@ -121,29 +133,49 @@ export class SyncRolesAndUsersResolver {
     @Arg('roles', () => [RoleInputType]) roles: RoleInputType[],
     @Ctx() context: AppContext
     ) : Promise<SyncRolesAndUsersResultType> {
+        // Wrap delete + add + update of roles in one DB transaction so any failure
+        // rolls back the whole batch. Keeps the sync idempotent across retries.
         try {
-            // we iterate through the provided roles and we remove roles that are not in the input and add roles that are new
-            // and update roles that already exist
-            const rv = new RunView();
-            const result = await rv.RunView<MJRoleEntity>({
-                EntityName: "MJ: Roles",
-                ResultType: 'entity_object'
-            }, context.userPayload.userRecord);
-    
-            if (result && result.Success) {
-                const currentRoles = result.Results;
-                if (await this.DeleteRemovedRoles(currentRoles, roles, context.userPayload.userRecord, context.userPayload)) {
-                    if ( await this.AddNewRoles(currentRoles, roles, context.userPayload.userRecord, context.userPayload)) {
-                        return await this.UpdateExistingRoles(currentRoles, roles, context.userPayload);
-                    }
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            await provider.BeginTransaction();
+            try {
+                const result = await this.DoSyncRoles(roles, context.userPayload.userRecord, context.userPayload);
+                if (result.Success) {
+                    await provider.CommitTransaction();
+                } else {
+                    await provider.RollbackTransaction();
                 }
+                return result;
+            } catch (txErr) {
+                await provider.RollbackTransaction();
+                throw txErr;
             }
-
-            return { Success: false }; // if we get here, something went wrong
         } catch (err) {
             LogError(err);
             throw new Error('Error syncing roles and users\n\n' + err);
         }
+    }
+
+    /** Transaction-free core of SyncRoles — expected to be invoked inside an outer transaction. */
+    protected async DoSyncRoles(roles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<SyncRolesAndUsersResultType> {
+        const rv = new RunView();
+        const result = await rv.RunView<MJRoleEntity>({
+            EntityName: "MJ: Roles",
+            ResultType: 'entity_object'
+        }, user);
+
+        if (!result || !result.Success) {
+            return { Success: false };
+        }
+
+        const currentRoles = result.Results;
+        if (!await this.DeleteRemovedRoles(currentRoles, roles, user, userPayload)) {
+            return { Success: false };
+        }
+        if (!await this.AddNewRoles(currentRoles, roles, user, userPayload)) {
+            return { Success: false };
+        }
+        return await this.UpdateExistingRoles(currentRoles, roles, userPayload);
     }
 
     protected async UpdateExistingRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], userPayload: UserPayload): Promise<SyncRolesAndUsersResultType> {
@@ -229,33 +261,46 @@ export class SyncRolesAndUsersResolver {
     @Arg('users', () => [UserInputType]) users: UserInputType[],
     @Ctx() context: AppContext
     ) : Promise<SyncRolesAndUsersResultType> {
+        // Wrap delete + add + update + role-sync of users in one DB transaction.
         try {
-            // first, we sync up the users and then the user roles. 
-            // for syncing users we first remove users that are no longer in the input, then we add new users and update existing users
-            const rv = new RunView();
-            const result = await rv.RunView<MJUserEntity>({
-                EntityName: "MJ: Users",
-                ResultType: 'entity_object'
-            }, context.userPayload.userRecord);
-            if (result && result.Success) {
-                // go through current users and remove those that are not in the input
-                const currentUsers = result.Results;
-                if (await this.DeleteRemovedUsers(currentUsers, users, context.userPayload.userRecord, context.userPayload)) {
-                    if (await this.AddNewUsers(currentUsers, users, context.userPayload)) {
-                        if (await this.UpdateExistingUsers(currentUsers, users, context.userPayload)) {
-                            if (await this.SyncUserRoles(users, context.userPayload.userRecord, context.userPayload)) {
-                                return { Success: true };
-                            }    
-                        }
-                    }
+            const provider = Metadata.Provider as DatabaseProviderBase;
+            await provider.BeginTransaction();
+            try {
+                const result = await this.DoSyncUsers(users, context.userPayload.userRecord, context.userPayload);
+                if (result.Success) {
+                    await provider.CommitTransaction();
+                } else {
+                    await provider.RollbackTransaction();
                 }
+                return result;
+            } catch (txErr) {
+                await provider.RollbackTransaction();
+                throw txErr;
             }
-
-            return { Success: false }; // if we get here, something went wrong
         } catch (err) {
             LogError(err);
             throw new Error('Error syncing roles and users\n\n' + err);
         }
+    }
+
+    /** Transaction-free core of SyncUsers — expected to be invoked inside an outer transaction. */
+    protected async DoSyncUsers(users: UserInputType[], user: UserInfo, userPayload: UserPayload): Promise<SyncRolesAndUsersResultType> {
+        const rv = new RunView();
+        const result = await rv.RunView<MJUserEntity>({
+            EntityName: "MJ: Users",
+            ResultType: 'entity_object'
+        }, user);
+
+        if (!result || !result.Success) {
+            return { Success: false };
+        }
+
+        const currentUsers = result.Results;
+        if (!await this.DeleteRemovedUsers(currentUsers, users, user, userPayload)) return { Success: false };
+        if (!await this.AddNewUsers(currentUsers, users, userPayload)) return { Success: false };
+        if (!await this.UpdateExistingUsers(currentUsers, users, userPayload)) return { Success: false };
+        if (!await this.SyncUserRoles(users, user, userPayload)) return { Success: false };
+        return { Success: true };
     }
 
     protected async UpdateExistingUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<boolean> {  
@@ -309,7 +354,6 @@ export class SyncRolesAndUsersResolver {
         const md = new Metadata();
 
         let ok: boolean = true;
-        //const tg = await md.CreateTransactionGroup(); HAVING PROBLEMS with this, so skipping for now, I think the entire thing is wrapped in a transaction and that's causing issues with two styles of trans wrappers
         for (const remove of currentUsers) {
             if (remove.Type.trim().toLowerCase() !== 'owner') {
                 if (!futureUsers.find(r => r.Email.trim().toLowerCase() === remove.Email.trim().toLowerCase())) {
@@ -331,8 +375,7 @@ export class SyncRolesAndUsersResolver {
         }, u);
         if (r2.Success) {
             for (const ur of r2.Results) {
-                //ur.TransactionGroup = tg;
-                ok = ok && await ur.Delete(); // remove the user role
+                ok = ok && await ur.Delete(); // remove the user role — part of the outer transaction
             }
         }
         if (await user.Delete()) {
@@ -373,9 +416,9 @@ export class SyncRolesAndUsersResolver {
             const dbUserRoles = urResult.Results;
             let ok: boolean = true;
 
-            // now, we can do lookups in memory from those DB roles and Users for their ID values
-            // now we will iterate through the users input type and for each role, make sure it is in there     
-            //const tg = await md.CreateTransactionGroup();
+            // now, we can do lookups in memory from those DB roles and Users for their ID values.
+            // now we will iterate through the users input type and for each role, make sure it is in there.
+            // Saves/Deletes below run inside the outer SyncUsers/SyncRolesAndUsers transaction.
             for (const user of users) {
                 const dbUser = dbUsers.find(u => u.Email.trim().toLowerCase() === user.Email.trim().toLowerCase());
                 if (dbUser) {
@@ -398,8 +441,7 @@ export class SyncRolesAndUsersResolver {
                         const role = user.Roles.find(r => r.Name.trim().toLowerCase() === dbRoles.find(rr => UUIDsEqual(rr.ID, dbUserRole.RoleID))?.Name.trim().toLowerCase());
                         if (!role && !this.IsStandardRole(dbUserRole.Role)) {
                             // this user role is no longer in the user's roles, we need to remove it
-                            //dbUserRole.TransactionGroup = tg;
-                            ok = ok && await dbUserRole.Delete(); // remove the user role - we use await for the DELETE, not the save
+                            ok = ok && await dbUserRole.Delete();
                         }
                     }
                 }
