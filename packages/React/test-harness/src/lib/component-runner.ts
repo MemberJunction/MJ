@@ -84,6 +84,40 @@ export interface ComponentExecutionOptions {
    *   .map(e => SimpleEntityInfo.FromEntityInfo(e));
    */
   entityMetadata?: SimpleEntityInfo[];
+
+  /**
+   * Optional callback invoked with the live Playwright page after the component
+   * has rendered successfully. The page remains open until this callback resolves,
+   * allowing the caller to perform interactions (clicks, form fills, etc.) and
+   * inspect the post-interaction state.
+   *
+   * The callback receives the Playwright Page object and the execution result
+   * captured so far. Any errors thrown inside the callback are caught and added
+   * to the result's error array — they do not prevent the result from being returned.
+   *
+   * @example
+   * const result = await harness.testComponent({
+   *   ...options,
+   *   onPageReady: async (page, result) => {
+   *     const buttons = await page.locator('button').all();
+   *     for (const btn of buttons) {
+   *       await btn.click();
+   *       await page.waitForTimeout(500);
+   *     }
+   *   }
+   * });
+   */
+  onPageReady?: (page: any, result: ComponentExecutionResult) => Promise<void>;
+
+  /**
+   * When true, the final screenshot captures the entire scrollable page content
+   * (Playwright's `fullPage: true`) instead of only the viewport. Use this when
+   * testing tall components (dashboards, long forms) where viewport-only
+   * screenshots can cut off content below the fold.
+   *
+   * Defaults to false to preserve existing behavior for other harness users.
+   */
+  fullPageScreenshot?: boolean;
 }
 
 export interface ComponentExecutionResult {
@@ -1068,9 +1102,11 @@ export class ComponentRunner {
         }
       }
 
-      // Take screenshot with size protection
+      // Take screenshot with size protection. fullPage:true captures the entire
+      // scrollable content instead of just the viewport — required for tall
+      // components (dashboards, long forms) where the viewport cuts off content.
       try {
-        screenshot = await page.screenshot();
+        screenshot = await page.screenshot({ fullPage: options.fullPageScreenshot === true });
 
         // Check screenshot size (should be reasonable)
         const screenshotSize = screenshot.length;
@@ -1218,6 +1254,25 @@ export class ComponentRunner {
 
       if (debug) {
         this.dumpDebugInfo(result);
+      }
+
+      // Call onPageReady callback if provided, giving the caller access to the live page
+      if (options.onPageReady) {
+        try {
+          await options.onPageReady(page, result);
+        } catch (callbackError) {
+          const callbackMessage = callbackError instanceof Error ? callbackError.message : String(callbackError);
+          if (debug) {
+            console.log(`\n⚠️ onPageReady callback error: ${callbackMessage}`);
+          }
+          result.errors.push({
+            message: `onPageReady callback error: ${callbackMessage}`,
+            severity: 'medium' as const,
+            rule: 'page-ready-callback',
+            line: 0,
+            column: 0
+          });
+        }
       }
 
       return result;
