@@ -111,7 +111,7 @@
                                             <i class="fa-solid fa-download"></i> CSV
                                         </button>
                                     }
-                                    <button class="drill-down-close" (click)="CloseDrillDown()">
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()">
                                         <i class="fa-solid fa-times"></i>
                                     </button>
                                 </div>
@@ -298,7 +298,7 @@
                         <div class="drill-down-panel">
                             <div class="drill-down-header">
                                 <span class="drill-down-title"><i class="fa-solid fa-table"></i> {{ DrillDownTarget }} Detail</span>
-                                <button class="drill-down-close" (click)="CloseDrillDown()">
+                                <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()">
                                     <i class="fa-solid fa-times"></i>
                                 </button>
                             </div>
