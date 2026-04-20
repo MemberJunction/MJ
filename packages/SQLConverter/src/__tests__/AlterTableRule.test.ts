@@ -157,6 +157,33 @@ describe('AlterTableRule', () => {
     });
   });
 
+  describe('Boolean DEFAULT conversion in ADD COLUMN', () => {
+    it('should convert BIT DEFAULT 1 to BOOLEAN DEFAULT TRUE', () => {
+      const sql = `ALTER TABLE [__mj].[AIAgent] ADD [AllowEphemeralClientTools] [BIT] NOT NULL DEFAULT 1`;
+      const result = convert(sql);
+      expect(result).toContain('BOOLEAN');
+      expect(result).toContain('DEFAULT TRUE');
+      expect(result).not.toContain('DEFAULT 1');
+    });
+
+    it('should convert BIT DEFAULT 0 to BOOLEAN DEFAULT FALSE', () => {
+      const sql = `ALTER TABLE [__mj].[Entity] ADD [SupportsGeoCoding] [BIT] NOT NULL DEFAULT 0`;
+      const result = convert(sql);
+      expect(result).toContain('BOOLEAN');
+      expect(result).toContain('DEFAULT FALSE');
+      expect(result).not.toContain('DEFAULT 0');
+    });
+
+    it('should handle multiple BOOLEAN columns in one ALTER TABLE', () => {
+      const sql = `ALTER TABLE [__mj].[Entity]
+        ADD [AutoUpdateFullTextSearch] [BIT] NOT NULL DEFAULT 1,
+            [SupportsGeoCoding] [BIT] NOT NULL DEFAULT 0`;
+      const result = convert(sql);
+      expect(result).toContain('DEFAULT TRUE');
+      expect(result).toContain('DEFAULT FALSE');
+    });
+  });
+
   describe('DEFAULT FOR column', () => {
     it('should convert ADD DEFAULT val FOR col to ALTER COLUMN SET DEFAULT', () => {
       const sql = `ALTER TABLE [__mj].[Foo] ADD DEFAULT 0.7 FOR [Threshold]`;

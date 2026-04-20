@@ -78,3 +78,7 @@ export type {
 // Post-conversion validation/fixup
 export { deduplicateEntityFieldSequences } from './rules/SequenceDeduplicator.js';
 export type { SequenceFix, DeduplicationResult } from './rules/SequenceDeduplicator.js';
+
+// Parity reporting
+export { generateParityReport } from './rules/ParityReporter.js';
+export type { ParityReport, ParityGap, MigrationFileInfo } from './rules/ParityReporter.js';

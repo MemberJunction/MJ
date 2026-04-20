@@ -194,6 +194,7 @@ export class AlterTableRule implements IConversionRule {
     sql = sql.replace(/\bVARCHAR\s*\(\s*MAX\s*\)/gi, 'TEXT');
     sql = sql.replace(/\bUNIQUEIDENTIFIER\b/gi, 'UUID');
     sql = sql.replace(/(?<![\w"])BIT(?![\w"])/gi, 'BOOLEAN');
+    sql = sql.replace(/"BIT"/gi, 'BOOLEAN'); // Also handle bracket-quoted [BIT] → "BIT" from convertIdentifiers
     sql = sql.replace(/\bDATETIMEOFFSET\b(?:\s*\(\s*\d+\s*\))?/gi, 'TIMESTAMPTZ');
     sql = sql.replace(/\bDATETIME2?\b(?:\s*\(\s*\d+\s*\))?/gi, 'TIMESTAMPTZ');
     sql = sql.replace(/\bSMALLDATETIME\b/gi, 'TIMESTAMPTZ');
@@ -204,13 +205,17 @@ export class AlterTableRule implements IConversionRule {
     return sql;
   }
 
-  /** Convert SQL Server default functions to PostgreSQL equivalents */
+  /** Convert SQL Server default functions and boolean literals to PostgreSQL equivalents */
   private convertDefaults(sql: string): string {
     sql = sql.replace(/\bGETUTCDATE\s*\(\s*\)/gi, 'NOW()');
     sql = sql.replace(/\bGETDATE\s*\(\s*\)/gi, 'NOW()');
     sql = sql.replace(/\bSYSDATETIMEOFFSET\s*\(\s*\)/gi, 'NOW()');
     sql = sql.replace(/\bNEWSEQUENTIALID\s*\(\s*\)/gi, 'gen_random_uuid()');
     sql = sql.replace(/\bNEWID\s*\(\s*\)/gi, 'gen_random_uuid()');
+    // After BIT → BOOLEAN type conversion, DEFAULT 0/1 must become DEFAULT FALSE/TRUE.
+    // PG's BOOLEAN type does not accept integer literals as defaults.
+    sql = sql.replace(/\bBOOLEAN\b(.*?)\bDEFAULT\s+0\b/gi, 'BOOLEAN$1DEFAULT FALSE');
+    sql = sql.replace(/\bBOOLEAN\b(.*?)\bDEFAULT\s+1\b/gi, 'BOOLEAN$1DEFAULT TRUE');
     return sql;
   }
 
