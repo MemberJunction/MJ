@@ -14,7 +14,7 @@ import { AuthorizationInfo, UserInfo } from "./securityInfo";
  * ## Usage
  * Prefer {@link UserCanExecuteWithAncestors} for feature-gate checks so that
  * administrators can grant access at whatever granularity fits their policy
- * (root "Schema Management" for all entity-designer ops, or a specific leaf
+ * (root "Schema Management" for all database-designer ops, or a specific leaf
  * for finer control).  Use the plain {@link UserCanExecute} only when you
  * explicitly need to verify a direct grant with no hierarchy traversal.
  */

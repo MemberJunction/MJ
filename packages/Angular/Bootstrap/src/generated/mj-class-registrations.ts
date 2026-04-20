@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (314 classes)
+// @memberjunction/core-entities (315 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -276,6 +276,7 @@ import {
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUAuditLogEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -420,7 +421,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (65 classes)
+// @memberjunction/ng-dashboards (66 classes)
 import {
     APIKeysResourceComponent,
     ActionExplorerComponent,
@@ -449,6 +450,7 @@ import {
     DashboardBrowserResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
+    DatabaseDesignerDashboardComponent,
     DuplicateDetectionResourceComponent,
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
@@ -769,6 +771,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUAuditLogEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -918,6 +921,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     DashboardBrowserResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
+    DatabaseDesignerDashboardComponent,
     DuplicateDetectionResourceComponent,
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
@@ -977,7 +981,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 449;
+export const CLASS_REGISTRATIONS_COUNT = 451;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

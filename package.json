@@ -15,7 +15,7 @@
     "packages/AI/Vectors/Memory/*",
     "packages/AI/Knowledge/*",
     "packages/AI/AgentManager/*",
-    "packages/AI/EntityDesigner/*",
+    "packages/AI/DatabaseDesigner/*",
     "packages/AI/AICLI",
     "packages/Communication/*",
     "packages/Communication/providers/*",

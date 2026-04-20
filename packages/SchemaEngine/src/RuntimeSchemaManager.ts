@@ -1668,7 +1668,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * Also includes any additional schemas configured via the `RSU_PROTECTED_SCHEMAS`
    * environment variable (comma-separated list, e.g. `RSU_PROTECTED_SCHEMAS=dbo,sys`).
    *
-   * Callers such as the Entity Designer Validator use this for early-exit UX
+   * Callers such as the Database Designer Validator use this for early-exit UX
    * feedback before DDL is even generated — the same set that
    * `ValidateMigrationSQL()` enforces at the SQL level.
    *

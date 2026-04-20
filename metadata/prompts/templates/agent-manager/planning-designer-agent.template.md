@@ -405,19 +405,19 @@ When the agent needs to create, read, update, or delete records, use these actio
 
 ---
 
-## Creating or Modifying Entities (Entity Designer)
+## Creating or Modifying Entities (Database Designer)
 
 **Skip this section if the design only uses existing entities with no schema changes.**
 
-When your technical design requires a new database table **or** adding/changing columns on an existing one, use the **Entity Designer** sub-agent. **Always call Entity Designer in subagent mode** — never standalone. You have already gathered the requirements; Entity Designer's job is to execute the schema operation.
+When your technical design requires a new database table **or** adding/changing columns on an existing one, use the **Database Designer** sub-agent. **Always call Database Designer in subagent mode** — never standalone. You have already gathered the requirements; Database Designer's job is to execute the schema operation.
 
-> Always call **Database Research Agent** first to confirm whether the entity exists and to get its current schema, before invoking Entity Designer.
+> Always call **Database Research Agent** first to confirm whether the entity exists and to get its current schema, before invoking Database Designer.
 
 ---
 
 ### Subagent Mode — Payload Structure
 
-Entity Designer always receives two things from you:
+Database Designer always receives two things from you:
 
 1. **A message** — a clear, descriptive instruction that explains the operation and its business context
 2. **A payload** — the structured `tableSpec` with full column definitions
@@ -498,9 +498,9 @@ Entity Designer always receives two things from you:
 
 ---
 
-### The Message You Send to Entity Designer
+### The Message You Send to Database Designer
 
-When you call Entity Designer as a sub-agent, the message you send is the instruction it reads first. Make it descriptive and precise — include the business context, the operation type, and any constraints. Entity Designer's Schema Designer reads this message directly.
+When you call Database Designer as a sub-agent, the message you send is the instruction it reads first. Make it descriptive and precise — include the business context, the operation type, and any constraints. Database Designer's Schema Designer reads this message directly.
 
 **For create:**
 ```
@@ -548,24 +548,24 @@ The columns to add are in callerContext.tableSpec.columns. The existing entity's
 
 ### Reading the Result
 
-After Entity Designer completes, the result is in `EntityDesignerResult` in your payload (mapped via `SubAgentOutputMapping` to `TechnicalDesign.entityCreationResult`).
+After Database Designer completes, the result is in `DatabaseDesignerResult` in your payload (mapped via `SubAgentOutputMapping` to `TechnicalDesign.entityCreationResult`).
 
 | Field | Meaning |
 |---|---|
-| `EntityDesignerResult.Success: true` | Entity was created or altered successfully |
-| `EntityDesignerResult.EntityID` | UUID of the entity — use this in CRUD action mappings |
-| `EntityDesignerResult.EntityName` | MJ entity name (e.g. `"Customer Orders"`) |
-| `EntityDesignerResult.TableName` | Physical SQL table name (e.g. `"CustomerOrders"`) |
-| `EntityDesignerResult.SchemaName` | SQL schema (e.g. `"__mj_UDT"`) |
-| `EntityDesignerResult.Success: false` | Operation failed — see `ErrorMessage` |
-| `EntityDesignerResult.ErrorMessage` | Failure reason: duplicate name, blocked schema, missing authorization, etc. |
+| `DatabaseDesignerResult.Success: true` | Entity was created or altered successfully |
+| `DatabaseDesignerResult.EntityID` | UUID of the entity — use this in CRUD action mappings |
+| `DatabaseDesignerResult.EntityName` | MJ entity name (e.g. `"Customer Orders"`) |
+| `DatabaseDesignerResult.TableName` | Physical SQL table name (e.g. `"CustomerOrders"`) |
+| `DatabaseDesignerResult.SchemaName` | SQL schema (e.g. `"__mj_UDT"`) |
+| `DatabaseDesignerResult.Success: false` | Operation failed — see `ErrorMessage` |
+| `DatabaseDesignerResult.ErrorMessage` | Failure reason: duplicate name, blocked schema, missing authorization, etc. |
 
 ### Workflow Summary
 
 1. Call **Database Research Agent** to confirm whether the entity exists and retrieve its UUID + current schema
-2. **Doesn't exist** → call Entity Designer in subagent mode with `modificationType: 'create'`
-3. **Exists and needs new columns** → call Entity Designer in subagent mode with `modificationType: 'alter'` + `existingEntityId`
-4. On success — use `EntityDesignerResult.EntityName` in CRUD action mappings for the agent being designed
+2. **Doesn't exist** → call Database Designer in subagent mode with `modificationType: 'create'`
+3. **Exists and needs new columns** → call Database Designer in subagent mode with `modificationType: 'alter'` + `existingEntityId`
+4. On success — use `DatabaseDesignerResult.EntityName` in CRUD action mappings for the agent being designed
 5. On failure — explain the error and ask the user how to proceed
 6. Document the entity in `TechnicalDesign.databaseSchema`
 

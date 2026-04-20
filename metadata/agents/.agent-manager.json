@@ -402,10 +402,10 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "SubAgentID": "@lookup:MJ: AI Agents.Name=Entity Designer",
+                  "SubAgentID": "@lookup:MJ: AI Agents.Name=Database Designer",
                   "Status": "Active",
                   "SubAgentOutputMapping": {
-                    "EntityDesignerResult": "TechnicalDesign.entityCreationResult"
+                    "DatabaseDesignerResult": "TechnicalDesign.entityCreationResult"
                   },
                   "SubAgentContextPaths": [
                     "TechnicalDesign",
@@ -416,8 +416,8 @@
                   "ID": "57BC8352-ACCF-4B88-874D-44C46B6DEEE0"
                 },
                 "sync": {
-                  "lastModified": "2026-04-13T06:16:42.911Z",
-                  "checksum": "657c9492db487177bddfc9e53b9a6da14c3668aadb5e19485fdb5ebd14680ad9"
+                  "lastModified": "2026-04-20T17:16:17.631Z",
+                  "checksum": "e9a76d373db50d81cc4ed26abb4da6ad2d29a25c4ba3a2e42692ec54904fd3a0"
                 }
               }
             ]

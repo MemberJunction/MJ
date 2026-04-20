@@ -511,7 +511,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (314 classes)
+// @memberjunction/core-entities (315 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -746,6 +746,7 @@ import {
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUAuditLogEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -854,6 +855,23 @@ import {
     DataContextItemServer,
 } from '@memberjunction/data-context-server';
 
+// @memberjunction/database-designer-actions (5 classes)
+import {
+    CreateEntityAction,
+    DescribeEntityAction,
+    ListMyEntitiesAction,
+    ModifyEntityAction,
+    ValidateEntitySchemaAction,
+} from '@memberjunction/database-designer-actions';
+
+// @memberjunction/database-designer-core (4 classes)
+import {
+    DatabaseDesignerAgent,
+    DatabaseDesignerSchemaBuilder,
+    DatabaseDesignerSchemaDesigner,
+    DatabaseDesignerSchemaValidator,
+} from '@memberjunction/database-designer-core';
+
 // @memberjunction/doc-utils (2 classes)
 import {
     MJLibraryEntityExtended,
@@ -874,22 +892,6 @@ import {
 import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
-
-// @memberjunction/entity-designer-actions (4 classes)
-import {
-    CreateEntityAction,
-    DescribeEntityAction,
-    ListMyEntitiesAction,
-    ModifyEntityAction,
-} from '@memberjunction/entity-designer-actions';
-
-// @memberjunction/entity-designer-core (4 classes)
-import {
-    EntityDesignerAgent,
-    EntityDesignerSchemaBuilder,
-    EntityDesignerSchemaDesigner,
-    EntityDesignerSchemaValidator,
-} from '@memberjunction/entity-designer-core';
 
 // @memberjunction/integration-actions (1 classes)
 import {
@@ -1527,6 +1529,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUAuditLogEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -1625,6 +1628,15 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
     DataContextItemServer,
+    CreateEntityAction,
+    DescribeEntityAction,
+    ListMyEntitiesAction,
+    ModifyEntityAction,
+    ValidateEntitySchemaAction,
+    DatabaseDesignerAgent,
+    DatabaseDesignerSchemaBuilder,
+    DatabaseDesignerSchemaDesigner,
+    DatabaseDesignerSchemaValidator,
     MJLibraryEntityExtended,
     MJLibraryItemEntityExtended,
     AWSKMSKeySource,
@@ -1634,14 +1646,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     EnvVarKeySource,
     RotateEncryptionKeyAction,
     MJEntityCommunicationMessageTypeEntityExtended,
-    CreateEntityAction,
-    DescribeEntityAction,
-    ListMyEntitiesAction,
-    ModifyEntityAction,
-    EntityDesignerAgent,
-    EntityDesignerSchemaBuilder,
-    EntityDesignerSchemaDesigner,
-    EntityDesignerSchemaValidator,
     RunSyncAction,
     FileFeedConnector,
     HubSpotConnector,
@@ -1685,7 +1689,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 697;
+export const CLASS_REGISTRATIONS_COUNT = 699;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -1739,11 +1743,11 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/core-entities',
     '@memberjunction/core-entities-server',
     '@memberjunction/data-context-server',
+    '@memberjunction/database-designer-actions',
+    '@memberjunction/database-designer-core',
     '@memberjunction/doc-utils',
     '@memberjunction/encryption',
     '@memberjunction/entity-communications-base',
-    '@memberjunction/entity-designer-actions',
-    '@memberjunction/entity-designer-core',
     '@memberjunction/integration-actions',
     '@memberjunction/integration-connectors',
     '@memberjunction/messaging-adapters',

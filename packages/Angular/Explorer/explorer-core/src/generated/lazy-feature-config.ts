@@ -148,7 +148,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::MCPResource': loadMcpModule,
 
   // @memberjunction/ng-dashboards → ./module
-  'BaseResourceComponent::EntityDesignerDashboard': loadModule,
+  'BaseResourceComponent::DatabaseDesignerDashboard': loadModule,
 
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadSchedulingDashboardsModule,

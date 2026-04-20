@@ -64,10 +64,10 @@
         "isDefault": false
       },
       {
-        "Label": "Entity Designer",
+        "Label": "Database Designer",
         "Icon": "fa-solid fa-wand-magic-sparkles",
         "ResourceType": "Custom",
-        "DriverClass": "EntityDesignerDashboard",
+        "DriverClass": "DatabaseDesignerDashboard",
         "isDefault": false
       }
     ]
@@ -79,7 +79,7 @@
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2026-04-19T22:42:10.696Z",
-    "checksum": "865a6176d4c57296661ee46498a3c564d8ceb714daac5a6fe481fadf1bf798fa"
+    "lastModified": "2026-04-20T17:26:46.649Z",
+    "checksum": "15aaaed84b511301e9363db0f0ac8fdfcfec9099eda5ec0ac994e1aafce5720e"
   }
 }
