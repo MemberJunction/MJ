@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [1d62875]
+- Updated dependencies [fdab4bb]
+- Updated dependencies [115e4da]
+  - @memberjunction/integration-engine@5.28.0
+  - @memberjunction/ai-prompts@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-agents@5.28.0
+  - @memberjunction/ai-vector-sync@5.28.0
+  - @memberjunction/actions@5.28.0
+  - @memberjunction/content-autotagging@5.28.0
+  - @memberjunction/core-entities-server@5.28.0
+  - @memberjunction/ai-agent-manager@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/ai-mcp-client@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/code-execution@5.28.0
+  - @memberjunction/communication-types@5.28.0
+  - @memberjunction/communication-engine@5.28.0
+  - @memberjunction/external-change-detection@5.28.0
+  - @memberjunction/generic-database-provider@5.28.0
+  - @memberjunction/storage@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/search-engine@5.28.0
+  - @memberjunction/geo-core@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/ai-betty-bot@5.28.0
+  - @memberjunction/export-engine@5.28.0
+  - @memberjunction/global@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [fdab4bb]
+- Updated dependencies [115e4da]
+  - @memberjunction/ai-prompts@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/ai-vectors@5.28.0
+  - @memberjunction/ai-vectordb@5.28.0
+  - @memberjunction/ai-vectors-pinecone@5.28.0
+  - @memberjunction/credentials@5.28.0
+  - @memberjunction/templates-base-types@5.28.0
+  - @memberjunction/templates@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/global@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes
