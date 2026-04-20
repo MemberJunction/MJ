@@ -162,13 +162,13 @@ export class EntityOrganicKeyInfo extends BaseInfo {
         return this.MatchFieldNames ? this.MatchFieldNames.split(',').map(f => f.trim()) : [];
     }
 
-    constructor(initData: {EntityOrganicKeyRelatedEntities?: unknown[]; _RelatedEntities?: unknown[]} & Record<string, unknown> = null) {
+    constructor(initData: {EntityOrganicKeyRelatedEntities?: unknown[]; _RelatedEntities?: unknown[]; RelatedEntities?: unknown[]} & Record<string, unknown> = null) {
         super();
         if (initData) {
             this.copyInitData(initData);
 
             this._RelatedEntities = [];
-            const re = initData.EntityOrganicKeyRelatedEntities || initData._RelatedEntities;
+            const re = initData.EntityOrganicKeyRelatedEntities || initData._RelatedEntities || initData.RelatedEntities;
             if (re && Array.isArray(re)) {
                 // sort by sequence
                 const sorted = [...re] as Record<string, unknown>[];
@@ -183,6 +183,7 @@ export class EntityOrganicKeyInfo extends BaseInfo {
             }
         }
     }
+
 }
 
 /**
@@ -255,6 +256,7 @@ export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
             this.copyInitData(initData);
         }
     }
+
 }
 
 export const EntityPermissionType = {
@@ -430,6 +432,17 @@ export class EntityFieldValueInfo extends BaseInfo {
     constructor (initData: any) {
         super();
         this.copyInitData(initData);
+    }
+
+    /**
+     * Returns a plain object suitable for JSON serialization.
+     * Called automatically by JSON.stringify().
+     */
+    toJSON(): { Value: string; Code: string } {
+        return {
+            Value: this.Value,
+            Code: this.Code,
+        };
     }
 }
 
@@ -1079,6 +1092,7 @@ export class EntityFieldInfo extends BaseInfo {
             }
         }
     }
+
 
 
     /**
@@ -2193,9 +2207,9 @@ export class EntityInfo extends BaseInfo {
             this.copyInitData(initData);
 
             // do some special handling to create class instances instead of just data objects
-            // copy the Entity Fields
+            // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
             this._Fields = [];
-            const ef = initData.EntityFields || initData._Fields;
+            const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
                     this._Fields.push(new EntityFieldInfo(ef[j]));
@@ -2204,7 +2218,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Entity Permissions
             this._Permissions = [];
-            const ep = initData.EntityPermissions || initData._Permissions;
+            const ep = initData.EntityPermissions || initData._Permissions || initData.Permissions;
             if (ep) {
                 for (let j = 0; j < ep.length; j++) {
                     this._Permissions.push(new EntityPermissionInfo(ep[j]));
@@ -2213,7 +2227,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Entity settings
             this._Settings = [];
-            const es = initData.EntitySettings || initData._Settings;
+            const es = initData.EntitySettings || initData._Settings || initData.Settings;
             if (es) {
                 es.map((s) => this._Settings.push(new EntitySettingInfo(s)));
             }
@@ -2221,9 +2235,9 @@ export class EntityInfo extends BaseInfo {
             // auto-populate FieldCategories from the FieldCategoryInfo setting
             this._FieldCategories = this.parseFieldCategoriesFromSettings();
 
-            // copy the Related Entities
+            // copy the Related Entities (accept EntityRelationships, _RelatedEntities, or RelatedEntities as input names)
             this._RelatedEntities = [];
-            const er = initData.EntityRelationships || initData._RelatedEntities;
+            const er = initData.EntityRelationships || initData._RelatedEntities || initData.RelatedEntities;
             if (er) {
                 // check to see if ANY of the records in the er array have a non-null or non-zero sequence value. The reason is 
                 // if we have any sequence values populated we want to sort by that sequence, and we want to consider null to be a high number
@@ -2252,7 +2266,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Organic Keys (sorted by sequence inside EntityOrganicKeyInfo constructor)
             this._OrganicKeys = [];
-            const ok = initData.EntityOrganicKeys || initData._OrganicKeys;
+            const ok = initData.EntityOrganicKeys || initData._OrganicKeys || initData.OrganicKeys;
             if (ok && Array.isArray(ok)) {
                 for (const item of ok) {
                     this._OrganicKeys.push(new EntityOrganicKeyInfo(item));

@@ -15,6 +15,8 @@ import {
     TransactionGroupBase,
     IMetadataProvider,
     RunQuerySQLFilterManager,
+    RestoreContext,
+    RecordChangePayload,
 } from '@memberjunction/core';
 
 
@@ -325,6 +327,13 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     /**
      * Generates PostgreSQL function-call SQL for Save (Create/Update).
      * Returns parameterized SQL with $1, $2, ... placeholders.
+     *
+     * When the entity tracks record changes, the resulting SQL is a CTE
+     * batch — the CRUD function-call result feeds a second CTE that
+     * inserts the RecordChange row using a SQL-side RecordID expression
+     * (so the post-INSERT primary key is captured without a JS round-trip).
+     * Payload assembly (diff, JSON, lineage) is delegated to the
+     * dialect-agnostic `BuildRecordChangePayload` helper on the base.
      */
     protected override async GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
         const entityInfo = entity.EntityInfo;
@@ -332,23 +341,45 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         const { paramValues, paramPlaceholders } = await this.buildCRUDParams(entity, isNew, entityInfo, user);
         const simpleSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
 
-        if (this.shouldTrackRecordChanges(entityInfo)) {
-            const rc = this.computeSaveRecordChangeParams(entity, isNew, user, paramValues.length);
-            if (rc) {
-                const s = rc.startIdx;
+        if (this.ShouldTrackRecordChanges(entityInfo)) {
+            const newData = entity.GetAll(false);
+            const oldData = !isNew ? entity.GetAll(true) : null;
+            // Empty recordID — the CTE resolves it via buildRecordIDFromCTE below.
+            const payload = this.BuildRecordChangePayload(
+                newData,
+                oldData,
+                '',
+                entityInfo,
+                isNew ? 'Create' : 'Update',
+                user,
+                entity.RestoreContext,
+                "'",
+            );
+            if (payload) {
+                const s = paramValues.length + 1;
                 const recordIDExpr = this.buildRecordIDFromCTE(entityInfo, 'save_result');
                 const fullSQL = `WITH save_result AS (
     ${simpleSQL}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
-        ("EntityID", "RecordID", "UserID", "Type", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status")
-    SELECT $${s}::uuid, ${recordIDExpr}, $${s+1}::uuid, $${s+2}::varchar, $${s+3}::text, $${s+4}::text, $${s+5}::text, 'Complete'
+        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
+    SELECT $${s}::uuid, ${recordIDExpr}, $${s+1}::uuid, $${s+2}::varchar, $${s+3}::varchar, $${s+4}::text, $${s+5}::text, $${s+6}::text, 'Complete', $${s+7}::uuid, $${s+8}::text
     FROM save_result
     RETURNING "ID"
 )
 SELECT * FROM save_result`;
-                paramValues.push(...rc.params);
+                paramValues.push(
+                    payload.entityID,
+                    payload.userID,
+                    payload.type,
+                    payload.source,
+                    payload.changesJSON,
+                    payload.changesDescription,
+                    payload.fullRecordJSON,
+                    payload.restoredFromID,
+                    payload.restoreReason,
+                );
                 return { fullSQL, simpleSQL, parameters: paramValues };
             }
         }
@@ -371,30 +402,46 @@ SELECT * FROM save_result`;
         const paramPlaceholders = paramValues.map((_v: unknown, i: number) => `$${i + 1}`).join(', ');
         const simpleSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
 
-        if (this.shouldTrackRecordChanges(entityInfo)) {
+        if (this.ShouldTrackRecordChanges(entityInfo)) {
             const oldData = entity.GetAll(false);
-            const fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(oldData, "'"));
             const recordID = this.buildRecordIDFromEntity(entity);
-            const s = paramValues.length + 1;
-            paramValues.push(
-                entityInfo.ID,
+            // Delete: newData is null so the payload renders Source/lineage from
+            // the entity's RestoreContext (usually NULL — supported for symmetry).
+            const payload = this.BuildRecordChangePayload(
+                null,
+                oldData,
                 recordID,
-                user.ID,
-                fullRecordJSON,
+                entityInfo,
+                'Delete',
+                user,
+                entity.RestoreContext,
+                "'",
             );
-            const fullSQL = `WITH delete_result AS (
+            if (payload) {
+                const s = paramValues.length + 1;
+                paramValues.push(
+                    payload.entityID,
+                    payload.recordID,
+                    payload.userID,
+                    payload.source,
+                    payload.fullRecordJSON,
+                    payload.restoredFromID,
+                    payload.restoreReason,
+                );
+                const fullSQL = `WITH delete_result AS (
     ${simpleSQL}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
-        ("EntityID", "RecordID", "UserID", "Type", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status")
-    SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', '', 'Record Deleted', $${s+3}::text, 'Complete'
+        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
+    SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', $${s+3}::varchar, '', 'Record Deleted', $${s+4}::text, 'Complete', $${s+5}::uuid, $${s+6}::text
     FROM delete_result
     WHERE EXISTS (SELECT 1 FROM delete_result)
     RETURNING "ID"
 )
 SELECT * FROM delete_result`;
-            return { fullSQL, simpleSQL, parameters: paramValues };
+                return { fullSQL, simpleSQL, parameters: paramValues };
+            }
         }
 
         return { fullSQL: simpleSQL, simpleSQL, parameters: paramValues };
@@ -471,53 +518,10 @@ SELECT * FROM delete_result`;
 
     // ─── CRUD Function Helpers ───────────────────────────────────────
 
-
-    // --- Record Change Tracking ---
-
-    /**
-     * Checks if record change tracking should be applied for the given entity.
-     * Excludes the Record Changes entity itself to prevent recursion.
-     */
-    private shouldTrackRecordChanges(entityInfo: EntityInfo): boolean {
-        if (!entityInfo.TrackRecordChanges) return false;
-        const lower = entityInfo.Name.trim().toLowerCase();
-        return lower !== 'record changes' && lower !== 'mj: record changes';
-    }
-
-    /**
-     * Computes the diff between old and new entity values for record change logging.
-     * Returns null if there are no changes to log.
-     */
-    private computeSaveRecordChangeParams(
-        entity: BaseEntity,
-        isNew: boolean,
-        user: UserInfo,
-        paramOffset: number
-    ): { params: unknown[]; startIdx: number } | null {
-        const newData = entity.GetAll(false);
-        const oldData = !isNew ? entity.GetAll(true) : null;
-        const changes = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
-        const changesKeys = changes ? Object.keys(changes) : [];
-
-        if (changesKeys.length === 0 && !isNew) return null;
-
-        const changesJSON = changes ? JSON.stringify(changes) : '';
-        const changesDescription = oldData && newData
-            ? this.CreateUserDescriptionOfChanges(changes!)
-            : 'Record Created';
-        const fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(newData, "'"));
-
-        const startIdx = paramOffset + 1;
-        const params: unknown[] = [
-            entity.EntityInfo.ID,
-            user.ID,
-            isNew ? 'Create' : 'Update',
-            changesJSON,
-            changesDescription,
-            fullRecordJSON,
-        ];
-        return { params, startIdx };
-    }
+    // Note: Record Change tracking helpers (`ShouldTrackRecordChanges` and
+    // `BuildRecordChangePayload`) live on `DatabaseProviderBase` so SQL Server
+    // and PostgreSQL share one implementation. This provider only renders
+    // PG-specific SQL on top of the shared payload.
 
     /**
      * Builds a SQL expression that constructs the RecordID string from primary key columns
@@ -638,6 +642,15 @@ SELECT * FROM delete_result`;
     /**
      * Builds PostgreSQL INSERT INTO "RecordChange" SQL for record change logging.
      * Uses parameterized queries with $N placeholders.
+     *
+     * Dialect-agnostic payload assembly (diff, JSON serialization, restore
+     * lineage derivation) is hoisted into `DatabaseProviderBase.BuildRecordChangePayload`,
+     * so this method only renders the parameterized INSERT.
+     *
+     * @param restoreContext When non-null, the row is written with
+     *   `Source='Restore'`, `RestoredFromID = SourceChangeID`, and
+     *   `RestoreReason = Reason`. When null, defaults to `Source='Internal'`
+     *   with NULL lineage columns.
      */
     protected override BuildRecordChangeSQL(
         newData: Record<string, unknown> | null,
@@ -647,37 +660,36 @@ SELECT * FROM delete_result`;
         entityInfo: EntityInfo,
         type: 'Create' | 'Update' | 'Delete',
         user: UserInfo,
+        restoreContext?: RestoreContext | null,
     ): { sql: string; parameters?: unknown[] } | null {
-        const dataForJSON = newData ?? oldData;
-        if (!dataForJSON) return null;
-        const fullRecordJSON: string = JSON.stringify(this.EscapeQuotesInProperties(dataForJSON, "'"));
-
-        // DiffObjects requires non-null inputs; for creates/deletes one side is null
-        const changes = (oldData && newData)
-            ? this.DiffObjects(oldData, newData, entityInfo, "'")
-            : null;
-        const changesKeys = changes ? Object.keys(changes) : [];
-
-        if (changesKeys.length === 0 && oldData !== null && newData !== null) return null;
-
-        const changesJSON = changes !== null ? JSON.stringify(changes) : '';
-        const changesDescription = oldData && newData
-            ? this.CreateUserDescriptionOfChanges(changes!)
-            : !oldData ? 'Record Created' : 'Record Deleted';
+        const payload = this.BuildRecordChangePayload(
+            newData,
+            oldData,
+            recordID,
+            entityInfo,
+            type,
+            user,
+            restoreContext,
+            "'",
+        );
+        if (!payload) return null;
 
         const sql = `INSERT INTO ${this._schemaName}."RecordChange"
-            ("EntityID", "RecordID", "UserID", "Type", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status")
-            VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::text, $6::text, $7::text, 'Complete')
+            ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
+            VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text)
             RETURNING "ID"`;
 
         const parameters: unknown[] = [
-            entityInfo.ID,
-            recordID,
-            user.ID,
-            type,
-            changesJSON,
-            changesDescription,
-            fullRecordJSON,
+            payload.entityID,
+            payload.recordID,
+            payload.userID,
+            payload.type,
+            payload.source,
+            payload.changesJSON,
+            payload.changesDescription,
+            payload.fullRecordJSON,
+            payload.restoredFromID,
+            payload.restoreReason,
         ];
 
         return { sql, parameters };

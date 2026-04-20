@@ -1,5 +1,120 @@
 # @memberjunction/ng-dashboards
 
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ng-search@5.27.1
+  - @memberjunction/ng-dashboard-viewer@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ai-engine-base@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/api-keys-base@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/ng-base-application@5.27.1
+  - @memberjunction/ng-core-entity-forms@5.27.1
+  - @memberjunction/ng-explorer-settings@5.27.1
+  - @memberjunction/ng-shared@5.27.1
+  - @memberjunction/ng-testing@5.27.1
+  - @memberjunction/ng-action-gallery@5.27.1
+  - @memberjunction/ng-actions@5.27.1
+  - @memberjunction/ng-agent-requests@5.27.1
+  - @memberjunction/ng-agents@5.27.1
+  - @memberjunction/ng-ai-test-harness@5.27.1
+  - @memberjunction/ng-code-editor@5.27.1
+  - @memberjunction/ng-container-directives@5.27.1
+  - @memberjunction/ng-conversations@5.27.1
+  - @memberjunction/ng-credentials@5.27.1
+  - @memberjunction/ng-entity-relationship-diagram@5.27.1
+  - @memberjunction/ng-entity-viewer@5.27.1
+  - @memberjunction/ng-list-management@5.27.1
+  - @memberjunction/ng-map-view@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/ng-query-viewer@5.27.1
+  - @memberjunction/ng-react@5.27.1
+  - @memberjunction/ng-scheduling@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/ng-trees@5.27.1
+  - @memberjunction/ng-versions@5.27.1
+  - @memberjunction/integration-engine-base@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/skip-types@5.27.1
+  - @memberjunction/templates-base-types@5.27.1
+  - @memberjunction/testing-engine-base@5.27.1
+  - @memberjunction/ng-clustering@5.27.1
+  - @memberjunction/interactive-component-types@5.27.1
+  - @memberjunction/ng-filter-builder@5.27.1
+  - @memberjunction/ng-export-service@5.27.1
+  - @memberjunction/ng-markdown@5.27.1
+  - @memberjunction/ng-ui-components@5.27.1
+  - @memberjunction/ng-word-cloud@5.27.1
+  - @memberjunction/export-engine@5.27.1
+
+## 5.27.0
+
+### Minor Changes
+
+- 348decb: metadata bump so minor
+
+### Patch Changes
+
+- 4357090: Repair three query composition pipeline regressions surfaced by Skip-Brain, clear test feedback dialog state when switching conversations, strip tag IDs from taxonomy context injected into LLM prompts, exclude in-progress runs from last-run-date lookups, and replace direct UUID equality checks with `UUIDsEqual()` in the AI analytics dashboards to comply with the cross-platform UUID compliance test.
+- 6fd2886: Add server connectivity heartbeat service with warning banner that alerts users when the API connection is lost.
+- Updated dependencies [35cf7d4]
+- Updated dependencies [a642e3f]
+- Updated dependencies [4357090]
+  - @memberjunction/ng-trees@5.27.0
+  - @memberjunction/ng-search@5.27.0
+  - @memberjunction/ng-conversations@5.27.0
+  - @memberjunction/ng-core-entity-forms@5.27.0
+  - @memberjunction/ng-dashboard-viewer@5.27.0
+  - @memberjunction/ai-engine-base@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/api-keys-base@5.27.0
+  - @memberjunction/actions-base@5.27.0
+  - @memberjunction/ng-base-application@5.27.0
+  - @memberjunction/ng-explorer-settings@5.27.0
+  - @memberjunction/ng-shared@5.27.0
+  - @memberjunction/ng-testing@5.27.0
+  - @memberjunction/ng-action-gallery@5.27.0
+  - @memberjunction/ng-actions@5.27.0
+  - @memberjunction/ng-agent-requests@5.27.0
+  - @memberjunction/ng-agents@5.27.0
+  - @memberjunction/ng-ai-test-harness@5.27.0
+  - @memberjunction/ng-clustering@5.27.0
+  - @memberjunction/ng-code-editor@5.27.0
+  - @memberjunction/ng-container-directives@5.27.0
+  - @memberjunction/ng-credentials@5.27.0
+  - @memberjunction/ng-entity-relationship-diagram@5.27.0
+  - @memberjunction/ng-entity-viewer@5.27.0
+  - @memberjunction/ng-export-service@5.27.0
+  - @memberjunction/ng-filter-builder@5.27.0
+  - @memberjunction/ng-list-management@5.27.0
+  - @memberjunction/ng-markdown@5.27.0
+  - @memberjunction/ng-map-view@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/ng-query-viewer@5.27.0
+  - @memberjunction/ng-react@5.27.0
+  - @memberjunction/ng-scheduling@5.27.0
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/ng-ui-components@5.27.0
+  - @memberjunction/ng-versions@5.27.0
+  - @memberjunction/ng-word-cloud@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/integration-engine-base@5.27.0
+  - @memberjunction/interactive-component-types@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/export-engine@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/skip-types@5.27.0
+  - @memberjunction/templates-base-types@5.27.0
+  - @memberjunction/testing-engine-base@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes
