@@ -247,6 +247,12 @@ export interface IntegrationSyncOptions {
     FullSync?: boolean;
     /** Links this sync run to a ScheduledJobRun for traceability. */
     ScheduledJobRunID?: string;
+    /**
+     * Override sync direction for all entity maps in this run.
+     * If omitted, each entity map's own SyncDirection is used.
+     * Pull = external → MJ only. Push = MJ → external only. Bidirectional = both.
+     */
+    SyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
 }
 
 // ─── Source Schema Introspection Types ──────────────────────────────

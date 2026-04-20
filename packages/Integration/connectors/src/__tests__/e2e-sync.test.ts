@@ -27,6 +27,8 @@ import { canConnectToMockDB } from './db-availability.js';
 function createMockCI(config: Record<string, string>): MJCompanyIntegrationEntity {
     const configJson = JSON.stringify(config);
     return {
+        Configuration: configJson,
+        CredentialID: null,
         Get: (field: string) => (field === 'Configuration' ? configJson : null),
     } as unknown as MJCompanyIntegrationEntity;
 }

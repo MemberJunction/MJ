@@ -1,5 +1,32 @@
 # @memberjunction/ng-trees
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- 35cf7d4: Fix "Maximum call stack size exceeded" in the tree component when branch data contains a ParentID cycle. Added cycle detection in buildBranchHierarchy and ancestor tracking in cloneNode, using UUIDsEqual/NormalizeUUID for cross-platform UUID safety.
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

@@ -1,5 +1,54 @@
 # Change Log - @memberjunction/ng-shared
 
+## 5.28.0
+
+### Patch Changes
+
+- 2542615: Pin Actions as quick-launch cards on the Home dashboard with a configurable title, accent color, FA icon, preset parameter values, and a list of parameters to prompt for at runtime. Adds Configure and Runner dialogs and extends HomeAppPinService with an 'Actions' ResourceType dedup case.
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ng-base-application@5.28.0
+  - @memberjunction/ng-base-types@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/entity-communications-base@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ai-engine-base@5.27.1
+  - @memberjunction/ng-base-application@5.27.1
+  - @memberjunction/ng-base-types@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/entity-communications-base@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.27.0
+- @memberjunction/ng-base-application@5.27.0
+- @memberjunction/ng-base-types@5.27.0
+- @memberjunction/ng-notifications@5.27.0
+- @memberjunction/ng-shared-generic@5.27.0
+- @memberjunction/entity-communications-base@5.27.0
+- @memberjunction/graphql-dataprovider@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes
