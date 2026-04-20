@@ -65,6 +65,28 @@ GO
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 --- CODEGEN OUTPUT ---
 
 
@@ -996,13 +1018,13 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObject] TO [cdp_I
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '0F0F0147-386F-45C8-AA9F-021C26B634A5'
+               WHERE ID = '7F19F87B-4609-4738-97D6-8627DE23AF4B'
                AND AutoUpdateUserSearchPredicate = 1
             
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '8DEFCEAD-C227-45E0-AF79-6B3318C563C7'
+               WHERE ID = '0F0F0147-386F-45C8-AA9F-021C26B634A5'
                AND AutoUpdateUserSearchPredicate = 1
             
 
@@ -1018,18 +1040,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteIntegrationObject] TO [cdp_I
                SET DefaultInView = 1
                WHERE ID = 'CC99E8BA-DDB8-4CFB-8F0A-A4A68769A942'
                AND AutoUpdateDefaultInView = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'DA3BC5CE-671C-48AC-9CD5-497CA602D0E5'
-               AND AutoUpdateDefaultInView = 1
-            
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'F087BB9D-A16E-4778-A711-026B5CDB5ECB'
-               AND AutoUpdateUserSearchPredicate = 1
             
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -1161,7 +1171,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'URL',
+   ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '1CFA6C37-9057-4662-8C40-F835AA972EDF' AND AutoUpdateCategory = 1
@@ -1198,7 +1208,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = 'URL',
+   ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = 'D0BEDA5A-9F7B-4611-867D-59AA8EF8B849' AND AutoUpdateCategory = 1
@@ -1381,7 +1391,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'UI Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -1410,7 +1419,6 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Field Identity',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Is Custom Field',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -1511,12 +1519,3 @@ SET
 WHERE 
    ID = 'DA3BC5CE-671C-48AC-9CD5-497CA602D0E5' AND AutoUpdateCategory = 1
 
-
-
-
-
--- NOTE: The `yourmembership.*` physical schema is owned by the RSU (Remote
--- Schema Update) flow driven by IntegrationSchemaSync + SchemaBuilder. It
--- reads IntegrationObject/IntegrationObjectField metadata and generates the
--- correct CREATE/ALTER TABLE DDL at runtime. No hand-written yourmembership
--- DDL belongs in this migration — metadata is the source of truth.
