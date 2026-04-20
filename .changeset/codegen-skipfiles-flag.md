@@ -1,6 +1,6 @@
 ---
-"@memberjunction/cli": minor
-"@memberjunction/codegen-lib": minor
+"@memberjunction/cli": patch
+"@memberjunction/codegen-lib": patch
 ---
 
 feat(codegen): add `--skipfiles` flag for DB-only CodeGen runs
