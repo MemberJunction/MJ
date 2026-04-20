@@ -1,5 +1,23 @@
 # @memberjunction/generic-database-provider
 
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/aiengine@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/actions@5.27.1
+  - @memberjunction/encryption@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/queue@5.27.1
+  - @memberjunction/query-processor@5.27.1
+  - @memberjunction/geo-core@5.27.1
+  - @memberjunction/sql-dialect@5.27.1
+  - @memberjunction/sql-parser@5.27.1
+
 ## 5.27.0
 
 ### Patch Changes

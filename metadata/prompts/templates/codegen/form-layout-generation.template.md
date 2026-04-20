@@ -232,15 +232,19 @@ For each field, you must also determine:
   - "Longitude" → `'GeoLongitude'`
 
 **3. Code Type** - For fields with ExtendedType='Code', specifies the programming language
-- Valid values: `'CSS'`, `'HTML'`, `'JavaScript'`, `'SQL'`, `'TypeScript'`, `'Other'`, or `null`
-- **Only set when ExtendedType='Code'**
+- **STRICT ENUM** — `codeType` MUST be EXACTLY one of these case-sensitive strings, or `null`:
+  `'CSS'`, `'HTML'`, `'JavaScript'`, `'SQL'`, `'TypeScript'`, `'Other'`
+- **Only set when ExtendedType='Code'**. Otherwise `codeType` MUST be `null`.
+- **Any other language (Python, Markdown, JSON, XML, YAML, Bash, Shell, C#, Java, Ruby, Go, Rust, PHP, etc.) MUST map to `'Other'` — do NOT invent new enum values.**
+- Case matters: `'javascript'` is invalid, `'JavaScript'` is correct. `'typescript'` is invalid, `'TypeScript'` is correct.
+- Never use an empty string `""` — use `null` instead.
 - Infer from field name and context:
   - "SQL", "Query", "SQLStatement" → `'SQL'`
   - "JavaScript", "Script", "JSCode" → `'JavaScript'`
   - "TypeScript", "TSCode" → `'TypeScript'`
   - "HTML", "HTMLContent" → `'HTML'`
   - "CSS", "Styles" → `'CSS'`
-  - Unknown code type → `'Other'`
+  - Any other language, or unknown → `'Other'`
 - Set to `null` for all non-code fields
 
 ### Common Patterns

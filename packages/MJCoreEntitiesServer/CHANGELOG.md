@@ -1,5 +1,31 @@
 # @memberjunction/core-entities-server
 
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ai-engine-base@5.27.1
+  - @memberjunction/ai@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/aiengine@5.27.1
+  - @memberjunction/tag-engine@5.27.1
+  - @memberjunction/ai-prompts@5.27.1
+  - @memberjunction/ai-vectordb@5.27.1
+  - @memberjunction/ai-vector-dupe@5.27.1
+  - @memberjunction/ai-vectors-memory@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/doc-utils@5.27.1
+  - @memberjunction/generic-database-provider@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/sqlserver-dataprovider@5.27.1
+  - @memberjunction/skip-types@5.27.1
+  - @memberjunction/ai-provider-bundle@5.27.1
+  - @memberjunction/sql-converter@5.27.1
+  - @memberjunction/sql-parser@5.27.1
+
 ## 5.27.0
 
 ### Patch Changes

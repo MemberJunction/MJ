@@ -16255,7 +16255,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: UI grouping category within the object`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Data Type
         * * SQL Data Type: nvarchar(100)
         * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.`),
     Length: z.number().nullable().describe(`
@@ -16286,31 +16286,31 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Default value from the source system`),
     IsPrimaryKey: z.boolean().describe(`
         * * Field Name: IsPrimaryKey
-        * * Display Name: Primary Key
+        * * Display Name: Is Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this field is part of the object primary key`),
     IsUniqueKey: z.boolean().describe(`
         * * Field Name: IsUniqueKey
-        * * Display Name: Unique Key
+        * * Display Name: Is Unique Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether values must be unique across all records`),
     IsReadOnly: z.boolean().describe(`
         * * Field Name: IsReadOnly
-        * * Display Name: Read Only
+        * * Display Name: Is Read Only
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this field cannot be written back to the source system`),
     IsRequired: z.boolean().describe(`
         * * Field Name: IsRequired
-        * * Display Name: Required
+        * * Display Name: Is Required
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this field is required for create/update operations`),
     RelatedIntegrationObjectID: z.string().nullable().describe(`
         * * Field Name: RelatedIntegrationObjectID
-        * * Display Name: Related Integration Object
+        * * Display Name: Related Integration Object ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
         * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.`),
@@ -16351,6 +16351,12 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    IsCustom: z.boolean().describe(`
+        * * Field Name: IsCustom
+        * * Display Name: Is Custom
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
     IntegrationObject: z.string().describe(`
         * * Field Name: IntegrationObject
         * * Display Name: Integration Object Name
@@ -16499,6 +16505,12 @@ export const MJIntegrationObjectSchema = z.object({
         * * SQL Data Type: nvarchar(10)
         * * Default Value: DELETE
         * * Description: HTTP method for delete operations. Defaults to DELETE.`),
+    IsCustom: z.boolean().describe(`
+        * * Field Name: IsCustom
+        * * Display Name: Is Custom
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration Name
@@ -19810,7 +19822,7 @@ export const MJRecordChangeSchema = z.object({
     *   * Snapshot
     *   * Update
         * * Description: Create, Update, or Delete`),
-    Source: z.union([z.literal('External'), z.literal('Internal')]).describe(`
+    Source: z.union([z.literal('External'), z.literal('Internal'), z.literal('Restore')]).describe(`
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(20)
@@ -19819,6 +19831,7 @@ export const MJRecordChangeSchema = z.object({
     * * Possible Values 
     *   * External
     *   * Internal
+    *   * Restore
         * * Description: Internal or External`),
     ChangedAt: z.date().describe(`
         * * Field Name: ChangedAt
@@ -19838,7 +19851,7 @@ export const MJRecordChangeSchema = z.object({
         * * Description: A generated, human-readable description of what was changed.`),
     FullRecordJSON: z.string().describe(`
         * * Field Name: FullRecordJSON
-        * * Display Name: Full Record Snapshot
+        * * Display Name: Full Record JSON
         * * SQL Data Type: nvarchar(MAX)
         * * Description: A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -19883,9 +19896,20 @@ export const MJRecordChangeSchema = z.object({
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()
         * * Description: Field UpdatedAt for entity Record Changes.`),
+    RestoredFromID: z.string().nullable().describe(`
+        * * Field Name: RestoredFromID
+        * * Display Name: Restored From ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Changes (vwRecordChanges.ID)
+        * * Description: When this RecordChange was produced by a restore operation, points at the historical RecordChange whose state was restored. NULL for ordinary changes. Together with Source='Restore' this builds the version-chain lineage for auditing and timeline navigation.`),
+    RestoreReason: z.string().nullable().describe(`
+        * * Field Name: RestoreReason
+        * * Display Name: Restore Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional user-entered explanation captured at restore time. Persisted for audit purposes (regulated industries often require a reason for every reversal). NULL when the user did not enter one or when the change was not a restore.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
@@ -19899,6 +19923,14 @@ export const MJRecordChangeSchema = z.object({
         * * Field Name: Integration
         * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
+    RestoredFrom: z.string().nullable().describe(`
+        * * Field Name: RestoredFrom
+        * * Display Name: Restored From
+        * * SQL Data Type: nvarchar(750)`),
+    RootRestoredFromID: z.string().nullable().describe(`
+        * * Field Name: RootRestoredFromID
+        * * Display Name: Root Restored From ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type MJRecordChangeEntityType = z.infer<typeof MJRecordChangeSchema>;
@@ -24685,7 +24717,7 @@ export const MJVersionLabelItemSchema = z.object({
     RecordChange: z.string().describe(`
         * * Field Name: RecordChange
         * * Display Name: Record Change
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(750)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -67727,7 +67759,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Data Type
     * * SQL Data Type: nvarchar(100)
     * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.
     */
@@ -67806,7 +67838,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsPrimaryKey
-    * * Display Name: Primary Key
+    * * Display Name: Is Primary Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this field is part of the object primary key
@@ -67820,7 +67852,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsUniqueKey
-    * * Display Name: Unique Key
+    * * Display Name: Is Unique Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether values must be unique across all records
@@ -67834,7 +67866,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsReadOnly
-    * * Display Name: Read Only
+    * * Display Name: Is Read Only
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this field cannot be written back to the source system
@@ -67848,7 +67880,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsRequired
-    * * Display Name: Required
+    * * Display Name: Is Required
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this field is required for create/update operations
@@ -67862,7 +67894,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: RelatedIntegrationObjectID
-    * * Display Name: Related Integration Object
+    * * Display Name: Related Integration Object ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
     * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.
@@ -67951,6 +67983,20 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: IsCustom
+    * * Display Name: Is Custom
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.
+    */
+    get IsCustom(): boolean {
+        return this.Get('IsCustom');
+    }
+    set IsCustom(value: boolean) {
+        this.Set('IsCustom', value);
     }
 
     /**
@@ -68303,6 +68349,20 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     }
     set DeleteMethod(value: string | null) {
         this.Set('DeleteMethod', value);
+    }
+
+    /**
+    * * Field Name: IsCustom
+    * * Display Name: Is Custom
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.
+    */
+    get IsCustom(): boolean {
+        return this.Get('IsCustom');
+    }
+    set IsCustom(value: boolean) {
+        this.Set('IsCustom', value);
     }
 
     /**
@@ -76967,12 +77027,13 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     * * Possible Values 
     *   * External
     *   * Internal
+    *   * Restore
     * * Description: Internal or External
     */
-    get Source(): 'External' | 'Internal' {
+    get Source(): 'External' | 'Internal' | 'Restore' {
         return this.Get('Source');
     }
-    set Source(value: 'External' | 'Internal') {
+    set Source(value: 'External' | 'Internal' | 'Restore') {
         this.Set('Source', value);
     }
 
@@ -77018,7 +77079,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: FullRecordJSON
-    * * Display Name: Full Record Snapshot
+    * * Display Name: Full Record JSON
     * * SQL Data Type: nvarchar(MAX)
     * * Description: A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.
     */
@@ -77122,8 +77183,35 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     }
 
     /**
+    * * Field Name: RestoredFromID
+    * * Display Name: Restored From ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Changes (vwRecordChanges.ID)
+    * * Description: When this RecordChange was produced by a restore operation, points at the historical RecordChange whose state was restored. NULL for ordinary changes. Together with Source='Restore' this builds the version-chain lineage for auditing and timeline navigation.
+    */
+    get RestoredFromID(): string | null {
+        return this.Get('RestoredFromID');
+    }
+    set RestoredFromID(value: string | null) {
+        this.Set('RestoredFromID', value);
+    }
+
+    /**
+    * * Field Name: RestoreReason
+    * * Display Name: Restore Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional user-entered explanation captured at restore time. Persisted for audit purposes (regulated industries often require a reason for every reversal). NULL when the user did not enter one or when the change was not a restore.
+    */
+    get RestoreReason(): string | null {
+        return this.Get('RestoreReason');
+    }
+    set RestoreReason(value: string | null) {
+        this.Set('RestoreReason', value);
+    }
+
+    /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -77155,6 +77243,24 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     */
     get Integration(): string | null {
         return this.Get('Integration');
+    }
+
+    /**
+    * * Field Name: RestoredFrom
+    * * Display Name: Restored From
+    * * SQL Data Type: nvarchar(750)
+    */
+    get RestoredFrom(): string | null {
+        return this.Get('RestoredFrom');
+    }
+
+    /**
+    * * Field Name: RootRestoredFromID
+    * * Display Name: Root Restored From ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootRestoredFromID(): string | null {
+        return this.Get('RootRestoredFromID');
     }
 }
 
@@ -90207,7 +90313,7 @@ export class MJVersionLabelItemEntity extends BaseEntity<MJVersionLabelItemEntit
     /**
     * * Field Name: RecordChange
     * * Display Name: Record Change
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(750)
     */
     get RecordChange(): string {
         return this.Get('RecordChange');

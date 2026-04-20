@@ -1,5 +1,18 @@
 # @memberjunction/ng-search
 
+## 5.27.1
+
+### Patch Changes
+
+- d18aa6c: Fix XSS vulnerability in highlight match bindings by escaping HTML entities via centralized EscapeHTML utility.
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+
 ## 5.27.0
 
 ### Patch Changes

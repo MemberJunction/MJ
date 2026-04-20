@@ -893,6 +893,20 @@
   opacity: 0.7;
 }
 
+/* Action-pin card: colored gradient background with white icon/SVG */
+.pin-thumbnail.action-mode {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mj-text-inverse, white);
+  background: var(--mj-brand-primary);
+}
+
+.pin-thumbnail.action-mode > i {
+  font-size: 36px;
+  color: var(--mj-text-inverse, white);
+}
+
 /* Hover overlay */
 .pin-overlay {
   position: absolute;

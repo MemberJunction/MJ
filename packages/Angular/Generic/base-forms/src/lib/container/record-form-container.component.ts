@@ -630,40 +630,57 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
 
   /**
    * Handles a restore request from the record-changes panel.
-   * Applies the old field values to the current record, saves, then refreshes version count.
+   *
+   * The event payload now carries the FULL snapshot the user opted to apply
+   * (the panel computes current-vs-snapshot diffs using the source change's
+   * FullRecordJSON, and the user can deselect individual fields). Setting
+   * the restore context before Save() causes the data provider to write the
+   * resulting RecordChange row with `Source='Restore'`, `RestoredFromID`,
+   * and `RestoreReason` populated — building the auditable lineage chain.
    */
   async OnRestoreRequested(event: RestoreVersionEvent): Promise<void> {
     const record = this.EffectiveRecord;
     if (!record) return;
 
     try {
-      // Apply old values from the version to the current record
-      for (const [fieldName, values] of Object.entries(event.FieldChanges)) {
-        record.Set(fieldName, values.OldValue);
+      // Apply each selected snapshot field
+      for (const fv of event.FieldValues) {
+        record.Set(fv.FieldName, fv.Value);
       }
 
-      // Save the record — this creates a new Record Change entry automatically
-      const saved = await record.Save();
-      if (saved) {
-        this.notificationService.CreateSimpleNotification(
-          `Restored ${Object.keys(event.FieldChanges).length} field(s) from version dated ${new Date(event.ChangedAt).toLocaleDateString()}`,
-          'info', 3000
-        );
+      // Mark the next save as a restore so the provider populates the
+      // lineage columns. ClearRestoreContext is called in finally{} below
+      // so it doesn't leak into subsequent saves on this entity instance.
+      record.SetRestoreContext(event.SourceChangeID, event.Reason);
 
-        // Refresh version count since a new change was created by the save
-        this.LoadVersionCount(record);
-        this.cdr.markForCheck();
-      } else {
-        this.notificationService.CreateSimpleNotification(
-          'Failed to save restored values. Please try again.',
-          'error', 4000
-        );
+      try {
+        const saved = await record.Save();
+        if (saved) {
+          const fieldCount = event.FieldValues.length;
+          const reasonSuffix = event.Reason ? ` — "${event.Reason}"` : '';
+          this.notificationService.CreateSimpleNotification(
+            `Restored ${fieldCount} field${fieldCount === 1 ? '' : 's'} from version dated ${new Date(event.ChangedAt).toLocaleDateString()}${reasonSuffix}`,
+            'info', 3500,
+          );
+
+          // Refresh version count — the save just produced a new restore-tagged change.
+          this.LoadVersionCount(record);
+          this.cdr.markForCheck();
+        } else {
+          const errMsg = record.LatestResult?.CompleteMessage ?? 'unknown error';
+          this.notificationService.CreateSimpleNotification(
+            `Failed to save restored values: ${errMsg}`,
+            'error', 4500,
+          );
+        }
+      } finally {
+        record.ClearRestoreContext();
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       this.notificationService.CreateSimpleNotification(
         `Restore failed: ${message}`,
-        'error', 4000
+        'error', 4000,
       );
     }
   }
