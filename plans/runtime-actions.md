@@ -149,52 +149,79 @@ ALTER TABLE [${flyway:defaultSchema}].[Action]
     CHECK ([Type] IN ('Custom', 'Generated', 'Runtime'));
 ```
 
-### `RuntimeActionConfiguration` (JSON)
+### `RuntimeActionConfiguration` (JSON) — authored via MJ's JSONType system
 
-Defined in `@memberjunction/actions-base` for cross-package import:
+The configuration shape is declared via MJ's JSONType metadata system, which means **the interface lives in exactly one place** and every consumer imports it from `@memberjunction/core-entities`. No duplication, no drift.
+
+**Authored source** (single file):
+[metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts](metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts) — defines `IRuntimeActionConfiguration` plus supporting types (`IRuntimeActionPermissions`, `IRuntimeActionLimits`, `IRuntimeActionSandboxOptions`, `IRuntimeActionReference`, `IRuntimeLibraryReference`).
+
+**Wiring** (tells CodeGen which EntityField holds the blob):
+[metadata/entities/.entity-field-jsontype-runtime-actions.json](metadata/entities/.entity-field-jsontype-runtime-actions.json) — sets `JSONType`, `JSONTypeIsArray`, `JSONTypeDefinition` on `Action.RuntimeActionConfiguration` via `@lookup:`.
+
+**Generation pipeline** — after `mj sync push --dir=metadata --include="entities"` and `mj codegen`:
+
+1. The full interface source is inlined at the top of `packages/MJCoreEntities/src/generated/entity_subclasses.ts`, namespaced by entity as `MJActionEntity_IRuntimeActionConfiguration` (and siblings like `MJActionEntity_IRuntimeActionPermissions`).
+2. `MJActionEntity` gets an auto-generated, lazily-cached typed accessor pair:
 
 ```typescript
-/** id + human-readable name pair — id is the source of truth */
-export interface RuntimeActionReference {
-  id: string;
-  name: string;
-}
-
-export interface RuntimeLibraryReference {
-  name: string;
-  version?: string;
-}
-
-/**
- * Stored as JSON in Action.RuntimeActionConfiguration.
- * Evolvable — new keys can be added without a schema change.
- */
-export interface RuntimeActionConfiguration {
-  permissions: {
-    allowedActions:  RuntimeActionReference[];
-    allowedAgents:   RuntimeActionReference[];
-    allowedEntities: RuntimeActionReference[];
-  };
-  limits?: {
-    maxMemoryMB?:    number;  // default 128
-    maxBridgeCalls?: number;  // default 100
-  };
-  sandbox?: {
-    additionalLibraries?: RuntimeLibraryReference[];
-    debugMode?:           boolean;
-  };
-  version?:            string;
-  previousVersionId?:  string;
-}
-
-export function parseRuntimeActionConfiguration(
-  action: ActionEntity
-): RuntimeActionConfiguration | null {
-  if (action.Type !== 'Runtime' || !action.RuntimeActionConfiguration) return null;
-  try { return JSON.parse(action.RuntimeActionConfiguration); }
-  catch { return null; }
-}
+get RuntimeActionConfigurationObject(): MJActionEntity_IRuntimeActionConfiguration | null { ... }
+set RuntimeActionConfigurationObject(value: MJActionEntity_IRuntimeActionConfiguration | null) { ... }
 ```
+
+The getter parses on first read after a string change and caches; the setter stringifies and updates the underlying `RuntimeActionConfiguration` string.
+
+**Canonical consumption** — every downstream package:
+
+```typescript
+import { MJActionEntity_IRuntimeActionConfiguration } from '@memberjunction/core-entities';
+```
+
+This includes `@memberjunction/action-runtime` (bridge + executor), `@memberjunction/actions-base` (Zod validator — see below), ActionSmith's `Create Runtime Action` action, and the approval UI. **Nothing redefines the shape.**
+
+### Runtime validation — Zod schema in `@memberjunction/actions-base`
+
+JSONType declares shape but does **not** validate at `Save()`. For Runtime actions this matters — the config drives the sandbox's security scopes, so a malformed blob is a security concern, not just a DX one. We add a Zod validator in `@memberjunction/actions-base` that ActionSmith uses at authoring time and `ActionEngine` uses before dispatching to the sandbox:
+
+```typescript
+// @memberjunction/actions-base/src/RuntimeActionConfigurationSchema.ts
+import { z } from 'zod';
+import type { MJActionEntity_IRuntimeActionConfiguration } from '@memberjunction/core-entities';
+
+const ReferenceSchema = z.object({ id: z.string().uuid(), name: z.string() });
+
+export const RuntimeActionConfigurationSchema = z.object({
+  permissions: z.object({
+    allowedActions:  z.array(ReferenceSchema),
+    allowedAgents:   z.array(ReferenceSchema),
+    allowedEntities: z.array(ReferenceSchema),
+  }),
+  limits: z.object({
+    maxMemoryMB:    z.number().int().positive().optional(),
+    maxBridgeCalls: z.number().int().positive().optional(),
+  }).optional(),
+  sandbox: z.object({
+    additionalLibraries: z.array(z.object({
+      name: z.string(),
+      version: z.string().optional(),
+    })).optional(),
+    debugMode: z.boolean().optional(),
+  }).optional(),
+  version:           z.string().optional(),
+  previousVersionId: z.string().uuid().optional(),
+});
+
+// Compile-time drift check — fails to build if the Zod schema ever falls
+// out of sync with the CodeGen-emitted interface.
+type _TypeEquivalence =
+  z.infer<typeof RuntimeActionConfigurationSchema> extends MJActionEntity_IRuntimeActionConfiguration
+    ? MJActionEntity_IRuntimeActionConfiguration extends z.infer<typeof RuntimeActionConfigurationSchema>
+      ? true
+      : { error: 'Zod schema is missing fields present in MJActionEntity_IRuntimeActionConfiguration' }
+    : { error: 'Zod schema has fields not present in MJActionEntity_IRuntimeActionConfiguration' };
+```
+
+The type-equivalence line turns drift into a compile-time error: if someone adds a field to the JSONType interface without updating the Zod schema (or vice versa), the `@memberjunction/actions-base` build breaks.
 
 ### Universal `MaxExecutionTimeMS` + `AbortSignal`
 
@@ -317,10 +344,12 @@ async function RunView(options) {
 **Host side — `RuntimeActionBridge` runs in the main process:**
 
 ```typescript
+import type { MJActionEntity_IRuntimeActionConfiguration } from '@memberjunction/core-entities';
+
 class RuntimeActionBridge {
   constructor(
     private contextUser: UserInfo,
-    private config:      RuntimeActionConfiguration,
+    private config:      MJActionEntity_IRuntimeActionConfiguration,
     private abortSignal: AbortSignal | undefined
   ) {}
 
@@ -389,8 +418,16 @@ async RunAction(params: RunActionParams): Promise<ActionResult> {
 
 private async runRuntimeAction(params: RunActionParams): Promise<ActionResult> {
   const action = params.Action;
-  const config = parseRuntimeActionConfiguration(action);
-  if (!config) return this.failResult('INVALID_CONFIG');
+
+  // Typed accessor from CodeGen — no manual parsing needed.
+  const raw = action.RuntimeActionConfigurationObject;
+  if (!raw) return this.failResult('MISSING_CONFIG');
+
+  // Runtime validation via Zod — catches malformed configs that slipped past
+  // ActionSmith (e.g. direct DB edits, older schemas).
+  const parsed = RuntimeActionConfigurationSchema.safeParse(raw);
+  if (!parsed.success) return this.failResult('INVALID_CONFIG', parsed.error.message);
+  const config = parsed.data;
 
   const bridge = new RuntimeActionBridge(params.ContextUser, config, params.AbortSignal);
   const executor = new RuntimeActionExecutor();  // lives in @memberjunction/action-runtime
@@ -448,15 +485,18 @@ No new sandbox; Codesmith's existing `Execute Code` loop works — the only addi
 
 Single phase, shipped as sub-deliverables 1a–1j. Each is individually mergeable and testable.
 
-### 1a — Migration + CodeGen regen
+### 1a — Migration + JSONType metadata + CodeGen regen
 
-- **File**: `migrations/v5/V202604201400__v5.29.x__Runtime_Actions_Schema.sql` (already drafted)
-- Adds `RuntimeActionConfiguration`, `MaxExecutionTimeMS`, `CreatedByAgentID`; widens `CHK_Action_Type` to include `'Runtime'`
-- Run `mj codegen` to regen `entity_subclasses.ts`, views, sprocs
-- Check in regenerated code
+Three things ship together in 1a because they feed the same CodeGen run:
+
+1. **Migration** — [migrations/v5/V202604201400__v5.29.x__Runtime_Actions_Schema.sql](migrations/v5/V202604201400__v5.29.x__Runtime_Actions_Schema.sql). Adds `RuntimeActionConfiguration`, `MaxExecutionTimeMS`, `CreatedByAgentID`; widens `CHK_Action_Type` to include `'Runtime'`.
+2. **JSONType interface + wiring** — [metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts](metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts) and [metadata/entities/.entity-field-jsontype-runtime-actions.json](metadata/entities/.entity-field-jsontype-runtime-actions.json). Run `mj sync push --dir=metadata --include="entities"` to propagate to the DB.
+3. **CodeGen** — regens `entity_subclasses.ts` (inlines interface + emits `RuntimeActionConfigurationObject` accessor), views, sprocs. Check in regenerated code.
+
+Sub-task **1a.1 — Zod validator** (lives in `@memberjunction/actions-base`): hand-authored Zod schema + compile-time type-equivalence assertion against `MJActionEntity_IRuntimeActionConfiguration`. Exported as `RuntimeActionConfigurationSchema` for use by ActionSmith at authoring time and `ActionEngine` before sandbox dispatch.
 
 **Dependencies**: none
-**Verifies**: Action schema and generated types match the plan
+**Verifies**: Action schema + generated types match the plan; typed accessor round-trips; Zod schema `safeParse` rejects a config with an unknown top-level key and accepts a minimal valid config
 
 ### 1b — Universal `MaxExecutionTimeMS` + `AbortSignal` in `ActionEngine`
 
