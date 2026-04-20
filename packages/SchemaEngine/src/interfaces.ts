@@ -45,6 +45,14 @@ export interface TableDefinition {
     Columns: ColumnDefinition[];
 
     /**
+     * Column names that form the database PRIMARY KEY constraint.
+     * Generates `CONSTRAINT PK_{TableName} PRIMARY KEY (col1, col2, ...)`.
+     * Use this for tables that need a real DB-enforced primary key.
+     * Distinct from SoftPrimaryKeys which creates only a UNIQUE constraint.
+     */
+    PrimaryKeyColumns?: string[];
+
+    /**
      * Column names that form the soft primary key (UNIQUE constraint only).
      * No DB-level PK is created — the unique constraint serves as the natural key.
      */

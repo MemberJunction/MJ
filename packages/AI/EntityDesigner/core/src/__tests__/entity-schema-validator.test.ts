@@ -2,12 +2,15 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 
 // ─── Hoisted mock state ──────────────────────────────────────────────────────
-// Mutable state shared between the vi.mock factory and per-test overrides.
-// Must be created with vi.hoisted() so it exists before mock factories run.
 
 const mockState = vi.hoisted(() => ({
     authorizations: [] as { Name: string; UserCanExecute: (u: unknown) => boolean }[],
+    /** Results for the naming-conflict RunView (MJ: Entities). */
     runViewResults: [] as unknown[],
+    /** Results for the ownership RunView (MJ: Entity Settings). */
+    settingsResults: [] as { Name: string; Value: string }[],
+    /** Schemas returned by RuntimeSchemaManager.GetAllProtectedSchemas(). */
+    protectedSchemas: new Set<string>(['__mj', 'dbo', 'sys', 'information_schema']),
 }));
 
 // ─── Mock all external dependencies ─────────────────────────────────────────
@@ -18,19 +21,23 @@ vi.mock('@memberjunction/core', () => ({
     }),
     RunView: vi.fn().mockImplementation(function(this: unknown) {
         return {
-            RunView: vi.fn().mockResolvedValue({
-                Success: true,
-                Results: mockState.runViewResults,
-                RowCount: mockState.runViewResults.length,
+            RunView: vi.fn().mockImplementation(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: Entity Settings') {
+                    return {
+                        Success: true,
+                        Results: mockState.settingsResults,
+                        RowCount: mockState.settingsResults.length,
+                    };
+                }
+                // Naming conflict check (MJ: Entities)
+                return {
+                    Success: true,
+                    Results: mockState.runViewResults,
+                    RowCount: mockState.runViewResults.length,
+                };
             }),
         };
     }),
-    /**
-     * AuthorizationEvaluator is used by EntityDesignerSchemaValidator to check
-     * whether the context user has the required authorization. We delegate to
-     * the `UserCanExecute` stub on the auth object so existing test fixtures
-     * continue working without changes.
-     */
     AuthorizationEvaluator: vi.fn().mockImplementation(function(this: unknown) {
         return {
             UserCanExecuteWithAncestors: vi.fn().mockImplementation(
@@ -39,12 +46,18 @@ vi.mock('@memberjunction/core', () => ({
             ),
         };
     }),
+    LogError: vi.fn(),
     UserInfo: vi.fn(),
 }));
 
 vi.mock('@memberjunction/schema-engine', () => ({
     SchemaValidator: {
         Validate: vi.fn().mockReturnValue({ Valid: true, Errors: [], Warnings: [] }),
+    },
+    RuntimeSchemaManager: {
+        Instance: {
+            GetAllProtectedSchemas: vi.fn(() => mockState.protectedSchemas),
+        },
     },
 }));
 
@@ -59,17 +72,18 @@ vi.mock('@memberjunction/ai-agents', () => ({
 vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => (_target: unknown) => _target,
     LogError: vi.fn(),
+    // UUIDsEqual normalises case — mirrors the real implementation
+    UUIDsEqual: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
 }));
 
 // ─── Import after mocks ──────────────────────────────────────────────────────
 
 import { EntityDesignerSchemaValidator } from '../agents/entity-schema-validator.js';
 import type { EntityDesignerPayload } from '../interfaces.js';
-import { ENTITY_DESIGNER_BLOCKED_SCHEMAS, AUTHORIZATIONS } from '../interfaces.js';
+import { AUTHORIZATIONS, UDT_SETTINGS } from '../interfaces.js';
 
 // ─── Test Helpers ────────────────────────────────────────────────────────────
 
-/** Expose protected method for testing. */
 type TestableValidator = {
     executeAgentInternal<P>(
         params: ExecuteAgentParams,
@@ -81,10 +95,10 @@ function makeValidator(): TestableValidator {
     return new EntityDesignerSchemaValidator() as unknown as TestableValidator;
 }
 
-function makeParams(payload: EntityDesignerPayload): ExecuteAgentParams {
+function makeParams(payload: EntityDesignerPayload, userID = 'user-1'): ExecuteAgentParams {
     return {
         payload,
-        contextUser: { ID: 'user-1', Email: 'test@example.com' } as ReturnType<typeof vi.fn>,
+        contextUser: { ID: userID, Email: 'test@example.com' } as ReturnType<typeof vi.fn>,
     } as unknown as ExecuteAgentParams;
 }
 
@@ -99,7 +113,7 @@ const VALID_TABLE_DEFINITION = {
     ],
 };
 
-const AUTH_WITH_EXECUTE = {
+const AUTH_CREATE_UDT = {
     Name: AUTHORIZATIONS.CREATE_IN_UDT_SCHEMA,
     UserCanExecute: () => true,
 };
@@ -108,12 +122,13 @@ const AUTH_WITH_EXECUTE = {
 
 describe('EntityDesignerSchemaValidator', () => {
     beforeEach(() => {
-        // Reset shared mock state before each test
         mockState.authorizations = [];
         mockState.runViewResults = [];
+        mockState.settingsResults = [];
+        mockState.protectedSchemas = new Set(['__mj', 'dbo', 'sys', 'information_schema']);
     });
 
-    describe('executeAgentInternal', () => {
+    describe('executeAgentInternal — pre-condition guards', () => {
         it('returns Failed when TableDefinition is absent from payload', async () => {
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(makeParams({}), {} as AgentConfiguration);
@@ -139,13 +154,12 @@ describe('EntityDesignerSchemaValidator', () => {
             expect(result.finalStep.step).toBe('Failed');
             expect(result.finalStep.reasoning).toContain('Authorization');
         });
+    });
 
-        it('returns Success with ValidationResult.Valid=false when schema is blocked', async () => {
-            // 'dbo' schema resolves to CREATE_IN_CUSTOM_SCHEMA auth (not UDT)
-            mockState.authorizations = [{
-                Name: AUTHORIZATIONS.CREATE_IN_CUSTOM_SCHEMA,
-                UserCanExecute: () => true,
-            }];
+    describe('executeAgentInternal — schema blocklist (via RuntimeSchemaManager)', () => {
+        it('blocks dbo schema when RSM includes it', async () => {
+            // dbo is in the default mockState.protectedSchemas
+            mockState.authorizations = [{ Name: AUTHORIZATIONS.CREATE_IN_CUSTOM_SCHEMA, UserCanExecute: () => true }];
 
             const validator = makeValidator();
             const blockedDef = { ...VALID_TABLE_DEFINITION, SchemaName: 'dbo' };
@@ -160,14 +174,63 @@ describe('EntityDesignerSchemaValidator', () => {
             expect(payload.ValidationResult?.Errors[0]).toContain('dbo');
         });
 
-        it('returns Success with ValidationResult.Valid=false when reserved column is present', async () => {
-            mockState.authorizations = [AUTH_WITH_EXECUTE];
+        it('always blocks __mj schema — RSM returns it regardless of env-var config', async () => {
+            mockState.authorizations = [{ Name: AUTHORIZATIONS.CREATE_IN_CUSTOM_SCHEMA, UserCanExecute: () => true }];
+            mockState.protectedSchemas = new Set(['__mj']); // only __mj, no env-var extras
+
+            const validator = makeValidator();
+            const blockedDef = { ...VALID_TABLE_DEFINITION, SchemaName: '__mj' };
+            const result = await validator.executeAgentInternal(
+                makeParams({ SchemaDesign: { TableDefinition: blockedDef, ModificationType: 'create' } }),
+                {} as AgentConfiguration
+            );
+
+            const payload = result.finalStep.newPayload as EntityDesignerPayload;
+            expect(payload.ValidationResult?.Valid).toBe(false);
+            expect(payload.ValidationResult?.Errors[0]).toContain('__mj');
+        });
+
+        it('blocks a custom schema added via RSU_PROTECTED_SCHEMAS env-var', async () => {
+            mockState.authorizations = [{ Name: AUTHORIZATIONS.CREATE_IN_CUSTOM_SCHEMA, UserCanExecute: () => true }];
+            mockState.protectedSchemas = new Set(['__mj', 'myschema']);
+
+            const validator = makeValidator();
+            const blockedDef = { ...VALID_TABLE_DEFINITION, SchemaName: 'myschema' };
+            const result = await validator.executeAgentInternal(
+                makeParams({ SchemaDesign: { TableDefinition: blockedDef, ModificationType: 'create' } }),
+                {} as AgentConfiguration
+            );
+
+            const payload = result.finalStep.newPayload as EntityDesignerPayload;
+            expect(payload.ValidationResult?.Valid).toBe(false);
+            expect(payload.ValidationResult?.Errors[0]).toContain('myschema');
+        });
+
+        it('does not block __mj_UDT — that is the intended schema for user tables', async () => {
+            mockState.authorizations = [AUTH_CREATE_UDT];
+            // RSM only knows about __mj, not __mj_UDT
+            mockState.protectedSchemas = new Set(['__mj']);
+
+            const validator = makeValidator();
+            const result = await validator.executeAgentInternal(
+                makeParams({ SchemaDesign: { TableDefinition: VALID_TABLE_DEFINITION, ModificationType: 'create' } }),
+                {} as AgentConfiguration
+            );
+
+            const payload = result.finalStep.newPayload as EntityDesignerPayload;
+            expect(payload.ValidationResult?.Valid).toBe(true);
+        });
+    });
+
+    describe('executeAgentInternal — column and naming checks', () => {
+        it('returns Valid=false when a CodeGen reserved column is present', async () => {
+            mockState.authorizations = [AUTH_CREATE_UDT];
 
             const validator = makeValidator();
             const reservedColDef = {
                 ...VALID_TABLE_DEFINITION,
                 Columns: [
-                    { Name: 'ID', Type: 'uuid' as const, IsNullable: false }, // reserved!
+                    { Name: 'ID', Type: 'uuid' as const, IsNullable: false },
                     { Name: 'Title', Type: 'string' as const, IsNullable: false },
                 ],
             };
@@ -176,14 +239,13 @@ describe('EntityDesignerSchemaValidator', () => {
                 {} as AgentConfiguration
             );
 
-            expect(result.finalStep.step).toBe('Success');
             const payload = result.finalStep.newPayload as EntityDesignerPayload;
             expect(payload.ValidationResult?.Valid).toBe(false);
             expect(payload.ValidationResult?.Errors.some(e => e.includes("'ID'"))).toBe(true);
         });
 
-        it('returns Success with ValidationResult.Valid=true when definition is valid', async () => {
-            mockState.authorizations = [AUTH_WITH_EXECUTE];
+        it('returns Valid=true when the definition is fully valid', async () => {
+            mockState.authorizations = [AUTH_CREATE_UDT];
 
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
@@ -191,14 +253,13 @@ describe('EntityDesignerSchemaValidator', () => {
                 {} as AgentConfiguration
             );
 
-            expect(result.finalStep.step).toBe('Success');
             const payload = result.finalStep.newPayload as EntityDesignerPayload;
             expect(payload.ValidationResult?.Valid).toBe(true);
             expect(payload.ValidationResult?.Errors).toHaveLength(0);
         });
 
-        it('reports a naming conflict from RunView result', async () => {
-            mockState.authorizations = [AUTH_WITH_EXECUTE];
+        it('returns Valid=false when RunView finds a naming conflict for create', async () => {
+            mockState.authorizations = [AUTH_CREATE_UDT];
             mockState.runViewResults = [{ ID: 'existing-id' }]; // entity already exists
 
             const validator = makeValidator();
@@ -211,19 +272,175 @@ describe('EntityDesignerSchemaValidator', () => {
             expect(payload.ValidationResult?.Valid).toBe(false);
             expect(payload.ValidationResult?.Errors.some(e => e.includes('already exists'))).toBe(true);
         });
-    });
 
-    describe('ENTITY_DESIGNER_BLOCKED_SCHEMAS constant', () => {
-        it('blocks __mj, dbo, sys, and information_schema', () => {
-            expect(ENTITY_DESIGNER_BLOCKED_SCHEMAS.has('__mj')).toBe(true);
-            expect(ENTITY_DESIGNER_BLOCKED_SCHEMAS.has('dbo')).toBe(true);
-            expect(ENTITY_DESIGNER_BLOCKED_SCHEMAS.has('sys')).toBe(true);
-            expect(ENTITY_DESIGNER_BLOCKED_SCHEMAS.has('information_schema')).toBe(true);
+        it('returns Valid=true for alter even when entity already exists (that is expected)', async () => {
+            const modifyAuth = { Name: AUTHORIZATIONS.MODIFY_OWN_ENTITIES, UserCanExecute: () => true };
+            mockState.authorizations = [modifyAuth];
+            // Entity exists — this is what alter expects (runViewResults used for MJ: Entities check)
+            mockState.runViewResults = [{ ID: 'existing-id' }];
+            mockState.settingsResults = [
+                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_ENTITY_DESIGNER },
+                { Name: UDT_SETTINGS.OWNER_KEY, Value: 'user-1' },
+            ];
+
+            const validator = makeValidator();
+            const result = await validator.executeAgentInternal(
+                makeParams({
+                    SchemaDesign: {
+                        TableDefinition: VALID_TABLE_DEFINITION,
+                        ModificationType: 'alter',
+                        ExistingEntityID: 'existing-id',
+                    },
+                }, 'user-1'),
+                {} as AgentConfiguration
+            );
+
+            const payload = result.finalStep.newPayload as EntityDesignerPayload;
+            expect(payload.ValidationResult?.Valid).toBe(true);
         });
 
-        it('does not block __mj_UDT', () => {
-            expect(ENTITY_DESIGNER_BLOCKED_SCHEMAS.has('__mj_udt')).toBe(false);
-            expect(ENTITY_DESIGNER_BLOCKED_SCHEMAS.has('__mj_UDT')).toBe(false);
+        it('returns Valid=false for alter when entity does not exist in MJ metadata', async () => {
+            const modifyAuth = { Name: AUTHORIZATIONS.MODIFY_ANY_UDT_ENTITIES, UserCanExecute: () => true };
+            mockState.authorizations = [modifyAuth];
+            // Entity not found — alter should fail
+            mockState.runViewResults = [];
+            mockState.settingsResults = [];
+
+            const validator = makeValidator();
+            const result = await validator.executeAgentInternal(
+                makeParams({
+                    SchemaDesign: {
+                        TableDefinition: VALID_TABLE_DEFINITION,
+                        ModificationType: 'alter',
+                        // No ExistingEntityID → falls back to MODIFY_ANY_UDT_ENTITIES
+                    },
+                }),
+                {} as AgentConfiguration
+            );
+
+            const payload = result.finalStep.newPayload as EntityDesignerPayload;
+            expect(payload.ValidationResult?.Valid).toBe(false);
+            expect(payload.ValidationResult?.Errors.some(e => e.includes('does not exist'))).toBe(true);
+        });
+    });
+
+    describe('alter mode — ownership-based authorization', () => {
+        const MODIFY_PAYLOAD_BASE: EntityDesignerPayload = {
+            SchemaDesign: {
+                TableDefinition: VALID_TABLE_DEFINITION,
+                ModificationType: 'alter',
+                ExistingEntityID: 'entity-abc',
+            },
+        };
+
+        it('requires only MODIFY_OWN_ENTITIES when contextUser is the entity owner', async () => {
+            mockState.authorizations = [{
+                Name: AUTHORIZATIONS.MODIFY_OWN_ENTITIES,
+                UserCanExecute: () => true,
+            }];
+            mockState.runViewResults = [{ ID: 'entity-abc' }]; // entity exists → checkEntityMustExist passes
+            mockState.settingsResults = [
+                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_ENTITY_DESIGNER },
+                { Name: UDT_SETTINGS.OWNER_KEY, Value: 'user-1' },
+            ];
+
+            const validator = makeValidator();
+            const result = await validator.executeAgentInternal(
+                makeParams(MODIFY_PAYLOAD_BASE, 'user-1'),
+                {} as AgentConfiguration
+            );
+
+            const payload = result.finalStep.newPayload as EntityDesignerPayload;
+            expect(payload.ValidationResult?.Valid).toBe(true);
+        });
+
+        it('requires MODIFY_ANY_UDT_ENTITIES when contextUser is not the owner', async () => {
+            // Only MODIFY_OWN_ENTITIES is granted — but owner is someone else → auth fails
+            mockState.authorizations = [{
+                Name: AUTHORIZATIONS.MODIFY_OWN_ENTITIES,
+                UserCanExecute: () => true,
+            }];
+            mockState.settingsResults = [
+                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_ENTITY_DESIGNER },
+                { Name: UDT_SETTINGS.OWNER_KEY, Value: 'other-user' },
+            ];
+
+            const validator = makeValidator();
+            const result = await validator.executeAgentInternal(
+                makeParams(MODIFY_PAYLOAD_BASE, 'user-1'),
+                {} as AgentConfiguration
+            );
+
+            // Required auth is MODIFY_ANY_UDT_ENTITIES which is not in authorizations → Failed
+            expect(result.finalStep.step).toBe('Failed');
+            expect(result.finalStep.reasoning).toContain('Authorization');
+        });
+
+        it('falls back to MODIFY_ANY_UDT_ENTITIES when no MJ:UDT:Source record exists', async () => {
+            // Entity was created outside Entity Designer — no source record
+            mockState.settingsResults = [];
+            mockState.runViewResults = [{ ID: 'entity-abc' }]; // entity exists → checkEntityMustExist passes
+            mockState.authorizations = [{
+                Name: AUTHORIZATIONS.MODIFY_ANY_UDT_ENTITIES,
+                UserCanExecute: () => true,
+            }];
+
+            const validator = makeValidator();
+            const result = await validator.executeAgentInternal(
+                makeParams(MODIFY_PAYLOAD_BASE, 'user-1'),
+                {} as AgentConfiguration
+            );
+
+            const payload = result.finalStep.newPayload as EntityDesignerPayload;
+            expect(payload.ValidationResult?.Valid).toBe(true);
+        });
+
+        it('treats UUID ownership match as case-insensitive (SQL Server uppercase vs PostgreSQL lowercase)', async () => {
+            // SQL Server stores UUIDs uppercase; contextUser.ID might be lowercase (or vice versa)
+            mockState.authorizations = [{
+                Name: AUTHORIZATIONS.MODIFY_OWN_ENTITIES,
+                UserCanExecute: () => true,
+            }];
+            mockState.runViewResults = [{ ID: 'entity-abc' }]; // entity exists → checkEntityMustExist passes
+            // Owner stored as uppercase UUID, contextUser ID as lowercase
+            mockState.settingsResults = [
+                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_ENTITY_DESIGNER },
+                { Name: UDT_SETTINGS.OWNER_KEY, Value: 'ABCD-1234-EF56' },
+            ];
+
+            const validator = makeValidator();
+            const result = await validator.executeAgentInternal(
+                makeParams(MODIFY_PAYLOAD_BASE, 'abcd-1234-ef56'), // lowercase contextUser.ID
+                {} as AgentConfiguration
+            );
+
+            // UUIDsEqual normalises case → should match → MODIFY_OWN_ENTITIES is sufficient
+            const payload = result.finalStep.newPayload as EntityDesignerPayload;
+            expect(payload.ValidationResult?.Valid).toBe(true);
+        });
+
+        it('falls back to MODIFY_ANY_UDT_ENTITIES when ExistingEntityID is absent', async () => {
+            const noIDPayload: EntityDesignerPayload = {
+                SchemaDesign: {
+                    TableDefinition: VALID_TABLE_DEFINITION,
+                    ModificationType: 'alter',
+                    // ExistingEntityID absent
+                },
+            };
+            mockState.authorizations = [{
+                Name: AUTHORIZATIONS.MODIFY_ANY_UDT_ENTITIES,
+                UserCanExecute: () => true,
+            }];
+            mockState.runViewResults = [{ ID: 'some-entity-id' }]; // entity exists → checkEntityMustExist passes
+
+            const validator = makeValidator();
+            const result = await validator.executeAgentInternal(
+                makeParams(noIDPayload),
+                {} as AgentConfiguration
+            );
+
+            const payload = result.finalStep.newPayload as EntityDesignerPayload;
+            expect(payload.ValidationResult?.Valid).toBe(true);
         });
     });
 });

@@ -47,7 +47,37 @@
     }
   },
 
-  "example_3_alter_add_column": {
+  "example_3_subagent_mode_skip_research": {
+    "description": "Schema Designer receives a subagent-mode message beginning with 'Subagent mode — called by' containing a Specification JSON block. Skip Step 1 (DB research) entirely — use the Specification as the starting point and write SchemaDesign directly. Return Success.",
+    "payloadChangeRequest": {
+      "newElements": {
+        "SchemaDesign": {
+          "ModificationType": "create",
+          "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| CustomerID | UNIQUEIDENTIFIER | ✅ Yes | — | FK → Customers.ID |\n| OrderDate | DATETIMEOFFSET | ✅ Yes | GETUTCDATE() | When order was placed |\n| Status | NVARCHAR(50) | ✅ Yes | 'Pending' | Pending, Fulfilled, Cancelled |\n| TotalAmount | DECIMAL(18,2) | No | — | Order total in USD |",
+          "TableDefinition": {
+            "SchemaName": "__mj_UDT",
+            "TableName": "CustomerOrders",
+            "EntityName": "Customer Orders",
+            "Description": "Tracks orders placed by customers.",
+            "Columns": [
+              { "Name": "CustomerID", "Type": "uuid", "IsNullable": false, "Description": "FK → Customers.ID." },
+              { "Name": "OrderDate", "RawSqlType": "DATETIMEOFFSET", "IsNullable": false, "DefaultValue": "GETUTCDATE()", "Description": "Timestamp when the order was placed." },
+              { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Pending'", "Description": "Order lifecycle: Pending, Fulfilled, Cancelled." },
+              { "Name": "TotalAmount", "RawSqlType": "DECIMAL(18,2)", "IsNullable": true, "Description": "Order total in base currency." }
+            ],
+            "ForeignKeys": [
+              { "ColumnName": "CustomerID", "ReferencedSchema": "__mj_UDT", "ReferencedTable": "Customers", "ReferencedColumn": "ID", "IsSoft": true }
+            ]
+          }
+        }
+      }
+    },
+    "nextStep": {
+      "type": "Success"
+    }
+  },
+
+  "example_4_alter_add_column": {
     "description": "Adding a new column to an existing entity — same two-step pattern. Always return nextStep.type: Success, never Chat.",
     "payloadChangeRequest": {
       "newElements": {

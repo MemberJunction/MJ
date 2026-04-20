@@ -73,6 +73,12 @@ const SCHEMA_VALIDATOR_AGENT_NAME = 'Entity Schema Validator';
 const SCHEMA_BUILDER_AGENT_NAME = 'Entity Schema Builder';
 
 /**
+ * The registered Name of the Schema Designer sub-agent. Used by Intercept 3
+ * (subagent mode fast path) to bypass Requirements Analyst.
+ */
+const SCHEMA_DESIGNER_AGENT_NAME = 'Entity Schema Designer';
+
+/**
  * The validation message sent to the Schema Validator sub-agent. Matches
  * the message used in the Entity Designer prompt template so that code and
  * prompt stay consistent.
@@ -116,26 +122,28 @@ export class EntityDesignerAgent extends BaseAgent {
      * Post-LLM intercept hook.
      *
      * Called by the Loop framework after every prompt invocation, receiving the
-     * LLM's proposed next step. This override runs two safety-critical checks
-     * before delegating to the LLM's decision:
+     * LLM's proposed next step. This override enforces three safety-critical
+     * transitions deterministically before delegating to the LLM:
      *
-     *   1. **User approved creation** — last user message contains `create_now`?
-     *      YES → discard the LLM's decision and hard-wire a call to
-     *            Entity Schema Validator (`terminateAfter: false`, so Entity
-     *            Designer gets another turn to react to the result).
+     *   1. **Subagent fast path** — `payload.mode === 'subagent'` and a
+     *      `callerContext.tableSpec` is present but `SchemaDesign` is not yet
+     *      populated?  YES → skip Requirements Analyst entirely and call Schema
+     *      Designer directly with the caller-supplied spec.
      *
-     *   2. **Validation passed, build not yet started** — payload has
-     *      `ValidationResult.Valid = true` and no `EntityDesignerResult`?
-     *      YES → discard the LLM's decision and hard-wire a call to Entity
-     *            Schema Builder (`terminateAfter: false`, so Entity Designer
-     *            gets a final turn to present the build outcome to the user).
+     *   2. **User approved creation** — last user message contains `create_now`?
+     *      YES → hard-wire a call to Entity Schema Validator (`terminateAfter:
+     *      false` so Entity Designer reacts to the result).
      *
-     *   Both checks must return false for the LLM's decision to stand.
+     *   3. **Validation passed, build not yet started** — `ValidationResult.Valid
+     *      = true` and no `EntityDesignerResult` in payload?
+     *      YES → hard-wire a call to Entity Schema Builder (`terminateAfter:
+     *      false` so Entity Designer presents the build outcome).
      *
-     * Why override here rather than using `validateSuccessNextStep` or
-     * `validateNextStep`? Those hooks run only when the LLM already chose
-     * "Success" or a specific step type. We need to intercept unconditionally —
-     * regardless of what step the LLM proposed.
+     * All three must return false for the LLM's decision to stand.
+     *
+     * Why override here rather than `validateSuccessNextStep`?  Those hooks fire
+     * only when the LLM chose "Success" or a specific step type; we need to
+     * intercept unconditionally, regardless of what step the LLM proposed.
      *
      * @param params        Full agent execution context including conversation history
      * @param agentType     The Loop agent type configuration (passed to super)
@@ -148,6 +156,20 @@ export class EntityDesignerAgent extends BaseAgent {
         promptResult: AIPromptRunResult,
         currentPayload: P,
     ): Promise<BaseAgentNextStep<P>> {
+        // Intercept 1: Subagent fast path — skip Requirements Analyst
+        const subagentMessage = this.buildSubagentSchemaDesignerMessage(currentPayload);
+        if (subagentMessage !== null) {
+            this.logStatus(
+                `🔒 EntityDesignerAgent: subagent mode detected with callerContext.tableSpec ` +
+                `— bypassing Requirements Analyst, routing directly to "${SCHEMA_DESIGNER_AGENT_NAME}"`,
+                true,
+                params,
+            );
+            return this.buildSubAgentStep(SCHEMA_DESIGNER_AGENT_NAME, subagentMessage, currentPayload);
+        }
+
+        // Intercept 2: User approved creation — reset BuildAttemptCount so a
+        // re-approval after a failed build gets a fresh build attempt.
         if (this.userApprovedCreation(params)) {
             this.logStatus(
                 `🔒 EntityDesignerAgent: detected "${CREATE_NOW_SENTINEL}" in last user message ` +
@@ -155,9 +177,18 @@ export class EntityDesignerAgent extends BaseAgent {
                 true,
                 params,
             );
-            return this.buildSubAgentStep(SCHEMA_VALIDATOR_AGENT_NAME, SCHEMA_VALIDATOR_MESSAGE, currentPayload);
+            const resetPayload: EntityDesignerPayload = {
+                ...(currentPayload as unknown as EntityDesignerPayload),
+                BuildAttemptCount: 0,
+            };
+            return this.buildSubAgentStep(SCHEMA_VALIDATOR_AGENT_NAME, SCHEMA_VALIDATOR_MESSAGE, resetPayload as unknown as P);
         }
 
+        // Intercept 3: Validation passed — trigger build pipeline.
+        // Increment BuildAttemptCount in the newPayload so that if the builder
+        // fails (and the framework discards its newPayload), this intercept will
+        // NOT re-fire on the next turn — giving the LLM a chance to report the
+        // error to the user instead of looping endlessly.
         if (this.validationPassedNeedsBuilding(currentPayload)) {
             this.logStatus(
                 `🔒 EntityDesignerAgent: ValidationResult.Valid = true and no EntityDesignerResult ` +
@@ -165,14 +196,59 @@ export class EntityDesignerAgent extends BaseAgent {
                 true,
                 params,
             );
-            return this.buildSubAgentStep(SCHEMA_BUILDER_AGENT_NAME, SCHEMA_BUILDER_MESSAGE, currentPayload);
+            const p = currentPayload as unknown as EntityDesignerPayload;
+            const markedPayload: EntityDesignerPayload = {
+                ...p,
+                BuildAttemptCount: (p.BuildAttemptCount ?? 0) + 1,
+            };
+            return this.buildSubAgentStep(SCHEMA_BUILDER_AGENT_NAME, SCHEMA_BUILDER_MESSAGE, markedPayload as unknown as P);
         }
 
-        // Neither safety intercept fired — let the LLM's decision stand as normal
+        // No intercept fired — let the LLM's decision stand as normal
         return super.determineNextStep(params, agentType, promptResult, currentPayload);
     }
 
     // ─── Private helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Returns the message to send to Schema Designer when running in subagent
+     * fast-path mode, or `null` if the intercept should not fire.
+     *
+     * The intercept fires only when:
+     *   - `payload.mode === 'subagent'`
+     *   - `callerContext.tableSpec` is present (calling agent supplied a spec)
+     *   - `SchemaDesign` is not yet in the payload (designer hasn't run yet)
+     *
+     * The tableSpec is embedded in the message so Schema Designer receives it
+     * directly — no separate payload path needed for Schema Designer to operate.
+     *
+     * If mode is 'subagent' but tableSpec is missing, the intercept does NOT fire
+     * and we fall through to standalone flow (lenient: caller may have omitted spec,
+     * better to gather requirements than fail hard).
+     */
+    private buildSubagentSchemaDesignerMessage<P>(currentPayload: P): string | null {
+        if (currentPayload == null) return null;
+
+        const payload = currentPayload as unknown as EntityDesignerPayload;
+
+        if (payload.mode !== 'subagent') return null;
+        if (!payload.callerContext?.tableSpec) return null;
+        if (payload.SchemaDesign) return null; // already designed, don't re-run
+
+        const { tableSpec, agentName, subagentConfirmedByParent } = payload.callerContext;
+        const confirmNote = subagentConfirmedByParent
+            ? 'User approval was already obtained by the calling agent — skip the user confirmation prompt and proceed directly to returning the schema.'
+            : 'Present the design to the user for confirmation before returning.';
+
+        return (
+            `Subagent mode — called by "${agentName}".\n` +
+            `Design the entity schema from the specification below. ` +
+            `Skip the Database Research Agent discovery step (the calling agent already did this research).\n\n` +
+            `Specification:\n${JSON.stringify(tableSpec, null, 2)}\n\n` +
+            `${confirmNote}\n` +
+            `Write SchemaDesign (Prototype + TableDefinition + ModificationType) to payload and return Success.`
+        );
+    }
 
     /**
      * Determines whether the last user message in the conversation contains the
@@ -219,9 +295,15 @@ export class EntityDesignerAgent extends BaseAgent {
         if (currentPayload == null) return false;
 
         const payload = currentPayload as unknown as EntityDesignerPayload;
+        // BuildAttemptCount is incremented in the newPayload returned by Intercept 3.
+        // The framework applies that newPayload to the parent even when the builder
+        // succeeds or fails, so after one attempt BuildAttemptCount >= 1 in the
+        // parent's payload and this intercept will not re-fire. The LLM gets to
+        // report the outcome (success or error) to the user instead.
         return (
             payload.ValidationResult?.Valid === true &&
-            !payload.EntityDesignerResult
+            !payload.EntityDesignerResult &&
+            (payload.BuildAttemptCount ?? 0) === 0
         );
     }
 

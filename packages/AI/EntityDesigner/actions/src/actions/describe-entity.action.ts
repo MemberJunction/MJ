@@ -139,7 +139,7 @@ export class DescribeEntityAction extends BaseEntityDesignerAction {
             Description: string | null;
             IsRequired: boolean;
         }>({
-            EntityName: 'Entity Fields',
+            EntityName: 'MJ: Entity Fields',
             ExtraFilter: `EntityID = '${escapeSqlLiteral(entityID)}'`,
             Fields: ['Name', 'Type', 'AllowsNull', 'MaxLength', 'Description', 'IsRequired'],
             OrderBy: 'Sequence ASC',

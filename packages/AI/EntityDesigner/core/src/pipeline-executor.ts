@@ -80,7 +80,9 @@ export class EntityDesignerPipelineExecutor {
         contextUser: UserInfo,
         options: PipelineExecutionOptions = {}
     ): Promise<PipelineExecutionResult> {
-        const migrationOutput = EntityDesignerPipelineExecutor.generateCreateMigration(tableDefinition);
+        const migrationOutput = EntityDesignerPipelineExecutor.generateCreateMigration(
+            EntityDesignerPipelineExecutor.normalizeForeignKeys(tableDefinition)
+        );
         return EntityDesignerPipelineExecutor.executePipeline(
             migrationOutput.SQL,
             `Create entity: ${tableDefinition.EntityName}`,
@@ -101,17 +103,18 @@ export class EntityDesignerPipelineExecutor {
         contextUser: UserInfo,
         options: PipelineExecutionOptions = {}
     ): Promise<PipelineExecutionResult> {
+        const normalizedDesired = EntityDesignerPipelineExecutor.normalizeForeignKeys(desired);
         const evolution = new SchemaEvolution();
         const alterSQL = evolution.GenerateFromEvolutionInput(
-            { Desired: desired, ExistingTable: existing },
+            { Desired: normalizedDesired, ExistingTable: existing },
             TARGET_PLATFORM
         );
-        const affectedTables = [`${desired.SchemaName}.${desired.TableName}`];
+        const affectedTables = [`${normalizedDesired.SchemaName}.${normalizedDesired.TableName}`];
         return EntityDesignerPipelineExecutor.executePipeline(
             alterSQL,
-            `Modify entity: ${desired.EntityName}`,
+            `Modify entity: ${normalizedDesired.EntityName}`,
             affectedTables,
-            desired,
+            normalizedDesired,
             contextUser,
             options
         );
@@ -157,7 +160,7 @@ export class EntityDesignerPipelineExecutor {
             Precision: number | null;
             Scale: number | null;
         }>({
-            EntityName: 'Entity Fields',
+            EntityName: 'MJ: Entity Fields',
             ExtraFilter: `EntityID = '${escapeSqlLiteral(entityID)}'`,
             Fields: ['Name', 'Type', 'AllowsNull', 'MaxLength', 'Precision', 'Scale'],
             OrderBy: 'Sequence ASC',
@@ -185,6 +188,58 @@ export class EntityDesignerPipelineExecutor {
     // ─── Private helpers ──────────────────────────────────────────────────────
 
     /**
+     * Normalize LLM-generated ForeignKey entries to match ForeignKeyDefinition exactly.
+     *
+     * LLMs occasionally output `Column` instead of `ColumnName` and omit `ReferencedColumn`.
+     * Both field-name variants are accepted here so that minor prompt drift doesn't
+     * cause SQL generation to embed literal "undefined" strings in constraint names.
+     */
+    private static normalizeForeignKeys(tableDefinition: TableDefinition): TableDefinition {
+        if (!tableDefinition.ForeignKeys?.length) return tableDefinition;
+        return {
+            ...tableDefinition,
+            ForeignKeys: tableDefinition.ForeignKeys.map(fk => {
+                const raw = fk as unknown as Record<string, unknown>;
+                return {
+                    ...fk,
+                    ColumnName: fk.ColumnName ?? (raw['Column'] as string | undefined) ?? fk.ColumnName,
+                    ReferencedColumn: fk.ReferencedColumn ?? 'ID',
+                };
+            }),
+        };
+    }
+
+    /**
+     * Inject the standard MJ primary-key column (`ID`) so that CodeGen can
+     * register the entity after the migration runs.
+     *
+     * WHY: the Schema Designer template correctly tells the LLM to omit `ID`
+     * (CodeGen auto-adds it for __mj core entities). But for __mj_UDT user
+     * tables, CodeGen's spGetPrimaryKeyForTable requires a physical PRIMARY KEY
+     * constraint to register an entity. Without it CodeGen skips the table with
+     * "No primary key found". __mj_CreatedAt/__mj_UpdatedAt are handled by
+     * CodeGen's ensureCreatedAtUpdatedAtFieldsExist — it ALTERs the table to
+     * add them once the entity is registered; they do NOT need to be here.
+     */
+    private static injectStandardMJColumns(tableDefinition: TableDefinition): TableDefinition {
+        return {
+            ...tableDefinition,
+            AdditionalColumns: [
+                ...(tableDefinition.AdditionalColumns ?? []),
+                {
+                    Name: 'ID',
+                    Type: 'uuid' as const,
+                    RawSqlType: 'UNIQUEIDENTIFIER',
+                    IsNullable: false,
+                    DefaultValue: 'NEWSEQUENTIALID()',
+                    Description: 'Unique identifier for this record.',
+                },
+            ],
+            PrimaryKeyColumns: ['ID'],
+        };
+    }
+
+    /**
      * Delegate to SchemaEngine to produce CREATE TABLE SQL + affected-table metadata.
      * The FileName field in the returned MigrationOutput is discarded — RuntimeSchemaManager
      * generates its own filename (V{timestamp}__RSU_{tables}.sql) when writing to disk.
@@ -192,7 +247,11 @@ export class EntityDesignerPipelineExecutor {
     private static generateCreateMigration(tableDefinition: TableDefinition) {
         const engine = new SchemaEngine();
         // mjVersion only affects the discarded FileName; pass empty string.
-        return engine.GenerateMigration(tableDefinition, TARGET_PLATFORM, '');
+        return engine.GenerateMigration(
+            EntityDesignerPipelineExecutor.injectStandardMJColumns(tableDefinition),
+            TARGET_PLATFORM,
+            ''
+        );
     }
 
     /**
@@ -226,10 +285,20 @@ export class EntityDesignerPipelineExecutor {
         }
 
         const steps = EntityDesignerPipelineExecutor.mapPipelineSteps(result.Steps ?? []);
+        const warnings: string[] = [];
 
-        // Refresh metadata so the newly created entity is immediately visible
+        // Refresh metadata so the newly created entity is immediately visible.
+        // A refresh failure is non-fatal — the entity exists in the DB; it will
+        // appear after the next server restart or explicit refresh.
         const md = new Metadata();
-        await md.Refresh();
+        try {
+            await md.Refresh();
+        } catch (refreshErr) {
+            const msg = `Metadata refresh failed after successful pipeline: ${String(refreshErr)}. ` +
+                `The entity was created but may not be visible until MJAPI restarts.`;
+            LogError(`EntityDesignerPipelineExecutor: ${msg}`);
+            warnings.push(msg);
+        }
 
         const entityInfo = md.Entities.find(
             e =>
@@ -239,12 +308,13 @@ export class EntityDesignerPipelineExecutor {
 
         if (!entityInfo) {
             // Pipeline succeeded but CodeGen hasn't registered the entity yet —
-            // this is rare but can happen if SkipRestart is true.
+            // common when SkipRestart is true or if refresh failed above.
             return {
                 Success: true,
                 SchemaName: tableDefinition.SchemaName,
                 TableName: tableDefinition.TableName,
                 PipelineSteps: steps,
+                Warnings: warnings.length > 0 ? warnings : undefined,
             };
         }
 
@@ -263,6 +333,7 @@ export class EntityDesignerPipelineExecutor {
             SchemaName: tableDefinition.SchemaName,
             TableName: tableDefinition.TableName,
             PipelineSteps: steps,
+            Warnings: warnings.length > 0 ? warnings : undefined,
         };
     }
 

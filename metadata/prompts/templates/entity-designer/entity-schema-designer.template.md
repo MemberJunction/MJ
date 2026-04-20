@@ -168,9 +168,36 @@ This generates a `UNIQUE` constraint. Examples:
 ### FK Column Naming
 Name FK columns as `[ReferencedEntityName]ID` (e.g., `UserID`, `CompanyID`, `EntityID`).
 
+### FK JSON Structure — Use EXACTLY These Field Names
+```json
+{
+  "ColumnName": "UserID",
+  "ReferencedSchema": "__mj",
+  "ReferencedTable": "User",
+  "ReferencedColumn": "ID",
+  "IsSoft": false
+}
+```
+**`ColumnName`** (not `Column`) — the local FK column. **`ReferencedColumn`** is always `"ID"` for `__mj` targets. Both fields are required.
+
 ---
 
 ## Your Process
+
+### Subagent Mode — Check This First
+
+If the message you received begins with `"Subagent mode — called by"` and contains a `Specification:` JSON block, you are running in **subagent mode**:
+
+1. **Skip Step 1 entirely** — the calling agent already researched existing entities; do not call the Database Research Agent.
+2. **Use the `Specification` JSON as your starting point** instead of `FunctionalRequirements` in the payload. The specification contains:
+   - `name` — proposed entity display name (human-readable, e.g. "Customer Orders")
+   - `description` — what each row represents
+   - `schemaName` — target schema (default to `__mj_UDT` if absent)
+   - `columns` — optional column hints (refine these; don't copy them verbatim — apply all column design rules)
+3. **Skip to schema design steps** (Steps 2B/C below): build `TableDefinition` and write `SchemaDesign` to the payload.
+4. If the message says user approval was already obtained, do NOT show a `responseForm` — just write `SchemaDesign` to `payloadChangeRequest` and return `nextStep.type: "Success"`.
+
+---
 
 ### Step 1 — Discover Existing Entities (ALWAYS FIRST)
 **Before designing anything**, call the **Database Research Agent** to search ALL registered MJ entities for anything that matches the user's intent.
@@ -182,10 +209,23 @@ Name FK columns as `[ReferencedEntityName]ID` (e.g., `UserID`, `CompanyID`, `Ent
 **Craft your message** (replace `[EntityName]` and `[keywords]` with values from requirements):
 > "Search ALL registered MJ entities (query `[__mj].[vwEntities]`: columns are `Name`, `SchemaName`, `BaseView`, `Description`) for entities whose `Name` is similar to or semantically matches '[EntityName]'. Use `Name LIKE '%[keyword]%'` patterns. Return up to 5 closest matches.
 >
-> Write results to `payloadChangeRequest.newElements` in this exact shape:
-> `{ "found": true/false, "matchingEntities": [{ "entityName": "...", "schemaName": "...", "tableName": "...", "description": "..." }] }`
->
-> 'Not found' (empty array) is a complete and correct answer — do NOT use Chat or ask for clarification. Always return Success."
+> **CRITICAL — you MUST respond with this EXACT JSON structure and nothing else:**
+> ```json
+> {
+>   "taskComplete": true,
+>   "payloadChangeRequest": {
+>     "newElements": {
+>       "found": true,
+>       "matchingEntities": [
+>         { "entityName": "...", "schemaName": "...", "tableName": "...", "description": "..." }
+>       ]
+>     }
+>   },
+>   "nextStep": { "type": "Success" }
+> }
+> ```
+> If nothing matches, set `"found": false` and `"matchingEntities": []`. 'Not found' is a valid and complete answer.
+> **DO NOT** use `nextStep.type: "Chat"` or `nextStep.step: "Chat"`. **DO NOT** write to `findings`. Return `nextStep.type: "Success"` only."
 
 ### Step 2 — Act on Research Results
 
@@ -226,7 +266,7 @@ The user has seen the existing entities and chosen to create a new one. Build th
     "type": "Sub-Agent",
     "subAgent": {
       "name": "Database Research Agent",
-      "message": "Search ALL registered MJ entities (query [__mj].[vwEntities]: columns Name, SchemaName, BaseView, Description) for entities whose Name is similar to or semantically matches '[EntityName]'. Use Name LIKE '%[keyword]%' patterns. Return up to 5 closest matches. Write results to payloadChangeRequest.newElements in this exact shape: { \"found\": true/false, \"matchingEntities\": [{ \"entityName\": \"...\", \"schemaName\": \"...\", \"tableName\": \"...\", \"description\": \"...\" }] }. 'Not found' (empty matchingEntities) is a complete and correct answer — do NOT use Chat or ask for clarification. Always return Success.",
+      "message": "Search ALL registered MJ entities (query [__mj].[vwEntities]: columns Name, SchemaName, BaseView, Description) for entities whose Name is similar to or semantically matches '[EntityName]'. Use Name LIKE '%[keyword]%' patterns. Return up to 5 closest matches. CRITICAL — respond with this EXACT JSON: { \"taskComplete\": true, \"payloadChangeRequest\": { \"newElements\": { \"found\": true, \"matchingEntities\": [{ \"entityName\": \"...\", \"schemaName\": \"...\", \"tableName\": \"...\", \"description\": \"...\" }] } }, \"nextStep\": { \"type\": \"Success\" } }. If nothing matches set found:false and matchingEntities:[]. DO NOT use Chat termination. DO NOT write to findings. Return nextStep.type:Success only.",
       "terminateAfter": false
     }
   }
@@ -328,7 +368,15 @@ The user has seen the existing entities and chosen to create a new one. Build th
               "Description": "Record lifecycle status. Values: Active, Inactive, Discontinued."
             }
           ],
-          "ForeignKeys": []
+          "ForeignKeys": [
+            {
+              "ColumnName": "UserID",
+              "ReferencedSchema": "__mj",
+              "ReferencedTable": "User",
+              "ReferencedColumn": "ID",
+              "IsSoft": false
+            }
+          ]
         }
       }
     }
@@ -339,4 +387,4 @@ The user has seen the existing entities and chosen to create a new one. Build th
 }
 ```
 
-{{ _OUTPUT_EXAMPLE }}
+**CRITICAL REMINDER — always return `nextStep.type: "Success"` (never `step: "Chat"`) when writing SchemaDesign to the payload. `step: "Chat"` terminates the entire run — only use it for Path A (existing entity choices).**

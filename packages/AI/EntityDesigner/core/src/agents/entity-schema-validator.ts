@@ -20,21 +20,22 @@
 
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 import { BaseEntityDesignerCodeAgent } from './base-entity-designer-code-agent.js';
-import { AuthorizationEvaluator, Metadata, RunView } from '@memberjunction/core';
-import { SchemaValidator, type TableDefinition } from '@memberjunction/schema-engine';
+import { AuthorizationEvaluator, LogError, Metadata, RunView } from '@memberjunction/core';
+import type { TableDefinition } from '@memberjunction/schema-engine';
 
 import {
     type EntityDesignerPayload,
     type EntityValidationResult,
-    ENTITY_DESIGNER_BLOCKED_SCHEMAS,
-    CODEGEN_RESERVED_COLUMNS,
     AUTHORIZATIONS,
     UDT_SCHEMA_NAME,
+    UDT_SETTINGS,
     escapeSqlLiteral,
 } from '../interfaces.js';
+
+import { EntitySchemaValidationService } from '../entity-schema-validation.service.js';
 
 // ─── Driver registration ─────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ export class EntityDesignerSchemaValidator extends BaseEntityDesignerCodeAgent {
             return this.buildCodeFailure(authError);
         }
 
-        const validationResult = await this.runValidationChecks(tableDefinition, params);
+        const validationResult = await this.runValidationChecks(tableDefinition, payload, params);
 
         const newPayload: EntityDesignerPayload = {
             ...payload,
@@ -95,15 +96,27 @@ export class EntityDesignerSchemaValidator extends BaseEntityDesignerCodeAgent {
         payload: EntityDesignerPayload,
         params: ExecuteAgentParams
     ): Promise<string | null> {
-        const authName = this.resolveRequiredAuthorization(tableDefinition, payload);
-        if (!authName) {
-            return null; // no auth needed (shouldn't happen in normal flow)
+        const md = new Metadata();
+
+        // Guard: assert all expected authorization records exist at runtime.
+        // A missing record means the schema-management metadata was not pushed.
+        for (const authName of Object.values(AUTHORIZATIONS)) {
+            if (!md.Authorizations.find(a => a.Name === authName)) {
+                LogError(
+                    `EntityDesignerSchemaValidator: authorization '${authName}' is not found in ` +
+                    `Metadata.Authorizations. Push metadata/authorizations/.schema-management.json ` +
+                    `via mj sync push to seed the required records.`
+                );
+            }
         }
 
-        const md = new Metadata();
+        const authName = await this.resolveRequiredAuthorization(tableDefinition, payload, params);
+        if (!authName) {
+            return null;
+        }
+
         const auth = md.Authorizations.find(a => a.Name === authName);
         if (!auth) {
-            // Authorization record not seeded — deny to be safe
             return (
                 `Authorization '${authName}' is not configured in this system. ` +
                 `An administrator must push the schema-management authorization metadata.`
@@ -120,22 +133,20 @@ export class EntityDesignerSchemaValidator extends BaseEntityDesignerCodeAgent {
     }
 
     /**
-     * Map the requested operation to the finest-grained authorization that
-     * covers it.  This determines the minimum required permission.
+     * Map the requested operation to the finest-grained authorization that covers it.
      *
-     * TODO(Phase3 — Ownership Check): For 'alter' operations, load the
-     * MJ:UDT:Owner EntitySettings record for the entity and check:
-     *   - Owner matches contextUser.ID → require MODIFY_OWN_ENTITIES
-     *   - Owner differs (admin modifying someone else's entity) → require
-     *     MODIFY_ANY_UDT_ENTITIES
-     * Also block modification of non-UDT entities (no MJ:UDT:Source setting).
-     * SchemaDesign.ExistingEntityID (set by Schema Designer) is the handle
-     * for loading the EntitySettings records.
+     * For alter operations, reads the `MJ:UDT:Owner` EntitySettings record to
+     * determine whether the user is the entity's owner:
+     * - Owner match → require `MODIFY_OWN_ENTITIES`
+     * - Owner mismatch or no owner record → require `MODIFY_ANY_UDT_ENTITIES`
+     * - No `MJ:UDT:Source` record → entity was not created via Entity Designer;
+     *   fall back to `MODIFY_ANY_UDT_ENTITIES` (admin-only modification).
      */
-    private resolveRequiredAuthorization(
+    private async resolveRequiredAuthorization(
         tableDefinition: TableDefinition,
-        payload: EntityDesignerPayload
-    ): string | null {
+        payload: EntityDesignerPayload,
+        params: ExecuteAgentParams
+    ): Promise<string | null> {
         const modificationType = payload.SchemaDesign?.ModificationType ?? 'create';
 
         if (modificationType === 'create') {
@@ -144,96 +155,69 @@ export class EntityDesignerSchemaValidator extends BaseEntityDesignerCodeAgent {
                 : AUTHORIZATIONS.CREATE_IN_CUSTOM_SCHEMA;
         }
 
-        // For alter: Phase 2 always uses the base modify auth.
-        // Phase 3 will refine this based on ownership (see TODO above).
-        return AUTHORIZATIONS.MODIFY_OWN_ENTITIES;
+        return this.resolveModifyAuthorization(payload, params);
+    }
+
+    /**
+     * Resolve the required authorization for an alter (modify) operation by
+     * loading the entity's provenance from MJ: Entity Settings.
+     *
+     * Falls back to the most restrictive permission (`MODIFY_ANY_UDT_ENTITIES`)
+     * whenever ownership cannot be confirmed, ensuring a safe default.
+     */
+    private async resolveModifyAuthorization(
+        payload: EntityDesignerPayload,
+        params: ExecuteAgentParams
+    ): Promise<string> {
+        const existingEntityID = payload.SchemaDesign?.ExistingEntityID;
+        if (!existingEntityID) {
+            // No entity ID — can't check ownership; require elevated permission
+            return AUTHORIZATIONS.MODIFY_ANY_UDT_ENTITIES;
+        }
+
+        const rv = new RunView();
+        const result = await rv.RunView<{ Name: string; Value: string }>({
+            EntityName: 'MJ: Entity Settings',
+            ExtraFilter: (
+                `EntityID = '${escapeSqlLiteral(existingEntityID)}' ` +
+                `AND Name IN ('${UDT_SETTINGS.OWNER_KEY}', '${UDT_SETTINGS.SOURCE_KEY}')`
+            ),
+            Fields: ['Name', 'Value'],
+            ResultType: 'simple',
+        }, params.contextUser);
+
+        if (!result.Success) {
+            return AUTHORIZATIONS.MODIFY_ANY_UDT_ENTITIES;
+        }
+
+        const settings = new Map(result.Results.map(r => [r.Name, r.Value]));
+
+        // Entity not created via Entity Designer — no provenance record means we
+        // cannot safely allow lower-privileged modification
+        if (!settings.has(UDT_SETTINGS.SOURCE_KEY)) {
+            return AUTHORIZATIONS.MODIFY_ANY_UDT_ENTITIES;
+        }
+
+        const ownerID = settings.get(UDT_SETTINGS.OWNER_KEY);
+        const isOwner = ownerID != null && UUIDsEqual(ownerID, params.contextUser?.ID ?? '');
+        return isOwner ? AUTHORIZATIONS.MODIFY_OWN_ENTITIES : AUTHORIZATIONS.MODIFY_ANY_UDT_ENTITIES;
     }
 
     // ─── Validation pipeline ─────────────────────────────────────────────
 
     /**
-     * Run all deterministic validation checks and aggregate results.
-     * Returns early if the schema blocklist rejects the request.
+     * Delegate all deterministic validation checks to `EntitySchemaValidationService`.
+     * The service is the single source of truth for validation logic so that the
+     * agent path and the action path (`ValidateEntitySchemaAction`) stay in sync.
      */
     private async runValidationChecks(
         tableDefinition: TableDefinition,
+        payload: EntityDesignerPayload,
         params: ExecuteAgentParams
     ): Promise<EntityValidationResult> {
-        const errors: string[] = [];
-        const warnings: string[] = [];
-
-        this.checkBlockedSchema(tableDefinition.SchemaName, errors);
-        if (errors.length > 0) {
-            // No point running further checks — the schema itself is off-limits.
-            return { Valid: false, Errors: errors, Warnings: [] };
-        }
-
-        this.checkSchemaEngineValidation(tableDefinition, errors, warnings);
-        this.checkReservedColumnNames(tableDefinition, errors);
-        await this.checkNamingConflicts(tableDefinition, params, errors);
-
-        return { Valid: errors.length === 0, Errors: errors, Warnings: warnings };
-    }
-
-    /** Reject schemas that Entity Designer is not permitted to touch. */
-    private checkBlockedSchema(schemaName: string, errors: string[]): void {
-        if (ENTITY_DESIGNER_BLOCKED_SCHEMAS.has(schemaName.toLowerCase())) {
-            errors.push(
-                `Schema '${schemaName}' is reserved and cannot be used with the Entity Designer. ` +
-                `Use '${UDT_SCHEMA_NAME}' for user-defined tables.`
-            );
-        }
-    }
-
-    /** Delegate structural validation to SchemaEngine (identifier safety, etc.). */
-    private checkSchemaEngineValidation(
-        tableDefinition: TableDefinition,
-        errors: string[],
-        warnings: string[]
-    ): void {
-        const result = SchemaValidator.Validate(tableDefinition);
-        errors.push(...result.Errors);
-        warnings.push(...result.Warnings);
-    }
-
-    /** Ensure no column collides with MJ's auto-injected system columns. */
-    private checkReservedColumnNames(tableDefinition: TableDefinition, errors: string[]): void {
-        for (const col of tableDefinition.Columns) {
-            if (CODEGEN_RESERVED_COLUMNS.has(col.Name.toLowerCase())) {
-                errors.push(
-                    `Column '${col.Name}' is automatically managed by MemberJunction's CodeGen ` +
-                    `and must not be defined manually. Remove it from the column list.`
-                );
-            }
-        }
-    }
-
-    /**
-     * Check for an existing MJ entity that shares the same table name or
-     * entity name — either would cause a CodeGen conflict.
-     */
-    private async checkNamingConflicts(
-        tableDefinition: TableDefinition,
-        params: ExecuteAgentParams,
-        errors: string[]
-    ): Promise<void> {
-        const rv = new RunView();
-        const result = await rv.RunView<{ ID: string }>({
-            EntityName: 'MJ: Entities',
-            ExtraFilter:
-                `(Name = '${escapeSqlLiteral(tableDefinition.EntityName)}' ` +
-                `OR BaseTable = '${escapeSqlLiteral(tableDefinition.TableName)}') ` +
-                `AND SchemaName = '${escapeSqlLiteral(tableDefinition.SchemaName)}'`,
-            Fields: ['ID'],
-            ResultType: 'simple',
-        }, params.contextUser);
-
-        if (result.Success && result.Results.length > 0) {
-            errors.push(
-                `An entity with the name '${tableDefinition.EntityName}' or table '${tableDefinition.TableName}' ` +
-                `already exists in schema '${tableDefinition.SchemaName}'. Choose a different name.`
-            );
-        }
+        const service = new EntitySchemaValidationService();
+        const modificationType = payload.SchemaDesign?.ModificationType ?? 'create';
+        return service.validate(tableDefinition, params.contextUser, modificationType);
     }
 
 }

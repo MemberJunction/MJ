@@ -19,19 +19,45 @@ import type { TableDefinition } from '@memberjunction/schema-engine';
 /**
  * Root payload passed through the entire Entity Designer agent chain.
  *
- * In standalone mode the Requirements Analyst and Schema Designer populate the
- * first two sections before the code-based agents take over.
+ * ### Standalone mode (default)
+ * The user converses directly with Entity Designer. The Requirements Analyst
+ * and Schema Designer sub-agents populate the first two sections sequentially
+ * before the code-based Validator and Builder take over.
  *
- * In sub-agent mode (invoked by Agent Manager) the caller pre-populates
- * `SchemaDesign.TableDefinition` so the orchestrator skips straight to
- * Schema Validator.
+ * ### Subagent mode (`mode === 'subagent'`)
+ * Invoked by another agent (e.g. Planning Designer) that has already determined
+ * what entity is needed.  The caller provides `callerContext.tableSpec` and the
+ * orchestrator skips Requirements Analyst, routing directly to Schema Designer.
  */
 export interface EntityDesignerPayload {
+    /**
+     * Operating mode set by whoever initiates the agent run.
+     * - `'standalone'`: full conversational flow (default when omitted)
+     * - `'subagent'`: fast path — caller provides `callerContext.tableSpec`,
+     *   Requirements Analyst is skipped
+     */
+    mode?: 'standalone' | 'subagent';
+
+    /**
+     * Populated by the calling agent in subagent mode.
+     * Contains the pre-researched entity spec and invocation metadata.
+     * Ignored when `mode !== 'subagent'`.
+     */
+    callerContext?: EntityDesignerCallerContext;
+
     /**
      * Natural-language requirements document produced by the Requirements
      * Analyst sub-agent (standalone mode only).  Markdown format.
      */
     FunctionalRequirements?: string;
+
+    /**
+     * Existing entity research written by the Schema Designer after it
+     * queries the Database Research Agent in Step 1.
+     * Used to surface potential duplicates or FK targets to the user.
+     * Key matches SubAgentOutputMapping in .entity-designer.json.
+     */
+    entityResearch?: ExistingEntityResearch;
 
     /** Schema design artefacts produced by the Schema Designer sub-agent. */
     SchemaDesign?: SchemaDesignSection;
@@ -41,6 +67,84 @@ export interface EntityDesignerPayload {
 
     /** Final outcome written by the Schema Builder sub-agent. */
     EntityDesignerResult?: EntityDesignerResult;
+
+    /**
+     * Number of times the orchestrator has dispatched Entity Schema Builder.
+     * Incremented by the deterministic intercept in EntityDesignerAgent each time
+     * Intercept 3 fires. Prevents infinite retry when the builder fails — the
+     * framework discards a failed sub-agent's newPayload, so EntityDesignerResult
+     * never propagates back; without this counter the intercept would re-fire
+     * every turn until the agent run is killed.
+     *
+     * Reset to 0 when Intercept 2 fires (user re-approves, triggering fresh validation).
+     */
+    BuildAttemptCount?: number;
+}
+
+/**
+ * Context provided by the calling agent when Entity Designer runs in subagent
+ * mode (`payload.mode === 'subagent'`).
+ */
+export interface EntityDesignerCallerContext {
+    /** Display name of the calling agent — used in user-facing confirmation messages. */
+    agentName: string;
+
+    /** The entity specification the calling agent wants created or modified. */
+    tableSpec: SubagentTableSpec;
+
+    /**
+     * When true, the calling agent has already obtained explicit user approval
+     * (e.g. Agent Manager showed a design review step).  Entity Designer will
+     * skip its own confirmation prompt and proceed directly to validation.
+     * Defaults to false when omitted — Entity Designer asks the user to confirm.
+     */
+    subagentConfirmedByParent?: boolean;
+}
+
+/**
+ * Minimum entity specification passed by a calling agent in subagent mode.
+ * Schema Designer uses this as the starting point when `FunctionalRequirements`
+ * is not available.
+ */
+export interface SubagentTableSpec {
+    /** Proposed entity display name — human-readable, title-cased with spaces (e.g. "Customer Orders"). */
+    name: string;
+
+    /** One-paragraph description of what each row represents. */
+    description: string;
+
+    /**
+     * Target SQL schema.  Defaults to the UDT sandbox schema when omitted.
+     * Will be validated by the Schema Validator — blocked schemas are rejected.
+     */
+    schemaName?: string;
+
+    /** Optional column hints from the calling agent. Schema Designer refines these. */
+    columns?: Array<{
+        name: string;
+        type: string;
+        description?: string;
+        required?: boolean;
+        /** e.g. "Users.ID" — Schema Designer resolves to a proper FK definition. */
+        foreignKeyTarget?: string;
+    }>;
+}
+
+/**
+ * Research findings written by Schema Designer after it queries the Database
+ * Research Agent for existing entities that might match the user's intent.
+ */
+export interface ExistingEntityResearch {
+    /** Whether the research found any potentially matching entities. */
+    found: boolean;
+
+    /** Up to 5 closest matches returned by the Database Research Agent. */
+    matchingEntities: Array<{
+        entityName: string;
+        schemaName: string;
+        tableName: string;
+        description: string;
+    }>;
 }
 
 /**
@@ -124,24 +228,11 @@ export interface PipelineExecutionResult {
     TableName?: string;
     PipelineSteps?: PipelineStepSummary[];
     ErrorMessage?: string;
+    /** Non-fatal advisories — e.g. metadata refresh failure after a successful pipeline run. */
+    Warnings?: string[];
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-/**
- * Schemas that the Entity Designer blocks, regardless of the user's
- * authorizations.  Note: `__mj` is already blocked by RuntimeSchemaManager
- * at the DDL level; we block it here too for early-exit UX.
- *
- * These are intentionally NOT added to SchemaEngine's global blocklist because
- * other subsystems (e.g. integration adapters) legitimately write to `dbo`.
- */
-export const ENTITY_DESIGNER_BLOCKED_SCHEMAS: ReadonlySet<string> = new Set([
-    '__mj',
-    'dbo',
-    'sys',
-    'information_schema',
-]);
 
 /**
  * Column names reserved by MemberJunction's CodeGen system.  The agent must

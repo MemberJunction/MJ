@@ -92,13 +92,13 @@
   },
 
   "example_6_user_clicked_create_now": {
-    "description": "The last user message is 'Does this design look right?: create_now' — the framework formats button clicks as '[label]: [value]', so create_now means the user approved. Call Schema Validator immediately. No message, no responseForm, no confirmation — just the sub-agent call.",
+    "description": "The last user message is 'Does this design look right?: create_now' — the framework formats button clicks as '[label]: [value]', so create_now means the user approved. Call Schema Validator immediately. No message, no responseForm, no confirmation — just the sub-agent call. terminateAfter MUST be false — the parent must react to ValidationResult (success → route to Builder; failure → report errors).",
     "nextStep": {
       "type": "Sub-Agent",
       "subAgent": {
         "name": "Entity Schema Validator",
         "message": "Validate the TableDefinition in SchemaDesign.TableDefinition. Check authorization, schema blocklist, naming conflicts, and structural validity. Return ValidationResult.",
-        "terminateAfter": true
+        "terminateAfter": false
       }
     }
   },
@@ -119,6 +119,42 @@
     "description": "EntityDesignerResult is in the payload — entity was created successfully. Report it to the user and set taskComplete: true.",
     "taskComplete": true,
     "message": "Your new entity is live!\n\n- **Entity Name**: Project Milestones\n- **Table**: `__mj_UDT.ProjectMilestones`\n- **Columns**: 4 custom + 3 auto-managed (ID, CreatedAt, UpdatedAt)\n\nYou can start creating records immediately via the API or Explorer UI."
+  },
+
+  "example_10_subagent_mode_entry": {
+    "description": "payload.mode === 'subagent' and callerContext.tableSpec is present but SchemaDesign is absent. Intercept 1 fires: bypass Requirements Analyst entirely and route directly to Schema Designer with the tableSpec embedded in the message.",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Entity Schema Designer",
+        "message": "Subagent mode — called by Planning Designer Agent.\n\nSpecification:\n```json\n{\"name\": \"Customer Orders\", \"description\": \"Tracks orders placed by customers\", \"schemaName\": \"__mj_UDT\"}\n```\n\nDesign the schema for this entity. Skip DB research (Step 1) — the calling agent has already determined this is a new entity. Write SchemaDesign (Prototype + TableDefinition + ModificationType=create) to the payload and return Success.",
+        "terminateAfter": false
+      }
+    }
+  },
+
+  "example_11_subagent_confirmed_by_parent": {
+    "description": "payload.mode === 'subagent', callerContext.subagentConfirmedByParent === true, and SchemaDesign is absent. The calling agent already obtained user approval. The message includes 'User approval was already obtained' — Schema Designer should skip the approval step and proceed directly.",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Entity Schema Designer",
+        "message": "Subagent mode — called by Planning Designer Agent.\n\nSpecification:\n```json\n{\"name\": \"Customer Orders\", \"description\": \"Tracks orders placed by customers\"}\n```\n\nUser approval was already obtained by the calling agent — do not ask for confirmation. Write SchemaDesign and return Success immediately.",
+        "terminateAfter": false
+      }
+    }
+  },
+
+  "example_12_validation_passed_route_to_builder": {
+    "description": "ValidationResult.Valid === true is in the payload and EntityDesignerResult is absent. Intercept 3 fires automatically — route to Schema Builder. No user interaction needed.",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Entity Schema Builder",
+        "message": "Build the entity defined in SchemaDesign.TableDefinition. The schema has passed validation. Create the table, run the migration pipeline, and write EntityDesignerResult to the payload.",
+        "terminateAfter": false
+      }
+    }
   },
 
   "example_9_validation_failure": {
