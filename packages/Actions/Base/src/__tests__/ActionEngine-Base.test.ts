@@ -67,7 +67,14 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target
+    RegisterClass: () => (target: unknown) => target,
+    // Basic case-insensitive UUID equality — sufficient for tests that
+    // pass matching UUIDs. EntityActionEngineBase.GetActionsByEntityID
+    // uses this to compare the requested entity ID against cached rows.
+    UUIDsEqual: (a: unknown, b: unknown): boolean =>
+        typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase(),
+    NormalizeUUID: (value: unknown): string =>
+        typeof value === 'string' ? value.toLowerCase() : String(value)
 }));
 
 import {

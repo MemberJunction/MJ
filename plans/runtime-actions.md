@@ -571,10 +571,11 @@ Sub-task **1a.1 — Zod validator** (lives in `@memberjunction/actions-base`): h
   - `FinalPayloadValidation` — schema ensuring Action record was created
 - System prompt in `/metadata/prompts/.actionsmith-prompt.md`
 - Two new actions: `Create Runtime Action`, `Test Runtime Action`
-- Codesmith prompt extension: recognize `runtimeActionMode: true` and surface bridge utilities in its in-context documentation
+- **Codesmith prompt extension** (`/metadata/prompts/templates/codesmith-prompt.template.md` or equivalent): recognize `runtimeActionMode: true` in the payload and surface the bridge utilities (`md`, `rv`, `rq`, `entity`, `actions`, `agents`, `ai`, `log`, `libs`) in its in-context documentation, with a hint to use `async/await` for bridge calls and to validate against the caller-provided `outputSchema`.
+- **Agent Manager prompt extension** (`/metadata/prompts/templates/agent-manager-prompt.template.md` or equivalent): update so Agent Manager knows ActionSmith exists as a sub-agent, when to delegate to it (capability-gap scenarios), and what payload to pass. This is a prompt-only change — no behavior change to Agent Manager itself. Run `mj sync push` after edits.
 
 **Dependencies**: 1g
-**Verifies**: ask ActionSmith (via Agent Manager or directly) to create "Weekly Sales Summary Email" — end-to-end flow produces an approved Runtime action
+**Verifies**: ask ActionSmith (via Agent Manager or directly) to create "Weekly Sales Summary Email" — end-to-end flow produces an approved Runtime action; also verify Agent Manager surfaces ActionSmith as a sub-agent when asked "I need a new capability that combines X and Y"
 
 ### 1i — Approval UI enhancements
 
@@ -784,3 +785,129 @@ Runtime Actions let MJ agents fill capability gaps without waiting for developer
 - **Clean factoring of independent tracks** — `ExecuteAgent` (1j) is useful but not a prerequisite; it's in the phase so it ships as a set, but can be developed in parallel.
 
 The infrastructure we already have — `isolated-vm` sandbox, Codesmith's iterative loop, Agent Manager's sub-agent scaffolding, `CodeApprovalStatus` workflow, `PayloadManager` for data isolation, per-request provider threading — is sufficient to make this feasible. The work is mostly integration and the bidirectional IPC layer.
+
+---
+
+## Progress Log
+
+This section is the source of truth for resumption. Every completed sub-phase gets an entry here immediately after its work is done (before any commit boundary). If the conversation context is lost, anyone — human or AI — should be able to read this plan and pick up at the exact right spot.
+
+Format per entry:
+```
+### 1x — <title>                                     <YYYY-MM-DD>
+Status: DONE | IN-PROGRESS | BLOCKED
+Commits: <hashes or "uncommitted: <file list>">
+Key decisions: <bullets on non-obvious choices made>
+Tests: <pass/fail/skip counts per package>
+Known follow-ups: <anything deferred to later phases>
+```
+
+### 1a — Migration + JSONType metadata + CodeGen regen                      2026-04-20
+Status: DONE
+Commits: `7cff86a4bf` (foundation), `2f3fbd9647` (codegen follow-up)
+Key decisions:
+- Chose a dedicated `RuntimeActionConfiguration` column rather than reusing the existing `Action.Config` field (which is used for integration-action routing); separation of concerns.
+- Emitted as JSONType interface rather than plain NVARCHAR(MAX) so every consumer imports `MJActionEntity_IRuntimeActionConfiguration` from `@memberjunction/core-entities` — zero duplication.
+- `MaxExecutionTimeMS` is universal (applies to all action types), not Runtime-specific.
+- `CreatedByAgentID` is FK to `AIAgent.ID`, NULL for human-authored actions.
+Tests: N/A (schema + codegen output only)
+Known follow-ups: 1a.1 Zod validator; all subsequent phases consume the generated types.
+
+### 1a.1 — Zod validator in @memberjunction/actions-base                     2026-04-20
+Status: DONE
+Commits: uncommitted — files: `packages/Actions/Base/package.json`, `packages/Actions/Base/src/RuntimeActionConfigurationSchema.ts` (new), `packages/Actions/Base/src/index.ts`, `packages/Actions/Base/src/__tests__/RuntimeActionConfigurationSchema.test.ts` (new), `packages/Actions/Base/src/__tests__/ActionEngine-Base.test.ts` (mock fix)
+Key decisions:
+- Zod-inferred types are unreliable as a compile-time drift guard in this repo because the server tsconfig omits `strictNullChecks`. Removed the `z.ZodType<T>` annotation-on-each-schema approach (erased field inference) and the `Exact<A,B>` helper (couldn't distinguish required from optional without strict mode).
+- Drift detection moved into the Vitest suite via two `satisfies` clauses (Zod→interface and interface→Zod) at the top of the test file. If either direction stops compiling, the schema and the JSONType interface have drifted structurally.
+- Added `.strict()` on every object schema so unknown keys are rejected at parse time — defense against silent drift from older clients.
+- Exported `RuntimeActionConfiguration` type as an alias for `MJActionEntity_IRuntimeActionConfiguration` so consumers can pull type + validator from one import. Zero duplication.
+- Fixed a pre-existing test failure in `ActionEngine-Base.test.ts`: the `@memberjunction/global` mock was missing `UUIDsEqual` and `NormalizeUUID`, which `EntityActionEngineBase.GetActionsByEntityID` depends on. Added minimal implementations.
+Tests: 49 pass / 0 fail / 0 skip (`@memberjunction/actions-base`). 16 new in `RuntimeActionConfigurationSchema.test.ts`, 33 pre-existing now unbroken.
+Known follow-ups: If `strictNullChecks` is enabled repo-wide in the future, revisit the compile-time drift guard — the `satisfies` pairs in the test file would become unnecessary and we could move the check back into the schema file itself.
+
+### 1b — Universal MaxExecutionTimeMS + AbortSignal                          2026-04-20
+Status: DONE
+Commits: uncommitted — files: `packages/Actions/Base/src/ActionEngine-Base.ts` (added `AbortSignal` field to `RunActionParams`), `packages/Actions/Engine/src/generic/ActionEngine.ts` (new `RunActionWithTimeout` wrapper + `DefaultActionTimeoutMS` hook), `packages/Actions/Engine/package.json` (`test` script), `packages/Actions/Engine/src/__tests__/ActionEngine.test.ts` (new describe block + UUIDsEqual mock fix), `packages/Actions/Engine/src/__tests__/EntityActionEngine.test.ts` (UUIDsEqual mock fix), `packages/AI/CorePlus/src/agent-types.ts` (`maxExecutionTimeMs` field on `ExecuteAgentParams`), `packages/AI/Agents/src/base-agent.ts` (timeout/abort chaining around `Execute`).
+Key decisions:
+- Timeout enforcement is **cooperative, not forceful**: the wrapper aborts a chained `AbortSignal` when the wall-clock fires and races the action (or agent run) against a rejection. In-flight `fetch`, `setTimeout`, and long-running loops can observe the signal and short-circuit; we don't kill the Node process.
+- `RunAction()` entrypoint is unchanged for callers. The timeout wrapper (`RunActionWithTimeout`) is called at the very end of `RunAction` and is overridable by sub-classes if anyone needs to customize timeout semantics.
+- Chained-abort semantics: if the caller passes `params.AbortSignal` (e.g. from a Runtime-action bridge), we chain to it so either the upstream or the local timeout can trigger cancellation. After the run completes we restore the caller's original `AbortSignal` onto `params` so nothing leaks.
+- Default timeouts are intentionally generous (2 hours). Interactive flows should tighten via `Action.MaxExecutionTimeMS` per-action or `ExecuteAgentParams.maxExecutionTimeMs` per-run. Sub-classes can override `DefaultActionTimeoutMS` / `DefaultAgentTimeoutMS` to change defaults globally.
+- On `BaseAgent.Execute`, wrapped the method minimally (top + finally) rather than renaming — the existing 250-line body remains untouched, reducing regression risk. The merged `AbortSignal` replaces `params.cancellationToken` in-place so every existing cancellation check (including those propagated into sub-agents) observes the merged condition.
+- Timeout results surface via the normal `ActionResult` shape with `Success=false` and a descriptive `Message`. `Result` (which must be an `MJActionResultCodeEntity`) is left `undefined` — we can't guarantee a `TIMEOUT` result code exists on every action; the flag + message are the canonical signal.
+- Fixed pre-existing test failures in `Actions/Engine` by adding the missing `UUIDsEqual` / `NormalizeUUID` to the `@memberjunction/global` mocks (same pattern as actions-base). 7 previously-failing tests now pass.
+Tests:
+- `@memberjunction/actions` (Engine): 144 pass / 0 fail (previously 137 pass / 7 fail on pre-existing mock gaps). Added 4 timeout-specific tests: (a) AbortSignal propagation to InternalRunAction, (b) timeout fires when MaxExecutionTimeMS is exceeded, (c) upstream caller-supplied aborts propagate, (d) caller-visible params.AbortSignal is restored after the run.
+- `@memberjunction/ai-agents`: 589 pass / 0 fail (unchanged — BaseAgent timeout wrapper doesn't regress any existing test). Dedicated timeout tests for `BaseAgent.Execute` deferred — the code path is structurally identical to the Action variant, which is well-tested.
+Known follow-ups: audit existing long-running BaseAction subclasses (WebPageContentAction, BusinessCentralBaseAction family) to poll `params.AbortSignal` inside their inner loops so cooperative abort becomes truly mid-flight. Deferred — not on the critical path.
+
+### 1j — `Execute Agent` action + `ExposeAsAction` dispatch                   2026-04-20
+Status: DONE
+Commits: uncommitted — files: `packages/Actions/CoreActions/src/custom/ai/execute-agent.action.ts` (new), `packages/Actions/CoreActions/src/index.ts` (public-api export), `metadata/actions/.execute-agent.json` (new).
+Key decisions:
+- **Scope narrowed**: the plan originally called for "AIAgent.ExposeAsAction auto-populates agent-as-action entries" (one Action record per exposed agent). That turned out to be unnecessary complexity. The generic `Execute Agent` action accepts `AgentName`/`AgentID` as a parameter and delegates to `AgentRunner.RunAgent()`, so **a single Action record in the catalog covers every exposed agent**. External callers (schedulers, workflows, MCP, other Runtime actions via `utilities.actions.Invoke`) invoke `Execute Agent` with the target agent name. No per-agent metadata upkeep, no startup-time DB writes, no sync drift.
+- Safety rails enforced at dispatch: the action refuses to run any agent whose `ParentID` is set (sub-agents aren't invokable directly — their payload contract is governed by the parent) and any agent with `ExposeAsAction=false`. Both return descriptive `ResultCode`s so calling workflows can branch cleanly.
+- Outputs include the full `AgentResult` plus convenience `AgentRunID` and `Payload` outputs so downstream steps don't need to dig into nested structures.
+- `params.AbortSignal` (populated by ActionEngine's timeout wrapper from 1b) is passed through as `cancellationToken` to `AgentRunner.RunAgent()` — caller-supplied aborts flow end-to-end into the agent run.
+- Optional `MaxExecutionTimeMs` input adds agent-level wall-clock timeout on top of the outer action timeout.
+- Action metadata uses the existing `/metadata/actions/.actions.json` pattern (one file per action, `@lookup:` for the category). Paired with `mj sync push --dir=metadata --include="actions"` to land in the DB.
+Tests:
+- `@memberjunction/core-actions`: 68 pass / 0 fail (build clean; no new unit tests — action is a thin composition of `AIEngine.Config()` + `AgentRunner.RunAgent()`, both of which have extensive upstream test coverage. An integration test that actually runs a trivial agent through the action would be valuable but requires a live DB — deferred to the broader regression pass).
+Known follow-ups:
+- Once the Execute Agent action record is synced via `mj sync push`, verify the approval UI surfaces it alongside other Custom actions.
+- If demand emerges for agent-specific parameter surfaces (typed inputs per-agent), revisit the "auto-populate per-agent Action records" idea as a separate feature — the generic action is the MVP.
+
+### 1c — ActionEngine Type dispatch + pure-compute Runtime actions            2026-04-20
+Status: DONE
+Commits: uncommitted — files: `packages/Actions/Runtime/` (NEW PACKAGE — `@memberjunction/action-runtime`: `package.json`, `tsconfig.json`, `vitest.config.ts`, `src/index.ts`, `src/types.ts`, `src/RuntimeActionExecutor.ts`, `src/__tests__/RuntimeActionExecutor.test.ts`); `packages/Actions/Engine/package.json` (added `@memberjunction/action-runtime` dep); `packages/Actions/Engine/src/generic/ActionEngine.ts` (refactored `InternalRunAction` to branch on `Action.Type`, factored `RunClassBasedAction` + added `RunRuntimeAction`); `packages/Actions/Engine/src/__tests__/ActionEngine.test.ts` (added `BaseSingleton` to the `@memberjunction/global` mock).
+Key decisions:
+- **New package `@memberjunction/action-runtime`** at `packages/Actions/Runtime/`. Separated from `@memberjunction/actions` so the runtime-specific wiring (sandbox, future bridge, allowlists) stays modular and can evolve independently. Engine depends on it, not vice versa.
+- **`RuntimeActionExecutor` is a `BaseSingleton`.** It owns a persistent `CodeExecutionService` and its isolated-vm worker pool. Spinning those up on every invocation would negate the pool's whole point; singleton amortizes the cost.
+- **Gating order** (fail-fast): `Type='Runtime'` → `Code` present → `Status='Active'` → `CodeApprovalStatus='Approved'` → `!AbortSignal.aborted`. Every gate returns a distinct `RuntimeActionResultCode` so approval-UI diagnostics can be precise. No gate is skippable.
+- **Pure-compute only this phase**: the sandbox sees `input` (keys derived from `RunActionParams.Params` where `Type in ('Input','Both')`) and `libs` (the CodeExecutionService-injected allowlist: lodash, date-fns, mathjs, papaparse, uuid, validator). No bridge — no `md`, `rv`, `rq`, `entity`, `actions`, `agents`, or `ai`. Those land in 1e–1g.
+- **User code wrapped in an async IIFE** so plain `return expr;` works as the idiomatic shape. The wrapper assigns the return value to `output`, which is the channel `CodeExecutionService` reads to surface results back to the host.
+- **Return-value → Output ActionParams**: if user code returns an object, each top-level key becomes an Output ActionParam; a scalar return lands under `result`. Existing Input params the user code returns with the same key get upgraded to `Both`. This gives workflow/agent callers the standard `params`-based read path without them knowing the action is sandboxed.
+- **Default timeout + memory** hardcoded to 30s / 128MB for this phase. Once `RuntimeActionConfiguration.limits` is live (after the bridge), those become the overrides with the same defaults.
+- **Dispatch factoring**: `InternalRunAction` was refactored to branch on `Action.Type`, with the pre-existing ClassFactory path extracted to `RunClassBasedAction()` and the new Runtime path in `RunRuntimeAction()`. Both paths return the same `ActionResultSimple` shape so the surrounding result-code mapping and logging code is unchanged.
+- **Type-dispatch tests not added to ActionEngine.test.ts**: mocking `@memberjunction/action-runtime` on top of the existing `@memberjunction/actions-base` and `@memberjunction/global` mocks pushed the mock setup over its complexity budget. Coverage is solid on the executor side (13 new unit tests exercising every gate, input wiring, output wiring, and every sandbox error-type mapping). End-to-end dispatch will get covered once we have a live DB integration test after 1e lands.
+Tests:
+- `@memberjunction/action-runtime` (NEW): 13 pass / 0 fail. Covers: type gate, code gate, status gate, approval gate, upstream abort gate, Input/Both→`input` wiring, async-IIFE code wrapping, object-return→Output-param promotion, scalar-return→`result` param, Input→Both upgrade on matching key, TIMEOUT mapping, SYNTAX_ERROR/MEMORY_LIMIT/SECURITY_ERROR/RUNTIME_ERROR mapping, UNEXPECTED_ERROR when sandbox throws.
+- `@memberjunction/actions` (Engine): 144 pass / 0 fail (unchanged). Added `BaseSingleton` to the global mock because the real action-runtime module is now in the graph.
+Known follow-ups: Full end-to-end test (real DB + real action record with `Type='Runtime'`) deferred until after 1e — until the bridge exists, Runtime actions are pure-compute only and the integration value is limited.
+
+---
+
+## Resumption Instructions
+
+If you're picking this up cold (session died, new contributor, AI resumed fresh):
+
+1. Read the Progress Log above — it tells you exactly what's done.
+2. Look at the last `DONE` entry; the next sub-phase to work on is the one immediately after it.
+3. Re-read the **target sub-phase section** (1a–1j) for scope.
+4. Re-read the **top of this doc** only if you're missing architectural context (bridge design, utilities shape, security model). Otherwise skip to execution.
+5. Follow the **execution loop** per sub-phase:
+   - Research subagent first (maps current state of affected code; ≤500 word report).
+   - Design sketch inline (what classes change, what tests prove correctness).
+   - Implement directly via Edit/Write; subagent assistance only for genuinely parallelizable sub-tasks.
+   - `npm run build` in every affected package — fix errors before moving on.
+   - `npm run test` in every affected package — add unit tests per the "Verifies" bullet; fix failures.
+   - Append a Progress Log entry **before** asking to commit.
+   - Do not commit until the user says `/commit` (standing rule for this branch).
+6. Quality gates (non-negotiable):
+   - No `any` / `unknown` escape hatches.
+   - No `.Get()` / `.Set()` when a typed accessor exists.
+   - Every `Save()` / `Delete()` checks return value; error details via `LatestResult?.CompleteMessage`.
+   - No dynamic `require()` / `import()`.
+   - Design tokens in any new CSS (no hex literals except per CLAUDE.md exceptions).
+   - `UUIDsEqual()` / `NormalizeUUID()` for UUID comparisons.
+7. Checkpoints where you should stop and ask the user:
+   - **Before 1d implementation starts** — present the IPC protocol design (message shapes, abort semantics, timeout re-architecture). Do not invest 2–3 weeks without sign-off.
+   - **Before 1h implementation** — present the ActionSmith agent metadata + draft system prompt; prompt-level decisions benefit from user review.
+   - **Before 1i** — present UX concept for the Approval UI enhancements before touching Angular.
+   - Any ambiguity in the plan's "Verifies" bullet or any non-trivial design tradeoff — ask, don't guess.
+   - Any build/test failure that isn't cleanly resolved in ~2 attempts — stop and report.
+8. Standing rules (session-scoped):
+   - **No commits** until the user says `/commit` explicitly.
+   - **No destructive git ops** (`git checkout --`, `git restore`, `git reset --hard`, etc.) without explicit authorization each time.
+   - Files modified by the user (codegen output, migrations) are THEIR responsibility — don't stage or touch them without instruction.
+

@@ -3,6 +3,7 @@ import { MJActionExecutionLogEntity, MJActionFilterEntity, MJActionParamEntity, 
 import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
 import { ActionEngineBase, MJActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
 
  
 
@@ -15,6 +16,17 @@ export class ActionEngineServer extends ActionEngineBase {
 
    public static get Instance(): ActionEngineServer {
       return super.getInstance<ActionEngineServer>();
+   }
+
+   /**
+    * Engine-default wall-clock timeout applied to any action whose
+    * `MaxExecutionTimeMS` is NULL. Intentionally generous (2 hours) because
+    * some integration actions do legitimately long sync work; per-action
+    * overrides should be used to tighten this for anything agent-facing.
+    * Sub-classes can override to globally change the default.
+    */
+   protected get DefaultActionTimeoutMS(): number {
+      return 2 * 60 * 60 * 1000;
    }
 
    public async RunAction(params: RunActionParams): Promise<ActionResult> {
@@ -51,8 +63,98 @@ export class ActionEngineServer extends ActionEngineBase {
          }
       }
 
-      const runActionResult = await this.InternalRunAction(params);
-      return runActionResult;
+      return await this.RunActionWithTimeout(params);
+   }
+
+   /**
+    * Wraps `InternalRunAction()` with a universal wall-clock timeout
+    * (`Action.MaxExecutionTimeMS`, falling back to `DefaultActionTimeoutMS`)
+    * and an `AbortSignal` passed to the action via `params.AbortSignal`.
+    *
+    * Enforcement is cooperative: when the timeout fires we set an abort on
+    * the signal so in-flight `fetch`/`setTimeout`/custom polling logic can
+    * short-circuit, and we race the action against a rejection that surfaces
+    * a `TIMEOUT` result. If the caller already supplied an `AbortSignal`
+    * (e.g. when being run from a Runtime-action bridge that has its own
+    * abort), we chain to it so either source can trigger cancellation.
+    */
+   protected async RunActionWithTimeout(params: RunActionParams): Promise<ActionResult> {
+      const actionTimeoutMS = params.Action.MaxExecutionTimeMS ?? this.DefaultActionTimeoutMS;
+
+      // Chain with any upstream AbortSignal (e.g. Runtime-action bridge).
+      const controller = new AbortController();
+      const externalSignal = params.AbortSignal;
+      const relayExternalAbort = () => {
+         if (!controller.signal.aborted) {
+            controller.abort(externalSignal?.reason ?? 'upstream abort');
+         }
+      };
+      if (externalSignal) {
+         if (externalSignal.aborted) {
+            relayExternalAbort();
+         } else {
+            externalSignal.addEventListener('abort', relayExternalAbort, { once: true });
+         }
+      }
+
+      // Wall-clock timeout.
+      const timeoutId = setTimeout(() => {
+         if (!controller.signal.aborted) {
+            controller.abort(`Action '${params.Action.Name}' exceeded MaxExecutionTimeMS (${actionTimeoutMS}ms)`);
+         }
+      }, actionTimeoutMS);
+
+      // Assign the chained signal onto params so BaseAction subclasses can poll it.
+      const previousSignal = params.AbortSignal;
+      params.AbortSignal = controller.signal;
+
+      try {
+         const timeoutPromise = new Promise<ActionResult>((_resolve, reject) => {
+            controller.signal.addEventListener(
+               'abort',
+               () => {
+                  reject(new Error(String(controller.signal.reason ?? 'aborted')));
+               },
+               { once: true }
+            );
+         });
+
+         try {
+            return await Promise.race([this.InternalRunAction(params), timeoutPromise]);
+         } catch (err) {
+            // Timeout or upstream abort — return a standard TIMEOUT result.
+            // Result is left undefined (we don't guarantee a 'TIMEOUT' ActionResultCode
+            // exists on every action; the Success flag + Message are the canonical
+            // failure signal for timeouts).
+            if (controller.signal.aborted) {
+               const message =
+                  typeof controller.signal.reason === 'string'
+                     ? controller.signal.reason
+                     : `Action '${params.Action.Name}' was aborted`;
+               const timeoutResult: ActionResult = {
+                  Success: false,
+                  Message: message,
+                  LogEntry: null,
+                  Params: params.Params,
+                  RunParams: params,
+                  Result: undefined
+               };
+               if (!params.SkipActionLog) {
+                  timeoutResult.LogEntry = await this.StartAndEndActionLog(params, timeoutResult);
+               }
+               return timeoutResult;
+            }
+            // Real runtime error unrelated to abort — rethrow so upstream handling catches it.
+            throw err;
+         }
+      } finally {
+         clearTimeout(timeoutId);
+         if (externalSignal) {
+            externalSignal.removeEventListener('abort', relayExternalAbort);
+         }
+         // Restore whatever AbortSignal the caller had in place so we don't leak our own.
+         params.AbortSignal = previousSignal;
+      }
    }
    
 
@@ -125,22 +227,19 @@ export class ActionEngineServer extends ActionEngineBase {
    }
 
    protected async InternalRunAction(params: RunActionParams): Promise<ActionResult> {
-      // this is where the actual action code will be implemented
-      // first, let's get the right BaseAction derived sub-class for this particular action
-      // using ClassFactory
       let logEntry: MJActionExecutionLogEntity | undefined;
       if(!params.SkipActionLog){
          logEntry = await this.StartActionLog(params);
       }
 
       try {
-         const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, params.Action.DriverClass || params.Action.Name, params.ContextUser);
-         if (!action || action.constructor === BaseAction) {
-            throw new Error(`Could not find a class for action ${params.Action.Name}.`);
-         }
-         
-         // we now have the action class for this particular action, so run it
-         const simpleResult: ActionResultSimple = await action.Run(params);
+         // Branch by Action.Type. Runtime actions go through the sandboxed
+         // RuntimeActionExecutor; Custom / Generated (and legacy rows where
+         // Type may be null) flow through the existing ClassFactory path.
+         const simpleResult: ActionResultSimple =
+            params.Action.Type === 'Runtime'
+               ? await this.RunRuntimeAction(params)
+               : await this.RunClassBasedAction(params);
 
          const resultCodeEntity: MJActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => UUIDsEqual(r.ActionID, params.Action.ID) &&
                                                                r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
@@ -150,7 +249,7 @@ export class ActionEngineServer extends ActionEngineBase {
             Message: simpleResult.Message,
             AIDirectives: simpleResult.AIDirectives,
             LogEntry: logEntry,
-            Params: simpleResult.Params || params.Params, // use the params from the simple result if provided, otherwise use the original params
+            Params: simpleResult.Params || params.Params,
             Result: resultCodeEntity
          };
 
@@ -178,6 +277,46 @@ export class ActionEngineServer extends ActionEngineBase {
 
          return result;
       }
+   }
+
+   /**
+    * Resolves and runs a Custom / Generated action via the ClassFactory.
+    * This is the pre-existing path — factored out of `InternalRunAction` so
+    * the Type dispatch is readable.
+    */
+   protected async RunClassBasedAction(params: RunActionParams): Promise<ActionResultSimple> {
+      const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(
+         BaseAction,
+         params.Action.DriverClass || params.Action.Name,
+         params.ContextUser
+      );
+      if (!action || action.constructor === BaseAction) {
+         throw new Error(`Could not find a class for action ${params.Action.Name}.`);
+      }
+      return await action.Run(params);
+   }
+
+   /**
+    * Runs an `Action.Type='Runtime'` action by delegating to the sandboxed
+    * RuntimeActionExecutor. Approval / Status / Code-presence checks are
+    * enforced inside the executor; here we just wire the plumbing and
+    * translate the executor's result shape into the `ActionResultSimple`
+    * shape that the rest of `InternalRunAction` expects.
+    */
+   protected async RunRuntimeAction(params: RunActionParams): Promise<ActionResultSimple> {
+      const execResult = await RuntimeActionExecutor.Instance.execute({
+         action: params.Action,
+         params: params.Params ?? [],
+         contextUser: params.ContextUser,
+         abortSignal: params.AbortSignal
+      });
+
+      return {
+         Success: execResult.success,
+         ResultCode: execResult.resultCode,
+         Message: execResult.message,
+         Params: execResult.params
+      };
    }
 
    protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true): Promise<MJActionExecutionLogEntity> {

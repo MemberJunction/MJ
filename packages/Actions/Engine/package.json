@@ -11,7 +11,8 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "echo \"No tests configured yet\""
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -23,6 +24,7 @@
     "@memberjunction/global": "5.28.0",
     "@memberjunction/core": "5.28.0",
     "@memberjunction/actions-base": "5.28.0",
+    "@memberjunction/action-runtime": "5.28.0",
     "@memberjunction/core-entities": "5.28.0",
     "@memberjunction/ai": "5.28.0",
     "@memberjunction/ai-core-plus": "5.28.0",

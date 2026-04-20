@@ -87,6 +87,7 @@ export * from './custom/workflow/delay.action';
 
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';
+export * from './custom/ai/execute-agent.action';
 export * from './custom/ai/summarize-content.action';
 export * from './custom/ai/find-candidate-agents.action';
 export * from './custom/ai/find-candidate-actions.action';

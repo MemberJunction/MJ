@@ -1,8 +1,8 @@
 {
-  "name": "@memberjunction/actions-base",
+  "name": "@memberjunction/action-runtime",
   "type": "module",
   "version": "5.28.0",
-  "description": "Base Classes for MemberJunction Actions. This library is used on both server and network nodes.",
+  "description": "Runtime Actions executor for MemberJunction — runs Action.Type='Runtime' JavaScript payloads inside the existing isolated-vm sandbox and (in a later phase) exposes the MJ bridge utilities to sandbox code.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -24,7 +24,8 @@
     "@memberjunction/global": "5.28.0",
     "@memberjunction/core": "5.28.0",
     "@memberjunction/core-entities": "5.28.0",
-    "zod": "~3.24.4"
+    "@memberjunction/actions-base": "5.28.0",
+    "@memberjunction/code-execution": "5.28.0"
   },
   "repository": {
     "type": "git",

@@ -1272,6 +1272,21 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     clientToolTimeoutMs?: number;
 
+    /**
+     * Optional wall-clock timeout for the entire agent run, in milliseconds.
+     * When set, BaseAgent wraps the execution in an internal AbortController
+     * that fires after this many ms. The abort propagates through the existing
+     * `cancellationToken` chain — sub-agents, pending prompt calls, and
+     * actions (which carry their own `RunActionParams.AbortSignal`) all see
+     * the cancellation. On timeout, the run terminates with an Aborted result
+     * whose message identifies the timeout origin.
+     *
+     * When omitted, BaseAgent falls back to its `DefaultAgentTimeoutMS`
+     * (currently 2 hours) — generous by default because some Loop agents do
+     * legitimate long iteration; tighten per-run for anything interactive.
+     */
+    maxExecutionTimeMs?: number;
+
 }
 
 /**

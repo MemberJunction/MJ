@@ -90,6 +90,21 @@ vi.mock('@memberjunction/global', () => ({
         }
     }),
     RegisterClass: () => (target: Function) => target,
+    // Case-insensitive UUID equality. Used by ActionEngineServer when
+    // matching action result codes and by EntityActionInvocation*.MapParams.
+    UUIDsEqual: (a: unknown, b: unknown): boolean =>
+        typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase(),
+    NormalizeUUID: (value: unknown): string =>
+        typeof value === 'string' ? value.toLowerCase() : String(value),
+    // Minimal BaseSingleton — transitive dep from @memberjunction/action-runtime
+    // which is pulled in as part of the ActionEngine module graph even though
+    // the existing tests don't exercise Runtime actions directly.
+    BaseSingleton: class BaseSingletonMock<T> {
+        protected constructor() {}
+        protected static getInstance<U>(this: new () => U): U {
+            return new this();
+        }
+    },
 }));
 
 // Mock @memberjunction/actions-base
@@ -688,6 +703,117 @@ describe('ActionEngineServer', () => {
         it('should return an instance from static getter', () => {
             const instance = ActionEngineServer.Instance;
             expect(instance).toBeDefined();
+        });
+    });
+
+    // ========================================================================
+    // Universal MaxExecutionTimeMS + AbortSignal (Phase 1b)
+    // ========================================================================
+    describe('RunActionWithTimeout', () => {
+        // Stand-up helpers: bypass validation/filter plumbing so tests only
+        // exercise the timeout wrapper.
+        beforeEach(() => {
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(true as never);
+        });
+
+        function buildParams(
+            overrides: Partial<{ MaxExecutionTimeMS: number | null; AbortSignal: AbortSignal; Name: string }> = {}
+        ) {
+            return {
+                Action: {
+                    ID: 'action-1',
+                    Name: overrides.Name ?? 'Slow Test Action',
+                    DriverClass: 'TestDriver',
+                    MaxExecutionTimeMS: overrides.MaxExecutionTimeMS ?? null
+                },
+                ContextUser: { ID: 'user-1', Name: 'Test' },
+                Filters: [],
+                Params: [],
+                SkipActionLog: true,
+                AbortSignal: overrides.AbortSignal
+            };
+        }
+
+        it('propagates params.AbortSignal to InternalRunAction', async () => {
+            let observedSignal: AbortSignal | undefined;
+            const internalSpy = vi
+                .spyOn(engine as never, 'InternalRunAction' as never)
+                .mockImplementation(async (passedParams: never) => {
+                    observedSignal = (passedParams as { AbortSignal?: AbortSignal }).AbortSignal;
+                    return {
+                        Success: true,
+                        Message: 'ok',
+                        LogEntry: null,
+                        Params: [],
+                        RunParams: passedParams
+                    } as never;
+                });
+
+            const params = buildParams();
+            await engine.RunAction(params as unknown as Record<string, Function>);
+
+            expect(internalSpy).toHaveBeenCalledTimes(1);
+            expect(observedSignal).toBeInstanceOf(AbortSignal);
+            expect(observedSignal?.aborted).toBe(false);
+        });
+
+        it('returns Success=false and a timeout message when MaxExecutionTimeMS fires first', async () => {
+            // InternalRunAction sleeps far longer than the timeout — the wrapper
+            // should race ahead and return a TIMEOUT-style result.
+            vi.spyOn(engine as never, 'InternalRunAction' as never).mockImplementation(
+                () =>
+                    new Promise((resolve) => {
+                        setTimeout(() => {
+                            resolve({ Success: true, Message: 'late', LogEntry: null, Params: [], RunParams: null } as never);
+                        }, 500);
+                    })
+            );
+
+            const params = buildParams({ MaxExecutionTimeMS: 50, Name: 'Times Out' });
+            const result = await engine.RunAction(params as unknown as Record<string, Function>);
+
+            expect(result.Success).toBe(false);
+            expect(result.Message).toMatch(/MaxExecutionTimeMS \(50ms\)/);
+            expect(result.Message).toContain('Times Out');
+        });
+
+        it('returns Success=false with the upstream reason when the caller aborts via params.AbortSignal', async () => {
+            const upstream = new AbortController();
+            vi.spyOn(engine as never, 'InternalRunAction' as never).mockImplementation(
+                () =>
+                    new Promise((resolve) => {
+                        setTimeout(() => {
+                            resolve({ Success: true, Message: 'late', LogEntry: null, Params: [], RunParams: null } as never);
+                        }, 500);
+                    })
+            );
+
+            const params = buildParams({ AbortSignal: upstream.signal });
+            // Fire the upstream abort shortly after the call starts.
+            setTimeout(() => upstream.abort('user-initiated cancel'), 20);
+            const result = await engine.RunAction(params as unknown as Record<string, Function>);
+
+            expect(result.Success).toBe(false);
+            expect(result.Message).toBe('user-initiated cancel');
+        });
+
+        it('does not corrupt caller-visible params after the run', async () => {
+            vi.spyOn(engine as never, 'InternalRunAction' as never).mockResolvedValue({
+                Success: true,
+                Message: 'ok',
+                LogEntry: null,
+                Params: [],
+                RunParams: null
+            } as never);
+
+            const upstream = new AbortController();
+            const params = buildParams({ AbortSignal: upstream.signal });
+            await engine.RunAction(params as unknown as Record<string, Function>);
+
+            // The wrapper should have restored the original AbortSignal (or undefined)
+            // on `params` so callers don't see our internal merged signal leaked.
+            expect(params.AbortSignal).toBe(upstream.signal);
         });
     });
 });
