@@ -1,13 +1,14 @@
 /**
  * @module database-schema-validator
- * @description Code-based sub-agent that deterministically validates a
- * TableDefinition before it is handed to the Schema Builder.
+ * @description Code-based sub-agent that deterministically validates all
+ * TableDefinitions in SchemaDesign.Tables[] before they are handed to the
+ * Schema Builder.
  *
  * No LLM is invoked — all checks are pure TypeScript so that errors are
  * consistent, fast, and audit-able.
  *
  * Security layers enforced here (in order):
- *  1. MJ Authorization check (contextUser must hold the required auth)
+ *  1. MJ Authorization check (contextUser must hold the required auth for EACH table)
  *  2. Database Designer schema blocklist (dbo, sys, __mj, INFORMATION_SCHEMA)
  *  3. SchemaEngine.Validate() — identifier safety, non-empty column list
  *  4. Naming conflict check — no duplicate BaseTable or EntityName in MJ
@@ -24,11 +25,11 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 import { BaseDatabaseDesignerCodeAgent } from './base-database-designer-code-agent.js';
 import { AuthorizationEvaluator, LogError, Metadata, RunView } from '@memberjunction/core';
-import type { TableDefinition } from '@memberjunction/schema-engine';
 
 import {
     type DatabaseDesignerPayload,
     type EntityValidationResult,
+    type SchemaDesignEntry,
     AUTHORIZATIONS,
     UDT_SCHEMA_NAME,
     UDT_SETTINGS,
@@ -54,20 +55,25 @@ export class DatabaseDesignerSchemaValidator extends BaseDatabaseDesignerCodeAge
     ): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }> {
         const payload = params.payload as DatabaseDesignerPayload ?? {};
 
-        const tableDefinition = payload.SchemaDesign?.TableDefinition;
-        if (!tableDefinition) {
+        const tables = payload.SchemaDesign?.Tables;
+        if (!tables?.length) {
             return this.buildCodeFailure(
-                'Schema Validator received no TableDefinition in payload.SchemaDesign. ' +
-                'The Schema Designer sub-agent must populate this field before validation can proceed.'
+                'Schema Validator received no Tables in payload.SchemaDesign. ' +
+                'The Schema Designer sub-agent must populate SchemaDesign.Tables[] before validation can proceed.'
             );
         }
 
-        const authError = await this.checkAuthorization(tableDefinition, payload, params);
-        if (authError) {
-            return this.buildCodeFailure(authError);
+        // Guard: assert all expected authorization records exist at runtime.
+        this.assertAuthorizationsExist();
+
+        for (const entry of tables) {
+            const authError = await this.checkAuthorizationForEntry(entry, payload, params);
+            if (authError) {
+                return this.buildCodeFailure(authError);
+            }
         }
 
-        const validationResult = await this.runValidationChecks(tableDefinition, payload, params);
+        const validationResult = await this.runBatchValidationChecks(tables, params);
 
         const newPayload: DatabaseDesignerPayload = {
             ...payload,
@@ -86,20 +92,12 @@ export class DatabaseDesignerSchemaValidator extends BaseDatabaseDesignerCodeAge
     // ─── Authorization ────────────────────────────────────────────────────
 
     /**
-     * Determine which authorization is required for the requested operation
-     * and check whether `contextUser` holds it.
-     *
-     * Returns a non-empty error string on failure, null on success.
+     * Assert that all expected authorization records exist in Metadata at runtime.
+     * Logs an error (but does not throw) when a record is missing — a missing record
+     * means the schema-management metadata was not pushed.
      */
-    private async checkAuthorization(
-        tableDefinition: TableDefinition,
-        payload: DatabaseDesignerPayload,
-        params: ExecuteAgentParams
-    ): Promise<string | null> {
+    private assertAuthorizationsExist(): void {
         const md = new Metadata();
-
-        // Guard: assert all expected authorization records exist at runtime.
-        // A missing record means the schema-management metadata was not pushed.
         for (const authName of Object.values(AUTHORIZATIONS)) {
             if (!md.Authorizations.find(a => a.Name === authName)) {
                 LogError(
@@ -109,8 +107,22 @@ export class DatabaseDesignerSchemaValidator extends BaseDatabaseDesignerCodeAge
                 );
             }
         }
+    }
 
-        const authName = await this.resolveRequiredAuthorization(tableDefinition, payload, params);
+    /**
+     * Determine which authorization is required for the requested operation on a
+     * single entry and check whether `contextUser` holds it.
+     *
+     * Returns a non-empty error string on failure, null on success.
+     */
+    private async checkAuthorizationForEntry(
+        entry: SchemaDesignEntry,
+        payload: DatabaseDesignerPayload,
+        params: ExecuteAgentParams
+    ): Promise<string | null> {
+        const md = new Metadata();
+
+        const authName = await this.resolveRequiredAuthorizationForEntry(entry, payload, params);
         if (!authName) {
             return null;
         }
@@ -133,7 +145,8 @@ export class DatabaseDesignerSchemaValidator extends BaseDatabaseDesignerCodeAge
     }
 
     /**
-     * Map the requested operation to the finest-grained authorization that covers it.
+     * Map the requested operation for a single entry to the finest-grained
+     * authorization that covers it.
      *
      * For alter operations, reads the `MJ:UDT:Owner` EntitySettings record to
      * determine whether the user is the entity's owner:
@@ -142,20 +155,20 @@ export class DatabaseDesignerSchemaValidator extends BaseDatabaseDesignerCodeAge
      * - No `MJ:UDT:Source` record → entity was not created via Database Designer;
      *   fall back to `MODIFY_ANY_UDT_ENTITIES` (admin-only modification).
      */
-    private async resolveRequiredAuthorization(
-        tableDefinition: TableDefinition,
-        payload: DatabaseDesignerPayload,
+    private async resolveRequiredAuthorizationForEntry(
+        entry: SchemaDesignEntry,
+        _payload: DatabaseDesignerPayload,
         params: ExecuteAgentParams
     ): Promise<string | null> {
-        const modificationType = payload.SchemaDesign?.ModificationType ?? 'create';
+        const modificationType = entry.ModificationType ?? 'create';
 
         if (modificationType === 'create') {
-            return tableDefinition.SchemaName.toLowerCase() === UDT_SCHEMA_NAME.toLowerCase()
+            return entry.TableDefinition.SchemaName.toLowerCase() === UDT_SCHEMA_NAME.toLowerCase()
                 ? AUTHORIZATIONS.CREATE_IN_UDT_SCHEMA
                 : AUTHORIZATIONS.CREATE_IN_CUSTOM_SCHEMA;
         }
 
-        return this.resolveModifyAuthorization(payload, params);
+        return this.resolveModifyAuthorization(entry, params);
     }
 
     /**
@@ -166,10 +179,10 @@ export class DatabaseDesignerSchemaValidator extends BaseDatabaseDesignerCodeAge
      * whenever ownership cannot be confirmed, ensuring a safe default.
      */
     private async resolveModifyAuthorization(
-        payload: DatabaseDesignerPayload,
+        entry: SchemaDesignEntry,
         params: ExecuteAgentParams
     ): Promise<string> {
-        const existingEntityID = payload.SchemaDesign?.ExistingEntityID;
+        const existingEntityID = entry.ExistingEntityID;
         if (!existingEntityID) {
             // No entity ID — can't check ownership; require elevated permission
             return AUTHORIZATIONS.MODIFY_ANY_UDT_ENTITIES;
@@ -207,18 +220,18 @@ export class DatabaseDesignerSchemaValidator extends BaseDatabaseDesignerCodeAge
 
     /**
      * Delegate all deterministic validation checks to `DatabaseSchemaValidationService`.
+     * Uses the batch validation path so cross-table checks (duplicate EntityName,
+     * duplicate TableName within schema) are also enforced.
+     *
      * The service is the single source of truth for validation logic so that the
      * agent path and the action path (`ValidateEntitySchemaAction`) stay in sync.
      */
-    private async runValidationChecks(
-        tableDefinition: TableDefinition,
-        payload: DatabaseDesignerPayload,
+    private async runBatchValidationChecks(
+        tables: SchemaDesignEntry[],
         params: ExecuteAgentParams
     ): Promise<EntityValidationResult> {
         const service = new DatabaseSchemaValidationService();
-        const modificationType = payload.SchemaDesign?.ModificationType ?? 'create';
-        return service.validate(tableDefinition, params.contextUser, modificationType);
+        return service.validateBatch(tables, params.contextUser);
     }
 
 }
-

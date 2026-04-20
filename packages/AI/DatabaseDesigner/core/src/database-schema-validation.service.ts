@@ -32,6 +32,7 @@ import {
     UDT_SCHEMA_NAME,
     escapeSqlLiteral,
     type EntityValidationResult,
+    type SchemaDesignEntry,
 } from './interfaces.js';
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -85,6 +86,105 @@ export class DatabaseSchemaValidationService {
         }
 
         return { Valid: errors.length === 0, Errors: errors, Warnings: warnings };
+    }
+
+    /**
+     * Run validation for all tables in a batch (SchemaDesignSection.Tables[]).
+     * Each entry is validated individually via the existing `validate()` method;
+     * errors from all entries are aggregated into a single EntityValidationResult.
+     *
+     * For single-table batches, delegates directly to `validate()` without overhead.
+     *
+     * @param tables      The SchemaDesignEntry array from SchemaDesignSection.Tables.
+     * @param contextUser The requesting user, forwarded to RunView for DB checks.
+     * @returns Aggregated result — Valid is false if ANY table has errors.
+     */
+    public async validateBatch(
+        tables: SchemaDesignEntry[],
+        contextUser: UserInfo | undefined
+    ): Promise<EntityValidationResult> {
+        if (tables.length === 0) {
+            return { Valid: false, Errors: ['No tables provided for validation.'], Warnings: [] };
+        }
+
+        // Single-table shortcut — avoid cross-table overhead for the common case
+        if (tables.length === 1) {
+            return this.validate(
+                tables[0].TableDefinition,
+                contextUser,
+                tables[0].ModificationType ?? 'create'
+            );
+        }
+
+        // Check for duplicate EntityName or TableName within the batch before running
+        // per-table validation — duplicates would cause silent CodeGen conflicts.
+        const dupErrors = this.checkBatchDuplicates(tables);
+        if (dupErrors.length > 0) {
+            return { Valid: false, Errors: dupErrors, Warnings: [] };
+        }
+
+        const allErrors: string[] = [];
+        const allWarnings: string[] = [];
+
+        for (const entry of tables) {
+            const result = await this.validate(
+                entry.TableDefinition,
+                contextUser,
+                entry.ModificationType ?? 'create'
+            );
+            const prefix = `[${entry.TableDefinition.TableName}]`;
+            allErrors.push(...result.Errors.map(e => `${prefix} ${e}`));
+            allWarnings.push(...result.Warnings.map(w => `${prefix} ${w}`));
+
+            // Short-circuit on a blocked schema — subsequent checks would be misleading
+            const isBlocked = RuntimeSchemaManager.Instance
+                .GetAllProtectedSchemas()
+                .has(entry.TableDefinition.SchemaName.toLowerCase());
+            if (!result.Valid && isBlocked) {
+                return { Valid: false, Errors: allErrors, Warnings: allWarnings };
+            }
+        }
+
+        return { Valid: allErrors.length === 0, Errors: allErrors, Warnings: allWarnings };
+    }
+
+    // ─── Batch helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Return errors for any duplicate EntityName or TableName (within the same
+     * schema) across the batch.  Called before per-table validation so the caller
+     * sees a clear structural error rather than a confusing DB conflict.
+     */
+    private checkBatchDuplicates(tables: SchemaDesignEntry[]): string[] {
+        const errors: string[] = [];
+        const seenEntityNames = new Map<string, number>(); // lowercased name → first index
+        const seenTableKeys = new Map<string, number>();   // "schema.table" → first index
+
+        for (let i = 0; i < tables.length; i++) {
+            const td = tables[i].TableDefinition;
+            const entityKey = td.EntityName.toLowerCase();
+            const tableKey = `${td.SchemaName.toLowerCase()}.${td.TableName.toLowerCase()}`;
+
+            if (seenEntityNames.has(entityKey)) {
+                errors.push(
+                    `Duplicate entity name '${td.EntityName}' in batch (entries ${seenEntityNames.get(entityKey)! + 1} and ${i + 1}). ` +
+                    `Each entity must have a unique name.`
+                );
+            } else {
+                seenEntityNames.set(entityKey, i);
+            }
+
+            if (seenTableKeys.has(tableKey)) {
+                errors.push(
+                    `Duplicate table '${td.SchemaName}.${td.TableName}' in batch (entries ${seenTableKeys.get(tableKey)! + 1} and ${i + 1}). ` +
+                    `Each table must be unique within the batch.`
+                );
+            } else {
+                seenTableKeys.set(tableKey, i);
+            }
+        }
+
+        return errors;
     }
 
     // ─── Validation checks ────────────────────────────────────────────────────

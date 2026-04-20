@@ -1,12 +1,13 @@
 /**
  * @module database-schema-builder
  * @description Code-based sub-agent that executes the RSU pipeline to
- * materialise a validated TableDefinition as a live MemberJunction entity.
+ * materialise all validated TableDefinitions in SchemaDesign.Tables[] as live
+ * MemberJunction entities.
  *
  * Execution sequence:
  *  1. Guard: ValidationResult must exist and be Valid (fail fast with distinct messages)
- *  2. Guard: SchemaDesign.TableDefinition must be present
- *  3. Delegate to DatabaseDesignerPipelineExecutor.CreateEntity() or ModifyEntity()
+ *  2. Guard: SchemaDesign.Tables[] must be present and non-empty, each with a TableDefinition
+ *  3. Delegate to DatabaseDesignerPipelineExecutor.CreateEntitiesBatch()
  *  4. Write DatabaseDesignerResult to payload
  *
  * No LLM is invoked — this is pure orchestration of the SchemaEngine and
@@ -19,11 +20,11 @@ import { RegisterClass } from '@memberjunction/global';
 
 import { BaseDatabaseDesignerCodeAgent } from './base-database-designer-code-agent.js';
 
-import { DatabaseDesignerPipelineExecutor, type PipelineExecutionOptions } from '../pipeline-executor.js';
+import { DatabaseDesignerPipelineExecutor, type BatchTableInput, type PipelineExecutionOptions } from '../pipeline-executor.js';
 import type {
     DatabaseDesignerPayload,
     DatabaseDesignerResult,
-    PipelineExecutionResult,
+    SchemaDesignEntry,
 } from '../interfaces.js';
 import { UDT_SETTINGS } from '../interfaces.js';
 
@@ -36,7 +37,8 @@ export class DatabaseDesignerSchemaBuilder extends BaseDatabaseDesignerCodeAgent
 
     /**
      * Override the Loop-agent execution loop entirely.
-     * Drives the RSU pipeline and writes the outcome to `DatabaseDesignerResult`.
+     * Drives the RSU pipeline for all tables and writes the batch outcome to
+     * `DatabaseDesignerResult`.
      */
     protected override async executeAgentInternal<P = DatabaseDesignerPayload>(
         params: ExecuteAgentParams,
@@ -49,29 +51,30 @@ export class DatabaseDesignerSchemaBuilder extends BaseDatabaseDesignerCodeAgent
             return this.buildCodeFailure(guardError);
         }
 
-        const tableDefinition = payload.SchemaDesign!.TableDefinition!;
-        const modificationType = payload.SchemaDesign!.ModificationType ?? 'create';
+        // validatePreconditions guarantees tables is non-empty and each entry has TableDefinition
+        const tables = payload.SchemaDesign!.Tables!;
         const pipelineOptions = this.buildPipelineOptions(payload);
 
-        let execResult: PipelineExecutionResult;
-        if (modificationType === 'alter') {
-            execResult = await this.runModify(payload, params, pipelineOptions);
-        } else {
-            execResult = await DatabaseDesignerPipelineExecutor.CreateEntity(
-                tableDefinition,
-                params.contextUser,
-                pipelineOptions
-            );
-        }
+        const batchInputs: BatchTableInput[] = this.buildBatchInputs(tables);
+
+        const batchResult = await DatabaseDesignerPipelineExecutor.CreateEntitiesBatch(
+            batchInputs,
+            params.contextUser,
+            pipelineOptions
+        );
 
         const designerResult: DatabaseDesignerResult = {
-            Success: execResult.Success,
-            EntityName: execResult.EntityName,
-            EntityID: execResult.EntityID,
-            SchemaName: execResult.SchemaName,
-            TableName: execResult.TableName,
-            PipelineSteps: execResult.PipelineSteps,
-            ErrorMessage: execResult.ErrorMessage,
+            Success: batchResult.Success,
+            Results: batchResult.Results.map(r => ({
+                Success: r.Success,
+                EntityName: r.EntityName,
+                EntityID: r.EntityID,
+                SchemaName: r.SchemaName,
+                TableName: r.TableName,
+                PipelineSteps: r.PipelineSteps,
+                ErrorMessage: r.ErrorMessage,
+            })),
+            Warnings: batchResult.Warnings,
         };
 
         const newPayload: DatabaseDesignerPayload = {
@@ -79,16 +82,18 @@ export class DatabaseDesignerSchemaBuilder extends BaseDatabaseDesignerCodeAgent
             DatabaseDesignerResult: designerResult,
         };
 
-        if (!execResult.Success) {
-            return this.buildCodeFailure(
-                execResult.ErrorMessage ?? 'Pipeline failed without error message',
-                newPayload as P
-            );
+        if (!batchResult.Success) {
+            const failedErrors = batchResult.Results
+                .filter(r => !r.Success)
+                .map(r => r.ErrorMessage ?? 'Pipeline failed without error message')
+                .join('; ');
+            return this.buildCodeFailure(failedErrors, newPayload as P);
         }
 
+        const successCount = batchResult.Results.filter(r => r.Success).length;
         return this.buildCodeSuccess(
             newPayload as P,
-            `Entity '${execResult.EntityName ?? tableDefinition.EntityName}' created/modified successfully`
+            `${successCount}/${tables.length} entity/entities created/modified successfully`
         );
     }
 
@@ -98,9 +103,10 @@ export class DatabaseDesignerSchemaBuilder extends BaseDatabaseDesignerCodeAgent
      * Verify all pre-conditions for pipeline execution are satisfied.
      * Returns an error string when a condition is violated, null otherwise.
      *
-     * Distinguishes between two separate failure modes:
+     * Distinguishes between three separate failure modes:
      *  - ValidationResult absent → Schema Validator never ran
      *  - ValidationResult.Valid = false → Validator ran but found errors
+     *  - SchemaDesign.Tables[] missing/empty → Schema Designer never ran
      */
     private validatePreconditions(payload: DatabaseDesignerPayload): string | null {
         if (!payload.ValidationResult) {
@@ -110,46 +116,28 @@ export class DatabaseDesignerSchemaBuilder extends BaseDatabaseDesignerCodeAgent
             const errors = payload.ValidationResult.Errors.join('; ');
             return `Schema Builder cannot proceed: validation failed. Errors: ${errors}`;
         }
-        if (!payload.SchemaDesign?.TableDefinition) {
-            return 'Schema Builder cannot proceed: SchemaDesign.TableDefinition is missing from payload.';
+        const tables = payload.SchemaDesign?.Tables;
+        if (!tables?.length) {
+            return 'Schema Builder cannot proceed: SchemaDesign.Tables[] is missing or empty.';
+        }
+        if (tables.some(t => !t.TableDefinition)) {
+            return 'Schema Builder cannot proceed: one or more SchemaDesignEntry items have a missing TableDefinition.';
         }
         return null;
     }
 
-    // ─── Modify path ─────────────────────────────────────────────────────
+    // ─── Batch input builder ─────────────────────────────────────────────
 
     /**
-     * For ALTER operations, load the existing table structure from the DB
-     * so SchemaEvolution can diff it against the desired state.
-     *
-     * Delegates table-info loading to DatabaseDesignerPipelineExecutor so there
-     * is a single, correct implementation shared with the Modify Entity action.
+     * Map SchemaDesign.Tables[] to BatchTableInput[] for the pipeline executor.
+     * Called only after validatePreconditions() passes, so TableDefinition is guaranteed.
      */
-    private async runModify(
-        payload: DatabaseDesignerPayload,
-        params: ExecuteAgentParams,
-        options: PipelineExecutionOptions
-    ): Promise<PipelineExecutionResult> {
-        const tableDefinition = payload.SchemaDesign!.TableDefinition!;
-        const existingTableInfo = await DatabaseDesignerPipelineExecutor.LoadExistingTableInfo(
-            tableDefinition.SchemaName,
-            tableDefinition.TableName,
-            params.contextUser
-        );
-
-        if (!existingTableInfo) {
-            return {
-                Success: false,
-                ErrorMessage: `Cannot modify entity: table '${tableDefinition.SchemaName}.${tableDefinition.TableName}' was not found in the database.`,
-            };
-        }
-
-        return DatabaseDesignerPipelineExecutor.ModifyEntity(
-            tableDefinition,
-            existingTableInfo,
-            params.contextUser,
-            options
-        );
+    private buildBatchInputs(tables: SchemaDesignEntry[]): BatchTableInput[] {
+        return tables.map(entry => ({
+            tableDefinition: entry.TableDefinition!,
+            modificationType: entry.ModificationType ?? 'create',
+            existingEntityID: entry.ExistingEntityID,
+        }));
     }
 
     // ─── Pipeline options ────────────────────────────────────────────────
@@ -165,7 +153,7 @@ export class DatabaseDesignerSchemaBuilder extends BaseDatabaseDesignerCodeAgent
      */
     private buildPipelineOptions(payload: DatabaseDesignerPayload): PipelineExecutionOptions {
         const isAgentManagerMode =
-            payload.SchemaDesign?.TableDefinition !== undefined &&
+            (payload.SchemaDesign?.Tables?.length ?? 0) > 0 &&
             !payload.FunctionalRequirements;
 
         return {
@@ -188,4 +176,3 @@ export class DatabaseDesignerSchemaBuilder extends BaseDatabaseDesignerCodeAgent
     }
 
 }
-

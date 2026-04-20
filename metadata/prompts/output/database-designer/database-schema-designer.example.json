@@ -14,7 +14,7 @@
   },
 
   "example_1b_path_a_matches_found_write_entity_research": {
-    "description": "Path A: DB Research Agent returned matches. Write entityResearch to payloadChangeRequest (so the parent retains it when Schema Designer is called again) AND present choices to the user via Chat. If you omit payloadChangeRequest here, the parent loses entityResearch and re-runs research on every turn — causing an infinite loop.",
+    "description": "Path A: DB Research Agent returned matches. Write entityResearch to payloadChangeRequest (so the parent retains it when Schema Designer is called again) AND present choices to the user via Chat.",
     "payloadChangeRequest": {
       "newElements": {
         "entityResearch": {
@@ -43,24 +43,28 @@
   },
 
   "example_1c_path_c_user_chose_create_new": {
-    "description": "Path C: entityResearch is in the payload AND the last user message contains create_new. The user already saw the matches and chose to create a new entity. Skip Step 1 entirely — do NOT call DB Research Agent again. Design the schema directly and write it to payloadChangeRequest.",
+    "description": "Path C: entityResearch is in the payload AND the last user message contains create_new. Skip Step 1 entirely. Design the schema and write it to payloadChangeRequest using SchemaDesign.Tables[] format.",
     "payloadChangeRequest": {
       "newElements": {
         "SchemaDesign": {
-          "ModificationType": "create",
-          "Description": "Stores product catalog information including pricing and inventory levels.",
-          "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Name | NVARCHAR(200) | ✅ Yes | — | Product display name |\n| UnitPrice | DECIMAL(18,4) | ✅ Yes | — | Selling price per unit |\n| Status | NVARCHAR(50) | ✅ Yes | 'Active' | Record lifecycle status |",
-          "TableDefinition": {
-            "SchemaName": "__mj_UDT",
-            "TableName": "Products",
-            "EntityName": "Products",
-            "Description": "Stores product catalog information.",
-            "Columns": [
-              { "Name": "Name", "RawSqlType": "NVARCHAR(200)", "IsNullable": false, "Description": "Product display name." },
-              { "Name": "UnitPrice", "RawSqlType": "DECIMAL(18,4)", "IsNullable": false, "Description": "Selling price per unit." },
-              { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Active'", "Description": "Record lifecycle status." }
-            ]
-          }
+          "Tables": [
+            {
+              "ModificationType": "create",
+              "Description": "Stores product catalog information including pricing and inventory levels.",
+              "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Name | NVARCHAR(200) | \u2705 Yes | \u2014 | Product display name |\n| UnitPrice | DECIMAL(18,4) | \u2705 Yes | \u2014 | Selling price per unit |\n| Status | NVARCHAR(50) | \u2705 Yes | 'Active' | Record lifecycle status |",
+              "TableDefinition": {
+                "SchemaName": "__mj_UDT",
+                "TableName": "Products",
+                "EntityName": "Products",
+                "Description": "Stores product catalog information.",
+                "Columns": [
+                  { "Name": "Name", "RawSqlType": "NVARCHAR(200)", "IsNullable": false, "Description": "Product display name." },
+                  { "Name": "UnitPrice", "RawSqlType": "DECIMAL(18,4)", "IsNullable": false, "Description": "Selling price per unit." },
+                  { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Active'", "Description": "Record lifecycle status." }
+                ]
+              }
+            }
+          ]
         }
       }
     },
@@ -68,32 +72,36 @@
   },
 
   "example_2_step2_write_schema_success": {
-    "description": "Path B / Step 2: Research returned no matches (or entityResearch absent) — design the schema, write it to payloadChangeRequest, and return nextStep.type: Success. NO message. NO responseForm. The parent Database Designer will read SchemaDesign.Prototype from the payload and show it to the user.",
+    "description": "Path B / Step 2: Research returned no matches — design the schema, write it to payloadChangeRequest using SchemaDesign.Tables[] format, and return Success. NO message. NO responseForm. The parent Database Designer will read SchemaDesign.Tables[0].Prototype and show it to the user.",
     "payloadChangeRequest": {
       "newElements": {
         "SchemaDesign": {
-          "ModificationType": "create",
-          "Description": "Key checkpoints and milestones for projects, tracking title, status, due date, and responsible team member.",
-          "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Title | NVARCHAR(200) | ✅ Yes | — | Milestone label |\n| Status | NVARCHAR(50) | ✅ Yes | 'Active' | Active, Completed, Cancelled |\n| DueDate | DATE | No | — | Target completion date |\n| CompletedDate | DATE | No | — | Actual completion date |\n| Notes | NVARCHAR(MAX) | No | — | Free-text description |\n| ProjectID | UNIQUEIDENTIFIER | No | — | FK → Projects.ID |\n| AssignedUserID | UNIQUEIDENTIFIER | No | — | FK → __mj.User.ID |",
-          "TableDefinition": {
-            "SchemaName": "__mj_UDT",
-            "TableName": "ProjectMilestones",
-            "EntityName": "Project Milestones",
-            "Description": "Key checkpoints and milestones for projects.",
-            "Columns": [
-              { "Name": "Title", "RawSqlType": "NVARCHAR(200)", "IsNullable": false, "Description": "Short label for the milestone." },
-              { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Active'", "Description": "Lifecycle status: Active, Completed, Cancelled." },
-              { "Name": "DueDate", "Type": "date", "IsNullable": true, "Description": "Target completion date." },
-              { "Name": "CompletedDate", "Type": "date", "IsNullable": true, "Description": "Actual date the milestone was completed." },
-              { "Name": "Notes", "Type": "text", "IsNullable": true, "Description": "Additional context or description." },
-              { "Name": "ProjectID", "Type": "uuid", "IsNullable": true, "Description": "FK → Projects.ID." },
-              { "Name": "AssignedUserID", "Type": "uuid", "IsNullable": true, "Description": "FK → __mj.User.ID — the person responsible." }
-            ],
-            "ForeignKeys": [
-              { "ColumnName": "ProjectID", "ReferencedSchema": "__mj_UDT", "ReferencedTable": "Projects", "ReferencedColumn": "ID", "IsSoft": true },
-              { "ColumnName": "AssignedUserID", "ReferencedSchema": "__mj", "ReferencedTable": "User", "ReferencedColumn": "ID", "IsSoft": false }
-            ]
-          }
+          "Tables": [
+            {
+              "ModificationType": "create",
+              "Description": "Key checkpoints and milestones for projects, tracking title, status, due date, and responsible team member.",
+              "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Title | NVARCHAR(200) | \u2705 Yes | \u2014 | Milestone label |\n| Status | NVARCHAR(50) | \u2705 Yes | 'Active' | Active, Completed, Cancelled |\n| DueDate | DATE | No | \u2014 | Target completion date |\n| CompletedDate | DATE | No | \u2014 | Actual completion date |\n| Notes | NVARCHAR(MAX) | No | \u2014 | Free-text description |\n| ProjectID | UNIQUEIDENTIFIER | No | \u2014 | FK \u2192 Projects.ID |\n| AssignedUserID | UNIQUEIDENTIFIER | No | \u2014 | FK \u2192 __mj.User.ID |",
+              "TableDefinition": {
+                "SchemaName": "__mj_UDT",
+                "TableName": "ProjectMilestones",
+                "EntityName": "Project Milestones",
+                "Description": "Key checkpoints and milestones for projects.",
+                "Columns": [
+                  { "Name": "Title", "RawSqlType": "NVARCHAR(200)", "IsNullable": false, "Description": "Short label for the milestone." },
+                  { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Active'", "Description": "Lifecycle status: Active, Completed, Cancelled." },
+                  { "Name": "DueDate", "Type": "date", "IsNullable": true, "Description": "Target completion date." },
+                  { "Name": "CompletedDate", "Type": "date", "IsNullable": true, "Description": "Actual date the milestone was completed." },
+                  { "Name": "Notes", "Type": "text", "IsNullable": true, "Description": "Additional context or description." },
+                  { "Name": "ProjectID", "Type": "uuid", "IsNullable": true, "Description": "FK \u2192 Projects.ID." },
+                  { "Name": "AssignedUserID", "Type": "uuid", "IsNullable": true, "Description": "FK \u2192 __mj.User.ID \u2014 the person responsible." }
+                ],
+                "ForeignKeys": [
+                  { "ColumnName": "ProjectID", "ReferencedSchema": "__mj_UDT", "ReferencedTable": "Projects", "ReferencedColumn": "ID", "IsSoft": true },
+                  { "ColumnName": "AssignedUserID", "ReferencedSchema": "__mj", "ReferencedTable": "User", "ReferencedColumn": "ID", "IsSoft": false }
+                ]
+              }
+            }
+          ]
         }
       }
     },
@@ -103,28 +111,32 @@
   },
 
   "example_3_subagent_mode_skip_research": {
-    "description": "Schema Designer receives a subagent-mode message beginning with 'Subagent mode — called by' containing a Specification JSON block. Skip Step 1 (DB research) entirely — use the Specification as the starting point and write SchemaDesign directly. Return Success.",
+    "description": "Schema Designer receives a subagent-mode message beginning with 'Subagent mode — called by' containing tableSpecs[]. Skip Step 1 entirely and write all tables to SchemaDesign.Tables[] in a single response. Return Success.",
     "payloadChangeRequest": {
       "newElements": {
         "SchemaDesign": {
-          "ModificationType": "create",
-          "Description": "Tracks orders placed by customers, capturing order date, status, and total amount.",
-          "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| CustomerID | UNIQUEIDENTIFIER | ✅ Yes | — | FK → Customers.ID |\n| OrderDate | DATETIMEOFFSET | ✅ Yes | GETUTCDATE() | When order was placed |\n| Status | NVARCHAR(50) | ✅ Yes | 'Pending' | Pending, Fulfilled, Cancelled |\n| TotalAmount | DECIMAL(18,2) | No | — | Order total in USD |",
-          "TableDefinition": {
-            "SchemaName": "__mj_UDT",
-            "TableName": "CustomerOrders",
-            "EntityName": "Customer Orders",
-            "Description": "Tracks orders placed by customers.",
-            "Columns": [
-              { "Name": "CustomerID", "Type": "uuid", "IsNullable": false, "Description": "FK → Customers.ID." },
-              { "Name": "OrderDate", "RawSqlType": "DATETIMEOFFSET", "IsNullable": false, "DefaultValue": "GETUTCDATE()", "Description": "Timestamp when the order was placed." },
-              { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Pending'", "Description": "Order lifecycle: Pending, Fulfilled, Cancelled." },
-              { "Name": "TotalAmount", "RawSqlType": "DECIMAL(18,2)", "IsNullable": true, "Description": "Order total in base currency." }
-            ],
-            "ForeignKeys": [
-              { "ColumnName": "CustomerID", "ReferencedSchema": "__mj_UDT", "ReferencedTable": "Customers", "ReferencedColumn": "ID", "IsSoft": true }
-            ]
-          }
+          "Tables": [
+            {
+              "ModificationType": "create",
+              "Description": "Tracks orders placed by customers, capturing order date, status, and total amount.",
+              "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| CustomerID | UNIQUEIDENTIFIER | \u2705 Yes | \u2014 | FK \u2192 Customers.ID |\n| OrderDate | DATETIMEOFFSET | \u2705 Yes | GETUTCDATE() | When order was placed |\n| Status | NVARCHAR(50) | \u2705 Yes | 'Pending' | Pending, Fulfilled, Cancelled |\n| TotalAmount | DECIMAL(18,2) | No | \u2014 | Order total in USD |",
+              "TableDefinition": {
+                "SchemaName": "__mj_UDT",
+                "TableName": "CustomerOrders",
+                "EntityName": "Customer Orders",
+                "Description": "Tracks orders placed by customers.",
+                "Columns": [
+                  { "Name": "CustomerID", "Type": "uuid", "IsNullable": false, "Description": "FK \u2192 Customers.ID." },
+                  { "Name": "OrderDate", "RawSqlType": "DATETIMEOFFSET", "IsNullable": false, "DefaultValue": "GETUTCDATE()", "Description": "Timestamp when the order was placed." },
+                  { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Pending'", "Description": "Order lifecycle: Pending, Fulfilled, Cancelled." },
+                  { "Name": "TotalAmount", "RawSqlType": "DECIMAL(18,2)", "IsNullable": true, "Description": "Order total in base currency." }
+                ],
+                "ForeignKeys": [
+                  { "ColumnName": "CustomerID", "ReferencedSchema": "__mj_UDT", "ReferencedTable": "Customers", "ReferencedColumn": "ID", "IsSoft": true }
+                ]
+              }
+            }
+          ]
         }
       }
     },
@@ -134,29 +146,82 @@
   },
 
   "example_4_alter_add_column": {
-    "description": "Adding a new column to an existing entity — same two-step pattern. Always return nextStep.type: Success, never Chat.",
+    "description": "Adding a new column to an existing entity using SchemaDesign.Tables[] format. Always return nextStep.type: Success, never Chat.",
     "payloadChangeRequest": {
       "newElements": {
         "SchemaDesign": {
-          "ModificationType": "alter",
-          "Description": "Key checkpoints and milestones for projects.",
-          "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Title | NVARCHAR(200) | ✅ Yes | — | Milestone label |\n| Status | NVARCHAR(50) | ✅ Yes | 'Active' | Active, Completed, Cancelled |\n| Priority | INT | No | — | 1 (high) to 5 (low) |",
-          "TableDefinition": {
-            "SchemaName": "__mj_UDT",
-            "TableName": "ProjectMilestones",
-            "EntityName": "Project Milestones",
-            "Description": "Key checkpoints and milestones for projects.",
-            "Columns": [
-              { "Name": "Title", "RawSqlType": "NVARCHAR(200)", "IsNullable": false, "Description": "Short label for the milestone." },
-              { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Active'", "Description": "Active, Completed, Cancelled." },
-              { "Name": "Priority", "Type": "integer", "IsNullable": true, "Description": "Priority ranking: 1=highest, 5=lowest." }
-            ]
-          }
+          "Tables": [
+            {
+              "ModificationType": "alter",
+              "Description": "Key checkpoints and milestones for projects.",
+              "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Title | NVARCHAR(200) | \u2705 Yes | \u2014 | Milestone label |\n| Status | NVARCHAR(50) | \u2705 Yes | 'Active' | Active, Completed, Cancelled |\n| Priority | INT | No | \u2014 | 1 (high) to 5 (low) |",
+              "TableDefinition": {
+                "SchemaName": "__mj_UDT",
+                "TableName": "ProjectMilestones",
+                "EntityName": "Project Milestones",
+                "Description": "Key checkpoints and milestones for projects.",
+                "Columns": [
+                  { "Name": "Title", "RawSqlType": "NVARCHAR(200)", "IsNullable": false, "Description": "Short label for the milestone." },
+                  { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Active'", "Description": "Active, Completed, Cancelled." },
+                  { "Name": "Priority", "Type": "integer", "IsNullable": true, "Description": "Priority ranking: 1=highest, 5=lowest." }
+                ]
+              }
+            }
+          ]
         }
       }
     },
     "nextStep": {
       "type": "Success"
     }
+  },
+
+  "example_5_multi_table_subagent": {
+    "description": "Multi-table subagent mode: called by Planning Designer with tableSpecs[] of 2 tables. Write both as SchemaDesignEntry items in SchemaDesign.Tables[] in one response. Return Success — parent will present combined prototype to user.",
+    "payloadChangeRequest": {
+      "newElements": {
+        "SchemaDesign": {
+          "Tables": [
+            {
+              "ModificationType": "create",
+              "Description": "Tracks customer records with contact and billing information.",
+              "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Name | NVARCHAR(200) | \u2705 Yes | \u2014 | Customer display name |\n| Email | NVARCHAR(500) | No | \u2014 | Primary contact email |\n| Status | NVARCHAR(50) | \u2705 Yes | 'Active' | Account status |",
+              "TableDefinition": {
+                "SchemaName": "__mj_UDT",
+                "TableName": "Customers",
+                "EntityName": "Customers",
+                "Description": "Tracks customer records with contact and billing information.",
+                "Columns": [
+                  { "Name": "Name", "RawSqlType": "NVARCHAR(200)", "IsNullable": false, "Description": "Customer display name." },
+                  { "Name": "Email", "RawSqlType": "NVARCHAR(500)", "IsNullable": true, "Description": "Primary contact email address." },
+                  { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Active'", "Description": "Account lifecycle status: Active, Inactive, Suspended." }
+                ]
+              }
+            },
+            {
+              "ModificationType": "create",
+              "Description": "Tracks orders placed by customers, capturing date, status, and total amount.",
+              "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| CustomerID | UNIQUEIDENTIFIER | \u2705 Yes | \u2014 | FK \u2192 Customers.ID |\n| OrderDate | DATETIMEOFFSET | \u2705 Yes | GETUTCDATE() | When the order was placed |\n| TotalAmount | DECIMAL(18,4) | No | \u2014 | Order total |\n| Status | NVARCHAR(50) | \u2705 Yes | 'Pending' | Pending, Fulfilled, Cancelled |",
+              "TableDefinition": {
+                "SchemaName": "__mj_UDT",
+                "TableName": "Orders",
+                "EntityName": "Orders",
+                "Description": "Tracks orders placed by customers.",
+                "Columns": [
+                  { "Name": "CustomerID", "Type": "uuid", "IsNullable": false, "Description": "FK \u2192 Customers.ID." },
+                  { "Name": "OrderDate", "RawSqlType": "DATETIMEOFFSET", "IsNullable": false, "DefaultValue": "GETUTCDATE()", "Description": "Timestamp when the order was placed." },
+                  { "Name": "TotalAmount", "RawSqlType": "DECIMAL(18,4)", "IsNullable": true, "Description": "Order total in base currency." },
+                  { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Pending'", "Description": "Order lifecycle: Pending, Fulfilled, Cancelled." }
+                ],
+                "ForeignKeys": [
+                  { "ColumnName": "CustomerID", "ReferencedSchema": "__mj_UDT", "ReferencedTable": "Customers", "ReferencedColumn": "ID", "IsSoft": true }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "nextStep": { "type": "Success" }
   }
 }

@@ -46,6 +46,7 @@ import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 
 import type { DatabaseDesignerPayload } from '../interfaces.js';
+import type { TableDefinition } from '@memberjunction/schema-engine';
 import { generateERDMermaid } from '../erd-generator.js';
 
 // ─── Module-level constants ────────────────────────────────────────────────────
@@ -126,10 +127,10 @@ export class DatabaseDesignerAgent extends BaseAgent {
      * LLM's proposed next step. This override enforces three safety-critical
      * transitions deterministically before delegating to the LLM:
      *
-     *   1. **Subagent fast path** — `payload.mode === 'subagent'` and a
-     *      `callerContext.tableSpec` is present but `SchemaDesign` is not yet
+     *   1. **Subagent fast path** — `payload.mode === 'subagent'` and
+     *      `callerContext.tableSpecs` is non-empty but `SchemaDesign` is not yet
      *      populated?  YES → skip Requirements Analyst entirely and call Schema
-     *      Designer directly with the caller-supplied spec.
+     *      Designer directly with the caller-supplied specs.
      *
      *   2. **User approved creation** — last user message contains `create_now`?
      *      YES → hard-wire a call to Database Schema Validator (`terminateAfter:
@@ -165,7 +166,7 @@ export class DatabaseDesignerAgent extends BaseAgent {
         const subagentMessage = this.buildSubagentSchemaDesignerMessage(payload);
         if (subagentMessage !== null) {
             this.logStatus(
-                `🔒 DatabaseDesignerAgent: subagent mode detected with callerContext.tableSpec ` +
+                `🔒 DatabaseDesignerAgent: subagent mode detected with callerContext.tableSpecs ` +
                 `— bypassing Requirements Analyst, routing directly to "${SCHEMA_DESIGNER_AGENT_NAME}"`,
                 true,
                 params,
@@ -229,10 +230,16 @@ export class DatabaseDesignerAgent extends BaseAgent {
         if (!currentPayload) return currentPayload;
 
         const p = currentPayload as unknown as DatabaseDesignerPayload;
-        if (!p.SchemaDesign?.TableDefinition) return currentPayload;
-        if (p.SchemaDesign.ERDMermaid) return currentPayload; // already set
+        if (!p.SchemaDesign?.Tables?.length) return currentPayload;
+        if (p.SchemaDesign.ERDMermaid) return currentPayload; // combined ERD already set
 
-        const erd = generateERDMermaid([p.SchemaDesign.TableDefinition]);
+        const tableDefs = p.SchemaDesign.Tables
+            .map(t => t.TableDefinition)
+            .filter((td): td is TableDefinition => td != null);
+
+        if (tableDefs.length === 0) return currentPayload;
+
+        const erd = generateERDMermaid(tableDefs);
         if (!erd) return currentPayload; // no FKs — skip diagram
 
         return {
@@ -250,15 +257,15 @@ export class DatabaseDesignerAgent extends BaseAgent {
      *
      * The intercept fires only when:
      *   - `payload.mode === 'subagent'`
-     *   - `callerContext.tableSpec` is present (calling agent supplied a spec)
+     *   - `callerContext.tableSpecs` is non-empty (calling agent supplied specs)
      *   - `SchemaDesign` is not yet in the payload (designer hasn't run yet)
      *
-     * The tableSpec is embedded in the message so Schema Designer receives it
+     * The tableSpecs are embedded in the message so Schema Designer receives them
      * directly — no separate payload path needed for Schema Designer to operate.
      *
-     * If mode is 'subagent' but tableSpec is missing, the intercept does NOT fire
-     * and we fall through to standalone flow (lenient: caller may have omitted spec,
-     * better to gather requirements than fail hard).
+     * If mode is 'subagent' but tableSpecs is missing/empty, the intercept does NOT
+     * fire and we fall through to standalone flow (lenient: caller may have omitted
+     * specs, better to gather requirements than fail hard).
      */
     private buildSubagentSchemaDesignerMessage<P>(currentPayload: P): string | null {
         if (currentPayload == null) return null;
@@ -266,21 +273,25 @@ export class DatabaseDesignerAgent extends BaseAgent {
         const payload = currentPayload as unknown as DatabaseDesignerPayload;
 
         if (payload.mode !== 'subagent') return null;
-        if (!payload.callerContext?.tableSpec) return null;
+
+        const tableSpecs = payload.callerContext?.tableSpecs;
+        if (!tableSpecs?.length) return null;
         if (payload.SchemaDesign) return null; // already designed, don't re-run
 
-        const { tableSpec, agentName, subagentConfirmedByParent } = payload.callerContext;
+        const { agentName, subagentConfirmedByParent } = payload.callerContext!;
         const confirmNote = subagentConfirmedByParent
             ? 'User approval was already obtained by the calling agent — skip the user confirmation prompt and proceed directly to returning the schema.'
             : 'Present the design to the user for confirmation before returning.';
 
+        const specLabel = tableSpecs.length === 1 ? '1 table' : `${tableSpecs.length} tables`;
+
         return (
             `Subagent mode — called by "${agentName}".\n` +
-            `Design the entity schema from the specification below. ` +
+            `Design the entity schema(s) for ${specLabel} from the specification(s) below. ` +
             `Skip the Database Research Agent discovery step (the calling agent already did this research).\n\n` +
-            `Specification:\n${JSON.stringify(tableSpec, null, 2)}\n\n` +
+            `Specification(s):\n${JSON.stringify(tableSpecs, null, 2)}\n\n` +
             `${confirmNote}\n` +
-            `Write SchemaDesign (Prototype + TableDefinition + ModificationType) to payload and return Success.`
+            `Write SchemaDesign.Tables[] (one SchemaDesignEntry per specification, with Prototype + TableDefinition + ModificationType for each) to payloadChangeRequest and return nextStep.type: "Success".`
         );
     }
 

@@ -6,10 +6,10 @@
     Leave empty if this entity stands alone.
   </p>
 
-  @if (UuidColumns.length === 0) {
+  @if (AvailableColumns.length === 0) {
     <div class="no-fk-hint">
       <i class="fa-solid fa-link-slash"></i>
-      <p>No UUID columns defined yet — go back to Step 2 and add a UUID column to use as a foreign key.</p>
+      <p>No columns defined yet — go back to Step 2 and add at least one column to use as a foreign key.</p>
     </div>
   }
 
@@ -27,14 +27,14 @@
 
           <div class="fk-row-grid">
 
-            <!-- Source Column -->
+            <!-- Source Column — any Step 2 column, not just UUID -->
             <div class="fk-field">
               <label class="fk-label">Source Column</label>
               <select class="mj-input"
                       [value]="row.ColumnName"
                       (change)="OnSourceColumnChange(row.rowIndex, $any($event.target).value)">
                 <option value="">— select column —</option>
-                @for (col of UuidColumns; track col.Name) {
+                @for (col of AllColumns; track col.Name) {
                   <option [value]="col.Name">{{ col.Name }}</option>
                 }
               </select>
@@ -67,16 +67,16 @@
               </select>
             </div>
 
-            <!-- Target Column -->
+            <!-- Target Column — shows SQL type to help user match source column type -->
             <div class="fk-field">
               <label class="fk-label">Target Column</label>
               <select class="mj-input"
                       [value]="row.ReferencedColumn"
                       [disabled]="!row.selectedEntityId"
-                      (change)="OnColumnChange(row.rowIndex, $any($event.target).value)">
+                      (change)="OnColumnChange(row.rowIndex, $any($event.target).value, row.selectedEntityId)">
                 <option value="">{{ ColumnPlaceholder(row) }}</option>
-                @for (col of ColumnsForEntity(row.selectedEntityId); track col) {
-                  <option [value]="col">{{ col }}</option>
+                @for (col of ColumnsForEntity(row.selectedEntityId); track col.Name) {
+                  <option [value]="col.Name">{{ col.Name }} ({{ col.SqlType }})</option>
                 }
               </select>
             </div>
@@ -100,8 +100,8 @@
 
   <div class="add-bar">
     <button mjButton buttonStyle="secondary" type="button"
-            [disabled]="UuidColumns.length === 0"
-            [title]="UuidColumns.length === 0 ? 'Add a UUID column in Step 2 first' : ''"
+            [disabled]="AvailableColumns.length === 0"
+            [title]="AvailableColumns.length === 0 ? 'Add a column in Step 2 first' : ''"
             (click)="AddRelationship()">
       <i class="fa-solid fa-plus"></i>
       Add Relationship

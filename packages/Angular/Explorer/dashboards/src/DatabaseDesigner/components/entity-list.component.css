@@ -67,6 +67,13 @@
   box-sizing: border-box;
 }
 
+.schema-filter {
+  width: auto;
+  min-width: 160px;
+  max-width: 220px;
+  flex-shrink: 0;
+}
+
 .search-clear {
   position: absolute;
   right: 8px;

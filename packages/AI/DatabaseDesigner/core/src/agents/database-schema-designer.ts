@@ -24,7 +24,8 @@ import type {
 } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
 
-import type { DatabaseDesignerPayload } from '../interfaces.js';
+import type { DatabaseDesignerPayload, SchemaDesignEntry } from '../interfaces.js';
+import type { TableDefinition } from '@memberjunction/schema-engine';
 
 // ─── Driver registration ─────────────────────────────────────────────────────
 
@@ -55,9 +56,9 @@ export class DatabaseDesignerSchemaDesigner extends BaseAgent {
         }
 
         const payload = currentPayload as DatabaseDesignerPayload;
-        const tableDefinition = payload.SchemaDesign?.TableDefinition;
+        const tables = payload.SchemaDesign?.Tables;
 
-        const errors = this.collectTableDefinitionErrors(tableDefinition);
+        const errors = this.collectTablesErrors(tables);
         if (errors.length > 0) {
             return {
                 ...nextStep,
@@ -72,16 +73,40 @@ export class DatabaseDesignerSchemaDesigner extends BaseAgent {
     // ─── Validation helpers ───────────────────────────────────────────────
 
     /**
-     * Collect all structural problems with the TableDefinition.
+     * Collect all structural problems with SchemaDesign.Tables[].
+     * Returns an empty array when all definitions are complete and valid.
+     */
+    private collectTablesErrors(tables: SchemaDesignEntry[] | undefined): string[] {
+        const errors: string[] = [];
+
+        if (!tables?.length) {
+            errors.push('SchemaDesign.Tables[] is missing or empty.');
+            return errors;
+        }
+
+        for (let i = 0; i < tables.length; i++) {
+            const entry = tables[i];
+            const prefix = tables.length === 1
+                ? ''
+                : `Tables[${i}] (${entry.TableDefinition?.EntityName ?? 'unknown'}): `;
+            const entryErrors = this.collectTableDefinitionErrors(entry.TableDefinition);
+            errors.push(...entryErrors.map(e => `${prefix}${e}`));
+        }
+
+        return errors;
+    }
+
+    /**
+     * Collect all structural problems with a single TableDefinition.
      * Returns an empty array when the definition is complete and valid.
      */
     private collectTableDefinitionErrors(
-        tableDefinition: DatabaseDesignerPayload['SchemaDesign']['TableDefinition'] | undefined
+        tableDefinition: TableDefinition | undefined
     ): string[] {
         const errors: string[] = [];
 
         if (!tableDefinition) {
-            errors.push('SchemaDesign.TableDefinition is missing entirely.');
+            errors.push('TableDefinition is missing entirely.');
             return errors; // no point checking sub-fields
         }
 
@@ -110,7 +135,8 @@ export class DatabaseDesignerSchemaDesigner extends BaseAgent {
             '',
             ...errors.map((e, i) => `${i + 1}. ${e}`),
             '',
-            'Please revise your response to include a complete `SchemaDesign.TableDefinition` with:',
+            'Please revise your response to populate SchemaDesign.Tables[] with one entry per table.',
+            'Each entry must contain a complete `TableDefinition` with:',
             '- `SchemaName` (e.g. "__mj_UDT")',
             '- `TableName` (PascalCase, no spaces)',
             '- `EntityName` (human-readable name as it will appear in MemberJunction)',

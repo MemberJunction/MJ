@@ -420,43 +420,82 @@ When your technical design requires a new database table **or** adding/changing 
 Database Designer always receives two things from you:
 
 1. **A message** — a clear, descriptive instruction that explains the operation and its business context
-2. **A payload** — the structured `tableSpec` with full column definitions
+2. **A payload** — the structured `tableSpecs` array with full column definitions
 
-**Creating a new entity** (`modificationType: 'create'` or omit it):
+`tableSpecs` is **always an array** — even for a single table. Database Designer processes all tables in one batch (one CodeGen run), so passing multiple tables together is more efficient than calling it once per table.
+
+**Creating one new entity** (`modificationType: 'create'` or omit it):
 
 ```json
 {
-  "mode": "subagent",
   "callerContext": {
     "agentName": "Planning Designer",
     "subagentConfirmedByParent": true,
-    "tableSpec": {
-      "name": "Customer Orders",
-      "description": "Tracks orders placed by customers. Each row is a single order with a total, status, and a reference to the customer who placed it.",
-      "schemaName": "__mj_UDT",
-      "modificationType": "create",
-      "columns": [
-        {
-          "name": "CustomerID",
-          "type": "UNIQUEIDENTIFIER",
-          "description": "References the customer (User) who placed the order",
-          "required": true,
-          "foreignKeyTarget": "__mj.User.ID"
-        },
-        {
-          "name": "TotalAmount",
-          "type": "DECIMAL(18,4)",
-          "description": "Total value of the order in base currency",
-          "required": true
-        },
-        {
-          "name": "Status",
-          "type": "NVARCHAR(50)",
-          "description": "Order lifecycle: Pending, Processing, Shipped, Delivered, Cancelled",
-          "required": true
-        }
-      ]
-    }
+    "tableSpecs": [
+      {
+        "name": "Customer Orders",
+        "description": "Tracks orders placed by customers. Each row is a single order with a total, status, and a reference to the customer who placed it.",
+        "schemaName": "__mj_UDT",
+        "modificationType": "create",
+        "columns": [
+          {
+            "name": "CustomerID",
+            "type": "UNIQUEIDENTIFIER",
+            "description": "References the customer (User) who placed the order",
+            "required": true,
+            "foreignKeyTarget": "__mj.User.ID"
+          },
+          {
+            "name": "TotalAmount",
+            "type": "DECIMAL(18,4)",
+            "description": "Total value of the order in base currency",
+            "required": true
+          },
+          {
+            "name": "Status",
+            "type": "NVARCHAR(50)",
+            "description": "Order lifecycle: Pending, Processing, Shipped, Delivered, Cancelled",
+            "required": true
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Creating multiple related entities in one call** (preferred — single CodeGen run):
+
+```json
+{
+  "callerContext": {
+    "agentName": "Planning Designer",
+    "subagentConfirmedByParent": true,
+    "tableSpecs": [
+      {
+        "name": "Customer Orders",
+        "description": "Tracks orders placed by customers.",
+        "schemaName": "__mj_UDT",
+        "modificationType": "create",
+        "columns": [
+          { "name": "CustomerID", "type": "UNIQUEIDENTIFIER", "required": true, "foreignKeyTarget": "__mj.User.ID" },
+          { "name": "TotalAmount", "type": "DECIMAL(18,4)", "required": true },
+          { "name": "Status", "type": "NVARCHAR(50)", "required": true }
+        ]
+      },
+      {
+        "name": "Order Line Items",
+        "description": "Individual line items belonging to a Customer Order.",
+        "schemaName": "__mj_UDT",
+        "modificationType": "create",
+        "columns": [
+          { "name": "OrderID", "type": "UNIQUEIDENTIFIER", "required": true, "foreignKeyTarget": "__mj_UDT.CustomerOrders.ID" },
+          { "name": "ProductName", "type": "NVARCHAR(255)", "required": true },
+          { "name": "Quantity", "type": "INT", "required": true },
+          { "name": "UnitPrice", "type": "DECIMAL(18,4)", "required": true }
+        ]
+      }
+    ]
   }
 }
 ```
@@ -465,31 +504,32 @@ Database Designer always receives two things from you:
 
 ```json
 {
-  "mode": "subagent",
   "callerContext": {
     "agentName": "Planning Designer",
     "subagentConfirmedByParent": true,
-    "tableSpec": {
-      "name": "Customer Orders",
-      "description": "Adding shipping address and tracking fields to support fulfillment tracking.",
-      "schemaName": "__mj_UDT",
-      "modificationType": "alter",
-      "existingEntityId": "UUID-OF-THE-ENTITY-FROM-DATABASE-RESEARCH",
-      "columns": [
-        {
-          "name": "ShippingAddress",
-          "type": "NVARCHAR(500)",
-          "description": "Full shipping address for this order",
-          "required": false
-        },
-        {
-          "name": "TrackingNumber",
-          "type": "NVARCHAR(100)",
-          "description": "Carrier tracking number assigned when the order ships",
-          "required": false
-        }
-      ]
-    }
+    "tableSpecs": [
+      {
+        "name": "Customer Orders",
+        "description": "Adding shipping address and tracking fields to support fulfillment tracking.",
+        "schemaName": "__mj_UDT",
+        "modificationType": "alter",
+        "existingEntityId": "UUID-OF-THE-ENTITY-FROM-DATABASE-RESEARCH",
+        "columns": [
+          {
+            "name": "ShippingAddress",
+            "type": "NVARCHAR(500)",
+            "description": "Full shipping address for this order",
+            "required": false
+          },
+          {
+            "name": "TrackingNumber",
+            "type": "NVARCHAR(100)",
+            "description": "Carrier tracking number assigned when the order ships",
+            "required": false
+          }
+        ]
+      }
+    ]
   }
 }
 ```
@@ -526,7 +566,9 @@ The columns to add are in callerContext.tableSpec.columns. The existing entity's
 
 ---
 
-### `tableSpec` Field Reference
+### `tableSpecs[]` Entry Field Reference
+
+Each entry in the `tableSpecs` array has these fields:
 
 | Field | Required | Notes |
 |---|---|---|
@@ -537,7 +579,7 @@ The columns to add are in callerContext.tableSpec.columns. The existing entity's
 | `existingEntityId` | For alter | UUID from Database Research Agent — required when `modificationType: 'alter'` |
 | `columns` | No | For create: full column list. For alter: ONLY the new columns to add. Omit to let Schema Designer infer. |
 | `columns[].name` | Yes | PascalCase column name |
-| `columns[].type` | Yes | SQL type: `NVARCHAR(255)`, `INT`, `BIT`, `UNIQUEIDENTIFIER`, `DECIMAL(18,4)`, `DATETIMEOFFSET`, etc. |
+| `columns[].type` | Yes | SQL type: `NVARCHAR(255)`, `INT`, `BIT`, `UNIQUEIDENTIFIER`, `DECIMAL(18,4)`, `DATETIMEOFFSET`, etc. FK column type must exactly match the referenced column's type. |
 | `columns[].description` | No | Recommended — Schema Designer writes column-level documentation from this |
 | `columns[].required` | No | `true` = NOT NULL; `false` or omit = nullable |
 | `columns[].foreignKeyTarget` | No | `"Schema.Table.Column"` — e.g. `"__mj.User.ID"` |
@@ -550,22 +592,30 @@ The columns to add are in callerContext.tableSpec.columns. The existing entity's
 
 After Database Designer completes, the result is in `DatabaseDesignerResult` in your payload (mapped via `SubAgentOutputMapping` to `TechnicalDesign.entityCreationResult`).
 
+`Results` is always an array — one entry per table in `tableSpecs`:
+
 | Field | Meaning |
 |---|---|
-| `DatabaseDesignerResult.Success: true` | Entity was created or altered successfully |
-| `DatabaseDesignerResult.EntityID` | UUID of the entity — use this in CRUD action mappings |
-| `DatabaseDesignerResult.EntityName` | MJ entity name (e.g. `"Customer Orders"`) |
-| `DatabaseDesignerResult.TableName` | Physical SQL table name (e.g. `"CustomerOrders"`) |
-| `DatabaseDesignerResult.SchemaName` | SQL schema (e.g. `"__mj_UDT"`) |
-| `DatabaseDesignerResult.Success: false` | Operation failed — see `ErrorMessage` |
-| `DatabaseDesignerResult.ErrorMessage` | Failure reason: duplicate name, blocked schema, missing authorization, etc. |
+| `DatabaseDesignerResult.Success: true` | **All** tables were created/altered successfully |
+| `DatabaseDesignerResult.Success: false` | One or more tables failed (partial failure possible) |
+| `DatabaseDesignerResult.Results[]` | Per-table results, same order as `tableSpecs[]` |
+| `DatabaseDesignerResult.Results[i].Success` | Whether this specific table succeeded |
+| `DatabaseDesignerResult.Results[i].EntityID` | UUID of the entity — use this in CRUD action mappings |
+| `DatabaseDesignerResult.Results[i].EntityName` | MJ entity name (e.g. `"Customer Orders"`) |
+| `DatabaseDesignerResult.Results[i].TableName` | Physical SQL table name (e.g. `"CustomerOrders"`) |
+| `DatabaseDesignerResult.Results[i].SchemaName` | SQL schema (e.g. `"__mj_UDT"`) |
+| `DatabaseDesignerResult.Results[i].ErrorMessage` | Failure reason for this table if `Success: false` |
+
+**Single-table shortcut**: For a single table, use `DatabaseDesignerResult.Results[0].EntityID` etc.
+
+**Partial failure**: If some tables succeeded and some failed, the succeeded tables are live in the DB. Report the failure to the user and ask how to proceed — don't re-create the succeeded tables.
 
 ### Workflow Summary
 
 1. Call **Database Research Agent** to confirm whether the entity exists and retrieve its UUID + current schema
 2. **Doesn't exist** → call Database Designer in subagent mode with `modificationType: 'create'`
 3. **Exists and needs new columns** → call Database Designer in subagent mode with `modificationType: 'alter'` + `existingEntityId`
-4. On success — use `DatabaseDesignerResult.EntityName` in CRUD action mappings for the agent being designed
+4. On success — use `DatabaseDesignerResult.Results[0].EntityName` (or `Results[i]` for the relevant table) in CRUD action mappings for the agent being designed
 5. On failure — explain the error and ask the user how to proceed
 6. Document the entity in `TechnicalDesign.databaseSchema`
 
