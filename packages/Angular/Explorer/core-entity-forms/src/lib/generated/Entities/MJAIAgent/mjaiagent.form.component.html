@@ -1217,5 +1217,30 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <!-- Actions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJActions"
+        SectionName="Actions"
+        Icon="fa-solid fa-bolt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJActions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Actions','CreatedByAgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Actions')"
+                [AllowLoad]="IsSectionExpanded('mJActions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 </mj-record-form-container>
         
