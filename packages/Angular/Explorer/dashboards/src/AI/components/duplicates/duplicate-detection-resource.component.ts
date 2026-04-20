@@ -10,7 +10,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { RunView } from '@memberjunction/core';
+import { Metadata, RunView } from '@memberjunction/core';
 import {
     ResourceData,
     MJDuplicateRunEntity,
@@ -469,9 +469,17 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
 
         try {
+            const md = new Metadata();
+            const tg = await md.CreateTransactionGroup();
             for (const match of group.Matches) {
                 match.ApprovalStatus = status;
+                match.TransactionGroup = tg;
                 await match.Save();
+            }
+            const success = await tg.Submit();
+            if (!success) {
+                console.error(`Failed to update match approval statuses to ${status}`);
+                return;
             }
 
             // Update the local group state

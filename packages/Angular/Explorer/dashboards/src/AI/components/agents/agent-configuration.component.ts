@@ -600,28 +600,32 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     try {
       const agent = result.Agent;
 
-      // Save the agent
-      const saveResult = await agent.Save();
-      if (!saveResult) {
-        throw new Error('Failed to save agent');
-      }
+      // Create agent + linked prompts + linked actions in one atomic transaction.
+      // agent.ID is assigned client-side by NewRecord() so we can use it on child records before submit.
+      const md = new Metadata();
+      const tg = await md.CreateTransactionGroup();
 
-      // Save linked prompts if any
+      agent.TransactionGroup = tg;
+      await agent.Save();
+
       if (result.AgentPrompts && result.AgentPrompts.length > 0) {
         for (const agentPrompt of result.AgentPrompts) {
-          // Update the AgentID to the saved agent's ID
           agentPrompt.AgentID = agent.ID;
+          agentPrompt.TransactionGroup = tg;
           await agentPrompt.Save();
         }
       }
 
-      // Save linked actions if any
       if (result.AgentActions && result.AgentActions.length > 0) {
         for (const agentAction of result.AgentActions) {
-          // Update the AgentID to the saved agent's ID
           agentAction.AgentID = agent.ID;
+          agentAction.TransactionGroup = tg;
           await agentAction.Save();
         }
+      }
+
+      if (!await tg.Submit()) {
+        throw new Error('Failed to save agent — all changes have been rolled back');
       }
 
       // Refresh the agent list

@@ -336,37 +336,34 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         const confirmed = confirm(`Are you sure you want to delete ${count} credential(s)? This action cannot be undone.`);
         if (!confirmed) return;
 
-        let successCount = 0;
-        let failCount = 0;
+        const toDelete = Array.from(this.selectedCredentials)
+            .map(id => this.credentials.find(c => UUIDsEqual(c.ID, id)))
+            .filter((c): c is MJCredentialEntity => c != null);
 
-        for (const credId of this.selectedCredentials) {
-            const credential = this.credentials.find(c => UUIDsEqual(c.ID, credId));
-            if (credential) {
-                try {
-                    const success = await credential.Delete();
-                    if (success) {
-                        successCount++;
-                        this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credId));
-                    } else {
-                        failCount++;
-                    }
-                } catch {
-                    failCount++;
-                }
-            }
+        if (toDelete.length === 0) return;
+
+        const tg = await this._metadata.CreateTransactionGroup();
+        for (const credential of toDelete) {
+            credential.TransactionGroup = tg;
+            await credential.Delete();
         }
 
-        this.selectedCredentials.clear();
-        this.applyFilters();
-
-        if (successCount > 0) {
+        if (await tg.Submit()) {
+            const deletedIds = new Set(toDelete.map(c => c.ID));
+            this.credentials = this.credentials.filter(c => !deletedIds.has(c.ID));
+            this.selectedCredentials.clear();
+            this.applyFilters();
             MJNotificationService.Instance.CreateSimpleNotification(
-                `${successCount} credential(s) deleted${failCount > 0 ? `, ${failCount} failed` : ''}`,
-                failCount > 0 ? 'warning' : 'success',
+                `${toDelete.length} credential(s) deleted`,
+                'success',
                 3000
             );
         } else {
-            MJNotificationService.Instance.CreateSimpleNotification('Failed to delete credentials', 'error', 3000);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Failed to delete credentials — all changes have been rolled back',
+                'error',
+                3000
+            );
         }
     }
 
@@ -631,40 +628,48 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     public async bulkToggleActive(active: boolean): Promise<void> {
         if (!this.UserCanUpdate || this.selectedCredentials.size === 0) return;
 
-        let successCount = 0;
-        let failCount = 0;
-
+        const toUpdate: MJCredentialEntity[] = [];
         for (const credId of this.selectedCredentials) {
             const credential = this.credentials.find(c => UUIDsEqual(c.ID, credId));
             if (credential && credential.IsActive !== active) {
-                try {
-                    credential.IsActive = active;
-                    const success = await credential.Save();
-                    if (success) {
-                        successCount++;
-                    } else {
-                        credential.IsActive = !active;
-                        failCount++;
-                    }
-                } catch {
-                    credential.IsActive = !active;
-                    failCount++;
-                }
+                toUpdate.push(credential);
             }
         }
 
-        this.clearSelection();
-        this.applyFilters();
-
         const action = active ? 'activated' : 'deactivated';
-        if (successCount > 0) {
+
+        if (toUpdate.length === 0) {
+            this.clearSelection();
+            return;
+        }
+
+        const tg = await this._metadata.CreateTransactionGroup();
+        for (const credential of toUpdate) {
+            credential.IsActive = active;
+            credential.TransactionGroup = tg;
+            await credential.Save();
+        }
+
+        if (await tg.Submit()) {
+            this.clearSelection();
+            this.applyFilters();
             MJNotificationService.Instance.CreateSimpleNotification(
-                `${successCount} credential(s) ${action}${failCount > 0 ? `, ${failCount} failed` : ''}`,
-                failCount > 0 ? 'warning' : 'success',
+                `${toUpdate.length} credential(s) ${action}`,
+                'success',
                 3000
             );
-        } else if (failCount > 0) {
-            MJNotificationService.Instance.CreateSimpleNotification(`Failed to ${action.slice(0, -1)} credentials`, 'error', 3000);
+        } else {
+            // Server rolled back — revert the client-side state to match
+            for (const credential of toUpdate) {
+                credential.IsActive = !active;
+            }
+            this.clearSelection();
+            this.applyFilters();
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Failed to ${action.slice(0, -1)} credentials — all changes have been rolled back`,
+                'error',
+                3000
+            );
         }
     }
 
@@ -675,37 +680,34 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         const confirmed = confirm(`Are you sure you want to delete ${count} credential(s)? This action cannot be undone.`);
         if (!confirmed) return;
 
-        let successCount = 0;
-        let failCount = 0;
+        const toDelete = Array.from(this.selectedCredentials)
+            .map(id => this.credentials.find(c => UUIDsEqual(c.ID, id)))
+            .filter((c): c is MJCredentialEntity => c != null);
 
-        for (const credId of this.selectedCredentials) {
-            const credential = this.credentials.find(c => UUIDsEqual(c.ID, credId));
-            if (credential) {
-                try {
-                    const success = await credential.Delete();
-                    if (success) {
-                        successCount++;
-                        this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credId));
-                    } else {
-                        failCount++;
-                    }
-                } catch {
-                    failCount++;
-                }
-            }
+        if (toDelete.length === 0) return;
+
+        const tg = await this._metadata.CreateTransactionGroup();
+        for (const credential of toDelete) {
+            credential.TransactionGroup = tg;
+            await credential.Delete();
         }
 
-        this.clearSelection();
-        this.applyFilters();
-
-        if (successCount > 0) {
+        if (await tg.Submit()) {
+            const deletedIds = new Set(toDelete.map(c => c.ID));
+            this.credentials = this.credentials.filter(c => !deletedIds.has(c.ID));
+            this.clearSelection();
+            this.applyFilters();
             MJNotificationService.Instance.CreateSimpleNotification(
-                `${successCount} credential(s) deleted${failCount > 0 ? `, ${failCount} failed` : ''}`,
-                failCount > 0 ? 'warning' : 'success',
+                `${toDelete.length} credential(s) deleted`,
+                'success',
                 3000
             );
         } else {
-            MJNotificationService.Instance.CreateSimpleNotification('Failed to delete credentials', 'error', 3000);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Failed to delete credentials — all changes have been rolled back',
+                'error',
+                3000
+            );
         }
     }
 }

@@ -1026,9 +1026,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         console.log(`[MCPDashboard] deleteConnectionInternal called for connectionId: ${connectionId}`);
         const rv = new RunView();
         const md = new Metadata();
+        const tg = await md.CreateTransactionGroup();
 
-        // Delete execution logs for this connection
-        console.log('[MCPDashboard] Deleting execution logs...');
+        // Queue deletes for execution logs
         const logsResult = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: MCP Tool Execution Logs',
             ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
@@ -1036,27 +1036,19 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             ResultType: 'simple'
         });
         if (logsResult.Success && logsResult.Results) {
-            console.log(`[MCPDashboard] Found ${logsResult.Results.length} execution logs to delete`);
+            console.log(`[MCPDashboard] Queueing ${logsResult.Results.length} execution logs for delete`);
             for (const log of logsResult.Results) {
-                console.log(`[MCPDashboard] Loading execution log ${log.ID}...`);
                 const logEntity = await md.GetEntityObject<MJMCPToolExecutionLogEntity>('MJ: MCP Tool Execution Logs');
-                const loaded = await logEntity.Load(log.ID);
-                console.log(`[MCPDashboard] Load result for execution log ${log.ID}: ${loaded}`);
-                if (loaded) {
-                    const deleted = await logEntity.Delete();
-                    if (!deleted) {
-                        console.error(`[MCPDashboard] Failed to delete execution log ${log.ID}:`, logEntity.LatestResult);
-                        throw new Error(`Failed to delete execution log: ${logEntity.LatestResult?.Message || 'Unknown error'}`);
-                    }
-                    console.log(`[MCPDashboard] Deleted execution log ${log.ID}`);
+                if (await logEntity.Load(log.ID)) {
+                    logEntity.TransactionGroup = tg;
+                    await logEntity.Delete();
                 } else {
                     console.warn(`[MCPDashboard] Could not load execution log ${log.ID} - may have been already deleted`);
                 }
             }
         }
 
-        // Delete OAuth Authorization States for this connection
-        console.log('[MCPDashboard] Deleting OAuth Authorization States...');
+        // Queue deletes for OAuth Authorization States
         const authStatesResult = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: O Auth Authorization States',
             ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
@@ -1064,27 +1056,19 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             ResultType: 'simple'
         });
         if (authStatesResult.Success && authStatesResult.Results) {
-            console.log(`[MCPDashboard] Found ${authStatesResult.Results.length} OAuth Authorization States to delete`);
+            console.log(`[MCPDashboard] Queueing ${authStatesResult.Results.length} OAuth Authorization States for delete`);
             for (const state of authStatesResult.Results) {
-                console.log(`[MCPDashboard] Loading OAuth Authorization State ${state.ID}...`);
                 const stateEntity = await md.GetEntityObject<MJOAuthAuthorizationStateEntity>('MJ: O Auth Authorization States');
-                const loaded = await stateEntity.Load(state.ID);
-                console.log(`[MCPDashboard] Load result for OAuth Authorization State ${state.ID}: ${loaded}`);
-                if (loaded) {
-                    const deleted = await stateEntity.Delete();
-                    if (!deleted) {
-                        console.error(`[MCPDashboard] Failed to delete OAuth Authorization State ${state.ID}:`, stateEntity.LatestResult);
-                        throw new Error(`Failed to delete OAuth Authorization State: ${stateEntity.LatestResult?.Message || 'Unknown error'}`);
-                    }
-                    console.log(`[MCPDashboard] Deleted OAuth Authorization State ${state.ID}`);
+                if (await stateEntity.Load(state.ID)) {
+                    stateEntity.TransactionGroup = tg;
+                    await stateEntity.Delete();
                 } else {
                     console.warn(`[MCPDashboard] Could not load OAuth Authorization State ${state.ID} - may have been already deleted`);
                 }
             }
         }
 
-        // Delete OAuth Client Registrations for this connection
-        console.log('[MCPDashboard] Deleting OAuth Client Registrations...');
+        // Queue deletes for OAuth Client Registrations
         const clientRegsResult = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: O Auth Client Registrations',
             ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
@@ -1092,27 +1076,19 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             ResultType: 'simple'
         });
         if (clientRegsResult.Success && clientRegsResult.Results) {
-            console.log(`[MCPDashboard] Found ${clientRegsResult.Results.length} OAuth Client Registrations to delete`);
+            console.log(`[MCPDashboard] Queueing ${clientRegsResult.Results.length} OAuth Client Registrations for delete`);
             for (const reg of clientRegsResult.Results) {
-                console.log(`[MCPDashboard] Loading OAuth Client Registration ${reg.ID}...`);
                 const regEntity = await md.GetEntityObject<MJOAuthClientRegistrationEntity>('MJ: O Auth Client Registrations');
-                const loaded = await regEntity.Load(reg.ID);
-                console.log(`[MCPDashboard] Load result for OAuth Client Registration ${reg.ID}: ${loaded}`);
-                if (loaded) {
-                    const deleted = await regEntity.Delete();
-                    if (!deleted) {
-                        console.error(`[MCPDashboard] Failed to delete OAuth Client Registration ${reg.ID}:`, regEntity.LatestResult);
-                        throw new Error(`Failed to delete OAuth Client Registration: ${regEntity.LatestResult?.Message || 'Unknown error'}`);
-                    }
-                    console.log(`[MCPDashboard] Deleted OAuth Client Registration ${reg.ID}`);
+                if (await regEntity.Load(reg.ID)) {
+                    regEntity.TransactionGroup = tg;
+                    await regEntity.Delete();
                 } else {
                     console.warn(`[MCPDashboard] Could not load OAuth Client Registration ${reg.ID} - may have been already deleted`);
                 }
             }
         }
 
-        // Delete OAuth Tokens for this connection
-        console.log('[MCPDashboard] Deleting OAuth Tokens...');
+        // Queue deletes for OAuth Tokens
         const tokensResult = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: O Auth Tokens',
             ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
@@ -1120,37 +1096,33 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             ResultType: 'simple'
         });
         if (tokensResult.Success && tokensResult.Results) {
-            console.log(`[MCPDashboard] Found ${tokensResult.Results.length} OAuth Tokens to delete`);
+            console.log(`[MCPDashboard] Queueing ${tokensResult.Results.length} OAuth Tokens for delete`);
             for (const token of tokensResult.Results) {
-                console.log(`[MCPDashboard] Loading OAuth Token ${token.ID}...`);
                 const tokenEntity = await md.GetEntityObject<MJOAuthTokenEntity>('MJ: O Auth Tokens');
-                const loaded = await tokenEntity.Load(token.ID);
-                console.log(`[MCPDashboard] Load result for OAuth Token ${token.ID}: ${loaded}`);
-                if (loaded) {
-                    const deleted = await tokenEntity.Delete();
-                    if (!deleted) {
-                        console.error(`[MCPDashboard] Failed to delete OAuth Token ${token.ID}:`, tokenEntity.LatestResult);
-                        throw new Error(`Failed to delete OAuth Token: ${tokenEntity.LatestResult?.Message || 'Unknown error'}`);
-                    }
-                    console.log(`[MCPDashboard] Deleted OAuth Token ${token.ID}`);
+                if (await tokenEntity.Load(token.ID)) {
+                    tokenEntity.TransactionGroup = tg;
+                    await tokenEntity.Delete();
                 } else {
                     console.warn(`[MCPDashboard] Could not load OAuth Token ${token.ID} - may have been already deleted`);
                 }
             }
         }
 
-        // Now delete the connection itself
-        console.log('[MCPDashboard] All related records deleted. Now deleting the connection itself...');
+        // Queue the connection delete last
         const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>('MJ: MCP Server Connections');
         const loaded = await entity.Load(connectionId);
         if (!loaded) {
             throw new Error(`Connection not found`);
         }
-        const deleted = await entity.Delete();
-        if (!deleted) {
+        entity.TransactionGroup = tg;
+        await entity.Delete();
+
+        // Submit everything atomically — if anything fails, the whole cascade rolls back
+        if (!await tg.Submit()) {
             const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Delete failed';
-            throw new Error(errorMsg);
+            throw new Error(`Failed to delete connection and related records: ${errorMsg}`);
         }
+        console.log('[MCPDashboard] Connection and all related records deleted atomically');
     }
 
     public async onServerDialogClose(result: { saved: boolean }): Promise<void> {
