@@ -1,632 +1,214 @@
-# Script Actions
+# Runtime Actions
 
 ## Technical Architecture Document
 
-**Version**: 1.0
-**Date**: January 2026
-**Status**: Proposal
+**Version**: 2.0
+**Date**: April 2026
+**Status**: Proposal — Phase 1 planning
+**Supersedes**: v1.0 "Script Actions" (January 2026)
 
 ---
 
 ## Executive Summary
 
-This document describes the architecture for enabling MemberJunction agents to dynamically generate, test, and persist new actions at runtime. Building on the proven bridge pattern from Skip's React runtime and the existing JavaScript sandbox infrastructure, **Script Actions** (a new `Type='Script'` in the existing Actions entity) allow agents to create composite capabilities that combine existing actions with custom logic—enabling a self-improving agent ecosystem.
+This document describes the architecture for a new `Action.Type='Runtime'` — a JavaScript payload authored (typically by an agent), executed inside MJ's existing CodeExecution sandbox, and given structured, permissioned access to MemberJunction's capabilities via a request/response bridge.
 
-The key innovation is the **Script Action Bridge**—a utilities object injected into sandboxed JavaScript that provides async access to MemberJunction's full capabilities: entity metadata, views, queries, actions, and agents. This mirrors the successful pattern used in the React runtime for interactive components.
+The model is inspired by the `utilities` object pattern used in `@memberjunction/react-runtime` for interactive components, adapted for a server-side isolated-vm context. The bridge is pure JavaScript — there is no React dependency, and no DOM. Runtime actions are first-class `Action` records reusing the existing discovery, logging, agent-linking, and `CodeApprovalStatus` workflows.
 
-**Key Design Decision**: Rather than creating new entities, Script Actions extend the existing Actions infrastructure with a new Type value and a few additional columns. This maximizes reuse of existing discovery, logging, agent linking, and approval workflows.
+**Why this is v2.0.** The January proposal ("Script Actions") predates several shifts in the framework:
+
+- The `Agent Manager` hierarchy is fully built out (Requirements Analyst → Planning Designer → Architect → Builder → Spec Loader), so ActionSmith slots in as a sibling using the existing `MJ: AI Agent Sub-Agents` relationship table rather than being invented.
+- `Codesmith Agent` is live with an iterative `Execute Code` loop, so delegation from ActionSmith → Codesmith is concrete, not hypothetical.
+- `ActionEngine` dispatches by `DriverClass`, **not** by `Action.Type`, so introducing a new Type means adding a dispatch branch rather than an enum value.
+- The CodeExecution sandbox is strictly one-shot (JSON cloned in, JSON cloned out). A **new bidirectional IPC layer in `WorkerPool`** is the single biggest piece of net-new infrastructure, not a minor extension of the React runtime pattern.
+- Neither `ActionEngine` nor `BaseAgent` has a wall-clock `MaxExecutionTimeMS` / `AbortSignal` today — this is a cross-cutting engine change worth shipping on its own.
+- `AIAgent.ExposeAsAction` exists as a flag on every major agent but is not wired to a dispatcher. `ExecuteAgent` is an independent, small deliverable we should build alongside (but Runtime actions do **not** depend on it — `utilities.agents.Run` can call `AgentRunner` directly).
+
+Naming: **`Action.Type='Runtime'`**, package **`@memberjunction/action-runtime`**, bridge object **`utilities`**, agent **ActionSmith**.
 
 ---
 
-## Vision & Business Case
+## Vision
 
-### The Problem: Capability Gaps Halt Agents
+### The Capability-Gap Problem
 
-Today's MemberJunction agents operate within a fixed set of capabilities defined at development time. When an agent encounters a task that requires combining existing actions in novel ways, or needs a capability that doesn't exist yet, it must either:
-
-1. **Fail gracefully** - Report that it cannot complete the task
-2. **Request human intervention** - Ask a developer to create the missing capability
-3. **Improvise poorly** - Attempt workarounds that may not be reliable
-
-This creates a bottleneck where the value of agents is limited by the imagination and availability of developers who define their capabilities upfront.
-
-### The Vision: Agents That Build Their Own Tools
-
-Script Actions transform agents from consumers of fixed capabilities into **creators of new ones**. When Agent Manager (or any agent with appropriate permissions) identifies a capability gap, it can:
-
-1. **Design** a new action that composes existing actions with custom logic
-2. **Generate** the code using Codesmith's proven code generation patterns
-3. **Test** the action in a sandboxed environment
-4. **Submit** for human approval with full transparency on permissions and code
-5. **Persist** as a first-class action available to all agents
-
-The result is an agent ecosystem that **improves itself over time**—each new capability becomes a building block for even more sophisticated capabilities.
+Today's MJ agents operate within a fixed action catalog defined at development time. When an agent hits a task that needs a novel composition of existing actions — or a capability that doesn't exist — it must fail, escalate, or improvise. The value of the agent ecosystem is capped by developer bandwidth for action authoring.
 
 ### The Scaffolding Effect
 
-This is the key insight that makes Script Actions transformative:
+Runtime Actions let agents fill gaps by **composing, not coding from scratch**:
 
 ```
-Week 1: Agent creates "Daily Customer Digest" action
+Week 1: Agent creates "Daily Customer Digest"
 Week 2: Agent creates "Sales Pipeline Alert" using Customer Digest as a component
-Week 3: Agent creates "Executive Dashboard Generator" using both prior actions
+Week 3: Agent creates "Executive Dashboard" using both
 Week 4: Agent creates "Quarterly Business Review" composing all of the above
 ```
 
-Each new action **scaffolds** upon previous ones, creating compound value:
-
-- **Linear development** → **Exponential capability growth**
-- Actions that took agents hours to create → now take minutes to compose
-- Cross-functional capabilities emerge organically from business needs
-- Domain knowledge encoded by agents becomes permanent organizational assets
+Each generated action becomes a building block for the next. Linear development → compounding capability growth. The human stays in the loop via `CodeApprovalStatus`, but approval bandwidth becomes the binding constraint, not implementation bandwidth.
 
 ### Business Value
 
-| Traditional Approach | With Script Actions |
-|---------------------|---------------------|
-| Developers must anticipate every capability | Agents identify gaps in real-time |
+| Traditional | With Runtime Actions |
+|---|---|
+| Devs must anticipate every capability | Agents identify gaps in real time |
 | Weeks to design, implement, test, deploy | Hours from conception to approval |
-| Capabilities siloed by development cycles | Continuous capability improvement |
-| Knowledge locked in developer heads | Knowledge encoded in executable actions |
-| Limited by developer availability | Limited only by approval bandwidth |
-
-### Real-World Use Cases
-
-**1. Operations Automation**
-> "Send me a weekly digest of new customers, sorted by estimated value, and alert me immediately if any enterprise-tier customer churns."
-
-Agent creates "Customer Digest with Churn Alert" action combining entity queries, value calculations, and notification triggers—all approved by a human before execution.
-
-**2. Data Quality Enforcement**
-> "Before any record is saved, validate that all required relationships exist and data formats are correct."
-
-Agent creates validation actions that compose existing validators with custom business rules, running in the pre-save hook.
-
-**3. Cross-System Orchestration**
-> "When a deal closes in CRM, create the project in PM tool, notify the delivery team, and schedule the kickoff meeting."
-
-Agent creates an orchestration action that invokes multiple existing integration actions in sequence with error handling.
-
-**4. Adaptive Reporting**
-> "Create a report that shows me the metrics most likely to indicate problems with this quarter's forecast."
-
-Agent creates a dynamic reporting action that uses AI to select relevant metrics and presentation formats based on context.
-
-### Why Now?
-
-MemberJunction already has all the prerequisites:
-
-1. **Proven Sandbox** - 5-layer security with isolated-vm, battle-tested
-2. **Bridge Pattern** - React runtime demonstrates utilities injection works
-3. **Codesmith Agent** - Iterative code generation with testing loop
-4. **Approval Workflow** - CodeApprovalStatus for human oversight
-5. **Actions Framework** - Extensible type system and execution engine
-
-Script Actions is the natural evolution that connects these pieces into a coherent capability-generation system.
+| Knowledge locked in developer heads | Knowledge encoded as executable actions |
+| Capabilities siloed by release cycles | Continuous capability accretion |
 
 ---
 
-## Architectural Foundation
+## Current-State Grounding (as of April 2026)
 
-### Existing Infrastructure Leverage
+This is what actually exists today, verified against `packages/MJCoreEntities/src/generated/entity_subclasses.ts` and the current codebase. Everything in the target architecture below is described as a delta against this.
 
-| Component | Current State | Script Actions Usage |
-|-----------|--------------|----------------------|
-| **JavaScript Sandbox** | Production-grade `isolated-vm` with 5-layer security | Execution environment for Script action code |
-| **React Runtime Bridge** | `utilities` object with `md`, `rv`, `rq`, `ai` | Pattern template for action bridge |
-| **Codesmith Agent** | Iterative code generation and testing | ActionSmith delegates code generation to Codesmith |
-| **Actions Entity** | Existing with `Type='Custom'`, `'Generated'`, `'EntityAction'` | Add `Type='Script'` + permission columns |
-| **Action Framework** | `ActionEngineServer` with full lifecycle | Add `case 'Script'` to route to sandbox |
-| **Agent Manager** | Meta-agent creating agents and prompts | Primary consumer for Script action generation |
+### Action entity (`[${flyway:defaultSchema}].[Action]`)
 
-### Design Principles
+- `Type` — `nvarchar(20)`, default `'Generated'`, current CHECK constraint `CHK_Action_Type` allows `'Custom' | 'Generated'`
+- `Code` — `nvarchar(MAX)`, nullable
+- `CodeApprovalStatus` — `'Approved' | 'Pending' | 'Rejected'`, default `'Pending'`
+- Approval audit fields: `CodeApprovalComments`, `CodeApprovedByUserID`, `CodeApprovedAt`, `CodeLocked`, `ForceCodeGeneration`
+- `DriverClass` — `nvarchar(255)`, used by `ClassFactory` for Custom actions
+- `Config` — `nvarchar(MAX)`, used today for integration-action routing metadata (NOT suitable for Runtime config — we want separation of concerns)
+- Child entities: `Action Params`, `Action Result Codes`, `Action Execution Logs`, `AI Agent Actions`
+- **Missing**: `RuntimeActionConfiguration`, `MaxExecutionTimeMS`, `CreatedByAgentID`
 
-1. **Existing Infrastructure**: Use Actions entity with new Type, not new tables
-2. **Bridge Pattern**: Expose MJ capabilities through a clean utilities interface (like React runtime)
-3. **Async-First**: All bridge operations are Promise-based for natural async/await usage
-4. **Serializable Data**: All data crossing the bridge is JSON-serializable (no class instances)
-5. **Security by Approval**: Uses existing CodeApprovalStatus workflow
-6. **Codesmith Composition**: ActionSmith orchestrates, Codesmith writes code—don't reinvent the wheel
-7. **Scaffolding Effect**: Each Script action becomes a building block for more complex actions
+### `ActionEngine` (`packages/Actions/Engine/src/generic/ActionEngine.ts`)
+
+- `RunAction()` instantiates via `ClassFactory.CreateInstance<BaseAction>(BaseAction, action.DriverClass || action.Name, ...)`.
+- **No Type-based dispatch.** Introducing `Type='Runtime'` means adding an explicit branch before the `ClassFactory` call.
+- **No `MaxExecutionTimeMS`, no `AbortSignal`.** Actions run to completion unless they throw.
+
+### CodeExecution sandbox (`packages/Actions/CodeExecution/`)
+
+- Isolation: `isolated-vm` inside a forked child process. `WorkerPool` manages N workers.
+- `inputData` is `JSON.stringify`'d on the host, `JSON.parse`'d inside the isolate.
+- **Strictly one-shot.** `requireFunc` is synchronous by design (see header comments in `worker.ts`). The isolate cannot await a promise that resolves in the host.
+- Host→worker protocol is `{ type: 'execute', requestId, params }`; worker responds with `{ type: 'result', requestId, result }`. No backchannel.
+- Host-enforced wall-clock timeout via `setTimeout`. Cannot be extended mid-execution.
+- Supported libraries: `lodash`, `date-fns`, `mathjs`, `papaparse`, `uuid`, `validator`.
+
+### Agent runtime (`packages/AI/Agents/src/base-agent.ts`)
+
+- `BaseAgent` dispatches via `DetermineNextStep` → `ValidateNextStep` → `ExecuteNextStep` switch. Step types: `Retry`, `Actions`, `Sub-Agent`, `Chat`, `Success`, `Failed`, `ForEach`, `While`, `ClientTools` (Feb 2026).
+- `AgentRunner.RunAgent()` is the outer entry point — **this is what the bridge will call for `utilities.agents.Run()`**, not an `ExecuteAgent` action.
+- `MaxIterationsPerRun` is an iteration cap, **not** a wall-clock timeout. There is no agent-level `MaxExecutionTimeMS` today either.
+- Per-request provider threading (`IMetadataProvider`) landed in April 2026 — bridge handlers must respect this when calling MJ services on behalf of the sandbox.
+
+### Agent hierarchy
+
+- `AIAgent.ParentID` — owned children (deleted with parent, single-parent only). Used for Agent Manager's direct sub-agents.
+- `MJ: AI Agent Sub-Agents` relationship table — **fully wired at runtime** (confirmed). Lets a top-level agent be referenced as a sub-agent of one or more parents. This is how ActionSmith will be both `ExposeAsAction=true` and callable under Agent Manager.
+- Constraint: if `ParentID IS NOT NULL`, `ExposeAsAction` must be `FALSE`. ActionSmith must use the relationship table, not `ParentID`.
+
+### Agents that already exist (relevant ones)
+
+- **Codesmith Agent** — Loop type, `ExposeAsAction: true`, `MaxIterationsPerRun: 10`, one action (`Execute Code`), `PayloadSelfWritePaths: ["task", "inputData", "requirements", "iterations", "code", "results", "errors", "logs"]`, `FinalPayloadValidation` schema. Iterates until code passes validation or iteration cap.
+- **Agent Manager** — Loop type, orchestrates Requirements Analyst → Planning Designer → Architect → Builder → Spec Loader via `ParentID` children.
+- Both have `ExposeAsAction: true`, but no dispatcher wires that flag to the Action catalog yet.
+
+### React runtime `utilities` (pattern template)
+
+Located at `packages/Angular/Generic/react/src/lib/utilities/runtime-utilities.ts:45` — shape is:
+
+```typescript
+{ md, rv, rq, ai }
+```
+
+`buildUtilities()` calls `this.CreateSimpleMetadata(new Metadata())`, `CreateSimpleRunView(new RunView())`, etc. This is a browser-side, same-context injection — functions can be invoked directly. The server-side Runtime Action bridge inherits the **shape** but not the mechanism (see the bridge section below).
 
 ---
 
-## Script Action Bridge
+## Target Architecture
 
-### The `utilities` Object
+### Action Type Comparison
 
-Script actions receive a `utilities` object identical in spirit to the React runtime, but tailored for action execution context:
+| Field | `Custom` | `Generated` | `Runtime` (NEW) |
+|---|---|---|---|
+| **Code origin** | Hand-written TS | AI-generated TS | AI-generated JS |
+| **Compilation** | Build time | Build time | None — runtime |
+| **Execution** | Native TS class | Native TS class | Sandbox + bridge |
+| **Approval** | N/A | `CodeApprovalStatus` | `CodeApprovalStatus` |
+| **Permissions** | Implicit in code | Implicit in code | Declarative via `RuntimeActionConfiguration` |
+| **Timeout** | `MaxExecutionTimeMS` | `MaxExecutionTimeMS` | `MaxExecutionTimeMS` |
+| **Calls other actions** | Direct (TS) | Direct (TS) | Via bridge (scoped) |
 
-```typescript
-interface ScriptActionUtilities {
-  /**
-   * Entity metadata access
-   * Read-only access to entity definitions, fields, relationships
-   */
-  md: {
-    /** All available entities */
-    Entities: EntityInfo[];
-
-    /** Get entity metadata by name */
-    GetEntity(entityName: string): EntityInfo | undefined;
-
-    /** Get entity fields */
-    GetEntityFields(entityName: string): EntityFieldInfo[];
-
-    /** Get related entities */
-    GetRelatedEntities(entityName: string): RelatedEntityInfo[];
-  };
-
-  /**
-   * View execution - query entity data
-   * Returns plain JSON objects (not BaseEntity instances)
-   */
-  rv: {
-    /** Execute a single view */
-    RunView(options: {
-      EntityName: string;
-      ExtraFilter?: string;
-      OrderBy?: string;
-      Fields?: string[];
-      MaxRows?: number;
-    }): Promise<{
-      Success: boolean;
-      Results: Record<string, any>[];
-      TotalRowCount: number;
-      ErrorMessage?: string;
-    }>;
-
-    /** Execute multiple views in parallel (optimized) */
-    RunViews(options: Array<{
-      EntityName: string;
-      ExtraFilter?: string;
-      OrderBy?: string;
-      Fields?: string[];
-      MaxRows?: number;
-    }>): Promise<Array<{
-      Success: boolean;
-      Results: Record<string, any>[];
-      TotalRowCount: number;
-      ErrorMessage?: string;
-    }>>;
-  };
-
-  /**
-   * Query execution - run named queries
-   */
-  rq: {
-    RunQuery(options: {
-      QueryName: string;
-      Parameters?: Record<string, any>;
-    }): Promise<{
-      Success: boolean;
-      Results: Record<string, any>[];
-      ErrorMessage?: string;
-    }>;
-  };
-
-  /**
-   * Entity CRUD operations
-   * Works with plain JSON objects, not BaseEntity instances
-   */
-  entity: {
-    /** Create a new record */
-    Create(entityName: string, data: Record<string, any>): Promise<{
-      Success: boolean;
-      ID: string;
-      Record: Record<string, any>;
-      ErrorMessage?: string;
-    }>;
-
-    /** Load a record by ID */
-    Load(entityName: string, id: string): Promise<{
-      Success: boolean;
-      Record: Record<string, any>;
-      ErrorMessage?: string;
-    }>;
-
-    /** Update an existing record */
-    Update(entityName: string, id: string, data: Record<string, any>): Promise<{
-      Success: boolean;
-      Record: Record<string, any>;
-      ErrorMessage?: string;
-    }>;
-
-    /** Delete a record */
-    Delete(entityName: string, id: string): Promise<{
-      Success: boolean;
-      ErrorMessage?: string;
-    }>;
-
-    /** Save (create or update based on ID presence) */
-    Save(entityName: string, data: Record<string, any>): Promise<{
-      Success: boolean;
-      ID: string;
-      Record: Record<string, any>;
-      ErrorMessage?: string;
-    }>;
-  };
-
-  /**
-   * Action invocation - call other actions
-   * The core composition mechanism
-   */
-  actions: {
-    /** Get available actions (filtered by permissions) */
-    GetAvailableActions(): ActionInfo[];
-
-    /** Invoke an action by name */
-    Invoke(actionName: string, params: Record<string, any>): Promise<{
-      Success: boolean;
-      ResultCode: string;
-      OutputParams: Record<string, any>;
-      Message?: string;
-    }>;
-
-    /** Invoke multiple actions in parallel */
-    InvokeAll(calls: Array<{
-      ActionName: string;
-      Params: Record<string, any>;
-    }>): Promise<Array<{
-      Success: boolean;
-      ResultCode: string;
-      OutputParams: Record<string, any>;
-      Message?: string;
-    }>>;
-  };
-
-  /**
-   * Agent invocation - delegate to other agents
-   */
-  agents: {
-    /** Get available agents (filtered by permissions) */
-    GetAvailableAgents(): AgentInfo[];
-
-    /** Run an agent */
-    Run(agentName: string, options: {
-      Input: Record<string, any>;
-      ConversationID?: string;
-    }): Promise<{
-      Success: boolean;
-      Output: Record<string, any>;
-      Messages: Array<{ Role: string; Content: string }>;
-      ErrorMessage?: string;
-    }>;
-  };
-
-  /**
-   * AI/LLM capabilities - direct model access
-   */
-  ai: {
-    /** Execute a prompt */
-    ExecutePrompt(options: {
-      SystemPrompt: string;
-      UserMessage: string;
-      ModelPower?: 'lowest' | 'medium' | 'highest';
-    }): Promise<{
-      Success: boolean;
-      Response: string;
-      ModelUsed: string;
-      TokensUsed: number;
-    }>;
-
-    /** Generate embeddings */
-    GetEmbedding(text: string): Promise<{
-      Success: boolean;
-      Embedding: number[];
-    }>;
-  };
-
-  /**
-   * Logging and debugging
-   */
-  log: {
-    info(message: string, data?: any): void;
-    warn(message: string, data?: any): void;
-    error(message: string, data?: any): void;
-    debug(message: string, data?: any): void;
-  };
-
-  /**
-   * Allowed utility libraries (pre-loaded)
-   */
-  libs: {
-    lodash: typeof import('lodash');
-    dateFns: typeof import('date-fns');
-    mathjs: typeof import('mathjs');
-    uuid: { v4: () => string };
-    validator: typeof import('validator');
-  };
-}
-```
-
-### Bridge Implementation Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Runtime Action Execution                      │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                   Sandbox (isolated-vm)                   │   │
-│  │                                                           │   │
-│  │   // User's runtime action code                          │   │
-│  │   async function execute(input, utilities) {             │   │
-│  │     const sales = await utilities.rv.RunView({           │   │
-│  │       EntityName: 'Sales',                               │   │
-│  │       ExtraFilter: `Region = '${input.region}'`          │   │
-│  │     });                                                   │   │
-│  │                                                           │   │
-│  │     const summary = await utilities.ai.ExecutePrompt({   │   │
-│  │       SystemPrompt: 'Summarize sales data',              │   │
-│  │       UserMessage: JSON.stringify(sales.Results)         │   │
-│  │     });                                                   │   │
-│  │                                                           │   │
-│  │     await utilities.actions.Invoke('Send Email', {       │   │
-│  │       To: input.recipientEmail,                          │   │
-│  │       Subject: 'Sales Summary',                          │   │
-│  │       Body: summary.Response                             │   │
-│  │     });                                                   │   │
-│  │                                                           │   │
-│  │     return { success: true, summary: summary.Response }; │   │
-│  │   }                                                       │   │
-│  │                                                           │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                              │                                   │
-│                              │ Bridge Calls (IPC)                │
-│                              ▼                                   │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │              Bridge Handler (Main Process)                │   │
-│  │                                                           │   │
-│  │   • Receives serialized requests from sandbox            │   │
-│  │   • Validates permissions for requested operation        │   │
-│  │   • Executes actual MJ API calls with contextUser        │   │
-│  │   • Serializes results back to sandbox                   │   │
-│  │   • Enforces rate limits and resource constraints        │   │
-│  │                                                           │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                              │                                   │
-│                              ▼                                   │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │           MemberJunction Core Services                    │   │
-│  │                                                           │   │
-│  │   Metadata │ RunView │ RunQuery │ ActionEngine │ Agents  │   │
-│  │                                                           │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Async Bridge Protocol
-
-The sandbox uses a request-response IPC pattern for async operations:
-
-```typescript
-// Inside sandbox: utilities.rv.RunView() implementation
-async function RunView(options) {
-  // 1. Serialize request
-  const request = {
-    id: generateRequestId(),
-    type: 'rv.RunView',
-    payload: options
-  };
-
-  // 2. Send to main process via IPC
-  sendToHost(JSON.stringify(request));
-
-  // 3. Wait for response (Promise resolves when response arrives)
-  const response = await waitForResponse(request.id);
-
-  // 4. Return deserialized result
-  return JSON.parse(response);
-}
-```
-
-```typescript
-// Main process: Bridge handler
-class ScriptActionBridge {
-  async handleRequest(request: BridgeRequest, context: ExecutionContext): Promise<BridgeResponse> {
-    // Validate permissions
-    if (!this.isOperationAllowed(request.type, context.permissions)) {
-      return { error: 'Operation not permitted', code: 'PERMISSION_DENIED' };
-    }
-
-    // Route to appropriate handler
-    switch (request.type) {
-      case 'rv.RunView':
-        return this.handleRunView(request.payload, context.contextUser);
-      case 'actions.Invoke':
-        return this.handleActionInvoke(request.payload, context);
-      case 'agents.Run':
-        return this.handleAgentRun(request.payload, context);
-      // ... other handlers
-    }
-  }
-
-  private async handleRunView(payload: RunViewPayload, contextUser: UserInfo) {
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: payload.EntityName,
-      ExtraFilter: payload.ExtraFilter,
-      OrderBy: payload.OrderBy,
-      MaxRows: payload.MaxRows,
-      Fields: payload.Fields,
-      ResultType: 'simple'  // Always return plain objects, not entities
-    }, contextUser);
-
-    return {
-      Success: result.Success,
-      Results: result.Results,
-      TotalRowCount: result.TotalRowCount,
-      ErrorMessage: result.ErrorMessage
-    };
-  }
-}
-```
-
----
-
-## Using Existing Actions Infrastructure
-
-### No New Tables Required
-
-Instead of creating a new `RuntimeAction` entity, we extend the existing `Actions` infrastructure with a new type. The Actions table already has:
-
-- `Type` field → Add new value: `'Script'`
-- `Code` field → Already stores code for Generated actions
-- `CodeApprovalStatus` → Already handles approval workflow
-- `ActionParams` → Already defines inputs/outputs
-- `ActionResultCodes` → Already defines outcomes
-- `ActionExecutionLog` → Already logs all executions
-- `AIAgentAction` → Already links actions to agents
-
-### Schema Extension
+### Schema Extensions (see migration `V202604201400__v5.29.x__Runtime_Actions_Schema.sql`)
 
 ```sql
--- Add to existing Actions table
 ALTER TABLE [${flyway:defaultSchema}].[Action] ADD
-    -- Script-specific configuration (JSON blob - evolvable)
-    [ScriptActionConfiguration] NVARCHAR(MAX) NULL,
+    RuntimeActionConfiguration NVARCHAR(MAX) NULL,   -- JSON blob, only for Type='Runtime'
+    MaxExecutionTimeMS          INT           NULL,   -- universal, all action types
+    CreatedByAgentID            UNIQUEIDENTIFIER NULL; -- FK → AIAgent.ID
 
-    -- Universal execution timeout (applies to ALL action types)
-    [MaxExecutionTimeMS] INT NULL,
+ALTER TABLE [${flyway:defaultSchema}].[Action]
+    DROP CONSTRAINT CHK_Action_Type;
 
-    -- Creation tracking (which agent created this, if any)
-    [CreatedByAgentID] UNIQUEIDENTIFIER NULL;
+ALTER TABLE [${flyway:defaultSchema}].[Action]
+    ADD CONSTRAINT CHK_Action_Type
+    CHECK ([Type] IN ('Custom', 'Generated', 'Runtime'));
 ```
 
-### ScriptActionConfiguration Interface
+### `RuntimeActionConfiguration` (JSON)
 
-Defined in `@memberjunction/actions-base` for universal access:
+Defined in `@memberjunction/actions-base` for cross-package import:
 
 ```typescript
-/**
- * Reference to an entity/action/agent with both ID (stable) and Name (readable)
- * ID is the source of truth; Name is for display and debugging
- */
-export interface ScriptActionReference {
-  /** UUID of the referenced item - used for lookups */
+/** id + human-readable name pair — id is the source of truth */
+export interface RuntimeActionReference {
   id: string;
-  /** Human-readable name - for display, logging, and approval review */
   name: string;
 }
 
-/**
- * Reference to an approved sandbox library
- */
-export interface ScriptLibraryReference {
-  /** Library name as used in require() */
+export interface RuntimeLibraryReference {
   name: string;
-  /** Optional: specific version constraint */
   version?: string;
 }
 
 /**
- * Configuration for Script actions (Type='Script')
- * Stored as JSON in Action.ScriptActionConfiguration
- * Evolvable - add new properties as needed without schema changes
+ * Stored as JSON in Action.RuntimeActionConfiguration.
+ * Evolvable — new keys can be added without a schema change.
  */
-export interface ScriptActionConfiguration {
-  // Permission boundaries - what this script can access via bridge
+export interface RuntimeActionConfiguration {
   permissions: {
-    /** Actions this script can invoke via bridge */
-    allowedActions: ScriptActionReference[];
-    /** Agents this script can run via bridge */
-    allowedAgents: ScriptActionReference[];
-    /** Entities this script can access via bridge (RunView, CRUD) */
-    allowedEntities: ScriptActionReference[];
+    allowedActions:  RuntimeActionReference[];
+    allowedAgents:   RuntimeActionReference[];
+    allowedEntities: RuntimeActionReference[];
   };
-
-  // Resource limits (override defaults)
   limits?: {
-    /** Memory limit in MB (default: 128) */
-    maxMemoryMB?: number;
-    /** Max bridge calls per execution (default: 100) */
-    maxBridgeCalls?: number;
+    maxMemoryMB?:    number;  // default 128
+    maxBridgeCalls?: number;  // default 100
   };
-
-  // Sandbox configuration
   sandbox?: {
-    /**
-     * Additional libraries beyond the default set.
-     * Default set: lodash, date-fns, uuid, validator
-     * Additional approved libraries (opt-in):
-     *   - mathjs: Heavy math library, not needed by most scripts
-     *   - papaparse: CSV parsing, only if script handles CSV
-     *   - cheerio: HTML parsing, only if script processes HTML
-     *   - marked: Markdown parsing
-     * Must be in the approved library registry - arbitrary npm packages not allowed
-     */
-    additionalLibraries?: ScriptLibraryReference[];
-    /** Enable debug logging in sandbox (verbose console output) */
-    debugMode?: boolean;
+    additionalLibraries?: RuntimeLibraryReference[];
+    debugMode?:           boolean;
   };
-
-  // Versioning metadata
-  version?: string;
-  previousVersionId?: string;
+  version?:            string;
+  previousVersionId?:  string;
 }
 
-// Helper in ActionEntityExtended or ActionEngineBase
-export function parseScriptActionConfiguration(
+export function parseRuntimeActionConfiguration(
   action: ActionEntity
-): ScriptActionConfiguration | null {
-  if (action.Type !== 'Script' || !action.ScriptActionConfiguration) {
-    return null;
-  }
-  try {
-    return JSON.parse(action.ScriptActionConfiguration) as ScriptActionConfiguration;
-  } catch {
-    return null;
-  }
+): RuntimeActionConfiguration | null {
+  if (action.Type !== 'Runtime' || !action.RuntimeActionConfiguration) return null;
+  try { return JSON.parse(action.RuntimeActionConfiguration); }
+  catch { return null; }
 }
 ```
 
-### Example Configuration (Readable)
+### Universal `MaxExecutionTimeMS` + `AbortSignal`
 
-```json
-{
-  "permissions": {
-    "allowedEntities": [
-      { "id": "A1B2C3D4-...", "name": "Customers" },
-      { "id": "E5F6G7H8-...", "name": "Orders" }
-    ],
-    "allowedActions": [
-      { "id": "I9J0K1L2-...", "name": "Send Email" }
-    ],
-    "allowedAgents": []
-  },
-  "limits": {
-    "maxMemoryMB": 128,
-    "maxBridgeCalls": 50
-  },
-  "sandbox": {
-    "additionalLibraries": [
-      { "name": "papaparse" }
-    ],
-    "debugMode": false
-  }
-}
-```
-
-### Universal Execution Timeout with Abort Signal
-
-`MaxExecutionTimeMS` applies to **all** action types. ActionEngine enforces with abort signal:
+Applies to ALL action types, not just Runtime. Same pattern is mirrored in `BaseAgent` so agents get wall-clock timeout parity.
 
 ```typescript
-// In ActionEngineServer - applies to ALL action types
 async RunAction(params: RunActionParams): Promise<ActionResult> {
-  const action = params.Action;
-  const timeoutMs = action.MaxExecutionTimeMS || this.config.defaultActionTimeoutMS;
+  const action    = params.Action;
+  const timeoutMs = action.MaxExecutionTimeMS ?? this.config.defaultActionTimeoutMS;
 
-  // Create abort controller for cancellation
   const abortController = new AbortController();
-  const timeoutId = setTimeout(() => {
-    abortController.abort();
-  }, timeoutMs);
+  const timeoutId       = setTimeout(() => abortController.abort(), timeoutMs);
 
   try {
-    // Pass abort signal through params
     params.AbortSignal = abortController.signal;
     return await this.executeAction(action, params);
   } finally {
@@ -634,1402 +216,531 @@ async RunAction(params: RunActionParams): Promise<ActionResult> {
   }
 }
 
-// Actions can check for abort in long-running operations
+// Individual BaseAction subclasses can poll:
 protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-  // Check periodically in loops
   if (params.AbortSignal?.aborted) {
-    return { Success: false, ResultCode: 'TIMEOUT', Message: 'Execution aborted due to timeout' };
+    return { Success: false, ResultCode: 'TIMEOUT', Message: 'Execution aborted' };
   }
-  // ... action logic
+  // ...
 }
 ```
 
-### Action Type Comparison
+### Bridge: `utilities` object
 
-| Field | Custom | Generated | Script (NEW) |
-|-------|--------|-----------|--------------|
-| **Code Storage** | N/A (compiled) | AI-generated TypeScript | JavaScript in sandbox |
-| **Execution** | Native TypeScript | Native TypeScript | Sandbox + Bridge |
-| **Compilation** | Build-time | Build-time | Runtime (no build) |
-| **Approval** | N/A | CodeApprovalStatus | CodeApprovalStatus |
-| **Permissions** | Implicit (code) | Implicit (code) | Explicit (ScriptActionConfiguration) |
-| **Timeout** | MaxExecutionTimeMS | MaxExecutionTimeMS | MaxExecutionTimeMS |
-| **Can call Actions** | Yes (direct) | Yes (direct) | Yes (via bridge, scoped) |
-
-### How Script Actions Work
+Shape mirrors the React runtime (`md`, `rv`, `rq`, `ai`) but adds entity CRUD, action invocation, agent invocation, and a logger. All operations are `Promise`-based because each call is an async host round-trip.
 
 ```typescript
-// ActionEngineServer detects Type='Script' and routes accordingly
-private async executeAction(action: ActionEntity, params: RunActionParams): Promise<ActionResult> {
-  switch (action.Type) {
-    case 'Custom':
-    case 'Generated':
-      return this.runNativeAction(action, params);
+export interface RuntimeActionUtilities {
+  md: {
+    Entities:            EntityInfo[];
+    GetEntity:           (name: string) => EntityInfo | undefined;
+    GetEntityFields:     (name: string) => EntityFieldInfo[];
+    GetRelatedEntities:  (name: string) => RelatedEntityInfo[];
+  };
 
-    case 'Script':
-      return this.runScriptAction(action, params);
+  rv: {
+    RunView:  (opts: BridgeRunViewOptions)  => Promise<BridgeRunViewResult>;
+    RunViews: (opts: BridgeRunViewOptions[])=> Promise<BridgeRunViewResult[]>;
+  };
 
-    case 'EntityAction':
-      return this.runEntityAction(action, params);
+  rq: {
+    RunQuery: (opts: { QueryName: string; Parameters?: Record<string, unknown> })
+      => Promise<BridgeRunQueryResult>;
+  };
+
+  entity: {
+    Create: (entityName: string, data: Record<string, unknown>)             => Promise<BridgeEntityResult>;
+    Load:   (entityName: string, id: string)                                => Promise<BridgeEntityResult>;
+    Update: (entityName: string, id: string, data: Record<string, unknown>) => Promise<BridgeEntityResult>;
+    Delete: (entityName: string, id: string)                                => Promise<BridgeDeleteResult>;
+    Save:   (entityName: string, data: Record<string, unknown>)             => Promise<BridgeEntityResult>;
+  };
+
+  actions: {
+    GetAvailableActions: () => ActionInfo[];
+    Invoke:              (actionName: string, params: Record<string, unknown>)
+      => Promise<BridgeActionResult>;
+    InvokeAll:           (calls: Array<{ ActionName: string; Params: Record<string, unknown> }>)
+      => Promise<BridgeActionResult[]>;
+  };
+
+  agents: {
+    GetAvailableAgents: () => AgentInfo[];
+    Run:                (agentName: string, opts: { Input: Record<string, unknown>; ConversationID?: string })
+      => Promise<BridgeAgentResult>;
+  };
+
+  ai: {
+    ExecutePrompt: (opts: { SystemPrompt: string; UserMessage: string; ModelPower?: 'lowest' | 'medium' | 'highest' })
+      => Promise<BridgePromptResult>;
+    GetEmbedding:  (text: string) => Promise<BridgeEmbeddingResult>;
+  };
+
+  log: {
+    info:  (msg: string, data?: unknown) => void;
+    warn:  (msg: string, data?: unknown) => void;
+    error: (msg: string, data?: unknown) => void;
+    debug: (msg: string, data?: unknown) => void;
+  };
+
+  libs: {
+    lodash:    typeof import('lodash');
+    dateFns:   typeof import('date-fns');
+    mathjs:    typeof import('mathjs');
+    uuid:      { v4: () => string };
+    validator: typeof import('validator');
+  };
+}
+```
+
+**Key semantic choices:**
+
+- All data crossing the bridge is JSON-serializable plain objects. No `BaseEntity` instances, no class methods.
+- `rv.RunView` always returns `ResultType: 'simple'` (plain objects) — the sandbox has no use for `BaseEntity`.
+- `utilities.agents.Run` is implemented by the bridge calling `AgentRunner.RunAgent()` directly. **We deliberately do NOT route through an `ExecuteAgent` action wrapper** — that would be an unnecessary extra layer for an in-process call. `ExecuteAgent` is a separate independent deliverable (1j) for the broader `ExposeAsAction` story.
+
+### Bridge protocol — bidirectional IPC in WorkerPool
+
+This is the single largest piece of net-new infrastructure. Today's `WorkerPool` is a one-shot request/response; we need to invert it into a multi-message session so the worker can make bridge calls during execution and await host responses.
+
+**Worker side — what the user code sees:**
+
+```javascript
+// Inside the sandbox — transparent async wrapper
+async function RunView(options) {
+  const id = nextRequestId();
+  postToHost({ type: 'bridge.rv.RunView', id, payload: options });
+  return await waitForBridgeResponse(id);  // Promise backed by message-id map
+}
+```
+
+**Host side — `RuntimeActionBridge` runs in the main process:**
+
+```typescript
+class RuntimeActionBridge {
+  constructor(
+    private contextUser: UserInfo,
+    private config:      RuntimeActionConfiguration,
+    private abortSignal: AbortSignal | undefined
+  ) {}
+
+  async handleRequest(msg: BridgeRequest): Promise<BridgeResponse> {
+    if (this.abortSignal?.aborted) {
+      return { error: 'Aborted', code: 'ABORTED' };
+    }
+    if (!this.isAllowed(msg.type, msg.payload)) {
+      return { error: 'Permission denied', code: 'PERMISSION_DENIED' };
+    }
+    switch (msg.type) {
+      case 'bridge.rv.RunView':       return this.handleRunView(msg.payload);
+      case 'bridge.actions.Invoke':   return this.handleActionInvoke(msg.payload);
+      case 'bridge.agents.Run':       return this.handleAgentRun(msg.payload);
+      // ...
+    }
+  }
+
+  private async handleRunView(p: BridgeRunViewOptions) {
+    if (!this.entityAllowed(p.EntityName)) return this.deny('entity', p.EntityName);
+    const rv = new RunView();
+    const result = await rv.RunView({ ...p, ResultType: 'simple' }, this.contextUser);
+    return {
+      Success:       result.Success,
+      Results:       result.Results,
+      TotalRowCount: result.TotalRowCount,
+      ErrorMessage:  result.ErrorMessage,
+    };
   }
 }
+```
 
-private async runScriptAction(action: ActionEntity, params: RunActionParams): Promise<ActionResult> {
-  // 1. Parse configuration
-  const config = parseScriptActionConfiguration(action);
-  if (!config) {
-    return { Success: false, Message: 'Invalid ScriptActionConfiguration' };
+**Protocol extensions (over today's fork-pool IPC):**
+
+- New message type set: `bridge.*` requests from worker → host, `bridge-response` from host → worker. Request IDs let multiple in-flight bridge calls coexist if user code uses `Promise.all`.
+- Worker keeps a `Map<id, { resolve, reject }>` for pending bridge calls.
+- Host keeps the worker alive during bridge calls — the wall-clock timeout measures **total** execution (user code + bridge calls), enforced by `AbortController`. If the abort fires, the host sends a `bridge-abort` to the worker and the worker's pending promises reject.
+- Memory and bridge-call-count limits enforced host-side (we can track both cheaply).
+
+This is real work — budget ~2–3 weeks (see phase 1d).
+
+### Security Model
+
+Five layers, same structure as the Jan proposal, with two clarifications:
+
+1. **Approval gate** — `CodeApprovalStatus='Approved'` is required. Human sees code + declared permissions + test results. Reusing existing approval UI.
+2. **Declarative permissions** — `RuntimeActionConfiguration.permissions` enumerates allowed entities/actions/agents *by id*. Bridge enforces; permissions are part of the approval review.
+3. **Bridge enforcement** — every bridge call validated against permissions before dispatching. `contextUser` flows through every downstream call so MJ row-level security still applies.
+4. **Sandbox isolation** — existing `isolated-vm` + child process + module blocking + library allowlist + memory/CPU/timeout limits.
+5. **Audit** — `ActionExecutionLog` captures every invocation (existing). Bridge-call counts and host denials captured in the log's structured output.
+
+### `ActionEngine` dispatch extension
+
+Minimal change to the existing `RunAction()`:
+
+```typescript
+async RunAction(params: RunActionParams): Promise<ActionResult> {
+  // ... universal timeout wiring (see above) ...
+
+  if (params.Action.Type === 'Runtime') {
+    return this.runRuntimeAction(params);
   }
+  // existing ClassFactory path for Custom / Generated
+  return this.runClassBasedAction(params);
+}
 
-  // 2. Create bridge with scoped permissions
-  const bridge = new ScriptActionBridge(
-    params.ContextUser,
-    config.permissions,
-    params.AbortSignal  // Pass abort signal to bridge
-  );
+private async runRuntimeAction(params: RunActionParams): Promise<ActionResult> {
+  const action = params.Action;
+  const config = parseRuntimeActionConfiguration(action);
+  if (!config) return this.failResult('INVALID_CONFIG');
 
-  // 3. Execute in sandbox
-  const executor = new ScriptActionExecutor();
-  const result = await executor.execute(
-    action.Code,
-    this.paramsToInput(params),
+  const bridge = new RuntimeActionBridge(params.ContextUser, config, params.AbortSignal);
+  const executor = new RuntimeActionExecutor();  // lives in @memberjunction/action-runtime
+
+  const result = await executor.execute({
+    code:         action.Code!,
+    input:        this.paramsToInput(params),
     bridge,
-    {
-      memoryLimit: config.limits?.maxMemoryMB || 128,
-      maxBridgeCalls: config.limits?.maxBridgeCalls || 100,
-      abortSignal: params.AbortSignal
-    }
-  );
+    memoryLimitMB: config.limits?.maxMemoryMB ?? 128,
+    maxBridgeCalls: config.limits?.maxBridgeCalls ?? 100,
+    abortSignal:  params.AbortSignal,
+  });
 
-  // 4. Standard logging (uses existing ActionExecutionLog)
   return this.wrapResult(result, params);
 }
 ```
 
-### Benefits of Using Existing Infrastructure
+---
 
-1. **No migration complexity** - Just add columns and a new Type value
-2. **Unified discovery** - Script actions appear alongside other actions
-3. **Existing logging** - ActionExecutionLog already captures everything
-4. **Existing agent linking** - AIAgentAction already works
-5. **Existing UI** - Action management UI works with minor updates
-6. **Existing CodeGen patterns** - Same approval workflow as Generated actions
-7. **Evolvable Configuration** - JSON blob can grow without schema changes
-8. **Universal Timeout** - All action types benefit from timeout enforcement
+## ActionSmith Agent
 
-### Example: Creating a Script Action
+ActionSmith is a new top-level agent with `ExposeAsAction: true`, also linked as a sub-agent of Agent Manager via the `MJ: AI Agent Sub-Agents` relationship table (the fully-wired referenced-sub-agent pattern — not `ParentID`, which would forbid `ExposeAsAction`).
 
-```json
-{
-  "fields": {
-    "Name": "Daily Customer Digest",
-    "Description": "Fetches new customers, generates AI summary, sends email",
-    "Type": "Script",
-    "Status": "Pending",
-    "CategoryID": "@lookup:Action Categories.Name=Communication",
+### Responsibilities
 
-    "Code": "const customers = await utilities.rv.RunView({ EntityName: 'Customers', ExtraFilter: \"CreatedAt >= DATEADD(day, -1, GETDATE())\" });\n\nif (customers.Results.length === 0) {\n  return { success: true, message: 'No new customers' };\n}\n\nconst summary = await utilities.ai.ExecutePrompt({ SystemPrompt: 'Summarize new customers', UserMessage: JSON.stringify(customers.Results) });\n\nawait utilities.actions.Invoke('Send Email', { To: input.recipientEmail, Subject: 'Daily Customer Digest', Body: summary.Response });\n\nreturn { success: true, customerCount: customers.Results.length };",
+1. Parse a capability-gap description into a contract: name, description, `inputSchema`, `outputSchema`, minimal-necessary `permissions`, test cases.
+2. Delegate code generation to **Codesmith** as a sub-agent, passing the contract and the set of available bridge utilities.
+3. When Codesmith returns working code, package an `Action` record with `Type='Runtime'`, `Code`, `RuntimeActionConfiguration`, `ActionParams`, `ActionResultCodes`, `CodeApprovalStatus='Pending'`, `CreatedByAgentID`.
+4. Present for human approval with code, permissions, and test results surfaced.
 
-    "CodeApprovalStatus": "Pending",
-    "ScriptActionConfiguration": "{\"permissions\":{\"allowedEntities\":[\"Customers\"],\"allowedActions\":[\"Send Email\"],\"allowedAgents\":[]},\"limits\":{\"maxMemoryMB\":128}}",
-    "MaxExecutionTimeMS": 30000,
-    "CreatedByAgentID": "@lookup:AI Agents.Name=ActionSmith Agent"
-  },
-  "relatedEntities": {
-    "Action Params": [
-      {
-        "fields": {
-          "Name": "recipientEmail",
-          "Type": "Input",
-          "ValueType": "Scalar",
-          "IsRequired": true,
-          "Description": "Email address to send the digest to"
-        }
-      },
-      {
-        "fields": {
-          "Name": "customerCount",
-          "Type": "Output",
-          "ValueType": "Scalar",
-          "Description": "Number of new customers included in digest"
-        }
-      }
-    ],
-    "Action Result Codes": [
-      { "fields": { "ResultCode": "SUCCESS", "IsSuccess": true } },
-      { "fields": { "ResultCode": "NO_CUSTOMERS", "IsSuccess": true, "Description": "No new customers to report" } },
-      { "fields": { "ResultCode": "EMAIL_FAILED", "IsSuccess": false } }
-    ]
-  }
-}
-```
+### What ActionSmith does NOT do
 
-**Readable ScriptActionConfiguration:**
-```json
-{
-  "permissions": {
-    "allowedEntities": [
-      { "id": "D7E8F9A0-1234-5678-9ABC-DEF012345678", "name": "Customers" }
-    ],
-    "allowedActions": [
-      { "id": "A1B2C3D4-5678-9ABC-DEF0-123456789ABC", "name": "Send Email" }
-    ],
-    "allowedAgents": []
-  },
-  "limits": {
-    "maxMemoryMB": 128
-  }
-}
-```
+- Write JavaScript — Codesmith does that, and already iterates to 10 attempts with an execution loop.
+- Test the code — Codesmith's validation loop handles it.
+- Skip approval — every Runtime action requires a human approval before it's `Status='Active'`.
+
+### Delegation to Codesmith
+
+Codesmith already takes a `task` + `inputData` + `iterations` payload and returns working `code`. We add a minor extension: a `runtimeActionMode: true` flag that signals Codesmith to:
+
+- Use `async/await` (bridge calls are async)
+- Include the bridge utilities (`md`, `rv`, `rq`, `entity`, `actions`, `agents`, `ai`, `log`, `libs`) in the prompt context
+- Validate against the caller-provided `outputSchema`
+
+No new sandbox; Codesmith's existing `Execute Code` loop works — the only addition is that when testing, it executes against a **real bridge** scoped to the requested permissions so bridge calls are actually exercised.
+
+### ActionSmith Actions
+
+- **`Create Runtime Action`** — persists the Action + Params + ResultCodes + RuntimeActionConfiguration in one transaction. `CreatedByAgentID` set automatically. `CodeApprovalStatus='Pending'`.
+- **`Test Runtime Action`** — runs a set of test cases against the sandbox with the configured permissions; returns structured pass/fail for each case.
 
 ---
 
-## Execution Flow
+## Implementation Plan — Phase 1
 
-### Complete Lifecycle
+Single phase, shipped as sub-deliverables 1a–1j. Each is individually mergeable and testable.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                 RUNTIME ACTION LIFECYCLE                         │
-└─────────────────────────────────────────────────────────────────┘
+### 1a — Migration + CodeGen regen
 
-1. GENERATION (Agent Manager or User)
-   ┌─────────────────────────────────────────────────────────────┐
-   │ Agent identifies capability gap                              │
-   │     ↓                                                        │
-   │ Agent designs runtime action:                                │
-   │   • Determines which existing actions to compose             │
-   │   • Defines input/output schema                              │
-   │   • Writes JavaScript code using bridge utilities            │
-   │     ↓                                                        │
-   │ Agent generates RuntimeAction record with Status='Pending'   │
-   └─────────────────────────────────────────────────────────────┘
-                              ↓
-2. TESTING (Sandbox Execution)
-   ┌─────────────────────────────────────────────────────────────┐
-   │ Agent provides test inputs                                   │
-   │     ↓                                                        │
-   │ RuntimeActionExecutor runs in sandbox with test permissions  │
-   │     ↓                                                        │
-   │ Results validated against OutputSchema                       │
-   │     ↓                                                        │
-   │ If errors: Agent refines code (Codesmith pattern)           │
-   │ If success: Proceed to approval                              │
-   └─────────────────────────────────────────────────────────────┘
-                              ↓
-3. APPROVAL (User Gate)
-   ┌─────────────────────────────────────────────────────────────┐
-   │ User presented with:                                         │
-   │   • Action name and description                              │
-   │   • What it does (plain English from agent)                  │
-   │   • The code (syntax highlighted)                            │
-   │   • Permissions requested (entities, actions, agents)        │
-   │   • Test results                                             │
-   │     ↓                                                        │
-   │ User reviews and either:                                     │
-   │   [Approve] → Status='Approved', ApprovedAt=now              │
-   │   [Reject]  → Status='Rejected', RejectionReason=feedback    │
-   │   [Edit]    → User can modify code before approval           │
-   └─────────────────────────────────────────────────────────────┘
-                              ↓
-4. REGISTRATION (Available for Use)
-   ┌─────────────────────────────────────────────────────────────┐
-   │ RuntimeAction indexed in semantic search                     │
-   │     ↓                                                        │
-   │ Action appears in agent action discovery                     │
-   │     ↓                                                        │
-   │ Can be linked to agents via AIAgentRuntimeAction             │
-   │     ↓                                                        │
-   │ Available for composition in other runtime actions           │
-   └─────────────────────────────────────────────────────────────┘
-                              ↓
-5. EXECUTION (Runtime)
-   ┌─────────────────────────────────────────────────────────────┐
-   │ Agent/workflow invokes runtime action                        │
-   │     ↓                                                        │
-   │ ActionEngineServer detects RuntimeAction type                │
-   │     ↓                                                        │
-   │ RuntimeActionExecutor:                                       │
-   │   1. Creates sandbox with bridge utilities                   │
-   │   2. Injects permissions based on AllowedActions/Entities    │
-   │   3. Executes code with timeout/memory limits                │
-   │   4. Returns result                                          │
-   │     ↓                                                        │
-   │ Execution logged to RuntimeActionExecutionLog                │
-   └─────────────────────────────────────────────────────────────┘
-                              ↓
-6. SCAFFOLDING (Compound Growth)
-   ┌─────────────────────────────────────────────────────────────┐
-   │ New runtime action can invoke this action via bridge         │
-   │     ↓                                                        │
-   │ Capabilities compound over time                              │
-   │     ↓                                                        │
-   │ Agent ecosystem becomes increasingly capable                 │
-   └─────────────────────────────────────────────────────────────┘
-```
+- **File**: `migrations/v5/V202604201400__v5.29.x__Runtime_Actions_Schema.sql` (already drafted)
+- Adds `RuntimeActionConfiguration`, `MaxExecutionTimeMS`, `CreatedByAgentID`; widens `CHK_Action_Type` to include `'Runtime'`
+- Run `mj codegen` to regen `entity_subclasses.ts`, views, sprocs
+- Check in regenerated code
 
-### ScriptActionExecutor Implementation
+**Dependencies**: none
+**Verifies**: Action schema and generated types match the plan
 
-```typescript
-export class ScriptActionExecutor {
+### 1b — Universal `MaxExecutionTimeMS` + `AbortSignal` in `ActionEngine`
 
-  async execute(
-    action: ActionEntity,  // Uses existing Actions entity with Type='Script'
-    inputParams: Record<string, any>,
-    contextUser: UserInfo
-  ): Promise<ScriptActionResult> {
+- Wrap `RunAction()` in an `AbortController`, set `params.AbortSignal`, respect `action.MaxExecutionTimeMS` with engine-default fallback
+- Mirror in `BaseAgent.Execute()` so agents have wall-clock timeout parity (lift the same pattern)
+- Document behavior in `packages/Actions/Engine/README.md` and agent docs
+- Update existing `BaseAction` subclasses to honor abort in long loops where relevant
 
-    // 1. Build permission context from action metadata
-    const permissions: ExecutionPermissions = {
-      allowedActions: JSON.parse(action.AllowedActions || '[]'),
-      allowedAgents: JSON.parse(action.AllowedAgents || '[]'),
-      allowedEntities: JSON.parse(action.AllowedEntities || '[]')
-    };
+**Dependencies**: 1a
+**Verifies**: integration test — action with `MaxExecutionTimeMS=100` that sleeps returns `TIMEOUT` result code
 
-    // 2. Create bridge with scoped permissions
-    const bridge = new ScriptActionBridge(contextUser, permissions);
+### 1c — `ActionEngine` Type dispatch + pure-compute Runtime actions
 
-    // 3. Build utilities object for sandbox
-    const utilities = this.buildUtilities(bridge);
+- Add `if (Type === 'Runtime')` branch in `RunAction()` that routes to `RuntimeActionExecutor`
+- Create `@memberjunction/action-runtime` package with `RuntimeActionExecutor`, input/output wiring, wrap user code in an async IIFE
+- Inject ONLY `input` + `libs` at first — no bridge yet
+- Approval workflow: Runtime actions with `CodeApprovalStatus !== 'Approved'` refuse to execute with a clear error
 
-    // 4. Execute in sandbox
-    const codeExecution = new CodeExecutionService();
-    await codeExecution.initialize();
+**Dependencies**: 1a, 1b
+**Verifies**: hand-authored Runtime action that takes two numbers and returns their sum works end-to-end; unapproved Runtime action is refused
 
-    const result = await codeExecution.execute({
-      code: this.wrapCode(action.Code),
-      language: 'javascript',
-      inputData: { input: inputParams, utilities },
-      timeoutSeconds: action.MaxExecutionTimeSeconds || 30,
-      memoryLimitMB: action.MaxMemoryMB || 128
-    });
+### 1d — Bidirectional IPC in `WorkerPool`
 
-    return {
-      Success: result.success,
-      Output: result.output,
-      Logs: result.logs,
-      ErrorMessage: result.error,
-      ExecutionTimeMs: result.executionTimeMs
-    };
-  }
+- Extend the worker's IPC protocol with bridge request/response messages + request IDs
+- Add a Promise-backed message router on both sides
+- Rework wall-clock timeout enforcement to abort mid-bridge-call via a signal to the worker
+- Enforce `maxBridgeCalls` counter on the host
+- Unit tests for: successful bridge round-trip, rejected-by-permissions, host-aborted mid-call, worker-side timeout of an awaited host response
 
-  private wrapCode(userCode: string): string {
-    return `
-      async function __executeScriptAction(input, utilities) {
-        ${userCode}
-      }
+**Dependencies**: 1c
+**Verifies**: unit tests above pass; no regression in existing `Execute Code` action
+**Risk level**: **highest** of the phase — budget ~2–3 weeks
 
-      output = await __executeScriptAction(input, utilities);
-    `;
-  }
+### 1e — Read-only bridge: `md`, `rv`, `rq`
 
-  private buildUtilities(bridge: ScriptActionBridge): ScriptActionUtilities {
-    return {
-      md: {
-        Entities: bridge.getEntities(),
-        GetEntity: (name) => bridge.getEntity(name),
-        GetEntityFields: (name) => bridge.getEntityFields(name),
-        GetRelatedEntities: (name) => bridge.getRelatedEntities(name)
-      },
-      rv: {
-        RunView: (options) => bridge.runView(options),
-        RunViews: (options) => bridge.runViews(options)
-      },
-      rq: {
-        RunQuery: (options) => bridge.runQuery(options)
-      },
-      entity: {
-        Create: (entityName, data) => bridge.createEntity(entityName, data),
-        Load: (entityName, id) => bridge.loadEntity(entityName, id),
-        Update: (entityName, id, data) => bridge.updateEntity(entityName, id, data),
-        Delete: (entityName, id) => bridge.deleteEntity(entityName, id),
-        Save: (entityName, data) => bridge.saveEntity(entityName, data)
-      },
-      actions: {
-        GetAvailableActions: () => bridge.getAvailableActions(),
-        Invoke: (name, params) => bridge.invokeAction(name, params),
-        InvokeAll: (calls) => bridge.invokeActions(calls)
-      },
-      agents: {
-        GetAvailableAgents: () => bridge.getAvailableAgents(),
-        Run: (name, options) => bridge.runAgent(name, options)
-      },
-      ai: {
-        ExecutePrompt: (options) => bridge.executePrompt(options),
-        GetEmbedding: (text) => bridge.getEmbedding(text)
-      },
-      log: {
-        info: (msg, data) => bridge.log('info', msg, data),
-        warn: (msg, data) => bridge.log('warn', msg, data),
-        error: (msg, data) => bridge.log('error', msg, data),
-        debug: (msg, data) => bridge.log('debug', msg, data)
-      },
-      libs: bridge.getLibraries()
-    };
-  }
-}
-```
+- Implement `RuntimeActionBridge` in `@memberjunction/action-runtime`
+- Handlers for: `md.Entities`, `md.GetEntity`, `md.GetEntityFields`, `md.GetRelatedEntities`, `rv.RunView`, `rv.RunViews`, `rq.RunQuery`
+- Permission enforcement from `RuntimeActionConfiguration.permissions.allowedEntities`
+- Inject pre-warmed snapshot of allowed `md` data into the sandbox at startup so synchronous `md.*` calls work without a bridge round-trip
+- `contextUser` threaded through every call
 
----
+**Dependencies**: 1d
+**Verifies**: Runtime action that queries two allowed entities and a disallowed one — allowed queries succeed, disallowed rejected
 
-## Security Model
+### 1f — Write bridge: `entity` CRUD + `actions.Invoke`
 
-### Multi-Layer Security
+- `entity.Create`/`Load`/`Update`/`Delete`/`Save` (all permission-scoped)
+- `actions.Invoke`/`InvokeAll` — bridge calls `ActionEngineServer.RunAction()` with the sandbox's `contextUser`
+- Re-entrancy: a Runtime action invoking another Runtime action is supported but subject to the same permission and timeout checks. Track call depth to prevent runaway recursion (hard cap, default 10)
+- `ActionExecutionLog` captures all nested invocations
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Layer 1: USER APPROVAL GATE                                     │
-│ • User must explicitly approve runtime action before use        │
-│ • User sees: code, permissions, test results                    │
-│ • User can edit code before approval                            │
-│ • Rejection requires reason (feedback to agent)                 │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ Layer 2: DECLARATIVE PERMISSIONS                                 │
-│ • AllowedActions: Only these actions can be invoked             │
-│ • AllowedAgents: Only these agents can be run                   │
-│ • AllowedEntities: Only these entities can be accessed          │
-│ • Permissions are part of approval review                        │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ Layer 3: BRIDGE ENFORCEMENT                                      │
-│ • Bridge validates every operation against permissions          │
-│ • contextUser flows through all operations                       │
-│ • MJ's entity-level security still applies                       │
-│ • Rate limiting per execution                                    │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ Layer 4: SANDBOX ISOLATION                                       │
-│ • V8 isolate with memory limits                                  │
-│ • Execution timeout                                              │
-│ • No filesystem/network access                                   │
-│ • No eval() or dynamic code execution                            │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│ Layer 5: AUDIT TRAIL                                             │
-│ • All executions logged with full context                        │
-│ • Bridge operations counted and recorded                         │
-│ • Errors captured with stack traces                              │
-│ • Usage analytics for anomaly detection                          │
-└─────────────────────────────────────────────────────────────────┘
-```
+**Dependencies**: 1e
+**Verifies**: Runtime action that loads a record, transforms it, invokes `Send Email`, and saves a status record works with a minimum-necessary permission set
 
-### Permission Enforcement in Bridge
+### 1g — Agent + AI bridge: `agents.Run`, `ai.ExecutePrompt`, `ai.GetEmbedding`
 
-```typescript
-class ScriptActionBridge {
-  constructor(
-    private contextUser: UserInfo,
-    private permissions: ExecutionPermissions
-  ) {}
+- `agents.Run` calls `AgentRunner.RunAgent()` directly (no `ExecuteAgent` action in the path)
+- Permission-scoped by `allowedAgents`; same `contextUser`
+- `ai.ExecutePrompt` / `ai.GetEmbedding` delegate to existing AI providers using the caller's API key context
+- Respect the per-request `IMetadataProvider` threading (Apr 2026 feature) when dispatching from the bridge
 
-  async invokeAction(actionName: string, params: Record<string, any>) {
-    // Check if action is in allowed list
-    if (!this.permissions.allowedActions.includes(actionName)) {
-      throw new SecurityError(
-        `Action '${actionName}' is not in AllowedActions. ` +
-        `Permitted actions: ${this.permissions.allowedActions.join(', ')}`
-      );
-    }
+**Dependencies**: 1f
+**Verifies**: Runtime action that loads feedback records, delegates analysis to a scoped sub-agent, and emits a summary via `ai.ExecutePrompt`
 
-    // Also check if it's a RuntimeAction and whether that's allowed
-    const action = ActionEngineServer.Instance.Actions.find(a => a.Name === actionName);
-    if (!action) {
-      // Check RuntimeActions
-      const runtimeAction = await this.getRuntimeAction(actionName);
-      if (runtimeAction && runtimeAction.Status !== 'Approved') {
-        throw new SecurityError(`RuntimeAction '${actionName}' is not approved`);
-      }
-    }
+### 1h — ActionSmith agent
 
-    // Execute with contextUser
-    const result = await ActionEngineServer.Instance.RunAction({
-      Action: action,
-      Params: this.convertParams(params),
-      ContextUser: this.contextUser,
-      SkipActionLog: false
-    });
+- Agent metadata JSON in `/metadata/agents/.actionsmith-agent.json`:
+  - `Name: "ActionSmith Agent"`, TypeID = Loop, `ExposeAsAction: true`, `ParentID: NULL`
+  - Link to Agent Manager via `MJ: AI Agent Sub-Agents` relationship (not `ParentID`)
+  - Declare `Codesmith Agent` as a sub-agent via the relationship table
+  - `PayloadSelfWritePaths` — contract, permissions, code, testResults, approvalStatus
+  - `FinalPayloadValidation` — schema ensuring Action record was created
+- System prompt in `/metadata/prompts/.actionsmith-prompt.md`
+- Two new actions: `Create Runtime Action`, `Test Runtime Action`
+- Codesmith prompt extension: recognize `runtimeActionMode: true` and surface bridge utilities in its in-context documentation
 
-    return this.serializeResult(result);
-  }
+**Dependencies**: 1g
+**Verifies**: ask ActionSmith (via Agent Manager or directly) to create "Weekly Sales Summary Email" — end-to-end flow produces an approved Runtime action
 
-  async runView(options: RunViewOptions) {
-    // Check entity permission
-    if (!this.permissions.allowedEntities.includes(options.EntityName)) {
-      throw new SecurityError(
-        `Entity '${options.EntityName}' is not in AllowedEntities. ` +
-        `Permitted entities: ${this.permissions.allowedEntities.join(', ')}`
-      );
-    }
+### 1i — Approval UI enhancements
 
-    const rv = new RunView();
-    const result = await rv.RunView({
-      ...options,
-      ResultType: 'simple'  // Always return plain objects
-    }, this.contextUser);
+- Extend existing Action approval UI to render `RuntimeActionConfiguration` in a readable form: which entities / actions / agents are permitted, resource limits, additional libraries requested
+- Syntax-highlighted code block for the JS payload
+- Link to test results (from `Test Runtime Action` execution)
+- Edit-before-approve: user can modify `Code` and `RuntimeActionConfiguration` before approval; edits become part of the approved version
 
-    return {
-      Success: result.Success,
-      Results: result.Results,
-      TotalRowCount: result.TotalRowCount,
-      ErrorMessage: result.ErrorMessage
-    };
-  }
-}
-```
+**Dependencies**: 1h
+**Verifies**: approver can review a generated Runtime action, modify permissions, and approve — all visible in Action Execution Log
 
----
+### 1j — `ExecuteAgent` action (parallel track, independent)
 
-## Integration with Action Framework
+- New `Action` record with `Type='Custom'`, `Name='Execute Agent'`, `DriverClass='ExecuteAgentAction'`
+- Inputs: `AgentName` (or `AgentID`), `Input` (JSON), optional `ConversationID`
+- Outputs: full `AgentResult` payload
+- Implementation: thin wrapper around `AgentRunner.RunAgent()`
+- Separately wires up `AIAgent.ExposeAsAction` so the agent catalog auto-populates agent-as-action entries
 
-### ActionEngineServer Extension
-
-```typescript
-// ActionEngineServer already handles this via the Type='Script' detection
-// shown in the "How Script Actions Work" section above.
-// No separate extension class needed - the logic integrates directly
-// into the existing RunAction method.
-```
-
-### Discovery Integration
-
-Since Script actions use the existing Actions entity, discovery is automatic:
-
-```typescript
-// No special discovery needed - Script actions are just Actions with Type='Script'
-// ActionEngineServer.Instance.Actions already includes them
-
-// Filter by type if needed:
-const scriptActions = ActionEngineServer.Instance.Actions
-  .filter(a => a.Type === 'Script' && a.Status === 'Active' && a.CodeApprovalStatus === 'Approved');
-
-// They appear in semantic search automatically via existing action indexing
-// They work with AIAgentAction linking automatically
-// They use existing ActionExecutionLog for logging
-```
-
----
-
-## ActionSmith: Composing with Codesmith
-
-### Agent Hierarchy: Agent Manager → ActionSmith → Codesmith
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Agent Manager                               │
-│              (Meta-Agent for Agent Creation)                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  When capability gap identified, delegates to ActionSmith        │
-│                                                                  │
-│  Sub-Agents:                                                     │
-│    • Requirements Analyst                                        │
-│    • Designer                                                    │
-│    • Prompt Designer                                             │
-│    • ActionSmith (NEW) ◄─── For creating Script actions          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       ActionSmith                                │
-│                (Script Action Orchestrator)                      │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  1. REQUIREMENTS ANALYSIS                                        │
-│     • Understand capability gap                                  │
-│     • Define input/output params                                 │
-│     • Determine required permissions                             │
-│                                                                  │
-│  2. DELEGATE TO CODESMITH ◄──────────────────────────────────┐  │
-│                         │                                    │  │
-│                         ▼                                    │  │
-│  ┌─────────────────────────────────────────────────────────┐ │  │
-│  │              Codesmith Agent (Sub-Agent)                │ │  │
-│  │                                                         │ │  │
-│  │  • Receives extended utilities (md, rv, actions, etc.)  │ │  │
-│  │  • Writes JavaScript code                               │ │  │
-│  │  • Tests in sandbox with bridge                         │ │  │
-│  │  • Iterates on errors (up to 10 times)                  │ │  │
-│  │  • Returns working code + test results                  │ │  │
-│  │                                                         │ │  │
-│  └─────────────────────────────────────────────────────────┘ │  │
-│                         │                                    │  │
-│                         ▼                                    │  │
-│  3. VALIDATE & PACKAGE                                       │  │
-│     • Verify code meets requirements                         │  │
-│     • Create Action with Type='Script'                       │  │
-│     • Set ScriptActionConfiguration                          │  │
-│                                                              │  │
-│  4. REQUEST APPROVAL                                         │  │
-│     • Present to user for review                             │  │
-│     • User sees: code, permissions, test results             │  │
-│     • On approval: CodeApprovalStatus → 'Approved'           │  │
-│                                                              │  │
-│  5. REGISTER                                                 │  │
-│     • Automatic via existing Actions infrastructure          │  │
-│     • Available for use ─────────────────────────────────────┘  │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Design Philosophy: Don't Reinvent the Wheel
-
-Codesmith already excels at iterative code generation and testing. ActionSmith is a thin orchestrator that:
-
-1. Handles action-specific concerns (schema, permissions, approval, persistence)
-2. Delegates code generation to Codesmith with extended utilities
-3. Manages the approval workflow
-
-### Extending Codesmith's Utilities
-
-When ActionSmith calls Codesmith, it provides an extended context that adds the bridge utilities:
-
-```typescript
-// Standard Codesmith capabilities
-const standardUtilities = {
-  libs: { lodash, dateFns, mathjs, uuid, validator }
-};
-
-// Extended utilities for RuntimeAction code generation
-const extendedUtilities = {
-  ...standardUtilities,
-
-  // NEW: MemberJunction bridge capabilities
-  md: { /* entity metadata */ },
-  rv: { /* RunView, RunViews */ },
-  rq: { /* RunQuery */ },
-  entity: { /* CRUD operations */ },
-  actions: { /* Invoke other actions */ },
-  agents: { /* Run other agents */ },
-  ai: { /* LLM access */ },
-  log: { /* Structured logging */ }
-};
-```
-
-### ActionSmith Agent Definition
-
-```json
-{
-  "fields": {
-    "Name": "ActionSmith Agent",
-    "Description": "Creates runtime actions by composing existing actions with custom logic. Delegates code generation to Codesmith and handles action-specific concerns: schema definition, permission scoping, testing, and approval workflow.",
-    "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
-    "Status": "Active",
-    "ExposeAsAction": true,
-    "IconClass": "fa-solid fa-wand-magic-sparkles",
-    "PayloadSelfWritePaths": "[\"requirements\", \"inputSchema\", \"outputSchema\", \"permissions\", \"code\", \"testCases\", \"testResults\", \"approvalStatus\"]",
-    "MaxIterationsPerRun": 5
-  },
-  "relatedEntities": {
-    "MJ: AI Agent Prompts": [
-      {
-        "fields": {
-          "PromptID": "@lookup:AI Prompts.Name=ActionSmith Agent Prompt",
-          "ExecutionOrder": 0
-        }
-      }
-    ],
-    "AI Agent Actions": [
-      { "fields": { "ActionID": "@lookup:Actions.Name=Create Script Action" } },
-      { "fields": { "ActionID": "@lookup:Actions.Name=Test Script Action" } }
-    ],
-    "MJ: AI Agent Sub-Agents": [
-      {
-        "fields": {
-          "ParentAgentID": "@parent:ID",
-          "SubAgentID": "@lookup:AI Agents.Name=Codesmith Agent"
-        }
-      }
-    ]
-  }
-}
-```
-
-### ActionSmith Prompt Template
-
-```markdown
-# ActionSmith Agent
-
-You are **ActionSmith**, an expert at creating reusable runtime actions. You work WITH Codesmith, not instead of it.
-
-## Your Role
-
-1. **Architect**: Define what the action should do, its inputs/outputs, and permissions
-2. **Orchestrator**: Delegate code generation to Codesmith with the right context
-3. **Quality Gate**: Validate the result meets requirements
-4. **Packager**: Bundle everything for user approval
-
-## Your Workflow
-
-### Step 1: Analyze Requirements
-When asked to create a new action, first understand:
-- What capability gap needs to be filled?
-- What existing actions could be composed?
-- What entities need to be accessed?
-- What inputs are required? What outputs expected?
-
-### Step 2: Define the Contract
-Before any code is written, define:
-
-```json
-{
-  "name": "Weekly Sales Summary Email",
-  "description": "Fetches sales data, generates AI summary, sends via email",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "region": { "type": "string" },
-      "recipientEmail": { "type": "string", "format": "email" }
-    },
-    "required": ["region", "recipientEmail"]
-  },
-  "outputSchema": {
-    "type": "object",
-    "properties": {
-      "success": { "type": "boolean" },
-      "totalSales": { "type": "number" },
-      "emailSent": { "type": "boolean" }
-    }
-  },
-  "permissions": {
-    "entities": ["Sales", "Users"],
-    "actions": ["Send Email"],
-    "agents": []
-  }
-}
-```
-
-### Step 3: Delegate to Codesmith
-Call Codesmith as a sub-agent with:
-- The task: Write the action implementation
-- The contract: Input/output schemas
-- The context: Available utilities (md, rv, actions, etc.)
-- Test cases: Sample inputs to validate against
-
-Codesmith will iterate until the code works.
-
-### Step 4: Package and Request Approval
-Once Codesmith returns working code:
-1. Create the RuntimeAction entity
-2. Attach test results
-3. Request user approval
-
-## What You DON'T Do
-
-❌ Write JavaScript code yourself - Codesmith does that
-❌ Test code yourself - Codesmith handles iteration
-❌ Skip the approval step - users must approve
-
-## What You DO
-
-✅ Define clear requirements and contracts
-✅ Scope permissions minimally (least privilege)
-✅ Design good test cases
-✅ Orchestrate the workflow
-✅ Present clear approval requests
-```
-
-### Codesmith Extension: Runtime Action Mode
-
-When Codesmith is called by ActionSmith, it receives additional context:
-
-```typescript
-// Extended payload when called for runtime action generation
-interface CodesmitheRuntimeActionPayload {
-  // Standard Codesmith fields
-  task: string;
-  inputData: any;
-  iterations: number;
-  code: string;
-  results: any;
-  errors: string[];
-
-  // NEW: Runtime Action context
-  runtimeActionMode: true;
-  contract: {
-    inputSchema: JSONSchema;
-    outputSchema: JSONSchema;
-  };
-  permissions: {
-    entities: string[];
-    actions: string[];
-    agents: string[];
-  };
-  testCases: Array<{
-    name: string;
-    input: Record<string, any>;
-    expectedOutput?: Record<string, any>;
-  }>;
-
-  // Extended utilities available
-  availableUtilities: [
-    'md', 'rv', 'rq', 'entity', 'actions', 'agents', 'ai', 'log', 'libs'
-  ];
-}
-```
-
-The Codesmith prompt can detect `runtimeActionMode: true` and adjust its behavior:
-- Use async/await (bridge utilities are async)
-- Access the extended utilities
-- Validate against the provided schemas
-- Run all test cases
-
-### Implementation: ActionSmith Actions
-
-```typescript
-// Action: Create Script Action (used by ActionSmith)
-// Uses existing Actions entity with Type='Script'
-@RegisterClass(BaseAction, 'Create Script Action')
-export class CreateScriptActionAction extends BaseAction {
-
-  protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const name = this.getParamValue(params, 'Name');
-    const description = this.getParamValue(params, 'Description');
-    const code = this.getParamValue(params, 'Code');
-    const categoryId = this.getParamValue(params, 'CategoryID');
-    const permissions = this.getParamValue(params, 'Permissions');
-    const limits = this.getParamValue(params, 'Limits');
-    const inputParams = this.getParamValue(params, 'InputParams');
-    const outputParams = this.getParamValue(params, 'OutputParams');
-    const createdByAgentId = this.getParamValue(params, 'CreatedByAgentID');
-
-    const md = new Metadata();
-
-    // Build ScriptActionConfiguration
-    const config: ScriptActionConfiguration = {
-      permissions: {
-        allowedEntities: permissions.entities || [],
-        allowedActions: permissions.actions || [],
-        allowedAgents: permissions.agents || []
-      },
-      limits: {
-        maxMemoryMB: limits?.maxMemoryMB || 128,
-        maxBridgeCalls: limits?.maxBridgeCalls || 100
-      }
-    };
-
-    // Create the Action record (existing entity!)
-    const action = await md.GetEntityObject<ActionEntity>('Actions', params.ContextUser);
-    action.NewRecord();
-    action.Name = name;
-    action.Description = description;
-    action.Type = 'Script';
-    action.Code = code;
-    action.CategoryID = categoryId;
-    action.Status = 'Active';
-    action.CodeApprovalStatus = 'Pending';
-    action.ScriptActionConfiguration = JSON.stringify(config);
-    action.MaxExecutionTimeMS = limits?.maxExecutionTimeMS || 30000;
-    action.CreatedByAgentID = createdByAgentId;
-
-    const saved = await action.Save();
-    if (!saved) {
-      return { Success: false, ResultCode: 'SAVE_FAILED', Message: 'Failed to save action' };
-    }
-
-    // Create ActionParams (existing entity!)
-    for (const param of [...inputParams, ...outputParams]) {
-      const actionParam = await md.GetEntityObject<ActionParamEntity>(
-        'Action Params',
-        params.ContextUser
-      );
-      actionParam.NewRecord();
-      actionParam.ActionID = action.ID;
-      actionParam.Name = param.name;
-      actionParam.Type = param.type;
-      actionParam.ValueType = param.valueType || 'Scalar';
-      actionParam.IsRequired = param.isRequired || false;
-      actionParam.Description = param.description;
-      await actionParam.Save();
-    }
-
-    this.setParamValue(params, 'ActionID', action.ID);
-    return { Success: true, ResultCode: 'SUCCESS', Params: params.Params };
-  }
-}
-
-// Action: Test Script Action (validates code works in sandbox)
-@RegisterClass(BaseAction, 'Test Script Action')
-export class TestScriptActionAction extends BaseAction {
-
-  protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const code = this.getParamValue(params, 'Code');
-    const testCases = this.getParamValue(params, 'TestCases');
-    const config = this.getParamValue(params, 'ScriptActionConfiguration') as ScriptActionConfiguration;
-
-    const executor = new ScriptActionExecutor();
-    const bridge = new ScriptActionBridge(params.ContextUser, config.permissions);
-    const results: TestResult[] = [];
-
-    for (const testCase of testCases) {
-      const result = await executor.execute(
-        code,
-        testCase.input,
-        bridge,
-        { timeout: 30, memoryLimit: 128 }
-      );
-
-      results.push({
-        name: testCase.name,
-        passed: result.Success,
-        output: result.Output,
-        error: result.ErrorMessage,
-        executionTimeMs: result.ExecutionTimeMs
-      });
-    }
-
-    const allPassed = results.every(r => r.passed);
-    this.setParamValue(params, 'TestResults', results);
-    this.setParamValue(params, 'AllPassed', allPassed);
-
-    return {
-      Success: true,
-      ResultCode: allPassed ? 'ALL_PASSED' : 'SOME_FAILED',
-      Params: params.Params
-    };
-  }
-}
-```
-
-### Complete Flow: Agent Manager → ActionSmith → Codesmith
-
-```
-User: "Create an action that sends a daily digest of new customers"
-                    │
-                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Agent Manager                               │
-│  "I need a new capability. Let me delegate to ActionSmith."     │
-└─────────────────────────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       ActionSmith                                │
-│                                                                  │
-│  1. Analyzes: Need to query Customers, use AI for summary,      │
-│     call Send Email action                                       │
-│                                                                  │
-│  2. Defines contract:                                            │
-│     • Input: { recipientEmail: string }                          │
-│     • Output: { customerCount: number, emailSent: boolean }      │
-│     • Permissions: entities=['Customers'], actions=['Send Email']│
-│                                                                  │
-│  3. Creates test cases:                                          │
-│     • Empty customer list → should handle gracefully             │
-│     • 5 customers → should summarize and send                    │
-│                                                                  │
-│  4. Calls Codesmith sub-agent...                                 │
-└─────────────────────────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        Codesmith                                 │
-│                  (runtimeActionMode: true)                       │
-│                                                                  │
-│  Iteration 1: Writes code using utilities.rv, utilities.ai,     │
-│               utilities.actions                                   │
-│               → Error: forgot to handle empty results            │
-│                                                                  │
-│  Iteration 2: Adds empty check                                   │
-│               → Error: wrong parameter name for Send Email       │
-│                                                                  │
-│  Iteration 3: Fixes parameter name                               │
-│               → All test cases pass! ✓                           │
-│                                                                  │
-│  Returns: { code: "...", testResults: [...], iterations: 3 }    │
-└─────────────────────────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       ActionSmith                                │
-│                                                                  │
-│  5. Creates Action with Type='Script' (CodeApprovalStatus: 'Pending')
-│                                                                  │
-│  6. Requests user approval...                                    │
-└─────────────────────────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                         User                                     │
-│                                                                  │
-│  Reviews:                                                        │
-│  • Action name: "Daily Customer Digest"                          │
-│  • Permissions: Can access Customers, can send emails            │
-│  • Code: [syntax highlighted, readable]                          │
-│  • Test results: 2/2 passed                                      │
-│                                                                  │
-│  [Approve] [Reject] [Edit]                                       │
-└─────────────────────────────────────────────────────────────────┘
-                    │
-                    ▼ (User clicks Approve)
-┌─────────────────────────────────────────────────────────────────┐
-│                    RuntimeAction                                 │
-│                  Status: 'Approved'                              │
-│                                                                  │
-│  Now available for:                                              │
-│  • Direct invocation                                             │
-│  • Agent action discovery                                        │
-│  • Composition in other runtime actions                          │
-└─────────────────────────────────────────────────────────────────┘
-```
+**Dependencies**: none (can ship in parallel with 1a–1g)
+**Not a dependency of** Runtime actions — the bridge's `utilities.agents.Run` uses `AgentRunner` directly. `ExecuteAgent` is for external callers (schedulers, workflows, other Runtime actions invoking via `utilities.actions.Invoke`).
 
 ---
 
 ## Examples
 
-### Example 1: Simple Composite Action
-
-**Scenario**: Agent needs to send a weekly sales summary email
+### Example 1: Composite action
 
 ```javascript
 // Runtime Action: Weekly Sales Summary Email
-// AllowedEntities: ['Sales', 'Users']
-// AllowedActions: ['Send Email']
-
+// allowedEntities: ['Sales']
+// allowedActions:  ['Send Email']
 const { recipientEmail, region } = input;
 
-// 1. Get sales data for the week
 const weekAgo = new Date();
 weekAgo.setDate(weekAgo.getDate() - 7);
 
 const sales = await utilities.rv.RunView({
   EntityName: 'Sales',
   ExtraFilter: `Region = '${region}' AND SaleDate >= '${weekAgo.toISOString()}'`,
-  OrderBy: 'SaleDate DESC'
+  OrderBy: 'SaleDate DESC',
 });
+if (!sales.Success) return { success: false, error: sales.ErrorMessage };
 
-if (!sales.Success) {
-  return { success: false, error: sales.ErrorMessage };
-}
-
-// 2. Calculate summary
 const _ = utilities.libs.lodash;
-const totalSales = _.sumBy(sales.Results, 'Amount');
-const topProducts = _(sales.Results)
+const totalSales   = _.sumBy(sales.Results, 'Amount');
+const topProducts  = _(sales.Results)
   .groupBy('ProductName')
   .map((items, name) => ({ name, total: _.sumBy(items, 'Amount') }))
-  .orderBy('total', 'desc')
-  .take(5)
-  .value();
+  .orderBy('total', 'desc').take(5).value();
 
-// 3. Format email body
-const body = `
-Weekly Sales Summary for ${region}
-==================================
-Total Sales: $${totalSales.toLocaleString()}
-Transaction Count: ${sales.Results.length}
+const body = [
+  `Weekly Sales Summary for ${region}`,
+  `Total: $${totalSales.toLocaleString()}  (${sales.Results.length} transactions)`,
+  '',
+  'Top 5 Products:',
+  ...topProducts.map((p, i) => `${i + 1}. ${p.name}: $${p.total.toLocaleString()}`),
+].join('\n');
 
-Top 5 Products:
-${topProducts.map((p, i) => `${i+1}. ${p.name}: $${p.total.toLocaleString()}`).join('\n')}
-`;
-
-// 4. Send email via existing action
 const emailResult = await utilities.actions.Invoke('Send Email', {
   To: recipientEmail,
-  Subject: `Weekly Sales Summary - ${region}`,
-  Body: body
+  Subject: `Weekly Sales Summary — ${region}`,
+  Body: body,
 });
 
 return {
   success: emailResult.Success,
   totalSales,
   transactionCount: sales.Results.length,
-  topProducts
 };
 ```
 
-### Example 2: AI-Enhanced Data Analysis
-
-**Scenario**: Agent needs to analyze customer feedback with AI
+### Example 2: AI-enhanced data analysis
 
 ```javascript
 // Runtime Action: Analyze Customer Feedback
-// AllowedEntities: ['Customer Feedback', 'Customers']
-// AllowedActions: []
-// RequiresAI: true
-
+// allowedEntities: ['Customer Feedback', 'Customers']
 const { customerId, timeframeDays } = input;
 
-// 1. Get customer info
 const customer = await utilities.entity.Load('Customers', customerId);
-if (!customer.Success) {
-  return { success: false, error: `Customer not found: ${customerId}` };
-}
+if (!customer.Success) return { success: false, error: 'Customer not found' };
 
-// 2. Get recent feedback
-const cutoffDate = new Date();
-cutoffDate.setDate(cutoffDate.getDate() - timeframeDays);
+const cutoff = new Date();
+cutoff.setDate(cutoff.getDate() - timeframeDays);
 
 const feedback = await utilities.rv.RunView({
   EntityName: 'Customer Feedback',
-  ExtraFilter: `CustomerID = '${customerId}' AND CreatedAt >= '${cutoffDate.toISOString()}'`,
-  OrderBy: 'CreatedAt DESC'
+  ExtraFilter: `CustomerID = '${customerId}' AND CreatedAt >= '${cutoff.toISOString()}'`,
+  OrderBy:    'CreatedAt DESC',
 });
-
 if (feedback.Results.length === 0) {
-  return {
-    success: true,
-    analysis: 'No feedback found in the specified timeframe',
-    feedbackCount: 0
-  };
+  return { success: true, analysis: 'No feedback in timeframe', feedbackCount: 0 };
 }
 
-// 3. Use AI to analyze sentiment and themes
-const feedbackText = feedback.Results
-  .map(f => f.Comments)
-  .join('\n---\n');
-
-const aiAnalysis = await utilities.ai.ExecutePrompt({
-  SystemPrompt: `You are a customer feedback analyst. Analyze the following feedback and provide:
-1. Overall sentiment (positive/neutral/negative with confidence %)
-2. Top 3 themes or topics mentioned
-3. Key action items or concerns
-4. A brief executive summary (2-3 sentences)
-
-Format as JSON.`,
-  UserMessage: feedbackText,
-  ModelPower: 'medium'
+const analysis = await utilities.ai.ExecutePrompt({
+  SystemPrompt: 'Return JSON: sentiment, themes[3], actionItems, summary',
+  UserMessage:  feedback.Results.map(f => f.Comments).join('\n---\n'),
+  ModelPower:   'medium',
 });
 
-// 4. Parse and return
-const analysis = JSON.parse(aiAnalysis.Response);
-
 return {
-  success: true,
-  customerName: customer.Record.Name,
+  success:       true,
+  customerName:  customer.Record.Name,
   feedbackCount: feedback.Results.length,
-  timeframeDays,
-  analysis,
-  modelUsed: aiAnalysis.ModelUsed
+  analysis:      JSON.parse(analysis.Response),
 };
 ```
 
-### Example 3: Multi-Agent Orchestration
-
-**Scenario**: Agent needs to coordinate multiple sub-agents
+### Example 3: Multi-agent orchestration
 
 ```javascript
 // Runtime Action: Comprehensive Account Review
-// AllowedEntities: ['Accounts', 'Contacts', 'Opportunities', 'Activities']
-// AllowedActions: ['Generate Report']
-// AllowedAgents: ['Risk Assessment Agent', 'Opportunity Scorer Agent']
-
+// allowedEntities: ['Accounts', 'Contacts', 'Opportunities', 'Activities']
+// allowedActions:  ['Generate Report']
+// allowedAgents:   ['Risk Assessment Agent', 'Opportunity Scorer Agent']
 const { accountId } = input;
 
-// 1. Load account data
 const [account, contacts, opportunities, activities] = await utilities.rv.RunViews([
-  { EntityName: 'Accounts', ExtraFilter: `ID = '${accountId}'` },
-  { EntityName: 'Contacts', ExtraFilter: `AccountID = '${accountId}'` },
+  { EntityName: 'Accounts',      ExtraFilter: `ID = '${accountId}'` },
+  { EntityName: 'Contacts',      ExtraFilter: `AccountID = '${accountId}'` },
   { EntityName: 'Opportunities', ExtraFilter: `AccountID = '${accountId}'`, OrderBy: 'CloseDate DESC' },
-  { EntityName: 'Activities', ExtraFilter: `AccountID = '${accountId}'`, OrderBy: 'ActivityDate DESC', MaxRows: 50 }
+  { EntityName: 'Activities',    ExtraFilter: `AccountID = '${accountId}'`, OrderBy: 'ActivityDate DESC', MaxRows: 50 },
 ]);
-
 if (!account.Success || account.Results.length === 0) {
   return { success: false, error: 'Account not found' };
 }
 
-// 2. Run risk assessment agent
-const riskResult = await utilities.agents.Run('Risk Assessment Agent', {
-  Input: {
-    accountData: account.Results[0],
-    opportunities: opportunities.Results,
-    activityHistory: activities.Results
-  }
-});
+const [risk, scoring] = await Promise.all([
+  utilities.agents.Run('Risk Assessment Agent',   { Input: { account: account.Results[0], opportunities: opportunities.Results, activities: activities.Results } }),
+  utilities.agents.Run('Opportunity Scorer Agent', { Input: { account: account.Results[0], opportunities: opportunities.Results } }),
+]);
 
-// 3. Run opportunity scorer agent
-const scoringResult = await utilities.agents.Run('Opportunity Scorer Agent', {
-  Input: {
-    opportunities: opportunities.Results,
-    accountProfile: account.Results[0]
-  }
-});
-
-// 4. Compile comprehensive review
-const review = {
-  account: account.Results[0],
-  contactCount: contacts.Results.length,
-  openOpportunities: opportunities.Results.filter(o => o.Status === 'Open').length,
-  totalPipelineValue: opportunities.Results
-    .filter(o => o.Status === 'Open')
-    .reduce((sum, o) => sum + o.Amount, 0),
-  riskAssessment: riskResult.Output,
-  opportunityScores: scoringResult.Output,
-  recentActivityCount: activities.Results.length,
-  lastActivityDate: activities.Results[0]?.ActivityDate
-};
-
-// 5. Generate formal report
-const reportResult = await utilities.actions.Invoke('Generate Report', {
+const report = await utilities.actions.Invoke('Generate Report', {
   Template: 'Account Review',
-  Data: review
+  Data:     { account: account.Results[0], risk: risk.Output, scoring: scoring.Output },
 });
 
-return {
-  success: true,
-  review,
-  reportUrl: reportResult.OutputParams.ReportUrl
-};
+return { success: true, reportUrl: report.OutputParams?.ReportUrl };
 ```
 
 ---
 
-## Versioning Strategy
+## Versioning & Promotion
 
-### Semantic Versioning for Runtime Actions
+### Semantic versioning
 
-```typescript
-interface RuntimeActionVersion {
-  major: number;  // Breaking changes to input/output schema
-  minor: number;  // New optional functionality
-  patch: number;  // Bug fixes
-}
-
-// Version increment rules:
-// MAJOR: InputSchema or OutputSchema changes that break existing callers
-// MINOR: New optional input params, enhanced output (backward compatible)
-// PATCH: Bug fixes, performance improvements, no API changes
+```
+MAJOR  — breaking change to Action.Params / ResultCodes
+MINOR  — new optional param, enriched output (backward compatible)
+PATCH  — bug fix, perf improvement, no API change
 ```
 
-### Version Management
+A new version is a new `Action` record with `RuntimeActionConfiguration.previousVersionId` pointing at the prior. `CodeApprovalStatus` resets to `Pending` for every new version.
 
-```typescript
-class RuntimeActionVersionManager {
+### Promotion pathway
 
-  async createNewVersion(
-    existingActionId: string,
-    changes: RuntimeActionChanges,
-    contextUser: UserInfo
-  ): Promise<RuntimeActionEntity> {
-
-    const existing = await this.loadAction(existingActionId);
-    const currentVersion = this.parseVersion(existing.Version);
-
-    // Determine version bump
-    const newVersion = this.calculateNewVersion(currentVersion, changes);
-
-    // Create new version
-    const newAction = await this.cloneAction(existing, contextUser);
-    newAction.Version = this.formatVersion(newVersion);
-    newAction.PreviousVersionID = existing.ID;
-    newAction.Status = 'Pending';  // Requires re-approval
-
-    // Apply changes
-    Object.assign(newAction, changes);
-
-    await newAction.Save();
-
-    return newAction;
-  }
-
-  private calculateNewVersion(
-    current: RuntimeActionVersion,
-    changes: RuntimeActionChanges
-  ): RuntimeActionVersion {
-
-    if (changes.InputSchema || changes.OutputSchema) {
-      // Breaking change
-      return { major: current.major + 1, minor: 0, patch: 0 };
-    }
-
-    if (changes.Code && !changes.InputSchema && !changes.OutputSchema) {
-      // New functionality or fix
-      const hasFunctionalChange = this.detectFunctionalChange(changes.Code);
-      if (hasFunctionalChange) {
-        return { major: current.major, minor: current.minor + 1, patch: 0 };
-      }
-      return { major: current.major, minor: current.minor, patch: current.patch + 1 };
-    }
-
-    return current;
-  }
-}
 ```
+Runtime action
+  (AI-generated JS, sandbox execution, bridge calls)
+        │
+        │ [ frequently used + stable + faster path wanted ]
+        ▼
+Generated action
+  (AI-generated TS, compiled at build time, native execution)
+        │
+        │ [ universal value + core-team review ]
+        ▼
+Core action
+  (Hand-written, part of the framework distribution)
+```
+
+Each rung trades flexibility for performance and permanence.
 
 ---
 
-## Promotion Pathway
+## Monitoring
 
-### Runtime Action → Generated Action → Core Action
+All Runtime action invocations land in the existing `ActionExecutionLog`. Queryable by `Action.Type='Runtime'`. Structured log output captures:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ PROMOTION LIFECYCLE                                              │
-└─────────────────────────────────────────────────────────────────┘
+- Per-invocation: `bridgeCallCount`, `bridgeDenyCount`, `executionTimeMs`, `memoryPeakMB`, `aborted` (bool)
+- Per-bridge-call: type (`rv.RunView`, `actions.Invoke`, etc.), target entity/action/agent, duration
 
-Stage 1: RUNTIME ACTION (Sandbox Execution)
-├── Created by agent or user
-├── Executes in JavaScript sandbox
-├── Uses bridge for MJ operations
-├── Good for: Prototyping, user-specific workflows
-└── Performance: Moderate (sandbox overhead)
-                    ↓
-        [Usage Analytics: Frequent use detected]
-        [Stability: No errors in 30 days]
-        [User Request: "Make this faster"]
-                    ↓
-Stage 2: GENERATED ACTION (Compiled TypeScript)
-├── Code converted to TypeScript
-├── AI generates proper BaseAction subclass
-├── Compiled into action_subclasses.ts
-├── Executes without sandbox overhead
-├── Good for: Stable, frequently-used actions
-└── Performance: Fast (native execution)
-                    ↓
-        [Community Value: Used across organizations]
-        [Quality: Well-tested, documented]
-        [Review: Core team approval]
-                    ↓
-Stage 3: CORE ACTION (Framework Distribution)
-├── Included in MemberJunction distribution
-├── Professional documentation
-├── Unit tests and integration tests
-├── Versioned with framework
-└── Good for: Universal utility
-```
+Anomaly detection is straightforward against this schema — error-rate spikes, latency degradation, unusual usage volume — but is explicitly out of scope for Phase 1. A follow-up "Runtime Action Monitor" dashboard in MJExplorer would surface these views.
 
 ---
 
-## Monitoring and Analytics
+## Open Questions (to resolve during implementation)
 
-### Execution Metrics
+1. **Library allowlist evolution** — do we ship a global registry of permitted `additionalLibraries`, or is the list per-Action in `RuntimeActionConfiguration.sandbox.additionalLibraries`? Current answer: per-Action, but the set is constrained to a hard-coded allowlist in `@memberjunction/action-runtime`. Revisit in 1e.
 
-```typescript
-interface RuntimeActionMetrics {
-  // Usage
-  totalExecutions: number;
-  uniqueUsers: number;
-  executionsPerDay: number[];
+2. **Bridge-call re-entrancy budget** — a Runtime action invoking another Runtime action via `utilities.actions.Invoke` multiplies bridge-call counts. Do we aggregate across the call tree or per-invocation? Leaning per-invocation with a hard cap on call-tree depth (10).
 
-  // Performance
-  averageExecutionTimeMs: number;
-  p95ExecutionTimeMs: number;
-  p99ExecutionTimeMs: number;
+3. **AbortSignal semantics during bridge calls** — if the wall-clock fires while a bridge call is awaiting a long-running host operation (e.g., `agents.Run` on a deep sub-agent tree), do we abort the host operation or just the worker's await? Leaning: abort both — propagate the signal into the host-side call.
 
-  // Reliability
-  successRate: number;
-  errorsByType: Record<string, number>;
+4. **Approval-scope drift** — if a previously-approved Runtime action is edited to expand its permissions, does it re-enter `Pending`? Yes, any permission expansion forces re-approval; permission narrowing does not.
 
-  // Resource Usage
-  averageBridgeCalls: number;
-  mostUsedBridgeOperations: string[];
-
-  // Composition
-  invokedByActions: string[];
-  invokesActions: string[];
-}
-```
-
-### Anomaly Detection
-
-```typescript
-class RuntimeActionMonitor {
-
-  async checkForAnomalies(actionId: string): Promise<AnomalyReport> {
-    const metrics = await this.getMetrics(actionId);
-    const anomalies: Anomaly[] = [];
-
-    // Sudden increase in errors
-    if (metrics.recentErrorRate > metrics.historicalErrorRate * 2) {
-      anomalies.push({
-        type: 'ERROR_SPIKE',
-        severity: 'high',
-        message: `Error rate increased from ${metrics.historicalErrorRate}% to ${metrics.recentErrorRate}%`
-      });
-    }
-
-    // Performance degradation
-    if (metrics.recentP95 > metrics.historicalP95 * 1.5) {
-      anomalies.push({
-        type: 'PERFORMANCE_DEGRADATION',
-        severity: 'medium',
-        message: `P95 latency increased from ${metrics.historicalP95}ms to ${metrics.recentP95}ms`
-      });
-    }
-
-    // Unusual usage pattern
-    if (metrics.recentExecutions > metrics.averageExecutions * 10) {
-      anomalies.push({
-        type: 'USAGE_SPIKE',
-        severity: 'info',
-        message: `Execution volume 10x higher than average`
-      });
-    }
-
-    return { actionId, anomalies, checkedAt: new Date() };
-  }
-}
-```
-
----
-
-## Implementation Checklist
-
-### Core Infrastructure
-
-- [ ] **Actions Schema Extension**:
-  - Add `ScriptActionConfiguration NVARCHAR(MAX) NULL` (JSON blob, evolvable)
-  - Add `MaxExecutionTimeMS INT NULL` (universal timeout for ALL action types)
-  - Add `CreatedByAgentID UNIQUEIDENTIFIER NULL`
-  - Add `Type='Script'` value support
-- [ ] **ScriptActionConfiguration Interface**: Define in `@memberjunction/actions-base` with helper function
-- [ ] **ScriptActionBridge**: Bridge implementation with all utilities (md, rv, rq, entity, actions, agents, ai, log, libs)
-- [ ] **ScriptActionExecutor**: Sandbox integration with bridge injection
-- [ ] **ActionEngineServer Update**:
-  - Add `case 'Script'` handler in RunAction method
-  - Add universal timeout with AbortSignal for ALL action types
-  - Pass AbortSignal through RunActionParams
-
-### Security & Approval
-
-- [ ] **Approval UI Enhancement**: Update existing action approval UI to show ScriptActionConfiguration (permissions, limits)
-- [ ] **Permission Validator**: Enforce permissions from ScriptActionConfiguration in bridge
-- [ ] **Uses existing ActionExecutionLog** - no new logging infrastructure needed
-
-### Agent Integration
-
-- [ ] **ActionSmith Agent**: New agent (sub-agent of Agent Manager) that orchestrates Script action creation
-- [ ] **Codesmith Extension**: Support `runtimeActionMode` context with extended utilities
-- [ ] **Create Script Action**: Action for persisting Script actions to database
-- [ ] **Test Script Action**: Action for testing Script actions in sandbox
-
-### Discovery & Composition
-
-- [ ] **Automatic via existing infrastructure** - Script actions are just Actions with Type='Script'
-- [ ] **Dependency Graph**: Track action→action invocations via AllowedActions
-- [ ] **Impact Analysis**: Warn when modifying actions referenced in AllowedActions
-
-### Versioning & Lifecycle
-
-- [ ] **Version Manager**: Semantic versioning (leverage existing action patterns)
-- [ ] **Promotion Pipeline**: Script → Generated → Core pathway
-
-### Monitoring
-
-- [ ] **Uses existing ActionExecutionLog** - filter by Type='Script'
-- [ ] **Usage Analytics**: Identify high-value Script actions for promotion
+5. **Pre-warmed `md` snapshot** — synchronous `md.*` calls require data in the sandbox at startup. What's the size budget? For small tenants this is a few hundred KB; for large metadata sets it could be megabytes. Mitigation: `md` access is scoped by `allowedEntities`, so we only inject metadata for permitted entities.
 
 ---
 
 ## Conclusion
 
-Script Actions extend MemberJunction's agent capabilities by enabling dynamic action creation with a proven bridge pattern. Key architectural decisions:
+Runtime Actions let MJ agents fill capability gaps without waiting for developer cycles. The v2.0 plan differs from v1.0 in three substantive ways:
 
-1. **Existing Infrastructure**: Uses Actions entity with new Type='Script' - no new tables
-2. **Bridge Pattern**: Mirrors the successful React runtime approach with `utilities` object
-3. **Async-First**: All bridge operations are Promise-based for natural async/await
-4. **Declarative Permissions**: AllowedActions/Entities/Agents defined upfront
-5. **User Approval Gate**: Uses existing CodeApprovalStatus workflow
-6. **Codesmith Composition**: ActionSmith delegates to Codesmith - don't reinvent the wheel
-7. **Scaffolding Effect**: Each action becomes a building block for more complex actions
+- **Grounded in current state** — every assumption is checked against today's code, not an aspirational snapshot. The biggest consequence is that the bridge's bidirectional IPC is called out as its own major deliverable (1d) rather than being hand-waved as "use the React runtime pattern."
+- **Phased for incremental value** — every sub-phase 1a–1j ships something demonstrable. Universal `MaxExecutionTimeMS` (1b), pure-compute Runtime actions (1c), and the read-only bridge (1e) all deliver value even if later phases slip.
+- **Clean factoring of independent tracks** — `ExecuteAgent` (1j) is useful but not a prerequisite; it's in the phase so it ships as a set, but can be developed in parallel.
 
-The system maintains MemberJunction's security posture while dramatically expanding agent capabilities, creating a self-improving ecosystem where agents can fill capability gaps autonomously.
-
----
-
-*This document expands on the vision outlined in the original "Runtime Action Generator" discussion, translating concepts into concrete architecture while preserving the core insight: agents that can build their own tools become exponentially more valuable over time.*
+The infrastructure we already have — `isolated-vm` sandbox, Codesmith's iterative loop, Agent Manager's sub-agent scaffolding, `CodeApprovalStatus` workflow, `PayloadManager` for data isolation, per-request provider threading — is sufficient to make this feasible. The work is mostly integration and the bidirectional IPC layer.
