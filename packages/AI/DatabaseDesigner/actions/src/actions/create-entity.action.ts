@@ -51,7 +51,7 @@ export class CreateEntityAction extends BaseDatabaseDesignerAction {
                 return { Success: false, ResultCode: 'UNAUTHORIZED', Message: authError };
             }
 
-            const options = this.buildPipelineOptions(params, UDT_SETTINGS.SOURCE_ENTITY_DESIGNER);
+            const options = this.buildPipelineOptions(params, UDT_SETTINGS.SOURCE_DATABASE_DESIGNER);
             const execResult = await DatabaseDesignerPipelineExecutor.CreateEntity(
                 td!,
                 params.ContextUser,

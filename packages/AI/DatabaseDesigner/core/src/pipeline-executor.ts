@@ -341,7 +341,7 @@ export class DatabaseDesignerPipelineExecutor {
             await DatabaseDesignerPipelineExecutor.saveProvenance(
                 entityID,
                 contextUser,
-                options.Source ?? UDT_SETTINGS.SOURCE_ENTITY_DESIGNER
+                options.Source ?? UDT_SETTINGS.SOURCE_DATABASE_DESIGNER
             );
         }
 

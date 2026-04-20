@@ -183,7 +183,7 @@ export class DatabaseDesignerSchemaBuilder extends BaseDatabaseDesignerCodeAgent
             SkipRestart: true,
             Source: isAgentManagerMode
                 ? UDT_SETTINGS.SOURCE_AGENT_MANAGER
-                : UDT_SETTINGS.SOURCE_ENTITY_DESIGNER,
+                : UDT_SETTINGS.SOURCE_DATABASE_DESIGNER,
         };
     }
 

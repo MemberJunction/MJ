@@ -279,7 +279,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
             // Entity exists — this is what alter expects (runViewResults used for MJ: Entities check)
             mockState.runViewResults = [{ ID: 'existing-id' }];
             mockState.settingsResults = [
-                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_ENTITY_DESIGNER },
+                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_DATABASE_DESIGNER },
                 { Name: UDT_SETTINGS.OWNER_KEY, Value: 'user-1' },
             ];
 
@@ -340,7 +340,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
             }];
             mockState.runViewResults = [{ ID: 'entity-abc' }]; // entity exists → checkEntityMustExist passes
             mockState.settingsResults = [
-                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_ENTITY_DESIGNER },
+                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_DATABASE_DESIGNER },
                 { Name: UDT_SETTINGS.OWNER_KEY, Value: 'user-1' },
             ];
 
@@ -361,7 +361,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
                 UserCanExecute: () => true,
             }];
             mockState.settingsResults = [
-                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_ENTITY_DESIGNER },
+                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_DATABASE_DESIGNER },
                 { Name: UDT_SETTINGS.OWNER_KEY, Value: 'other-user' },
             ];
 
@@ -404,7 +404,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
             mockState.runViewResults = [{ ID: 'entity-abc' }]; // entity exists → checkEntityMustExist passes
             // Owner stored as uppercase UUID, contextUser ID as lowercase
             mockState.settingsResults = [
-                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_ENTITY_DESIGNER },
+                { Name: UDT_SETTINGS.SOURCE_KEY, Value: UDT_SETTINGS.SOURCE_DATABASE_DESIGNER },
                 { Name: UDT_SETTINGS.OWNER_KEY, Value: 'ABCD-1234-EF56' },
             ];
 

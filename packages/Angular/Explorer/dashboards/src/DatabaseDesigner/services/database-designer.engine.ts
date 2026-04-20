@@ -44,7 +44,7 @@ const UDT_SCHEMA_NAME = '__mj_UDT';
 const UDT_SETTINGS = {
     OWNER_KEY: 'MJ:UDT:Owner',
     SOURCE_KEY: 'MJ:UDT:Source',
-    SOURCE_ENTITY_DESIGNER: 'DatabaseDesigner',
+    SOURCE_DATABASE_DESIGNER: 'DatabaseDesigner',
     SOURCE_AGENT_MANAGER: 'AgentManager',
 } as const;
 
@@ -278,7 +278,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
                 EntityName: 'MJ: Entity Settings',
                 ExtraFilter: (
                     `Name = '${UDT_SETTINGS.SOURCE_KEY}' ` +
-                    `AND Value IN ('${UDT_SETTINGS.SOURCE_ENTITY_DESIGNER}', '${UDT_SETTINGS.SOURCE_AGENT_MANAGER}')`
+                    `AND Value IN ('${UDT_SETTINGS.SOURCE_DATABASE_DESIGNER}', '${UDT_SETTINGS.SOURCE_AGENT_MANAGER}')`
                 ),
                 Fields: ['EntityID', 'Value'],
                 ResultType: 'simple',

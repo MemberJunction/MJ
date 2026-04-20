@@ -162,7 +162,7 @@ describe('DatabaseDesignerPipelineExecutor', () => {
                 s => s.Name === UDT_SETTINGS.SOURCE_KEY
             );
             expect(sourceSetting).toBeDefined();
-            expect(sourceSetting?.Value).toBe(UDT_SETTINGS.SOURCE_ENTITY_DESIGNER);
+            expect(sourceSetting?.Value).toBe(UDT_SETTINGS.SOURCE_DATABASE_DESIGNER);
         });
 
         it('writes MJ:UDT:Source as AgentManager when Source option is overridden', async () => {

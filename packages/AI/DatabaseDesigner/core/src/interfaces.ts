@@ -299,7 +299,7 @@ export const UDT_SCHEMA_NAME = '__mj_UDT';
 export const UDT_SETTINGS = {
     OWNER_KEY: 'MJ:UDT:Owner',
     SOURCE_KEY: 'MJ:UDT:Source',
-    SOURCE_ENTITY_DESIGNER: 'DatabaseDesigner',
+    SOURCE_DATABASE_DESIGNER: 'DatabaseDesigner',
     SOURCE_AGENT_MANAGER: 'AgentManager',
 } as const;
 
