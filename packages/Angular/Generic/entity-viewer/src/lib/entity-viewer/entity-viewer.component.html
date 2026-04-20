@@ -69,6 +69,12 @@
         </div>
       }
 
+      <!-- Recycle Bin chip (auto-hides when entity has no deleted records, no tracking,
+           or user lacks Delete permission) -->
+      @if (ShowRecycleBin) {
+        <mj-recycle-bin-chip [EntityName]="effectiveEntity?.Name ?? null"></mj-recycle-bin-chip>
+      }
+
       <!-- Timeline Controls (only shown when timeline is active) -->
       @if (effectiveViewMode === 'timeline' && hasDateFields) {
         <!-- Date Field Selector -->

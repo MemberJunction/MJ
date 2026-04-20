@@ -28,6 +28,15 @@ vi.mock('rxjs', () => ({
     subscribe: vi.fn(),
     asObservable: vi.fn(),
   })),
+  BehaviorSubject: class {
+    value: unknown;
+    constructor(initialValue: unknown) { this.value = initialValue; }
+    next = vi.fn();
+    complete = vi.fn();
+    subscribe = vi.fn();
+    asObservable = vi.fn();
+    getValue = vi.fn();
+  },
   Subscription: vi.fn(),
 }));
 

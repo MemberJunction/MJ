@@ -86,5 +86,65 @@
       "lastModified": "2026-02-13T21:08:31.458Z",
       "checksum": "9e41002d02f78716a1e15c6d1fa367b913503b2b65f8f40a509dab7e8d0747f4"
     }
+  },
+  {
+    "fields": {
+      "Name": "rerank-v4-pro",
+      "Description": "Cohere Rerank 4 Pro - Flagship semantic reranking model released December 16, 2025. 32K tokens per document, 100+ language support, and self-learning capabilities. Designed for maximum retrieval quality in demanding RAG workloads. Cohere standard pricing applies: $2.50 per 1,000 search units (not modeled here because rerank pricing does not map cleanly to Per-1M-Tokens unit types).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "PowerRank": 110,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CohereReranker",
+            "APIName": "rerank-v4-pro",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "rerank-v4-fast",
+      "Description": "Cohere Rerank 4 Fast - Distilled, cost-efficient reranking model released December 16, 2025. 16K tokens per document, 100+ language support. Optimized for lower latency and higher throughput RAG pipelines where Rerank 4 Pro quality is not required. Cohere standard pricing applies: $1.50 per 1,000 search units (not modeled here because rerank pricing does not map cleanly to Per-1M-Tokens unit types).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "PowerRank": 90,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CohereReranker",
+            "APIName": "rerank-v4-fast",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ]
+    }
   }
 ]

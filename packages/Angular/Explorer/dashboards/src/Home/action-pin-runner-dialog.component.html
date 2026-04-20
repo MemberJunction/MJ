@@ -1,0 +1,88 @@
+@if (Visible && Pin) {
+  <div class="apr-backdrop" (click)="Close()"></div>
+  <div class="apr-dialog" role="dialog" aria-modal="true">
+    <div class="apr-hero" [style.background]="'linear-gradient(135deg, ' + AccentColor + ' 0%, ' + AccentColor + 'cc 100%)'">
+      <div class="apr-hero-icon">
+        <i [class]="FaIcon"></i>
+      </div>
+      <div class="apr-hero-info">
+        <div class="apr-hero-title">{{ Pin.DisplayName }}</div>
+        <div class="apr-hero-sub">{{ ActionName }}</div>
+      </div>
+      <button class="apr-close" (click)="Close()" [disabled]="IsRunning" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="apr-body">
+      @if (RunSucceeded === null) {
+        @if (RuntimeFields.length === 0) {
+          <div class="apr-no-fields">
+            <i class="fa-solid fa-circle-info"></i>
+            This action runs with all parameters preset — no input needed.
+          </div>
+        } @else {
+          <div class="apr-help">Provide values for the parameters below:</div>
+          <div class="apr-fields">
+            @for (f of RuntimeFields; track f.Name) {
+              <div class="apr-field">
+                <label [for]="'rf-' + f.Name">{{ f.Name }}</label>
+                <input [id]="'rf-' + f.Name"
+                       type="text"
+                       class="mj-input"
+                       [(ngModel)]="f.Value"
+                       [disabled]="IsRunning"
+                       [placeholder]="'Enter ' + f.Name" />
+              </div>
+            }
+          </div>
+        }
+      } @else {
+        <div class="apr-result" [class.success]="RunSucceeded" [class.failure]="!RunSucceeded">
+          <div class="apr-result-icon">
+            @if (RunSucceeded) {
+              <i class="fa-solid fa-circle-check"></i>
+            } @else {
+              <i class="fa-solid fa-circle-xmark"></i>
+            }
+          </div>
+          <div class="apr-result-text">
+            <div class="apr-result-title">{{ RunSucceeded ? 'Action completed' : 'Action failed' }}</div>
+            @if (ResultMessage) {
+              <div class="apr-result-msg">{{ ResultMessage }}</div>
+            }
+          </div>
+        </div>
+      }
+
+      @if (ErrorMessage) {
+        <div class="apr-error">
+          <i class="fa-solid fa-triangle-exclamation"></i> {{ ErrorMessage }}
+        </div>
+      }
+    </div>
+
+    <div class="apr-footer">
+      @if (RunSucceeded === null) {
+        <button type="button" class="apr-btn primary"
+                [disabled]="!CanRun()"
+                [style.background]="AccentColor"
+                [style.border-color]="AccentColor"
+                (click)="Run()">
+          @if (IsRunning) {
+            <i class="fa-solid fa-spinner fa-spin"></i> Running…
+          } @else {
+            <i class="fa-solid fa-play"></i> Run action
+          }
+        </button>
+        <button type="button" class="apr-btn" [disabled]="IsRunning" (click)="Close()">
+          Cancel
+        </button>
+      } @else {
+        <button type="button" class="apr-btn primary" (click)="Close()">
+          Done
+        </button>
+      }
+    </div>
+  </div>
+}

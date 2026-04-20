@@ -20,7 +20,7 @@ import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@member
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
-import { Observable, Subject, Subscription } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
 import { FieldMapper } from './FieldMapper';
 import { v4 as uuidv4 } from 'uuid';
@@ -30,6 +30,15 @@ import { BrowserIndexedDBStorageProvider } from "./storage-providers";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
+
+/**
+ * State of the provider's graphql-ws WebSocket connection.
+ * - 'connected': socket is open and ready
+ * - 'disconnected': socket failed after graphql-ws exhausted its retries
+ * - 'unknown': no active socket (never opened, or cleanly disposed). Consumers
+ *   should treat this as "no signal" — not a failure.
+ */
+export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
 
 /**
  * Callback invoked when token refresh fails irrecoverably (e.g., session fully expired).
@@ -1595,6 +1604,22 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 vars.input[mapper.MapFieldName(f.CodeName)] = val;
             }
 
+            // Carry restore lineage across the network.
+            // BaseEntity._restoreContext is a client-side-only field — it doesn't
+            // serialize through GraphQL automatically. When set, mirror it onto the
+            // mutation input as RestoreContext___ so the server-side resolver can
+            // call SetRestoreContext() on the freshly-constructed BaseEntity before
+            // Save(). Without this, the data provider on the server reads
+            // entity.RestoreContext as null and writes Source='Internal' with NULL
+            // lineage columns — i.e., the restore audit trail is silently lost.
+            const clientRestoreContext = entity.RestoreContext;
+            if (clientRestoreContext) {
+                vars.input['RestoreContext___'] = {
+                    SourceChangeID: clientRestoreContext.SourceChangeID,
+                    Reason: clientRestoreContext.Reason,
+                };
+            }
+
             // now add an OldValues prop to the vars IF the type === 'update' and the options.SkipOldValuesCheck === false
             if (type.trim().toLowerCase() === 'update' &&
                 options.SkipOldValuesCheck === false) {
@@ -2561,6 +2586,33 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _wsClient: Client = null;
     private _wsClientCreatedAt: number = null;
+    private _socketStateSubject = new BehaviorSubject<SocketConnectionState>('unknown');
+    private _isDisposingSocketIntentionally = false;
+
+    /**
+     * Observable of the WebSocket (graphql-ws) connection state. Used by
+     * connectivity monitors as the primary signal for server reachability,
+     * with /healthcheck polling as a fallback when 'disconnected' is emitted.
+     */
+    public get SocketConnectivity$(): Observable<SocketConnectionState> {
+        return this._socketStateSubject.asObservable();
+    }
+
+    /**
+     * Current WebSocket connection state (synchronous snapshot).
+     */
+    public get SocketConnectionState(): SocketConnectionState {
+        return this._socketStateSubject.value;
+    }
+
+    /**
+     * Force-dispose the current WebSocket client so the next subscription
+     * creates a fresh connection. Called by ServerConnectivityService after
+     * /healthcheck confirms the server is back online.
+     */
+    public ForceSocketReconnect(): void {
+        this.disposeWSClient();
+    }
     private _pushStatusSubjects: Map<string, {
         subject: Subject<string>,
         subscription: Subscription,
@@ -2596,6 +2648,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Create new client if needed
         if (!this._wsClient) {
+            this._isDisposingSocketIntentionally = false;
             this._wsClient = createClient({
                 url: this.ConfigData.WSURL,
                 connectionParams: {
@@ -2606,6 +2659,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 shouldRetry: () => true,
             });
             this._wsClientCreatedAt = now;
+
+            // Emit connectivity events — consumed by ServerConnectivityService
+            this._wsClient.on('connected', () => {
+                this._socketStateSubject.next('connected');
+            });
+            this._wsClient.on('closed', () => {
+                // Ignore closes we initiated via disposeWSClient() — those already
+                // emit 'unknown' themselves. Only treat unexpected closes (retries
+                // exhausted) as 'disconnected'.
+                if (this._isDisposingSocketIntentionally) {
+                    return;
+                }
+                this._socketStateSubject.next('disconnected');
+            });
 
             // Start cleanup timer if not already running
             if (!this._subscriptionCleanupTimer) {
@@ -2624,6 +2691,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     private disposeWSClient(): void {
         if (this._wsClient) {
+            this._isDisposingSocketIntentionally = true;
             try {
                 this._wsClient.dispose();
             } catch (e) {
@@ -2631,6 +2699,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
             this._wsClient = null;
             this._wsClientCreatedAt = null;
+            this._socketStateSubject.next('unknown');
         }
     }
 

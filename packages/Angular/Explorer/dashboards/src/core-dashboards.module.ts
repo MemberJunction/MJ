@@ -16,6 +16,8 @@ import { SharedPipesModule } from './shared/shared-pipes.module';
 // Core components — eagerly loaded, most-visited pages
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
+import { ActionPinConfigDialogComponent } from './Home/action-pin-config-dialog.component';
+import { ActionPinRunnerDialogComponent } from './Home/action-pin-runner-dialog.component';
 // HomeApplication is a non-Angular class registered via @RegisterClass(BaseApplication, 'HomeApplication').
 // It must be imported here so ESBuild includes it in this chunk, making it discoverable
 // via the lazy loading system when ApplicationManager calls CreateInstanceAsync.
@@ -48,6 +50,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
   declarations: [
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
+    ActionPinConfigDialogComponent,
+    ActionPinRunnerDialogComponent,
     SystemDiagnosticsComponent,
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
