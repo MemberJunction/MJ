@@ -1,8 +1,7 @@
 import { UUIDsEqual } from "@memberjunction/global";
-import { SQLServerDialect, PostgreSQLDialect, type SQLDialect } from "@memberjunction/sql-dialect";
-import { SQLParser } from "@memberjunction/sql-parser";
+import { GetDialect, type SQLDialect } from "@memberjunction/sql-dialect";
+import { SQLParser, AnalyzeTopLevelOrderBy } from "@memberjunction/sql-parser";
 import { Metadata, QueryInfo, DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
-import { AnalyzeTopLevelOrderBy } from "./orderByAnalyzer.js";
 import { SymbolTable } from "./symbolTable.js";
 
 /**
@@ -591,11 +590,7 @@ export class QueryCompositionEngine {
      * Resolves a DatabasePlatform string to the corresponding SQLDialect instance.
      */
     private getDialect(platform: DatabasePlatform): SQLDialect {
-        switch (platform) {
-            case 'postgresql': return new PostgreSQLDialect();
-            case 'sqlserver': return new SQLServerDialect();
-            default: throw new Error(`Unsupported database platform: ${platform}`);
-        }
+        return GetDialect(platform);
     }
 
     /**
@@ -634,7 +629,7 @@ export class QueryCompositionEngine {
         const dialect = this.getDialect(platform);
 
         // SymbolTable guarantees CTE name uniqueness at registration time.
-        const symTable = new SymbolTable(platform);
+        const symTable = new SymbolTable(dialect);
 
         // Seed the symbol table with outer-CTE names so inner CTEs that happen
         // to share a name with an outer CTE also get renamed.
@@ -648,7 +643,7 @@ export class QueryCompositionEngine {
             const commentStrippedSQL = this.stripSQLComments(strippedSQL).trimStart();
 
             if (/^WITH\s/i.test(commentStrippedSQL)) {
-                const { innerCTEDefinitions, mainSelect } = this.hoistInnerCTEs(commentStrippedSQL, platform);
+                const { innerCTEDefinitions, mainSelect } = this.hoistInnerCTEs(commentStrippedSQL, dialect);
 
                 // Use SymbolTable for deconfliction instead of raw Set
                 const { definitions, rewrittenMainSelect } =
@@ -691,7 +686,7 @@ export class QueryCompositionEngine {
 
             const cteName = bodyMatch[1];
             const body = bodyMatch[2];
-            const analysis = AnalyzeTopLevelOrderBy(body, dialect.ParserDialect);
+            const analysis = AnalyzeTopLevelOrderBy(body, dialect);
 
             if (analysis.Positions.length > 0 && !analysis.IsLegalInCTE) {
                 const entry = cteEntries.find(e => e.CTEName === cteName);
@@ -801,10 +796,9 @@ export class QueryCompositionEngine {
      * AST parsing fails (e.g. SQL contains Nunjucks template tokens).
      *
      * @param sql SQL starting with a WITH clause
-     * @param platform Database platform, used to select the AST dialect
+     * @param dialect SQL dialect for AST parsing
      */
-    private hoistInnerCTEs(sql: string, platform: DatabasePlatform): { innerCTEDefinitions: string[]; mainSelect: string } {
-        const dialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
+    private hoistInnerCTEs(sql: string, dialect: SQLDialect): { innerCTEDefinitions: string[]; mainSelect: string } {
         const extraction = SQLParser.ExtractCTEs(sql, dialect);
 
         if (!extraction) {
@@ -840,7 +834,7 @@ export class QueryCompositionEngine {
         if (!/ORDER/i.test(trimmed)) return sql;
         if (dialect.AllowsOrderByInCTE) return sql;
 
-        const analysis = AnalyzeTopLevelOrderBy(trimmed, dialect.ParserDialect);
+        const analysis = AnalyzeTopLevelOrderBy(trimmed, dialect);
 
         // No top-level ORDER BY found — nothing to strip
         if (analysis.Positions.length === 0) return sql;

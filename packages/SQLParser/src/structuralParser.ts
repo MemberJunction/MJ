@@ -16,8 +16,9 @@
  * for Nunjucks evaluation.
  */
 
-import { SQLParser } from '@memberjunction/sql-parser';
-import { AnalyzeTopLevelOrderBy, isOrderByLegalInCTE, findOrderByStatement } from './orderByAnalyzer.js';
+import { SQLParser } from './sql-parser.js';
+import type { SQLParserDialect } from '@memberjunction/sql-dialect';
+import { AnalyzeTopLevelOrderBy } from './orderByAnalyzer.js';
 import type {
     QueryIR,
     CTENode,
@@ -37,10 +38,10 @@ import type {
  * Parses SQL (potentially containing MJ template tokens) into a QueryIR.
  *
  * @param sql - Raw SQL with potential {{query:"..."}}, {{ var }}, {% %} tokens
- * @param parserDialect - 'TransactSQL' or 'PostgresQL'
+ * @param dialect - SQL dialect for parsing and identifier quoting
  * @returns Structural IR for composition manipulation
  */
-export function ParseToIR(sql: string, parserDialect: string): QueryIR {
+export function ParseToIR(sql: string, dialect: SQLParserDialect): QueryIR {
     if (!sql || sql.trim().length === 0) {
         return { CTEs: [], Body: [], HasUserCTEs: false, TrailingOrderBy: null, OrderByIsLegalInCTE: false };
     }
@@ -49,13 +50,11 @@ export function ParseToIR(sql: string, parserDialect: string): QueryIR {
     const fragments = tokenizeToFragments(sql);
 
     // Step 2: Detect and extract CTE structure
-    const { ctes, body, hasUserCTEs } = extractCTEStructure(sql, fragments, parserDialect);
+    const { ctes, body, hasUserCTEs } = extractCTEStructure(sql, fragments, dialect);
 
     // Step 3: Detect trailing ORDER BY and split from body
-    // We analyze the body text (not full SQL with CTEs) for non-CTE queries,
-    // or the full SQL for CTE queries where ORDER BY is after the main SELECT.
     const bodyText = renderFragments(body);
-    const orderByAnalysis = AnalyzeTopLevelOrderBy(bodyText, parserDialect);
+    const orderByAnalysis = AnalyzeTopLevelOrderBy(bodyText, dialect);
 
     let finalBody = body;
     let trailingOrderBy: Fragment[] | null = null;
@@ -84,7 +83,7 @@ export function ParseToIR(sql: string, parserDialect: string): QueryIR {
  * This is the single code path that emits SQL from the composition engine.
  * All template tokens are preserved verbatim for downstream Nunjucks evaluation.
  */
-export function RenderIR(ir: QueryIR, platform: 'sqlserver' | 'postgresql'): string {
+export function RenderIR(ir: QueryIR, _dialect: SQLParserDialect): string {
     const parts: string[] = [];
 
     // Render CTEs
@@ -204,7 +203,7 @@ interface CTEStructure {
 function extractCTEStructure(
     sql: string,
     fragments: Fragment[],
-    parserDialect: string
+    dialect: SQLParserDialect
 ): CTEStructure {
     // Strip comments to check for WITH prefix
     const commentStripped = stripSQLCommentsFromFragments(fragments).trimStart();
@@ -213,7 +212,6 @@ function extractCTEStructure(
     }
 
     // Use SQLParser.ExtractCTEs for the actual splitting
-    const dialect = parserDialect === 'PostgresQL' ? 'PostgresQL' : 'TransactSQL';
     const extraction = SQLParser.ExtractCTEs(sql, dialect);
     if (!extraction) {
         return { ctes: [], body: fragments, hasUserCTEs: false };

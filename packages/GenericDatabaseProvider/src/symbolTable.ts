@@ -1,4 +1,4 @@
-import { DatabasePlatform } from '@memberjunction/core';
+import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Symbol table for managing CTE names during composition.
@@ -13,11 +13,11 @@ export class SymbolTable {
     /** Allocated names (canonical lowercase → original casing) */
     private allocatedNames = new Map<string, string>();
 
-    /** Platform for identifier quoting */
-    private platform: DatabasePlatform;
+    /** Dialect for identifier quoting */
+    private dialect: SQLParserDialect;
 
-    constructor(platform: DatabasePlatform) {
-        this.platform = platform;
+    constructor(dialect: SQLParserDialect) {
+        this.dialect = dialect;
     }
 
     /**
@@ -48,7 +48,6 @@ export class SymbolTable {
 
     /**
      * Pre-seeds the table with names that are already taken (e.g., outer CTE names).
-     * Returns the name unchanged. Throws if the name was already seeded.
      */
     Seed(name: string): void {
         const canonical = name.toLowerCase();
@@ -66,10 +65,10 @@ export class SymbolTable {
     }
 
     /**
-     * Returns the platform-quoted form of a name (e.g., `[name]` for SQL Server).
+     * Returns the dialect-quoted form of a name via `dialect.QuoteIdentifier()`.
      */
     Quote(name: string): string {
-        return this.platform === 'postgresql' ? `"${name}"` : `[${name}]`;
+        return this.dialect.QuoteIdentifier(name);
     }
 
     /**

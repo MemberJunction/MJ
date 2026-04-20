@@ -45,6 +45,9 @@ import { BaseConstraintValidator } from './base-constraint-validator';
 import { ValidationContext } from './validation-context';
 import { PropValueExtractor } from '../prop-value-extractor';
 import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
+
+const tsqlDialect = new SQLServerDialect();
 
 /**
  * Validates SQL WHERE clauses for syntax and field references
@@ -190,7 +193,7 @@ export class SqlWhereClauseValidator extends BaseConstraintValidator {
     const violations: ConstraintViolation[] = [];
 
     // Parse WHERE clause using SQLParser (wraps node-sql-parser with FOR XML workaround)
-    const ast = SQLParser.ParseSQL(`SELECT * FROM t WHERE ${whereClause}`);
+    const ast = SQLParser.ParseSQL(`SELECT * FROM t WHERE ${whereClause}`, tsqlDialect);
     if (!ast) {
       throw new Error('Failed to parse WHERE clause');
     }

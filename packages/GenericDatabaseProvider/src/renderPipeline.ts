@@ -1,4 +1,5 @@
 import { DatabasePlatform, UserInfo, QueryDependencySpec, QueryParameterInfo } from '@memberjunction/core';
+import { GetDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
 import { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
 import { QueryParameterProcessor } from '@memberjunction/query-processor';
@@ -254,15 +255,24 @@ export class RenderPipeline {
             return sql;
         }
 
-        if (platform === 'postgresql') {
-            const withoutSemicolon = trimmed.replace(/;\s*$/, '');
-            return `${withoutSemicolon}\nLIMIT ${maxRows}`;
+        const dialect = RenderPipeline.getDialect(platform);
+        const limitResult = dialect.LimitClause(maxRows);
+
+        if (limitResult.prefix) {
+            // SQL Server style: inject TOP N after SELECT
+            return trimmed.replace(
+                /^(SELECT\s+(?:DISTINCT\s+)?)/i,
+                `$1${limitResult.prefix} `
+            );
         }
 
-        return trimmed.replace(
-            /^(SELECT\s+(?:DISTINCT\s+)?)/i,
-            `$1TOP ${maxRows} `
-        );
+        // PostgreSQL style: append LIMIT N
+        const withoutSemicolon = trimmed.replace(/;\s*$/, '');
+        return `${withoutSemicolon}\n${limitResult.suffix}`;
+    }
+
+    private static getDialect(platform: DatabasePlatform): SQLDialect {
+        return GetDialect(platform);
     }
 }
 

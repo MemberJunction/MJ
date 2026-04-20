@@ -1,6 +1,6 @@
 import { DatabasePlatform } from '@memberjunction/core';
-import { SQLParser } from '@memberjunction/sql-parser';
-import { AnalyzeTopLevelOrderBy, findOrderByStatement as sharedFindOrderByStatement } from './orderByAnalyzer.js';
+import { SQLParser, AnalyzeTopLevelOrderBy, findOrderByStatement as sharedFindOrderByStatement } from '@memberjunction/sql-parser';
+import { GetDialect, SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Result of wrapping SQL with paging directives.
@@ -50,11 +50,11 @@ export class QueryPagingEngine {
         maxRows: number,
         platform: DatabasePlatform,
     ): PagingWrappedSQL {
-        // Strip trailing semicolons — they break OFFSET/FETCH and CTE wrapping
         const cleanedSQL = resolvedSQL.trimEnd().replace(/;\s*$/, '');
+        const dialect = QueryPagingEngine.getDialect(platform);
 
-        const dataSQL = QueryPagingEngine.buildDataSQL(cleanedSQL, startRow, maxRows, platform);
-        const countSQL = QueryPagingEngine.buildCountSQL(cleanedSQL, platform);
+        const dataSQL = QueryPagingEngine.buildDataSQL(cleanedSQL, startRow, maxRows, dialect);
+        const countSQL = QueryPagingEngine.buildCountSQL(cleanedSQL, dialect);
 
         return { DataSQL: dataSQL, CountSQL: countSQL, Offset: startRow, PageSize: maxRows };
     }
@@ -70,39 +70,29 @@ export class QueryPagingEngine {
     // Data SQL — append paging clause directly to original SQL
     // ════════════════════════════════════════════════════════════════════
 
-    /**
-     * Builds the paged data SQL by appending OFFSET/FETCH or LIMIT/OFFSET
-     * directly to the original SQL.
-     *
-     * - Strips TOP on SQL Server (TOP and OFFSET are mutually exclusive)
-     * - Ensures ORDER BY exists (SQL Server requires it for OFFSET/FETCH;
-     *   PostgreSQL requires it for deterministic LIMIT/OFFSET)
-     * - Appends the platform-specific paging clause
-     */
     private static buildDataSQL(
         sql: string,
         startRow: number,
         maxRows: number,
-        platform: DatabasePlatform,
+        dialect: SQLDialect,
     ): string {
         let dataSQL = sql;
 
         // Strip TOP clause on SQL Server — it conflicts with OFFSET/FETCH.
-        // Must operate on the main SELECT, not on subqueries or CTEs.
-        if (platform === 'sqlserver') {
-            dataSQL = QueryPagingEngine.stripTopFromMainSelect(dataSQL);
+        if (dialect.PlatformKey === 'sqlserver') {
+            dataSQL = QueryPagingEngine.stripTopFromMainSelect(dataSQL, dialect);
         }
 
         // Ensure there's an ORDER BY — required for OFFSET/FETCH on SQL Server,
         // and strongly recommended for deterministic LIMIT/OFFSET on PostgreSQL.
-        if (!QueryPagingEngine.hasTopLevelOrderBy(dataSQL, platform)) {
-            const defaultOrder = QueryPagingEngine.defaultOrderBy(platform);
-            dataSQL = `${dataSQL}\nORDER BY ${defaultOrder}`;
+        const hasOrderBy = AnalyzeTopLevelOrderBy(dataSQL, dialect).Positions.length > 0;
+        if (!hasOrderBy) {
+            dataSQL = `${dataSQL}\nORDER BY ${dialect.DefaultPagingOrderBy}`;
         }
 
-        // Append paging clause
-        const pagingClause = QueryPagingEngine.buildPagingClause(startRow, maxRows, platform);
-        return `${dataSQL}\n${pagingClause}`;
+        // Append paging clause via dialect
+        const limitResult = dialect.LimitClause(maxRows, startRow);
+        return `${dataSQL}\n${limitResult.suffix}`;
     }
 
     /**
@@ -110,24 +100,18 @@ export class QueryPagingEngine {
      * Handles `TOP N` and `TOP (N)`, with or without DISTINCT.
      * Does not affect TOP in subqueries or CTEs.
      */
-    private static stripTopFromMainSelect(sql: string): string {
-        // Find the main SELECT — it's either the first token, or follows the
-        // last CTE closing paren. Use ExtractCTEs to find the main statement.
-        const parserDialect = 'TransactSQL';
-        const extraction = SQLParser.ExtractCTEs(sql, parserDialect);
+    private static stripTopFromMainSelect(sql: string, dialect: SQLDialect): string {
+        const extraction = SQLParser.ExtractCTEs(sql, dialect);
 
         if (extraction) {
-            // SQL has CTEs — strip TOP only from the main statement
             const { sql: cleanMain, topRemoved } = QueryPagingEngine.stripTopClause(extraction.MainStatement);
             if (topRemoved) {
-                // Reassemble: WITH ... <CTEs> ... <cleanMain>
                 const ctePrefix = sql.substring(0, sql.length - extraction.MainStatement.length).trimEnd();
                 return `${ctePrefix}\n${cleanMain}`;
             }
             return sql;
         }
 
-        // No CTEs — strip TOP from the SQL directly
         const { sql: cleanSQL } = QueryPagingEngine.stripTopClause(sql);
         return cleanSQL;
     }
@@ -136,57 +120,36 @@ export class QueryPagingEngine {
     // Count SQL — wrap in CTE, strip ORDER BY, SELECT COUNT(*)
     // ════════════════════════════════════════════════════════════════════
 
-    /**
-     * Builds the count SQL by wrapping the original query (minus ORDER BY)
-     * in a CTE and selecting COUNT(*).
-     *
-     * Uses a two-tier approach:
-     *   1. **AST path** — parse SQL, strip ORDER BY via AST, reconstruct
-     *   2. **Regex fallback** — use SQLParser.ExtractCTEs + regex ORDER BY removal
-     */
-    private static buildCountSQL(sql: string, platform: DatabasePlatform): string {
-        // Tier 1: Try full AST — cleanest approach
-        const astResult = QueryPagingEngine.buildCountSQLViaAST(sql, platform);
+    private static buildCountSQL(sql: string, dialect: SQLDialect): string {
+        const astResult = QueryPagingEngine.buildCountSQLViaAST(sql, dialect);
         if (astResult) return astResult;
 
-        // Tier 2: Hybrid — SQLParser.ExtractCTEs + regex ORDER BY stripping
-        return QueryPagingEngine.buildCountSQLViaRegex(sql, platform);
+        return QueryPagingEngine.buildCountSQLViaRegex(sql, dialect);
     }
 
-    /**
-     * AST-based count SQL: parse entire SQL, extract CTEs, strip ORDER BY and
-     * TOP from the main SELECT, then assemble all CTEs + __count as siblings
-     * in a flat WITH chain.
-     */
-    private static buildCountSQLViaAST(sql: string, platform: DatabasePlatform): string | null {
-        const parserDialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
+    private static buildCountSQLViaAST(sql: string, dialect: SQLDialect): string | null {
         try {
-            const ast = SQLParser.ParseSQL(sql, parserDialect);
+            const ast = SQLParser.ParseSQL(sql, dialect);
             if (!ast) return null;
 
             const stmt = (Array.isArray(ast) ? ast[0] : ast) as unknown as Record<string, unknown>;
             if (!stmt) return null;
 
-            // Extract existing CTEs as sibling definitions
-            const existingCTEDefs = QueryPagingEngine.extractCTEsFromAST(stmt, parserDialect, platform);
+            const existingCTEDefs = QueryPagingEngine.extractCTEsFromAST(stmt, dialect);
 
-            // Strip ORDER BY (not needed for counting, illegal in CTEs without TOP)
             const orderByStmt = QueryPagingEngine.findOrderByStatement(stmt);
             if (orderByStmt?.orderby) {
                 orderByStmt.orderby = null;
             }
 
-            // Strip TOP — we want the full count
             if (stmt.top) stmt.top = null;
 
-            // Reconstruct only the main SELECT (without CTEs)
             stmt.with = null;
             const mainSelectSQL = SQLParser.SqlifyAST(
-                stmt as unknown as Parameters<typeof SQLParser.SqlifyAST>[0], parserDialect
+                stmt as unknown as Parameters<typeof SQLParser.SqlifyAST>[0], dialect
             );
 
-            // Assemble: all existing CTEs + __count as siblings in a single WITH
-            const countCTEName = QueryPagingEngine.quoteIdentifier('__count', platform);
+            const countCTEName = dialect.QuoteIdentifier('__count');
             const allCTEs = [...existingCTEDefs, `${countCTEName} AS (\n${mainSelectSQL}\n)`];
             return `WITH ${allCTEs.join(',\n')}\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
         } catch {
@@ -194,54 +157,35 @@ export class QueryPagingEngine {
         }
     }
 
-    /**
-     * Extracts CTE definitions from an AST statement, producing quoted
-     * `[name] AS (...)` strings for each CTE.
-     */
     private static extractCTEsFromAST(
         stmt: Record<string, unknown>,
-        parserDialect: string,
-        platform: DatabasePlatform
+        dialect: SQLDialect
     ): string[] {
         const ctes = (stmt.with as unknown[] | null) || [];
         return ctes.map(cte => {
             const cteRecord = cte as { name: { value: string }; stmt: { ast: unknown } };
-            const quotedName = QueryPagingEngine.quoteIdentifier(cteRecord.name.value, platform);
-            const bodySQL = SQLParser.SqlifyAST(cteRecord.stmt.ast as Parameters<typeof SQLParser.SqlifyAST>[0], parserDialect);
+            const quotedName = dialect.QuoteIdentifier(cteRecord.name.value);
+            const bodySQL = SQLParser.SqlifyAST(cteRecord.stmt.ast as Parameters<typeof SQLParser.SqlifyAST>[0], dialect);
             return `${quotedName} AS (\n${bodySQL}\n)`;
         });
     }
 
-    /**
-     * Regex-based count SQL: use SQLParser.ExtractCTEs for robust CTE splitting,
-     * then regex to strip ORDER BY from the main SELECT, wrap in count CTE.
-     */
-    private static buildCountSQLViaRegex(sql: string, platform: DatabasePlatform): string {
-        const parserDialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
-        const extraction = SQLParser.ExtractCTEs(sql, parserDialect);
+    private static buildCountSQLViaRegex(sql: string, dialect: SQLDialect): string {
+        const extraction = SQLParser.ExtractCTEs(sql, dialect);
 
         if (extraction) {
-            // Strip ORDER BY from the main SELECT only
-            const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(extraction.MainStatement, parserDialect);
+            const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(extraction.MainStatement, dialect);
             const quotedCTEDefs = extraction.CTEDefinitions.map(def =>
-                QueryPagingEngine.quoteCteName(def, platform)
+                QueryPagingEngine.quoteCteName(def, dialect)
             );
-            const countCTEName = QueryPagingEngine.quoteIdentifier('__count', platform);
+            const countCTEName = dialect.QuoteIdentifier('__count');
             const allCTEs = [...quotedCTEDefs, `${countCTEName} AS (\n${sqlWithoutOrder}\n)`];
             return `WITH ${allCTEs.join(',\n')}\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
         }
 
-        // No CTEs — strip ORDER BY and wrap the whole SQL
-        const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(sql, parserDialect);
-        return QueryPagingEngine.assembleCountSQL(sqlWithoutOrder, platform);
-    }
-
-    /**
-     * Wraps cleaned SQL (no ORDER BY) in a CTE for counting.
-     */
-    private static assembleCountSQL(cleanSQL: string, platform: DatabasePlatform): string {
-        const countCTEName = QueryPagingEngine.quoteIdentifier('__count', platform);
-        return `WITH ${countCTEName} AS (\n${cleanSQL}\n)\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
+        const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(sql, dialect);
+        const countCTEName = dialect.QuoteIdentifier('__count');
+        return `WITH ${countCTEName} AS (\n${sqlWithoutOrder}\n)\nSELECT COUNT(*) AS TotalRowCount FROM ${countCTEName}`;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -257,31 +201,20 @@ export class QueryPagingEngine {
     // ════════════════════════════════════════════════════════════════════
 
     /**
-     * Checks if the SQL has a top-level ORDER BY clause (not inside subqueries,
-     * CTEs, window functions, comments, or string/identifier literals).
-     *
-     * Delegates to the shared `AnalyzeTopLevelOrderBy` utility which handles
-     * both SQL+Nunjucks (composition) and clean SQL (paging) through AST parsing
-     * with MJLexer scanner fallback.
-     */
-    private static hasTopLevelOrderBy(sql: string, platform: DatabasePlatform): boolean {
-        const parserDialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
-        return AnalyzeTopLevelOrderBy(sql, parserDialect).Positions.length > 0;
-    }
-
-    /**
      * Extracts the top-level ORDER BY clause from SQL, ignoring ORDER BY
      * inside subqueries, block comments, line comments, single-quoted strings,
      * and bracket/double-quoted identifiers.
      *
-     * Delegates to the shared `AnalyzeTopLevelOrderBy` utility. Preserves the
-     * public static API for existing callers and tests.
+     * Preserves the public static API for existing callers and tests.
      */
     static extractOrderBy(
         sql: string,
-        parserDialect: string = 'TransactSQL'
+        dialect: SQLDialect | string = new SQLServerDialect()
     ): { sqlWithoutOrder: string; orderByClause: string | null } {
-        const analysis = AnalyzeTopLevelOrderBy(sql, parserDialect);
+        const resolvedDialect = typeof dialect === 'string'
+            ? QueryPagingEngine.getDialect(dialect as DatabasePlatform)
+            : dialect;
+        const analysis = AnalyzeTopLevelOrderBy(sql, resolvedDialect);
         return {
             sqlWithoutOrder: analysis.SqlWithoutOrderBy,
             orderByClause: analysis.OrderByClause,
@@ -300,34 +233,24 @@ export class QueryPagingEngine {
 
     /**
      * ExtractCTEs returns CTE definitions with unquoted names (e.g. `myName AS (...)`).
-     * We need to apply platform-specific identifier quoting to the CTE name.
+     * Apply dialect-specific identifier quoting to the CTE name.
      */
-    private static quoteCteName(cteDefinition: string, platform: DatabasePlatform): string {
+    private static quoteCteName(cteDefinition: string, dialect: SQLDialect): string {
         const match = cteDefinition.match(/^(\[([^\]]+)\]|"([^"]+)"|([A-Za-z_]\w*))\s+AS\s*\(/i);
         if (!match) return cteDefinition;
 
         const bareName = match[2] ?? match[3] ?? match[4];
         if (!bareName) return cteDefinition;
 
-        const quotedName = QueryPagingEngine.quoteIdentifier(bareName, platform);
+        const quotedName = dialect.QuoteIdentifier(bareName);
         return quotedName + cteDefinition.substring(match[1].length);
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // Platform helpers
+    // Dialect resolution
     // ════════════════════════════════════════════════════════════════════
 
-    private static quoteIdentifier(name: string, platform: DatabasePlatform): string {
-        return platform === 'postgresql' ? `"${name}"` : `[${name}]`;
-    }
-
-    private static buildPagingClause(startRow: number, maxRows: number, platform: DatabasePlatform): string {
-        return platform === 'postgresql'
-            ? `LIMIT ${maxRows} OFFSET ${startRow}`
-            : `OFFSET ${startRow} ROWS FETCH NEXT ${maxRows} ROWS ONLY`;
-    }
-
-    private static defaultOrderBy(platform: DatabasePlatform): string {
-        return platform === 'postgresql' ? '1' : '(SELECT NULL)';
+    private static getDialect(platform: DatabasePlatform): SQLDialect {
+        return GetDialect(platform);
     }
 }

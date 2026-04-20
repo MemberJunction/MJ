@@ -1,4 +1,5 @@
-import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLParser } from './sql-parser.js';
+import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Result of analyzing a SQL string for top-level ORDER BY clauses.
@@ -45,7 +46,7 @@ export interface OrderByAnalysis {
  */
 export function AnalyzeTopLevelOrderBy(
     sql: string,
-    parserDialect: string
+    dialect: SQLParserDialect
 ): OrderByAnalysis {
     if (!sql || sql.trim().length === 0) {
         return { Positions: [], SqlWithoutOrderBy: sql, OrderByClause: null, IsLegalInCTE: false };
@@ -59,7 +60,7 @@ export function AnalyzeTopLevelOrderBy(
     }
 
     // Tier 1: AST-based analysis
-    const astResult = analyzeViaAST(trimmed, parserDialect);
+    const astResult = analyzeViaAST(trimmed, dialect);
     if (astResult !== null) return astResult;
 
     // Tier 2: MJLexer-based scanner (handles SQL+Nunjucks, carries state across token boundaries)
@@ -70,8 +71,8 @@ export function AnalyzeTopLevelOrderBy(
  * Checks whether the given SQL has any top-level ORDER BY clause.
  * Convenience wrapper around {@link AnalyzeTopLevelOrderBy}.
  */
-export function HasTopLevelOrderBy(sql: string, parserDialect: string): boolean {
-    return AnalyzeTopLevelOrderBy(sql, parserDialect).Positions.length > 0;
+export function HasTopLevelOrderBy(sql: string, dialect: SQLParserDialect): boolean {
+    return AnalyzeTopLevelOrderBy(sql, dialect).Positions.length > 0;
 }
 
 /**
@@ -80,9 +81,9 @@ export function HasTopLevelOrderBy(sql: string, parserDialect: string): boolean 
  */
 export function ExtractOrderBy(
     sql: string,
-    parserDialect: string
+    dialect: SQLParserDialect
 ): { sqlWithoutOrder: string; orderByClause: string | null } {
-    const analysis = AnalyzeTopLevelOrderBy(sql, parserDialect);
+    const analysis = AnalyzeTopLevelOrderBy(sql, dialect);
     return { sqlWithoutOrder: analysis.SqlWithoutOrderBy, orderByClause: analysis.OrderByClause };
 }
 
@@ -94,15 +95,15 @@ export function ExtractOrderBy(
  * Attempts to analyze ORDER BY via node-sql-parser AST.
  * Returns null if parsing fails (caller should fall back to Tier 2).
  */
-function analyzeViaAST(sql: string, parserDialect: string): OrderByAnalysis | null {
+function analyzeViaAST(sql: string, dialect: SQLParserDialect): OrderByAnalysis | null {
     // Try direct parsing first
-    const directResult = tryDirectAST(sql, parserDialect);
+    const directResult = tryDirectAST(sql, dialect);
     if (directResult !== null) return directResult;
 
     // If MJ extensions detected, try with Nunjucks preprocessing
     const mjParse = SQLParser.Analyze(sql);
     if (mjParse.hasMJExtensions) {
-        return tryNunjucksAwareAST(sql, parserDialect);
+        return tryNunjucksAwareAST(sql, dialect);
     }
 
     return null;
@@ -111,15 +112,15 @@ function analyzeViaAST(sql: string, parserDialect: string): OrderByAnalysis | nu
 /**
  * Direct AST parsing attempt — works for clean SQL without MJ tokens.
  */
-function tryDirectAST(sql: string, parserDialect: string): OrderByAnalysis | null {
+function tryDirectAST(sql: string, dialect: SQLParserDialect): OrderByAnalysis | null {
     try {
-        const ast = SQLParser.ParseSQL(sql, parserDialect);
+        const ast = SQLParser.ParseSQL(sql, dialect);
         if (!ast) return null;
 
         const stmt = Array.isArray(ast) ? ast[0] : ast;
         if (!stmt) return buildNoOrderByResult(sql);
 
-        return buildASTAnalysis(stmt as unknown as Record<string, unknown>, sql, parserDialect);
+        return buildASTAnalysis(stmt as unknown as Record<string, unknown>, sql);
     } catch {
         return null;
     }
@@ -129,11 +130,11 @@ function tryDirectAST(sql: string, parserDialect: string): OrderByAnalysis | nul
  * Nunjucks-preprocessed AST parsing — substitutes MJ tokens with safe
  * placeholders, parses the resulting clean SQL, then maps results back.
  */
-function tryNunjucksAwareAST(sql: string, parserDialect: string): OrderByAnalysis | null {
+function tryNunjucksAwareAST(sql: string, dialect: SQLParserDialect): OrderByAnalysis | null {
     const preprocessed = SQLParser.Substitute(sql).cleanSQL;
 
     try {
-        const ast = SQLParser.ParseSQL(preprocessed, parserDialect);
+        const ast = SQLParser.ParseSQL(preprocessed, dialect);
         if (!ast) return null;
 
         const stmt = Array.isArray(ast) ? ast[0] : ast;
@@ -181,7 +182,6 @@ function tryNunjucksAwareAST(sql: string, parserDialect: string): OrderByAnalysi
 function buildASTAnalysis(
     stmt: Record<string, unknown>,
     sql: string,
-    _parserDialect: string
 ): OrderByAnalysis {
     const orderByStmt = findOrderByStatement(stmt);
     if (!orderByStmt) return buildNoOrderByResult(sql);

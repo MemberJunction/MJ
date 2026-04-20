@@ -622,6 +622,65 @@ ORDER BY [LogCount] DESC`,
 });
 
 // ════════════════════════════════════════════════════════════════════
+// PostgreSQL Dialect Variants
+// ════════════════════════════════════════════════════════════════════
+
+describe('PostgreSQL Dialect Variants', () => {
+
+    // pgSQL: preserves ORDER BY in CTE (PostgreSQL allows it)
+    it('pgSQL: preserves ORDER BY in CTE (PostgreSQL allows it)', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'Customers', CategoryPath: '/Sales/', SQL:
+`SELECT [ID], [Name], [Revenue]
+FROM [crm].[vwCustomers]
+ORDER BY [Revenue] DESC`,
+        }];
+        const result = RenderPipeline.Run(
+            `SELECT [c].[Name] FROM {{query:"Sales/Customers"}} [c]`,
+            { Platform: 'postgresql', ContextUser: mockUser, Dependencies: deps }
+        );
+        // PostgreSQL allows ORDER BY in CTEs, so it should be preserved
+        expect(result.FinalSQL).toMatch(/ORDER\s+BY/i);
+    });
+
+    // pgSQL: uses double-quoted identifiers in CTE names
+    it('pgSQL: uses double-quoted identifiers in CTE names', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'SimpleDep', CategoryPath: '/Test/', SQL:
+`SELECT [ID], [Name] FROM [data].[vwRecords]`,
+        }];
+        const result = RenderPipeline.Run(
+            `SELECT [s].[ID] FROM {{query:"Test/SimpleDep"}} [s]`,
+            { Platform: 'postgresql', ContextUser: mockUser, Dependencies: deps }
+        );
+        // PostgreSQL uses double-quoted identifiers, not brackets
+        expect(result.FinalSQL).toMatch(/"__cte_/);
+        expect(result.FinalSQL).not.toMatch(/\[__cte_/);
+    });
+
+    // pgSQL: paging uses LIMIT/OFFSET syntax
+    it('pgSQL: paging uses LIMIT/OFFSET syntax', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'Records', CategoryPath: '/Test/', SQL:
+`SELECT [ID], [Name] FROM [data].[vwRecords]`,
+        }];
+        const result = RenderPipeline.Run(
+            `SELECT [r].[ID], [r].[Name] FROM {{query:"Test/Records"}} [r]
+ORDER BY [r].[ID]`,
+            { Platform: 'postgresql', ContextUser: mockUser, Dependencies: deps,
+              Paging: { StartRow: 0, MaxRows: 25 } }
+        );
+        // PostgreSQL uses LIMIT/OFFSET, not OFFSET...FETCH NEXT
+        expect(result.FinalSQL).toMatch(/LIMIT\s+25/i);
+        expect(result.FinalSQL).toMatch(/OFFSET\s+0/i);
+        expect(result.FinalSQL).not.toMatch(/FETCH\s+NEXT/i);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
 // Helpers
 // ════════════════════════════════════════════════════════════════════
 

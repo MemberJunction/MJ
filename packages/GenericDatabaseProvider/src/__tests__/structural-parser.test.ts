@@ -6,8 +6,12 @@
  * replacement via typed IR.
  */
 import { describe, it, expect } from 'vitest';
-import { ParseToIR, RenderIR } from '../structuralParser';
+import { ParseToIR, RenderIR } from '@memberjunction/sql-parser';
 import { SymbolTable } from '../symbolTable';
+import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
+
+const tsqlDialect = new SQLServerDialect();
+const pgDialect = new PostgreSQLDialect();
 
 // ════════════════════════════════════════════════════════════════════
 // SymbolTable
@@ -15,21 +19,21 @@ import { SymbolTable } from '../symbolTable';
 
 describe('SymbolTable', () => {
     it('registers unique names without suffix', () => {
-        const st = new SymbolTable('sqlserver');
+        const st = new SymbolTable(tsqlDialect);
         expect(st.Register('MyTable')).toBe('MyTable');
         expect(st.Has('MyTable')).toBe(true);
         expect(st.Size).toBe(1);
     });
 
     it('adds __2 suffix on first collision', () => {
-        const st = new SymbolTable('sqlserver');
+        const st = new SymbolTable(tsqlDialect);
         st.Register('Bridge');
         expect(st.Register('Bridge')).toBe('Bridge__2');
         expect(st.Size).toBe(2);
     });
 
     it('increments suffix on repeated collisions', () => {
-        const st = new SymbolTable('sqlserver');
+        const st = new SymbolTable(tsqlDialect);
         st.Register('CTE');
         st.Register('CTE');
         expect(st.Register('CTE')).toBe('CTE__3');
@@ -37,31 +41,31 @@ describe('SymbolTable', () => {
     });
 
     it('is case-insensitive', () => {
-        const st = new SymbolTable('sqlserver');
+        const st = new SymbolTable(tsqlDialect);
         st.Register('bridge');
         expect(st.Register('Bridge')).toBe('Bridge__2');
         expect(st.Register('BRIDGE')).toBe('BRIDGE__3');
     });
 
     it('seeds without suffix', () => {
-        const st = new SymbolTable('sqlserver');
+        const st = new SymbolTable(tsqlDialect);
         st.Seed('PreExisting');
         expect(st.Has('preexisting')).toBe(true);
         expect(st.Register('PreExisting')).toBe('PreExisting__2');
     });
 
     it('quotes identifiers for SQL Server', () => {
-        const st = new SymbolTable('sqlserver');
+        const st = new SymbolTable(tsqlDialect);
         expect(st.Quote('MyTable')).toBe('[MyTable]');
     });
 
     it('quotes identifiers for PostgreSQL', () => {
-        const st = new SymbolTable('postgresql');
+        const st = new SymbolTable(pgDialect);
         expect(st.Quote('MyTable')).toBe('"MyTable"');
     });
 
     it('generates composition CTE names', () => {
-        const st = new SymbolTable('sqlserver');
+        const st = new SymbolTable(tsqlDialect);
         const name = st.RegisterCompositionCTE('Active Users', 'some-hash-input');
         expect(name).toMatch(/^\[__cte_Active_Users_[a-z0-9]+\]$/);
         expect(st.Size).toBe(1);
@@ -74,7 +78,7 @@ describe('SymbolTable', () => {
 
 describe('ParseToIR', () => {
     it('parses simple SELECT into body fragments', () => {
-        const ir = ParseToIR('SELECT [ID], [Name] FROM [Users]', 'TransactSQL');
+        const ir = ParseToIR('SELECT [ID], [Name] FROM [Users]', tsqlDialect);
         expect(ir.CTEs).toHaveLength(0);
         expect(ir.Body.length).toBeGreaterThan(0);
         expect(ir.HasUserCTEs).toBe(false);
@@ -85,7 +89,7 @@ describe('ParseToIR', () => {
     SELECT [ID] FROM [t1]
 )
 SELECT * FROM CTE_A`;
-        const ir = ParseToIR(sql, 'TransactSQL');
+        const ir = ParseToIR(sql, tsqlDialect);
         expect(ir.HasUserCTEs).toBe(true);
         expect(ir.CTEs.length).toBeGreaterThanOrEqual(1);
         expect(ir.CTEs[0].CanonicalName).toBe('CTE_A');
@@ -93,19 +97,19 @@ SELECT * FROM CTE_A`;
 
     it('detects trailing ORDER BY', () => {
         const sql = 'SELECT [ID] FROM [Users] ORDER BY [ID]';
-        const ir = ParseToIR(sql, 'TransactSQL');
+        const ir = ParseToIR(sql, tsqlDialect);
         expect(ir.TrailingOrderBy).not.toBeNull();
     });
 
     it('returns null for trailing ORDER BY when none exists', () => {
         const sql = 'SELECT [ID] FROM [Users]';
-        const ir = ParseToIR(sql, 'TransactSQL');
+        const ir = ParseToIR(sql, tsqlDialect);
         expect(ir.TrailingOrderBy).toBeNull();
     });
 
     it('preserves template expressions as fragments', () => {
         const sql = `SELECT [ID] FROM [t1] WHERE [Name] = {{ Name | sqlString }}`;
-        const ir = ParseToIR(sql, 'TransactSQL');
+        const ir = ParseToIR(sql, tsqlDialect);
         const templateFrags = ir.Body.filter(f => f.Kind === 'template-expr');
         expect(templateFrags.length).toBeGreaterThan(0);
         expect(templateFrags[0].Variable).toBe('Name');
@@ -113,7 +117,7 @@ SELECT * FROM CTE_A`;
 
     it('preserves composition refs as fragments', () => {
         const sql = `SELECT * FROM {{query:"Test/MyQuery"}} [q]`;
-        const ir = ParseToIR(sql, 'TransactSQL');
+        const ir = ParseToIR(sql, tsqlDialect);
         const compFrags = ir.Body.filter(f => f.Kind === 'composition-ref');
         expect(compFrags.length).toBe(1);
         expect(compFrags[0].QueryPath).toBe('Test/MyQuery');
@@ -124,13 +128,13 @@ SELECT * FROM CTE_A`;
 {% if Region %}
 WHERE [Region] = {{ Region | sqlString }}
 {% endif %}`;
-        const ir = ParseToIR(sql, 'TransactSQL');
+        const ir = ParseToIR(sql, tsqlDialect);
         const blockFrags = ir.Body.filter(f => f.Kind === 'block');
         expect(blockFrags.length).toBeGreaterThanOrEqual(2); // {% if %} and {% endif %}
     });
 
     it('handles empty SQL', () => {
-        const ir = ParseToIR('', 'TransactSQL');
+        const ir = ParseToIR('', tsqlDialect);
         expect(ir.CTEs).toHaveLength(0);
         expect(ir.Body).toHaveLength(0);
     });
@@ -142,8 +146,8 @@ WHERE [Region] = {{ Region | sqlString }}
 
 describe('RenderIR', () => {
     it('renders simple body without CTEs', () => {
-        const ir = ParseToIR('SELECT [ID] FROM [Users]', 'TransactSQL');
-        const rendered = RenderIR(ir, 'sqlserver');
+        const ir = ParseToIR('SELECT [ID] FROM [Users]', tsqlDialect);
+        const rendered = RenderIR(ir, tsqlDialect);
         expect(rendered).toContain('SELECT [ID] FROM [Users]');
     });
 
@@ -152,16 +156,16 @@ describe('RenderIR', () => {
     SELECT [ID] FROM [t1]
 )
 SELECT * FROM CTE_A`;
-        const ir = ParseToIR(sql, 'TransactSQL');
-        const rendered = RenderIR(ir, 'sqlserver');
+        const ir = ParseToIR(sql, tsqlDialect);
+        const rendered = RenderIR(ir, tsqlDialect);
         expect(rendered).toContain('WITH');
         expect(rendered).toContain('CTE_A');
     });
 
     it('preserves template tokens in rendered output', () => {
         const sql = `SELECT [ID] FROM [t1] WHERE [Name] = {{ Name | sqlString }}`;
-        const ir = ParseToIR(sql, 'TransactSQL');
-        const rendered = RenderIR(ir, 'sqlserver');
+        const ir = ParseToIR(sql, tsqlDialect);
+        const rendered = RenderIR(ir, tsqlDialect);
         expect(rendered).toContain('{{ Name | sqlString }}');
     });
 
@@ -170,16 +174,16 @@ SELECT * FROM CTE_A`;
 {% if Region %}
 WHERE [Region] = {{ Region | sqlString }}
 {% endif %}`;
-        const ir = ParseToIR(sql, 'TransactSQL');
-        const rendered = RenderIR(ir, 'sqlserver');
+        const ir = ParseToIR(sql, tsqlDialect);
+        const rendered = RenderIR(ir, tsqlDialect);
         expect(rendered).toContain('{% if Region %}');
         expect(rendered).toContain('{% endif %}');
     });
 
     it('round-trips simple SQL through parse → render', () => {
         const sql = 'SELECT [ID], [Name] FROM [Users] WHERE [Active] = 1';
-        const ir = ParseToIR(sql, 'TransactSQL');
-        const rendered = RenderIR(ir, 'sqlserver');
+        const ir = ParseToIR(sql, tsqlDialect);
+        const rendered = RenderIR(ir, tsqlDialect);
         // Content should be preserved (whitespace may vary slightly)
         expect(rendered).toContain('SELECT [ID], [Name]');
         expect(rendered).toContain('FROM [Users]');
@@ -193,8 +197,8 @@ FROM {{query:"Test/Users"}} [a]
 WHERE [a].[Region] = {{ Region | sqlString }}
 {% endif %}
 ORDER BY [a].[ID]`;
-        const ir = ParseToIR(sql, 'TransactSQL');
-        const rendered = RenderIR(ir, 'sqlserver');
+        const ir = ParseToIR(sql, tsqlDialect);
+        const rendered = RenderIR(ir, tsqlDialect);
         expect(rendered).toContain('{{query:"Test/Users"}}');
         expect(rendered).toContain('{% if Region %}');
         expect(rendered).toContain('{{ Region | sqlString }}');
@@ -207,7 +211,7 @@ ORDER BY [a].[ID]`;
 
 describe('IR Manipulation', () => {
     it('can add CTEs to an IR and render them', () => {
-        const ir = ParseToIR('SELECT * FROM MyDep [d]', 'TransactSQL');
+        const ir = ParseToIR('SELECT * FROM MyDep [d]', tsqlDialect);
 
         // Simulate composition: add a CTE
         ir.CTEs.push({
@@ -219,7 +223,7 @@ describe('IR Manipulation', () => {
             OrderByStripped: false,
         });
 
-        const rendered = RenderIR(ir, 'sqlserver');
+        const rendered = RenderIR(ir, tsqlDialect);
         expect(rendered).toContain('WITH');
         expect(rendered).toContain('[__cte_MyDep_abc123] AS');
         expect(rendered).toContain('SELECT [ID], [Name] FROM [Users]');
@@ -227,14 +231,14 @@ describe('IR Manipulation', () => {
 
     it('can strip trailing ORDER BY from IR', () => {
         const sql = 'SELECT [ID] FROM [Users] ORDER BY [ID] DESC';
-        const ir = ParseToIR(sql, 'TransactSQL');
+        const ir = ParseToIR(sql, tsqlDialect);
 
         expect(ir.TrailingOrderBy).not.toBeNull();
 
         // Strip the ORDER BY
         ir.TrailingOrderBy = null;
 
-        const rendered = RenderIR(ir, 'sqlserver');
+        const rendered = RenderIR(ir, tsqlDialect);
         expect(rendered).not.toContain('ORDER BY');
     });
 });
