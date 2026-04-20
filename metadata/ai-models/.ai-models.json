@@ -4434,7 +4434,7 @@
       "Description": "Claude 3.7 Sonnet",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true
@@ -4738,7 +4738,7 @@
       "Description": "Largest Claude 3 Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -6974,7 +6974,7 @@
       "Description": "Claude Medium Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 10,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true
@@ -7106,7 +7106,7 @@
       "Description": "Claude Largest Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 12,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true
