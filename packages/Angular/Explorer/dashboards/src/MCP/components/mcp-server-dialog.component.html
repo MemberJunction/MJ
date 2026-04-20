@@ -1,0 +1,220 @@
+@if (visible) {
+  <mj-dialog
+    [Visible]="true"
+    [Title]="DialogTitle"
+    (Close)="cancel()"
+    [Width]="600">
+    <form [formGroup]="serverForm" class="server-form">
+      <!-- Error Message -->
+      @if (ErrorMessage) {
+        <div class="error-banner">
+          <i class="fa-solid fa-exclamation-triangle"></i>
+          {{ ErrorMessage }}
+        </div>
+      }
+      <!-- Basic Info Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-info-circle"></i> Basic Information</h3>
+        <div class="form-group">
+          <label for="name">Name <span class="required">*</span></label>
+          <input class="mj-input"
+            id="name"
+            formControlName="Name"
+            placeholder="e.g., GitHub MCP Server" />
+          @if (hasError('Name', 'required')) {
+            <span class="error-text">Name is required</span>
+          }
+        </div>
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea class="mj-textarea"
+            id="description"
+            formControlName="Description"
+            placeholder="Optional description of this server"
+          [rows]="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="status">Status</label>
+          <mj-dropdown
+            [Data]="['Active', 'Inactive']"
+            [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('Status')?.value"
+            (ValueChange)="serverForm.get('Status')?.setValue($any($event))">
+          </mj-dropdown>
+        </div>
+      </div>
+      <!-- Transport Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-network-wired"></i> Transport Configuration</h3>
+        <div class="form-group">
+          <label for="transportType">Transport Type <span class="required">*</span></label>
+          <mj-dropdown
+            [Data]="transportTypes"
+            TextField="label"
+            ValueField="value"
+            [ValuePrimitive]="true"
+            [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('TransportType')?.value"
+            (ValueChange)="serverForm.get('TransportType')?.setValue($any($event)); onTransportTypeChange()">
+            <ng-template #mjDropdownItem let-dataItem>
+              <div class="transport-option">
+                <span class="transport-label">{{ dataItem.label }}</span>
+                <span class="transport-desc">{{ dataItem.description }}</span>
+              </div>
+            </ng-template>
+          </mj-dropdown>
+        </div>
+        @if (RequiresURL) {
+          <div class="form-group">
+            <label for="serverUrl">Server URL <span class="required">*</span></label>
+            <input class="mj-input"
+              id="serverUrl"
+              formControlName="ServerURL"
+              placeholder="https://api.example.com/mcp" />
+            @if (hasError('ServerURL', 'required')) {
+              <span class="error-text">Server URL is required for this transport type</span>
+            }
+          </div>
+        }
+        @if (RequiresCommand) {
+          <div class="form-group">
+            <label for="command">Command <span class="required">*</span></label>
+            <input class="mj-input"
+              id="command"
+              formControlName="Command"
+              placeholder="e.g., npx or /usr/local/bin/mcp-server" />
+            @if (hasError('Command', 'required')) {
+              <span class="error-text">Command is required for Stdio transport</span>
+            }
+          </div>
+          <div class="form-group">
+            <label for="commandArgs">Command Arguments (JSON array)</label>
+            <input class="mj-input"
+              id="commandArgs"
+              formControlName="CommandArgs"
+              placeholder='["arg1", "arg2"]' />
+            <span class="hint">JSON array of command line arguments</span>
+          </div>
+        }
+      </div>
+      <!-- Authentication Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-shield-halved"></i> Authentication</h3>
+        <div class="form-group">
+          <label for="authType">Default Auth Type</label>
+          <mj-dropdown
+            [Data]="authTypes"
+            TextField="label"
+            ValueField="value"
+            [ValuePrimitive]="true"
+            [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('DefaultAuthType')?.value"
+            (ValueChange)="serverForm.get('DefaultAuthType')?.setValue($any($event)); onAuthTypeChange()">
+            <ng-template #mjDropdownItem let-dataItem>
+              <div class="auth-option">
+                <span class="auth-label">{{ dataItem.label }}</span>
+                <span class="auth-desc">{{ dataItem.description }}</span>
+              </div>
+            </ng-template>
+          </mj-dropdown>
+        </div>
+      </div>
+      <!-- OAuth 2.0 Configuration Section -->
+      @if (IsOAuth2) {
+        <div class="form-section oauth-section">
+          <h3><i class="fa-solid fa-key"></i> OAuth 2.0 Configuration</h3>
+          <div class="form-group">
+            <label for="oauthIssuerUrl">OAuth Issuer URL <span class="required">*</span></label>
+            <input class="mj-input"
+              id="oauthIssuerUrl"
+              formControlName="OAuthIssuerURL"
+              placeholder="https://auth.example.com" />
+            @if (hasError('OAuthIssuerURL', 'required')) {
+              <span class="error-text">OAuth Issuer URL is required for OAuth 2.0 authentication</span>
+            }
+            <span class="hint">The authorization server's issuer URL (e.g., https://login.microsoftonline.com/tenant-id or https://your-domain.auth0.com)</span>
+          </div>
+          <div class="form-group">
+            <label for="oauthScopes">OAuth Scopes</label>
+            <input class="mj-input"
+              id="oauthScopes"
+              formControlName="OAuthScopes"
+              placeholder="openid profile email" />
+            <span class="hint">Space-separated list of OAuth scopes to request</span>
+          </div>
+          <div class="form-group">
+            <label for="oauthCacheTtl">Metadata Cache TTL (minutes)</label>
+            <mj-numeric-input
+              [Min]="5"
+              Placeholder="1440"
+              [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('OAuthMetadataCacheTTLMinutes')?.value"
+              (ngModelChange)="serverForm.get('OAuthMetadataCacheTTLMinutes')?.setValue($event)">
+            </mj-numeric-input>
+            <span class="hint">How long to cache OAuth metadata (default: 1440 minutes = 24 hours)</span>
+          </div>
+          <div class="oauth-client-section">
+            <h4>Pre-configured Client (Optional)</h4>
+            <p class="section-hint">Leave blank to use Dynamic Client Registration (DCR). If the auth server doesn't support DCR, configure your client credentials here.</p>
+            <div class="form-group">
+              <label for="oauthClientId">Client ID</label>
+              <input class="mj-input"
+                id="oauthClientId"
+                formControlName="OAuthClientID"
+                placeholder="your-client-id" />
+            </div>
+            <div class="form-group">
+              <label for="oauthClientSecret">Client Secret</label>
+              <input class="mj-input"
+                id="oauthClientSecret"
+                formControlName="OAuthClientSecretEncrypted"
+                type="password"
+                placeholder="your-client-secret" />
+              <span class="hint">The secret will be encrypted before storage</span>
+            </div>
+          </div>
+        </div>
+      }
+      <!-- Rate Limiting Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-gauge-high"></i> Rate Limiting</h3>
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="rateLimitMinute">Requests per Minute</label>
+            <mj-numeric-input
+              [Min]="0"
+              Placeholder="No limit"
+              [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('RateLimitPerMinute')?.value"
+              (ngModelChange)="serverForm.get('RateLimitPerMinute')?.setValue($event)">
+            </mj-numeric-input>
+          </div>
+          <div class="form-group half">
+            <label for="rateLimitHour">Requests per Hour</label>
+            <mj-numeric-input
+              [Min]="0"
+              Placeholder="No limit"
+              [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('RateLimitPerHour')?.value"
+              (ngModelChange)="serverForm.get('RateLimitPerHour')?.setValue($event)">
+            </mj-numeric-input>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="requestTimeout">Request Timeout (ms)</label>
+          <mj-numeric-input
+            [Min]="1000"
+            [Max]="600000"
+            [Step]="1000"
+            [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('RequestTimeoutMs')?.value"
+            (ngModelChange)="serverForm.get('RequestTimeoutMs')?.setValue($event)">
+          </mj-numeric-input>
+          <span class="hint">Timeout for individual tool calls (1000-600000ms)</span>
+        </div>
+      </div>
+    </form>
+    <mj-dialog-actions>
+      <button mjButton variant="primary" (click)="save()" [disabled]="IsSaving">
+        @if (IsSaving) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+        }
+        {{ IsEditMode ? 'Update' : 'Create' }}
+      </button>
+      <button mjButton (click)="cancel()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}

@@ -1,0 +1,254 @@
+[
+  {
+    "fields": {
+      "Name": "Dolenjska",
+      "Code": "07",
+      "ISO3166_2": "SI-07",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dolenjska"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "D53709AC-1CDD-4743-B59C-06C74B781A74"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.409Z",
+      "checksum": "3097f79e1e5d7fbae8b315816d46fb74f70d0f744738bc66e2bfebb28ebd8051"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gorenjska",
+      "Code": "09",
+      "ISO3166_2": "SI-09",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gorenjska"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "38BC7765-300C-4B73-8E2D-226AB0DC2896"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.426Z",
+      "checksum": "45604e3cd19970e7324a41a823d37d953a8bb26db1789ac151c88051511cee97"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Goriška",
+      "Code": "11",
+      "ISO3166_2": "SI-11",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Goriška"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "976ABAFC-9E67-426D-96BD-53599C68FE84"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.442Z",
+      "checksum": "8fd8604293e5c61b39326569ffc48618c4ac84f28f6a394a676e012fed80599a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Koroška",
+      "Code": "03",
+      "ISO3166_2": "SI-03",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Koroška"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "E6F39540-D584-4633-B2FA-120C7121D3CC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.459Z",
+      "checksum": "fae302cb3a3136a56c630afcde0f11c78b20b6ef94dabf9dbfca876c3cd0b310"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Notranjsko-kraška",
+      "Code": "10",
+      "ISO3166_2": "SI-10",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Notranjsko-kraška"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "C89AA284-6FCA-4084-92A1-73F287042E2C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.478Z",
+      "checksum": "92bad3bcb53a12d88670a6c2c821a22f55cf138fdd4656bea805e495182c42cc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Obalno-kraška",
+      "Code": "12",
+      "ISO3166_2": "SI-12",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Obalno-kraška"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "201DC9D0-DE44-428B-97D6-46B2EB755296"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.496Z",
+      "checksum": "86fec2d6695f3baccb3918fa41819ffe2d0708b7068d4c5e8685cc17f872f2fb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Osrednjeslovenska",
+      "Code": "08",
+      "ISO3166_2": "SI-08",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Osrednjeslovenska"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "EEA7C8AB-00ED-423D-A598-E7374D10CC44"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.513Z",
+      "checksum": "9fe8c68501acd56667b3b5e7bc1c4cfc83548d9d4b6d2c3cd8990fd2e8182407"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Podravska",
+      "Code": "02",
+      "ISO3166_2": "SI-02",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Podravska"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "B40D0DEB-4D3F-4978-BE27-9FF97D9F1189"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.530Z",
+      "checksum": "26953f51bf6212d0b6860dd94c06235463172e23dfdfbddafe4ef8091db28501"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pomurska",
+      "Code": "01",
+      "ISO3166_2": "SI-01",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pomurska"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "54043367-CFC5-4308-8368-BA65ECB992E9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.546Z",
+      "checksum": "ec7f858f687e79488123908d81c9d287a6d2cc253c886126c8f24daff6f3521d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Savinjska",
+      "Code": "04",
+      "ISO3166_2": "SI-04",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Savinjska"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "636D3C2B-5012-4F52-8163-2DA1CAA8AED8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.560Z",
+      "checksum": "12cf4584c8091959a69e3a11e303b719e2c4ecb548f19f9cb2f8049364a8cb30"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Spodnjeposavska",
+      "Code": "06",
+      "ISO3166_2": "SI-06",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Spodnjeposavska"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "DEF133EA-9C82-476D-8EC1-198BC778FE68"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.589Z",
+      "checksum": "227bdb0ee870dec9f54eb8fb20d03550dbbf12a6c6a9bd6e711827cb31f3dcd3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zasavska",
+      "Code": "05",
+      "ISO3166_2": "SI-05",
+      "Latitude": 46.1454,
+      "Longitude": 14.924,
+      "BoundaryGeoJSON": "@file:by-country/SI/boundaries/SI-05.geojson",
+      "CommonAliases": [
+        "Zasavska"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SI"
+    },
+    "primaryKey": {
+      "ID": "612F76DD-E02F-4F8D-B6D2-7C37956D058C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.606Z",
+      "checksum": "97d38629beaf0b603f88dd4ac2c2a452305051a7ed8225cc8ed97854eb2e875b"
+    }
+  }
+]

@@ -15,6 +15,42 @@
   overflow-y: auto;
   position: relative;
 }
+
+/* Sidebar toggle button - positioned in top-left */
+.sidebar-toggle-btn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  z-index: 10;
+}
+
+.sidebar-toggle-btn:hover {
+  background: color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
+}
+
+.sidebar-toggle-btn:active {
+  background: color-mix(in srgb, var(--mj-text-primary) 12%, transparent);
+}
+
+.sidebar-toggle-btn i {
+  color: var(--mj-text-secondary);
+  font-size: 18px;
+  transition: color 0.15s ease;
+}
+
+.sidebar-toggle-btn:hover i {
+  color: var(--mj-text-primary);
+}
 @media (max-width: 768px) {
   .conversation-empty-state {
     align-items: flex-start;
@@ -28,7 +64,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.95);
+  background: color-mix(in srgb, var(--mj-bg-surface-card) 95%, transparent);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -43,17 +79,17 @@
   align-items: center;
   gap: 1rem;
   padding: 2rem;
-  background: white;
+  background: var(--mj-bg-surface-card);
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--mj-text-primary) 10%, transparent);
 }
 .loading-content i {
-  color: var(--primary-color, #007bff);
+  color: var(--mj-brand-primary);
 }
 
 .loading-message {
   font-size: 1rem;
-  color: var(--text-primary, #333);
+  color: var(--mj-text-primary);
   font-weight: 500;
   margin: 0;
 }
@@ -89,7 +125,7 @@
 }
 
 .greeting-icon {
-  color: var(--primary-color, #007bff);
+  color: var(--mj-brand-primary);
   margin-bottom: 1rem;
   opacity: 0.8;
 }
@@ -98,12 +134,12 @@
   font-size: 2rem;
   font-weight: 600;
   margin: 0 0 0.5rem 0;
-  color: var(--text-primary, #333);
+  color: var(--mj-text-primary);
 }
 
 .greeting-subtitle {
   font-size: 1rem;
-  color: var(--text-secondary, #666);
+  color: var(--mj-text-secondary);
   margin: 0;
   line-height: 1.5;
 }
@@ -124,17 +160,17 @@
   align-items: flex-start;
   gap: 1rem;
   padding: 1.25rem;
-  background: var(--card-background, #f8f9fa);
-  border: 1px solid var(--border-color, #e0e0e0);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 .prompt-card:hover:not(.disabled) {
-  background: var(--card-hover-background, #e9ecef);
-  border-color: var(--primary-color, #007bff);
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-brand-primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-text-primary) 10%, transparent);
 }
 .prompt-card.disabled {
   cursor: not-allowed;
@@ -148,8 +184,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--primary-color, #007bff);
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   border-radius: 8px;
   font-size: 1.2rem;
 }
@@ -162,13 +198,13 @@
 .prompt-title {
   font-weight: 600;
   font-size: 0.95rem;
-  color: var(--text-primary, #333);
+  color: var(--mj-text-primary);
   margin-bottom: 0.25rem;
 }
 
 .prompt-text {
   font-size: 0.85rem;
-  color: var(--text-secondary, #666);
+  color: var(--mj-text-secondary);
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -189,7 +225,7 @@
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem 0;
-  border-top: 1px solid var(--border-color, #e0e0e0);
+  border-top: 1px solid var(--mj-border-default);
 }
 
 .tip-item {
@@ -197,18 +233,47 @@
   align-items: center;
   gap: 0.75rem;
   font-size: 0.875rem;
-  color: var(--text-secondary, #666);
+  color: var(--mj-text-secondary);
 }
 .tip-item i {
   flex-shrink: 0;
   width: 24px;
   text-align: center;
-  color: var(--primary-color, #007bff);
+  color: var(--mj-brand-primary);
   opacity: 0.7;
 }
 .tip-item strong {
-  color: var(--text-primary, #333);
+  color: var(--mj-text-primary);
   font-weight: 600;
+}
+
+/* Overlay Mode — compact layout for floating chat widget */
+.conversation-empty-state.overlay-mode {
+  padding: 1rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.overlay-mode .empty-state-container {
+  gap: 0.75rem;
+  max-width: 100%;
+  justify-content: center;
+}
+
+.overlay-greeting {
+  text-align: center;
+  padding: 1rem 0 0;
+}
+
+.overlay-greeting-text {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  margin: 0;
+}
+
+.overlay-mode .message-input-wrapper {
+  margin: 0.5rem 0;
 }
 
 /* Responsive Design */

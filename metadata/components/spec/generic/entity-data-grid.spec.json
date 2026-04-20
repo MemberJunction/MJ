@@ -1,0 +1,260 @@
+{
+  "name": "EntityDataGrid",
+  "title": "Entity Data Grid",
+  "description": "@file:../../descriptions/generic/entity-data-grid.md",
+  "type": "table",
+  "location": "embedded",
+  "functionalRequirements": "@file:../../functional-requirements/generic/entity-data-grid.md",
+  "technicalDesign": "@file:../../technical-design/generic/entity-data-grid.md",
+  "dataRequirements": {
+    "mode": "views",
+    "description": "Component performs RunView internally with adaptive caching. Initial load fetches maxCachedRows to determine cache mode. Does NOT accept data via props."
+  },
+  "typeDefinitions": {
+    "FieldDefinition": {
+      "description": "Field definition object for advanced field configuration",
+      "properties": {
+        "field": {
+          "type": "string",
+          "required": true,
+          "description": "Field name from entity"
+        },
+        "header": {
+          "type": "string",
+          "required": false,
+          "description": "Display header text (defaults to field DisplayName or field name)"
+        },
+        "render": {
+          "type": "function",
+          "signature": "(value: any, record: object, fieldInfo?: object) => ReactNode",
+          "required": false,
+          "description": "Custom render function for cell content"
+        },
+        "width": {
+          "type": "string | number",
+          "required": false,
+          "description": "Column width (e.g., '200px' or 200)"
+        },
+        "sortable": {
+          "type": "boolean",
+          "required": false,
+          "description": "Override global sorting setting for this column"
+        }
+      }
+    }
+  },
+  "properties": [
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "REQUIRED. Name of the MemberJunction entity to load records from. Must match entity name in metadata (e.g., 'Invoices', 'Members', 'CRM: Contacts').",
+      "required": true,
+      "exampleValue": "Invoices"
+    },
+    {
+      "name": "extraFilter",
+      "type": "string",
+      "description": "Optional SQL WHERE clause to filter records (without 'WHERE' keyword). Always applied server-side via RunView ExtraFilter parameter. Supports full SQL syntax: comparison operators, AND/OR logic, IN clauses, date functions, etc. Clearing cache and reloading data when changed. Examples: \"Status='Active'\", \"InvoiceDate >= '2024-01-01' AND Total > 1000\", \"MemberID IN (SELECT ID FROM Members WHERE MembershipType='Gold')\"",
+      "required": false,
+      "exampleValue": "Status='Active' AND InvoiceDate >= '2024-01-01'",
+      "constraints": [
+        {
+          "type": "sql-where-clause",
+          "dependsOn": "entityName",
+          "description": "Validates SQL WHERE clause syntax and field references against the entity schema",
+          "errorTemplate": "SQL WHERE clause error: {message}"
+        }
+      ]
+    },
+    {
+      "name": "fields",
+      "type": "Array<string | FieldDefinition>",
+      "description": "Optional field definitions. Can be simple strings (field names) or FieldDefinition objects for advanced configuration. If omitted, auto-detects first 15 non-system fields. When using FieldDefinition objects, the 'field' property is validated against entity fields.",
+      "required": false,
+      "exampleValue": "[\"Name\", {field: \"Price\", header: \"Unit Price\", width: \"120px\", render: (v) => `$${v.toFixed(2)}`}, \"Status\"]",
+      "constraints": [
+        {
+          "type": "subset-of-entity-fields",
+          "dependsOn": "entityName",
+          "description": "Validates that field names (strings or FieldDefinition.field properties) exist on the specified entity",
+          "config": {
+            "allowWildcard": false,
+            "caseSensitive": false
+          },
+          "errorTemplate": "Field '{field}' does not exist on entity '{entityName}'"
+        }
+      ]
+    },
+    {
+      "name": "orderBy",
+      "type": "string",
+      "description": "Optional SQL ORDER BY clause (without 'ORDER BY' keyword). Defaults to primary key field(s) if not specified. In full cache mode: only sets initial sort (client-side sorting available). In partial cache mode: changing this triggers new RunView and clears cache. Examples: \"InvoiceDate DESC\", \"LastName ASC, FirstName ASC\", \"Total DESC\"",
+      "required": false,
+      "exampleValue": "InvoiceDate DESC"
+    },
+    {
+      "name": "pageSize",
+      "type": "number",
+      "description": "Number of records to display per page. Must be one of: 10, 20, 50, 100, 200. In full cache mode: slices cached array. In partial cache mode: MaxRows parameter for RunView.",
+      "required": false,
+      "defaultValue": 20,
+      "exampleValue": "50"
+    },
+    {
+      "name": "initialPage",
+      "type": "number",
+      "description": "Initial page number to load (1-based). Useful for deep linking or restoring user state.",
+      "required": false,
+      "defaultValue": 1
+    },
+    {
+      "name": "maxCachedRows",
+      "type": "number",
+      "description": "Maximum number of rows to cache. Determines cache mode: if totalRecords <= maxCachedRows, enters full cache mode (loads all data upfront for instant sort/filter). If totalRecords > maxCachedRows, enters partial cache mode (server-side sort/filter, paginated loading). Higher values improve UX for larger datasets but use more memory. Typical drilldown scenarios have < 1000 rows.",
+      "required": false,
+      "defaultValue": 1000,
+      "exampleValue": "2000"
+    },
+    {
+      "name": "enablePageCache",
+      "type": "boolean",
+      "description": "Enable page caching in partial cache mode. When true, visited pages are cached for instant back/forward navigation. Cache cleared when entityName, extraFilter, or orderBy change. Keeps last 10 pages in memory (LRU eviction).",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "showPageSizeChanger",
+      "type": "boolean",
+      "description": "Show page size selector dropdown in pagination controls",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "enableSorting",
+      "type": "boolean",
+      "description": "Enable column sorting in DataGrid UI. In full cache mode: client-side instant sorting. In partial cache mode: triggers new RunView with OrderBy and clears cache. Different from 'orderBy' prop which sets the initial/default sort order.",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "enableFiltering",
+      "type": "boolean",
+      "description": "Enable DataGrid's text search filter UI. In full cache mode: instantly filters cached records. In partial cache mode: filters visible page data only and shows warning to use 'extraFilter' prop for database-level filtering. Different from 'extraFilter' prop which is always server-side SQL filtering.",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "selectionMode",
+      "type": "'none' | 'checkbox' | 'radio' | 'row'",
+      "description": "Row selection mode (passed to DataGrid)",
+      "required": false,
+      "defaultValue": "none"
+    },
+    {
+      "name": "autoFitColumns",
+      "type": "boolean",
+      "description": "When true, columns auto-fit to container width. When false, uses fixed widths with horizontal scrolling (passed to DataGrid)",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "showRefreshButton",
+      "type": "boolean",
+      "description": "Show refresh button to manually reload and clear all caches",
+      "required": false,
+      "defaultValue": false
+    },
+    {
+      "name": "showCacheModeIndicator",
+      "type": "boolean",
+      "description": "Show indicator badge displaying current cache mode ('All X records loaded' or 'Showing first X of Y records'). Useful for developers debugging performance or power users who want to understand data loading behavior. Most end users don't need to see this.",
+      "required": false,
+      "defaultValue": false
+    },
+    {
+      "name": "warnOnPartialResults",
+      "type": "boolean",
+      "description": "Show warning banner in partial cache mode suggesting user refine extraFilter for better results. Useful when users might be confused about not seeing all data, but adaptive caching is designed to work transparently without requiring user awareness.",
+      "required": false,
+      "defaultValue": false
+    }
+  ],
+  "events": [
+    {
+      "name": "pageChanged",
+      "description": "Fired when page or page size changes, after data is loaded",
+      "parameters": [
+        {
+          "name": "pageInfo",
+          "type": "{ pageNumber: number, pageSize: number, totalRecords: number | null, totalPages: number | null, visibleRows: Array<object>, cacheMode: 'full' | 'partial', cacheHit: boolean }",
+          "description": "Complete pagination state including cache information"
+        }
+      ]
+    },
+    {
+      "name": "dataLoaded",
+      "description": "Fired when data successfully loads from RunView",
+      "parameters": [
+        {
+          "name": "loadResult",
+          "type": "{ data: Array<object>, totalRecords: number | null, pageNumber: number, pageSize: number, cacheMode: 'full' | 'partial' }",
+          "description": "Loaded data and cache mode metadata"
+        }
+      ]
+    },
+    {
+      "name": "loadError",
+      "description": "Fired when RunView fails or network error occurs",
+      "parameters": [
+        {
+          "name": "errorInfo",
+          "type": "{ error: string, extraFilter?: string, entityName: string }",
+          "description": "Error details for logging or user notification"
+        }
+      ]
+    },
+    {
+      "name": "cacheModeChanged",
+      "description": "Fired when cache mode switches between full and partial",
+      "parameters": [
+        {
+          "name": "cacheModeInfo",
+          "type": "{ cacheMode: 'full' | 'partial', totalRecords: number, maxCachedRows: number }",
+          "description": "Cache mode transition information"
+        }
+      ]
+    },
+    {
+      "name": "rowClick",
+      "description": "Bubbled from DataGrid - fired when row clicked",
+      "parameters": [
+        {
+          "name": "event",
+          "type": "{ record: object, cancel: boolean }",
+          "description": "Row click event with cancelable pattern"
+        }
+      ]
+    },
+    {
+      "name": "selectionChanged",
+      "description": "Bubbled from DataGrid - fired when selection changes",
+      "parameters": [
+        {
+          "name": "selectionInfo",
+          "type": "{ selectedRows: Array<object> }",
+          "description": "Array of selected records"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "DataGrid",
+      "namespace": "Generic/UI/Table",
+      "location": "registry",
+      "description": "Wrapped data grid component for rendering"
+    }
+  ],
+  "code": "@file:../../code/generic/entity-data-grid.js",
+  "exampleUsage": "// Basic usage - auto-detects fields, enters full cache mode for small datasets\n<EntityDataGrid\n  entityName=\"Invoices\"\n  extraFilter=\"Status='Unpaid'\"\n  pageSize={50}\n/>\n// If < 1000 unpaid invoices: Full cache mode, instant sort/filter\n// If > 1000 unpaid invoices: Partial cache mode, shows warning banner\n\n// ADVANCED COLUMN STYLING EXAMPLES:\n\n// Example 1: Custom Renderers with Formatting\n<EntityDataGrid\n  entityName=\"Products\"\n  fields={[\n    'Name',\n    'SKU',\n    {\n      field: 'Price',\n      header: 'Unit Price',\n      width: '120px',\n      render: (value, record) => {\n        const formatted = `$${value.toFixed(2)}`;\n        return record.OnSale ? \n          <span style={{color: '#cf1322', fontWeight: 'bold'}}>{formatted} SALE!</span> :\n          formatted;\n      }\n    },\n    {\n      field: 'Stock',\n      header: 'In Stock',\n      width: '100px',\n      render: (value) => {\n        const color = value > 10 ? '#389e0d' : value > 0 ? '#d48806' : '#cf1322';\n        return <span style={{color, fontWeight: 600}}>{value}</span>;\n      }\n    },\n    'Status'\n  ]}\n/>\n\n// Example 2: Calculated Columns\n<EntityDataGrid\n  entityName=\"Orders\"\n  fields={[\n    'OrderNumber',\n    'SubTotal',\n    'Tax',\n    {\n      field: 'SubTotal', // Use existing field for data\n      header: 'Total (with Tax)',\n      width: '140px',\n      render: (value, record) => {\n        const total = value + (record.Tax || 0);\n        return `$${total.toFixed(2)}`;\n      }\n    },\n    'Status'\n  ]}\n/>\n\n// Example 3: Conditional Styling & Icons\n<EntityDataGrid\n  entityName=\"Tasks\"\n  fields={[\n    {\n      field: 'Priority',\n      width: '100px',\n      render: (value) => {\n        const styles = {\n          High: { color: '#cf1322', icon: '🔴' },\n          Medium: { color: '#d48806', icon: '🟡' },\n          Low: { color: '#389e0d', icon: '🟢' }\n        };\n        const style = styles[value] || {};\n        return <span style={{color: style.color}}>{style.icon} {value}</span>;\n      }\n    },\n    'Title',\n    'AssignedTo',\n    {\n      field: 'DueDate',\n      header: 'Due',\n      width: '120px',\n      render: (value) => {\n        const date = new Date(value);\n        const isOverdue = date < new Date();\n        return <span style={{color: isOverdue ? '#cf1322' : '#262626'}}>\n          {date.toLocaleDateString()}\n        </span>;\n      }\n    }\n  ]}\n/>\n\n// Example 4: Links and Actions\n<EntityDataGrid\n  entityName=\"Customers\"\n  fields={[\n    'Name',\n    {\n      field: 'Email',\n      width: '200px',\n      render: (value) => <a href={`mailto:${value}`}>{value}</a>\n    },\n    {\n      field: 'Phone',\n      width: '150px',\n      render: (value) => <a href={`tel:${value}`}>{value}</a>\n    },\n    'City',\n    'Status'\n  ]}\n/>\n\n// Example 5: Mix Simple and Advanced\n<EntityDataGrid\n  entityName=\"Invoices\"\n  fields={[\n    'InvoiceNumber',  // Simple string\n    'CustomerName',   // Simple string\n    { field: 'Total', header: 'Amount', width: '120px' },  // Custom header & width\n    'Status',  // Simple string (gets colored tag from value list)\n    {\n      field: 'DueDate',\n      width: '140px',\n      sortable: false,  // Disable sorting for this column only\n      render: (value, record) => {\n        const daysUntil = Math.ceil((new Date(value) - new Date()) / (1000 * 60 * 60 * 24));\n        if (daysUntil < 0) return <span style={{color: '#cf1322'}}>OVERDUE</span>;\n        if (daysUntil < 7) return <span style={{color: '#d48806'}}>Due soon ({daysUntil}d)</span>;\n        return new Date(value).toLocaleDateString();\n      }\n    }\n  ]}\n/>\n\n// Drill-down from chart - typically small filtered datasets (full cache mode)\nconst handleMemberClick = (segment) => {\n  setSelectedMemberId(segment.records[0]?.MemberID);\n};\n\n<EntityDataGrid\n  entityName=\"Invoices\"\n  extraFilter={`MemberID='${selectedMemberId}'`}\n  fields={['InvoiceNumber', 'InvoiceDate', 'Total', 'Status', 'DueDate']}\n  orderBy=\"InvoiceDate DESC\"\n  pageSize={20}\n  entityPrimaryKeys={['ID']}\n  onRowClick={handleInvoiceClick}\n  onCacheModeChanged={(info) => console.log('Cache mode:', info.cacheMode)}\n/>\n// Single member's invoices usually < 1000 → Full cache, instant UX\n\n// Large dataset with higher cache limit\n<EntityDataGrid\n  entityName=\"CRM: Contacts\"\n  extraFilter=\"Status='Active' AND LastContactDate >= DATEADD(day, -30, GETDATE())\"\n  fields={[\n    'FirstName',\n    'LastName',\n    { field: 'Email', header: 'Email Address', width: '250px' },\n    'LastContactDate',\n    'Status'\n  ]}\n  orderBy=\"LastContactDate DESC\"\n  pageSize={100}\n  maxCachedRows={2000}\n  enablePageCache={true}\n  showCacheModeIndicator={true}\n  warnOnPartialResults={true}\n  enableSorting={true}\n  enableFiltering={true}\n  showRefreshButton={true}\n  onPageChanged={(info) => {\n    console.log(`Page ${info.pageNumber}, Cache hit: ${info.cacheHit}`);\n  }}\n/>\n// If 1500 contacts: Enters full cache mode (< 2000), instant sort/filter\n// If 5000 contacts: Enters partial cache mode, server-side sort, page caching\n\n// Drilldown pattern with SimpleChart + EntityDataGrid\nconst [selectedCategory, setSelectedCategory] = React.useState(null);\n\n<div>\n  <SimpleChart\n    data={aggregatedData}  // Pre-aggregated from RunQuery\n    groupBy=\"Category\"\n    valueField=\"TotalRevenue\"\n    chartType=\"bar\"\n    title=\"Revenue by Category\"\n    onDataPointClick={(segment) => setSelectedCategory(segment.label)}\n  />\n  \n  {selectedCategory && (\n    <div style={{ marginTop: 20 }}>\n      <h3>Products in {selectedCategory}</h3>\n      <EntityDataGrid\n        entityName=\"Products\"\n        extraFilter={`Category='${selectedCategory}'`}\n        fields={['ProductName', 'UnitPrice', 'StockQuantity', 'Status']}\n        orderBy=\"ProductName ASC\"\n        pageSize={50}\n        maxCachedRows={500}\n      />\n      {/* Category drill-down usually has < 500 products → Full cache mode */}\n    </div>\n  )}\n</div>\n\n// CACHE MODE BEHAVIOR EXAMPLES:\n\n// Scenario 1: Small filtered dataset (100 invoices for one account)\n// - Initial load: Fetches all 100 rows\n// - Cache mode: 'full'\n// - User sorts by Total: Instant client-side sort\n// - User pages: Instant array slicing\n// - User filters text: Instant client-side filter\n// - Result: Perfect instant UX\n\n// Scenario 2: Large dataset (50,000 total contacts)\n// - Initial load: Fetches first 1000 rows\n// - Cache mode: 'partial'\n// - Shows banner: 'Showing first 1,000 of 50,000 records. Refine your filter for better results.'\n// - User sorts by LastName: Triggers new RunView with OrderBy, clears cache\n// - User pages to page 2: Fetches page 2 (rows 21-40), caches it\n// - User pages back to page 1: Instant (cache hit)\n// - User text filters: Filters visible 20 rows, shows warning about using extraFilter\n// - Result: Transparent UX with guidance"
+}

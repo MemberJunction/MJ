@@ -1,0 +1,244 @@
+<div class="label-create-container">
+
+  <!-- Step indicator -->
+  @if (CreateStep !== 'creating' && CreateStep !== 'done') {
+    <div class="step-indicator">
+      <div class="step" [class.active]="CreateStep === 'entity'" [class.completed]="CreateStep !== 'entity'">
+        <span class="step-number">1</span>
+        <span class="step-label">Entity</span>
+      </div>
+      <div class="step-connector" [class.active]="CreateStep !== 'entity'"></div>
+      <div class="step" [class.active]="CreateStep === 'records'" [class.completed]="CreateStep === 'details'">
+        <span class="step-number">2</span>
+        <span class="step-label">Records</span>
+      </div>
+      <div class="step-connector" [class.active]="CreateStep === 'details'"></div>
+      <div class="step" [class.active]="CreateStep === 'details'">
+        <span class="step-number">3</span>
+        <span class="step-label">Details</span>
+      </div>
+    </div>
+  }
+
+  <!-- Step 1: Pick Entity -->
+  @if (CreateStep === 'entity') {
+    <div class="dialog-step">
+      <p class="step-description">Choose an entity type to label records from.</p>
+      <div class="dialog-search">
+        <i class="fa-solid fa-search dialog-search-icon"></i>
+        <input type="text"
+          class="dialog-search-input"
+          placeholder="Search entities..."
+          [ngModel]="EntitySearchText"
+          (ngModelChange)="OnEntitySearchChange($event)" />
+      </div>
+      <div class="entity-list">
+        @for (entity of FilteredEntities; track entity) {
+          <div class="entity-option"
+            (click)="SelectEntity(entity)">
+            <div class="entity-option-info">
+              <span class="entity-option-name">{{entity.Name}}</span>
+              @if (entity.Description) {
+                <span class="entity-option-desc">{{entity.Description | slice:0:80}}</span>
+              }
+            </div>
+            <i class="fa-solid fa-chevron-right entity-option-arrow"></i>
+          </div>
+        }
+        @if (FilteredEntities.length === 0) {
+          <div class="entity-list-empty">
+            No entities match your search.
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Step 2: Select Records -->
+  @if (CreateStep === 'records') {
+    <div class="dialog-step">
+      <div class="step-header-row">
+        @if (!PreselectedEntity) {
+          <button class="btn-back" (click)="GoBackToEntity()">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+        }
+        <div>
+          <p class="step-description">
+            Select records from <strong>{{SelectedEntity?.Name}}</strong> to label.
+          </p>
+        </div>
+      </div>
+      @if (IsLoadingRecords) {
+        <mj-loading text="Loading records..."></mj-loading>
+      }
+      @if (!IsLoadingRecords) {
+        <div class="records-toolbar">
+          <div class="dialog-search" style="flex: 1;">
+            <i class="fa-solid fa-search dialog-search-icon"></i>
+            <input type="text"
+              class="dialog-search-input"
+              placeholder="Search records..."
+              [ngModel]="RecordSearchText"
+              (ngModelChange)="OnRecordSearchChange($event)" />
+          </div>
+          <div class="selection-actions">
+            <button class="btn-text" (click)="SelectAllRecords()">Select All</button>
+            <button class="btn-text" (click)="DeselectAllRecords()">Clear</button>
+          </div>
+        </div>
+        <div class="record-list">
+          @for (record of FilteredRecords; track record) {
+            <div class="record-option"
+              [class.selected]="record.Selected"
+              (click)="ToggleRecordSelection(record)">
+              <div class="record-checkbox">
+                @if (record.Selected) {
+                  <i class="fa-solid fa-check"></i>
+                }
+              </div>
+              <span class="record-name">{{record.DisplayName}}</span>
+            </div>
+          }
+          @if (FilteredRecords.length === 0 && !IsLoadingRecords) {
+            <div class="entity-list-empty">
+              No records found for this entity.
+            </div>
+          }
+        </div>
+        <div class="records-footer">
+          <span class="selection-count">{{SelectedRecordCount}} selected</span>
+          <button class="btn-primary"
+            [disabled]="SelectedRecordCount === 0"
+            (click)="GoToDetailsStep()">
+            Continue
+            <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Step 3: Label Details -->
+  @if (CreateStep === 'details') {
+    <div class="dialog-step">
+      <div class="step-header-row">
+        <button class="btn-back" (click)="GoBackToRecords()">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <p class="step-description">Name your version label.</p>
+      </div>
+      <div class="details-summary">
+        <div class="summary-item">
+          <i class="fa-solid fa-table"></i>
+          <span>{{SelectedEntity?.Name}}</span>
+        </div>
+        <div class="summary-item">
+          <i class="fa-solid fa-check-double"></i>
+          <span>{{SelectedRecordCount}} record{{SelectedRecordCount > 1 ? 's' : ''}} selected</span>
+        </div>
+        @if (SelectedRecordCount > 1) {
+          <div class="summary-item">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>Will create 1 group + {{SelectedRecordCount}} child labels</span>
+          </div>
+        }
+      </div>
+      <div class="form-field">
+        <label class="form-label">Label Name</label>
+        <input type="text"
+          class="form-input"
+          placeholder="e.g. Customer Support Agent v2.0"
+          [(ngModel)]="LabelName" />
+      </div>
+      <div class="form-field">
+        <label class="form-label">Description (optional)</label>
+        <textarea class="form-textarea"
+          rows="3"
+          placeholder="What does this version represent?"
+        [(ngModel)]="LabelDescription"></textarea>
+      </div>
+      <div class="details-footer">
+        <button class="btn-primary"
+          [disabled]="!LabelName.trim()"
+          (click)="CreateLabels()">
+          <i class="fa-solid fa-tag"></i>
+          Create Label{{SelectedRecordCount > 1 ? 's' : ''}}
+        </button>
+        <button class="btn-secondary" (click)="OnCancel()">
+          Cancel
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Creating state -->
+  @if (CreateStep === 'creating') {
+    <div class="dialog-step creating-step">
+      <div class="creating-animation">
+        <i class="fa-solid fa-tag fa-spin creating-icon"></i>
+      </div>
+      <h3 class="creating-title">Creating Labels...</h3>
+      <!-- Progress bar -->
+      @if (CreateProgress) {
+        <div class="progress-container">
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" [style.width.%]="CreateProgress.Percentage"></div>
+          </div>
+          <div class="progress-details">
+            <span class="progress-message">{{CreateProgress.Message}}</span>
+            <span class="progress-pct">{{CreateProgress.Percentage}}%</span>
+          </div>
+          @if (CreateProgress.RecordsProcessed != null && CreateProgress.TotalRecords) {
+            <div class="progress-stats">
+              <span class="progress-stat">
+                <i class="fa-solid fa-camera"></i>
+                {{CreateProgress.RecordsProcessed}} / {{CreateProgress.TotalRecords}} records
+              </span>
+              @if (CreateProgress.CurrentEntity) {
+                <span class="progress-stat">
+                  <i class="fa-solid fa-table"></i>
+                  {{CreateProgress.CurrentEntity}}
+                </span>
+              }
+            </div>
+          }
+        </div>
+      }
+      @if (!CreateProgress) {
+        <p class="creating-progress">
+          {{CreatedLabelCount}} label{{CreatedLabelCount !== 1 ? 's' : ''}} created
+          @if (CreatedItemCount > 0) {
+            <span> &middot; {{CreatedItemCount}} items captured</span>
+          }
+        </p>
+      }
+    </div>
+  }
+
+  <!-- Done state -->
+  @if (CreateStep === 'done') {
+    <div class="dialog-step done-step">
+      @if (!CreateError) {
+        <div class="done-icon-wrap success">
+          <i class="fa-solid fa-check"></i>
+        </div>
+        <h3 class="done-title">Labels Created</h3>
+        <p class="done-message">
+          Successfully created {{CreatedLabelCount}} label{{CreatedLabelCount !== 1 ? 's' : ''}}
+          @if (CreatedItemCount > 0) {
+            <span> with {{CreatedItemCount}} items captured</span>
+            }.
+          </p>
+        }
+        @if (CreateError) {
+          <div class="done-icon-wrap error">
+            <i class="fa-solid fa-xmark"></i>
+          </div>
+          <h3 class="done-title">Error</h3>
+          <p class="done-message error-text">{{CreateError}}</p>
+        }
+        <button class="btn-primary" (click)="FinishCreate()">Done</button>
+      </div>
+    }
+  </div>

@@ -1,4 +1,4 @@
-export * from './get-profiles.action';
+export * from './get-channels.action';
 export * from './create-post.action';
 export * from './get-pending-posts.action';
 export * from './get-sent-posts.action';

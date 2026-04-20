@@ -953,11 +953,3 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
         return this.ExcludeTitles.includes(title.trim().toLowerCase());
     }
 }
-
-/**
- * Loader function to ensure the ApolloEnrichmentContactsAction class is included in the bundle
- * Prevents tree shaking from removing this action class
- */
-export function LoadApolloContactsEnrichmentAction() {
-    // Stub function to prevent tree shaking
-}

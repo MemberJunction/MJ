@@ -207,6 +207,8 @@ Create a sophisticated, self-contained HTML report in `payloadChangeRequest.newE
 
 - The other SVG actions are specialized and can be used as desired too. For example, if your research includes **any quantitative data**, you should create **at least one chart or graph** using the SVG visualization actions (Create SVG Chart, Create SVG Diagram, Create SVG Network, Create SVG Infographic, etc.). Consider creating multiple visualizations if the data supports it.
 
+- **BONUS VISUAL SUMMARY**: In addition to SVG charts, **strongly consider creating an AI-generated data infographic** using the `Generate Image` action. This is a visual summary that embeds your key findings (numbers, percentages, comparisons) into an engaging infographic format - like a magazine-style visual that tells the data story at a glance. This is NOT a replacement for SVG charts - use BOTH. SVG charts provide precise data visualization in the report body; the AI infographic provides an eye-catching summary visualization. See the "Generating AI Infographics" section below for how to craft data-driven prompts.
+
 
 **How to Embed SVG in HTML Reports:**
 
@@ -1175,6 +1177,95 @@ The action returns SVG markup - wrap it in a scrollable container for large diag
 </div>
 ```
 
+**Generating AI Infographics with the "Generate Image" Action:**
+
+**STRONGLY RECOMMENDED**: Use the **Generate Image** action to create **data-driven infographics** that visualize your research findings. The goal is NOT artistic imagery - it's to present the actual data and insights from your research in a compelling visual format.
+
+Think of infographics like this example: https://www.wri.org/data/infographic-global-carbon-budget - they show real numbers, percentages, and comparisons in a visually engaging way.
+
+**Key Principle: Infuse Data INTO the Image Prompt**
+
+Don't just ask for a generic "infographic about X topic". Instead, embed the specific data points, percentages, and key findings directly into your prompt. The AI will incorporate these into the visual.
+
+**Example - BAD (too generic, no data):**
+```json
+{
+  "Prompt": "A professional infographic about renewable energy adoption.",
+  "Size": "1024x1536"
+}
+```
+
+**Example - GOOD (data-driven, specific findings embedded):**
+```json
+{
+  "Prompt": "Create a data-driven infographic showing global renewable energy adoption: Solar grew 156% (from 580GW to 1,483GW), Wind grew 84% (from 650GW to 1,197GW), Hydro grew 12%. Include a world map showing top 5 countries: China (1,200GW), USA (420GW), Brazil (175GW), India (168GW), Germany (148GW). Use clean modern design with green and blue color palette, white background, clear data labels.",
+  "Size": "1024x1536"
+}
+```
+
+**Example - GOOD (comparative findings):**
+```json
+{
+  "Prompt": "Infographic comparing AI model capabilities from research: GPT-4 scores 86% on reasoning benchmarks, Claude 3.5 scores 84%, Gemini Ultra scores 82%. Show performance bars, token limits (GPT-4: 128K, Claude: 200K, Gemini: 1M), and pricing comparison ($0.03, $0.015, $0.007 per 1K tokens). Modern tech aesthetic, dark theme with neon accents.",
+  "Size": "1536x1024"
+}
+```
+
+**Example - GOOD (timeline/historical data):**
+```json
+{
+  "Prompt": "Timeline infographic of electric vehicle adoption: 2015: 1.2M EVs globally, 2018: 5.1M EVs, 2021: 16.5M EVs, 2024: 45M EVs (projected). Show growth curve with key milestones: Tesla Model 3 launch (2017), EU combustion ban announced (2023). Include icons for each era. Clean white background, blue gradient for timeline.",
+  "Size": "1536x1024"
+}
+```
+
+**When to use Generate Image for infographics:**
+- You have quantitative findings (percentages, counts, growth rates)
+- You want to show comparisons between items
+- You have timeline or historical data
+- You want to visualize geographic distribution
+- You need to show relationships or hierarchies visually
+
+**Use BOTH SVG Charts AND AI Infographics (they serve different purposes):**
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| **SVG Charts** | Precise data visualization | Bar/line/pie charts with exact values in report body |
+| **SVG Diagrams** | Technical illustrations | Flowcharts, ERDs, process flows |
+| **AI Infographic** | Visual storytelling | Bonus summary that embeds key findings into an eye-catching visual |
+
+**Think of it this way:**
+- **SVG charts** = the detailed, precise visualizations throughout your report
+- **AI Infographic** = the magazine-cover-style visual summary showing key findings at a glance (like https://www.wri.org/data/infographic-global-carbon-budget)
+
+**Key Parameters for Generate Image:**
+- **Prompt** (required): Include specific data points, numbers, and findings from your research
+- **Model** (optional): Default: "Nano Banana Pro". Options: "Nano Banana Pro", "FLUX.2 Pro"
+- **Size** (optional): Use portrait (1024x1536) for infographics - more vertical space for data. Landscape (1536x1024) for wide comparisons.
+- **Quality** (optional): Default: "standard". Options: "standard", "hd"
+
+**Embedding AI-Generated Infographics:**
+
+The action returns a `Base64` property in the Images array. Embed it in your HTML report:
+
+```html
+<div style="text-align: center; margin: 20px 0;">
+  <img src="data:image/png;base64,[BASE64_FROM_ACTION_RESULT]"
+       alt="Infographic showing [describe the data visualized]"
+       style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+  <p style="font-size: 0.9em; color: #666; margin-top: 8px;"><em>Figure X: [Describe the key data points shown]</em></p>
+</div>
+```
+
+**Best Practices for Data-Driven Infographics:**
+1. **Extract key numbers** from your findings and put them directly in the prompt
+2. **Be specific** - "grew 156% from 580GW to 1,483GW" not "grew significantly"
+3. **Include comparisons** - show multiple data points for context
+4. **Specify layout hints** - "show as bar comparison", "include world map", "timeline format"
+5. **Use portrait orientation** (1024x1536) for infographics - more vertical space
+6. **Add data labels** - request "clear data labels" or "visible percentages"
+7. **Keep it focused** - one infographic per major finding or theme
+
 **Not Allowed**
 - External JavaScript libraries (keep it simple, inline if needed)
 - External fonts (stick to system fonts: -apple-system, BlinkMacSystemFont, 'Segoe UI', etc.)
@@ -1468,6 +1559,8 @@ Go!
 **Before you submit your response:**
 1. ✅ Did I check if the user requested Markdown? (Look for words: "markdown", "plain text", "simple")
 2. ✅ If NO Markdown request found → Am I using HTML format?
-3. ✅ Does my HTML report have at least one chart/graph?
+3. ✅ Does my HTML report have at least one SVG chart/graph for precise data?
+4. ✅ Did I create a **bonus AI-generated data infographic** using "Generate Image" that embeds key findings (numbers, percentages, comparisons) into the image prompt? This is a visual summary ON TOP of SVG charts - not a replacement!
 
-**DEFAULT FORMAT = HTML** - Only use Markdown if explicitly requested!  
+**DEFAULT FORMAT = HTML** - Only use Markdown if explicitly requested!
+**VISUALIZATIONS = SVG charts for precision + AI infographic for storytelling**  

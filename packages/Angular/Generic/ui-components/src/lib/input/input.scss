@@ -1,0 +1,77 @@
+/**
+ * MJ Form Input Styles
+ *
+ * Provides consistent styling for native form elements replacing Kendo inputs.
+ * - .mj-input — text inputs (replaces kendo-textbox / kendoTextBox)
+ * - .mj-textarea — textareas (replaces kendoTextArea)
+ * - .mj-checkbox — styled checkbox (replaces kendoCheckBox)
+ */
+
+.mj-input,
+.mj-textarea {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-family: var(--mj-font-family);
+  font-size: var(--mj-text-sm);
+  line-height: 1.5;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm);
+  transition: var(--mj-transition-colors), box-shadow var(--mj-transition-base);
+  outline: none;
+  min-height: 38px;
+
+  &::placeholder {
+    color: var(--mj-text-disabled);
+  }
+
+  &:hover:not(:disabled) {
+    border-color: var(--mj-border-strong);
+  }
+
+  &:focus {
+    border-color: var(--mj-brand-primary);
+    box-shadow: var(--mj-focus-ring);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--mj-bg-surface-sunken);
+  }
+}
+
+.mj-textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.mj-checkbox {
+  accent-color: var(--mj-brand-primary);
+}
+
+/* ========== Search Input with Icon ========== */
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--mj-text-muted);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .mj-input {
+    padding-left: 36px;
+  }
+
+  .search-clear {
+    position: absolute;
+    right: 4px;
+  }
+}

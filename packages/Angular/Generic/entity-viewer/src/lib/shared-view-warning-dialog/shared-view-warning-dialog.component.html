@@ -1,0 +1,45 @@
+<!-- Dialog Backdrop -->
+@if (IsOpen) {
+  <div class="dialog-backdrop" (click)="OnCancel()"></div>
+}
+
+<!-- Dialog Panel -->
+<div class="dialog-panel" [class.open]="IsOpen">
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="icon-circle warning">
+      <i class="fa-solid fa-users"></i>
+    </div>
+    <span class="header-title">Shared View</span>
+    <button class="close-btn" (click)="OnCancel()" title="Close">
+      <i class="fa-solid fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Body -->
+  <div class="dialog-body">
+    <p class="message">
+      <strong>"{{ ViewName }}"</strong> is shared with other users.
+      Changes you save will affect everyone who uses this view.
+    </p>
+    <div class="warning-box">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <span>Other users may be relying on this view's current configuration.</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="dialog-footer">
+    <button class="btn btn-primary" (click)="OnUpdateShared()">
+      <i class="fa-solid fa-save"></i>
+      Update Shared View
+    </button>
+    <button class="btn btn-secondary" (click)="OnSaveAsCopy()">
+      <i class="fa-solid fa-plus"></i>
+      Save As My Copy
+    </button>
+    <button class="btn btn-ghost" (click)="OnCancel()">
+      Cancel
+    </button>
+  </div>
+</div>

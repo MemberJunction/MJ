@@ -11,7 +11,7 @@ import {
 import { LibraryConfiguration, ExternalLibraryConfig, LibraryLoadOptions as ConfigLoadOptions } from '../types/library-config';
 import { getCoreRuntimeLibraries, isCoreRuntimeLibrary } from './core-libraries';
 import { resourceManager } from './resource-manager';
-import { ComponentLibraryEntity } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity } from '@memberjunction/core-entities';
 import { LibraryDependencyResolver } from './library-dependency-resolver';
 import { LoadedLibraryState, DependencyResolutionOptions } from '../types/dependency-types';
 import { LibraryRegistry } from './library-registry';
@@ -66,6 +66,38 @@ export class LibraryLoader {
   public static enableProgressiveDelay: boolean = false;
 
   /**
+   * Inject `<link rel="preload" as="script">` tags for core runtime libraries
+   * (React, ReactDOM, Babel) so the browser starts downloading them immediately.
+   * Call this as early as possible (e.g., in index.html or APP_INITIALIZER).
+   *
+   * This is purely a hint — if the scripts are already cached or loaded,
+   * the browser ignores the hint. The actual `loadAllLibraries()` call still
+   * creates `<script>` tags and waits for execution; preload just ensures the
+   * bytes are in the HTTP cache by the time that happens.
+   *
+   * @param debug Whether to preload development builds (default: false = production)
+   */
+  static preloadCoreScripts(debug: boolean = false): void {
+    if (typeof document === 'undefined') return; // SSR guard
+
+    const coreLibraries = getCoreRuntimeLibraries(debug);
+    for (const lib of coreLibraries) {
+      // Skip if already preloaded or loaded
+      if (document.querySelector(`link[href="${lib.cdnUrl}"]`) ||
+          document.querySelector(`script[src="${lib.cdnUrl}"]`)) {
+        continue;
+      }
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'script';
+      link.href = lib.cdnUrl;
+      // crossorigin is intentionally omitted to match the <script> tags
+      // which also omit crossOrigin (see loadScriptFromUrl comment)
+      document.head.appendChild(link);
+    }
+  }
+
+  /**
    * Load all standard libraries (core + UI + CSS)
    * This is the main method that should be used by test harness and Angular wrapper
    * @param config Optional full library configuration to replace the default
@@ -103,8 +135,8 @@ export class LibraryLoader {
   static async loadLibrariesFromConfig(options?: ConfigLoadOptions, debug?: boolean): Promise<LibraryLoadResult> {
     // Always load core runtime libraries first
     const coreLibraries = getCoreRuntimeLibraries(debug);
-    const corePromises = coreLibraries.map(lib => 
-      this.loadScript(lib.cdnUrl, lib.globalVariable, debug)
+    const corePromises = coreLibraries.map(lib =>
+      this.loadScript(lib.cdnUrl, lib.globalVariable, debug, lib.fallbackCdnUrls)
     );
     
     const coreResults = await Promise.all(corePromises);
@@ -117,16 +149,16 @@ export class LibraryLoader {
     if (typeof window !== 'undefined') {
       if (React && !(window as any).React) {
         (window as any).React = React;
-        console.log('✓ Exposed React as window.React for UMD compatibility');
+        //console.log('✓ Exposed React as window.React for UMD compatibility');
       }
       if (ReactDOM && !(window as any).ReactDOM) {
         (window as any).ReactDOM = ReactDOM;
-        console.log('✓ Exposed ReactDOM as window.ReactDOM for UMD compatibility');
+        //console.log('✓ Exposed ReactDOM as window.ReactDOM for UMD compatibility');
       }
       // Also expose PropTypes as empty object if not present (for older libraries)
       if (!(window as any).PropTypes) {
         (window as any).PropTypes = {};
-        console.log('✓ Exposed empty PropTypes as window.PropTypes for UMD compatibility');
+        //console.log('✓ Exposed empty PropTypes as window.PropTypes for UMD compatibility');
       }
     }
     
@@ -157,8 +189,8 @@ export class LibraryLoader {
     });
     
     // Load plugin libraries
-    const pluginPromises = pluginLibraries.map(lib => 
-      this.loadScript(lib.cdnUrl, lib.globalVariable, debug)
+    const pluginPromises = pluginLibraries.map(lib =>
+      this.loadScript(lib.cdnUrl, lib.globalVariable, debug, lib.fallbackCdnUrls)
     );
     
     const pluginResults = await Promise.all(pluginPromises);
@@ -219,10 +251,25 @@ export class LibraryLoader {
   }
 
   /**
-   * Load a script from URL
+   * Load a script from URL, with optional fallback CDN URLs.
+   * Tries the primary URL first, then each fallback in order until one succeeds.
    */
-  private static async loadScript(url: string, globalName: string, debug: boolean = false): Promise<any> {
-    // Check if already loaded
+  private static async loadScript(
+    url: string,
+    globalName: string,
+    debug: boolean = false,
+    fallbackUrls?: string[]
+  ): Promise<any> {
+    // Check if the global is already available (loaded by any URL)
+    const existingGlobal = typeof window !== 'undefined' ? (window as any)[globalName] : undefined;
+    if (existingGlobal) {
+      if (debug) {
+        console.log(`✅ Library '${globalName}' already available globally`);
+      }
+      return existingGlobal;
+    }
+
+    // Check if already loaded from this URL
     const existing = this.loadedResources.get(url);
     if (existing) {
       if (debug) {
@@ -231,13 +278,71 @@ export class LibraryLoader {
       return existing.promise;
     }
 
+    // Try the primary URL first
+    try {
+      return await this.loadScriptFromUrl(url, globalName, debug);
+    } catch (primaryError) {
+      // If no fallbacks, rethrow immediately
+      if (!fallbackUrls || fallbackUrls.length === 0) {
+        throw primaryError;
+      }
+
+      // Clean up the failed primary entry so fallbacks can try fresh
+      this.cleanupFailedScript(url);
+
+      if (debug) {
+        console.warn(`⚠️ Primary CDN failed for '${globalName}', trying fallback CDNs...`);
+      }
+
+      // Try each fallback URL in order
+      for (let i = 0; i < fallbackUrls.length; i++) {
+        const fallbackUrl = fallbackUrls[i];
+        try {
+          const result = await this.loadScriptFromUrl(fallbackUrl, globalName, debug);
+          console.log(`✅ Library '${globalName}' loaded from fallback CDN: ${fallbackUrl}`);
+          return result;
+        } catch (fallbackError) {
+          this.cleanupFailedScript(fallbackUrl);
+          if (debug) {
+            console.warn(`⚠️ Fallback CDN ${i + 1}/${fallbackUrls.length} failed for '${globalName}'`);
+          }
+        }
+      }
+
+      // All URLs failed
+      const allUrls = [url, ...fallbackUrls];
+      throw new Error(
+        `Failed to load '${globalName}' from all CDN sources: ${allUrls.join(', ')}`
+      );
+    }
+  }
+
+  /**
+   * Remove a failed script from the cache and DOM so a fallback URL can be tried.
+   */
+  private static cleanupFailedScript(url: string): void {
+    const failed = this.loadedResources.get(url);
+    if (failed?.element?.parentNode) {
+      failed.element.parentNode.removeChild(failed.element);
+    }
+    this.loadedResources.delete(url);
+  }
+
+  /**
+   * Load a single script from a specific URL. This is the low-level loader
+   * that handles DOM script element creation and global variable detection.
+   */
+  private static loadScriptFromUrl(url: string, globalName: string, debug: boolean = false): Promise<any> {
+    // Check if already cached for this URL
+    const existing = this.loadedResources.get(url);
+    if (existing) {
+      return existing.promise;
+    }
+
     const promise = new Promise((resolve, reject) => {
       // Check if global already exists
       const existingGlobal = (window as any)[globalName];
       if (existingGlobal) {
-        if (debug) {
-          console.log(`✅ Library '${globalName}' already available globally`);
-        }
         resolve(existingGlobal);
         return;
       }
@@ -249,11 +354,12 @@ export class LibraryLoader {
         return;
       }
 
-      // Create new script
+      // Create new script — no crossOrigin attribute so the browser uses standard
+      // "no-cors" mode, which avoids CORS failures when CDN headers are missing
+      // or browser tracking prevention interferes with the response.
       const script = document.createElement('script');
       script.src = url;
       script.async = true;
-      script.crossOrigin = 'anonymous';
 
       const cleanup = () => {
         script.removeEventListener('load', onLoad);
@@ -262,7 +368,7 @@ export class LibraryLoader {
 
       const onLoad = async () => {
         cleanup();
-        
+
         // Use progressive delay if enabled, otherwise use original behavior
         if (LibraryLoader.enableProgressiveDelay) {
           try {
@@ -281,7 +387,7 @@ export class LibraryLoader {
             resolve(global);
           } else {
             // Some libraries may take a moment to initialize
-            const timeoutId = resourceManager.setTimeout(
+            resourceManager.setTimeout(
               LIBRARY_LOADER_COMPONENT_ID,
               () => {
                 const delayedGlobal = (window as any)[globalName];
@@ -317,14 +423,14 @@ export class LibraryLoader {
       // These are harmless and expected when loading minified libraries from CDNs
       // that reference source maps which aren't available. This doesn't affect functionality.
       document.head.appendChild(script);
-      
+
       // Register the script element for cleanup
       resourceManager.registerDOMElement(LIBRARY_LOADER_COMPONENT_ID, script);
     });
 
-    this.loadedResources.set(url, { 
-      element: document.querySelector(`script[src="${url}"]`)!, 
-      promise 
+    this.loadedResources.set(url, {
+      element: document.querySelector(`script[src="${url}"]`)!,
+      promise
     });
 
     return promise;
@@ -537,7 +643,7 @@ export class LibraryLoader {
    */
   static async loadLibraryWithDependencies(
     libraryName: string,
-    allLibraries: ComponentLibraryEntity[],
+    allLibraries: MJComponentLibraryEntity[],
     requestedBy: string = 'user',
     options?: DependencyResolutionOptions
   ): Promise<any> {
@@ -662,7 +768,7 @@ export class LibraryLoader {
    */
   static async loadLibrariesWithDependencies(
     libraryNames: string[],
-    allLibraries: ComponentLibraryEntity[],
+    allLibraries: MJComponentLibraryEntity[],
     requestedBy: string = 'user',
     options?: DependencyResolutionOptions
   ): Promise<Map<string, any>> {

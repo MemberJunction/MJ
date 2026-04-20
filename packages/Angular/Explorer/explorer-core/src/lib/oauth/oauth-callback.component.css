@@ -1,0 +1,131 @@
+.oauth-callback-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: var(--mj-brand-primary);
+    padding: 1rem;
+}
+
+.oauth-callback-card {
+    background: var(--mj-bg-surface);
+    padding: 3rem;
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    max-width: 450px;
+    width: 100%;
+}
+
+.oauth-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.oauth-status h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.oauth-status p {
+    margin: 0;
+    color: var(--mj-text-muted);
+    line-height: 1.6;
+}
+
+/* Icon containers */
+.icon-container {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.icon-container i {
+    font-size: 3rem;
+}
+
+.success-icon {
+    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+}
+
+.success-icon i {
+    color: var(--mj-status-success);
+}
+
+.error-icon {
+    background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+}
+
+.error-icon i {
+    color: var(--mj-status-error);
+}
+
+/* Success state */
+.oauth-status.success h2 {
+    color: var(--mj-status-success);
+}
+
+/* Error state */
+.oauth-status.error h2 {
+    color: var(--mj-status-error);
+}
+
+.error-code {
+    background: color-mix(in srgb, var(--mj-status-error) 5%, var(--mj-bg-surface));
+    color: var(--mj-status-error);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-family: monospace;
+    font-size: 0.875rem;
+}
+
+.error-message {
+    background: var(--mj-bg-surface-sunken);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--mj-text-secondary);
+    width: 100%;
+}
+
+/* Buttons */
+.button-group {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.button-group button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Loading state */
+.oauth-status.loading {
+    padding: 2rem 0;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .oauth-callback-card {
+        padding: 2rem 1.5rem;
+    }
+
+    .button-group {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .button-group button {
+        width: 100%;
+        justify-content: center;
+    }
+}

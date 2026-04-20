@@ -1,17 +1,18 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
-import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
-import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine, ConversationEntity, ConversationDetailArtifactEntity, ConversationDetailEntity, ArtifactUseEntity } from '@memberjunction/core-entities';
+import { ParseJSONRecursive, ParseJSONOptions , UUIDsEqual } from '@memberjunction/global';
+import { MJArtifactEntity, MJArtifactVersionEntity, MJArtifactVersionAttributeEntity, MJArtifactTypeEntity, MJCollectionEntity, MJCollectionArtifactEntity, ArtifactMetadataEngine, MJConversationEntity, MJConversationDetailArtifactEntity, MJConversationDetailEntity, MJArtifactUseEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
-import { ArtifactViewerTab } from './base-artifact-viewer.component';
+import { ArtifactViewerTab, NavigationRequest } from './base-artifact-viewer.component';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
 @Component({
+  standalone: false,
   selector: 'mj-artifact-viewer-panel',
   templateUrl: './artifact-viewer-panel.component.html',
   styleUrls: ['./artifact-viewer-panel.component.css']
@@ -22,6 +23,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() environmentId!: string;
   @Input() versionNumber?: number; // Version to display
   @Input() showSaveToCollection: boolean = true; // Control whether Save to Collection button is shown
+  @Input() showHeader: boolean = true; // Control whether the header section is shown
+  @Input() showTabs: boolean = true; // Control whether the tab navigation is shown (false = show only Display tab content)
+  @Input() showCloseButton: boolean = true; // Control whether the close button is shown in header
+  @Input() showMaximizeButton: boolean = true; // Control whether the maximize/restore button is shown in header
   @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
   @Input() viewContext: 'conversation' | 'collection' | null = null; // Where artifact is being viewed
   @Input() contextCollectionId?: string; // If viewing in collection, which collection
@@ -34,33 +39,37 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
   @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
   private destroy$ = new Subject<void>();
 
-  public artifact: ArtifactEntity | null = null;
-  public artifactVersion: ArtifactVersionEntity | null = null;
-  public allVersions: ArtifactVersionEntity[] = [];
+  public artifact: MJArtifactEntity | null = null;
+  public artifactVersion: MJArtifactVersionEntity | null = null;
+  public allVersions: MJArtifactVersionEntity[] = [];
   public selectedVersionNumber: number = 1;
   public isLoading = true;
   public error: string | null = null;
   public jsonContent = '';
   public showVersionDropdown = false;
-  public artifactCollections: CollectionArtifactEntity[] = []; // All collections for ALL versions
-  public currentVersionCollections: CollectionArtifactEntity[] = []; // Collections containing CURRENT version only
-  public primaryCollection: CollectionEntity | null = null;
+  public artifactCollections: MJCollectionArtifactEntity[] = []; // All collections for ALL versions
+  public currentVersionCollections: MJCollectionArtifactEntity[] = []; // Collections containing CURRENT version only
+  public primaryCollection: MJCollectionEntity | null = null;
 
   // Tabbed interface
   public activeTab: string = 'display'; // Changed to string to support dynamic tabs
   public displayMarkdown: string | null = null;
   public displayHtml: string | null = null;
-  public versionAttributes: ArtifactVersionAttributeEntity[] = [];
+  public versionAttributes: MJArtifactVersionAttributeEntity[] = [];
   private artifactTypeDriverClass: string | null = null;
+  /** Populated from ArtifactType.ContentCategory. Used to suppress the JSON tab for
+   *  binary file-type artifacts — driven by metadata, not hardcoded plugin overrides. */
+  private artifactContentCategory: 'File' | 'Text' | null = null;
 
   // Links tab data
-  public originConversation: ConversationEntity | null = null;
-  public allCollections: CollectionEntity[] = [];
+  public originConversation: MJConversationEntity | null = null;
+  public allCollections: MJCollectionEntity[] = [];
   public hasAccessToOriginConversation: boolean = false;
   public originConversationVersionId: string | null = null; // Version ID that came from origin conversation
 
@@ -84,8 +93,13 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     const removals = this.pluginViewer?.pluginInstance?.GetStandardTabRemovals?.() || [];
     const removalsLower = removals.map(r => r.toLowerCase());
 
-    // Add standard tabs (unless plugin removed them)
-    if (!removalsLower.includes('json')) {
+    // File-category artifacts (PDF, Excel, Word) have binary content — the JSON tab
+    // would show a base64 blob or a storage reference, which is meaningless. Suppress it
+    // using ArtifactType.ContentCategory from the database rather than a hardcoded plugin override.
+    const isFileArtifact = this.artifactContentCategory === 'File';
+
+    // Add standard tabs (unless suppressed by metadata or plugin)
+    if (!isFileArtifact && !removalsLower.includes('json')) {
       tabs.push('JSON');
     }
     if (!removalsLower.includes('details')) {
@@ -187,6 +201,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   private recentAccessService: RecentAccessService;
 
   constructor(
+    private cdr: ChangeDetectorRef,
     private notificationService: MJNotificationService,
     private sanitizer: DomSanitizer,
     private artifactIconService: ArtifactIconService
@@ -226,22 +241,26 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     if (changes['versionNumber'] && !changes['versionNumber'].firstChange) {
       const newVersionNumber = changes['versionNumber'].currentValue;
       if (newVersionNumber != null) {
-        // Check if we already have this version loaded (avoid reload if possible)
+        // Check if we have metadata for this version (allVersions has lightweight metadata)
         const targetVersion = this.allVersions.find(v => v.VersionNumber === newVersionNumber);
         if (targetVersion) {
-          // Just switch to the version we already have
-          this.artifactVersion = targetVersion;
-          this.selectedVersionNumber = targetVersion.VersionNumber || 1;
-          this.jsonContent = this.FormatJSON(targetVersion.Content || '{}');
+          this.selectedVersionNumber = (targetVersion.VersionNumber as number) || 1;
 
-          // Load version attributes
-          await this.loadVersionAttributes();
+          // Load full content for the selected version
+          const fullVersion = await this.loadVersionContent(targetVersion.ID);
+          if (fullVersion) {
+            this.artifactVersion = fullVersion;
+            this.jsonContent = this.FormatJSON(fullVersion.Content || '{}');
+          }
 
-          // Reload collection associations for this version
-          await this.loadCollectionAssociations();
+          // Load attributes and collection data in parallel
+          await Promise.all([
+            this.loadVersionAttributes(),
+            this.loadCollectionAssociations(),
+            this.loadLinksData()
+          ]);
 
-          // Reload links data
-          await this.loadLinksData();
+          this.cdr.detectChanges();
         } else {
           // Need to reload to get this version (shouldn't normally happen)
           await this.loadArtifact(newVersionNumber);
@@ -265,66 +284,115 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
       const md = new Metadata();
 
-      // Load artifact
-      this.artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
-      const loaded = await this.artifact.Load(this.artifactId);
+      // Load artifact — assign to local first to avoid mid-cycle icon flicker
+      const artifactEntity = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
+      const loaded = await artifactEntity.Load(this.artifactId);
 
       if (!loaded) {
         this.error = 'Failed to load artifact';
         return;
       }
+      this.artifact = artifactEntity;
 
-      // Load artifact type to check for DriverClass
-      await this.loadArtifactType();
-
-      // Load ALL versions
+      // PERF: Batch load version metadata, collection associations, and conversation links
+      // in a single RunViews call. Content is excluded here — loaded on-demand for the selected version.
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactVersionEntity>({
-        EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ArtifactID='${this.artifactId}'`,
-        OrderBy: 'VersionNumber DESC',
-        ResultType: 'entity_object'
-      }, this.currentUser);
-
-      if (result.Success && result.Results && result.Results.length > 0) {
-        this.allVersions = result.Results;
-
-        // If target version specified, try to load it
-        if (targetVersionNumber) {
-          const targetVersion = this.allVersions.find(v => v.VersionNumber === targetVersionNumber);
-          if (targetVersion) {
-            this.artifactVersion = targetVersion;
-            this.selectedVersionNumber = targetVersion.VersionNumber || 1;
-            this.jsonContent = this.FormatJSON(targetVersion.Content || '{}');
-          } else {
-            // Target version not found, default to latest
-            this.artifactVersion = result.Results[0];
-            this.selectedVersionNumber = this.artifactVersion.VersionNumber || 1;
-            this.jsonContent = this.FormatJSON(this.artifactVersion.Content || '{}');
-          }
-        } else {
-          // No target version, default to latest version (first in DESC order)
-          this.artifactVersion = result.Results[0];
-          this.selectedVersionNumber = this.artifactVersion.VersionNumber || 1;
-          this.jsonContent = this.FormatJSON(this.artifactVersion.Content || '{}');
+      const batchResults = await rv.RunViews([
+        {
+          // [0] Version metadata (lightweight — no Content field)
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${this.artifactId}'`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'Description', '__mj_CreatedAt', '__mj_UpdatedAt'],
+          ResultType: 'simple'
+        },
+        {
+          // [1] Collection associations for all versions of this artifact
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `ArtifactVersionID IN (
+            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
+          )`,
+          Fields: ['ID', 'CollectionID', 'ArtifactVersionID', 'Sequence'],
+          ResultType: 'simple'
+        },
+        {
+          // [2] Conversation detail artifact links (for Links tab)
+          EntityName: 'MJ: Conversation Detail Artifacts',
+          ExtraFilter: `ArtifactVersionID IN (
+            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
+          )`,
+          Fields: ['ID', 'ConversationDetailID', 'ArtifactVersionID'],
+          MaxRows: 1,
+          ResultType: 'simple'
         }
+      ], this.currentUser);
 
-        // Load version attributes
-        await this.loadVersionAttributes();
+      const [versionsResult, collectionsResult, convDetailResult] = batchResults;
 
-        // Load collection associations
-        await this.loadCollectionAssociations();
-
-        // Load links data
-        await this.loadLinksData();
-      } else {
+      if (!versionsResult.Success || !versionsResult.Results || versionsResult.Results.length === 0) {
         this.error = 'No artifact version found';
+        return;
       }
+
+      // Store version metadata as simple objects (used for dropdown display)
+      this.allVersions = versionsResult.Results as MJArtifactVersionEntity[];
+
+      // Determine which version to display
+      let selectedVersion: Record<string, unknown> | undefined;
+      if (targetVersionNumber) {
+        selectedVersion = versionsResult.Results.find(
+          (v: Record<string, unknown>) => v.VersionNumber === targetVersionNumber
+        );
+      }
+      // Fall back to latest version (first in DESC order)
+      const versionToLoad = selectedVersion || versionsResult.Results[0];
+      this.selectedVersionNumber = (versionToLoad.VersionNumber as number) || 1;
+
+      // PERF: Start artifact type resolution and selected version content load in parallel
+      const [, selectedVersionEntity] = await Promise.all([
+        this.loadArtifactType(),
+        this.loadVersionContent(versionToLoad.ID as string)
+      ]);
+
+      if (selectedVersionEntity) {
+        this.artifactVersion = selectedVersionEntity;
+        this.jsonContent = this.FormatJSON(selectedVersionEntity.Content || '{}');
+      } else {
+        this.error = 'Failed to load artifact version content';
+        return;
+      }
+
+      // PERF: Process collection and links data in parallel (uses already-fetched batch data)
+      await Promise.all([
+        this.processCollectionAssociations(collectionsResult),
+        this.processLinksData(collectionsResult, convDetailResult)
+      ]);
+
+      // Load version attributes (depends on selected version being set)
+      await this.loadVersionAttributes();
     } catch (err) {
       console.error('Error loading artifact:', err);
       this.error = 'Error loading artifact: ' + (err as Error).message;
     } finally {
       this.isLoading = false;
+      this.updateArtifactIcon();
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Load full content for a single version by ID.
+   * This avoids downloading Content for ALL versions when only one is displayed.
+   */
+  private async loadVersionContent(versionId: string): Promise<MJArtifactVersionEntity | null> {
+    try {
+      const md = new Metadata();
+      const versionEntity = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
+      const loaded = await versionEntity.Load(versionId);
+      return loaded ? versionEntity : null;
+    } catch (err) {
+      console.error('Error loading version content:', err);
+      return null;
     }
   }
 
@@ -339,6 +407,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   private async loadArtifactType(): Promise<void> {
+    // Reset on every load so a previous artifact's values don't bleed into the next
+    this.artifactTypeDriverClass = null;
+    this.artifactContentCategory = null;
+
     if (!this.artifact?.Type) {
       return;
     }
@@ -350,6 +422,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       if (artifactType) {
         // Resolve DriverClass by traversing parent hierarchy if needed
         this.artifactTypeDriverClass = await this.resolveDriverClassForType(artifactType);
+        this.artifactContentCategory = artifactType.ContentCategory;
       }
     } catch (err) {
       console.error('Error loading artifact type:', err);
@@ -362,10 +435,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactVersionAttributeEntity>({
+      const result = await rv.RunView<MJArtifactVersionAttributeEntity>({
         EntityName: 'MJ: Artifact Version Attributes',
         ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
-        ResultType: 'entity_object'
+        ResultType: 'simple'
       }, this.currentUser);
 
       if (result.Success && result.Results) {
@@ -389,6 +462,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       }
     } catch (err) {
       console.error('Error loading version attributes:', err);
+    } finally {
+      this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
     }
   }
 
@@ -441,7 +516,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     return contentTypeAttr?.Value || undefined;
   }
 
-  get filteredAttributes(): ArtifactVersionAttributeEntity[] {
+  get filteredAttributes(): MJArtifactVersionAttributeEntity[] {
     // Filter out displayMarkdown and displayHtml as they're shown in the Display tab
     return this.versionAttributes.filter(attr => {
       const name = attr.Name?.toLowerCase();
@@ -472,6 +547,21 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   /**
+   * Called when a plugin's async tab data changes (e.g., ComponentArtifactViewer loads
+   * the full spec from the registry after initial render with a stripped spec).
+   * Forces re-evaluation of allTabs so new tab labels render correctly.
+   */
+  onTabsChanged(): void {
+    // If Display tab just became available (e.g., after plugin async load),
+    // switch to it — it should be the default when present.
+    const tabs = this.allTabs;
+    if (tabs.length > 0 && tabs[0].toLowerCase() === 'display' && this.activeTab !== 'display') {
+      this.activeTab = 'display';
+    }
+    this.cdr.detectChanges(); // zone.js 0.15: plugin emitted tabsChanged, force CD to re-evaluate allTabs
+  }
+
+  /**
    * Called when the plugin viewer finishes loading.
    * Selects the first available tab now that plugin tabs are available.
    */
@@ -482,6 +572,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     if (tabs.length > 0) {
       this.activeTab = tabs[0].toLowerCase();
     }
+    this.cdr.detectChanges(); // zone.js 0.15: plugin loaded via async callback, force CD
   }
 
   private parseAttributeValue(value: string | null | undefined): string | null {
@@ -521,50 +612,73 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     return cleaned;
   }
 
-  private async loadCollectionAssociations(): Promise<void> {
+  /**
+   * Process pre-fetched collection association data.
+   * Accepts the batch result from loadArtifact() to avoid duplicate queries.
+   */
+  private async processCollectionAssociations(
+    collectionsResult?: { Success: boolean; Results: Record<string, unknown>[] }
+  ): Promise<void> {
     if (!this.artifactId) return;
 
     try {
-      const rv = new RunView();
-      // Load ALL collection associations for ALL versions of this artifact
-      const result = await rv.RunView<CollectionArtifactEntity>({
-        EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `ArtifactVersionID IN (
-          SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
-        )`,
-        ResultType: 'entity_object'
-      }, this.currentUser);
+      // If no pre-fetched data, fetch it (used by selectVersion/saveToCollections reload)
+      let collectionRows: Record<string, unknown>[];
+      if (collectionsResult?.Success && collectionsResult.Results) {
+        collectionRows = collectionsResult.Results;
+      } else {
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string; CollectionID: string; ArtifactVersionID: string; Sequence: number }>({
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `ArtifactVersionID IN (
+            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
+          )`,
+          Fields: ['ID', 'CollectionID', 'ArtifactVersionID', 'Sequence'],
+          ResultType: 'simple'
+        }, this.currentUser);
+        collectionRows = (result.Success ? result.Results : []) as Record<string, unknown>[];
+      }
 
-      if (result.Success && result.Results) {
-        this.artifactCollections = result.Results;
+      // Store as simple objects — these are read-only display data
+      this.artifactCollections = collectionRows as unknown as MJCollectionArtifactEntity[];
 
-        // Filter to get only collections containing the CURRENT version
-        const currentVersionId = this.artifactVersion?.ID;
-        if (currentVersionId) {
-          // Type-safe comparison: ensure both IDs are strings and match exactly
-          const currentIdStr = String(currentVersionId).toLowerCase();
+      // Filter to get only collections containing the CURRENT version
+      const currentVersionId = this.artifactVersion?.ID;
+      if (currentVersionId) {
+        const currentIdStr = String(currentVersionId).toLowerCase();
+        this.currentVersionCollections = collectionRows.filter(ca => {
+          const versionIdStr = String(ca['ArtifactVersionID'] || ca.ArtifactVersionID || '').toLowerCase();
+          return versionIdStr && currentIdStr && versionIdStr === currentIdStr;
+        }) as unknown as MJCollectionArtifactEntity[];
+      } else {
+        this.currentVersionCollections = [];
+      }
 
-          this.currentVersionCollections = result.Results.filter(ca => {
-            const versionIdStr = String(ca.ArtifactVersionID || '').toLowerCase();
-            return versionIdStr && currentIdStr && versionIdStr === currentIdStr;
-          });
-        } else {
-          this.currentVersionCollections = [];
-        }
-
-        // Load the primary collection details if exists
-        if (this.artifactCollections.length > 0) {
-          const collectionId = this.artifactCollections[0].CollectionID;
+      // Load the primary collection details if exists
+      if (this.artifactCollections.length > 0) {
+        const collectionId = (collectionRows[0] as Record<string, unknown>).CollectionID as string ||
+                             (this.artifactCollections[0] as unknown as Record<string, unknown>).CollectionID as string;
+        if (collectionId) {
           const md = new Metadata();
-          this.primaryCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+          this.primaryCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
           await this.primaryCollection.Load(collectionId);
-        } else {
-          this.primaryCollection = null;
         }
+      } else {
+        this.primaryCollection = null;
       }
     } catch (err) {
-      console.error('Error loading collection associations:', err);
+      console.error('Error processing collection associations:', err);
+    } finally {
+      this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * @deprecated Use processCollectionAssociations() instead. Kept as a shim for callers
+   * that don't have pre-fetched data (e.g., selectVersion, saveToCollections).
+   */
+  private async loadCollectionAssociations(): Promise<void> {
+    return this.processCollectionAssociations();
   }
 
   get isInCollection(): boolean {
@@ -650,21 +764,25 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
   }
 
-  async selectVersion(version: ArtifactVersionEntity): Promise<void> {
-    this.artifactVersion = version;
-    this.selectedVersionNumber = version.VersionNumber || 1;
-    this.jsonContent = this.FormatJSON(version.Content || '{}');
+  async selectVersion(version: MJArtifactVersionEntity): Promise<void> {
+    this.selectedVersionNumber = (version.VersionNumber as number) || 1;
     this.showVersionDropdown = false;
 
-    // Load attributes for the selected version
-    await this.loadVersionAttributes();
+    // Load full content for the selected version (allVersions only has metadata)
+    const fullVersion = await this.loadVersionContent(version.ID);
+    if (fullVersion) {
+      this.artifactVersion = fullVersion;
+      this.jsonContent = this.FormatJSON(fullVersion.Content || '{}');
+    }
 
-    // CRITICAL FIX: Reload collection associations for this version
-    // This ensures bookmark button and Links tab reflect the correct state
-    await this.loadCollectionAssociations();
+    // Load attributes and collection data in parallel
+    await Promise.all([
+      this.loadVersionAttributes(),
+      this.loadCollectionAssociations(),
+      this.loadLinksData()
+    ]);
 
-    // Also reload links data to update conversation/collection links
-    await this.loadLinksData();
+    this.cdr.detectChanges();
   }
 
   async onSaveToLibrary(): Promise<void> {
@@ -713,7 +831,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       for (const collectionId of collectionIds) {
         // Double check this exact version doesn't already exist in the collection
         const rv = new RunView();
-        const existingResult = await rv.RunView<CollectionArtifactEntity>({
+        const existingResult = await rv.RunView<MJCollectionArtifactEntity>({
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID='${currentVersionId}'`,
           ResultType: 'entity_object'
@@ -724,7 +842,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         }
 
         // Create junction record with version ID
-        const collectionArtifact = await md.GetEntityObject<CollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
+        const collectionArtifact = await md.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
         collectionArtifact.CollectionID = collectionId;
         collectionArtifact.ArtifactVersionID = currentVersionId;
         collectionArtifact.Sequence = 0;
@@ -766,9 +884,13 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   /**
-   * Load links data: origin conversation and all collections containing this artifact
+   * Process links data using pre-fetched batch results from loadArtifact().
+   * Reuses collection data from the same batch to avoid duplicate queries.
    */
-  private async loadLinksData(): Promise<void> {
+  private async processLinksData(
+    collectionsResult?: { Success: boolean; Results: Record<string, unknown>[] },
+    convDetailResult?: { Success: boolean; Results: Record<string, unknown>[] }
+  ): Promise<void> {
     if (!this.artifactId) return;
 
     // Clear old links data first to prevent stale data from previous artifact
@@ -778,88 +900,109 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       const md = new Metadata();
       const rv = new RunView();
 
-      // Load all collections containing any version of this artifact
-      const collArtifactsResult = await rv.RunView<CollectionArtifactEntity>({
-        EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `ArtifactVersionID IN (
-          SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
-        )`,
-        ResultType: 'entity_object'
-      }, this.currentUser);
+      // Use pre-fetched collection data or fetch if not provided
+      let collectionRows: Record<string, unknown>[] = [];
+      if (collectionsResult?.Success && collectionsResult.Results) {
+        collectionRows = collectionsResult.Results;
+      } else {
+        const result = await rv.RunView<{ ID: string; CollectionID: string; ArtifactVersionID: string }>({
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `ArtifactVersionID IN (
+            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
+          )`,
+          Fields: ['ID', 'CollectionID', 'ArtifactVersionID'],
+          ResultType: 'simple'
+        }, this.currentUser);
+        collectionRows = (result.Success ? result.Results : []) as Record<string, unknown>[];
+      }
 
-      if (collArtifactsResult.Success && collArtifactsResult.Results) {
-        // Get unique collection IDs
-        const collectionIds = [...new Set(collArtifactsResult.Results.map(ca => ca.CollectionID))];
+      // Get unique collection IDs and load collection details
+      const collectionIds = [...new Set(
+        collectionRows.map(ca => (ca['CollectionID'] || ca.CollectionID) as string)
+      )].filter(Boolean);
 
-        if (collectionIds.length > 0) {
-          const collectionsFilter = collectionIds.map(id => `ID='${id}'`).join(' OR ');
-          const collectionsResult = await rv.RunView<CollectionEntity>({
-            EntityName: 'MJ: Collections',
-            ExtraFilter: collectionsFilter,
-            ResultType: 'entity_object'
-          }, this.currentUser);
+      if (collectionIds.length > 0) {
+        const collectionsFilter = collectionIds.map(id => `ID='${id}'`).join(' OR ');
+        const collectionsEntityResult = await rv.RunView<MJCollectionEntity>({
+          EntityName: 'MJ: Collections',
+          ExtraFilter: collectionsFilter,
+          Fields: ['ID', 'Name', 'UserID', 'Description'],
+          ResultType: 'simple'
+        }, this.currentUser);
 
-          if (collectionsResult.Success && collectionsResult.Results) {
-            this.allCollections = collectionsResult.Results;
-          }
+        if (collectionsEntityResult.Success && collectionsEntityResult.Results) {
+          this.allCollections = collectionsEntityResult.Results as unknown as MJCollectionEntity[];
         }
       }
 
-      // Load origin conversation (if artifact came from conversation)
-      // Artifacts are linked to conversations via ConversationDetailArtifact -> ConversationDetail -> Conversation
-      // Get all version IDs for this artifact
-      const versionIds = this.allVersions.map(v => v.ID);
+      // Use pre-fetched conversation detail artifact data or fetch if not provided
+      let convDetailRows: Record<string, unknown>[] = [];
+      if (convDetailResult?.Success && convDetailResult.Results) {
+        convDetailRows = convDetailResult.Results;
+      } else {
+        const versionIds = this.allVersions.map(v => v.ID);
+        if (versionIds.length > 0) {
+          const versionFilter = versionIds.map(id => `ArtifactVersionID='${id}'`).join(' OR ');
+          const result = await rv.RunView<{ ID: string; ConversationDetailID: string; ArtifactVersionID: string }>({
+            EntityName: 'MJ: Conversation Detail Artifacts',
+            ExtraFilter: versionFilter,
+            Fields: ['ID', 'ConversationDetailID', 'ArtifactVersionID'],
+            MaxRows: 1,
+            ResultType: 'simple'
+          }, this.currentUser);
+          convDetailRows = (result.Success ? result.Results : []) as Record<string, unknown>[];
+        }
+      }
 
-      if (versionIds.length > 0) {
-        const versionFilter = versionIds.map(id => `ArtifactVersionID='${id}'`).join(' OR ');
-        const convDetailArtifactsResult = await rv.RunView<ConversationDetailArtifactEntity>({
-          EntityName: 'MJ: Conversation Detail Artifacts',
-          ExtraFilter: versionFilter,
-          MaxRows: 1,
-          ResultType: 'entity_object'
-        }, this.currentUser);
+      // Load origin conversation if we have a link
+      if (convDetailRows.length > 0) {
+        const conversationDetailId = (convDetailRows[0]['ConversationDetailID'] || convDetailRows[0].ConversationDetailID) as string;
+        const artifactVersionId = (convDetailRows[0]['ArtifactVersionID'] || convDetailRows[0].ArtifactVersionID) as string;
 
-        if (convDetailArtifactsResult.Success && convDetailArtifactsResult.Results && convDetailArtifactsResult.Results.length > 0) {
-          const conversationDetailId = convDetailArtifactsResult.Results[0].ConversationDetailID;
-          const artifactVersionId = convDetailArtifactsResult.Results[0].ArtifactVersionID;
+        this.originConversationVersionId = artifactVersionId;
 
-          // Store which version came from the origin conversation
-          this.originConversationVersionId = artifactVersionId;
+        // Load conversation detail to get conversation ID
+        const conversationDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
+        const detailLoaded = await conversationDetail.Load(conversationDetailId);
 
-          // Load the conversation detail to get the conversation ID
-          const conversationDetail = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
-          const detailLoaded = await conversationDetail.Load(conversationDetailId);
+        if (detailLoaded && conversationDetail.ConversationID) {
+          const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', this.currentUser);
+          const loaded = await conversation.Load(conversationDetail.ConversationID);
 
-          if (detailLoaded && conversationDetail.ConversationID) {
-            const conversation = await md.GetEntityObject<ConversationEntity>('Conversations', this.currentUser);
-            const loaded = await conversation.Load(conversationDetail.ConversationID);
+          if (loaded) {
+            this.originConversation = conversation;
 
-            if (loaded) {
-              this.originConversation = conversation;
+            // Check if user has access (is owner or participant)
+            const userIsOwner = UUIDsEqual(conversation.UserID, this.currentUser.ID);
 
-              // Check if user has access (is owner or participant)
-              const userIsOwner = conversation.UserID === this.currentUser.ID;
+            const participantResult = await rv.RunView({
+              EntityName: 'MJ: Conversation Details',
+              ExtraFilter: `ConversationID='${conversation.ID}' AND UserID='${this.currentUser.ID}'`,
+              MaxRows: 1,
+              Fields: ['ID'],
+              ResultType: 'simple'
+            }, this.currentUser);
 
-              // Check if user is a participant
-              const participantResult = await rv.RunView({
-                EntityName: 'Conversation Details',
-                ExtraFilter: `ConversationID='${conversation.ID}' AND UserID='${this.currentUser.ID}'`,
-                MaxRows: 1,
-                ResultType: 'simple'
-              }, this.currentUser);
+            const userIsParticipant = participantResult.Success &&
+                                       participantResult.Results &&
+                                       participantResult.Results.length > 0;
 
-              const userIsParticipant = participantResult.Success &&
-                                         participantResult.Results &&
-                                         participantResult.Results.length > 0;
-
-              this.hasAccessToOriginConversation = userIsOwner || userIsParticipant;
-            }
+            this.hasAccessToOriginConversation = userIsOwner || userIsParticipant;
           }
         }
       }
     } catch (error) {
       console.error('Error loading links data:', error);
+    } finally {
+      this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * @deprecated Use processLinksData() instead. Kept as shim for callers without pre-fetched data.
+   */
+  private async loadLinksData(): Promise<void> {
+    return this.processLinksData();
   }
 
   get linksToShow(): Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> {
@@ -936,10 +1079,18 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   /**
+   * Handle navigation request from artifact viewer plugin.
+   * Propagates the event up to parent components for app-level navigation.
+   */
+  onNavigationRequest(event: NavigationRequest): void {
+    this.navigationRequest.emit(event);
+  }
+
+  /**
    * Resolves the DriverClass for an artifact type by traversing up the parent hierarchy.
    * Returns the first DriverClass found, or null if none found in the hierarchy.
    */
-  private async resolveDriverClassForType(artifactType: ArtifactTypeEntity): Promise<string | null> {
+  private async resolveDriverClassForType(artifactType: MJArtifactTypeEntity): Promise<string | null> {
     // Check if current artifact type has a DriverClass
     if (artifactType.DriverClass) {
       return artifactType.DriverClass;
@@ -962,10 +1113,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   /**
    * Loads an artifact type by ID
    */
-  private async getArtifactTypeById(id: string): Promise<ArtifactTypeEntity | null> {
+  private async getArtifactTypeById(id: string): Promise<MJArtifactTypeEntity | null> {
     try {
       const md = new Metadata();
-      const artifactType = await md.GetEntityObject<ArtifactTypeEntity>('MJ: Artifact Types', this.currentUser);
+      const artifactType = await md.GetEntityObject<MJArtifactTypeEntity>('MJ: Artifact Types', this.currentUser);
       const loaded = await artifactType.Load(id);
 
       if (loaded) {
@@ -1055,7 +1206,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       }
 
       const md = new Metadata();
-      const usage = await md.GetEntityObject<ArtifactUseEntity>('MJ: Artifact Uses');
+      const usage = await md.GetEntityObject<MJArtifactUseEntity>('MJ: Artifact Uses');
 
       usage.ArtifactVersionID = this.artifactVersion.ID;
       usage.UserID = this.currentUser.ID;
@@ -1080,8 +1231,13 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    * Get the icon for this artifact using the centralized icon service.
    * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
    */
-  public getArtifactIcon(): string {
-    if (!this.artifact) return 'fa-file';
-    return this.artifactIconService.getArtifactIcon(this.artifact);
+  /** Cached icon class — set once after artifact loads to avoid mid-cycle flicker */
+  public artifactIcon: string = 'fa-file';
+
+  /** Update the cached icon from the loaded artifact */
+  private updateArtifactIcon(): void {
+    this.artifactIcon = this.artifact
+      ? this.artifactIconService.getArtifactIcon(this.artifact)
+      : 'fa-file';
   }
 }

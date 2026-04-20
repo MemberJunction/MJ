@@ -1,10 +1,10 @@
-import { ElementRef, Injectable } from '@angular/core';
-import { LogError, Metadata } from '@memberjunction/core';
-import { UserInfoEngine, UserNotificationEntity } from '@memberjunction/core-entities';
-import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
+import { Injectable } from '@angular/core';
+import { LogError, Metadata, StartupManager } from '@memberjunction/core';
+import { UserInfoEngine, MJUserNotificationEntity } from '@memberjunction/core-entities';
+import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal, GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { map, shareReplay } from 'rxjs/operators';
 
 /**
  * This injectable service is also available as a singleton MJNotificationService.Instance globally within an Angular application/library process space. It is responsible for displaying notifications to the user and also is able to manage the User Notifications entity
@@ -14,24 +14,50 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
   providedIn: 'root'
 })
 export class MJNotificationService {
-  private static _instance: MJNotificationService;
+  private static readonly _globalStoreKey = '___SINGLETON__MJNotificationService';
   private static _loaded: boolean = false;
 
   private static isLoading$ = new BehaviorSubject<boolean>(false);
   private tabChange = new Subject();
   tabChange$ = this.tabChange.asObservable();
 
-  // Observable for notification changes
-  private static _notifications$ = new BehaviorSubject<UserNotificationEntity[]>([]);
-  private static _unreadCount$ = new BehaviorSubject<number>(0);
+  /**
+   * Observable stream of the current user's notifications, derived from
+   * UserInfoEngine.UserNotifications$. Emits immediately on subscribe (shareReplay
+   * buffers the latest value) and re-emits whenever the engine's notifications
+   * cache is mutated — by save, delete, remote-invalidate, or refresh. Each
+   * emission re-runs the engine's per-user filter+sort.
+   */
+  public static readonly Notifications$: Observable<MJUserNotificationEntity[]> =
+    UserInfoEngine.Instance.UserNotifications$.pipe(
+      map(() => UserInfoEngine.Instance.UserNotifications),
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
 
-  constructor(private notificationService: NotificationService) {
-    if (MJNotificationService._instance) {
-      // return existing instance which will short circuit the creation of a new instance
-      return MJNotificationService._instance;
+  /**
+   * Observable stream of the current user's unread notification count, derived
+   * from Notifications$. Same emission lifecycle as Notifications$.
+   */
+  public static readonly UnreadCount$: Observable<number> =
+    MJNotificationService.Notifications$.pipe(
+      map((arr) => arr.filter((n) => n.Unread).length),
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+
+  /**
+   * Optional callback that consuming apps can set to suppress toast notifications
+   * for specific events (e.g., when the user is actively viewing the conversation
+   * that triggered the notification). Return true to suppress the toast.
+   * The notification DB record is still created and the badge count still updates.
+   */
+  public ShouldSuppressToast?: (statusObj: Record<string, unknown>) => boolean;
+
+  constructor() {
+    const g = GetGlobalObjectStore()!;
+    if (g[MJNotificationService._globalStoreKey]) {
+      return g[MJNotificationService._globalStoreKey] as MJNotificationService;
     }
-    // first time this has been called, so return ourselves since we're in the constructor
-    MJNotificationService._instance = this;
+    g[MJNotificationService._globalStoreKey] = this;
 
     MJGlobal.Instance.GetEventListener(true).subscribe( (event) => {
       switch (event.event) {
@@ -47,8 +73,20 @@ export class MJNotificationService {
           }
           break;
         case MJEventType.LoggedIn:
-          if (MJNotificationService._loaded === false) 
-            MJNotificationService.RefreshUserNotifications();
+          if (MJNotificationService._loaded === false) {
+            // Wait for StartupManager to complete before refreshing notifications.
+            // UserInfoEngine (which backs RefreshUserNotifications) is @RegisterForStartup
+            // and its _metadataConfigs are only populated during Config() which runs
+            // as part of StartupManager.Startup(). Calling RefreshItem() before that
+            // completes would silently find no config and return nothing.
+            StartupManager.Instance.Startup().then(() => {
+              MJNotificationService.RefreshUserNotifications();
+            });
+          }
+
+          // Notifications$ / UnreadCount$ are derived from UserInfoEngine.UserNotifications$
+          // at static-init time, so they auto-update whenever the engine's cache mutates.
+          // No per-login subscription wiring is needed.
 
           // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally
           this.PushStatusUpdates().subscribe( (message: string) => {
@@ -67,17 +105,25 @@ export class MJNotificationService {
               component: this
             })
 
-            if (statusObj.type?.trim().toLowerCase() === 'usernotifications') {
-              if (statusObj.details && statusObj.details.action?.trim().toLowerCase() === 'create') { 
-                // we have changes to user notifications, so refresh them
-                this.CreateSimpleNotification('New Notification Available', "success", 2000)
+            const type = statusObj.type?.trim().toLowerCase();
+            if (type === 'notification' || type === 'usernotifications') {
+              // Server sends type:'notification', legacy used 'usernotifications' — support both
+              const action = statusObj.action?.trim().toLowerCase()
+                          || statusObj.details?.action?.trim().toLowerCase();
+              if (action === 'create') {
+                // Check if the consuming app wants to suppress this toast
+                // (e.g., user is actively viewing the conversation that triggered it)
+                const suppress = this.ShouldSuppressToast?.(statusObj) ?? false;
+                if (!suppress) {
+                  this.CreateSimpleNotification(statusObj.title || 'New Notification Available', "success", 3000);
+                }
+                // Always refresh the notification list (badge count, unread state)
                 MJNotificationService.RefreshUserNotifications();
               }
             }
             else {
               // otherwise just post it as a simple notification, except Skip messages, we will let Skip handle those
-              const type = statusObj.type?.trim().toLowerCase();
-              if (type !== 'askskip' && type !== 'entityobjectstatusmessage' && typeof statusObj.message === 'string') { 
+              if (type !== 'askskip' && type !== 'entityobjectstatusmessage' && typeof statusObj.message === 'string') {
                 this.CreateSimpleNotification(statusObj.message, "success", 2500);
               }
             }
@@ -93,38 +139,35 @@ export class MJNotificationService {
   }
 
   public static get Instance(): MJNotificationService {
-    return MJNotificationService._instance;
+    return GetGlobalObjectStore()![MJNotificationService._globalStoreKey] as MJNotificationService;
   }
  
-  private static _userNotifications: UserNotificationEntity[] = [];
-  public static get UserNotifications(): UserNotificationEntity[] {
-    return MJNotificationService._userNotifications;
+  /**
+   * The current user's notifications, delegated to UserInfoEngine which owns the
+   * cache. Applies the per-user filter and newest-first sort on each access.
+   */
+  public static get UserNotifications(): MJUserNotificationEntity[] {
+    return UserInfoEngine.Instance.UserNotifications;
   }
-  public static get UnreadUserNotifications(): UserNotificationEntity[] {
-    return MJNotificationService._userNotifications.filter(n => n.Unread);
+
+  /**
+   * The current user's unread notifications, delegated to UserInfoEngine.
+   */
+  public static get UnreadUserNotifications(): MJUserNotificationEntity[] {
+    return UserInfoEngine.Instance.UnreadNotifications;
   }
+
+  /**
+   * The current user's unread notification count, delegated to UserInfoEngine.
+   */
   public static get UnreadUserNotificationCount(): number {
-    return MJNotificationService.UnreadUserNotifications.length;
-  }
-
-  /**
-   * Observable that emits the full list of user notifications whenever they change
-   */
-  public static get Notifications$(): Observable<UserNotificationEntity[]> {
-    return MJNotificationService._notifications$.asObservable();
-  }
-
-  /**
-   * Observable that emits the unread notification count whenever it changes
-   */
-  public static get UnreadCount$(): Observable<number> {
-    return MJNotificationService._unreadCount$.asObservable();
+    return UserInfoEngine.Instance.UnreadNotificationCount;
   }
 
   /**
    * Instance method to access Notifications$ observable
    */
-  public get notifications$(): Observable<UserNotificationEntity[]> {
+  public get notifications$(): Observable<MJUserNotificationEntity[]> {
     return MJNotificationService.Notifications$;
   }
 
@@ -145,9 +188,9 @@ export class MJNotificationService {
    * @param resourceConfiguration Any object, it is converted to a string by JSON.stringify and stored in the database
    * @returns 
    */
-  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser: boolean = true): Promise<UserNotificationEntity> {
+  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser: boolean = true): Promise<MJUserNotificationEntity> {
     const md = new Metadata();
-    const notification = <UserNotificationEntity>await md.GetEntityObject('User Notifications');
+    const notification = <MJUserNotificationEntity>await md.GetEntityObject('MJ: User Notifications');
     notification.Title = title;
     notification.Message = message;
     if (resourceTypeId)
@@ -171,17 +214,20 @@ export class MJNotificationService {
   }
 
   /**
-   * Refresh the User Notifications from the database. This is called automatically when the service is first loaded after login occurs.
-   * Uses UserInfoEngine for centralized data access with local caching.
+   * Refresh user notifications from the server. Delegates to UserInfoEngine.RefreshItem,
+   * whose successful reload mutates the engine's notifications cache and triggers an
+   * emission on Notifications$/UnreadCount$ via the BaseEngine observable plumbing —
+   * subscribers are updated automatically with no manual re-emit required here.
+   *
+   * Uses RefreshItem() rather than relying solely on the global CACHE_INVALIDATION
+   * listener: when this method is called in response to a PushStatusUpdates message,
+   * the cache-invalidation event may not have arrived yet (separate WebSocket message,
+   * potential race). RefreshItem() eliminates that race by doing a targeted RunView
+   * for just notifications.
    */
   public static async RefreshUserNotifications() {
     try {
-      // Use UserInfoEngine for centralized, cached access
-      const engine = UserInfoEngine.Instance;
-      MJNotificationService._userNotifications = engine.UserNotifications;
-      // Emit to observables
-      MJNotificationService._notifications$.next(engine.UserNotifications);
-      MJNotificationService._unreadCount$.next(MJNotificationService.UnreadUserNotificationCount);
+      await UserInfoEngine.Instance.RefreshItem('_UserNotifications');
       MJNotificationService._loaded = true;
     }
     catch (e) {
@@ -190,34 +236,115 @@ export class MJNotificationService {
   }
 
   /**
-   * Update notification observables from existing in-memory data without doing a database query.
-   * This is efficient for cases where notifications have been modified locally (e.g., marking as read)
-   * and we just need to notify subscribers of the change.
+   * @deprecated Kept as a no-op for backward compatibility. Observable emissions are now
+   * driven by UserInfoEngine.UserNotifications$, which auto-emits on save/delete/
+   * remote-invalidate/refresh. External callers no longer need to manually push updates.
    */
   public static UpdateNotificationObservables() {
-    MJNotificationService._notifications$.next(MJNotificationService._userNotifications);
-    MJNotificationService._unreadCount$.next(MJNotificationService.UnreadUserNotificationCount);
+    // No-op — see JSDoc above.
   }
 
   /**
    * Creates a message that is not saved to the User Notifications table, but is displayed to the user.
+   * Uses a lightweight DOM-based toast notification.
    * @param message - text to display
    * @param style - display styling
    * @param hideAfter - option to auto hide after the specified delay in milliseconds
    */
   public CreateSimpleNotification(message: string, style: "none" | "success" | "error" | "warning" | "info" = "success", hideAfter?: number) {
-    const props: NotificationSettings = {
-      content: message,
-      cssClass: "button-notification",
-      animation: { type: "slide", duration: 400 },
-      position: { horizontal: "center", vertical: "top" },
-      type: { style: style, icon: true }
-    }
-    if (hideAfter)
-      props.hideAfter = hideAfter;
-    else
-      props.closable = true;
+    this.showToast(message, style, hideAfter);
+  }
 
-    this.notificationService.show(props);
+  /**
+   * Ensures the toast container element exists in the DOM.
+   */
+  private ensureToastContainer(): HTMLElement {
+    let container = document.getElementById('mj-toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'mj-toast-container';
+      container.style.cssText = `
+        position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+        z-index: 100000; display: flex; flex-direction: column; align-items: center; gap: 8px;
+        pointer-events: none;
+      `;
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  /**
+   * Shows a lightweight toast notification using DOM elements.
+   */
+  private showToast(message: string, style: string, hideAfter?: number): void {
+    const container = this.ensureToastContainer();
+
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      pointer-events: auto; padding: 12px 20px; border-radius: 6px; font-size: 14px;
+      font-family: inherit; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex; align-items: center; gap: 8px; animation: mj-toast-slide-in 0.3s ease-out;
+      color: var(--mj-text-inverse);
+    `;
+
+    const bgColors: Record<string, string> = {
+      success: 'var(--mj-status-success)',
+      error:   'var(--mj-status-error)',
+      warning: 'var(--mj-status-warning)',
+      info:    'var(--mj-status-info)',
+      none:    'var(--mj-text-secondary)'
+    };
+    toast.style.backgroundColor = bgColors[style] || bgColors['none'];
+
+    const iconMap: Record<string, string> = {
+      success: '\u2713',
+      error:   '\u2717',
+      warning: '\u26A0',
+      info:    '\u2139',
+      none:    ''
+    };
+    const icon = iconMap[style] || '';
+
+    const removeToast = () => {
+      toast.style.animation = 'mj-toast-slide-out 0.3s ease-in forwards';
+      toast.addEventListener('animationend', () => toast.remove());
+    };
+
+    toast.innerHTML = `
+      ${icon ? `<span style="font-size:16px;font-weight:bold;">${icon}</span>` : ''}
+      <span style="flex:1;">${this.escapeHtml(message)}</span>
+      ${!hideAfter ? `<button style="background:none;border:none;color:var(--mj-text-inverse);cursor:pointer;font-size:18px;padding:0 0 0 8px;line-height:1;" aria-label="Close">&times;</button>` : ''}
+    `;
+
+    if (!hideAfter) {
+      const closeBtn = toast.querySelector('button');
+      closeBtn?.addEventListener('click', removeToast);
+    }
+
+    container.appendChild(toast);
+
+    // Inject keyframes if not already present
+    if (!document.getElementById('mj-toast-keyframes')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'mj-toast-keyframes';
+      styleEl.textContent = `
+        @keyframes mj-toast-slide-in { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes mj-toast-slide-out { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(-20px); } }
+      `;
+      document.head.appendChild(styleEl);
+    }
+
+    if (hideAfter) {
+      setTimeout(removeToast, hideAfter);
+    }
+  }
+
+  /**
+   * Escapes HTML entities to prevent XSS in toast messages.
+   */
+  private escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }

@@ -1,0 +1,65 @@
+[
+  {
+    "fields": {
+      "Name": "Ascension",
+      "Code": "AC",
+      "ISO3166_2": "SH-AC",
+      "Latitude": -7.9192,
+      "Longitude": -14.3701,
+      "BoundaryGeoJSON": "@file:by-country/SH/boundaries/SH-AC.geojson",
+      "CommonAliases": [
+        "Ascension"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SH"
+    },
+    "primaryKey": {
+      "ID": "B2A79099-B2FD-4644-A523-14E6AF270369"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.271Z",
+      "checksum": "08c22f5522fb9cd1499a8b2e92ff41cd6746d8e8cb375884085f4b93c6498621"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Helena",
+      "Code": "SH",
+      "ISO3166_2": "SH-SH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Saint Helena"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SH"
+    },
+    "primaryKey": {
+      "ID": "26AC3E75-0FE1-4E79-92B0-BD57649335CD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.287Z",
+      "checksum": "645871618c12ccc7aa735be1cbd6ba093d0350bddab1b9f4b5fc0e743eb80af7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tristan da Cunha",
+      "Code": "TA",
+      "ISO3166_2": "SH-TA",
+      "Latitude": -37.1226,
+      "Longitude": -12.2667,
+      "BoundaryGeoJSON": "@file:by-country/SH/boundaries/SH-TA.geojson",
+      "CommonAliases": [
+        "Tristan da Cunha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SH"
+    },
+    "primaryKey": {
+      "ID": "2CB10ECE-D182-48DC-96DB-86BFF9BE8280"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.303Z",
+      "checksum": "49750798576922ebe6d43c471a1d5cd524d019c12159c9bca106030fceb7bd7e"
+    }
+  }
+]

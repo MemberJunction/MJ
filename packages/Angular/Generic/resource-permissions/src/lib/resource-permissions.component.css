@@ -1,15 +1,18 @@
 /* Container styling */
 .container {
   max-width: 100%;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
 }
 
 /* Table container for vertical scrolling */
 .table-container {
-  max-height: 400px; /* Adjust as needed */
+  max-height: 400px;
+  /* Adjust as needed */
   overflow-y: auto;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 /* Table styling */
@@ -19,52 +22,57 @@
 }
 
 .resource-table thead {
-  background-color: #f4f4f4;
-  font-weight: bold;
+  background-color: var(--mj-bg-surface-elevated);
+  font-weight: var(--mj-font-bold);
   position: sticky;
   top: 0;
   z-index: 1;
 }
 
-.resource-table th, .resource-table td {
-  padding: 12px;
+.resource-table th,
+.resource-table td {
+  padding: var(--mj-space-3);
   text-align: left;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-primary);
 }
 
 .resource-table th {
-  background-color: #f8f8f8;
+  background-color: var(--mj-bg-surface-elevated);
+  color: var(--mj-text-secondary);
 }
 
 .resource-table tbody tr:nth-child(even) {
-  background-color: #f9f9f9;
+  background-color: var(--mj-bg-surface-sunken);
 }
 
 .resource-table tbody tr:hover {
-  background-color: #f1f1f1;
+  background-color: var(--mj-bg-surface-hover);
 }
 
 /* Button styling */
 button.k-button {
-  background-color: #ff5252;
-  color: white;
+  background-color: var(--mj-status-error);
+  color: var(--mj-text-inverse);
   border: none;
-  padding: 5px 10px;
-  border-radius: 4px;
+  padding: var(--mj-space-1) var(--mj-space-2-5);
+  border-radius: var(--mj-radius-sm);
   cursor: pointer;
+  font-family: var(--mj-font-family);
 }
 
 button.k-button:hover {
-  background-color: #ff1744;
+  background-color: var(--mj-status-error-text);
 }
 
 .add-permission-label {
-  margin-left: 5px;
-  margin-right: 5px;
-  font-weight: bold;
+  margin-left: var(--mj-space-1);
+  margin-right: var(--mj-space-1);
+  font-weight: var(--mj-font-bold);
+  color: var(--mj-text-primary);
 }
 
 .add-permission-section {
-  margin-top: 10px;
-  margin-bottom: 10px;
+  margin-top: var(--mj-space-2-5);
+  margin-bottom: var(--mj-space-2-5);
 }

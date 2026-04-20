@@ -1,0 +1,70 @@
+name: Release Validation Suite
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to test'
+        default: 'next'
+        type: string
+
+jobs:
+  unit-tests:
+    name: Unit Tests (Vitest)
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || 'next' }}
+          persist-credentials: false
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Run unit tests
+        run: npm test
+
+  full-stack-regression:
+    name: Full-Stack Regression (Playwright + Testing Framework)
+    needs: unit-tests
+    timeout-minutes: 180
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || 'next' }}
+
+      - name: Start Docker Compose stack
+        run: docker compose -f docker/docker-compose.test.yml up -d --build --wait
+        timeout-minutes: 20
+
+      - name: Run database migrations
+        run: docker compose -f docker/docker-compose.test.yml exec -T mjapi npm run mj:migrate
+
+      - name: Run full regression suite
+        run: docker compose -f docker/docker-compose.test.yml exec -T playwright npx mj-test run --suite=regression
+
+      - name: Collect test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-results
+          path: docker/test-results/
+          retention-days: 90
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/docker-compose.test.yml down -v

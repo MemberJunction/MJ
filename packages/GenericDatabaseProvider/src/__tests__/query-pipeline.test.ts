@@ -1,0 +1,943 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+
+// Mock sql-formatter (used by SqlLoggingSessionImpl)
+vi.mock('sql-formatter', () => ({
+    format: (sql: string) => sql,
+}));
+
+import {
+    SaveSQLResult,
+    DeleteSQLResult,
+    UserInfo,
+    BaseEntity,
+    QueryInfo,
+    RunQueryParams,
+    RunQueryResult,
+    Metadata,
+} from '@memberjunction/core';
+
+/**
+ * Test subclass exposing protected pipeline methods for testing.
+ * Overrides resolveQueryInfo to use injected mock queries instead of
+ * requiring full provider Config().
+ */
+class TestPipelineProvider extends GenericDatabaseProvider {
+    private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
+    private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
+
+    protected get UUIDFunctionPattern(): RegExp { return TestPipelineProvider._uuidPattern; }
+    protected get DBDefaultFunctionPattern(): RegExp { return TestPipelineProvider._defaultPattern; }
+
+    public QuoteIdentifier(name: string): string { return `"${name}"`; }
+    public QuoteSchemaAndView(schema: string, obj: string): string { return `"${schema}"."${obj}"`; }
+    protected BuildChildDiscoverySQL(): string { return ''; }
+    protected BuildHardLinkDependencySQL(): string { return ''; }
+    protected BuildSoftLinkDependencySQL(): string { return ''; }
+    protected async GenerateSaveSQL(): Promise<SaveSQLResult> { return { fullSQL: '' }; }
+    protected GenerateDeleteSQL(): DeleteSQLResult { return { fullSQL: '' }; }
+    protected BuildRecordChangeSQL(): { sql: string; parameters?: unknown[] } | null { return null; }
+    protected BuildSiblingRecordChangeSQL(): string { return ''; }
+    protected BuildPaginationSQL(maxRows: number, startRow: number): string {
+        return `LIMIT ${maxRows} OFFSET ${startRow}`;
+    }
+
+    async BeginTransaction(): Promise<void> {}
+    async CommitTransaction(): Promise<void> {}
+    async RollbackTransaction(): Promise<void> {}
+
+    // ---- Mock query resolution ----
+    private _mockQueries: QueryInfo[] = [];
+    public setMockQueries(queries: QueryInfo[]): void {
+        this._mockQueries = queries;
+    }
+
+    /** Override to use injected mock queries instead of requiring Config() */
+    protected override resolveQueryInfo(params: RunQueryParams): QueryInfo | undefined {
+        if (params.QueryID) {
+            return this._mockQueries.find(q => q.ID === params.QueryID);
+        }
+        if (params.QueryName) {
+            return this._mockQueries.find(q =>
+                q.Name.toLowerCase() === params.QueryName!.toLowerCase()
+            );
+        }
+        return undefined;
+    }
+
+    // ---- Track ExecuteSQL calls ----
+    public executeSQLCalls: Array<{ sql: string; params?: unknown[] }> = [];
+    public executeSQLResults: Array<Record<string, unknown>[]> = [];
+    private executeSQLCallIndex = 0;
+
+    override async ExecuteSQL<T>(sql?: string, params?: unknown[]): Promise<Array<T>> {
+        this.executeSQLCalls.push({ sql: sql ?? '', params });
+        const result = this.executeSQLResults[this.executeSQLCallIndex] ?? [];
+        this.executeSQLCallIndex++;
+        return result as unknown as Array<T>;
+    }
+
+    public resetExecuteSQLState(): void {
+        this.executeSQLCalls = [];
+        this.executeSQLResults = [];
+        this.executeSQLCallIndex = 0;
+    }
+
+    // ---- Expose protected methods ----
+    public testInternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        return this.InternalRunQuery(params, contextUser);
+    }
+
+    public testInternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
+        return this.InternalRunQueries(params, contextUser);
+    }
+
+    public testFindAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): QueryInfo {
+        return this.findAndValidateQuery(params, contextUser);
+    }
+
+    public testProcessQueryParameters(
+        query: QueryInfo,
+        parameters?: Record<string, string>,
+        contextUser?: UserInfo,
+    ): { finalSQL: string; appliedParameters: Record<string, string> } {
+        return this.processQueryParameters(query, parameters, contextUser);
+    }
+
+    public testApplyQueryPagination(
+        results: Record<string, unknown>[],
+        params: RunQueryParams,
+    ): { paginatedResult: Record<string, unknown>[]; totalRowCount: number } {
+        return this.applyQueryPagination(results, params);
+    }
+
+    public testAuditQueryExecution(
+        query: QueryInfo,
+        params: RunQueryParams,
+        finalSQL: string,
+        rowCount: number,
+        totalRowCount: number,
+        executionTime: number,
+        contextUser?: UserInfo,
+    ): void {
+        this.auditQueryExecution(query, params, finalSQL, rowCount, totalRowCount, executionTime, contextUser);
+    }
+}
+
+// ---- Helpers ----
+
+function makeQueryInfo(overrides: Partial<{
+    ID: string;
+    Name: string;
+    SQL: string;
+    Status: string;
+    Reusable: boolean;
+    CategoryPath: string;
+    UsesTemplate: boolean;
+    CacheEnabled: boolean;
+    AuditQueryRuns: boolean;
+}>): QueryInfo {
+    const q = new QueryInfo();
+    q.ID = overrides.ID ?? 'q-1';
+    q.Name = overrides.Name ?? 'Test Query';
+    q.SQL = overrides.SQL ?? 'SELECT 1';
+    q.Status = (overrides.Status ?? 'Approved') as QueryInfo['Status'];
+    q.Reusable = overrides.Reusable ?? false;
+    q.UsesTemplate = overrides.UsesTemplate ?? false;
+    q.CacheEnabled = overrides.CacheEnabled ?? false;
+    q.AuditQueryRuns = overrides.AuditQueryRuns ?? false;
+
+    Object.defineProperty(q, 'CategoryPath', {
+        get: () => overrides.CategoryPath ?? '/Test/',
+        configurable: true
+    });
+
+    q.UserCanRun = vi.fn().mockReturnValue(true);
+    q.UserHasRunPermissions = vi.fn().mockReturnValue(true);
+    q.GetPlatformSQL = vi.fn().mockReturnValue(q.SQL);
+
+    return q;
+}
+
+const mockUser: UserInfo = {
+    ID: 'test-user-id',
+    Name: 'Test User',
+    Email: 'test@test.com',
+    UserRoles: [{ Role: 'Admin' }],
+} as unknown as UserInfo;
+
+// ---- Tests ----
+
+describe('GenericDatabaseProvider Query Pipeline', () => {
+    let provider: TestPipelineProvider;
+
+    beforeEach(() => {
+        provider = new TestPipelineProvider();
+        // Mock Metadata.Provider to prevent undefined access in pipeline methods
+        // (e.g., CacheConfig accesses QueryCategories, composition accesses Queries)
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+            Queries: [],
+            QueryDependencies: [],
+            QueryCategories: [],
+            QueryFields: [],
+            QueryParameters: [],
+            QueryPermissions: [],
+            SQLDialects: [],
+            QuerySQLs: [],
+        } as ReturnType<typeof Metadata.Provider>);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        provider.resetExecuteSQLState();
+    });
+
+    // ================================================================
+    // findAndValidateQuery
+    // ================================================================
+    describe('findAndValidateQuery', () => {
+        it('should find query by ID', () => {
+            const query = makeQueryInfo({ ID: 'abc-123', Name: 'My Query' });
+            provider.setMockQueries([query]);
+
+            const result = provider.testFindAndValidateQuery({ QueryID: 'abc-123' });
+            expect(result.ID).toBe('abc-123');
+            expect(result.Name).toBe('My Query');
+        });
+
+        it('should find query by name', () => {
+            const query = makeQueryInfo({ ID: 'abc-123', Name: 'My Query' });
+            provider.setMockQueries([query]);
+
+            const result = provider.testFindAndValidateQuery({ QueryName: 'My Query' });
+            expect(result.Name).toBe('My Query');
+        });
+
+        it('should throw when query not found by ID', () => {
+            provider.setMockQueries([]);
+
+            expect(() => provider.testFindAndValidateQuery({ QueryID: 'nonexistent' }))
+                .toThrow(/Query with ID 'nonexistent' not found/);
+        });
+
+        it('should throw when query not found by name', () => {
+            provider.setMockQueries([]);
+
+            expect(() => provider.testFindAndValidateQuery({ QueryName: 'Does Not Exist' }))
+                .toThrow(/Query 'Does Not Exist' not found/);
+        });
+
+        it('should include category path in error message when provided', () => {
+            provider.setMockQueries([]);
+
+            expect(() => provider.testFindAndValidateQuery({
+                QueryName: 'Missing',
+                CategoryPath: '/Sales/'
+            })).toThrow(/category path '\/Sales\/'/);
+        });
+
+        it('should throw when user lacks permission', () => {
+            const query = makeQueryInfo({ ID: 'q-1' });
+            query.UserHasRunPermissions = vi.fn().mockReturnValue(false);
+            provider.setMockQueries([query]);
+
+            expect(() => provider.testFindAndValidateQuery({ QueryID: 'q-1' }, mockUser))
+                .toThrow(/does not have permission/);
+        });
+    });
+
+    // ================================================================
+    // applyQueryPagination
+    // ================================================================
+    describe('applyQueryPagination', () => {
+        const testRows = Array.from({ length: 10 }, (_, i) => ({ id: i + 1 }));
+
+        it('should return all rows when no pagination params', () => {
+            const { paginatedResult, totalRowCount } = provider.testApplyQueryPagination(
+                testRows, {}
+            );
+            expect(paginatedResult).toHaveLength(10);
+            expect(totalRowCount).toBe(10);
+        });
+
+        it('should apply MaxRows limit', () => {
+            const { paginatedResult, totalRowCount } = provider.testApplyQueryPagination(
+                testRows, { MaxRows: 3 }
+            );
+            expect(paginatedResult).toHaveLength(3);
+            expect(paginatedResult[0]).toEqual({ id: 1 });
+            expect(totalRowCount).toBe(10);
+        });
+
+        it('should apply StartRow offset', () => {
+            const { paginatedResult, totalRowCount } = provider.testApplyQueryPagination(
+                testRows, { StartRow: 5 }
+            );
+            expect(paginatedResult).toHaveLength(5);
+            expect(paginatedResult[0]).toEqual({ id: 6 });
+            expect(totalRowCount).toBe(10);
+        });
+
+        it('should apply both StartRow and MaxRows', () => {
+            const { paginatedResult, totalRowCount } = provider.testApplyQueryPagination(
+                testRows, { StartRow: 2, MaxRows: 3 }
+            );
+            expect(paginatedResult).toHaveLength(3);
+            expect(paginatedResult[0]).toEqual({ id: 3 });
+            expect(paginatedResult[2]).toEqual({ id: 5 });
+            expect(totalRowCount).toBe(10);
+        });
+
+        it('should handle StartRow beyond data length', () => {
+            const { paginatedResult, totalRowCount } = provider.testApplyQueryPagination(
+                testRows, { StartRow: 100 }
+            );
+            expect(paginatedResult).toHaveLength(0);
+            expect(totalRowCount).toBe(10);
+        });
+
+        it('should handle empty results', () => {
+            const { paginatedResult, totalRowCount } = provider.testApplyQueryPagination(
+                [], { MaxRows: 10 }
+            );
+            expect(paginatedResult).toHaveLength(0);
+            expect(totalRowCount).toBe(0);
+        });
+    });
+
+    // ================================================================
+    // processQueryParameters
+    // ================================================================
+    describe('processQueryParameters', () => {
+        it('should return plain SQL for non-template queries', () => {
+            const query = makeQueryInfo({ SQL: 'SELECT * FROM Users', UsesTemplate: false });
+
+            const { finalSQL, appliedParameters } = provider.testProcessQueryParameters(query);
+            expect(finalSQL).toBe('SELECT * FROM Users');
+            expect(appliedParameters).toEqual({});
+        });
+
+        it('should invoke composition resolution for queries with {{query:"..."}} tokens', () => {
+            const baseQuery = makeQueryInfo({
+                ID: 'base-1',
+                Name: 'Active Users',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID FROM Users WHERE Active = 1',
+                Reusable: true,
+            });
+
+            const composingQuery = makeQueryInfo({
+                ID: 'comp-1',
+                Name: 'Report',
+                SQL: 'SELECT * FROM {{query:"Test/Active Users"}} au',
+                UsesTemplate: false
+            });
+            composingQuery.GetPlatformSQL = vi.fn().mockReturnValue(composingQuery.SQL);
+
+            // Composition resolution uses Metadata.Provider.Queries
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [baseQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(composingQuery, undefined, mockUser);
+
+            // The composition should resolve the token into a CTE
+            expect(finalSQL).toContain('WITH');
+            expect(finalSQL).toContain('SELECT ID FROM Users WHERE Active = 1');
+            expect(finalSQL).not.toContain('{{query:');
+        });
+
+        it('should resolve dependency Nunjucks templates when outer query has UsesTemplate=false', () => {
+            // Dependency uses Nunjucks templates
+            const depQuery = makeQueryInfo({
+                ID: 'dep-1',
+                Name: 'Membership Growth By Period',
+                CategoryPath: '/Reports/',
+                SQL: `SELECT YEAR(m.JoinDate) AS JoinYear, COUNT(*) AS MemberCount
+FROM Members m
+{% if StartDate %}
+WHERE m.JoinDate >= '{{ StartDate }}'
+{% endif %}
+GROUP BY YEAR(m.JoinDate)
+ORDER BY JoinYear`,
+                Reusable: true,
+                UsesTemplate: true,
+            });
+
+            // Outer query does NOT use templates itself, only references the dependency
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-1',
+                Name: 'Growth Report',
+                SQL: 'WITH mg AS (SELECT * FROM {{query:"Reports/Membership Growth By Period"}}) SELECT * FROM mg',
+                UsesTemplate: false,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [depQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            // Pass StartDate parameter — should be resolved in the dependency's Nunjucks templates
+            const { finalSQL } = provider.testProcessQueryParameters(
+                outerQuery,
+                { StartDate: '2024-01-01' },
+                mockUser
+            );
+
+            // Nunjucks {% if StartDate %} block should be resolved (not raw template syntax)
+            expect(finalSQL).not.toContain('{%');
+            expect(finalSQL).not.toContain('{{');
+            expect(finalSQL).toContain("'2024-01-01'");
+            // ORDER BY should be stripped from the CTE body
+            expect(finalSQL).toContain('WITH');
+            expect(finalSQL).toContain('MemberCount');
+            expect(finalSQL).not.toMatch(/ORDER\s+BY/i);
+        });
+
+        it('should strip ORDER BY from dependency CTE body', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'dep-order',
+                Name: 'Sorted Members',
+                CategoryPath: '/Reports/',
+                SQL: `SELECT m.ID, m.Name FROM Members m ORDER BY m.Name ASC`,
+                Reusable: true,
+            });
+
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-order',
+                Name: 'Member Count',
+                SQL: 'SELECT COUNT(*) AS Total FROM {{query:"Reports/Sorted Members"}}',
+                UsesTemplate: false,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [depQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(outerQuery, undefined, mockUser);
+
+            // CTE body must not contain ORDER BY (SQL Server disallows it)
+            expect(finalSQL).toContain('WITH');
+            // AST sqlify() adds [bracket] quoting — check semantic content
+            expect(finalSQL).toMatch(/SELECT\s+\[?m\]?\.?\[?ID\]?,\s*\[?m\]?\.?\[?Name\]?\s+FROM\s+\[?Members\]?/i);
+            expect(finalSQL).not.toMatch(/ORDER\s+BY/i);
+        });
+
+        it('should preserve ORDER BY in dependency CTE when TOP is present', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'dep-top',
+                Name: 'Top Members',
+                CategoryPath: '/Reports/',
+                SQL: `SELECT TOP 10 m.ID, m.Name FROM Members m ORDER BY m.Score DESC`,
+                Reusable: true,
+            });
+
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-top',
+                Name: 'Top Report',
+                SQL: 'SELECT * FROM {{query:"Reports/Top Members"}}',
+                UsesTemplate: false,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [depQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(outerQuery, undefined, mockUser);
+
+            // ORDER BY is valid in CTE when TOP is present
+            expect(finalSQL).toContain('WITH');
+            expect(finalSQL).toMatch(/ORDER\s+BY/i);
+            expect(finalSQL).toContain('TOP 10');
+        });
+
+        it('should process templates when both outer and dependency use templates', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'dep-both',
+                Name: 'Filtered Members',
+                CategoryPath: '/Reports/',
+                SQL: `SELECT m.ID, m.Name FROM Members m
+{% if Region %}
+WHERE m.Region = '{{ Region }}'
+{% endif %}`,
+                Reusable: true,
+                UsesTemplate: true,
+            });
+
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-both',
+                Name: 'Member Summary',
+                SQL: 'SELECT COUNT(*) AS Total FROM {{query:"Reports/Filtered Members"}} {% if Limit %}LIMIT {{ Limit }}{% endif %}',
+                UsesTemplate: true,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [depQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                outerQuery,
+                { Region: 'West', Limit: '100' },
+                mockUser
+            );
+
+            // Both dependency and outer templates should be resolved
+            expect(finalSQL).not.toContain('{%');
+            expect(finalSQL).not.toContain('{{');
+            expect(finalSQL).toContain("'West'");
+            expect(finalSQL).toContain('100');
+        });
+
+        it('should handle dependency templates with no parameters provided (falsy branch)', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'dep-2',
+                Name: 'All Members',
+                CategoryPath: '/Reports/',
+                SQL: `SELECT m.ID, m.Name
+FROM Members m
+{% if Region %}
+WHERE m.Region = '{{ Region }}'
+{% endif %}`,
+                Reusable: true,
+                UsesTemplate: true,
+            });
+
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-2',
+                Name: 'Member List',
+                SQL: 'SELECT * FROM {{query:"Reports/All Members"}}',
+                UsesTemplate: false,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [depQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            // No parameters provided — {% if Region %} should evaluate to false
+            const { finalSQL } = provider.testProcessQueryParameters(outerQuery, undefined, mockUser);
+
+            expect(finalSQL).not.toContain('{%');
+            expect(finalSQL).not.toContain('{{ Region }}');
+            // The WHERE clause should NOT be present since Region is not provided
+            expect(finalSQL).not.toContain('WHERE');
+            expect(finalSQL).toContain('SELECT m.ID, m.Name');
+        });
+        it('should escape {{query:"..."}} in comments when outer query has UsesTemplate=true and no composition', () => {
+            // This is the exact bug scenario: a query with UsesTemplate=true has a
+            // {{query:"..."}} composition example in a SQL comment. There are no actual
+            // composition tokens (they're inside comments), so composition is skipped.
+            // Without the fix, Nunjucks chokes on the unescaped {{ in the comment.
+            const queryID = 'comment-esc-1';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Tags For Entity Record',
+                SQL: `-- Reusable composable query: Returns all active tags for a given entity record.
+-- Compose via {{query:"MJ/Tags/Tags For Entity Record"}} and join on RecordID.
+-- Parameters: entityName, recordID
+SELECT t.ID AS TagID, t.Name AS TagName
+FROM vwTaggedItems ti
+INNER JOIN vwTags t ON ti.TagID = t.ID
+WHERE ti.Entity = {{ entityName | sqlString }}
+AND ti.RecordID = {{ recordID | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'entityName', Type: 'string', IsRequired: true },
+                    { QueryID: queryID, Name: 'recordID', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { entityName: 'Members', recordID: '42' },
+                mockUser
+            );
+
+            // Should succeed without throwing "expected variable end"
+            // The comment {{ should be escaped, but the parameter {{ should be resolved
+            expect(finalSQL).toContain("'Members'");
+            expect(finalSQL).toContain("'42'");
+            expect(finalSQL).not.toContain('{{ entityName');
+            expect(finalSQL).not.toContain('{{ recordID');
+        });
+
+        it('should escape {{ }} in block comments when outer query has UsesTemplate=true', () => {
+            const queryID = 'comment-esc-2';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Block Comment Query',
+                SQL: `/* This query demonstrates {{query:"Category/Some Query"}} syntax */
+SELECT * FROM Users WHERE Name = {{ userName | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'userName', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { userName: 'Alice' },
+                mockUser
+            );
+
+            expect(finalSQL).toContain("'Alice'");
+            // Block comment {{ should be escaped
+            expect(finalSQL).not.toMatch(/\/\*.*\{\{query:/);
+        });
+
+        it('should not corrupt non-comment template tokens when escaping comments', () => {
+            // Ensure that escaping only targets comments, not actual template expressions
+            const queryID = 'comment-esc-3';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Mixed Query',
+                SQL: `-- Uses {{someParam}} in a comment
+SELECT * FROM Users WHERE Status = {{ status | sqlString }} AND Name = {{ name | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'status', Type: 'string', IsRequired: true },
+                    { QueryID: queryID, Name: 'name', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { status: 'Active', name: 'Bob' },
+                mockUser
+            );
+
+            expect(finalSQL).toContain("'Active'");
+            expect(finalSQL).toContain("'Bob'");
+            // Comment should be escaped
+            expect(finalSQL).toMatch(/-- Uses \{ \{someParam\} \}/);
+        });
+    });
+
+    // ================================================================
+    // InternalRunQuery
+    // ================================================================
+    describe('InternalRunQuery', () => {
+        it('should execute a stored query end-to-end and return results', async () => {
+            const query = makeQueryInfo({
+                ID: 'q-1',
+                Name: 'Simple Query',
+                SQL: 'SELECT ID, Name FROM Users'
+            });
+            provider.setMockQueries([query]);
+            provider.executeSQLResults = [[{ ID: '1', Name: 'Alice' }, { ID: '2', Name: 'Bob' }]];
+
+            const result = await provider.testInternalRunQuery({ QueryID: 'q-1' }, mockUser);
+
+            expect(result.Success).toBe(true);
+            expect(result.QueryID).toBe('q-1');
+            expect(result.QueryName).toBe('Simple Query');
+            expect(result.Results).toHaveLength(2);
+            expect(result.RowCount).toBe(2);
+            expect(result.TotalRowCount).toBe(2);
+            expect(result.ExecutionTime).toBeGreaterThanOrEqual(0);
+        });
+
+        it('should apply pagination to query results', async () => {
+            const query = makeQueryInfo({ ID: 'q-1', Name: 'Paged Query', SQL: 'SELECT 1' });
+            provider.setMockQueries([query]);
+
+            // SQL-level paging: first call = data query (paged subset), second call = count query
+            const pagedRows = [{ id: 6 }, { id: 7 }, { id: 8 }];
+            const countResult = [{ TotalRowCount: 20 }];
+            provider.executeSQLResults = [pagedRows, countResult];
+
+            const result = await provider.testInternalRunQuery(
+                { QueryID: 'q-1', StartRow: 5, MaxRows: 3 },
+                mockUser
+            );
+
+            expect(result.Success).toBe(true);
+            expect(result.RowCount).toBe(3);
+            expect(result.TotalRowCount).toBe(20);
+            expect(result.Results[0]).toEqual({ id: 6 });
+        });
+
+        it('should return error result when query not found', async () => {
+            provider.setMockQueries([]);
+
+            const result = await provider.testInternalRunQuery(
+                { QueryID: 'nonexistent' },
+                mockUser
+            );
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('not found');
+            expect(result.Results).toHaveLength(0);
+        });
+
+        it('should return error result when ExecuteSQL throws', async () => {
+            const query = makeQueryInfo({ ID: 'q-1', SQL: 'SELECT 1' });
+            provider.setMockQueries([query]);
+
+            // Override ExecuteSQL to throw
+            vi.spyOn(provider, 'ExecuteSQL').mockRejectedValue(new Error('Connection failed'));
+
+            const result = await provider.testInternalRunQuery({ QueryID: 'q-1' }, mockUser);
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('Connection failed');
+        });
+
+        it('should produce valid SQL when composition CTEs have comments with apostrophes and paging is applied', async () => {
+            // This reproduces the MSTA lapsed-members bug: a composed CTE with SQL
+            // comments containing unmatched apostrophes (e.g. "member's") must be
+            // handled correctly by the paging engine's CTE splitting.
+            const bridgeQuery = makeQueryInfo({
+                ID: 'bridge-1',
+                Name: 'MSTA NAMS-DESE Member Bridge',
+                CategoryPath: '/Golden-Queries/Membership/',
+                SQL: `-- Bridge query: maps NAMS member accounts to DESE educator records
+-- is in the same district as the member's Institution__c via co_dist_desc.
+-- This eliminates false positives from common names (e.g., "Jennifer Smith")
+SELECT DISTINCT
+    a.Id AS AccountId,
+    a.FirstName,
+    a.LastName,
+    e.edssn,
+    e.co_dist_code
+FROM nams.vwAccounts a
+INNER JOIN dese.vwco_dist_descs d ON d.description = a.Institution__c
+INNER JOIN dese.vweducators e
+    ON UPPER(e.edfname) = UPPER(a.FirstName)
+    AND UPPER(e.edlname) = UPPER(a.LastName)
+    AND e.co_dist_code = d.co_dist_code
+    AND e.year = {{ TargetYear | sqlString }}
+WHERE a.IsPersonAccount = 1`,
+                Reusable: true,
+                UsesTemplate: true,
+            });
+
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-1',
+                Name: 'Lapsed Members District Movers',
+                SQL: `SELECT DISTINCT
+    bridge.AccountId,
+    bridge.FirstName,
+    bridge.LastName,
+    {{ PriorYear }} AS Prior_Year,
+    {{ TargetYear }} AS New_Year
+FROM {{query:"Golden-Queries/Membership/MSTA NAMS-DESE Member Bridge(TargetYear=PriorYear)"}} bridge
+ORDER BY bridge.LastName, bridge.FirstName`,
+                UsesTemplate: true,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [bridgeQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            provider.setMockQueries([outerQuery]);
+
+            // Paged execution: first call = data rows, second call = count
+            provider.executeSQLResults = [
+                [{ AccountId: '1', FirstName: 'Jane', LastName: 'Doe', Prior_Year: 2024, New_Year: 2025 }],
+                [{ TotalRowCount: 1 }],
+            ];
+
+            const result = await provider.testInternalRunQuery(
+                {
+                    QueryID: 'outer-1',
+                    Parameters: { PriorYear: '2024', TargetYear: '2025' },
+                    MaxRows: 100,
+                    StartRow: 0,
+                },
+                mockUser
+            );
+
+            expect(result.Success).toBe(true);
+
+            // Verify the data SQL has paging appended directly (no __paged CTE wrapping)
+            const dataSql = provider.executeSQLCalls[0]?.sql ?? '';
+            expect(dataSql).not.toContain('__paged');
+            expect(dataSql).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+        });
+
+        it('should handle ad-hoc SQL queries', async () => {
+            provider.executeSQLResults = [[{ val: 42 }]];
+
+            const result = await provider.testInternalRunQuery(
+                { SQL: 'SELECT 42 AS val' },
+                mockUser
+            );
+
+            expect(result.Success).toBe(true);
+            expect(result.QueryName).toBe('Ad-Hoc Query');
+            expect(result.Results).toEqual([{ val: 42 }]);
+        });
+
+        it('should reject ad-hoc mutation SQL', async () => {
+            const result = await provider.testInternalRunQuery(
+                { SQL: 'DELETE FROM Users WHERE 1=1' },
+                mockUser
+            );
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toBeTruthy();
+        });
+    });
+
+    // ================================================================
+    // InternalRunQueries (batch)
+    // ================================================================
+    describe('InternalRunQueries', () => {
+        it('should execute multiple queries in parallel', async () => {
+            const query1 = makeQueryInfo({ ID: 'q-1', Name: 'Query 1', SQL: 'SELECT 1' });
+            const query2 = makeQueryInfo({ ID: 'q-2', Name: 'Query 2', SQL: 'SELECT 2' });
+            provider.setMockQueries([query1, query2]);
+
+            // Both execute in parallel — provide 2 result sets
+            provider.executeSQLResults = [[{ val: 1 }], [{ val: 2 }]];
+
+            const results = await provider.testInternalRunQueries(
+                [{ QueryID: 'q-1' }, { QueryID: 'q-2' }],
+                mockUser
+            );
+
+            expect(results).toHaveLength(2);
+            expect(results[0].Success).toBe(true);
+            expect(results[1].Success).toBe(true);
+        });
+
+        it('should handle mixed success and failure', async () => {
+            const query1 = makeQueryInfo({ ID: 'q-1', SQL: 'SELECT 1' });
+            provider.setMockQueries([query1]);
+
+            provider.executeSQLResults = [[{ val: 1 }]];
+
+            const results = await provider.testInternalRunQueries(
+                [{ QueryID: 'q-1' }, { QueryID: 'nonexistent' }],
+                mockUser
+            );
+
+            expect(results).toHaveLength(2);
+            expect(results[0].Success).toBe(true);
+            expect(results[1].Success).toBe(false);
+            expect(results[1].ErrorMessage).toContain('not found');
+        });
+    });
+
+    // ================================================================
+    // auditQueryExecution
+    // ================================================================
+    describe('auditQueryExecution', () => {
+        it('should not audit when AuditQueryRuns is false and ForceAuditLog is not set', () => {
+            const query = makeQueryInfo({ AuditQueryRuns: false });
+            const createAuditSpy = vi.spyOn(provider, 'CreateAuditLogRecord' as keyof TestPipelineProvider);
+
+            provider.testAuditQueryExecution(query, {}, 'SELECT 1', 10, 10, 50, mockUser);
+
+            expect(createAuditSpy).not.toHaveBeenCalled();
+        });
+
+        it('should audit when AuditQueryRuns is true', () => {
+            const query = makeQueryInfo({ AuditQueryRuns: true });
+            const createAuditSpy = vi.spyOn(provider, 'CreateAuditLogRecord' as keyof TestPipelineProvider)
+                .mockResolvedValue(undefined);
+
+            provider.testAuditQueryExecution(query, {}, 'SELECT 1', 10, 10, 50, mockUser);
+
+            expect(createAuditSpy).toHaveBeenCalled();
+        });
+
+        it('should audit when ForceAuditLog is set', () => {
+            const query = makeQueryInfo({ AuditQueryRuns: false });
+            const createAuditSpy = vi.spyOn(provider, 'CreateAuditLogRecord' as keyof TestPipelineProvider)
+                .mockResolvedValue(undefined);
+
+            provider.testAuditQueryExecution(
+                query,
+                { ForceAuditLog: true },
+                'SELECT 1', 10, 10, 50, mockUser
+            );
+
+            expect(createAuditSpy).toHaveBeenCalled();
+        });
+    });
+});

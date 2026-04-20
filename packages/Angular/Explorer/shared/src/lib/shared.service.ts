@@ -1,13 +1,12 @@
 import { ElementRef, Injectable, Injector } from '@angular/core';
 import { CompositeKey, LocalCacheManager, LogError, Metadata, StartupManager } from '@memberjunction/core';
-import { ArtifactMetadataEngine, DashboardEngine, ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
+import { ArtifactMetadataEngine, DashboardEngine, ResourcePermissionEngine, MJResourceTypeEntity, MJUserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
-import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
+import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize, UUIDsEqual, GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
-import { NotificationService } from "@progress/kendo-angular-notification";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationService } from './navigation.service';
 
@@ -15,40 +14,40 @@ import { NavigationService } from './navigation.service';
   providedIn: 'root'
 })
 export class SharedService {
-  private static _instance: SharedService;
+  private static readonly _globalStoreKey = '___SINGLETON__SharedService';
   private static _loaded: boolean = false;
-  private static _resourceTypes: ResourceTypeEntity[] = [];
+  private static _resourceTypes: MJResourceTypeEntity[] = [];
   private static isLoading$ = new BehaviorSubject<boolean>(false);
   private tabChange = new Subject();
   tabChange$ = this.tabChange.asObservable();
   private _navigationService: NavigationService | null = null;
 
   constructor(
-    private notificationService: NotificationService,
     private mjNotificationsService: MJNotificationService,
     private injector: Injector
   ) {
-    if (SharedService._instance) {
-      // return existing instance which will short circuit the creation of a new instance
-      return SharedService._instance;
+    const g = GetGlobalObjectStore()!;
+    if (g[SharedService._globalStoreKey]) {
+      return g[SharedService._globalStoreKey] as SharedService;
     }
-    // first time this has been called, so return ourselves since we're in the constructor
-    SharedService._instance = this;
+    g[SharedService._globalStoreKey] = this;
 
     MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
       switch (event.event) {
         case MJEventType.LoggedIn:
           if (SharedService._loaded === false)  {
-            // Handle app startup
-            await StartupManager.Instance.Startup();          
+            // Pre-warm non-critical engines IMMEDIATELY on LoggedIn, before
+            // StartupManager.Startup() completes. These engines only need
+            // Metadata.Provider (set during setupGraphQLClient's provider.Config()).
+            // Firing them here allows their RunViews calls to be coalesced with
+            // the startup engines' calls into fewer mega-batched GraphQL requests.
+            SharedService.preWarmEngines();
+
+            // Handle app startup — joins the same Startup() promise that
+            // setupGraphQLClient kicked off.
+            await StartupManager.Instance.Startup();
 
             await SharedService.RefreshData(false);
-
-            // Pre-warm other engines in the background (fire and forget)
-            // These are not needed immediately but will be ready when user navigates to
-            // Conversations, Dashboards, or Artifacts. The BaseEngine pattern ensures
-            // subsequent callers will wait for the existing load rather than starting a new one.
-            SharedService.preWarmEngines();
           }
         break;
       }
@@ -56,7 +55,7 @@ export class SharedService {
   }
 
   public static get Instance(): SharedService {
-    return SharedService._instance;
+    return GetGlobalObjectStore()![SharedService._globalStoreKey] as SharedService;
   }
 
   /**
@@ -114,31 +113,31 @@ export class SharedService {
     return (<GraphQLDataProvider>Metadata.Provider).sessionId;
   }
 
-  public get ResourceTypes(): ResourceTypeEntity[] {
+  public get ResourceTypes(): MJResourceTypeEntity[] {
     return SharedService._resourceTypes;
   }
-  public get ViewResourceType(): ResourceTypeEntity {
+  public get ViewResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'user views')!;
   }
-  public get RecordResourceType(): ResourceTypeEntity {
+  public get RecordResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'records')!;
   }
-  public get DashboardResourceType(): ResourceTypeEntity {
+  public get DashboardResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'dashboards')!;
   }
-  public get ReportResourceType(): ResourceTypeEntity {
+  public get ReportResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'reports')!;
   }
-  public get SearchResultsResourceType(): ResourceTypeEntity {
+  public get SearchResultsResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'search results')!;
   }
-  public get ListResourceType(): ResourceTypeEntity {
+  public get ListResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'lists')!;
   }
-  public ResourceTypeByID(id: string): ResourceTypeEntity | undefined {
-    return SharedService._resourceTypes.find(rt => rt.ID === id);
+  public ResourceTypeByID(id: string): MJResourceTypeEntity | undefined {
+    return SharedService._resourceTypes.find(rt => UUIDsEqual(rt.ID, id));
   }
-  public ResourceTypeByName(name: string): ResourceTypeEntity | undefined {
+  public ResourceTypeByName(name: string): MJResourceTypeEntity | undefined {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === name.trim().toLowerCase());
   }
 
@@ -182,7 +181,9 @@ export class SharedService {
 
     this._resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
 
-    await SharedService.RefreshUserNotifications();  
+    // Note: RefreshUserNotifications() removed here because MJNotificationService
+    // already handles it via its own MJEventType.LoggedIn subscription. Calling it
+    // from both places caused a duplicate User Notifications GraphQL request on login.
   }  
 
   FormatColumnValue(col: ViewColumnInfo, value: any, maxLength: number = 0, trailingChars: string = "...") {
@@ -203,7 +204,7 @@ export class SharedService {
   }
 
   public ConvertMarkdownStringToHtmlList(listType: HtmlListType, text: string): string {
-    return ConvertMarkdownStringToHtmlList(listType, text);
+    return ConvertMarkdownStringToHtmlList(listType, text) ?? text;
   }
 
   
@@ -227,13 +228,13 @@ export class SharedService {
   /**
    * @deprecated Use MJNotificationService.UserNotifications instead
    */
-  public static get UserNotifications(): UserNotificationEntity[] {
+  public static get UserNotifications(): MJUserNotificationEntity[] {
     return MJNotificationService.UserNotifications;
   }
   /**
    * @deprecated Use MJNotificationService.UnreadUserNotifications instead
    */
-  public static get UnreadUserNotifications(): UserNotificationEntity[] {
+  public static get UnreadUserNotifications(): MJUserNotificationEntity[] {
     return MJNotificationService.UnreadUserNotifications;
   }
   /**
@@ -270,7 +271,7 @@ export class SharedService {
    * @returns 
    * @deprecated Use MJNotificationService.CreateNotification instead
    */
-  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser : boolean = true): Promise<UserNotificationEntity> {
+  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser : boolean = true): Promise<MJUserNotificationEntity> {
     return this.mjNotificationsService.CreateNotification(title, message, resourceTypeId, resourceRecordId, resourceConfiguration, displayToUser);
   }
 

@@ -1,0 +1,111 @@
+.app-main {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+}
+
+.app-header {
+  height: 80px;
+  width: 100%;
+}
+
+.app-body {
+  overflow: hidden;
+}
+
+.login-wrapper {
+  display: flex;
+  align-items: center;
+  height: 100vh;
+}
+
+.login-wrapper .main-banner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: var(--mj-brand-primary);
+  height: 100vh;
+  justify-content: center;
+  padding: 50px;
+  box-sizing: border-box;
+}
+
+.login-wrapper .main-banner .logo-icon {
+  flex: 1;
+}
+
+.login-wrapper .main-banner h1 {
+  font-size: 80px;
+  font-weight: 700;
+  line-height: 95px;
+  text-align: left;
+  flex: 2;
+  color: var(--mj-text-inverse);
+}
+
+.login-wrapper .login-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-wrapper .login-btn h3 {
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 42px;
+  text-align: center;
+  color: var(--mj-text-primary);
+}
+
+.login-wrapper .login-btn p {
+  font-size: var(--mj-text-base);
+  font-weight: 500;
+  line-height: 22px;
+  text-align: center;
+  color: var(--mj-text-muted);
+}
+
+.login-wrapper .login-btn button {
+  max-width: 450px;
+  width: 100%;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  border-radius: var(--mj-radius-lg);
+  padding: 0 25px;
+  border: none;
+  font-size: var(--mj-text-base);
+  font-weight: 700;
+  line-height: 50px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.login-wrapper .login-btn button:hover {
+  background: var(--mj-brand-primary-hover);
+}
+
+.title {
+  font-size: x-large;
+}
+
+.mj-logo-mark-login {
+  width: 62px;
+  height: 35px;
+  background-image: var(--mj-logo-mark-inverse);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.mj-logo-wordmark-login {
+  width: 297px;
+  height: 45px;
+  background-image: var(--mj-logo-wordmark);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}

@@ -1,0 +1,55 @@
+<!-- Overlay backdrop -->
+@if (Visible) {
+  <div class="mj-sm-overlay" (click)="OnOverlayClick($event)">
+    <!-- Drawer panel -->
+    <div class="mj-sm-drawer" (click)="$event.stopPropagation()">
+      <!-- Header -->
+      <div class="mj-sm-header">
+        <h3 class="mj-sm-title">
+          <i class="fa-solid fa-bars-staggered"></i>
+          Manage Sections
+        </h3>
+        <button class="mj-sm-close" (click)="OnClose()" title="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Section list -->
+      <div class="mj-sm-list">
+        @for (section of OrderedSections; track section.SectionKey; let i = $index) {
+          <div class="mj-sm-row">
+            <div class="mj-sm-row-info">
+              <i [class]="section.Icon" class="mj-sm-row-icon"></i>
+              <span class="mj-sm-row-name">{{ section.SectionName }}</span>
+              <span class="mj-sm-row-badge mj-sm-row-badge--{{ section.Variant }}">
+                {{ GetVariantLabel(section.Variant) }}
+              </span>
+            </div>
+            <div class="mj-sm-row-actions">
+              <button class="mj-sm-arrow"
+                      [disabled]="i === 0"
+                      (click)="OnMoveUp(i)"
+                      title="Move up">
+                <i class="fa-solid fa-chevron-up"></i>
+              </button>
+              <button class="mj-sm-arrow"
+                      [disabled]="i === OrderedSections.length - 1"
+                      (click)="OnMoveDown(i)"
+                      title="Move down">
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+
+      <!-- Footer -->
+      <div class="mj-sm-footer">
+        <button class="mj-sm-reset" (click)="OnReset()">
+          <i class="fa-solid fa-arrow-rotate-left"></i>
+          Reset to Default Order
+        </button>
+      </div>
+    </div>
+  </div>
+}

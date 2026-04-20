@@ -1,125 +1,283 @@
 /**
  * @fileoverview Type definitions for AI Agent execution results.
- * 
+ *
  * This module contains type definitions for agent execution results that are
  * shared between server and client code. These types provide strongly-typed
  * interfaces for agent execution results and the complete execution history.
- * 
+ *
  * @module @memberjunction/aiengine
  * @author MemberJunction.com
  * @since 2.50.0
  */
 
-import { AIAgentTypeEntity,  } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
+import { AgentScratchpad } from './agent-scratchpad';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
+import { ActionParam } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
-import { AIAgentRunEntityExtended } from './AIAgentRunExtended';
-import { AIAgentEntityExtended } from './AIAgentExtended';
-import { AIPromptEntityExtended } from './AIPromptExtended';
+import { AgentRequestAssignmentStrategy } from './assignment-strategy';
+import { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
+import { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
+import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
+import { MediaModality } from './prompt.types';
+
 /**
- * Universal ForEach loop configuration used by all agent types.
- * Flow agents convert AIAgentStep configuration to this format.
- * Loop agents receive this from LLM responses.
- * @since 2.112.0
+ * Value type for secondary scope dimensions.
+ * Supports strings, numbers, booleans, and string arrays (for multi-valued dimensions).
  */
-export interface ForEachOperation {
-    /** Path in payload to array to iterate over */
-    collectionPath: string;
-    /** Variable name for current item (default: "item") */
-    itemVariable?: string;
-    /** Variable name for loop index (default: "index") */
-    indexVariable?: string;
-    /** Maximum iterations (undefined=1000, 0=unlimited, >0=limit) */
-    maxIterations?: number;
-    /** Continue processing if an iteration fails (default: false) */
-    continueOnError?: boolean;
-    /** Delay between iterations in milliseconds (default: 0) */
-    delayBetweenIterationsMs?: number;
-    /**
-     * Execution mode for iterations (default: 'sequential')
-     * - 'sequential': Process iterations one at a time in order (safest, maintains order, good for state accumulation)
-     * - 'parallel': Process multiple iterations concurrently (faster for independent operations like web scraping, API calls)
-     * @since 2.113.0
-     */
-    executionMode?: 'sequential' | 'parallel';
-    /**
-     * Maximum number of iterations to process concurrently when executionMode='parallel' (default: 10)
-     * Only applies when executionMode='parallel'. Controls batch size to prevent resource exhaustion.
-     * Recommended values:
-     * - I/O-bound operations (API calls, web scraping): 10-20
-     * - CPU-bound operations (data processing): CPU core count
-     * - Sub-agent spawning: 2-5 (agents are resource-intensive)
-     * @since 2.113.0
-     */
-    maxConcurrency?: number;
+export type SecondaryScopeValue = string | number | boolean | string[];
 
-    /** Execute action per iteration */
-    action?: {
-        name: string;
-        params: Record<string, unknown>;
-        outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
-    };
+/**
+ * Configuration for secondary scope dimensions on an AI Agent.
+ *
+ * Defines what secondary scope dimensions are valid for an agent and how they
+ * should behave for memory retrieval and storage. This configuration is stored
+ * in the `SecondaryScopeConfig` JSON field on the AIAgent entity.
+ *
+ * @since 2.131.0
+ *
+ * @example Customer Service App (entity-backed dimensions)
+ * ```json
+ * {
+ *     "dimensions": [
+ *         {"name": "ContactID", "entityId": "uuid-for-contacts", "inheritanceMode": "cascading"},
+ *         {"name": "TeamID", "entityId": "uuid-for-teams", "inheritanceMode": "strict"}
+ *     ],
+ *     "allowSecondaryOnly": false
+ * }
+ * ```
+ *
+ * @example Analytics App (arbitrary value dimensions)
+ * ```json
+ * {
+ *     "dimensions": [
+ *         {"name": "Region", "inheritanceMode": "cascading"},
+ *         {"name": "DealStage", "inheritanceMode": "strict"}
+ *     ],
+ *     "allowSecondaryOnly": true
+ * }
+ * ```
+ */
+export interface SecondaryScopeConfig {
+    /**
+     * Array of dimension definitions.
+     * Each dimension defines a scope key that can be provided at runtime via
+     * `ExecuteAgentParams.SecondaryScopes`.
+     */
+    dimensions: SecondaryDimension[];
 
-    /** Execute sub-agent per iteration */
-    subAgent?: {
-        name: string;
-        message: string;
-        templateParameters?: Record<string, string>;
-        /**
-         * Runtime context propagated to the sub-agent.
-         * Allows sub-agents to access API keys, environment settings, and other
-         * runtime configuration from the parent agent.
-         * @since 2.127.0
-         */
-        context?: unknown;
-    };
+    /**
+     * Default inheritance mode for dimensions that don't specify one.
+     * - 'cascading': Notes without a dimension match queries with that dimension (broader retrieval)
+     * - 'strict': Notes must exactly match the dimension value or be absent
+     * @default 'cascading'
+     */
+    defaultInheritanceMode?: 'cascading' | 'strict';
+
+    /**
+     * Whether to allow secondary-only scoping (no primary scope required).
+     * When true, the agent can function with only secondary dimensions provided
+     * in `ExecuteAgentParams.SecondaryScopes` without requiring `PrimaryScopeRecordID`.
+     * @default false
+     */
+    allowSecondaryOnly?: boolean;
+
+    /**
+     * Whether to validate runtime scope values against this config.
+     * When true, extra dimensions not defined in `dimensions` array will cause validation errors.
+     * When false, extra dimensions are accepted and stored but may not be used in filtering.
+     * @default false
+     */
+    strictValidation?: boolean;
 }
 
 /**
- * Universal While loop configuration used by all agent types.
- * Flow agents convert AIAgentStep configuration to this format.
- * Loop agents receive this from LLM responses.
- * @since 2.112.0
+ * Definition of a single secondary scope dimension.
+ *
+ * Secondary dimensions allow fine-grained scoping beyond the primary scope level.
+ * Each dimension can be configured for validation, inheritance behavior, and defaults.
+ *
+ * @since 2.131.0
  */
-export interface WhileOperation {
-    /** Boolean expression evaluated before each iteration */
-    condition: string;
-    /** Variable name for attempt context (default: "attempt") */
-    itemVariable?: string;
-    /** Maximum iterations (undefined=100, 0=unlimited, >0=limit) */
-    maxIterations?: number;
-    /** Continue processing if an iteration fails (default: false) */
-    continueOnError?: boolean;
-    /** Delay between iterations in milliseconds (default: 0) */
-    delayBetweenIterationsMs?: number;
+export interface SecondaryDimension {
+    /**
+     * Dimension name/key (e.g., "ContactID", "TeamName", "Region").
+     * This is the key used in `ExecuteAgentParams.SecondaryScopes` and stored
+     * in the `SecondaryScopes` JSON field on notes/examples/runs.
+     */
+    name: string;
 
-    /** Execute action per iteration */
-    action?: {
-        name: string;
-        params: Record<string, unknown>;
-        outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
-    };
+    /**
+     * Optional MemberJunction Entity ID for validation.
+     * When provided, runtime values can be validated as existing records in that entity.
+     * When null/omitted, the dimension accepts any string value (useful for non-entity
+     * dimensions like "Region", "DealStage", "ProductLine", etc.).
+     */
+    entityId?: string | null;
 
-    /** Execute sub-agent per iteration */
-    subAgent?: {
-        name: string;
-        message: string;
-        templateParameters?: Record<string, string>;
-        /**
-         * Runtime context propagated to the sub-agent.
-         * Allows sub-agents to access API keys, environment settings, and other
-         * runtime configuration from the parent agent.
-         * @since 2.127.0
-         */
-        context?: unknown;
-    };
+    /**
+     * Whether this dimension is required at runtime.
+     * When true, `ExecuteAgentParams.SecondaryScopes` must include this dimension
+     * or have a `defaultValue` defined.
+     * @default false
+     */
+    required?: boolean;
+
+    /**
+     * Inheritance mode for this specific dimension, overrides `defaultInheritanceMode`.
+     * - 'cascading': Notes without this dimension match queries with it (broader retrieval).
+     *   For example, if querying with ContactID=123, notes without any ContactID will match.
+     * - 'strict': Notes must exactly match the provided dimension value.
+     *   Notes without the dimension do NOT match queries that include it.
+     */
+    inheritanceMode?: 'cascading' | 'strict';
+
+    /**
+     * Default value if not provided at runtime.
+     * Only used when `required=false`. If the dimension is not in the runtime scope
+     * and a defaultValue is set, this value will be used.
+     */
+    defaultValue?: string | null;
+
+    /**
+     * Human-readable description of this dimension for documentation.
+     */
+    description?: string;
 }
 
+// Import loop operation types from their dedicated modules
+// These are in separate files so they can be @include'd in prompt templates
+// Exported directly from index.ts, not re-exported here
+import type { ForEachOperation } from './foreach-operation';
+import type { WhileOperation } from './while-operation';
+
+/**
+ * Represents a media output that an agent has explicitly promoted to its outputs.
+ * This is the interface used in ExecuteAgentResult.mediaOutputs.
+ *
+ * Media can come from two sources:
+ * 1. Promoted from a prompt run (has promptRunMediaId)
+ * 2. Generated directly by agent code (has data or url)
+ *
+ * @since 3.1.0
+ */
+export interface MediaOutput {
+    /** Reference to source AIPromptRunMedia (if promoted from prompt execution) */
+    promptRunMediaId?: string;
+
+    /** The modality type */
+    modality: MediaModality;
+
+    /** MIME type of the media (e.g., 'image/png', 'audio/mp3') */
+    mimeType: string;
+
+    /** Base64 encoded data (only if NOT from prompt run) */
+    data?: string;
+
+    /** URL if available (some providers return URLs) */
+    url?: string;
+
+    /** Width in pixels (for images/video) */
+    width?: number;
+
+    /** Height in pixels (for images/video) */
+    height?: number;
+
+    /** Duration in seconds (for audio/video) */
+    durationSeconds?: number;
+
+    /** Agent-provided label for UI display */
+    label?: string;
+
+    /** Provider-specific metadata */
+    metadata?: Record<string, unknown>;
+
+    /**
+     * Placeholder reference ID for the ${media:xxx} pattern.
+     * Used to look up media when resolving placeholders in agent output.
+     * @since 3.1.0
+     */
+    refId?: string;
+
+    /**
+     * Controls whether this media should be persisted to the database.
+     * Default behavior (undefined or true): media is persisted to AIAgentRunMedia and ConversationDetailAttachment.
+     * Set to false for intercepted/working media that shouldn't be saved (e.g., generated but not used in output).
+     * @since 3.1.0
+     */
+    persist?: boolean;
+
+    /**
+     * Agent notes describing what this media represents.
+     * Used for internal tracking, debugging, and can be persisted for audit purposes.
+     * @since 3.1.0
+     */
+    description?: string;
+}
+
+/**
+ * A lightweight reference to a file produced by an agent action (PDF, Excel, Word, etc.).
+ * Collected during execution and processed by AgentRunner into MJ: Artifacts after the run.
+ *
+ * Distinct from MediaOutput (images/audio/video embedded in the LLM conversation).
+ * FileOutputRef represents document files that are archived as versioned artifacts —
+ * they are never injected into the LLM context.
+ *
+ * @since 5.22.0
+ */
+export interface FileOutputRef {
+    /** Original filename (e.g. "report.xlsx") */
+    fileName: string;
+    /** MIME type (e.g. "application/pdf") */
+    mimeType: string;
+    /** Base64-encoded file content — present when the action returned the file inline */
+    fileData?: string;
+    /** MJ: Files record ID — present when the action already saved the file to MJStorage */
+    fileId?: string;
+    /** File size in bytes */
+    sizeBytes?: number;
+}
+
+/**
+ * Attempts to parse an unknown value as a FileOutputRef by checking its shape.
+ * Returns null if the value doesn't have the required fields (fileName, mimeType,
+ * and either fileData or fileId).
+ *
+ * Detection is shape-based, not name-based — works regardless of what the action
+ * named its output parameter.
+ *
+ * @since 5.22.0
+ */
+export function ParseFileOutputRef(raw: unknown): FileOutputRef | null {
+    let fo: Record<string, unknown> | null = null;
+    if (typeof raw === 'string') {
+        try { fo = JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
+    } else if (raw && typeof raw === 'object') {
+        fo = raw as Record<string, unknown>;
+    }
+    if (!fo) return null;
+
+    const fileName = fo['fileName'];
+    const mimeType = fo['mimeType'];
+    if (typeof fileName !== 'string' || typeof mimeType !== 'string') return null;
+
+    const fileData = typeof fo['fileData'] === 'string' ? fo['fileData'] : undefined;
+    const fileId = typeof fo['fileId'] === 'string' ? fo['fileId'] : undefined;
+    if (!fileData && !fileId) return null;
+
+    return {
+        fileName,
+        mimeType,
+        fileData,
+        fileId,
+        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined
+    };
+}
 
 /**
  * Represents a single action to be executed.
@@ -133,9 +291,77 @@ export type AgentAction = {
     outputMapping?: string;   
 }
 
+// ============================================================================
+// Client Tool Types
+// ============================================================================
+
+/**
+ * Metadata definition for a client tool. Stored in agent configuration
+ * or a dedicated entity. The LLM sees Name + Description + InputSchema
+ * in its system prompt to know how to invoke the tool.
+ */
+export interface ClientToolMetadata {
+    /** Unique identifier for this tool */
+    Name: string;
+    /** Human-readable description — this is what the LLM reads to decide when to use it */
+    Description: string;
+    /** JSON Schema describing the input parameters */
+    InputSchema: Record<string, unknown>;
+    /** JSON Schema describing what the tool returns (optional, for LLM context) */
+    OutputSchema?: Record<string, unknown>;
+    /** Category for grouping in prompts (e.g., 'navigation', 'display', 'data') */
+    Category?: string;
+    /** Default timeout in ms for this specific tool (overrides agent default) */
+    DefaultTimeoutMs?: number;
+}
+
+/**
+ * A single client tool invocation request from the LLM.
+ * Uses the tool's Name to look up the full metadata (description, schema).
+ */
+export type AgentClientToolInvocation = {
+    /** Name of the client tool (must match a registered ClientToolMetadata.Name) */
+    Name: string;
+    /** Parameters to pass to the tool (validated against InputSchema) */
+    Params: Record<string, unknown>;
+    /** Override timeout for this specific invocation */
+    TimeoutMs?: number;
+    /** Human-readable description of why the agent is invoking this tool */
+    Description?: string;
+};
+
+/**
+ * Response from a client tool execution — returned to the server when
+ * the client finishes running the tool.
+ */
+export interface ClientToolResponse {
+    /** Must match the RequestID from the original request */
+    RequestID: string;
+    /** Whether the tool executed successfully */
+    Success: boolean;
+    /** The tool result (if successful) */
+    Result?: unknown;
+    /** Error message (if failed) */
+    ErrorMessage?: string;
+}
+
+/**
+ * Summary of a client tool execution result, used in conversation messages.
+ */
+export interface ClientToolResultSummary {
+    /** Name of the tool that was executed */
+    ToolName: string;
+    /** Whether the execution succeeded */
+    Success: boolean;
+    /** Result data from the tool */
+    Result?: unknown;
+    /** Error message if the tool failed */
+    ErrorMessage?: string;
+}
+
 /**
  * Represents a sub-agent invocation request.
- * 
+ *
  * @template TContext - Type of the context object passed to the sub-agent.
  *                      This allows for type-safe context propagation from parent to sub-agent.
  *                      Defaults to any for backward compatibility.
@@ -212,7 +438,7 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
      * and then continue with the retry.
      */
-    step: AIAgentRunEntityExtended['FinalStep']
+    step: MJAIAgentRunEntityExtended['FinalStep']
     /** Result from the prior step, useful for retry or sub-agent context */
     priorStepResult?: any;
     /** 
@@ -274,6 +500,31 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     forEach?: ForEachOperation;
     /** While operation details when step is 'While' (v2.112+) */
     while?: WhileOperation;
+    /**
+     * Scratchpad changes from the agent's response.
+     * Processed inline (zero turn cost) alongside payload changes.
+     * @since 2.46.0
+     */
+    scratchpad?: AgentScratchpad;
+    /**
+     * Media outputs to promote to the agent's final outputs.
+     * When set, these media items will be added to the agent's mediaOutputs collection
+     * and stored in AIAgentRunMedia.
+     * @since 3.1.0
+     */
+    promoteMediaOutputs?: MediaOutput[];
+    /**
+     * Client-side tools to execute when step is 'ClientTools'.
+     * Each invocation maps to a registered ClientToolMetadata by Name.
+     */
+    clientTools?: AgentClientToolInvocation[];
+    /**
+     * When true, the agent should terminate after executing the current step.
+     * Used by ClientTools: the main loop needs `terminate: false` so it continues
+     * to dispatch the tool execution, but `executeClientToolsStep` checks this
+     * to decide whether to return Success or continue to another prompt.
+     */
+    terminateAfterExecution?: boolean;
 }
 
 /**
@@ -297,7 +548,7 @@ export type ExecuteAgentResult<P = any> = {
      * - Use agentRun.CancellationReason for cancellation reason
      * - Use agentRun.Steps for the execution step history
      */
-    agentRun: AIAgentRunEntityExtended;
+    agentRun: MJAIAgentRunEntityExtended;
     /**
      * The artifact type ID for the returned payload.
      * This identifies what type of artifact the payload represents (e.g., JSON, Markdown, HTML).
@@ -331,9 +582,58 @@ export type ExecuteAgentResult<P = any> = {
      * Includes the notes and examples that were retrieved and used for context.
      */
     memoryContext?: {
-        notes: any[]; // AIAgentNoteEntity[] - using any to avoid circular dependency
-        examples: any[]; // AIAgentExampleEntity[] - using any to avoid circular dependency
+        notes: any[]; // MJAIAgentNoteEntity[] - using any to avoid circular dependency
+        examples: any[]; // MJAIAgentExampleEntity[] - using any to avoid circular dependency
     };
+
+    /**
+     * Multi-modal outputs generated by the agent.
+     * Contains media that the agent explicitly promoted to its outputs.
+     * This flows to ConversationDetailAttachment for UI display.
+     *
+     * Media items with `refId` are used for placeholder resolution (${media:xxx}).
+     * Media items with `persist: false` are excluded from database persistence.
+     * Sub-agents return their mediaOutputs to parents for bubbling up.
+     *
+     * @since 3.1.0
+     */
+    mediaOutputs?: MediaOutput[];
+
+    /**
+     * File outputs (PDF, Excel, Word, etc.) produced by file-generation actions during this run.
+     * Collected by BaseAgent during action execution and processed by AgentRunner into
+     * MJ: Artifacts (ContentMode='File') after the run completes.
+     *
+     * Unlike mediaOutputs (which are injected into the LLM conversation as multimodal content),
+     * file outputs are archived as versioned artifacts and never sent to the LLM.
+     * Sub-agents bubble their fileOutputs up to the parent for unified artifact creation.
+     *
+     * @since 5.22.0
+     */
+    fileOutputs?: FileOutputRef[];
+
+    /**
+     * When a Chat step fires, BaseAgent creates a persistent AIAgentRequest row and
+     * returns the new record's ID here. Callers use this to:
+     * - Send notifications to the assigned user
+     * - Track conversation-request sync (resolver marks the request as Responded when the user replies)
+     * - Deep-link into the Agent Requests dashboard
+     *
+     * Null/undefined when the agent did not terminate on a Chat step.
+     * @since 5.12.0
+     */
+    feedbackRequestId?: string;
+
+    /**
+     * The resolved FileStorageAccount ID for file artifact storage, determined during
+     * agent execution via the hierarchical resolution chain:
+     * Runtime → Agent → Category tree → Type → system fallback.
+     *
+     * Used by AgentRunner to route file artifact uploads to the correct storage account.
+     * Null when no storage account could be resolved (e.g., no accounts configured).
+     * @since 5.24.0
+     */
+    resolvedStorageAccountId?: string;
 }
 
 /**
@@ -443,7 +743,7 @@ export type AgentExecutionStreamingCallback = (chunk: {
  */
 export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unknown> = {
     /** The agent entity to execute, containing all metadata and configuration */
-    agent: AIAgentEntityExtended;
+    agent: MJAIAgentEntityExtended;
     /** Array of chat messages representing the conversation history */
     conversationMessages: ChatMessage[];
     /** Optional user context for permission checking and personalization */
@@ -452,6 +752,42 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     userId?: string;
     /** Optional company ID for scoping context memory (notes/examples) */
     companyId?: string;
+    /**
+     * Primary scope entity name (e.g., 'Organizations', 'Skip Tenants').
+     * Resolved to PrimaryScopeEntityID on the AIAgentRun record.
+     * Used by external applications for multi-tenant memory scoping.
+     * Not used by MJ's own chat infrastructure.
+     *
+     * @since 2.132.0
+     */
+    PrimaryScopeEntityName?: string;
+    /**
+     * Primary scope record ID — the actual record ID within the primary entity.
+     * Stored as an indexed column on AIAgentRun/AIAgentNote for fast filtering.
+     * Used by external applications for multi-tenant memory scoping.
+     * Not used by MJ's own chat infrastructure.
+     *
+     * @since 2.132.0
+     */
+    PrimaryScopeRecordID?: string;
+    /**
+     * Arbitrary key/value dimensions for external-app scoping.
+     * Stored as JSON in the SecondaryScopes column on AIAgentRun/AIAgentNote.
+     * Used by external applications (Skip, Izzy, etc.) to segment agent memory
+     * by custom dimensions. MJ's own chat infrastructure does not use this.
+     *
+     * @since 2.132.0
+     *
+     * @example
+     * ```typescript
+     * params.SecondaryScopes = {
+     *     ContactID: 'contact-456',
+     *     TeamID: 'team-alpha',
+     *     Region: 'EMEA'
+     * };
+     * ```
+     */
+    SecondaryScopes?: Record<string, SecondaryScopeValue>;
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */
@@ -469,7 +805,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     parentStepCounts?: number[];
     /** Optional parent agent run entity for nested sub-agent execution */
-    parentRun?: AIAgentRunEntityExtended;
+    parentRun?: MJAIAgentRunEntityExtended;
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
     data?: Record<string, any>;
     /** Optional payload to pass to the agent execution, type depends on agent implementation. Payload is the ongoing dynamic state of the agent run. */
@@ -506,6 +842,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     override?: {
         modelId?: string;
         vendorId?: string;
+        /**
+         * Runtime override for the file storage account used when creating file artifacts.
+         * Highest priority in the resolution chain: Runtime → Agent → Category tree → Type → system fallback.
+         * Resolves to a FileStorageAccount record which carries both the provider driver
+         * (via ProviderID) and credentials (via CredentialID).
+         */
+        storageAccountId?: string;
     };
     /** 
      * Optional flag to enable verbose logging during agent execution.
@@ -875,6 +1218,60 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * @since 2.127.0
      */
     agentTypeParams?: TAgentTypeParams;
+
+    /**
+     * Optional per-invocation override for feedback request assignment.
+     * Takes highest precedence over all metadata-driven defaults
+     * (agent type, category, request type).
+     *
+     * When an agent creates a feedback request via Chat step, this strategy
+     * determines who the request is assigned to and how. If not provided,
+     * the framework walks the resolution chain:
+     * 1. This field (highest precedence)
+     * 2. Agent Type's AssignmentStrategy
+     * 3. Agent's Category AssignmentStrategy (walks up ParentID tree)
+     * 4. Request Type's DefaultAssignmentStrategy
+     * 5. Fallback: assign to contextUser + console warning
+     *
+     * @since 5.12.0
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   assignmentStrategy: {
+     *     type: 'SpecificUser',
+     *     userID: 'finance-manager-user-id',
+     *     priority: 75,
+     *     expirationMinutes: 1440
+     *   }
+     * };
+     * ```
+     */
+    assignmentStrategy?: AgentRequestAssignmentStrategy;
+
+    /**
+     * Optional per-request metadata provider for multi-user server isolation.
+     * Pass the request-scoped provider from the GraphQL context so agent DB operations
+     * never share the global singleton's transaction state with concurrent requests.
+     * When omitted, falls back to the global Metadata.Provider (safe for single-user/client-side use).
+     */
+    provider?: IMetadataProvider;
+
+    /**
+     * Optional session ID for client tool communication.
+     * When provided, enables the agent to invoke client-side tools via PubSub.
+     * The session ID correlates tool requests/responses between server and client.
+     */
+    sessionID?: string;
+
+    /**
+     * Optional runtime override for client tool timeout (ms).
+     * Takes precedence over the agent's DefaultClientToolTimeoutMs config.
+     */
+    clientToolTimeoutMs?: number;
+
 }
 
 /**
@@ -893,12 +1290,16 @@ export type AgentContextData = {
     parentAgentName?: string | null;
     /** Number of sub-agents available to this agent */
     subAgentCount: number;
-    /** JSON stringified array of AIAgentEntityExtended objects representing sub-agents */
+    /** Markdown formatted list of sub-agent names and descriptions */
     subAgentDetails: string;
     /** Number of actions available to this agent */
     actionCount: number;
-    /** JSON stringified array of ActionEntity objects representing available actions */
+    /** Markdown formatted details of available actions (name, params, result codes) */
     actionDetails: string;
+    /** Markdown formatted details of available client tools (name, category, description, input schema) */
+    clientToolDetails?: string;
+    /** Markdown formatted snapshot of the user's current application context */
+    appContext?: string;
 }
 
 /**
@@ -910,11 +1311,11 @@ export type AgentConfiguration = {
     /** Error message if configuration failed */
     errorMessage?: string;
     /** The loaded agent type entity */
-    agentType?: AIAgentTypeEntity;
+    agentType?: MJAIAgentTypeEntity;
     /** The loaded system prompt entity */
-    systemPrompt?: AIPromptEntityExtended;
+    systemPrompt?: MJAIPromptEntityExtended;
     /** The loaded child prompt entity */
-    childPrompt?: AIPromptEntityExtended;
+    childPrompt?: MJAIPromptEntityExtended;
 }
 
 /**
@@ -946,8 +1347,12 @@ export type AgentChatMessageMetadata = {
     canExpand?: boolean;
     /** Whether this message has expired */
     isExpired?: boolean;
-    /** Type of message (for logging/debugging) */
-    messageType?: 'action-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    /** Type of message (for lifecycle management and logging) */
+    messageType?: 'action-result' | 'client-tool-result' | 'loop-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    /** Name of the sub-agent (only for sub-agent-result messages) */
+    subAgentName?: string;
+    /** ID of the sub-agent (only for sub-agent-result messages) */
+    subAgentId?: string;
 }
 
 /**
@@ -1128,4 +1533,17 @@ export interface ActionChange {
     actionLimits?: Record<string, number>;
 }
 
+// ── Types for action-step output parsing (used by AgentRunner reprocessing) ──
 
+/** Typed shape of the OutputData JSON written by base-agent for action steps */
+export interface ActionStepOutputData {
+    actionResult?: {
+        parameters?: ActionParam[];
+    };
+}
+
+/** Minimal read-only shape loaded from MJ: AI Agent Run Steps for reprocessing */
+export interface ActionStepSummary {
+    ID: string;
+    OutputData: string | null;
+}

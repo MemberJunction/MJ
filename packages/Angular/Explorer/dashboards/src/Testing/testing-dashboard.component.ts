@@ -2,19 +2,20 @@ import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ChangeDetection
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Subject } from 'rxjs';
-import { debounceTime } from 'rxjs/operators';
+import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ResourceData } from '@memberjunction/core-entities';
+import { TestingDialogService, TestingExecutionService, ActiveRun } from '@memberjunction/ng-testing';
 
 interface TestingDashboardState {
   activeTab: string;
-  overviewState: any;
-  executionState: any;
-  analyticsState: any;
-  versionState: any;
-  feedbackState: any;
+  dashboardState: Record<string, unknown>;
+  runsState: Record<string, unknown>;
+  analyticsState: Record<string, unknown>;
+  reviewState: Record<string, unknown>;
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-testing-dashboard',
   templateUrl: './testing-dashboard.component.html',
   styleUrls: ['./testing-dashboard.component.css'],
@@ -24,51 +25,74 @@ interface TestingDashboardState {
 export class TestingDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
 
   public isLoading = false;
-  public activeTab = 'overview';
+  public activeTab = 'dashboard';
   public selectedIndex = 0;
 
+  // Active test runs from execution service
+  public ActiveRuns: ActiveRun[] = [];
+
   // Component states
-  public overviewState: any = null;
-  public executionState: any = null;
-  public analyticsState: any = null;
-  public versionState: any = null;
-  public feedbackState: any = null;
+  public dashboardState: Record<string, unknown> | null = null;
+  public runsState: Record<string, unknown> | null = null;
+  public analyticsState: Record<string, unknown> | null = null;
+  public reviewState: Record<string, unknown> | null = null;
 
   // Track visited tabs for lazy loading
   private visitedTabs = new Set<string>();
 
   // Navigation items
-  public navigationItems: string[] = ['overview', 'execution', 'analytics', 'version', 'feedback'];
+  public navigationItems: string[] = ['dashboard', 'runs', 'analytics', 'review'];
 
   public navigationConfig = [
-    { text: 'Overview', icon: 'fa-solid fa-chart-line', selected: false },
-    { text: 'Execution', icon: 'fa-solid fa-play-circle', selected: false },
+    { text: 'Dashboard', icon: 'fa-solid fa-gauge-high', selected: false },
+    { text: 'Runs', icon: 'fa-solid fa-play-circle', selected: false },
     { text: 'Analytics', icon: 'fa-solid fa-chart-bar', selected: false },
-    { text: 'Version', icon: 'fa-solid fa-code-compare', selected: false },
-    { text: 'Feedback', icon: 'fa-solid fa-clipboard-check', selected: false }
+    { text: 'Review', icon: 'fa-solid fa-clipboard-check', selected: false }
   ];
 
   private stateChangeSubject = new Subject<TestingDashboardState>();
+  protected override destroy$ = new Subject<void>();
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor(
+    private cdr: ChangeDetectorRef,
+    public testingDialogService: TestingDialogService,
+    private executionService: TestingExecutionService
+  ) {
     super();
     this.setupStateManagement();
     this.updateNavigationSelection();
   }
 
-
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return "Testing"
+    return 'Testing';
   }
 
   ngAfterViewInit(): void {
     this.visitedTabs.add(this.activeTab);
     this.updateNavigationSelection();
     this.emitStateChange();
+
+    this.executionService.ActiveRuns$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(runs => {
+      this.ActiveRuns = runs;
+      this.cdr.markForCheck();
+    });
+
+    this.testingDialogService.PanelStateChanged$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe((isOpen) => {
+      console.log('[TestingDashboard] PanelStateChanged$:', isOpen, 'IsPanelOpen:', this.testingDialogService.IsPanelOpen);
+      this.cdr.detectChanges();
+    });
+
     this.cdr.detectChanges();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
+    this.destroy$.next();
+    this.destroy$.complete();
     this.stateChangeSubject.complete();
   }
 
@@ -97,38 +121,32 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
   private emitStateChange(): void {
     const state: TestingDashboardState = {
       activeTab: this.activeTab,
-      overviewState: this.overviewState || {},
-      executionState: this.executionState || {},
-      analyticsState: this.analyticsState || {},
-      versionState: this.versionState || {},
-      feedbackState: this.feedbackState || {}
+      dashboardState: (this.dashboardState || {}) as Record<string, unknown>,
+      runsState: (this.runsState || {}) as Record<string, unknown>,
+      analyticsState: (this.analyticsState || {}) as Record<string, unknown>,
+      reviewState: (this.reviewState || {}) as Record<string, unknown>
     };
 
     this.stateChangeSubject.next(state);
   }
 
-  public onOverviewStateChange(state: any): void {
-    this.overviewState = state;
+  public onDashboardStateChange(state: Record<string, unknown>): void {
+    this.dashboardState = state;
     this.emitStateChange();
   }
 
-  public onExecutionStateChange(state: any): void {
-    this.executionState = state;
+  public onRunsStateChange(state: Record<string, unknown>): void {
+    this.runsState = state;
     this.emitStateChange();
   }
 
-  public onAnalyticsStateChange(state: any): void {
+  public onAnalyticsStateChange(state: Record<string, unknown>): void {
     this.analyticsState = state;
     this.emitStateChange();
   }
 
-  public onVersionStateChange(state: any): void {
-    this.versionState = state;
-    this.emitStateChange();
-  }
-
-  public onFeedbackStateChange(state: any): void {
-    this.feedbackState = state;
+  public onReviewStateChange(state: Record<string, unknown>): void {
+    this.reviewState = state;
     this.emitStateChange();
   }
 
@@ -141,11 +159,10 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
       this.updateNavigationSelection();
     }
 
-    if (state.overviewState) this.overviewState = state.overviewState;
-    if (state.executionState) this.executionState = state.executionState;
+    if (state.dashboardState) this.dashboardState = state.dashboardState;
+    if (state.runsState) this.runsState = state.runsState;
     if (state.analyticsState) this.analyticsState = state.analyticsState;
-    if (state.versionState) this.versionState = state.versionState;
-    if (state.feedbackState) this.feedbackState = state.feedbackState;
+    if (state.reviewState) this.reviewState = state.reviewState;
 
     this.cdr.markForCheck();
   }
@@ -170,13 +187,27 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
       }, 0);
     }
 
-    this.NotifyLoadComplete();    
+    this.NotifyLoadComplete();
   }
 
   public getCurrentTabLabel(): string {
     const tabIndex = this.navigationItems.indexOf(this.activeTab);
-    const labels = ['Overview', 'Execution', 'Analytics', 'Version', 'Feedback'];
-    return tabIndex >= 0 ? labels[tabIndex] : 'Testing Dashboard';
+    return tabIndex >= 0 ? this.navigationConfig[tabIndex].text : 'Testing Dashboard';
+  }
+
+  public OnPanelClosed(): void {
+    this.testingDialogService.ClosePanel();
+    this.cdr.markForCheck();
+  }
+
+  public OnViewActiveRun(run: ActiveRun): void {
+    this.testingDialogService.OpenTestPanel(run.TestId);
+    this.cdr.markForCheck();
+  }
+
+  public OnViewRunningTestFromTab(testId: string): void {
+    this.testingDialogService.OpenTestPanel(testId);
+    this.cdr.detectChanges();
   }
 
   private updateNavigationSelection(): void {
@@ -184,8 +215,4 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
       item.selected = this.navigationItems[index] === this.activeTab;
     });
   }
-}
-
-export function LoadTestingDashboard() {
-  // Prevents tree-shaking
 }

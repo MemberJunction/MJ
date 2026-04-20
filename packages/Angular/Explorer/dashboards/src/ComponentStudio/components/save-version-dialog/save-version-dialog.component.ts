@@ -1,0 +1,183 @@
+import { Component, Input, Output, EventEmitter } from '@angular/core';
+
+export interface SaveVersionResult {
+  Comment: string;
+  Mode: 'new' | 'update';
+}
+
+@Component({
+  standalone: false,
+  selector: 'mj-save-version-dialog',
+  template: `
+    @if (Visible) {
+      <mj-dialog [Visible]="true" Title="Save Version" [Width]="420" (Close)="OnCancel()">
+        <div class="dialog-body">
+          <div class="version-context">
+            @if (CurrentVersion > 0) {
+              <span class="version-badge">Current: v{{ CurrentVersion }}</span>
+            } @else {
+              <span class="version-badge new-badge">First version</span>
+            }
+          </div>
+
+          <div class="form-field">
+            <label class="field-label" for="versionComment">Comment</label>
+            <input
+              class="mj-input comment-input"
+              id="versionComment"
+              [(ngModel)]="Comment"
+              placeholder="Describe what changed..." />
+          </div>
+
+          @if (CurrentVersion > 0) {
+            <div class="save-mode">
+              <label class="radio-option" [class.selected]="Mode === 'new'">
+                <input type="radio" name="saveMode" value="new" [(ngModel)]="Mode" />
+                <div class="radio-content">
+                  <span class="radio-label">Save as new version</span>
+                  <span class="radio-desc">Creates v{{ CurrentVersion + 1 }}</span>
+                </div>
+              </label>
+              <label class="radio-option" [class.selected]="Mode === 'update'">
+                <input type="radio" name="saveMode" value="update" [(ngModel)]="Mode" />
+                <div class="radio-content">
+                  <span class="radio-label">Update current version</span>
+                  <span class="radio-desc">Overwrites v{{ CurrentVersion }}</span>
+                </div>
+              </label>
+            </div>
+          }
+        </div>
+
+        <mj-dialog-actions>
+          <button mjButton variant="primary" (click)="OnSave()">
+            <i class="fa-solid fa-save"></i> Save
+          </button>
+          <button mjButton (click)="OnCancel()">
+            Cancel
+          </button>
+        </mj-dialog-actions>
+      </mj-dialog>
+    }
+  `,
+  styles: [`
+    .dialog-body {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 4px 0;
+    }
+
+    .version-context {
+      display: flex;
+      align-items: center;
+    }
+
+    .version-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+    }
+
+    .new-badge {
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+    }
+
+    .form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--mj-text-primary);
+    }
+
+    .comment-input {
+      width: 100%;
+    }
+
+    .save-mode {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .radio-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .radio-option:hover {
+      background: var(--mj-bg-surface-sunken);
+    }
+
+    .radio-option.selected {
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    }
+
+    .radio-option input[type="radio"] {
+      margin-top: 2px;
+      accent-color: var(--mj-brand-primary);
+    }
+
+    .radio-content {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .radio-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--mj-text-primary);
+    }
+
+    .radio-desc {
+      font-size: 11px;
+      color: var(--mj-text-secondary);
+    }
+  `]
+})
+export class SaveVersionDialogComponent {
+  @Input() Visible = false;
+  @Input() CurrentVersion = 0;
+  @Output() Save = new EventEmitter<SaveVersionResult>();
+  @Output() Cancel = new EventEmitter<void>();
+
+  Comment = '';
+  Mode: 'new' | 'update' = 'new';
+
+  OnSave(): void {
+    this.Save.emit({
+      Comment: this.Comment,
+      Mode: this.Mode
+    });
+    this.ResetForm();
+  }
+
+  OnCancel(): void {
+    this.Cancel.emit();
+    this.ResetForm();
+  }
+
+  private ResetForm(): void {
+    this.Comment = '';
+    this.Mode = 'new';
+  }
+}

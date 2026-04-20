@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Knowledge Base Research Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
       "Description": "Specialized agent for querying organizational knowledge bases and curated internal knowledge systems. Expert at conversational knowledge retrieval, policy interpretation, and connecting related organizational information. Handles tools like Betty and other knowledge management platforms to access company policies, procedures, documentation, and institutional knowledge.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -15,7 +16,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Knowledge Base Research Agent Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Knowledge Base Research Agent Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -23,60 +24,32 @@
             "ID": "63FDABF2-CDED-4AA2-AA8F-5F564B15D8C2"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.016Z",
-            "checksum": "c151b9bc854fb6b995bbc6a56afa21833da10f40d6159b0cfe6dd8983cddc45d"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "0388084B-97A8-4C3D-A38B-B6CE60471A87"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Knowledge Base Research Agent Prompt",
-              "resolved": "B3DBD3AC-A529-45A9-AAB5-F682E2E0F73A"
-            }
-          ]
+            "lastModified": "2026-02-13T21:09:23.419Z",
+            "checksum": "f51ee8174ef1e04c7ca1b48adae6f240d258d97a7b1fbff16aab015da424a347"
+          }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Betty",
+            "ActionID": "@lookup:MJ: Actions.Name=Betty",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "21D2E6E0-3331-4DAF-B401-E0D5545CDE34"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.018Z",
-            "checksum": "aa0fca193addf7fae93dcddb62eb65f236b634b536aac13b37f1cccbc599a4f2"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "0388084B-97A8-4C3D-A38B-B6CE60471A87"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Betty",
-              "resolved": "B43A6411-D9BB-4604-8515-38EABBD85A64"
-            }
-          ]
+            "lastModified": "2026-02-13T21:09:23.421Z",
+            "checksum": "9efe4320881d6a1b52a2919fe6143d3ec3ce03b5fde5a0548e5ab8dbd7c273d9"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "SubAgentID": "@lookup:AI Agents.Name=Codesmith Agent",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent",
             "Status": "Active",
             "SubAgentOutputMapping": {
               "*": "codeAnalysis[]"
@@ -89,23 +62,9 @@
             "ID": "B3CD28BD-4F31-4ED8-BB27-198A90D4E07A"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.019Z",
-            "checksum": "54dd88a1378b6f4d92209987836c95c555a951465974d5f1f2764d2d2a5d90ca"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "0388084B-97A8-4C3D-A38B-B6CE60471A87"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.SubAgentID",
-              "expression": "@lookup:AI Agents.Name=Codesmith Agent",
-              "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-            }
-          ]
+            "lastModified": "2026-02-13T21:09:23.424Z",
+            "checksum": "7a24335c70b69b4d6a23b08097fc0c497fa9f09fefafdb6b1af9f1e4ef0a56d9"
+          }
         }
       ]
     },
@@ -113,16 +72,8 @@
       "ID": "0388084B-97A8-4C3D-A38B-B6CE60471A87"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:34.988Z",
-      "checksum": "36a7053cb886969d2c62d4b80463eff8aca77638f38437f42cd6d4b0f85b3554"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+      "lastModified": "2026-03-13T19:10:49.192Z",
+      "checksum": "73517e70a273478351dc8141dc1072fecd318f334dbf53b34b366e13108641ac"
+    }
   }
 ]

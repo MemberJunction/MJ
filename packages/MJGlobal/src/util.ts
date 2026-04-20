@@ -1,33 +1,40 @@
-import { MJGlobal } from ".";
-import { MJEventType } from "./interface";
 import { v4 } from 'uuid';
-import * as _ from 'lodash';
+import _ from 'lodash';
+
+/**
+ * Type definition for the global object store that allows arbitrary string indexing.
+ * Uses 'any' intentionally as this is a dynamic storage mechanism for cross-module state.
+ */
+export interface GlobalObjectStore {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+}
 
 /**
  * The Global Object Store is a place to store global objects that need to be shared across the application. Depending on the execution environment, this could be the window object in a browser, or the global object in a node environment, or something else in other contexts. The key here is that in some cases static variables are not truly shared
      * because it is possible that a given class might have copies of its code in multiple paths in a deployed application. This approach ensures that no matter how many code copies might exist, there is only one instance of the object in question by using the Global Object Store.
- * @returns 
+ * @returns
  */
-export function GetGlobalObjectStore() {
+export function GetGlobalObjectStore(): GlobalObjectStore | null {
     try    {
         // we might be running in a browser, in that case, we use the window object for our global stuff
-        if (window) 
-            return window;
+        if (window)
+            return window as unknown as GlobalObjectStore;
         else {
-            // if we get here, we don't have a window object, so try the global object (node environment) 
+            // if we get here, we don't have a window object, so try the global object (node environment)
             // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
-            if (global) 
-                return global;
-            else 
+            if (global)
+                return global as unknown as GlobalObjectStore;
+            else
                 return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
         }
     }
     catch (e) {
         try {
             // if we get here, we don't have a window object, so try the global object (node environment)
-            if (global) 
-                return global;
-            else 
+            if (global)
+                return global as unknown as GlobalObjectStore;
+            else
                 return null; // won't get here typically because attempting to access the global object will throw an exception if it doesn't exist
         }
         catch (e) {
@@ -40,12 +47,19 @@ export function GetGlobalObjectStore() {
 
 /**
  * This utility function will copy all scalar and array properties from an object to a new object and return the new object.
- * This function will NOT copy functions or non-plain objects (unless resolveCircularReferences is true).
+ * This function will NOT copy non-plain object instances (unless they implement `toJSON()` or `resolveCircularReferences` is true).
+ *
+ * The function respects the standard JavaScript `toJSON()` protocol: if a value exposes a `toJSON()` method
+ * (as `Date`, `BaseInfo` subclasses, and user-defined classes can), the method is invoked and its return value
+ * is processed in place of the original. This mirrors how `JSON.stringify()` handles serialization.
+ *
+ * Arrays are recursively processed — each item is copied/toJSON'd individually — so nested objects with
+ * `toJSON()` are unwrapped to their serializable form.
  *
  * @param input - The object to copy
  * @param resolveCircularReferences - If true, handles circular references and complex objects for safe JSON serialization.
  *                                     When enabled, circular references are replaced with '[Circular Reference]',
- *                                     complex objects (Sockets, Streams, etc.) are replaced with their type names,
+ *                                     complex objects without `toJSON()` are replaced with their type names,
  *                                     Error objects are specially handled to extract name/message/stack,
  *                                     and Dates are converted to ISO strings. Default: false
  * @param maxDepth - Maximum recursion depth when resolveCircularReferences is true (default: 10)
@@ -92,12 +106,8 @@ export function CopyScalarsAndArrays<T extends object>(
                 return value.map(item => copy(item, depth + 1));
             }
 
-            // Handle Date objects
-            if (_.isDate(value)) {
-                return value.toISOString();
-            }
-
             // Handle Error objects specially to get their properties
+            // (checked before toJSON so we always get name/message/stack, even if Error subclasses define toJSON)
             if (value instanceof Error) {
                 return {
                     name: value.name,
@@ -106,6 +116,11 @@ export function CopyScalarsAndArrays<T extends object>(
                     // Spread any custom properties added to the error
                     ...copy(_.omit(value, ['name', 'message', 'stack']), depth + 1)
                 };
+            }
+
+            // Respect the toJSON() protocol (covers Date, BaseInfo subclasses, and any class that implements it)
+            if (typeof value.toJSON === 'function') {
+                return copy(value.toJSON(), depth + 1);
             }
 
             // Handle plain objects (POJOs)
@@ -119,7 +134,7 @@ export function CopyScalarsAndArrays<T extends object>(
                 return result;
             }
 
-            // For complex objects (Socket, Stream, Buffer, etc.), just use the type name
+            // For complex objects without toJSON (Socket, Stream, Buffer, etc.), just use the type name
             const typeName = value.constructor?.name || 'Object';
             if (typeName !== 'Object') {
                 return `[${typeName}]`;
@@ -130,21 +145,41 @@ export function CopyScalarsAndArrays<T extends object>(
 
         return copy(input, 0);
     } else {
-        // Original implementation for backward compatibility
+        // Simple mode: preserves existing behavior (primitives/functions pass through, class instances
+        // without toJSON get their keys dropped) while honoring the toJSON() protocol and recursing
+        // into array items so nested objects with toJSON are unwrapped.
         const result: Partial<T> = {};
         Object.keys(input).forEach((key) => {
             const value = input[key as keyof T];
-            // Check for null or scalar types directly
+            // Primitives, null, functions — pass through
             if (value === null || typeof value !== 'object') {
                 result[key as keyof T] = value;
-            } else if (Array.isArray(value)) {
-                // Handle arrays by creating a new array with the same elements
-                result[key as keyof T] = [...value] as any;
-            } else if (typeof value === 'object' && value.constructor === Object) {
-                // Recursively copy plain objects
-                result[key as keyof T] = CopyScalarsAndArrays(value) as any;
+                return;
             }
-            // Functions and non-plain objects are intentionally ignored
+            // toJSON protocol — use the method's output
+            const valueToJSON = (value as { toJSON?: unknown }).toJSON;
+            if (typeof valueToJSON === 'function') {
+                result[key as keyof T] = (valueToJSON as () => unknown).call(value) as T[keyof T];
+                return;
+            }
+            // Arrays — process each item; items with toJSON are unwrapped, class instances without it are replaced with null to preserve array length
+            if (Array.isArray(value)) {
+                result[key as keyof T] = value.map(item => {
+                    if (item === null || typeof item !== 'object') return item;
+                    const itemToJSON = (item as { toJSON?: unknown }).toJSON;
+                    if (typeof itemToJSON === 'function') return (itemToJSON as () => unknown).call(item);
+                    if ((item as object).constructor === Object) return CopyScalarsAndArrays(item as object);
+                    // Non-plain, non-toJSON class instances inside an array — can't drop without changing
+                    // array length, so fall back to null (sanitized placeholder)
+                    return null;
+                }) as T[keyof T];
+                return;
+            }
+            // Plain objects — recurse (key omitted for class instances without toJSON)
+            if ((value as object).constructor === Object) {
+                result[key as keyof T] = CopyScalarsAndArrays(value as object) as T[keyof T];
+            }
+            // else: non-plain class instance without toJSON → key is dropped entirely (matches legacy)
         });
         return result;
     }
@@ -178,11 +213,16 @@ export function CopyScalarsAndArrays<T extends object>(
  * const response = CleanAndParseJSON<AIResponse>(aiOutput, true);
  * // Returns typed object or null
  */
-export function CleanAndParseJSON<T = any>(inputString: string | null, logErrors: boolean = false): T {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function CleanAndParseJSON<T = any>(inputString: string | null, logErrors: boolean = false): T | null {
     if (!inputString) {
         return null;
     }
-    return SafeJSONParse<T>(CleanJSON(inputString), logErrors);
+    const cleaned = CleanJSON(inputString);
+    if (!cleaned) {
+        return null;
+    }
+    return SafeJSONParse<T>(cleaned, logErrors);
 }
 
 /**
@@ -223,7 +263,7 @@ export function CleanJSON(inputString: string | null): string | null {
         return null;
 
     let processedString = inputString.trim();
-    let originalException = null;
+    let originalException: Error | null = null;
     
     // First, try to parse the string as-is
     // This preserves any embedded JSON or markdown blocks within string values
@@ -233,7 +273,7 @@ export function CleanJSON(inputString: string | null): string | null {
         return JSON.stringify(parsed, null, 2);
     } catch (e) {
         // save the original exception to throw later if we can't find a path to valid JSON
-        originalException = e;
+        originalException = e instanceof Error ? e : new Error(String(e));
 
         // common JSON patterns from LLM often have extra } or missing final
         // } so let's test those two patterns quickly here and if they fail
@@ -379,13 +419,14 @@ export function CleanJavaScript(javaScriptCode: string): string {
  * // Invalid JSON returns null
  * const result = SafeJSONParse('invalid json', true); // logs error, returns null
  */
-export function SafeJSONParse<T = any>(jsonString: string, logErrors: boolean = false): T {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function SafeJSONParse<T = any>(jsonString: string, logErrors: boolean = false): T | null {
     if (!jsonString) {
         return null;
     }
 
     try {
-        return <T>JSON.parse(jsonString);
+        return JSON.parse(jsonString) as T;
     } catch (e) {
         if (logErrors)
             console.error("Error parsing JSON string:", e);
@@ -399,25 +440,382 @@ export function SafeJSONParse<T = any>(jsonString: string, logErrors: boolean = 
  * @param text 
  * @returns 
  */
-export function ConvertMarkdownStringToHtmlList(htmlListType: 'Ordered' | 'Unordered', text: string): string {
+export function ConvertMarkdownStringToHtmlList(htmlListType: 'Ordered' | 'Unordered', text: string): string | null {
     try {
         const listTag = htmlListType === 'Unordered' ? 'ul' : 'ol';
         if (!text.includes('\n')) {
             return text;
         }
         const listItems = text.split('\n').map(line => `<li>${line.trim().replace(/^-\s*/, '')}</li>`).join('');
-        return `<${listTag}>${listItems}</${listTag}>`;    
+        return `<${listTag}>${listItems}</${listTag}>`;
     }
     catch (e) {
         console.error("Error converting markdown string to HTML list:", e);
         return null;
-    }   
+    }
 }
 
 
 
 
 
+
+/**
+ * Configuration options for entity and field name normalization.
+ * These control how ALL CAPS database identifiers are converted to human-readable names.
+ */
+export interface EntityNamingOptions {
+    /** Normalize ALL CAPS names to Title Case (e.g., PAYMENT -> Payment). Default: true */
+    normalizeAllCaps?: boolean;
+    /** Attempt to split compound ALL CAPS words using dictionary matching (e.g., INDIVIDUALDESIGNATION -> Individual Designation). Default: true */
+    splitCompoundWords?: boolean;
+    /** Additional domain-specific words for the compound word splitter */
+    additionalDomainWords?: string[];
+}
+
+/**
+ * Creates a human-readable display name from a database identifier. Handles:
+ * - snake_case: "organization_email" -> "Organization Email"
+ * - PascalCase/camelCase: "OrganizationEmail" -> "Organization Email"
+ * - ALL CAPS: "PAYMENT" -> "Payment" (when normalizeAllCaps is true)
+ * - ALL CAPS compound: "INDIVIDUALDESIGNATION" -> "Individual Designation" (when splitCompoundWords is true)
+ *
+ * Snake_case identifiers are split on underscores and title-cased first, then fed through
+ * the existing camelCase logic to handle mixed conventions like "org_emailAddress" -> "Org Email Address".
+ *
+ * @param s - The database identifier to convert
+ * @param options - Optional naming configuration. When omitted, ALL CAPS normalization and compound splitting are enabled by default.
+ */
+export function createDisplayName(s: string, options?: EntityNamingOptions): string {
+    const normalizeAllCaps = options?.normalizeAllCaps ?? true;
+    const splitCompoundWords = options?.splitCompoundWords ?? true;
+
+    if (s.includes('_')) {
+        // Split on underscores, process each segment individually, rejoin as PascalCase
+        s = s.split('_')
+             .filter(part => part.length > 0)
+             .map(part => {
+                 if (normalizeAllCaps && isAllCaps(part)) {
+                     return normalizeAllCapsWord(part, splitCompoundWords, options?.additionalDomainWords);
+                 }
+                 return part.charAt(0).toUpperCase() + part.slice(1);
+             })
+             .join('');
+    } else if (normalizeAllCaps && isAllCaps(s)) {
+        // Entire string is ALL CAPS with no delimiters
+        s = normalizeAllCapsWord(s, splitCompoundWords, options?.additionalDomainWords);
+    }
+    return convertCamelCaseToHaveSpaces(s);
+}
+
+/**
+ * Checks if a string is entirely uppercase letters (and digits).
+ * Returns false for strings that already have mixed case (i.e., PascalCase/camelCase).
+ */
+function isAllCaps(s: string): boolean {
+    if (s.length === 0) return false;
+    // Must have at least one letter and all letters must be uppercase
+    let hasLetter = false;
+    for (let i = 0; i < s.length; i++) {
+        const c = s[i];
+        if (c >= 'a' && c <= 'z') return false; // has a lowercase letter, not ALL CAPS
+        if (c >= 'A' && c <= 'Z') hasLetter = true;
+    }
+    return hasLetter;
+}
+
+/**
+ * Normalizes an ALL CAPS word to PascalCase, optionally splitting compound words.
+ * Examples:
+ *   "PAYMENT" -> "Payment"
+ *   "INDIVIDUALDESIGNATION" -> "IndividualDesignation" (with splitting)
+ *   "ID" -> "ID" (known acronym preserved)
+ */
+function normalizeAllCapsWord(s: string, splitCompound: boolean, additionalWords?: string[]): string {
+    // Check if it's a known acronym that should stay uppercase
+    if (__knownAcronyms.has(s.toUpperCase())) {
+        return s.toUpperCase();
+    }
+
+    if (splitCompound && s.length > 2) {
+        const words = splitCompoundAllCapsWord(s, additionalWords);
+        if (words.length > 1) {
+            // Successfully split into multiple words — PascalCase each
+            return words.map(w => titleCaseWord(w)).join('');
+        }
+    }
+
+    // Single word or no split found — just title-case it
+    return titleCaseWord(s);
+}
+
+/**
+ * Title-cases a single word: first letter uppercase, rest lowercase.
+ * Preserves known acronyms (e.g., "ID" stays "ID", not "Id").
+ */
+function titleCaseWord(word: string): string {
+    const upper = word.toUpperCase();
+    if (__knownAcronyms.has(upper)) {
+        return upper;
+    }
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+}
+
+/**
+ * Known acronyms that should remain ALL CAPS when normalizing.
+ * These are common database and technical abbreviations.
+ */
+const __knownAcronyms = new Set([
+    'ID', 'URL', 'API', 'SQL', 'CRM', 'AI', 'FK', 'PK', 'UUID',
+    'SKU', 'UPC', 'VIN', 'MSRP', 'HR', 'ERP', 'ETL', 'SSO',
+    'SSN', 'TIN', 'EIN', 'VAT', 'GL', 'AP', 'AR', 'PO', 'RFP',
+    'HTML', 'CSS', 'JSON', 'XML', 'CSV', 'PDF', 'HTTP', 'HTTPS',
+    'MJ', 'UI', 'UX', 'IP', 'OS', 'DB',
+]);
+
+/**
+ * Splits a compound ALL CAPS word into individual words using recursive dictionary
+ * lookup with backtracking. Falls back to the full word if no valid split is found.
+ *
+ * Uses a longest-match-first strategy, but backtracks to shorter matches when the
+ * remaining string can't be fully consumed (e.g., "ORDERSCHEDULE" tries "orders" first,
+ * but backtracks to "order" + "schedule" when "chedule" fails).
+ *
+ * Examples:
+ *   "INDIVIDUALDESIGNATION" -> ["individual", "designation"]
+ *   "CUSTOMFIELDVALUE" -> ["custom", "field", "value"]
+ *   "CUSTOMERID" -> ["customer", "id"]
+ *   "INVOICEORDERSCHEDULE" -> ["invoice", "order", "schedule"]
+ *   "XYZABC" -> ["XYZABC"] (no match, returned as-is)
+ */
+function splitCompoundAllCapsWord(s: string, additionalWords?: string[]): string[] {
+    const lower = s.toLowerCase();
+    const dict = getCompoundWordDictionary(additionalWords);
+
+    // Use memoized recursive approach with backtracking
+    const memo = new Map<number, string[] | null>();
+    const result = splitRecursive(lower, 0, dict, memo);
+
+    if (!result || result.length <= 1) {
+        return [s]; // No valid split found, return original
+    }
+    return result;
+}
+
+/**
+ * Recursively attempts to split a string starting at `pos` into dictionary words.
+ * Tries longest matches first and backtracks if the remaining string can't be consumed.
+ * Returns null if no valid complete split exists from this position.
+ */
+function splitRecursive(
+    s: string,
+    pos: number,
+    dict: Set<string>,
+    memo: Map<number, string[] | null>
+): string[] | null {
+    if (pos >= s.length) return []; // Successfully consumed everything
+
+    if (memo.has(pos)) return memo.get(pos)!;
+
+    const maxLen = Math.min(s.length - pos, 30);
+    // Try longest match first, minimum 2 chars to avoid single-letter splits
+    for (let len = maxLen; len >= 2; len--) {
+        const candidate = s.substring(pos, pos + len);
+        if (dict.has(candidate)) {
+            const rest = splitRecursive(s, pos + len, dict, memo);
+            if (rest !== null) {
+                const result = [candidate, ...rest];
+                memo.set(pos, result);
+                return result;
+            }
+            // This match didn't lead to a complete split — try shorter
+        }
+    }
+
+    // No match at this position leads to a complete split
+    memo.set(pos, null);
+    return null;
+}
+
+/**
+ * Lazily builds and caches the compound word dictionary.
+ * Includes built-in common database/business words plus any user-provided domain words.
+ */
+let __compoundWordDictCache: Set<string> | null = null;
+let __compoundWordDictAdditional: string[] | undefined = undefined;
+
+function getCompoundWordDictionary(additionalWords?: string[]): Set<string> {
+    // Return cache if additional words haven't changed
+    if (__compoundWordDictCache && __compoundWordDictAdditional === additionalWords) {
+        return __compoundWordDictCache;
+    }
+
+    const dict = new Set<string>();
+
+    // Add all built-in words (lowercase)
+    for (const word of __builtInDictionaryWords) {
+        dict.add(word.toLowerCase());
+    }
+
+    // Add user-provided domain words
+    if (additionalWords) {
+        for (const word of additionalWords) {
+            dict.add(word.toLowerCase());
+        }
+    }
+
+    // Add known acronyms (lowercase for matching)
+    for (const acronym of __knownAcronyms) {
+        dict.add(acronym.toLowerCase());
+    }
+
+    __compoundWordDictCache = dict;
+    __compoundWordDictAdditional = additionalWords;
+    return dict;
+}
+
+/**
+ * Built-in dictionary of common words found in database schemas.
+ * Used by the compound word splitter to break apart ALL CAPS identifiers.
+ * Words are stored in lowercase for case-insensitive matching.
+ */
+const __builtInDictionaryWords = [
+    // Business/Entity words
+    'account', 'accounts', 'action', 'actions', 'activity', 'address', 'adjustment',
+    'admin', 'agent', 'agreement', 'alias', 'allocation', 'amount', 'analysis',
+    'application', 'approval', 'archive', 'area', 'article', 'asset', 'assignment',
+    'association', 'attachment', 'attribute', 'audit', 'authorization', 'available',
+    'award', 'balance', 'bank', 'base', 'batch', 'benefit', 'bill', 'billing',
+    'block', 'board', 'body', 'bonus', 'book', 'booth', 'branch', 'brand',
+    'budget', 'building', 'bundle', 'business', 'buyer',
+    'calendar', 'call', 'campaign', 'cancellation', 'candidate', 'capacity',
+    'capital', 'card', 'cart', 'case', 'catalog', 'category', 'center', 'certificate',
+    'certificant', 'certificants', 'chain', 'change', 'channel', 'chapter', 'charge',
+    'chart', 'check', 'child', 'city', 'claim', 'class', 'client', 'close', 'club',
+    'code', 'collection', 'color', 'column', 'comment', 'commerce', 'commission',
+    'committee', 'communication', 'community', 'company', 'comparison', 'compensation',
+    'compliance', 'component', 'condition', 'conference', 'config', 'configuration',
+    'confirmation', 'connection', 'consent', 'constraint', 'contact', 'content',
+    'context', 'contract', 'control', 'controls', 'conversion', 'copy', 'core',
+    'corporate', 'correction', 'correspondence', 'cost', 'count', 'counter',
+    'country', 'county', 'coupon', 'course', 'coverage', 'creation', 'creator',
+    'credit', 'criteria', 'currency', 'current', 'custom', 'customer', 'cycle',
+    'daily', 'dashboard', 'data', 'database', 'date', 'day', 'deal', 'debit',
+    'default', 'definition', 'degree', 'delete', 'deleted', 'delivery', 'demand',
+    'department', 'dependent', 'deposit', 'description', 'design', 'designation',
+    'detail', 'details', 'development', 'device', 'dimension', 'direction',
+    'directory', 'discount', 'discipline', 'display', 'distribution', 'district',
+    'division', 'document', 'domain', 'donation', 'download', 'draft', 'driver',
+    'due', 'duration', 'duty',
+    'education', 'effective', 'effort', 'element', 'email', 'emergency',
+    'employee', 'employer', 'encoding', 'end', 'engine', 'enrollment',
+    'enterprise', 'entity', 'entry', 'environment', 'equipment', 'error',
+    'estimate', 'evaluation', 'event', 'evidence', 'exam', 'examination',
+    'exception', 'exchange', 'exclude', 'execution', 'exemption', 'exhibit',
+    'exhibition', 'exhibitor', 'expansion', 'expenditure', 'expense', 'experience',
+    'expertise', 'expiration', 'export', 'exposure', 'expression', 'extension',
+    'external', 'extract',
+    'facility', 'factor', 'family', 'favorite', 'feature', 'fee', 'feed',
+    'feedback', 'field', 'file', 'filter', 'finance', 'financial', 'firm',
+    'first', 'fiscal', 'flag', 'floor', 'flow', 'folder', 'follow', 'forecast',
+    'foreign', 'form', 'format', 'formula', 'frequency', 'fulfillment',
+    'function', 'fund', 'funding',
+    'gateway', 'gender', 'general', 'generation', 'geographic', 'global',
+    'goal', 'government', 'grade', 'grant', 'graph', 'grid', 'gross', 'group',
+    'growth', 'guarantee', 'guardian', 'guest', 'guide',
+    'header', 'health', 'hierarchy', 'high', 'history', 'hold', 'holder',
+    'holding', 'holiday', 'home', 'host', 'hour', 'house',
+    'image', 'impact', 'import', 'inactive', 'incident', 'include', 'income',
+    'index', 'indicator', 'individual', 'industry', 'info', 'information',
+    'initial', 'input', 'inquiry', 'insert', 'inspection', 'instance',
+    'institution', 'instruction', 'insurance', 'integration', 'interest',
+    'internal', 'international', 'interval', 'interview', 'inventory',
+    'investment', 'invitation', 'invoice', 'issue', 'item',
+    'job', 'journal', 'judge', 'jurisdiction',
+    'key', 'keyword', 'kind', 'knowledge',
+    'label', 'language', 'last', 'launch', 'layout', 'lead', 'leader',
+    'learning', 'lease', 'leave', 'ledger', 'legal', 'length', 'letter',
+    'level', 'liability', 'library', 'license', 'life', 'lifetime', 'limit',
+    'line', 'link', 'list', 'load', 'loan', 'local', 'location', 'lock',
+    'log', 'logic', 'login', 'lookup', 'loss', 'lot', 'low',
+    'machine', 'mail', 'main', 'maintenance', 'major', 'management',
+    'manager', 'manifest', 'manual', 'map', 'mapping', 'margin', 'mark',
+    'market', 'marketing', 'master', 'match', 'material', 'matrix', 'max',
+    'measure', 'media', 'medium', 'meeting', 'member', 'membership', 'memo',
+    'menu', 'merchant', 'merge', 'merchandise', 'message', 'metadata', 'method',
+    'metric', 'migration', 'min', 'minor', 'minute', 'miscellaneous', 'mobile',
+    'mode', 'model', 'modification', 'module', 'monitor', 'month', 'monthly',
+    'name', 'narrative', 'national', 'navigation', 'net', 'network', 'new',
+    'news', 'next', 'node', 'nomination', 'nomination', 'note', 'notes',
+    'notification', 'number',
+    'object', 'objective', 'observation', 'offer', 'office', 'offset',
+    'old', 'online', 'open', 'operation', 'operator', 'opportunity',
+    'option', 'order', 'orders', 'organization', 'origin', 'original',
+    'other', 'out', 'outcome', 'output', 'outstanding', 'overall', 'override',
+    'overview', 'owner', 'ownership',
+    'package', 'page', 'paid', 'panel', 'parameter', 'parent', 'part',
+    'participant', 'partner', 'party', 'pass', 'password', 'path', 'pattern',
+    'pay', 'payment', 'payroll', 'pending', 'people', 'percentage',
+    'performance', 'period', 'permission', 'person', 'personal', 'phase',
+    'phone', 'photo', 'physical', 'place', 'plan', 'planning', 'platform',
+    'player', 'point', 'policy', 'pool', 'population', 'portal', 'portfolio',
+    'position', 'post', 'postal', 'potential', 'practice', 'preference',
+    'prefix', 'premium', 'preparation', 'presence', 'presentation', 'preset',
+    'price', 'primary', 'principal', 'print', 'prior', 'priority', 'private',
+    'privilege', 'problem', 'procedure', 'process', 'processor', 'product',
+    'production', 'professional', 'profile', 'profit', 'program', 'progress',
+    'project', 'promotion', 'proof', 'property', 'proposal', 'prospect',
+    'protect', 'protocol', 'provider', 'province', 'provision', 'proxy',
+    'public', 'publication', 'purchase', 'purpose', 'push',
+    'qualification', 'quality', 'quantity', 'quarter', 'quarterly', 'query',
+    'question', 'queue', 'quota', 'quote',
+    'range', 'rank', 'ranking', 'rate', 'rating', 'ratio', 'raw', 'read',
+    'reason', 'receipt', 'receive', 'recent', 'recognition', 'recognize',
+    'recommendation', 'record', 'recovery', 'recurring', 'redemption',
+    'reference', 'referral', 'refund', 'region', 'register', 'registration',
+    'regular', 'regulation', 'reject', 'related', 'relation', 'relationship',
+    'release', 'remaining', 'reminder', 'removal', 'renewal', 'rent', 'repair',
+    'replacement', 'report', 'reporting', 'repository', 'representative',
+    'request', 'requirement', 'research', 'reservation', 'reserve', 'reset',
+    'resolution', 'resource', 'response', 'restriction', 'result', 'retail',
+    'retention', 'retirement', 'return', 'revenue', 'review', 'revision',
+    'reward', 'risk', 'role', 'rollup', 'room', 'root', 'rotation', 'route',
+    'routing', 'row', 'rule', 'run',
+    'salary', 'sale', 'sales', 'sample', 'satisfaction', 'savings', 'scale',
+    'scan', 'scenario', 'schedule', 'schema', 'school', 'scope', 'score',
+    'screen', 'script', 'search', 'season', 'seat', 'section', 'sector',
+    'security', 'seed', 'segment', 'selection', 'send', 'sender', 'sequence',
+    'serial', 'server', 'service', 'session', 'set', 'setting', 'settings',
+    'setup', 'share', 'sheet', 'shelf', 'shift', 'ship', 'shipment',
+    'shipping', 'shop', 'short', 'show', 'sign', 'signature', 'site', 'size',
+    'skill', 'slot', 'snapshot', 'social', 'software', 'solicitation',
+    'solution', 'sort', 'source', 'space', 'speaker', 'special', 'specification',
+    'spend', 'split', 'sponsor', 'sponsorship', 'spot', 'stage', 'standard',
+    'start', 'state', 'statement', 'static', 'station', 'status', 'step',
+    'stock', 'stop', 'storage', 'store', 'strategy', 'stream', 'street',
+    'structure', 'student', 'study', 'sub', 'subject', 'submission', 'submit',
+    'subscriber', 'subscribers', 'subscription', 'substitute', 'success',
+    'suffix', 'suggestion', 'summary', 'supplier', 'supply', 'support',
+    'surcharge', 'survey', 'suspension', 'switch', 'sync', 'system',
+    'table', 'tag', 'target', 'task', 'tax', 'team', 'technology',
+    'telephone', 'template', 'temporary', 'tenant', 'tender', 'term',
+    'terminal', 'terminate', 'territory', 'test', 'text', 'theme', 'ticket',
+    'tier', 'time', 'timeline', 'timestamp', 'title', 'token', 'tool',
+    'top', 'topic', 'total', 'track', 'tracking', 'trade', 'trading',
+    'traffic', 'training', 'transaction', 'transfer', 'transformation',
+    'translation', 'transport', 'travel', 'trend', 'trial', 'trigger',
+    'trust', 'type',
+    'unit', 'update', 'upgrade', 'upload', 'usage', 'use', 'user',
+    'utility',
+    'validation', 'value', 'values', 'variable', 'variance', 'variation',
+    'vendor', 'venue', 'verification', 'version', 'view', 'virtual',
+    'visibility', 'visit', 'visitor', 'volume', 'voucher',
+    'wage', 'warning', 'warranty', 'wave', 'web', 'week', 'weekly',
+    'weight', 'wide', 'window', 'withdrawal', 'work', 'worker',
+    'workflow', 'workspace', 'world', 'write', 'writeoff',
+    'year', 'yearly', 'yield',
+    'zip', 'zone',
+];
 
 /**
 * Converts a string that uses camel casing or contains consecutive uppercase letters to have spaces between words.
@@ -744,22 +1142,6 @@ export function replaceAllSpaces(s: string): string {
     return s;
 }
  
-/**
- * This utility function sends a message to all components that are listening requesting a window resize. This is a cross-platform method of requesting a resize and is loosely coupled from
- * the actual implementation on a specific device/browser/etc.
- * @param delay 
- * @param component 
- */
-export function InvokeManualResize(delay: number = 50, component: any = null) {
-    setTimeout(() => {
-      MJGlobal.Instance.RaiseEvent({
-        event: MJEventType.ManualResizeRequest,
-        eventCode: '',
-        args: null,
-        component: component || this
-      })
-    }, delay ); // give the tabstrip time to render
-}
 
 /**
  * Generates a version 4 UUID (Universally Unique Identifier) using the uuid library.
@@ -966,6 +1348,24 @@ function recursiveReplaceKey(value: any, options: Required<ParseJSONOptions>, de
   else {
     return value; // return as-is for non-string, non-array, and non-object types
   }
+}
+
+/**
+ * Escape HTML entities in a string to prevent Cross-Site Scripting (XSS) attacks.
+ * This is particularly important when rendering un-sanitized user input via mechanisms
+ * like Angular's `[innerHTML]`.
+ *
+ * @param text - The string to escape.
+ * @returns The escaped HTML string.
+ */
+export function EscapeHTML(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 /**

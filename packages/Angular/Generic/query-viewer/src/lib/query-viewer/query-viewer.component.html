@@ -1,0 +1,120 @@
+<!-- Query Viewer Component -->
+<div class="query-viewer-container">
+  <!-- Header bar when query is loaded -->
+  @if (QueryInfo) {
+    <div class="query-header">
+      <div class="query-info">
+        <h3 class="query-name">{{ QueryInfo.Name }}</h3>
+        @if (QueryInfo.Category) {
+          <span class="query-category">
+            <i class="fa-solid fa-folder"></i>
+            {{ QueryInfo.Category }}
+          </span>
+        }
+      </div>
+      <div class="query-actions">
+        <!-- Info button -->
+        <button (click)="OpenInfoPanel()"
+          [disabled]="IsLoading"
+          class="btn btn-secondary"
+          title="Query information">
+          <i class="fa-solid fa-info-circle"></i>
+          Info
+        </button>
+        <!-- Parameters button -->
+        @if (HasParameters) {
+          <button
+            (click)="OpenParametersPanel()"
+            [disabled]="IsLoading"
+            class="btn btn-secondary"
+            title="Edit parameters">
+            <i class="fa-solid fa-sliders"></i>
+            Parameters
+          </button>
+        }
+        <!-- Execution stats -->
+        @if (ExecutionTimeMs !== null) {
+          <span class="execution-stats">
+            <i class="fa-solid fa-clock"></i>
+            {{ ExecutionTimeMs }}ms
+          </span>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Main content area -->
+  <div class="query-content">
+    <!-- No query selected state -->
+    @if (!QueryId) {
+      <div class="no-query-state">
+        <i class="fa-solid fa-database state-icon"></i>
+        <p class="state-message">Select a query to view results</p>
+      </div>
+    }
+
+    <!-- Query not found error -->
+    @if (QueryId && !QueryInfo && LastError) {
+      <div class="error-state">
+        <i class="fa-solid fa-exclamation-triangle state-icon error"></i>
+        <p class="state-message">{{ LastError }}</p>
+      </div>
+    }
+
+    <!-- Query description -->
+    @if (QueryInfo?.Description && !HasRun) {
+      <div class="query-description">
+        <i class="fa-solid fa-info-circle"></i>
+        {{ QueryInfo?.Description }}
+      </div>
+    }
+
+    <!-- Query execution error -->
+    @if (LastError && HasRun) {
+      <div class="execution-error">
+        <i class="fa-solid fa-exclamation-circle"></i>
+        <span>{{ LastError }}</span>
+        <button class="btn btn-secondary" (click)="Refresh()">Try Again</button>
+      </div>
+    }
+
+    <!-- Grid -->
+    @if (QueryInfo) {
+      <mj-query-data-grid
+        [QueryInfo]="QueryInfo"
+        [Data]="QueryData"
+        [TotalRowCount]="QueryTotalRowCount"
+        [PageNumber]="CurrentPageNumber"
+        [PageSize]="PageSize"
+        [SelectionMode]="SelectionMode"
+        [ShowToolbar]="ShowToolbar"
+        [VisualConfig]="VisualConfig"
+        [IsLoading]="IsLoading"
+        (PageChange)="OnPageChange($event)"
+        (EntityLinkClick)="OnEntityLinkClick($event)"
+        (RowDoubleClick)="OnRowDoubleClick($event)"
+        (SelectionChange)="OnSelectionChange($event)"
+        (GridStateChange)="OnGridStateChange($event)"
+        (RefreshRequest)="OnRefreshRequest()">
+      </mj-query-data-grid>
+    }
+  </div>
+
+  <!-- Parameter form panel -->
+  <mj-query-parameter-form
+    [QueryInfo]="QueryInfo"
+    [InitialValues]="SavedParams"
+    [IsOpen]="ShowParamsPanel"
+    (ParametersSubmit)="OnParametersSubmit($event)"
+    (Close)="OnParamsPanelClose()">
+  </mj-query-parameter-form>
+
+  <!-- Query info panel -->
+  <mj-query-info-panel
+    [QueryInfo]="QueryInfo"
+    [Visible]="ShowInfoPanel"
+    (Close)="CloseInfoPanel()"
+    (OpenRecord)="OnOpenQueryRecord($event)"
+    (CompositionTokenClick)="OnCompositionTokenClick($event)">
+  </mj-query-info-panel>
+</div>

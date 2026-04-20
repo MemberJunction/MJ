@@ -11,7 +11,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * await runAction({
  *   ActionName: 'Check Storage Object Exists',
  *   Params: [{
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'Google Drive'
  *   }, {
  *     Name: 'ObjectName',
@@ -27,7 +27,7 @@ export class ObjectExistsAction extends BaseFileStorageAction {
      * Check if a file object exists
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage provider
      *   - ObjectName: Required - Name/path of the object
      *
      * @returns Operation result with:
@@ -67,7 +67,4 @@ export class ObjectExistsAction extends BaseFileStorageAction {
             );
         }
     }
-}
-export function LoadObjectExistsAction() {
-    // Stub function to prevent tree shaking
 }

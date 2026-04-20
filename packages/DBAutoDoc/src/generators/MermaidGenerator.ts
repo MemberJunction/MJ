@@ -136,12 +136,14 @@ export class MermaidGenerator {
 
         if (table.dependsOn && table.dependsOn.length > 0) {
           for (const dep of table.dependsOn) {
+            // Strip schema prefix if present (LLM sometimes returns "SCHEMA.TABLE" format)
+            const depTable = dep.table.includes('.') ? dep.table.split('.').pop()! : dep.table;
             // Check if dependent table passes filters
-            if (this.tablePassesFilters(state, dep.schema, dep.table, options)) {
-              const key = `${dep.table}||--o{${table.name}`;
+            if (this.tablePassesFilters(state, dep.schema, depTable, options)) {
+              const key = `${depTable}||--o{${table.name}`;
               if (!relationships.has(key)) {
                 relationships.add(key);
-                lines.push(`    ${dep.table} ||--o{ ${table.name} : "has"`);
+                lines.push(`    ${depTable} ||--o{ ${table.name} : "has"`);
               }
             }
           }

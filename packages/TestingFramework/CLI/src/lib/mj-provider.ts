@@ -8,7 +8,7 @@ import { loadMJConfig } from '../utils/config-loader';
 // Load environment variables from .env file
 // Note: config-loader.ts also loads dotenv with override:true, but we include it here
 // for completeness in case mj-provider is used standalone
-dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true, quiet: true });
 
 let isInitialized = false;
 let connectionPool: sql.ConnectionPool | null = null;

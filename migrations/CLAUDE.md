@@ -2,7 +2,77 @@
 
 ## Overview
 
-This directory contains SQL migration scripts for MemberJunction database schema changes. We use Flyway for migration management.
+This directory contains SQL migration scripts for MemberJunction database schema changes. We use Skyway, a product we created that is flyway compatible for migration management.
+
+## 🚨 IMPORTANT: Where to Create New Migrations
+
+**All new migrations MUST be created in the `migrations/v5/` directory.**
+
+The `migrations/v2/`,`migrations/v3/`, and `migrations/v4/` directory are **frozen** and should not receive new migrations. They contain historical migrations for earlier MJ versions.
+
+```
+migrations/
+├── v2/                    # ❌ FROZEN - Do NOT add new migrations here
+│   └── V202407171600...   # Historical migrations through v2.133.0
+├── v3/                    # ❌ FROZEN - Do NOT add new migrations here
+│   └── V202601131636...   # Historical migrations through v3.4.x
+├── v4/                    # ❌ FROZEN - Do NOT add new migrations here
+│   └── V202602121700...   # Historical migrations through v4.4.x
+├── v5/                    # ✅ CREATE NEW MIGRATIONS HERE
+│   ├── B202602151200...   # v5.0 Baseline (complete schema)
+│   └── V202602131500...   # All new v5.x migrations
+└── R__RefreshMetadata.sql # Repeatable migration (runs after all versioned)
+```
+
+## Version 3.0 Baseline Migration
+
+Starting with v3.0, MemberJunction uses a **baseline migration** approach to streamline fresh installations:
+
+### Migration Paths
+
+1. **Fresh Installation (Blank Database)**:
+   - Skyway detects blank database and finds the latest baseline script
+   - For 5.x, it runs `B202602151200__v5.0__Baseline` from v5 (complete v5.0 schema)
+   - Runs `R__RefreshMetadata.sql` from root (repeatable migration, always runs after versioned migrations)
+   - Skips all versioned migrations with an earlier version number (V202407171600... through V202602121700)
+   - Runs any future migrations with versions > 202602151200
+
+2. **Existing Installation (< v2.133.0)**:
+   - Continues running remaining v2 migrations incrementally
+   - Skips baseline script (already has migration history)
+   - Runs all versioned scripts with a later version number when they arrive
+   - Repeatable scripts run as normal
+
+3. **Existing Installation (at v2.133.0)**:
+   - Skips baseline script (already at that schema state)
+   - Runs all versioned scripts with a later version number than the last installed versioned or baseline script
+   - Repeatable scripts run as normal
+
+### Configuration
+
+The baseline is configured in Flyway settings:
+```javascript
+{
+  migrationsLocation: 'filesystem:./migrations',  // Skyway recursively scans v2/ and v3/ subdirectories
+  baselineVersion: '202602151200',                // Baseline version (v5.0.x based on v4.4.x + 2 migration scripts that would have been in v4.5.0, unreleased)
+  baselineOnMigrate: true                         // Auto-baseline blank databases
+}
+```
+
+### Version Numbering for v3+
+
+**IMPORTANT**: All v3+ migrations must use **timestamp-based versions** (not semantic versions like 3.0.1):
+
+```
+V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
+```
+
+Examples:
+- ✅ `V202601130900__v3.0.1_Add_NewFeature.sql`
+- ✅ `V202601141400__v3.1.0_Major_Update.sql`
+- ❌ `V3.0.1__Add_NewFeature.sql` (would be interpreted as 3.0001, less than 202601122300!)
+
+This ensures v3 migrations run **after** all v2 migrations (including v2.133.0) in Skyway's/Flyway's version ordering.
 
 ## Migration File Naming Convention
 
@@ -15,7 +85,7 @@ V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
 - **Version Number**: Find the most recent file in the migrations folder and increment the minor version number by 1
   - Example: If latest is v2.60.x, next should be v2.61.x
 - Example: `V202506130552__v2.49.x_Add_AIAgent_Status_And_DriverClass_Columns.sql`
-- This ensures Flyway executes migrations in the correct order
+- This ensures Skyway executes migrations in the correct order
 
 ## CRITICAL: Migration Content Rules
 

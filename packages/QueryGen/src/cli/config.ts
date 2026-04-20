@@ -4,6 +4,13 @@
  * Loads configuration from mj.config.cjs and merges with CLI options
  */
 
+import fs from 'fs';
+import path from 'path';
+import { createRequire } from 'node:module';
+
+// Use createRequire to load CommonJS config files
+const require = createRequire(import.meta.url);
+
 /**
  * QueryGen configuration options
  */
@@ -21,6 +28,7 @@ export interface QueryGenConfig {
   questionsPerGroup: number;
   minGroupSize: number;        // Minimum entities per group
   maxGroupSize: number;        // Maximum entities per group
+  requireConnectivity: boolean; // Require entities in groups to be connected via relationships
 
   // AI Configuration
   modelOverride?: string;    // Override model for all prompts (e.g., "GPT-OSS-120B")
@@ -74,6 +82,7 @@ const DEFAULT_CONFIG: QueryGenConfig = {
   questionsPerGroup: 2,
   minGroupSize: 2,              // Multi-entity groups have at least 2 entities
   maxGroupSize: 3,              // Keep groups small for focused questions
+  requireConnectivity: true,    // Require entities to be connected (disable for sparse relationship graphs)
   embeddingModel: 'text-embedding-3-small',
   maxRefinementIterations: 3,
   maxFixingIterations: 5,
@@ -170,8 +179,7 @@ export function loadConfig(cliOptions: Record<string, unknown>): QueryGenConfig 
  */
 function loadMjConfig(): { queryGen?: Partial<QueryGenConfig> } | null {
   try {
-    const configPath = require('path').join(process.cwd(), 'mj.config.cjs');
-    const fs = require('fs');
+    const configPath = path.join(process.cwd(), 'mj.config.cjs');
     if (fs.existsSync(configPath)) {
       return require(configPath);
     }

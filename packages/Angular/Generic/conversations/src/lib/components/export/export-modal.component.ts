@@ -1,130 +1,123 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ExportService, ExportFormat, ExportOptions } from '../../services/export.service';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 
 @Component({
+  standalone: false,
   selector: 'mj-export-modal',
   template: `
-    <kendo-dialog
-      *ngIf="isVisible"
-      [title]="exportTitle"
-      [width]="600"
-      [height]="600"
-      (close)="onCancel()">
-
-      <div class="export-modal-content">
-        <section class="format-section">
-          <h3 class="section-title">
-            <i class="fa-solid fa-file-export"></i>
-            Export Format
-          </h3>
-          <p class="section-description">
-            Choose a format to export this conversation:
-          </p>
-
-          <div class="format-options">
-            @for (format of formats; track format.value) {
-              <div
-                class="format-option"
-                [class.selected]="selectedFormat === format.value"
-                (click)="selectFormat(format.value)">
-                <i [class]="format.icon"></i>
-                <div class="format-details">
-                  <div class="format-name">{{ format.name }}</div>
-                  <div class="format-description">{{ format.description }}</div>
+    @if (isVisible) {
+      <mj-dialog
+        [Title]="exportTitle"
+        [Width]="600"
+        [Height]="600"
+        [Visible]="true"
+        (Close)="onCancel()">
+        <div class="export-modal-content">
+          <section class="format-section">
+            <h3 class="section-title">
+              <i class="fa-solid fa-file-export"></i>
+              Export Format
+            </h3>
+            <p class="section-description">
+              Choose a format to export this conversation:
+            </p>
+            <div class="format-options">
+              @for (format of formats; track format.value) {
+                <div
+                  class="format-option"
+                  [class.selected]="selectedFormat === format.value"
+                  (click)="selectFormat(format.value)">
+                  <i [class]="format.icon"></i>
+                  <div class="format-details">
+                    <div class="format-name">{{ format.name }}</div>
+                    <div class="format-description">{{ format.description }}</div>
+                  </div>
+                  @if (selectedFormat === format.value) {
+                    <i class="fa-solid fa-check-circle check-icon"></i>
+                  }
                 </div>
-                @if (selectedFormat === format.value) {
-                  <i class="fa-solid fa-check-circle check-icon"></i>
-                }
+              }
+            </div>
+          </section>
+          <section class="options-section">
+            <h3 class="section-title">
+              <i class="fa-solid fa-sliders"></i>
+              Export Options
+            </h3>
+            <div class="option-checkboxes">
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="exportOptions.includeMessages"
+                  [disabled]="isExporting">
+                <span>Include messages</span>
+                <small>Export all conversation messages</small>
+              </label>
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="exportOptions.includeMetadata"
+                  [disabled]="isExporting">
+                <span>Include metadata</span>
+                <small>Add creation date, IDs, and other metadata</small>
+              </label>
+            </div>
+            @if (selectedFormat === 'json') {
+              <div class="format-specific-options">
+                <h4 class="subsection-title">JSON Options</h4>
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="exportOptions.prettyPrint"
+                    [disabled]="isExporting">
+                  <span>Pretty print</span>
+                  <small>Format JSON with indentation</small>
+                </label>
               </div>
             }
-          </div>
-        </section>
-
-        <section class="options-section">
-          <h3 class="section-title">
-            <i class="fa-solid fa-sliders"></i>
-            Export Options
-          </h3>
-
-          <div class="option-checkboxes">
-            <label class="checkbox-label">
-              <input
-                type="checkbox"
-                [(ngModel)]="exportOptions.includeMessages"
-                [disabled]="isExporting">
-              <span>Include messages</span>
-              <small>Export all conversation messages</small>
-            </label>
-
-            <label class="checkbox-label">
-              <input
-                type="checkbox"
-                [(ngModel)]="exportOptions.includeMetadata"
-                [disabled]="isExporting">
-              <span>Include metadata</span>
-              <small>Add creation date, IDs, and other metadata</small>
-            </label>
-          </div>
-
-          @if (selectedFormat === 'json') {
-            <div class="format-specific-options">
-              <h4 class="subsection-title">JSON Options</h4>
-              <label class="checkbox-label">
-                <input
-                  type="checkbox"
-                  [(ngModel)]="exportOptions.prettyPrint"
-                  [disabled]="isExporting">
-                <span>Pretty print</span>
-                <small>Format JSON with indentation</small>
-              </label>
+            @if (selectedFormat === 'html') {
+              <div class="format-specific-options">
+                <h4 class="subsection-title">HTML Options</h4>
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="exportOptions.includeCSS"
+                    [disabled]="isExporting">
+                  <span>Include CSS styling</span>
+                  <small>Embed styles for better presentation</small>
+                </label>
+              </div>
+            }
+          </section>
+          @if (errorMessage) {
+            <div class="error-message">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              {{ errorMessage }}
             </div>
           }
-
-          @if (selectedFormat === 'html') {
-            <div class="format-specific-options">
-              <h4 class="subsection-title">HTML Options</h4>
-              <label class="checkbox-label">
-                <input
-                  type="checkbox"
-                  [(ngModel)]="exportOptions.includeCSS"
-                  [disabled]="isExporting">
-                <span>Include CSS styling</span>
-                <small>Embed styles for better presentation</small>
-              </label>
+          @if (isExporting) {
+            <div class="loading-indicator">
+              <mj-loading text="Exporting conversation..." size="small"></mj-loading>
             </div>
           }
-        </section>
-
-        @if (errorMessage) {
-          <div class="error-message">
-            <i class="fa-solid fa-exclamation-triangle"></i>
-            {{ errorMessage }}
-          </div>
-        }
-
-        @if (isExporting) {
-          <div class="loading-indicator">
-            <mj-loading text="Exporting conversation..." size="small"></mj-loading>
-          </div>
-        }
-      </div>
-
-      <kendo-dialog-actions>
-        <button kendoButton [disabled]="isExporting" (click)="onCancel()">
-          <i class="fa-solid fa-times"></i>
-          Cancel
-        </button>
-        <button kendoButton [primary]="true" [disabled]="!canExport" (click)="onExport()">
-          <i class="fa-solid fa-download"></i>
-          Export
-        </button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  `,
+        </div>
+        <mj-dialog-actions>
+          <button mjButton [disabled]="isExporting" (click)="onCancel()">
+            <i class="fa-solid fa-times"></i>
+            Cancel
+          </button>
+          <button mjButton variant="primary" [disabled]="!canExport" (click)="onExport()">
+            <i class="fa-solid fa-download"></i>
+            Export
+          </button>
+        </mj-dialog-actions>
+      </mj-dialog>
+    }
+    `,
   styles: [`
     .export-modal-content {
       padding: 20px;
@@ -143,16 +136,16 @@ import { ToastService } from '../../services/toast.service';
       margin: 0 0 8px 0;
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .section-title i {
-      color: #007bff;
+      color: var(--mj-brand-primary);
     }
 
     .section-description {
       margin: 0 0 16px 0;
-      color: #666;
+      color: var(--mj-text-muted);
       font-size: 14px;
     }
 
@@ -167,33 +160,34 @@ import { ToastService } from '../../services/toast.service';
       align-items: center;
       gap: 12px;
       padding: 12px;
-      border: 2px solid #e0e0e0;
+      border: 2px solid var(--mj-border-strong);
       border-radius: 6px;
       cursor: pointer;
       transition: all 0.2s;
+      background: var(--mj-bg-surface-card);
     }
 
     .format-option:hover {
-      border-color: #007bff;
-      background: #f8f9fa;
+      border-color: var(--mj-brand-primary);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .format-option.selected {
-      border-color: #007bff;
-      background: #e3f2fd;
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface-card));
     }
 
     .format-option > i.fa-solid,
     .format-option > i.fas {
       font-size: 24px;
-      color: #666;
+      color: var(--mj-text-muted);
       width: 32px;
       text-align: center;
     }
 
     .format-option.selected > i.fa-solid,
     .format-option.selected > i.fas {
-      color: #007bff;
+      color: var(--mj-brand-primary);
     }
 
     .format-details {
@@ -208,12 +202,12 @@ import { ToastService } from '../../services/toast.service';
 
     .format-description {
       font-size: 12px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     .check-icon {
       font-size: 20px;
-      color: #28a745;
+      color: var(--mj-status-success);
     }
 
     .option-checkboxes {
@@ -233,7 +227,7 @@ import { ToastService } from '../../services/toast.service';
     }
 
     .checkbox-label:hover {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .checkbox-label input[type="checkbox"] {
@@ -255,32 +249,32 @@ import { ToastService } from '../../services/toast.service';
     .checkbox-label small {
       margin-left: 28px;
       font-size: 12px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     .format-specific-options {
       margin-top: 16px;
       padding-top: 16px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--mj-border-default);
     }
 
     .subsection-title {
       margin: 0 0 12px 0;
       font-size: 14px;
       font-weight: 600;
-      color: #555;
+      color: var(--mj-text-secondary);
     }
 
     .error-message {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #d32f2f;
+      color: var(--mj-status-error);
       font-size: 13px;
       margin-top: 15px;
       padding: 10px 12px;
-      background: #ffebee;
-      border-left: 3px solid #d32f2f;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border-left: 3px solid var(--mj-status-error);
       border-radius: 4px;
     }
 
@@ -290,27 +284,27 @@ import { ToastService } from '../../services/toast.service';
       gap: 10px;
       margin-top: 15px;
       padding: 12px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 4px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
-    kendo-dialog-actions {
+    mj-dialog-actions {
       display: flex;
       justify-content: flex-end;
       gap: 10px;
       padding: 15px 20px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--mj-border-default);
     }
 
-    kendo-dialog-actions button i {
+    mj-dialog-actions button i {
       margin-right: 6px;
     }
   `]
 })
 export class ExportModalComponent {
   @Input() isVisible = false;
-  @Input() conversation?: ConversationEntity;
+  @Input() conversation?: MJConversationEntity;
   @Input() currentUser!: UserInfo;
   @Output() cancelled = new EventEmitter<void>();
   @Output() exported = new EventEmitter<void>();

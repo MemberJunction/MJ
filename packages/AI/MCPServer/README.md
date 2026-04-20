@@ -1,22 +1,64 @@
 # @memberjunction/ai-mcp-server
 
-MemberJunction's implementation of the Model Context Protocol (MCP) server, providing a standardized interface for LLMs to interact with MemberJunction data and capabilities.
+MemberJunction's Model Context Protocol (MCP) server implementation. Exposes MemberJunction entities, AI agents, actions, and prompts as MCP tools that can be consumed by any MCP-compatible AI client (Claude Desktop, Cursor, custom integrations). Supports both SSE and StreamableHTTP transports, API key and OAuth 2.1 authentication, configurable tool filtering, and dynamic tool generation from entity metadata.
 
-## Overview
+## Architecture
 
-The MCP (Model Context Protocol) Server enables AI models to interact with MemberJunction entities through a standardized tool interface. It dynamically generates tools based on configuration, allowing AI models to perform CRUD operations, run views, and access metadata across your MemberJunction database.
+```mermaid
+graph TD
+    subgraph "@memberjunction/ai-mcp-server"
+        SRV["MCP Server<br/>Express + MCP SDK"]
+        style SRV fill:#2d8659,stroke:#1a5c3a,color:#fff
 
-## Features
+        CFG["Config System<br/>Entity/Agent/Action/Prompt Tools"]
+        style CFG fill:#b8762f,stroke:#8a5722,color:#fff
 
-- **MCP Implementation**: Full implementation of the Model Context Protocol (MCP) for AI model tool integration
-- **Entity Access**: Expose MemberJunction entities to AI models through a consistent tooling interface
-- **Agent Execution**: Execute MemberJunction AI agents with conversation history and template data support
-- **Configurable Tools**: Generate tools dynamically based on configuration with wildcard support
-- **CRUD Operations**: Support for creating, reading, updating, and deleting entity records
-- **View Execution**: Run entity views with filtering, sorting, and field selection
-- **Metadata Access**: Built-in tool to retrieve all entity metadata including fields and relationships
-- **Type-Safe**: Full TypeScript support with Zod schema validation
-- **SSE Transport**: Server-Sent Events based communication for real-time interactions
+        CLI["CLI Entry Point<br/>yargs"]
+        style CLI fill:#7c5295,stroke:#563a6b,color:#fff
+
+        subgraph "Authentication"
+            AK["API Key Auth"]
+            style AK fill:#2d6a9f,stroke:#1a4971,color:#fff
+            OA["OAuth 2.1 Proxy"]
+            style OA fill:#2d6a9f,stroke:#1a4971,color:#fff
+            AG["AuthGate"]
+            style AG fill:#2d6a9f,stroke:#1a4971,color:#fff
+            TV["TokenValidator"]
+            style TV fill:#2d6a9f,stroke:#1a4971,color:#fff
+            SE["ScopeEvaluator"]
+            style SE fill:#2d6a9f,stroke:#1a4971,color:#fff
+        end
+
+        subgraph "Tool Types"
+            ET["Entity Tools<br/>CRUD + RunView"]
+            style ET fill:#7c5295,stroke:#563a6b,color:#fff
+            AGT["Agent Tools<br/>Execute Agents"]
+            style AGT fill:#7c5295,stroke:#563a6b,color:#fff
+            ACT["Action Tools<br/>Execute Actions"]
+            style ACT fill:#7c5295,stroke:#563a6b,color:#fff
+            PT["Prompt Tools<br/>Execute Prompts"]
+            style PT fill:#7c5295,stroke:#563a6b,color:#fff
+            MT["Metadata Tool<br/>Entity Schema Info"]
+            style MT fill:#7c5295,stroke:#563a6b,color:#fff
+        end
+    end
+
+    CLI --> SRV
+    SRV --> CFG
+    SRV --> AG
+    AG --> AK
+    AG --> OA
+    SRV --> ET
+    SRV --> AGT
+    SRV --> ACT
+    SRV --> PT
+    SRV --> MT
+
+    MCP_CLIENT["MCP Client<br/>(Claude Desktop, Cursor, etc.)"]
+    style MCP_CLIENT fill:#b8762f,stroke:#8a5722,color:#fff
+
+    MCP_CLIENT -->|"SSE / StreamableHTTP"| SRV
+```
 
 ## Installation
 
@@ -24,484 +66,150 @@ The MCP (Model Context Protocol) Server enables AI models to interact with Membe
 npm install @memberjunction/ai-mcp-server
 ```
 
-## Requirements
-
-- Node.js 16+
-- SQL Server database with MemberJunction schema
-- MemberJunction Core libraries
-- Configuration file
-
-## Configuration
-
-The server reads configuration from a `mj.config.cjs` file using cosmiconfig. Create this file in your project root:
-
-```javascript
-module.exports = {
-  // Database settings
-  dbHost: 'localhost',
-  dbPort: 1433,
-  dbUsername: 'your_db_username',
-  dbPassword: 'your_db_password',
-  dbDatabase: 'your_database',
-  dbInstanceName: '', // Optional
-  dbTrustServerCertificate: true, // Optional
-  mjCoreSchema: '__mj',
-  
-  // Database connection settings
-  databaseSettings: {
-    connectionTimeout: 30000,
-    requestTimeout: 30000
-  },
-  
-  // MCP server settings
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-    
-    // Configure entity tools
-    entityTools: [
-      {
-        // Expose all entities
-        entityName: '*',
-        schemaName: '*',
-        get: true,
-        create: true,
-        update: true,
-        delete: true,
-        runView: true
-      },
-      // Expose specific entity with specific operations
-      {
-        entityName: 'Users',
-        schemaName: '__mj',
-        get: true,
-        runView: true
-      }
-    ],
-    
-    // Configure action tools (not yet implemented)
-    actionTools: [],
-    
-    // Configure agent tools
-    agentTools: [
-      {
-        // Expose all agents
-        agentName: '*',
-        discover: true,
-        execute: true,
-        status: true,
-        cancel: true
-      }
-    ]
-  }
-}
-```
-
-You can also use environment variables with a `.env` file:
-
-```
-DB_HOST=localhost
-DB_PORT=1433
-DB_USERNAME=your_db_username
-DB_PASSWORD=your_db_password
-DB_DATABASE=your_database
-```
-
-## Usage
-
-### Starting the Server
+## Quick Start
 
 ```bash
-# Install globally
-npm install -g @memberjunction/ai-mcp-server
-
-# Run the server
-MemberJunction
-
-# Or via npx
+# Start with all configured tools
 npx @memberjunction/ai-mcp-server
+
+# Start with tool filtering
+npx @memberjunction/ai-mcp-server --include "Get_*,Run_Agent"
+
+# Start excluding certain tools
+npx @memberjunction/ai-mcp-server --include "Get_*" --exclude "Get_AuditLogs_*"
+
+# List available tools without starting
+npx @memberjunction/ai-mcp-server --list-tools
+
+# Load filter config from file
+npx @memberjunction/ai-mcp-server --tools-file ./my-tools.json
 ```
 
-### Import and Start Programmatically
-
-```typescript
-import { initializeServer } from '@memberjunction/ai-mcp-server';
-
-// Start the server
-await initializeServer();
-```
-
-### Binary Execution
-
-When installed globally or locally, the package provides a `MemberJunction` executable that starts the MCP server. The server automatically initializes when the module is loaded.
-
-## Tool Configuration
-
-### Agent Tools
-
-Agent tools allow AI models to discover and execute MemberJunction AI agents.
-
-```javascript
-agentTools: [
-  {
-    // Agent matching (supports wildcards)
-    agentName: 'DataAnalysis*',  // Agent name pattern (use '*' for all agents)
-    
-    // Operations to enable
-    discover: true,   // Enable agent discovery
-    execute: true,    // Enable agent execution
-    status: true,     // Enable run status checking
-    cancel: true      // Enable run cancellation
-  }
-]
-```
-
-#### Agent Tool Naming
-
-The server generates tools with these naming conventions:
-
-- `Discover_Agents`: Lists available agents based on a name pattern
-- `Run_Agent`: General tool to execute any agent by name or ID
-- `Execute_[AgentName]_Agent`: Specific tools for each configured agent
-- `Get_Agent_Run_Status`: Check the status of an agent execution
-- `Cancel_Agent_Run`: Cancel a running agent execution
-
-#### Agent Tool Parameters and Responses
-
-**Discover_Agents**
-- Parameters: `pattern` (optional) - Wildcard pattern to match agent names
-- Returns: Array of agent metadata (ID, name, description, typeID, parentID)
-
-**Run_Agent**
-- Parameters:
-  - `agentNameOrId`: Agent name or ID to execute
-  - `conversationHistory` (optional): Array of chat messages
-  - `templateData` (optional): Data to pass to agent templates
-  - `waitForCompletion` (optional): Whether to wait for completion
-- Returns: `{ success: boolean, runId?: string, status?: string, returnValues?: any, errorMessage?: string }`
-
-**Execute_[AgentName]_Agent**
-- Parameters: Same as Run_Agent minus agentNameOrId
-- Returns: Same as Run_Agent
-
-**Get_Agent_Run_Status**
-- Parameters: `runId` - The ID of the agent run to check
-- Returns: `{ status: string, completedAt?: string, errorMessage?: string }`
-
-**Cancel_Agent_Run**
-- Parameters: `runId` - The ID of the agent run to cancel
-- Returns: `{ success: boolean, errorMessage?: string }`
+## Tool Types
 
 ### Entity Tools
 
-Entity tools allow AI models to interact with MemberJunction entities.
+Dynamically generated from MemberJunction entity metadata. For each configured entity, the server creates:
 
-```javascript
-entityTools: [
-  {
-    // Entity matching (supports wildcards)
-    entityName: 'Users', // Entity name (use '*' for all entities)
-    schemaName: '__mj',  // Schema name (use '*' for all schemas)
-    
-    // Operations to enable
-    get: true,     // Get entity by primary key
-    create: true,  // Create new entity record
-    update: true,  // Update existing entity record
-    delete: true,  // Delete entity record
-    runView: true  // Run entity view with filtering
-  }
-]
-```
+| Tool Pattern | Description |
+|---|---|
+| `Get_<Entity>_Record` | Retrieve a single record by primary key |
+| `Get_<Entity>_Records` | Query records with filtering, sorting, field selection |
+| `Create_<Entity>_Record` | Create a new entity record |
+| `Update_<Entity>_Record` | Update an existing record |
+| `Delete_<Entity>_Record` | Delete a record by primary key |
+| `RunView_<Entity>` | Execute a view with ExtraFilter, OrderBy, Fields, MaxRows |
 
-#### Tool Naming
+### Agent Tools
 
-The server generates tools with naming conventions (using the entity's ClassName property):
+| Tool | Description |
+|---|---|
+| `Run_Agent` | Execute any configured MemberJunction AI agent with conversation history and template data |
 
-- `Get_EntityName_Record`: Retrieve a record by primary key
-- `Create_EntityName_Record`: Create a new record
-- `Update_EntityName_Record`: Update an existing record
-- `Delete_EntityName_Record`: Delete a record
-- `Run_EntityName_View`: Run a view against the entity
+### Action Tools
 
-#### Tool Parameters and Responses
+| Tool Pattern | Description |
+|---|---|
+| `Run_<Action>_Action` | Execute a configured MemberJunction action with parameters |
 
-**Get Tool**
-- Parameters: Primary key field(s) of the entity
-- Returns: JSON object of the record or empty object if not found
+### Prompt Tools
 
-**Create Tool**
-- Parameters: All non-readonly fields (primary keys excluded)
-- Returns: `{ success: boolean, record?: object, errorMessage?: string }`
+| Tool Pattern | Description |
+|---|---|
+| `Run_<Prompt>_Prompt` | Execute a configured AI prompt with template data |
 
-**Update Tool**
-- Parameters: Primary key field(s) + all non-readonly fields
-- Returns: `{ success: boolean, record?: object, errorMessage?: string }`
+### Metadata Tool
 
-**Delete Tool**
-- Parameters: Primary key field(s)
-- Returns: `{ success: boolean, record?: object, errorMessage?: string }`
+| Tool | Description |
+|---|---|
+| `Get_All_Entity_Metadata` | Retrieve all entity metadata including fields, relationships, and field types |
 
-**RunView Tool**
-- Parameters:
-  - `extraFilter` (optional): SQL WHERE clause filter
-  - `orderBy` (optional): SQL ORDER BY clause
-  - `fields` (optional): Array of field names to include
-- Returns: JSON object with view results
+## Configuration
 
-### Wildcard Support
-
-You can use wildcards in `entityName` and `schemaName`:
-
-- `*`: Match all entities/schemas
-- `Users*`: Match entities/schemas starting with "Users"
-- `*Users`: Match entities/schemas ending with "Users"
-- `*Users*`: Match entities/schemas containing "Users"
-
-## Connecting Models to the Server
-
-The server endpoint is available at:
-
-```
-http://localhost:3100/mcp
-```
-
-You can connect any MCP-compatible client to this endpoint. The MCP protocol allows AI models to discover and use the available tools.
-
-## Built-in Tools
-
-The server includes a built-in tool that's always available:
-
-### Get_All_Entities
-
-- **Description**: Retrieves all Entities including entity fields and relationships from the MemberJunction Metadata
-- **Parameters**: None
-- **Returns**: JSON representation of all entity metadata including fields, relationships, and permissions
-
-Example response structure:
-```json
-[
-  {
-    "ID": "entity-id",
-    "Name": "Users",
-    "SchemaName": "__mj",
-    "ClassName": "UserEntity",
-    "Fields": [...],
-    "PrimaryKeys": [...],
-    "RelatedEntities": [...]
-  }
-]
-```
-
-## API Details
-
-### GET /mcp
-
-The primary endpoint for Server-Sent Events (SSE) based MCP protocol communication. This endpoint handles:
-
-- Tool discovery requests
-- Tool execution requests
-- Server capability negotiations
-- Real-time bidirectional communication with AI models
-
-The MCP protocol uses JSON-RPC 2.0 over Server-Sent Events for communication.
-
-## Security
-
-By default, the server runs without authentication. For production, you should configure authentication in the server options:
-
-```javascript
-// Example using basic auth
-const serverOptions = {
-  transportType: "sse",
-  sse: {
-    endpoint: "/mcp",
-    port: 3100
-  },
-  auth: {
-    type: "basic",
-    username: "user",
-    password: "pass"
-  }
-};
-```
-
-## Complete Example
-
-Here's a complete example of setting up and using the MCP server:
-
-### 1. Create Configuration File (mj.config.cjs)
+Configuration is loaded from `mj.config.cjs` or environment variables. Key settings:
 
 ```javascript
 module.exports = {
-  // Database connection
-  dbHost: process.env.DB_HOST || 'localhost',
-  dbPort: parseInt(process.env.DB_PORT || '1433'),
-  dbUsername: process.env.DB_USERNAME,
-  dbPassword: process.env.DB_PASSWORD,
-  dbDatabase: process.env.DB_DATABASE,
-  dbTrustServerCertificate: true,
-  mjCoreSchema: '__mj',
-  
-  databaseSettings: {
-    connectionTimeout: 30000,
-    requestTimeout: 30000
-  },
-  
-  // MCP Server Configuration
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-    
-    entityTools: [
-      // Expose all entities with all operations
-      {
-        entityName: '*',
-        schemaName: '*',
-        get: true,
-        create: true,
-        update: true,
-        delete: true,
-        runView: true
-      },
-      
-      // Override: Users entity with limited operations
-      {
-        entityName: 'Users',
-        schemaName: '__mj',
-        get: true,
-        runView: true,
-        create: false,
-        update: false,
-        delete: false
-      }
-    ]
-  }
+    mcpServerSettings: {
+        port: 3100,
+        entities: [
+            { entityName: 'Users', operations: ['get', 'list', 'create', 'update', 'delete', 'runview'] },
+            { entityName: 'Companies', operations: ['get', 'list', 'runview'] }
+        ],
+        agents: [
+            { agentId: 'agent-uuid', name: 'Sales Assistant' }
+        ],
+        actions: [
+            { actionId: 'action-uuid', name: 'Send Email' }
+        ],
+        prompts: [
+            { promptId: 'prompt-uuid', name: 'Summarize Content' }
+        ]
+    }
+};
+```
+
+## Authentication
+
+### API Key Authentication
+
+The server authenticates requests using MemberJunction API keys. The API key is passed via the `x-api-key` header and maps to a MemberJunction user context.
+
+### OAuth 2.1 (Optional)
+
+When configured, the server acts as both an OAuth resource server and an OAuth proxy:
+
+- **RFC 9728**: Protected Resource Metadata at `/.well-known/oauth-protected-resource`
+- **RFC 8414**: Authorization Server Metadata discovery
+- **RFC 7591**: Dynamic Client Registration
+- **PKCE**: Required for all authorization code flows
+- **Scope Evaluation**: Tool-level access control via OAuth scopes
+
+The OAuth proxy handles the authorization flow for MCP clients that don't natively support OAuth, proxying between the client and your identity provider.
+
+## Tool Filtering
+
+Filter which tools are exposed using glob-style patterns:
+
+```json
+{
+    "include": ["Get_*", "Run_Agent", "RunView_Users"],
+    "exclude": ["*_AuditLogs_*", "Delete_*"]
 }
 ```
 
-### 2. Start the Server
+Patterns support:
+- `*` -- Match any characters
+- `prefix*` -- Match tools starting with prefix
+- `*suffix` -- Match tools ending with suffix
+- `*contains*` -- Match tools containing text
 
-```bash
-# Using the CLI
-MemberJunction
+## CLI Options
 
-# Or programmatically
-node -e "import('@memberjunction/ai-mcp-server').then(m => m.initializeServer())"
-```
-
-### 3. Connect Your AI Model
-
-Configure your AI model client to connect to:
-```
-http://localhost:3100/mcp
-```
-
-### 4. Available Tools Example
-
-With the above configuration, your AI model will have access to tools like:
-
-**Entity Tools:**
-- `Get_All_Entities` - Get all entity metadata
-- `Get_UserEntity_Record` - Get a user by ID
-- `Run_UserEntity_View` - Query users with filters
-- `Get_CompanyEntity_Record` - Get a company by ID
-- `Create_CompanyEntity_Record` - Create a new company
-- `Update_CompanyEntity_Record` - Update a company
-- `Delete_CompanyEntity_Record` - Delete a company
-- `Run_CompanyEntity_View` - Query companies
-- And many more for all entities in your database
-
-**Agent Tools:**
-- `Discover_Agents` - Find available agents
-- `Run_Agent` - Execute any agent by name or ID
-- `Execute_DataAnalysisAgent_Agent` - Execute the Data Analysis agent
-- `Execute_ReportGeneratorAgent_Agent` - Execute the Report Generator agent
-- `Get_Agent_Run_Status` - Check agent execution status
-- `Cancel_Agent_Run` - Cancel a running agent
-
-## Field Type Support
-
-The server automatically handles different field types with appropriate Zod validation:
-
-- **String Fields**: Basic strings or enums (if entity field values are defined)
-- **Number Fields**: Numeric validation
-- **Boolean Fields**: Boolean validation
-- **Date Fields**: Date validation
-- **Value Lists**: Automatically creates enums for fields with predefined values
-- **Optional Fields**: Non-primary key fields can be optional for updates
+| Option | Alias | Description |
+|---|---|---|
+| `--include` | `-i` | Comma-separated include patterns |
+| `--exclude` | `-e` | Comma-separated exclude patterns |
+| `--tools-file` | `-f` | Path to JSON filter config file |
+| `--list-tools` | `-l` | List tools and exit |
+| `--help` | `-h` | Show help |
+| `--version` | `-v` | Show version |
 
 ## Dependencies
 
-- `@memberjunction/core`: Core MemberJunction library
-- `@memberjunction/core-entities`: MemberJunction entity management
-- `@memberjunction/global`: Global utilities and types
-- `@memberjunction/sqlserver-dataprovider`: SQL Server data provider
-- `@modelcontextprotocol/sdk`: MCP protocol SDK
-- `fastmcp`: Fast implementation of MCP
-- `cosmiconfig`: Configuration management
-- `dotenv`: Environment variable support
-- `typeorm`: ORM for database access
-- `zod`: Schema validation
-
-## Troubleshooting
-
-### Server Won't Start
-
-1. **Check Configuration**: Ensure `enableMCPServer` is set to `true` in your config
-2. **Database Connection**: Verify database credentials and connectivity
-3. **Port Conflicts**: Check if port 3100 (or your configured port) is available
-4. **Missing Dependencies**: Run `npm install` to ensure all dependencies are installed
-
-### Tools Not Appearing
-
-1. **Entity Matching**: Check that your entityName/schemaName patterns match existing entities
-2. **Permissions**: Ensure the database user has appropriate permissions
-3. **Configuration**: Verify the entityTools array is properly configured
-
-### Common Issues
-
-- **"Config file not found"**: Create a `mj.config.cjs` file in your project root
-- **Database timeout**: Increase `connectionTimeout` and `requestTimeout` in config
-- **Authentication errors**: Check database credentials and SQL Server authentication mode
-
-## Development Notes
-
-### Building from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/MemberJunction/MJ.git
-cd MJ/packages/AI/MCPServer
-
-# Install dependencies
-npm install
-
-# Build the package
-npm run build
-
-# Start the server
-npm start
-```
-
-### Architecture
-
-The MCP Server is built on:
-- **FastMCP**: Provides the MCP protocol implementation and SSE transport
-- **MemberJunction Core**: Handles entity metadata and database operations
-- **TypeORM**: Manages database connections
-- **Zod**: Validates tool parameters and configuration
-
-**Note**: The server automatically initializes when the module is imported, making it suitable for use as both a library and a CLI tool. The `initializeServer()` function is called at module load time in `Server.ts`.
-
-### Extending the Server
-
-To add custom tools or modify behavior:
-
-1. Fork the repository
-2. Modify `src/Server.ts` to add custom tools
-3. Use the `server.addTool()` method to register new tools
-4. Build and test your changes
-
-## License
-
-ISC
+- `@modelcontextprotocol/sdk` -- Official MCP SDK (server, transports)
+- `@memberjunction/ai-agents` -- AgentRunner for agent execution
+- `@memberjunction/ai-prompts` -- AIPromptRunner for prompt execution
+- `@memberjunction/ai-core-plus` -- Extended entity classes
+- `@memberjunction/aiengine` -- AIEngine for metadata
+- `@memberjunction/actions` / `@memberjunction/actions-base` -- Action execution
+- `@memberjunction/server` -- MJ server authentication
+- `@memberjunction/server-bootstrap-lite` -- Class registration manifest
+- `@memberjunction/sqlserver-dataprovider` -- SQL Server data access
+- `@memberjunction/api-keys` -- API key validation
+- `@memberjunction/credentials` -- Credential management
+- `@memberjunction/config` -- Configuration loading
+- `express` -- HTTP server framework
+- `jsonwebtoken` / `jwks-rsa` -- JWT validation for OAuth
+- `yargs` -- CLI argument parsing
+- `zod` -- Schema validation

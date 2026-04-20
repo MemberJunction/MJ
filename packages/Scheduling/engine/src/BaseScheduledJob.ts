@@ -4,15 +4,15 @@
  */
 
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, ValidationResult, UserInfo, Metadata } from '@memberjunction/core';
-import { ScheduledJobEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
 import { ScheduledJobResult, ScheduledJobConfiguration, NotificationContent } from '@memberjunction/scheduling-base-types';
 
 /**
  * Context passed to job execution
  */
 export interface ScheduledJobExecutionContext {
-    Schedule: ScheduledJobEntity;
-    Run: ScheduledJobRunEntity;
+    Schedule: MJScheduledJobEntity;
+    Run: MJScheduledJobRunEntity;
     ContextUser: UserInfo;
 }
 
@@ -72,7 +72,7 @@ export abstract class BaseScheduledJob {
      * @param schedule - The schedule being validated
      * @returns Validation result with any errors or warnings
      */
-    abstract ValidateConfiguration(schedule: ScheduledJobEntity): ValidationResult;
+    abstract ValidateConfiguration(schedule: MJScheduledJobEntity): ValidationResult;
 
     /**
      * Format notification content for job completion
@@ -102,7 +102,7 @@ export abstract class BaseScheduledJob {
      * @protected
      */
     protected parseConfiguration<T extends ScheduledJobConfiguration>(
-        schedule: ScheduledJobEntity
+        schedule: MJScheduledJobEntity
     ): T {
         if (!schedule.Configuration) {
             throw new Error(`Configuration is required for job type`);
@@ -125,11 +125,11 @@ export abstract class BaseScheduledJob {
      * @protected
      */
     protected async getJobType(
-        schedule: ScheduledJobEntity,
+        schedule: MJScheduledJobEntity,
         contextUser: UserInfo
-    ): Promise<ScheduledJobTypeEntity> {
+    ): Promise<MJScheduledJobTypeEntity> {
         const md = new Metadata();
-        const jobType = await md.GetEntityObject<ScheduledJobTypeEntity>('MJ: Scheduled Job Types', contextUser);
+        const jobType = await md.GetEntityObject<MJScheduledJobTypeEntity>('MJ: Scheduled Job Types', contextUser);
         await jobType.Load(schedule.JobTypeID);
         return jobType;
     }

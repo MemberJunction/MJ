@@ -1,15 +1,17 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
 import { RunView, LogError } from '@memberjunction/core';
-import { ActionCategoryEntity, ActionEntity } from '@memberjunction/core-entities';
+import { MJActionCategoryEntity, MJActionEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
+import { UUIDsEqual } from '@memberjunction/global';
 
-interface CategoryWithStats extends ActionCategoryEntity {
+interface CategoryWithStats extends MJActionCategoryEntity {
   actionCount?: number;
   activeActionCount?: number;
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-categories-list-view',
   template: `
     <div class="categories-list-view" mjFillContainer>
@@ -21,14 +23,13 @@ interface CategoryWithStats extends ActionCategoryEntity {
         </div>
         
         <div class="search-container">
-          <kendo-textbox 
-            placeholder="Search categories..." 
-            [value]="searchTerm$.value"
-            (valueChange)="onSearchChange($event)">
-            <ng-template kendoTextBoxPrefixTemplate>
-              <i class="fa-solid fa-search"></i>
-            </ng-template>
-          </kendo-textbox>
+          <div class="search-input-wrapper">
+            <i class="fa-solid fa-search search-icon"></i>
+            <input type="text" class="mj-input"
+              placeholder="Search categories..."
+              [value]="searchTerm$.value"
+              (input)="onSearchChange($any($event.target).value)" />
+          </div>
         </div>
       </div>
 
@@ -62,9 +63,9 @@ interface CategoryWithStats extends ActionCategoryEntity {
               </div>
               
               <div class="category-footer">
-                <button kendoButton 
-                  [fillMode]="'outline'" 
-                  [size]="'small'"
+                <button mjButton
+                  variant="outline"
+                  size="sm"
                   (click)="viewActions(category, $event)">
                   <i class="fa-solid fa-cogs"></i> View Actions
                 </button>
@@ -117,12 +118,12 @@ interface CategoryWithStats extends ActionCategoryEntity {
             gap: 0.5rem;
 
             i {
-              color: var(--kendo-color-primary);
+              color: var(--mj-brand-primary);
             }
           }
 
           .results-count {
-            color: var(--kendo-color-subtle);
+            color: var(--mj-text-muted);
             font-size: 0.875rem;
           }
         }
@@ -130,7 +131,7 @@ interface CategoryWithStats extends ActionCategoryEntity {
         .search-container {
           min-width: 250px;
           
-          kendo-textbox {
+          .search-input-wrapper {
             width: 100%;
           }
         }
@@ -144,8 +145,8 @@ interface CategoryWithStats extends ActionCategoryEntity {
         align-content: start;
 
         .category-card {
-          background: var(--kendo-color-surface);
-          border: 1px solid var(--kendo-color-border);
+          background: var(--mj-bg-surface-card);
+          border: 1px solid var(--mj-border-default);
           border-radius: 0.75rem;
           padding: 1.5rem;
           cursor: pointer;
@@ -157,7 +158,7 @@ interface CategoryWithStats extends ActionCategoryEntity {
           &:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            border-color: var(--kendo-color-primary);
+            border-color: var(--mj-brand-primary);
           }
 
           .category-header {
@@ -171,11 +172,11 @@ interface CategoryWithStats extends ActionCategoryEntity {
               justify-content: center;
               width: 3rem;
               height: 3rem;
-              background: var(--kendo-color-primary-subtle);
+              background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
               border-radius: 0.5rem;
 
               i {
-                color: var(--kendo-color-primary);
+                color: var(--mj-brand-primary);
                 font-size: 1.25rem;
               }
             }
@@ -189,7 +190,7 @@ interface CategoryWithStats extends ActionCategoryEntity {
           }
 
           .category-description {
-            color: var(--kendo-color-subtle);
+            color: var(--mj-text-muted);
             font-size: 0.875rem;
             line-height: 1.5;
             display: -webkit-box;
@@ -202,7 +203,7 @@ interface CategoryWithStats extends ActionCategoryEntity {
             display: flex;
             gap: 2rem;
             padding: 1rem;
-            background: var(--kendo-color-app-surface);
+            background: var(--mj-bg-surface);
             border-radius: 0.5rem;
 
             .stat-item {
@@ -213,16 +214,16 @@ interface CategoryWithStats extends ActionCategoryEntity {
               .stat-value {
                 font-size: 1.5rem;
                 font-weight: 700;
-                color: var(--kendo-color-on-app-surface);
+                color: var(--mj-text-primary);
 
                 &.active {
-                  color: var(--kendo-color-success);
+                  color: var(--mj-status-success);
                 }
               }
 
               .stat-label {
                 font-size: 0.75rem;
-                color: var(--kendo-color-subtle);
+                color: var(--mj-text-muted);
                 font-weight: 600;
               }
             }
@@ -243,7 +244,7 @@ interface CategoryWithStats extends ActionCategoryEntity {
         justify-content: center;
         padding: 4rem;
         text-align: center;
-        color: var(--kendo-color-subtle);
+        color: var(--mj-text-muted);
 
         i {
           font-size: 3rem;
@@ -338,11 +339,11 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
       const rv = new RunView();
       const [categoriesResult, actionsResult] = await rv.RunViews([
         {
-          EntityName: 'Action Categories', 
+          EntityName: 'MJ: Action Categories', 
           OrderBy: 'Name' 
         },
         {
-          EntityName: 'Actions', 
+          EntityName: 'MJ: Actions', 
           OrderBy: 'Name'
         }
       ]);
@@ -354,14 +355,14 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
         throw new Error('Failed to load categories: ' + categoriesResult.ErrorMessage);
       }
       
-      const categories = (categoriesResult.Results || []) as ActionCategoryEntity[];
-      const actions = (actionsResult.Results || []) as ActionEntity[];
+      const categories = (categoriesResult.Results || []) as MJActionCategoryEntity[];
+      const actions = (actionsResult.Results || []) as MJActionEntity[];
       
       console.log(`Loaded ${categories.length} categories and ${actions.length} actions`);
 
       // Calculate stats for each category
       this.categories = categories.map(category => {
-        const categoryActions = actions.filter(a => a.CategoryID === category.ID);
+        const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID));
         return {
           ...category,
           actionCount: categoryActions.length,
@@ -398,14 +399,14 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
     this.searchTerm$.next(searchTerm);
   }
 
-  public openCategory(category: ActionCategoryEntity): void {
+  public openCategory(category: MJActionCategoryEntity): void {
     this.openEntityRecord.emit({
-      entityName: 'Action Categories',
+      entityName: 'MJ: Action Categories',
       recordId: category.ID
     });
   }
 
-  public viewActions(category: ActionCategoryEntity, event: Event): void {
+  public viewActions(category: MJActionCategoryEntity, event: Event): void {
     event.stopPropagation();
     // This could navigate to the actions list with a pre-applied category filter
     // For now, just open the category

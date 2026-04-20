@@ -1,11 +1,25 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, Input, Output, EventEmitter } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { TestEngineBase } from '@memberjunction/testing-engine-base';
+import { TestEngineBase, TestVariableDefinition, TestTypeVariablesSchema, TestVariablesConfig } from '@memberjunction/testing-engine-base';
 import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { TestEntity, TestSuiteEntity } from '@memberjunction/core-entities';
+import { MJTestEntity, MJTestSuiteEntity, MJTestSuiteTestEntity, MJTestTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { TestingExecutionService, TestExecutionResult } from '../services/testing-execution.service';
+
+interface SuiteTestItem {
+  testId: string;
+  testName: string;
+  sequence: number;
+  selected: boolean;
+}
+
+interface VariableInput {
+  definition: TestVariableDefinition;
+  value: string | number | Date | boolean | null;
+  stringValue: string; // For input binding (converted on submit)
+}
 
 interface ProgressUpdate {
   step: string;
@@ -16,6 +30,7 @@ interface ProgressUpdate {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-test-run-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -23,6 +38,7 @@ interface ProgressUpdate {
         @if (!isRunning && !hasCompleted) {
           <!-- Pre-selected Mode - Compact Header -->
           @if (isPreselected) {
+            <div class="dialog-scroll-content">
             <div class="preselected-header">
               <div class="preselected-info">
                 <div class="preselected-icon">
@@ -45,6 +61,205 @@ interface ProgressUpdate {
                   </label>
                 }
               </div>
+            </div>
+
+            <!-- Tags Section for Preselected Mode -->
+            <div class="tags-section">
+              <div class="tags-header">
+                <i class="fa-solid fa-tags"></i>
+                <span>Run Tags</span>
+                <span class="tags-hint">(optional)</span>
+              </div>
+              <div class="tags-container">
+                <div class="tags-chips">
+                  @for (tag of tags; track tag) {
+                    <span class="tag-chip">
+                      {{ tag }}
+                      <button class="tag-remove" (click)="removeTag(tag)">
+                        <i class="fa-solid fa-times"></i>
+                      </button>
+                    </span>
+                  }
+                </div>
+                <div class="tag-input-row">
+                  <input
+                    type="text"
+                    [(ngModel)]="newTag"
+                    placeholder="Add tag (e.g., opus-4.5, v2.1.0)"
+                    (keyup.enter)="addTag()"
+                    class="tag-input"
+                  />
+                  <button class="tag-add-btn" (click)="addTag()" [disabled]="!newTag.trim()">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Variables Section for Preselected Mode -->
+            @if (availableVariables.length > 0) {
+              <div class="variables-section">
+                <button class="variables-toggle" (click)="showVariablesSection = !showVariablesSection">
+                  <i class="fa-solid" [class.fa-chevron-right]="!showVariablesSection" [class.fa-chevron-down]="showVariablesSection"></i>
+                  <i class="fa-solid fa-sliders"></i>
+                  <span>Test Variables</span>
+                  <span class="variables-count-badge">{{ availableVariables.length }}</span>
+                </button>
+
+                @if (showVariablesSection) {
+                  <div class="variables-content">
+                    @for (variable of availableVariables; track variable.definition.name) {
+                      <div class="variable-row">
+                        <div class="variable-info">
+                          <label class="variable-label">{{ variable.definition.displayName }}</label>
+                          @if (variable.definition.description) {
+                            <span class="variable-description">{{ variable.definition.description }}</span>
+                          }
+                        </div>
+                        <div class="variable-input">
+                          @if (variable.definition.valueSource === 'static' && variable.definition.possibleValues) {
+                            <select [(ngModel)]="variable.stringValue" class="variable-select">
+                              <option value="">-- Select --</option>
+                              @for (option of variable.definition.possibleValues; track option.value) {
+                                <option [value]="option.value">{{ option.label || option.value }}</option>
+                              }
+                            </select>
+                          } @else if (variable.definition.dataType === 'boolean') {
+                            <select [(ngModel)]="variable.stringValue" class="variable-select">
+                              <option value="">-- Select --</option>
+                              <option value="true">Yes</option>
+                              <option value="false">No</option>
+                            </select>
+                          } @else if (variable.definition.dataType === 'number') {
+                            <input
+                              type="number"
+                              [(ngModel)]="variable.stringValue"
+                              class="variable-input-field"
+                              [placeholder]="variable.definition.defaultValue?.toString() || 'Enter value'"
+                              [step]="variable.definition.name.toLowerCase().includes('temperature') ? 0.1 : 1"
+                            />
+                          } @else {
+                            <input
+                              type="text"
+                              [(ngModel)]="variable.stringValue"
+                              class="variable-input-field"
+                              [placeholder]="variable.definition.defaultValue?.toString() || 'Enter value'"
+                            />
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Advanced Options for Preselected Suite Mode -->
+            @if (runMode === 'suite' && suiteTests.length > 0) {
+              <div class="advanced-options-section preselected-advanced">
+                <button class="advanced-toggle" (click)="toggleAdvancedOptions()">
+                  <i class="fa-solid" [class.fa-chevron-right]="!showAdvancedOptions" [class.fa-chevron-down]="showAdvancedOptions"></i>
+                  <span>Advanced Options</span>
+                  <span class="test-count-badge">{{ suiteTests.length }} tests</span>
+                </button>
+
+                @if (showAdvancedOptions) {
+                  <div class="advanced-content">
+                    <!-- Selection Mode Tabs -->
+                    <div class="selection-mode-tabs">
+                      <button
+                        class="selection-tab"
+                        [class.active]="!useSequenceRange"
+                        (click)="useSequenceRange = false"
+                      >
+                        <i class="fa-solid fa-check-square"></i>
+                        Select Tests
+                      </button>
+                      <button
+                        class="selection-tab"
+                        [class.active]="useSequenceRange"
+                        (click)="useSequenceRange = true"
+                      >
+                        <i class="fa-solid fa-arrows-left-right"></i>
+                        Sequence Range
+                      </button>
+                    </div>
+
+                    <!-- Select Individual Tests Mode -->
+                    @if (!useSequenceRange) {
+                      <div class="test-selection-panel">
+                        <div class="selection-header">
+                          <label class="checkbox-label select-all">
+                            <input
+                              type="checkbox"
+                              [checked]="allTestsSelected"
+                              [indeterminate]="someTestsSelected"
+                              (change)="toggleAllTests($any($event.target).checked)"
+                            />
+                            <span>Select All</span>
+                          </label>
+                          <span class="selection-count">{{ selectedTestCount }} of {{ suiteTests.length }} selected</span>
+                        </div>
+                        <div class="test-list">
+                          @for (test of suiteTests; track test.testId) {
+                            <label class="test-item" [class.selected]="test.selected">
+                              <input
+                                type="checkbox"
+                                [checked]="test.selected"
+                                (change)="toggleTest(test.testId)"
+                              />
+                              <span class="test-sequence">#{{ test.sequence }}</span>
+                              <span class="test-name">{{ test.testName }}</span>
+                            </label>
+                          }
+                        </div>
+                      </div>
+                    }
+
+                    <!-- Sequence Range Mode -->
+                    @if (useSequenceRange) {
+                      <div class="sequence-range-panel">
+                        <div class="range-inputs">
+                          <div class="range-field">
+                            <label>Start at sequence</label>
+                            <input
+                              type="number"
+                              [(ngModel)]="sequenceStart"
+                              [min]="1"
+                              [max]="suiteTests.length"
+                              class="sequence-input"
+                            />
+                          </div>
+                          <div class="range-separator">
+                            <i class="fa-solid fa-arrow-right"></i>
+                          </div>
+                          <div class="range-field">
+                            <label>End at sequence</label>
+                            <input
+                              type="number"
+                              [(ngModel)]="sequenceEnd"
+                              [min]="1"
+                              [max]="suiteTests.length"
+                              class="sequence-input"
+                            />
+                          </div>
+                        </div>
+                        @if (sequenceRangeValid) {
+                          <div class="range-summary">
+                            Will run {{ testsInSequenceRange }} test(s) from sequence {{ sequenceStart }} to {{ sequenceEnd }}
+                          </div>
+                        } @else {
+                          <div class="range-error">
+                            <i class="fa-solid fa-exclamation-triangle"></i>
+                            Invalid range: start must be less than or equal to end
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
             </div>
           }
 
@@ -91,7 +306,7 @@ interface ProgressUpdate {
                   @for (test of filteredTests; track test.ID) {
                     <div
                       class="item"
-                      [class.selected]="selectedTestId === test.ID"
+                      [class.selected]="IsTestSelected(test)"
                       (click)="selectTest(test.ID)"
                     >
                       <div class="item-icon">
@@ -101,7 +316,7 @@ interface ProgressUpdate {
                         <div class="item-name">{{ test.Name }}</div>
                         <div class="item-meta">{{ test.Type }} • {{ test.Description || 'No description' }}</div>
                       </div>
-                      @if (selectedTestId === test.ID) {
+                      @if (IsTestSelected(test)) {
                         <div class="item-check">
                           <i class="fa-solid fa-check-circle"></i>
                         </div>
@@ -139,7 +354,7 @@ interface ProgressUpdate {
                   @for (suite of filteredSuites; track suite.ID) {
                     <div
                       class="item"
-                      [class.selected]="selectedSuiteId === suite.ID"
+                      [class.selected]="IsSuiteSelected(suite)"
                       (click)="selectSuite(suite.ID)"
                     >
                       <div class="item-icon suite">
@@ -149,7 +364,7 @@ interface ProgressUpdate {
                         <div class="item-name">{{ suite.Name }}</div>
                         <div class="item-meta">{{ suite.Description || 'No description' }}</div>
                       </div>
-                      @if (selectedSuiteId === suite.ID) {
+                      @if (IsSuiteSelected(suite)) {
                         <div class="item-check">
                           <i class="fa-solid fa-check-circle"></i>
                         </div>
@@ -164,6 +379,113 @@ interface ProgressUpdate {
                   }
                 </div>
               </div>
+
+              <!-- Advanced Options - Progressive Disclosure -->
+              @if (selectedSuiteId && suiteTests.length > 0) {
+                <div class="advanced-options-section">
+                  <button class="advanced-toggle" (click)="toggleAdvancedOptions()">
+                    <i class="fa-solid" [class.fa-chevron-right]="!showAdvancedOptions" [class.fa-chevron-down]="showAdvancedOptions"></i>
+                    <span>Advanced Options</span>
+                    <span class="test-count-badge">{{ suiteTests.length }} tests</span>
+                  </button>
+
+                  @if (showAdvancedOptions) {
+                    <div class="advanced-content">
+                      <!-- Selection Mode Tabs -->
+                      <div class="selection-mode-tabs">
+                        <button
+                          class="selection-tab"
+                          [class.active]="!useSequenceRange"
+                          (click)="useSequenceRange = false"
+                        >
+                          <i class="fa-solid fa-check-square"></i>
+                          Select Tests
+                        </button>
+                        <button
+                          class="selection-tab"
+                          [class.active]="useSequenceRange"
+                          (click)="useSequenceRange = true"
+                        >
+                          <i class="fa-solid fa-arrows-left-right"></i>
+                          Sequence Range
+                        </button>
+                      </div>
+
+                      <!-- Select Individual Tests Mode -->
+                      @if (!useSequenceRange) {
+                        <div class="test-selection-panel">
+                          <div class="selection-header">
+                            <label class="checkbox-label select-all">
+                              <input
+                                type="checkbox"
+                                [checked]="allTestsSelected"
+                                [indeterminate]="someTestsSelected"
+                                (change)="toggleAllTests($any($event.target).checked)"
+                              />
+                              <span>Select All</span>
+                            </label>
+                            <span class="selection-count">{{ selectedTestCount }} of {{ suiteTests.length }} selected</span>
+                          </div>
+                          <div class="test-list">
+                            @for (test of suiteTests; track test.testId) {
+                              <label class="test-item" [class.selected]="test.selected">
+                                <input
+                                  type="checkbox"
+                                  [checked]="test.selected"
+                                  (change)="toggleTest(test.testId)"
+                                />
+                                <span class="test-sequence">#{{ test.sequence }}</span>
+                                <span class="test-name">{{ test.testName }}</span>
+                              </label>
+                            }
+                          </div>
+                        </div>
+                      }
+
+                      <!-- Sequence Range Mode -->
+                      @if (useSequenceRange) {
+                        <div class="sequence-range-panel">
+                          <div class="range-inputs">
+                            <div class="range-field">
+                              <label>Start at sequence</label>
+                              <input
+                                type="number"
+                                [(ngModel)]="sequenceStart"
+                                [min]="1"
+                                [max]="suiteTests.length"
+                                class="sequence-input"
+                              />
+                            </div>
+                            <div class="range-separator">
+                              <i class="fa-solid fa-arrow-right"></i>
+                            </div>
+                            <div class="range-field">
+                              <label>End at sequence</label>
+                              <input
+                                type="number"
+                                [(ngModel)]="sequenceEnd"
+                                [min]="1"
+                                [max]="suiteTests.length"
+                                class="sequence-input"
+                              />
+                            </div>
+                          </div>
+                          @if (sequenceRangeValid) {
+                            <div class="range-summary">
+                              Will run {{ testsInSequenceRange }} test(s) from sequence {{ sequenceStart }} to {{ sequenceEnd }}
+                            </div>
+                          } @else {
+                            <div class="range-error">
+                              <i class="fa-solid fa-exclamation-triangle"></i>
+                              Invalid range: start must be less than or equal to end
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
             }
 
               <div class="options-panel">
@@ -177,6 +499,39 @@ interface ProgressUpdate {
                     <span>Run tests in parallel</span>
                   </label>
                 }
+              </div>
+
+              <!-- Tags Section for Selection Mode -->
+              <div class="tags-section selection-mode-tags">
+                <div class="tags-header">
+                  <i class="fa-solid fa-tags"></i>
+                  <span>Run Tags</span>
+                  <span class="tags-hint">(optional)</span>
+                </div>
+                <div class="tags-container">
+                  <div class="tags-chips">
+                    @for (tag of tags; track tag) {
+                      <span class="tag-chip">
+                        {{ tag }}
+                        <button class="tag-remove" (click)="removeTag(tag)">
+                          <i class="fa-solid fa-times"></i>
+                        </button>
+                      </span>
+                    }
+                  </div>
+                  <div class="tag-input-row">
+                    <input
+                      type="text"
+                      [(ngModel)]="newTag"
+                      placeholder="Add tag (e.g., opus-4.5, v2.1.0)"
+                      (keyup.enter)="addTag()"
+                      class="tag-input"
+                    />
+                    <button class="tag-add-btn" (click)="addTag()" [disabled]="!newTag.trim()">
+                      <i class="fa-solid fa-plus"></i>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           }
@@ -196,10 +551,14 @@ interface ProgressUpdate {
             </div>
 
             <div class="progress-container">
-              <div class="progress-bar">
-                <div class="progress-fill" [style.width.%]="progress"></div>
+              <div class="progress-bar" [class.indeterminate]="progress < 0">
+                @if (progress >= 0) {
+                  <div class="progress-fill" [style.width.%]="progress"></div>
+                }
               </div>
-              <div class="progress-text">{{ progress }}%</div>
+              @if (progress >= 0) {
+                <div class="progress-text">{{ progress }}%</div>
+              }
             </div>
 
             <div class="progress-steps">
@@ -223,6 +582,13 @@ interface ProgressUpdate {
                 </div>
               }
             </div>
+
+            @if (isRunning && PanelMode) {
+              <div class="safe-to-close-banner">
+                <i class="fa-solid fa-info-circle"></i>
+                <span>Tests run on the server. You can close this panel &mdash; your test will keep running. Check the dashboard for updates.</span>
+              </div>
+            }
 
             @if (executionLog.length > 0) {
               <div class="execution-log">
@@ -282,21 +648,24 @@ interface ProgressUpdate {
         <!-- Dialog Actions -->
         <div class="dialog-actions">
           @if (!isRunning && !hasCompleted) {
-            <button class="action-btn cancel-btn" (click)="onClose()">Cancel</button>
-            <button class="action-btn run-btn"
+            <button mjButton (click)="onClose()">Cancel</button>
+            <button mjButton variant="primary"
                     [disabled]="!canRun()"
                     (click)="runTest()">
               <i class="fa-solid fa-play"></i>
               Run {{ runMode === 'test' ? 'Test' : 'Suite' }}
             </button>
           } @else if (hasCompleted) {
-            <button class="action-btn cancel-btn" (click)="onClose()">Close</button>
-            <button class="action-btn run-btn" (click)="resetDialog()">
+            <button mjButton (click)="onClose()">Close</button>
+            <button mjButton variant="primary" (click)="resetDialog()">
               <i class="fa-solid fa-redo"></i>
               Run Another
             </button>
           } @else {
-            <button class="action-btn run-btn" [disabled]="true">
+            @if (PanelMode) {
+              <button mjButton (click)="onClose()">Close</button>
+            }
+            <button mjButton variant="primary" [disabled]="true">
               <i class="fa-solid fa-spinner fa-spin"></i>
               Running...
             </button>
@@ -309,7 +678,17 @@ interface ProgressUpdate {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
+      overflow: hidden;
+    }
+
+    .dialog-scroll-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
     .dialog-actions {
@@ -317,8 +696,8 @@ interface ProgressUpdate {
       justify-content: flex-end;
       gap: 12px;
       padding: 16px 20px;
-      background: white;
-      border-top: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface);
+      border-top: 1px solid var(--mj-border-default);
       margin-top: auto;
     }
 
@@ -336,25 +715,25 @@ interface ProgressUpdate {
     }
 
     .cancel-btn {
-      background: #f5f5f5;
-      color: #666;
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-secondary);
     }
 
     .cancel-btn:hover {
-      background: #e0e0e0;
+      background: var(--mj-border-default);
     }
 
     .run-btn {
-      background: #2196f3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .run-btn:hover:not(:disabled) {
-      background: #1976d2;
+      background: var(--mj-brand-primary-hover);
     }
 
     .run-btn:disabled {
-      background: #ccc;
+      background: var(--mj-border-strong);
       cursor: not-allowed;
       opacity: 0.6;
     }
@@ -364,30 +743,29 @@ interface ProgressUpdate {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 20px;
-      background: white;
+      padding: 12px;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      margin: 20px 20px 0 20px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .preselected-info {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
       flex: 1;
     }
 
     .preselected-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #2196f3, #21cbf3);
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      background: var(--mj-brand-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
-      font-size: 20px;
+      color: var(--mj-text-inverse);
+      font-size: 16px;
       flex-shrink: 0;
     }
 
@@ -400,7 +778,7 @@ interface ProgressUpdate {
     .preselected-label {
       font-size: 12px;
       font-weight: 500;
-      color: #999;
+      color: var(--mj-text-disabled);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -408,7 +786,7 @@ interface ProgressUpdate {
     .preselected-name {
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .options-compact {
@@ -430,10 +808,10 @@ interface ProgressUpdate {
     .mode-tabs {
       display: flex;
       gap: 8px;
-      background: white;
+      background: var(--mj-bg-surface);
       padding: 8px;
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
       flex-shrink: 0;
     }
 
@@ -446,7 +824,7 @@ interface ProgressUpdate {
       padding: 12px 20px;
       border: none;
       background: transparent;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 14px;
       font-weight: 500;
       border-radius: 6px;
@@ -455,13 +833,13 @@ interface ProgressUpdate {
     }
 
     .mode-tab:hover {
-      background: rgba(33, 150, 243, 0.1);
-      color: #2196f3;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+      color: var(--mj-brand-primary);
     }
 
     .mode-tab.active {
-      background: #2196f3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .mode-tab i {
@@ -473,10 +851,10 @@ interface ProgressUpdate {
       display: flex;
       flex-direction: column;
       gap: 12px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       padding: 16px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
       overflow: hidden;
     }
 
@@ -485,18 +863,18 @@ interface ProgressUpdate {
       align-items: center;
       gap: 8px;
       padding: 10px 14px;
-      background: #f5f7fa;
-      border: 2px solid #e0e4e8;
+      background: var(--mj-bg-surface-sunken);
+      border: 2px solid var(--mj-border-default);
       border-radius: 6px;
       transition: border-color 0.2s ease;
     }
 
     .search-box:focus-within {
-      border-color: #2196f3;
+      border-color: var(--mj-brand-primary);
     }
 
     .search-box i {
-      color: #999;
+      color: var(--mj-text-disabled);
       font-size: 14px;
     }
 
@@ -506,26 +884,26 @@ interface ProgressUpdate {
       background: transparent;
       outline: none;
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .search-box input::placeholder {
-      color: #999;
+      color: var(--mj-text-disabled);
     }
 
     .clear-btn {
       padding: 4px 8px;
       border: none;
       background: transparent;
-      color: #999;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       border-radius: 4px;
       transition: all 0.2s ease;
     }
 
     .clear-btn:hover {
-      background: rgba(0,0,0,0.05);
-      color: #666;
+      background: var(--mj-bg-overlay);
+      color: var(--mj-text-secondary);
     }
 
     .items-list {
@@ -542,7 +920,7 @@ interface ProgressUpdate {
       align-items: flex-start;
       gap: 14px;
       padding: 16px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border: 2px solid transparent;
       border-radius: 8px;
       cursor: pointer;
@@ -552,13 +930,13 @@ interface ProgressUpdate {
     }
 
     .item:hover {
-      background: #e3f2fd;
-      border-color: #90caf9;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
     }
 
     .item.selected {
-      background: #e3f2fd;
-      border-color: #2196f3;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: var(--mj-brand-primary);
     }
 
     .item-icon {
@@ -567,15 +945,15 @@ interface ProgressUpdate {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #2196f3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border-radius: 8px;
       font-size: 18px;
       flex-shrink: 0;
     }
 
     .item-icon.suite {
-      background: #9c27b0;
+      background: var(--mj-brand-primary);
     }
 
     .item-content {
@@ -589,7 +967,7 @@ interface ProgressUpdate {
     .item-name {
       font-size: 15px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       line-height: 1.3;
       word-wrap: break-word;
       overflow-wrap: break-word;
@@ -597,7 +975,7 @@ interface ProgressUpdate {
 
     .item-meta {
       font-size: 13px;
-      color: #666;
+      color: var(--mj-text-secondary);
       line-height: 1.4;
       word-wrap: break-word;
       overflow-wrap: break-word;
@@ -605,7 +983,7 @@ interface ProgressUpdate {
     }
 
     .item-check {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
       font-size: 20px;
     }
 
@@ -615,7 +993,7 @@ interface ProgressUpdate {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: #999;
+      color: var(--mj-text-disabled);
       padding: 40px;
       text-align: center;
     }
@@ -636,9 +1014,9 @@ interface ProgressUpdate {
       flex-direction: column;
       gap: 12px;
       padding: 16px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .checkbox-label {
@@ -657,7 +1035,7 @@ interface ProgressUpdate {
 
     .checkbox-label span {
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     /* Execution Mode */
@@ -675,9 +1053,9 @@ interface ProgressUpdate {
       justify-content: space-between;
       align-items: center;
       padding: 16px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .execution-title {
@@ -686,20 +1064,20 @@ interface ProgressUpdate {
       gap: 12px;
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .execution-title i {
       font-size: 20px;
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .execution-title i.fa-check-circle {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .execution-title i.fa-exclamation-circle {
-      color: #f44336;
+      color: var(--mj-status-error);
     }
 
     .execution-status {
@@ -712,18 +1090,18 @@ interface ProgressUpdate {
     }
 
     .execution-status.running {
-      background: #e3f2fd;
-      color: #2196f3;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .execution-status.success {
-      background: #e8f5e9;
-      color: #4caf50;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .execution-status.error {
-      background: #ffebee;
-      color: #f44336;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     .progress-container {
@@ -731,30 +1109,41 @@ interface ProgressUpdate {
       align-items: center;
       gap: 12px;
       padding: 16px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .progress-bar {
       flex: 1;
       height: 8px;
-      background: #e0e0e0;
+      background: var(--mj-border-default);
       border-radius: 4px;
       overflow: hidden;
     }
 
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #2196f3, #21cbf3);
+      background: var(--mj-brand-primary);
       border-radius: 4px;
       transition: width 0.3s ease;
+    }
+
+    .progress-bar.indeterminate {
+      background: linear-gradient(90deg, var(--mj-border-default) 25%, var(--mj-brand-primary) 50%, var(--mj-border-default) 75%);
+      background-size: 200% 100%;
+      animation: indeterminate-progress 1.5s ease-in-out infinite;
+    }
+
+    @keyframes indeterminate-progress {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
     }
 
     .progress-text {
       font-size: 14px;
       font-weight: 600;
-      color: #2196f3;
+      color: var(--mj-brand-primary);
       min-width: 45px;
       text-align: right;
     }
@@ -764,9 +1153,9 @@ interface ProgressUpdate {
       flex-direction: column;
       gap: 10px;
       padding: 16px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
       max-height: 150px;
       overflow-y: auto;
       flex-shrink: 0;
@@ -782,7 +1171,7 @@ interface ProgressUpdate {
     }
 
     .step.active {
-      background: #e3f2fd;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     .step.completed {
@@ -795,16 +1184,16 @@ interface ProgressUpdate {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #999;
+      color: var(--mj-text-disabled);
       font-size: 12px;
     }
 
     .step.active .step-icon {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .step.completed .step-icon {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .step-content {
@@ -815,13 +1204,32 @@ interface ProgressUpdate {
     .step-label {
       font-size: 13px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       margin-bottom: 2px;
     }
 
     .step-message {
       font-size: 12px;
-      color: #666;
+      color: var(--mj-text-secondary);
+    }
+
+    .safe-to-close-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+      background: var(--mj-status-info-bg);
+      color: var(--mj-status-info-text);
+      border: 1px solid var(--mj-status-info-border);
+    }
+
+    .safe-to-close-banner i {
+      margin-top: 2px;
+      flex-shrink: 0;
     }
 
     .execution-log {
@@ -830,7 +1238,7 @@ interface ProgressUpdate {
       background: #1e1e1e;
       border-radius: 8px;
       overflow: hidden;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
       flex: 1;
       min-height: 0;
     }
@@ -841,14 +1249,14 @@ interface ProgressUpdate {
       gap: 8px;
       padding: 12px 16px;
       background: #2d2d2d;
-      color: #fff;
+      color: #e0e0e0;
       font-size: 13px;
       font-weight: 600;
       border-bottom: 1px solid #3d3d3d;
     }
 
     .log-header i {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .log-content {
@@ -865,23 +1273,23 @@ interface ProgressUpdate {
       display: flex;
       gap: 12px;
       margin-bottom: 4px;
-      color: #e0e0e0;
+      color: #d4d4d4;
     }
 
     .log-entry.error {
-      color: #f44336;
+      color: var(--mj-status-error);
     }
 
     .log-entry.success {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .log-entry.info {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .log-time {
-      color: #999;
+      color: #888;
       min-width: 60px;
     }
 
@@ -892,17 +1300,17 @@ interface ProgressUpdate {
     .result-summary {
       padding: 16px;
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .result-summary.success {
-      background: #e8f5e9;
-      border: 2px solid #4caf50;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      border: 2px solid var(--mj-status-success);
     }
 
     .result-summary.error {
-      background: #ffebee;
-      border: 2px solid #f44336;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border: 2px solid var(--mj-status-error);
     }
 
     .result-header {
@@ -915,11 +1323,11 @@ interface ProgressUpdate {
     }
 
     .result-summary.success .result-header {
-      color: #2e7d32;
+      color: var(--mj-status-success);
     }
 
     .result-summary.error .result-header {
-      color: #c62828;
+      color: var(--mj-status-error);
     }
 
     .result-header i {
@@ -936,19 +1344,19 @@ interface ProgressUpdate {
       display: flex;
       justify-content: space-between;
       padding: 8px 12px;
-      background: rgba(255,255,255,0.5);
+      background: color-mix(in srgb, var(--mj-bg-surface) 50%, transparent);
       border-radius: 4px;
     }
 
     .result-label {
       font-weight: 600;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 13px;
     }
 
     .result-value {
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       font-size: 13px;
     }
 
@@ -957,9 +1365,9 @@ interface ProgressUpdate {
       align-items: flex-start;
       gap: 12px;
       padding: 14px;
-      background: rgba(255,255,255,0.7);
+      background: color-mix(in srgb, var(--mj-bg-surface) 70%, transparent);
       border-radius: 6px;
-      color: #c62828;
+      color: var(--mj-status-error);
       font-size: 13px;
       line-height: 1.5;
       word-break: break-word;
@@ -974,6 +1382,590 @@ interface ProgressUpdate {
     .error-message span {
       flex: 1;
     }
+
+    /* Tags Section Styles */
+    .tags-section {
+      padding: 10px 12px;
+      background: var(--mj-bg-surface);
+      border-radius: 8px;
+      box-shadow: var(--mj-shadow-sm);
+    }
+
+    .tags-section.selection-mode-tags {
+      box-shadow: var(--mj-shadow-sm);
+    }
+
+    .tags-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--mj-text-primary);
+    }
+
+    .tags-header i {
+      color: var(--mj-brand-primary);
+    }
+
+    .tags-hint {
+      color: var(--mj-text-disabled);
+      font-weight: 400;
+      font-size: 12px;
+    }
+
+    .tags-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .tags-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 20px;
+    }
+
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary-hover);
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .tag-remove {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border: none;
+      background: var(--mj-bg-overlay);
+      color: var(--mj-brand-primary-hover);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tag-remove:hover {
+      background: color-mix(in srgb, var(--mj-status-error) 20%, transparent);
+      color: var(--mj-status-error);
+    }
+
+    .tag-remove i {
+      font-size: 10px;
+    }
+
+    .tag-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .tag-input {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 4px;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .tag-input:focus {
+      border-color: var(--mj-brand-primary);
+    }
+
+    .tag-input::placeholder {
+      color: var(--mj-text-disabled);
+    }
+
+    .tag-add-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: none;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tag-add-btn:hover:not(:disabled) {
+      background: var(--mj-brand-primary-hover);
+    }
+
+    .tag-add-btn:disabled {
+      background: var(--mj-border-strong);
+      cursor: not-allowed;
+    }
+
+    .tag-add-btn i {
+      font-size: 14px;
+    }
+
+    /* Advanced Options - Progressive Disclosure */
+    .advanced-options-section {
+      background: var(--mj-bg-surface);
+      border-radius: 8px;
+      box-shadow: var(--mj-shadow-sm);
+      overflow: hidden;
+    }
+
+    .advanced-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--mj-text-secondary);
+      text-align: left;
+      transition: background 0.2s ease;
+    }
+
+    .advanced-toggle:hover {
+      background: var(--mj-bg-surface-sunken);
+    }
+
+    .advanced-toggle i {
+      color: var(--mj-text-disabled);
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .test-count-badge {
+      margin-left: auto;
+      padding: 2px 8px;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary-hover);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .advanced-content {
+      padding: 0 12px 12px 12px;
+      border-top: 1px solid var(--mj-border-default);
+    }
+
+    .selection-mode-tabs {
+      display: flex;
+      gap: 6px;
+      padding: 8px 0;
+    }
+
+    .selection-tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .selection-tab:hover {
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+      color: var(--mj-brand-primary);
+    }
+
+    .selection-tab.active {
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary-hover);
+    }
+
+    .selection-tab i {
+      font-size: 14px;
+    }
+
+    /* Test Selection Panel */
+    .test-selection-panel {
+      border: 1px solid var(--mj-border-default);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .selection-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
+    }
+
+    .select-all {
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    .selection-count {
+      font-size: 11px;
+      color: var(--mj-text-secondary);
+    }
+
+    .test-list {
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .test-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
+    }
+
+    .test-item:last-child {
+      border-bottom: none;
+    }
+
+    .test-item:hover {
+      background: var(--mj-bg-surface-sunken);
+    }
+
+    .test-item.selected {
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    }
+
+    .test-item input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    .test-sequence {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--mj-text-disabled);
+      min-width: 24px;
+    }
+
+    .test-name {
+      flex: 1;
+      font-size: 12px;
+      color: var(--mj-text-primary);
+    }
+
+    /* Sequence Range Panel */
+    .sequence-range-panel {
+      padding: 10px;
+      background: var(--mj-bg-surface-card);
+      border-radius: 4px;
+    }
+
+    .range-inputs {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+    }
+
+    .range-field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .range-field label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--mj-text-secondary);
+    }
+
+    .sequence-input {
+      padding: 8px 10px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 4px;
+      font-size: 13px;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .sequence-input:focus {
+      border-color: var(--mj-brand-primary);
+    }
+
+    .range-separator {
+      padding-bottom: 8px;
+      color: var(--mj-text-disabled);
+    }
+
+    .range-summary {
+      margin-top: 8px;
+      padding: 8px;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
+      border-radius: 4px;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .range-error {
+      margin-top: 8px;
+      padding: 8px;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
+      border-radius: 4px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .range-error i {
+      font-size: 12px;
+    }
+
+    .preselected-advanced {
+      /* No extra margin - handled by dialog-scroll-content gap */
+    }
+
+    /* Variables Section Styles */
+    .variables-section {
+      background: var(--mj-bg-surface);
+      border-radius: 8px;
+      box-shadow: var(--mj-shadow-sm);
+      overflow: hidden;
+    }
+
+    .variables-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--mj-text-secondary);
+      text-align: left;
+      transition: background 0.2s ease;
+    }
+
+    .variables-toggle:hover {
+      background: var(--mj-bg-surface-sunken);
+    }
+
+    .variables-toggle .fa-sliders {
+      color: var(--mj-brand-primary);
+    }
+
+    .variables-count-badge {
+      margin-left: auto;
+      padding: 2px 8px;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary-hover);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .variables-content {
+      padding: 0 12px 12px 12px;
+      border-top: 1px solid var(--mj-border-default);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-top: 12px;
+    }
+
+    .variable-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .variable-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .variable-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+    }
+
+    .variable-description {
+      font-size: 11px;
+      color: var(--mj-text-secondary);
+      line-height: 1.3;
+    }
+
+    .variable-input {
+      width: 100%;
+    }
+
+    .variable-select,
+    .variable-input-field {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 4px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s ease;
+      background: var(--mj-bg-surface);
+    }
+
+    .variable-select:focus,
+    .variable-input-field:focus {
+      border-color: var(--mj-brand-primary);
+    }
+
+    .variable-input-field::placeholder {
+      color: var(--mj-text-disabled);
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+      .preselected-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .options-compact {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .dialog-actions {
+        padding: 12px 16px;
+      }
+
+      .action-btn {
+        flex: 1;
+        justify-content: center;
+        min-height: 44px;
+      }
+
+      .mode-tabs {
+        flex-direction: column;
+      }
+
+      .mode-tab {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .selection-mode {
+        padding: 10px;
+      }
+
+      .selection-panel {
+        padding: 10px;
+      }
+
+      .execution-mode {
+        padding: 10px;
+      }
+
+      .result-details {
+        grid-template-columns: 1fr;
+      }
+
+      .progress-steps {
+        gap: 6px;
+      }
+
+      .step-content {
+        min-width: 0;
+      }
+
+      .step-label {
+        font-size: 12px;
+      }
+
+      .range-inputs {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .range-separator {
+        transform: rotate(90deg);
+        align-self: center;
+      }
+
+      .variable-row {
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .variable-input {
+        width: 100%;
+      }
+
+      .variable-select,
+      .variable-input-field {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .dialog-scroll-content {
+        padding: 8px;
+      }
+
+      .dialog-actions {
+        padding: 10px 12px;
+        gap: 8px;
+      }
+
+      .tags-container {
+        gap: 6px;
+      }
+
+      .tag-input-row {
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .tag-add-btn {
+        align-self: flex-start;
+      }
+
+      .execution-log .log-content {
+        font-size: 11px;
+      }
+
+      .log-time {
+        display: none;
+      }
+    }
   `]
 })
 export class TestRunDialogComponent implements OnInit, OnDestroy {
@@ -982,22 +1974,37 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   private engine!: TestEngineBase;
 
   // Selection state
-  runMode: 'test' | 'suite' = 'test';
+  @Input() runMode: 'test' | 'suite' | 'monitor' = 'test';
   searchText = '';
-  selectedTestId: string | null = null;
-  selectedSuiteId: string | null = null;
+  @Input() selectedTestId: string | null = null;
+  @Input() selectedSuiteId: string | null = null;
   verbose = true;
   parallel = false;
+
+  // Tags for test/suite runs
+  tags: string[] = [];
+  newTag = '';
 
   // Pre-selection mode - when launched from a specific test/suite
   isPreselected = false;
   preselectedName = '';
 
   // Data
-  allTests: TestEntity[] = [];
-  allSuites: TestSuiteEntity[] = [];
-  filteredTests: TestEntity[] = [];
-  filteredSuites: TestSuiteEntity[] = [];
+  allTests: MJTestEntity[] = [];
+  allSuites: MJTestSuiteEntity[] = [];
+  filteredTests: MJTestEntity[] = [];
+  filteredSuites: MJTestSuiteEntity[] = [];
+
+  // Selective test execution for suites (progressive disclosure)
+  showAdvancedOptions = false;
+  suiteTests: SuiteTestItem[] = [];
+  useSequenceRange = false;
+  sequenceStart: number | null = null;
+  sequenceEnd: number | null = null;
+
+  // Variables for parameterized tests
+  availableVariables: VariableInput[] = [];
+  showVariablesSection = false;
 
   // Execution state
   isRunning = false;
@@ -1025,9 +2032,12 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     return 'Run Test';
   }
 
+  @Input() PanelMode = false;
+  @Output() PanelClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: DialogRef,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private executionService: TestingExecutionService
   ) {
     // Get GraphQLDataProvider from Metadata.Provider (it's already configured in the Angular app)
     const dataProvider = Metadata.Provider as GraphQLDataProvider;
@@ -1047,15 +2057,51 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     this.allTests = this.engine.Tests.filter(t => t.Status === 'Active');
     this.allSuites = this.engine.TestSuites.filter(s => s.Status === 'Active');
 
+    // Monitor mode: show running state for a test executing on the server
+    if (this.runMode === 'monitor' && this.selectedTestId) {
+      // Try to reconnect to an active run tracked by the execution service
+      if (this.reconnectToActiveRun(this.selectedTestId)) {
+        this.cdr.markForCheck();
+        return;
+      }
+
+      // No active run in the execution service (started externally or from a previous session).
+      // Show a server-monitoring view.
+      const test = this.allTests.find(t => UUIDsEqual(t.ID, this.selectedTestId));
+      this.enterServerMonitoringMode(test?.Name ?? 'Test');
+      this.cdr.markForCheck();
+      return;
+    }
+
     // Check if we have a pre-selected test or suite
     if (this.selectedTestId) {
+      // Check if this test has an active run we can reconnect to
+      if (this.reconnectToActiveRun(this.selectedTestId)) {
+        this.cdr.markForCheck();
+        return;
+      }
+
       this.isPreselected = true;
-      const test = this.allTests.find(t => t.ID === this.selectedTestId);
+      this.runMode = 'test';
+      const test = this.allTests.find(t => UUIDsEqual(t.ID, this.selectedTestId));
       this.preselectedName = test ? test.Name : 'Test';
+      // Load variables for the selected test
+      if (test) {
+        this.loadVariablesForTest(test);
+      }
     } else if (this.selectedSuiteId) {
+      // Check if this suite has an active run we can reconnect to
+      if (this.reconnectToActiveRun(this.selectedSuiteId)) {
+        this.cdr.markForCheck();
+        return;
+      }
+
       this.isPreselected = true;
-      const suite = this.allSuites.find(s => s.ID === this.selectedSuiteId);
+      this.runMode = 'suite';
+      const suite = this.allSuites.find(s => UUIDsEqual(s.ID, this.selectedSuiteId));
       this.preselectedName = suite ? suite.Name : 'Test Suite';
+      // Load suite tests for selective execution
+      this.loadSuiteTests(this.selectedSuiteId);
     }
 
     this.filterItems();
@@ -1099,14 +2145,208 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     this.filterItems();
   }
 
+  IsTestSelected(test: MJTestEntity): boolean {
+    return UUIDsEqual(this.selectedTestId, test.ID);
+  }
+
+  IsSuiteSelected(suite: MJTestSuiteEntity): boolean {
+    return UUIDsEqual(this.selectedSuiteId, suite.ID);
+  }
+
   selectTest(testId: string): void {
     this.selectedTestId = testId;
+    // Load variables for the selected test
+    const test = this.allTests.find(t => UUIDsEqual(t.ID, testId));
+    if (test) {
+      this.loadVariablesForTest(test);
+    }
     this.cdr.markForCheck();
   }
 
   selectSuite(suiteId: string): void {
     this.selectedSuiteId = suiteId;
+    this.loadSuiteTests(suiteId);
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Load tests for a selected suite to enable selective execution
+   */
+  private loadSuiteTests(suiteId: string): void {
+    const suiteTestLinks = this.engine.TestSuiteTests.filter(st => UUIDsEqual(st.SuiteID, suiteId));
+
+    // Build list of tests with their sequence numbers
+    this.suiteTests = suiteTestLinks
+      .map(st => {
+        const test = this.allTests.find(t => UUIDsEqual(t.ID, st.TestID));
+        if (!test) return null;
+        return {
+          testId: st.TestID,
+          testName: test.Name,
+          sequence: st.Sequence,
+          selected: true // All selected by default
+        };
+      })
+      .filter((item): item is SuiteTestItem => item !== null)
+      .sort((a, b) => a.sequence - b.sequence);
+
+    // Reset sequence range
+    this.useSequenceRange = false;
+    this.sequenceStart = this.suiteTests.length > 0 ? this.suiteTests[0].sequence : null;
+    this.sequenceEnd = this.suiteTests.length > 0 ? this.suiteTests[this.suiteTests.length - 1].sequence : null;
+  }
+
+  toggleAdvancedOptions(): void {
+    this.showAdvancedOptions = !this.showAdvancedOptions;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Load available variables for a test based on its TestType's VariablesSchema
+   */
+  private loadVariablesForTest(test: MJTestEntity): void {
+    this.availableVariables = [];
+    this.showVariablesSection = false;
+
+    // Get the TestType to access VariablesSchema
+    const testType = this.engine.TestTypes.find(tt => UUIDsEqual(tt.ID, test.TypeID));
+    if (!testType) {
+      return;
+    }
+
+    // Parse the type's VariablesSchema
+    const variablesSchemaJson = (testType as MJTestTypeEntity & { VariablesSchema?: string }).VariablesSchema;
+    if (!variablesSchemaJson) {
+      return;
+    }
+
+    const typeSchema = SafeJSONParse(variablesSchemaJson) as TestTypeVariablesSchema | null;
+    if (!typeSchema || !typeSchema.variables || typeSchema.variables.length === 0) {
+      return;
+    }
+
+    // Parse the test's Variables config to check which are exposed
+    const testVariablesJson = (test as MJTestEntity & { Variables?: string }).Variables;
+    const testConfig = testVariablesJson ? SafeJSONParse(testVariablesJson) as TestVariablesConfig | null : null;
+
+    // Build the available variables list
+    for (const varDef of typeSchema.variables) {
+      // Check if test explicitly hides this variable
+      const testOverride = testConfig?.variables?.[varDef.name];
+      if (testOverride?.exposed === false) {
+        continue; // Variable not exposed by this test
+      }
+
+      // Determine the default value to show
+      const defaultValue = testOverride?.defaultValue ?? varDef.defaultValue;
+
+      this.availableVariables.push({
+        definition: varDef,
+        value: defaultValue ?? null,
+        stringValue: defaultValue != null ? String(defaultValue) : ''
+      });
+    }
+
+    // Auto-expand variables section if there are required variables
+    if (this.availableVariables.some(v => v.definition.required)) {
+      this.showVariablesSection = true;
+    }
+  }
+
+  /**
+   * Collect variable values for test execution
+   */
+  private getVariablesForExecution(): Record<string, unknown> | undefined {
+    if (this.availableVariables.length === 0) {
+      return undefined;
+    }
+
+    const variables: Record<string, unknown> = {};
+    let hasValues = false;
+
+    for (const variable of this.availableVariables) {
+      if (variable.stringValue !== '' && variable.stringValue != null) {
+        hasValues = true;
+        // Convert string value to appropriate type
+        switch (variable.definition.dataType) {
+          case 'number':
+            variables[variable.definition.name] = parseFloat(variable.stringValue);
+            break;
+          case 'boolean':
+            variables[variable.definition.name] = variable.stringValue.toLowerCase() === 'true';
+            break;
+          default:
+            variables[variable.definition.name] = variable.stringValue;
+        }
+      }
+    }
+
+    return hasValues ? variables : undefined;
+  }
+
+  toggleAllTests(selectAll: boolean): void {
+    this.suiteTests.forEach(t => t.selected = selectAll);
+    this.cdr.markForCheck();
+  }
+
+  toggleTest(testId: string): void {
+    const test = this.suiteTests.find(t => t.testId === testId);
+    if (test) {
+      test.selected = !test.selected;
+      this.cdr.markForCheck();
+    }
+  }
+
+  get selectedTestCount(): number {
+    return this.suiteTests.filter(t => t.selected).length;
+  }
+
+  get allTestsSelected(): boolean {
+    return this.suiteTests.length > 0 && this.suiteTests.every(t => t.selected);
+  }
+
+  get someTestsSelected(): boolean {
+    const selected = this.selectedTestCount;
+    return selected > 0 && selected < this.suiteTests.length;
+  }
+
+  get sequenceRangeValid(): boolean {
+    if (!this.useSequenceRange) return true;
+    if (this.sequenceStart == null || this.sequenceEnd == null) return false;
+    return this.sequenceStart <= this.sequenceEnd;
+  }
+
+  get testsInSequenceRange(): number {
+    if (!this.useSequenceRange || this.sequenceStart == null || this.sequenceEnd == null) {
+      return this.suiteTests.length;
+    }
+    return this.suiteTests.filter(t =>
+      t.sequence >= this.sequenceStart! && t.sequence <= this.sequenceEnd!
+    ).length;
+  }
+
+  /**
+   * Get IDs of selected tests for execution
+   */
+  private getSelectedTestIds(): string[] {
+    if (!this.showAdvancedOptions) {
+      // If advanced options not shown, run all tests
+      return this.suiteTests.map(t => t.testId);
+    }
+    return this.suiteTests.filter(t => t.selected).map(t => t.testId);
+  }
+
+  /**
+   * Get sequence range parameters if enabled
+   */
+  private getSequenceRangeParams(): { start: number | undefined; end: number | undefined } {
+    if (!this.showAdvancedOptions || !this.useSequenceRange) {
+      return { start: undefined, end: undefined };
+    }
+    return {
+      start: this.sequenceStart ?? undefined,
+      end: this.sequenceEnd ?? undefined
+    };
   }
 
   canRun(): boolean {
@@ -1125,15 +2365,19 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     this.resetProgressSteps();
 
     if (this.runMode === 'test') {
-      const test = this.allTests.find(t => t.ID === this.selectedTestId);
+      const test = this.allTests.find(t => UUIDsEqual(t.ID, this.selectedTestId));
       this.executionTitle = test ? test.Name : 'Running Test...';
       this.executionStatus = 'Running';
+      // Register with execution service so other components can reconnect
+      this.executionService.RegisterRun(this.selectedTestId!, this.executionTitle);
       this.addLogEntry(`Starting test: ${test?.Name}`, 'info');
       await this.executeTest();
     } else {
-      const suite = this.allSuites.find(s => s.ID === this.selectedSuiteId);
+      const suite = this.allSuites.find(s => UUIDsEqual(s.ID, this.selectedSuiteId));
       this.executionTitle = suite ? suite.Name : 'Running Suite...';
       this.executionStatus = 'Running';
+      // Register with execution service so other components can reconnect
+      this.executionService.RegisterRun(this.selectedSuiteId!, this.executionTitle);
       this.addLogEntry(`Starting suite: ${suite?.Name}`, 'info');
       await this.executeSuite();
     }
@@ -1142,10 +2386,16 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   }
 
   private async executeTest(): Promise<void> {
+    const testId = this.selectedTestId!;
     try {
+      // Collect variable values for execution
+      const variables = this.getVariablesForExecution();
+
       const result = await this.testingClient.RunTest({
-        testId: this.selectedTestId!,
+        testId,
         verbose: this.verbose,
+        tags: this.tags.length > 0 ? this.tags : undefined,
+        variables,
         onProgress: (progress) => {
           // Update progress percentage (fallback to 0 if not provided)
           this.progress = progress.percentage ?? 0;
@@ -1155,6 +2405,9 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
 
           // Add log entry for this progress update
           this.addLogEntry(progress.message, 'info');
+
+          // Push to execution service for cross-component visibility
+          this.executionService.UpdateRunProgress(testId, this.progress, progress.currentStep, progress.message);
 
           // Trigger change detection
           this.cdr.markForCheck();
@@ -1168,10 +2421,20 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
       this.executionStatus = result.success ? 'Completed' : 'Failed';
       this.completeAllSteps();
 
+      // Map RunTestResult to TestExecutionResult for the execution service
+      const execResult: TestExecutionResult = {
+        success: result.success,
+        errorMessage: result.errorMessage,
+        executionTimeMs: result.executionTimeMs ?? 0,
+        result: result.result ? result.result as TestExecutionResult['result'] : undefined
+      };
+
       if (result.success) {
         this.addLogEntry('Test completed successfully', 'success');
+        this.executionService.CompleteRun(testId, 'completed', execResult);
       } else {
         this.addLogEntry(`Test failed: ${result.errorMessage}`, 'error');
+        this.executionService.CompleteRun(testId, 'failed', execResult);
       }
 
     } catch (error) {
@@ -1183,6 +2446,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
         errorMessage: (error as Error).message
       };
       this.addLogEntry(`Error: ${(error as Error).message}`, 'error');
+      this.executionService.CompleteRun(testId, 'failed', this.result);
     } finally {
       this.isRunning = false;
       this.cdr.markForCheck();
@@ -1190,11 +2454,23 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   }
 
   private async executeSuite(): Promise<void> {
+    const suiteId = this.selectedSuiteId!;
     try {
+      // Build selective execution parameters
+      const selectedTestIds = this.getSelectedTestIds();
+      const sequenceParams = this.getSequenceRangeParams();
+      // Collect variable values for execution (applies to all tests in suite)
+      const variables = this.getVariablesForExecution();
+
       const result = await this.testingClient.RunTestSuite({
-        suiteId: this.selectedSuiteId!,
+        suiteId,
         verbose: this.verbose,
         parallel: this.parallel,
+        tags: this.tags.length > 0 ? this.tags : undefined,
+        variables,
+        selectedTestIds: selectedTestIds.length < this.suiteTests.length ? selectedTestIds : undefined,
+        sequenceStart: sequenceParams.start,
+        sequenceEnd: sequenceParams.end,
         onProgress: (progress) => {
           // Update progress percentage (fallback to 0 if not provided)
           this.progress = progress.percentage ?? 0;
@@ -1204,6 +2480,9 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
 
           // Add log entry for this progress update
           this.addLogEntry(progress.message, 'info');
+
+          // Push to execution service for cross-component visibility
+          this.executionService.UpdateRunProgress(suiteId, this.progress, progress.currentStep, progress.message);
 
           // Trigger change detection
           this.cdr.markForCheck();
@@ -1217,10 +2496,20 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
       this.executionStatus = result.success ? 'Completed' : 'Failed';
       this.completeAllSteps();
 
+      // Map RunTestResult to TestExecutionResult for the execution service
+      const execResult: TestExecutionResult = {
+        success: result.success,
+        errorMessage: result.errorMessage,
+        executionTimeMs: result.executionTimeMs ?? 0,
+        result: result.result ? result.result as TestExecutionResult['result'] : undefined
+      };
+
       if (result.success) {
         this.addLogEntry('Suite completed successfully', 'success');
+        this.executionService.CompleteRun(suiteId, 'completed', execResult);
       } else {
         this.addLogEntry(`Suite failed: ${result.errorMessage}`, 'error');
+        this.executionService.CompleteRun(suiteId, 'failed', execResult);
       }
 
     } catch (error) {
@@ -1232,6 +2521,11 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
         errorMessage: (error as Error).message
       };
       this.addLogEntry(`Error: ${(error as Error).message}`, 'error');
+      this.executionService.CompleteRun(suiteId, 'failed', {
+        success: false,
+        errorMessage: (error as Error).message,
+        executionTimeMs: 0
+      });
     } finally {
       this.isRunning = false;
       this.cdr.markForCheck();
@@ -1285,6 +2579,22 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Enter a monitoring view for a test that's running on the server but wasn't
+   * started from this client session (no active run in the execution service).
+   */
+  private enterServerMonitoringMode(testName: string): void {
+    this.isRunning = true;
+    this.hasCompleted = false;
+    this.hasError = false;
+    this.progress = -1; // indeterminate
+    this.executionTitle = testName;
+    this.executionStatus = 'Running on server';
+    this.executionLog = [];
+    this.addLogEntry('This test is running on the server. Detailed progress is not available for externally started runs.', 'info');
+    this.addLogEntry('Close this panel and check the dashboard for results when the test completes.', 'info');
+  }
+
   private resetProgressSteps(): void {
     this.progressSteps.forEach(step => {
       step.active = false;
@@ -1311,6 +2621,68 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     if (this.executionLog.length > 100) {
       this.executionLog = this.executionLog.slice(-100);
     }
+
+    // Push to execution service for cross-component visibility
+    const runId = this.selectedTestId ?? this.selectedSuiteId;
+    if (runId && this.isRunning) {
+      this.executionService.AddRunLog(runId, message, type);
+    }
+  }
+
+  /**
+   * Check if there's an active run for this test/suite in the execution service.
+   * If so, restore the running UI state and subscribe to live updates.
+   */
+  private reconnectToActiveRun(id: string): boolean {
+    const activeRun = this.executionService.GetActiveRun(id);
+    if (!activeRun || activeRun.Status !== 'running') {
+      return false;
+    }
+
+    // Restore execution UI state from the active run
+    this.isRunning = true;
+    this.hasCompleted = false;
+    this.hasError = false;
+    this.progress = activeRun.Progress;
+    this.executionTitle = activeRun.TestName;
+    this.executionStatus = 'Running';
+    this.executionLog = activeRun.LogEntries.map(e => ({
+      timestamp: e.timestamp,
+      message: e.message,
+      type: e.type
+    }));
+    this.updateProgressStep(activeRun.CurrentStep);
+
+    // Subscribe to live updates from the execution service
+    this.executionService.ActiveRuns$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(runs => {
+      const run = runs.find(r => r.TestId === id);
+      if (!run) return;
+
+      this.progress = run.Progress;
+      this.updateProgressStep(run.CurrentStep);
+
+      // Sync log entries from the service
+      this.executionLog = run.LogEntries.map(e => ({
+        timestamp: e.timestamp,
+        message: e.message,
+        type: e.type
+      }));
+
+      if (run.Status === 'completed' || run.Status === 'failed') {
+        this.isRunning = false;
+        this.hasCompleted = true;
+        this.hasError = run.Status === 'failed';
+        this.executionStatus = run.Status === 'completed' ? 'Completed' : 'Failed';
+        this.result = run.Result ?? null;
+        this.completeAllSteps();
+      }
+
+      this.cdr.markForCheck();
+    });
+
+    return true;
   }
 
   resetDialog(): void {
@@ -1325,14 +2697,29 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     this.selectedTestId = null;
     this.selectedSuiteId = null;
     this.searchText = '';
+    this.tags = [];
+    this.newTag = '';
     this.resetProgressSteps();
     this.filterItems();
     this.cdr.markForCheck();
   }
 
   onClose(): void {
-    if (!this.isRunning) {
-      this.dialogRef.close();
+    this.PanelClose.emit();
+  }
+
+  // Tag management methods
+  addTag(): void {
+    const tag = this.newTag.trim();
+    if (tag && !this.tags.includes(tag)) {
+      this.tags = [...this.tags, tag];
+      this.newTag = '';
+      this.cdr.markForCheck();
     }
+  }
+
+  removeTag(tag: string): void {
+    this.tags = this.tags.filter(t => t !== tag);
+    this.cdr.markForCheck();
   }
 }

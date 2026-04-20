@@ -3,7 +3,7 @@
  * Uses mssql driver for database connectivity
  */
 
-import * as sql from 'mssql';
+import sql from 'mssql';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAutoDocDriver } from './BaseAutoDocDriver.js';
 import {
@@ -143,20 +143,28 @@ export class SQLServerDriver extends BaseAutoDocDriver {
       const tables: AutoDocTable[] = [];
 
       for (const { tableName, rowCount } of tableSummaries) {
-        const [columns, foreignKeys, primaryKeys] = await Promise.all([
-          this.getColumns(schemaName, tableName),
-          this.getForeignKeys(schemaName, tableName),
-          this.getPrimaryKeys(schemaName, tableName)
-        ]);
+        try {
+          const [columns, foreignKeys, primaryKeys] = await Promise.all([
+            this.getColumns(schemaName, tableName),
+            this.getForeignKeys(schemaName, tableName),
+            this.getPrimaryKeys(schemaName, tableName)
+          ]);
 
-        tables.push({
-          schemaName,
-          tableName,
-          rowCount,
-          columns,
-          foreignKeys,
-          primaryKeys
-        });
+          tables.push({
+            schemaName,
+            tableName,
+            rowCount,
+            columns,
+            foreignKeys,
+            primaryKeys
+          });
+        } catch (error) {
+          // Log error and continue with next table instead of failing entire analysis
+          console.error(
+            `Failed to introspect ${schemaName}.${tableName}: ${(error as Error).message}`
+          );
+          console.error('  This table will be skipped. Continuing with remaining tables...');
+        }
       }
 
       schemas.push({
@@ -329,6 +337,8 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     // Get cardinality and null statistics
     const cardinalityStats = await this.getCardinalityStats(schemaName, tableName, columnName);
     Object.assign(stats, cardinalityStats);
+    // Fix: cardinalityStats returns totalCount, but AutoDocColumnStatistics expects totalRows
+    stats.totalRows = cardinalityStats.totalCount;
 
     // Get value distribution for low-cardinality columns
     if (stats.distinctCount <= cardinalityThreshold && stats.distinctCount > 0) {
@@ -391,7 +401,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     return result.success && result.data ? result.data : [];
   }
 
-  protected async getSampleValues(
+  public async getSampleValues(
     schemaName: string,
     tableName: string,
     columnName: string,

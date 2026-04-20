@@ -1,0 +1,1 @@
+SELECT pa.UploadedByID, SUM(pa.FileSizeBytes) AS TotalStorageBytes, COUNT(pa.ID) AS TotalAttachments, AVG(pa.FileSizeBytes) AS AvgFileSizeBytes, MIN(pa.UploadedDate) AS FirstUploadDate, MAX(pa.UploadedDate) AS LastUploadDate FROM [AssociationDemo].[vwPostAttachments] pa WHERE pa.FileSizeBytes IS NOT NULL GROUP BY pa.UploadedByID ORDER BY TotalStorageBytes DESC

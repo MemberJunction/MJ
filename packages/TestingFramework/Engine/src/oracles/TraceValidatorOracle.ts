@@ -4,7 +4,7 @@
  */
 
 import { RunView } from '@memberjunction/core';
-import { AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { IOracle } from './IOracle';
 import { OracleInput, OracleConfig, OracleResult } from '../types';
 
@@ -44,7 +44,7 @@ export class TraceValidatorOracle implements IOracle {
     async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
         try {
             // Get agent run entity
-            const agentRun = input.targetEntity as AIAgentRunEntity;
+            const agentRun = input.targetEntity as MJAIAgentRunEntity;
             if (!agentRun) {
                 return {
                     oracleType: this.type,
@@ -70,7 +70,7 @@ export class TraceValidatorOracle implements IOracle {
 
             // Load agent run steps
             const rv = new RunView();
-            const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+            const stepsResult = await rv.RunView<MJAIAgentRunStepEntity>({
                 EntityName: 'MJ: AI Agent Run Steps',
                 ExtraFilter: `AgentRunID='${agentRun.ID}'`,
                 OrderBy: 'Sequence ASC',
@@ -122,7 +122,7 @@ export class TraceValidatorOracle implements IOracle {
                     errors.push(`Step ${step.StepNumber}: ${step.StepName} - ${step.Status}`);
                 }
 
-                // Note: Output field doesn't exist on AIAgentRunStepEntity
+                // Note: Output field doesn't exist on MJAIAgentRunStepEntity
                 // If we need to check output, we'd need to load it from another source
             }
 

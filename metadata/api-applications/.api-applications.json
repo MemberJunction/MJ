@@ -1,0 +1,44 @@
+[
+  {
+    "fields": {
+      "Name": "MJAPI",
+      "Description": "MemberJunction GraphQL API - primary API for web and mobile applications",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "15A906BC-55F3-489C-A7D3-F8DAE9F26D6B"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T02:13:35.417Z",
+      "checksum": "8d51d0be67813b64fa4fffc64d83ea47cd6b50a7fcfa99c3fd02abb215559a8c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MCPServer",
+      "Description": "MemberJunction Model Context Protocol Server - exposes MJ capabilities to AI assistants",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "644F2FE0-95A1-44B4-986C-B605C6F0E892"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T02:13:35.425Z",
+      "checksum": "71fc8fb207b833b623c5f2f3384e70d8482a280171593d1557122b36492189a7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "A2AServer",
+      "Description": "MemberJunction Agent-to-Agent Protocol Server - enables agent communication",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "D57CBBA6-38AD-4CE7-8635-0603C0F6A16A"
+    },
+    "sync": {
+      "lastModified": "2026-01-27T02:13:35.434Z",
+      "checksum": "5a3079b3a6fc21c91feeebbdad6a003c51d234e75a98a8a696b5c4858a03896b"
+    }
+  }
+]

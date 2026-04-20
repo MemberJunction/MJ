@@ -1,5 +1,1001 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/actions@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/ai-vector-dupe@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/encryption@5.28.0
+  - @memberjunction/generic-database-provider@5.28.0
+  - @memberjunction/queue@5.28.0
+  - @memberjunction/query-processor@5.28.0
+  - @memberjunction/ai-provider-bundle@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/global@5.28.0
+  - @memberjunction/sql-dialect@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ai@5.27.1
+  - @memberjunction/aiengine@5.27.1
+  - @memberjunction/ai-vector-dupe@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/actions@5.27.1
+  - @memberjunction/encryption@5.27.1
+  - @memberjunction/generic-database-provider@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/queue@5.27.1
+  - @memberjunction/query-processor@5.27.1
+  - @memberjunction/ai-provider-bundle@5.27.1
+  - @memberjunction/sql-dialect@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- Updated dependencies [4357090]
+  - @memberjunction/generic-database-provider@5.27.0
+  - @memberjunction/ai@5.27.0
+  - @memberjunction/aiengine@5.27.0
+  - @memberjunction/ai-provider-bundle@5.27.0
+  - @memberjunction/ai-vector-dupe@5.27.0
+  - @memberjunction/actions-base@5.27.0
+  - @memberjunction/actions@5.27.0
+  - @memberjunction/encryption@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/queue@5.27.0
+  - @memberjunction/query-processor@5.27.0
+  - @memberjunction/sql-dialect@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/aiengine@5.26.0
+  - @memberjunction/ai-vector-dupe@5.26.0
+  - @memberjunction/actions-base@5.26.0
+  - @memberjunction/actions@5.26.0
+  - @memberjunction/encryption@5.26.0
+  - @memberjunction/generic-database-provider@5.26.0
+  - @memberjunction/queue@5.26.0
+  - @memberjunction/query-processor@5.26.0
+  - @memberjunction/ai-provider-bundle@5.26.0
+  - @memberjunction/ai@5.26.0
+  - @memberjunction/global@5.26.0
+  - @memberjunction/sql-dialect@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/generic-database-provider@5.25.0
+  - @memberjunction/actions@5.25.0
+  - @memberjunction/aiengine@5.25.0
+  - @memberjunction/ai-vector-dupe@5.25.0
+  - @memberjunction/actions-base@5.25.0
+  - @memberjunction/encryption@5.25.0
+  - @memberjunction/queue@5.25.0
+  - @memberjunction/query-processor@5.25.0
+  - @memberjunction/ai-provider-bundle@5.25.0
+  - @memberjunction/ai@5.25.0
+  - @memberjunction/global@5.25.0
+  - @memberjunction/sql-dialect@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-vector-dupe@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/aiengine@5.24.0
+  - @memberjunction/actions@5.24.0
+  - @memberjunction/ai-provider-bundle@5.24.0
+  - @memberjunction/actions-base@5.24.0
+  - @memberjunction/encryption@5.24.0
+  - @memberjunction/generic-database-provider@5.24.0
+  - @memberjunction/queue@5.24.0
+  - @memberjunction/query-processor@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/global@5.24.0
+  - @memberjunction/sql-dialect@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/generic-database-provider@5.23.0
+  - @memberjunction/ai-vector-dupe@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/actions@5.23.0
+  - @memberjunction/encryption@5.23.0
+  - @memberjunction/queue@5.23.0
+  - @memberjunction/query-processor@5.23.0
+  - @memberjunction/ai@5.23.0
+  - @memberjunction/ai-provider-bundle@5.23.0
+  - @memberjunction/sql-dialect@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ai-vector-dupe@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/actions@5.22.0
+  - @memberjunction/generic-database-provider@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/encryption@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/queue@5.22.0
+  - @memberjunction/query-processor@5.22.0
+  - @memberjunction/ai-provider-bundle@5.22.0
+  - @memberjunction/ai@5.22.0
+  - @memberjunction/sql-dialect@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+- Updated dependencies [72fc93b]
+  - @memberjunction/ai-vector-dupe@5.21.0
+  - @memberjunction/core@5.21.0
+  - @memberjunction/query-processor@5.21.0
+  - @memberjunction/ai-provider-bundle@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/actions-base@5.21.0
+  - @memberjunction/actions@5.21.0
+  - @memberjunction/encryption@5.21.0
+  - @memberjunction/generic-database-provider@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/queue@5.21.0
+  - @memberjunction/ai@5.21.0
+  - @memberjunction/global@5.21.0
+  - @memberjunction/sql-dialect@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [cc954e1]
+- Updated dependencies [2298f8a]
+  - @memberjunction/generic-database-provider@5.20.0
+  - @memberjunction/core@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/ai-vector-dupe@5.20.0
+  - @memberjunction/actions-base@5.20.0
+  - @memberjunction/actions@5.20.0
+  - @memberjunction/encryption@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/queue@5.20.0
+  - @memberjunction/query-processor@5.20.0
+  - @memberjunction/ai-provider-bundle@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/global@5.20.0
+  - @memberjunction/sql-dialect@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.19.0
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/ai-provider-bundle@5.19.0
+- @memberjunction/ai-vector-dupe@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/actions@5.19.0
+- @memberjunction/encryption@5.19.0
+- @memberjunction/generic-database-provider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/queue@5.19.0
+- @memberjunction/query-processor@5.19.0
+- @memberjunction/sql-dialect@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.18.0
+- @memberjunction/actions@5.18.0
+- @memberjunction/generic-database-provider@5.18.0
+- @memberjunction/ai-vector-dupe@5.18.0
+- @memberjunction/queue@5.18.0
+- @memberjunction/ai-provider-bundle@5.18.0
+- @memberjunction/ai@5.18.0
+- @memberjunction/actions-base@5.18.0
+- @memberjunction/encryption@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/core-entities@5.18.0
+- @memberjunction/global@5.18.0
+- @memberjunction/query-processor@5.18.0
+- @memberjunction/sql-dialect@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [4b6fd2a]
+- Updated dependencies [9881045]
+  - @memberjunction/generic-database-provider@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/aiengine@5.17.0
+  - @memberjunction/ai-vector-dupe@5.17.0
+  - @memberjunction/actions-base@5.17.0
+  - @memberjunction/actions@5.17.0
+  - @memberjunction/encryption@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/queue@5.17.0
+  - @memberjunction/query-processor@5.17.0
+  - @memberjunction/ai-provider-bundle@5.17.0
+  - @memberjunction/ai@5.17.0
+  - @memberjunction/global@5.17.0
+  - @memberjunction/sql-dialect@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/aiengine@5.16.0
+  - @memberjunction/ai-vector-dupe@5.16.0
+  - @memberjunction/actions-base@5.16.0
+  - @memberjunction/actions@5.16.0
+  - @memberjunction/encryption@5.16.0
+  - @memberjunction/generic-database-provider@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/queue@5.16.0
+  - @memberjunction/query-processor@5.16.0
+  - @memberjunction/ai-provider-bundle@5.16.0
+  - @memberjunction/ai@5.16.0
+  - @memberjunction/global@5.16.0
+  - @memberjunction/sql-dialect@5.16.0
+
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [5e85b29]
+- Updated dependencies [d01f697]
+- Updated dependencies [c3e8b94]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/generic-database-provider@5.15.0
+  - @memberjunction/ai@5.15.0
+  - @memberjunction/ai-provider-bundle@5.15.0
+  - @memberjunction/aiengine@5.15.0
+  - @memberjunction/ai-vector-dupe@5.15.0
+  - @memberjunction/actions-base@5.15.0
+  - @memberjunction/actions@5.15.0
+  - @memberjunction/encryption@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/queue@5.15.0
+  - @memberjunction/query-processor@5.15.0
+  - @memberjunction/global@5.15.0
+  - @memberjunction/sql-dialect@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/generic-database-provider@5.14.0
+  - @memberjunction/query-processor@5.14.0
+  - @memberjunction/actions-base@5.14.0
+  - @memberjunction/actions@5.14.0
+  - @memberjunction/aiengine@5.14.0
+  - @memberjunction/ai-vector-dupe@5.14.0
+  - @memberjunction/encryption@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/queue@5.14.0
+  - @memberjunction/ai-provider-bundle@5.14.0
+  - @memberjunction/ai@5.14.0
+  - @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/aiengine@5.13.0
+  - @memberjunction/ai-vector-dupe@5.13.0
+  - @memberjunction/actions-base@5.13.0
+  - @memberjunction/actions@5.13.0
+  - @memberjunction/encryption@5.13.0
+  - @memberjunction/generic-database-provider@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/queue@5.13.0
+  - @memberjunction/query-processor@5.13.0
+  - @memberjunction/ai@5.13.0
+  - @memberjunction/ai-provider-bundle@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- Updated dependencies [05f19ff]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/aiengine@5.12.0
+  - @memberjunction/generic-database-provider@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/ai-vector-dupe@5.12.0
+  - @memberjunction/actions-base@5.12.0
+  - @memberjunction/actions@5.12.0
+  - @memberjunction/encryption@5.12.0
+  - @memberjunction/queue@5.12.0
+  - @memberjunction/query-processor@5.12.0
+  - @memberjunction/ai-provider-bundle@5.12.0
+  - @memberjunction/ai@5.12.0
+  - @memberjunction/global@5.12.0
+
+## 5.11.0
+
+### Minor Changes
+
+- a4c3c81: migration/metadata
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/generic-database-provider@5.11.0
+  - @memberjunction/core@5.11.0
+  - @memberjunction/query-processor@5.11.0
+  - @memberjunction/aiengine@5.11.0
+  - @memberjunction/ai-vector-dupe@5.11.0
+  - @memberjunction/actions-base@5.11.0
+  - @memberjunction/actions@5.11.0
+  - @memberjunction/encryption@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/queue@5.11.0
+  - @memberjunction/ai-provider-bundle@5.11.0
+  - @memberjunction/ai@5.11.0
+  - @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.10.1
+- @memberjunction/aiengine@5.10.1
+- @memberjunction/ai-provider-bundle@5.10.1
+- @memberjunction/ai-vector-dupe@5.10.1
+- @memberjunction/actions-base@5.10.1
+- @memberjunction/actions@5.10.1
+- @memberjunction/encryption@5.10.1
+- @memberjunction/generic-database-provider@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/queue@5.10.1
+- @memberjunction/query-processor@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/aiengine@5.10.0
+  - @memberjunction/ai-vector-dupe@5.10.0
+  - @memberjunction/actions-base@5.10.0
+  - @memberjunction/actions@5.10.0
+  - @memberjunction/encryption@5.10.0
+  - @memberjunction/generic-database-provider@5.10.0
+  - @memberjunction/queue@5.10.0
+  - @memberjunction/query-processor@5.10.0
+  - @memberjunction/ai-provider-bundle@5.10.0
+  - @memberjunction/ai@5.10.0
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- 194ddf2: Add Redis-backed ILocalStorageProvider with cross-server cache invalidation via pub/sub
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/generic-database-provider@5.9.0
+  - @memberjunction/aiengine@5.9.0
+  - @memberjunction/ai-vector-dupe@5.9.0
+  - @memberjunction/actions-base@5.9.0
+  - @memberjunction/actions@5.9.0
+  - @memberjunction/encryption@5.9.0
+  - @memberjunction/queue@5.9.0
+  - @memberjunction/ai@5.9.0
+  - @memberjunction/query-processor@5.9.0
+  - @memberjunction/ai-provider-bundle@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [064cf3a]
+- Updated dependencies [0753249]
+  - @memberjunction/generic-database-provider@5.8.0
+  - @memberjunction/core@5.8.0
+  - @memberjunction/aiengine@5.8.0
+  - @memberjunction/ai-vector-dupe@5.8.0
+  - @memberjunction/actions-base@5.8.0
+  - @memberjunction/actions@5.8.0
+  - @memberjunction/encryption@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/queue@5.8.0
+  - @memberjunction/query-processor@5.8.0
+  - @memberjunction/ai-provider-bundle@5.8.0
+  - @memberjunction/ai@5.8.0
+  - @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [f52e156]
+- Updated dependencies [642c4df]
+  - @memberjunction/ai@5.7.0
+  - @memberjunction/core@5.7.0
+  - @memberjunction/aiengine@5.7.0
+  - @memberjunction/ai-vector-dupe@5.7.0
+  - @memberjunction/actions@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/queue@5.7.0
+  - @memberjunction/actions-base@5.7.0
+  - @memberjunction/encryption@5.7.0
+  - @memberjunction/generic-database-provider@5.7.0
+  - @memberjunction/query-processor@5.7.0
+  - @memberjunction/ai-provider-bundle@5.7.0
+  - @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/aiengine@5.6.0
+  - @memberjunction/ai-vector-dupe@5.6.0
+  - @memberjunction/actions-base@5.6.0
+  - @memberjunction/actions@5.6.0
+  - @memberjunction/encryption@5.6.0
+  - @memberjunction/generic-database-provider@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/queue@5.6.0
+  - @memberjunction/query-processor@5.6.0
+  - @memberjunction/ai-provider-bundle@5.6.0
+  - @memberjunction/ai@5.6.0
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Minor Changes
+
+- ee9f788: migrations - postgres sql support!
+
+### Patch Changes
+
+- 7ca2459: Viewing System fixes, CodeGen cleanup, startup performance
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ai-provider-bundle@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ai@5.5.0
+  - @memberjunction/aiengine@5.5.0
+  - @memberjunction/ai-vector-dupe@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/actions@5.5.0
+  - @memberjunction/encryption@5.5.0
+  - @memberjunction/generic-database-provider@5.5.0
+  - @memberjunction/queue@5.5.0
+  - @memberjunction/query-processor@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.4.1
+- @memberjunction/aiengine@5.4.1
+- @memberjunction/ai-provider-bundle@5.4.1
+- @memberjunction/ai-vector-dupe@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/actions@5.4.1
+- @memberjunction/encryption@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+- @memberjunction/queue@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/aiengine@5.4.0
+  - @memberjunction/ai-vector-dupe@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/actions@5.4.0
+  - @memberjunction/encryption@5.4.0
+  - @memberjunction/queue@5.4.0
+  - @memberjunction/ai-provider-bundle@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.3.1
+- @memberjunction/aiengine@5.3.1
+- @memberjunction/ai-provider-bundle@5.3.1
+- @memberjunction/ai-vector-dupe@5.3.1
+- @memberjunction/actions-base@5.3.1
+- @memberjunction/actions@5.3.1
+- @memberjunction/encryption@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+- @memberjunction/queue@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/aiengine@5.3.0
+  - @memberjunction/ai-vector-dupe@5.3.0
+  - @memberjunction/actions-base@5.3.0
+  - @memberjunction/actions@5.3.0
+  - @memberjunction/encryption@5.3.0
+  - @memberjunction/queue@5.3.0
+  - @memberjunction/ai-provider-bundle@5.3.0
+  - @memberjunction/ai@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
+## 5.2.0
+
+### Minor Changes
+
+- 06d889c: metadata -> migration
+- 3542cb6: metadata -> migration
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/aiengine@5.2.0
+  - @memberjunction/ai-vector-dupe@5.2.0
+  - @memberjunction/actions-base@5.2.0
+  - @memberjunction/actions@5.2.0
+  - @memberjunction/encryption@5.2.0
+  - @memberjunction/queue@5.2.0
+  - @memberjunction/ai-provider-bundle@5.2.0
+  - @memberjunction/ai@5.2.0
+  - @memberjunction/global@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+  - @memberjunction/global@5.1.0
+  - @memberjunction/ai@5.1.0
+  - @memberjunction/aiengine@5.1.0
+  - @memberjunction/ai-vector-dupe@5.1.0
+  - @memberjunction/actions-base@5.1.0
+  - @memberjunction/actions@5.1.0
+  - @memberjunction/encryption@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/core-entities@5.1.0
+  - @memberjunction/queue@5.1.0
+  - @memberjunction/ai-provider-bundle@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Minor Changes
+
+- a3e7cb6: migration
+
+### Patch Changes
+
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ai@5.0.0
+  - @memberjunction/aiengine@5.0.0
+  - @memberjunction/ai-provider-bundle@5.0.0
+  - @memberjunction/ai-vector-dupe@5.0.0
+  - @memberjunction/actions-base@5.0.0
+  - @memberjunction/actions@5.0.0
+  - @memberjunction/encryption@5.0.0
+  - @memberjunction/global@5.0.0
+  - @memberjunction/queue@5.0.0
+
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+- Updated dependencies [3bab2cd]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ai-provider-bundle@4.4.0
+  - @memberjunction/aiengine@4.4.0
+  - @memberjunction/ai-vector-dupe@4.4.0
+  - @memberjunction/actions-base@4.4.0
+  - @memberjunction/actions@4.4.0
+  - @memberjunction/encryption@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/queue@4.4.0
+  - @memberjunction/ai@4.4.0
+  - @memberjunction/global@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ai@4.3.1
+- @memberjunction/aiengine@4.3.1
+- @memberjunction/ai-provider-bundle@4.3.1
+- @memberjunction/ai-vector-dupe@4.3.1
+- @memberjunction/actions-base@4.3.1
+- @memberjunction/actions@4.3.1
+- @memberjunction/encryption@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/global@4.3.1
+- @memberjunction/queue@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/aiengine@4.3.0
+  - @memberjunction/ai-vector-dupe@4.3.0
+  - @memberjunction/actions-base@4.3.0
+  - @memberjunction/actions@4.3.0
+  - @memberjunction/encryption@4.3.0
+  - @memberjunction/queue@4.3.0
+  - @memberjunction/ai-provider-bundle@4.3.0
+  - @memberjunction/ai@4.3.0
+  - @memberjunction/global@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ai@4.2.0
+- @memberjunction/aiengine@4.2.0
+- @memberjunction/ai-provider-bundle@4.2.0
+- @memberjunction/ai-vector-dupe@4.2.0
+- @memberjunction/actions-base@4.2.0
+- @memberjunction/actions@4.2.0
+- @memberjunction/encryption@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+- @memberjunction/queue@4.2.0
+
+## 4.1.0
+
+### Patch Changes
+
+- f54a9e4: no migration
+- 9fab8ca: ESM Compatibility
+- Updated dependencies [77839a9]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/core@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/aiengine@4.1.0
+  - @memberjunction/ai-vector-dupe@4.1.0
+  - @memberjunction/actions-base@4.1.0
+  - @memberjunction/actions@4.1.0
+  - @memberjunction/encryption@4.1.0
+  - @memberjunction/queue@4.1.0
+  - @memberjunction/ai-provider-bundle@4.1.0
+  - @memberjunction/ai@4.1.0
+  - @memberjunction/global@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- 65b4274: migration
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- Updated dependencies [2f86270]
+- Updated dependencies [8366d44]
+- Updated dependencies [f159146]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/aiengine@4.0.0
+  - @memberjunction/ai@4.0.0
+  - @memberjunction/ai-provider-bundle@4.0.0
+  - @memberjunction/ai-vector-dupe@4.0.0
+  - @memberjunction/actions-base@4.0.0
+  - @memberjunction/actions@4.0.0
+  - @memberjunction/encryption@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/core-entities@4.0.0
+  - @memberjunction/global@4.0.0
+  - @memberjunction/queue@4.0.0
+
+## 3.4.0
+
+### Minor Changes
+
+- 3a71e4e: Fix large text field corruptions, cross-platform improvements, more robust environment variable parsing for boolean values
+
+### Patch Changes
+
+- 18b4e65: Add field-level encryption for credential values with automatic decryption, Box.com OAuth credential type, comprehensive JSON Schema validation, and fix credential editor to prevent "undefined" text in fields
+- Updated dependencies [d596467]
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/ai-provider-bundle@3.4.0
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/queue@3.4.0
+  - @memberjunction/actions@3.4.0
+  - @memberjunction/aiengine@3.4.0
+  - @memberjunction/ai-vector-dupe@3.4.0
+  - @memberjunction/actions-base@3.4.0
+  - @memberjunction/encryption@3.4.0
+  - @memberjunction/ai@3.4.0
+  - @memberjunction/global@3.4.0
+
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [ca551dd]
+- Updated dependencies [da33601]
+- Updated dependencies [3f17579]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/encryption@3.3.0
+  - @memberjunction/aiengine@3.3.0
+  - @memberjunction/ai-vector-dupe@3.3.0
+  - @memberjunction/actions-base@3.3.0
+  - @memberjunction/actions@3.3.0
+  - @memberjunction/queue@3.3.0
+  - @memberjunction/ai-provider-bundle@3.3.0
+  - @memberjunction/ai@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/aiengine@3.2.0
+  - @memberjunction/ai-vector-dupe@3.2.0
+  - @memberjunction/actions-base@3.2.0
+  - @memberjunction/actions@3.2.0
+  - @memberjunction/encryption@3.2.0
+  - @memberjunction/queue@3.2.0
+  - @memberjunction/ai-provider-bundle@3.2.0
+  - @memberjunction/ai@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- @memberjunction/ai@3.1.1
+- @memberjunction/aiengine@3.1.1
+- @memberjunction/ai-provider-bundle@3.1.1
+- @memberjunction/ai-vector-dupe@3.1.1
+- @memberjunction/actions-base@3.1.1
+- @memberjunction/actions@3.1.1
+- @memberjunction/encryption@3.1.1
+- @memberjunction/core@3.1.1
+- @memberjunction/core-entities@3.1.1
+- @memberjunction/global@3.1.1
+- @memberjunction/queue@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@3.0.0
+- @memberjunction/aiengine@3.0.0
+- @memberjunction/ai-provider-bundle@3.0.0
+- @memberjunction/ai-vector-dupe@3.0.0
+- @memberjunction/actions-base@3.0.0
+- @memberjunction/actions@3.0.0
+- @memberjunction/encryption@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+- @memberjunction/queue@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/aiengine@2.133.0
+  - @memberjunction/ai-vector-dupe@2.133.0
+  - @memberjunction/actions-base@2.133.0
+  - @memberjunction/actions@2.133.0
+  - @memberjunction/encryption@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/queue@2.133.0
+  - @memberjunction/ai-provider-bundle@2.133.0
+  - @memberjunction/ai@2.133.0
+  - @memberjunction/global@2.133.0
+
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/aiengine@2.132.0
+  - @memberjunction/ai-vector-dupe@2.132.0
+  - @memberjunction/actions-base@2.132.0
+  - @memberjunction/actions@2.132.0
+  - @memberjunction/encryption@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/queue@2.132.0
+  - @memberjunction/ai-provider-bundle@2.132.0
+  - @memberjunction/ai@2.132.0
+  - @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/aiengine@2.131.0
+  - @memberjunction/ai-vector-dupe@2.131.0
+  - @memberjunction/actions-base@2.131.0
+  - @memberjunction/actions@2.131.0
+  - @memberjunction/encryption@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/queue@2.131.0
+  - @memberjunction/ai-provider-bundle@2.131.0
+  - @memberjunction/ai@2.131.0
+  - @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.130.1
+- @memberjunction/aiengine@2.130.1
+- @memberjunction/ai-provider-bundle@2.130.1
+- @memberjunction/ai-vector-dupe@2.130.1
+- @memberjunction/actions-base@2.130.1
+- @memberjunction/actions@2.130.1
+- @memberjunction/encryption@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/global@2.130.1
+- @memberjunction/queue@2.130.1
+
+## 2.130.0
+
+### Minor Changes
+
+- 83ae347: migrations
+
+### Patch Changes
+
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+  - @memberjunction/ai@2.130.0
+  - @memberjunction/aiengine@2.130.0
+  - @memberjunction/ai-provider-bundle@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/ai-vector-dupe@2.130.0
+  - @memberjunction/actions@2.130.0
+  - @memberjunction/core-entities@2.130.0
+  - @memberjunction/queue@2.130.0
+  - @memberjunction/actions-base@2.130.0
+  - @memberjunction/encryption@2.130.0
+  - @memberjunction/global@2.130.0
+
 ## 2.129.0
 
 ### Minor Changes
@@ -749,7 +1745,6 @@
 ### Patch Changes
 
 - 56257ed: Fix RunView pagination implementation
-
   - Added StartRow parameter support for server-side pagination
   - Fixed SQL generation to prevent TOP and OFFSET/FETCH conflicts
   - Improved total row count calculation for paginated queries
@@ -867,7 +1862,6 @@
 
   Add comprehensive audit logging and caching capabilities to the
   MemberJunction Query system:
-
   - Add ForceAuditLog and AuditLogDescription parameters to RunQuery for
     granular audit control
   - Implement TTL-based result caching with LRU eviction strategy for
@@ -987,7 +1981,6 @@
   relationships.
 
   ### New Features
-
   - **Hierarchical Path Resolution**: CategoryName now supports paths like
     "/MJ/AI/Agents/" that are parsed by splitting on "/" and walking down the
     category hierarchy using ParentID relationships
@@ -1351,7 +2344,6 @@
 ### Patch Changes
 
 - dfca664: **SQLServerDataProvider Changes:**
-
   - SQLServerTransactionGroup now immediately rolls back and stops processing on first operation failure
   - Enhanced error handling to prevent double rollback attempts
   - Improved error messages to clearly indicate when transactions are rolled back
@@ -3504,7 +4496,6 @@ Sat, 13 Apr 2024 02:32:44 GMT
 ### Patch Changes
 
 - dfca664: **SQLServerDataProvider Changes:**
-
   - SQLServerTransactionGroup now immediately rolls back and stops processing on first operation failure
   - Enhanced error handling to prevent double rollback attempts
   - Improved error messages to clearly indicate when transactions are rolled back

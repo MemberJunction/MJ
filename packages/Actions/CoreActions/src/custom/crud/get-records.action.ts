@@ -246,9 +246,3 @@ export class GetRecordsAction extends BaseAction {
         return defaultValue;
     }
 }
-
-export function LoadGetRecordsAction(): void {
-    // This function exists to prevent tree-shaking
-    // Call it from consuming packages to ensure the action is included
-    return;
-}

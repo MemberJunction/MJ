@@ -1,0 +1,154 @@
+// Design tokens (must be first - provides CSS custom properties)
+@import '@memberjunction/ng-shared-generic/dist/lib/tokens';
+
+// Global reset — previously provided by Kendo theme
+[hidden] { display: none !important; }
+
+// Core style imports
+@import './variables';
+@import './typography';
+
+// Import dhtmlx-gantt CSS for Gantt chart components
+@import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
+
+// Import Golden Layout CSS for tab management
+@import 'golden-layout/dist/css/goldenlayout-base.css';
+@import 'golden-layout/dist/css/themes/goldenlayout-light-theme.css';
+
+// Shared UI patterns (selector lists for consistent styling)
+@import './shared-patterns';
+
+// Import remaining custom styles
+@import './common';
+@import './badges';
+@import './utilities';
+
+// MJ UI Components styles
+@import '@memberjunction/ng-ui-components/dist/lib/button/button';
+@import '@memberjunction/ng-ui-components/dist/lib/dialog/dialog';
+@import '@memberjunction/ng-ui-components/dist/lib/dropdown/dropdown';
+@import '@memberjunction/ng-ui-components/dist/lib/combobox/combobox';
+@import '@memberjunction/ng-ui-components/dist/lib/input/input';
+@import '@memberjunction/ng-ui-components/dist/lib/input/input-switch-progress';
+@import '@memberjunction/ng-ui-components/dist/lib/datepicker/datepicker';
+@import '@memberjunction/ng-ui-components/dist/lib/splitter/splitter';
+@import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
+@import '@memberjunction/ng-ui-components/dist/lib/window/window';
+@import '@memberjunction/ng-ui-components/dist/lib/input/chip';
+
+.link-text {
+    cursor: pointer;
+    color: darkblue;
+    font-size: 14px;
+}
+  
+//Grid
+.customer-photo {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-size: 32px 35px;
+    background-position: center center;
+    vertical-align: middle;
+    line-height: 32px;
+    box-shadow: inset 0 0 1px #999, inset 0 0 10px rgba(0, 0, 0, 0.2);
+    margin-left: 5px;
+}
+
+.customer-name {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 32px;
+    padding-left: 10px;
+}
+
+.red {
+    color: #d9534f;
+}
+
+// Chart
+.chart-tooltip {
+    text-align: center;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+// Card
+.employee-photo {
+    display: inline-block;
+    border-radius: 50%;
+    background-size: 38px 41px;
+    background-position: center center;
+    vertical-align: middle;
+    line-height: 32px;
+}
+
+.card-opacity {
+    opacity: 0.5;
+}
+
+
+.ddl-locale {
+    width: 120px;
+}
+
+.daterange-center {
+    align-self: center;
+}
+
+.searchBox {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 10px;
+    padding-right: 10px;
+    padding-left: 0px;
+
+    #txtSearch {
+        width: 300px;
+        height: 30px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        margin-right: 5px;
+        margin-left: 10px;
+    }
+}
+
+.item {
+    border: 1px solid #e1e0e1;
+    border-radius: 5px;
+    padding: 12px 10px;
+    font-size: 16px;
+    outline: none;
+    cursor: move;
+    margin-bottom: 10px;
+}
+
+.item:hover,
+.employee:hover {
+    opacity: 0.8;
+}
+
+.item.active,
+.employee.active {
+    background-color: #f55f54;
+    color: #fff;
+    border-color: #f55f54;
+    z-index: 10;
+}
+
+.item.disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.empty {
+    height: 150px;
+}
+
+.disabled-div {
+    pointer-events: none;
+    opacity: 0.4;
+}
+ 

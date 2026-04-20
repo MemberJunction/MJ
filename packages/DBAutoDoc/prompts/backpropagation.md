@@ -14,6 +14,14 @@ We have since analyzed tables that reference or are referenced by this table, an
 
 {{ insights }}
 
+{% if groundTruth %}
+## Ground Truth (AUTHORITATIVE — Do NOT override)
+The database owner has provided the following authoritative documentation. Any revision MUST remain consistent with this ground truth.
+
+{% if groundTruth.tableDescription %}**Table Description (AUTHORITATIVE)**: {{ groundTruth.tableDescription }}{% endif %}
+{% if groundTruth.tableNotes %}**Notes**: {{ groundTruth.tableNotes }}{% endif %}
+{% endif %}
+
 ---
 
 ## Your Task

@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild } 
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJEntityERDComponent } from '../mj-entity-erd.component';
 import { EntitySelectedEvent, OpenEntityRecordEvent } from '../mj-entity-erd.component';
 import { ERDConfig, ERDState } from '../../interfaces/erd-types';
@@ -65,6 +66,7 @@ export interface ERDCompositeState {
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-erd-composite',
   templateUrl: './erd-composite.component.html',
   styleUrls: ['./erd-composite.component.css']
@@ -385,7 +387,7 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
       this.relationshipsSectionExpanded = state.relationshipsSectionExpanded;
     }
     if (state.selectedEntityId && this.entities.length > 0) {
-      const entity = this.entities.find(e => e.ID === state.selectedEntityId);
+      const entity = this.entities.find(e => UUIDsEqual(e.ID, state.selectedEntityId));
       if (entity) {
         this.selectedEntity = entity;
       }

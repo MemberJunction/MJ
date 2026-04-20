@@ -1,11 +1,27 @@
 /**
  * Example authentication provider configuration for MemberJunction
- * 
+ *
  * This file demonstrates how to configure multiple authentication providers
  * in the new extensible authentication system.
- * 
+ *
  * Copy the authProviders section to your mj.config.cjs file and update
  * with your actual provider settings.
+ *
+ * =============================================================================
+ * MCP SERVER OAUTH PROXY - REDIRECT URI CONFIGURATION
+ * =============================================================================
+ *
+ * When using the MCP Server's OAuth Proxy (for MCP clients like Claude Code),
+ * you must add the following redirect URI to your identity provider:
+ *
+ *   http://localhost:3100/oauth/callback   (development)
+ *   https://your-mcp-server.com/oauth/callback   (production)
+ *
+ * This redirect URI should be added to the SAME app registration used by
+ * MJExplorer. The OAuth Proxy uses PKCE (no client secret required).
+ *
+ * Provider-specific setup instructions below.
+ * =============================================================================
  */
 
 module.exports = {
@@ -13,13 +29,21 @@ module.exports = {
 
   /**
    * Authentication Provider Configuration
-   * 
+   *
    * Define multiple OAuth 2.0/OIDC compliant authentication providers.
    * Each provider must have a unique name and all required fields.
    */
   authProviders: [
     /**
-     * Microsoft Authentication Library (MSAL) / Azure AD
+     * Microsoft Authentication Library (MSAL) / Azure AD / Entra ID
+     *
+     * REDIRECT URI SETUP:
+     * 1. Go to Azure Portal → App Registrations → Your App → Authentication
+     * 2. Under "Single-page application" platform, add:
+     *    - http://localhost:3100/oauth/callback (development)
+     *    - https://your-mcp-server.com/oauth/callback (production)
+     * 3. Ensure "Access tokens" and "ID tokens" are checked under Implicit grant
+     * 4. No client secret needed - the proxy uses PKCE (same as MJExplorer)
      */
     {
       name: 'msal',
@@ -33,6 +57,14 @@ module.exports = {
 
     /**
      * Auth0
+     *
+     * REDIRECT URI SETUP:
+     * 1. Go to Auth0 Dashboard → Applications → Your App → Settings
+     * 2. Under "Allowed Callback URLs", add:
+     *    - http://localhost:3100/oauth/callback (development)
+     *    - https://your-mcp-server.com/oauth/callback (production)
+     * 3. Under "Allowed Web Origins", add your MCP server URL
+     * 4. Save changes
      */
     {
       name: 'auth0',
@@ -47,6 +79,14 @@ module.exports = {
 
     /**
      * Okta
+     *
+     * REDIRECT URI SETUP:
+     * 1. Go to Okta Admin Console → Applications → Your App → General
+     * 2. Under "Login redirect URIs", add:
+     *    - http://localhost:3100/oauth/callback (development)
+     *    - https://your-mcp-server.com/oauth/callback (production)
+     * 3. Ensure "Authorization Code" grant type is enabled
+     * 4. Save changes
      */
     {
       name: 'okta',
@@ -60,7 +100,16 @@ module.exports = {
     },
 
     /**
-     * AWS Cognito Example
+     * AWS Cognito
+     *
+     * REDIRECT URI SETUP:
+     * 1. Go to AWS Console → Cognito → User Pools → Your Pool → App Integration
+     * 2. Under "App client settings", find your app client
+     * 3. Add to "Callback URL(s)":
+     *    - http://localhost:3100/oauth/callback (development)
+     *    - https://your-mcp-server.com/oauth/callback (production)
+     * 4. Enable "Authorization code grant" under OAuth 2.0
+     * 5. Save changes
      */
     {
       name: 'cognito',
@@ -74,7 +123,15 @@ module.exports = {
     },
 
     /**
-     * Google Identity Platform Example
+     * Google Identity Platform
+     *
+     * REDIRECT URI SETUP:
+     * 1. Go to Google Cloud Console → APIs & Services → Credentials
+     * 2. Edit your OAuth 2.0 Client ID
+     * 3. Under "Authorized redirect URIs", add:
+     *    - http://localhost:3100/oauth/callback (development)
+     *    - https://your-mcp-server.com/oauth/callback (production)
+     * 4. Save changes
      */
     {
       name: 'google',

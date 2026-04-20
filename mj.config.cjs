@@ -1,147 +1,53 @@
-/** @import { ConfigInfo as CodeGenConfig } from "./packages/CodeGenLib/src/Config/config" */
-/** @import { ConfigInfo as MJServerConfig } from "./packages/MJServer/src/config" */
-/** @import { ConfigInfo as MCPServerConfig } from "./packages/AI/MCPServer/src/config" */
-/** @import { ConfigInfo as QueryGenConfig } from "./packages/QueryGen/src/cli/config" */
-/** @import { ConfigInfo as A2AServerConfig } from "./packages/AI/A2AServer/src/config" */
-/** @import { MJConfig } from "./packages/MJCLI/src/config" */
+/**
+ * MemberJunction Configuration - Monorepo Overrides
+ *
+ * This minimal config demonstrates the new optional configuration system.
+ * All unspecified settings use framework defaults from:
+ * - @memberjunction/server (DEFAULT_SERVER_CONFIG)
+ * - @memberjunction/codegen-lib (DEFAULT_CODEGEN_CONFIG)
+ * - Other packages as needed
+ *
+ * Compare this 166 line file to the original 528 line mj.config.cjs!
+ *
+ * Before: 528 lines with all defaults explicitly specified
+ * After: 166 lines with only monorepo-specific overrides
+ * Reduction: 69% smaller
+ */
 
-/** @type {CodeGenConfig} */
-const codegenConfig = {
+/** @type {import('@memberjunction/config').MJConfig} */
+module.exports = {
   /**
-   * CodeGenLib Configuration (previously config.json)
+   * ====================
+   * CodeGen Overrides
+   * ====================
    */
 
-  // newUserSetup: {
-  //   UserName: '',
-  //   FirstName: '',
-  //   LastName: '',
-  //   Email: '',
-  //   Roles: ['Developer', 'Integration', 'UI'],
-  // },
-  verboseOutput: false,
+  // Include __mj schema for MJ framework development
+  // Default excludes __mj since end-users shouldn't modify core entities
+  excludeSchemas: ['sys', 'staging'],
+
+  // Default for CodeGen with larger batches, if this 
+  // isn't in place, hard default of 5 is fallback, much slower
+  advancedGeneration: {
+    batchSize: 15,
+  },
+
   settings: [
     { name: 'mj_core_schema', value: '__mj' },
     { name: 'skip_database_generation', value: false },
     { name: 'recompile_mj_views', value: true },
     { name: 'auto_index_foreign_keys', value: true },
   ],
-  logging: {
-    log: true,
-    logFile: 'codegen.output.log',
-    console: true,
-  },
-  newEntityDefaults: {
-    TrackRecordChanges: true,
-    AuditRecordAccess: false,
-    AuditViewRuns: false,
-    AllowAllRowsAPI: false,
-    AllowCreateAPI: true,
-    AllowUpdateAPI: true,
-    AllowDeleteAPI: true,
-    AllowUserSearchAPI: false,
-    CascadeDeletes: false,
-    UserViewMaxRows: 1000,
-    AddToApplicationWithSchemaName: true,
-    IncludeFirstNFieldsAsDefaultInView: 5,
-    PermissionDefaults: {
-      AutoAddPermissionsForNewEntities: true,
-      Permissions: [
-        { RoleName: 'UI', CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false },
-        { RoleName: 'Developer', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: false },
-        { RoleName: 'Integration', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
-      ],
-    },
-    NameRulesBySchema: [ 
-      { 
-        SchemaName: '${mj_core_schema}', 
-        EntityNamePrefix: 'MJ: ',
-        EntityNameSuffix: '', 
-      },
-    ]
-  },
-  newEntityRelationshipDefaults: {
-    AutomaticallyCreateRelationships: true,
-    CreateOneToManyRelationships: true,
-  },
-  newSchemaDefaults: {
-    CreateNewApplicationWithSchemaName: true,
-  },
-  excludeSchemas: ['sys', 'staging'],
-  excludeTables: [
-    {
-      schema: '%',
-      table: 'sys%',
-    },
-    {
-      schema: '%', 
-      table: 'flyway_schema_history' // Exclude Flyway schema history table from ever being part of CodeGen
-    }
-  ],
+
+
+  // Custom SQL scripts specific to this monorepo - NO LONGER INCLUDING MJ_BASE_BEFORE_SQL.sql as of 5.3.0!
   customSQLScripts: [
-    {
-      scriptFile: './SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
-      when: 'before-all',
-    },
   ],
-  dbSchemaJSONOutput: {
-    excludeEntities: [],
-    excludeSchemas: ['sys', 'staging', 'dbo'],
-    bundles: [
-      {
-        name: '_Core_Apps',
-        excludeSchemas: ['__mj'],
-      },
-    ],
-  },
-  integrityChecks: {
-    enabled: true,
-    entityFieldsSequenceCheck: true,
-  },
-  advancedGeneration: {
-    enableAdvancedGeneration: true,
-    // NOTE: Model configuration is now per-prompt in the AI Prompts table via the MJ: AI Prompt Models relationship.
-    // This allows different models for different prompts and automatic failover between vendors.
-    features: [
-      {
-        name: 'EntityNames',
-        description: 'Use AI to generate better entity names when creating new entities',
-        enabled: false,
-      },
-      {
-        name: 'DefaultInViewFields',
-        description:
-          'Use AI to determine which fields in an entity should be shown, by default, in a newly created User View for the entity. This is only used when creating new entities and when new fields are detected.',
-        enabled: true,
-      },
-      {
-        name: 'EntityDescriptions',
-        description: 'Use AI to generate descriptions for entities, only used when creating new entities',
-        enabled: false,
-      },
-      {
-        name: 'SmartFieldIdentification',
-        description: 'Use AI to identify the best name field and default field to show in views for each entity',
-        enabled: true, 
-      },
-      {
-        name: 'TransitiveJoinIntelligence',
-        description: 'Use AI to analyze entity relationships and detect junction tables for many-to-many relationships',
-        enabled: true,
-      },
-      {
-        name: 'FormLayoutGeneration',
-        description:
-          'Use AI to generate semantic field categories for better form organization. This includes using AI to determine the way to layout fields on each entity form by assigning them to domain-specific categories. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
-        enabled: true,
-      },
-      {
-        name: 'ParseCheckConstraints',
-        description:
-          'Use AI to parse check constraints and generate a description as well as sub-class Validate() methods that reflect the logic of the constraint.',
-        enabled: true,
-      }
-    ],
-  },
+
+  // Soft PK/FK configuration for tables without database constraints
+  additionalSchemaInfo: './metadata/integrations/additionalSchemaInfo.json',
+
+  // Output directories specific to monorepo structure
   output: [
     { type: 'SQL', directory: './SQL Scripts/generated', appendOutputCode: true },
     {
@@ -162,6 +68,8 @@ const codegenConfig = {
     { type: 'EntitySubclasses', directory: './packages/GeneratedEntities/src/generated' },
     { type: 'DBSchemaJSON', directory: './Schema Files' },
   ],
+
+  // Build commands for monorepo packages
   commands: [
     {
       workingDirectory: './packages/MJCoreEntities',
@@ -199,190 +107,68 @@ const codegenConfig = {
       args: ['run', 'build'],
       when: 'after',
     },
-    {
-      workingDirectory: './packages/MJAPI',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
-    },
+    // {
+    //   workingDirectory: './packages/MJAPI',
+    //   command: 'npm',
+    //   args: ['run', 'build'],
+    //   when: 'after',
+    // },
   ],
-  SQLOutput: {
-    enabled: true,
-    folderPath: './migrations/v2/',
-    appendToFile: true,
-    convertCoreSchemaToFlywayMigrationFile: true,
-    omitRecurringScriptsFromLog: true,
-  },
-  forceRegeneration: {
-    enabled: false,  // Set to true to force regeneration even without schema changes
-    entityWhereClause: "", // example - can be any where clause you want "__mj_UpdatedAt>='2025-06-24 23:36:30.4900000 +00:00'",  // Optional WHERE clause to filter entities for regeneration
-    baseViews: false,
-    spCreate: false,  // Set this to true to regenerate all spCreate procedures
-    spUpdate: false,
-    spDelete: false,
-    allStoredProcedures: false,  // Overrides individual SP flags when true
-    indexes: false,
-    fullTextSearch: false,
-  },
-};
 
-/** @type {MJServerConfig} */
-const mjServerConfig = {
   /**
-   * MJAPI Configuration (previously config.json)
+   * ====================
+   * MCP Server Overrides
+   * ====================
    */
 
-  userHandling: {
-    autoCreateNewUsers: true,
-    newUserLimitedToAuthorizedDomains: false,
-    newUserAuthorizedDomains: [],
-    newUserRoles: ['UI', 'Developer'],
-    updateCacheWhenNotFound: true,
-    updateCacheWhenNotFoundDelay: 5000,
-    contextUserForNewUserCreation: 'not.set@nowhere.com',
-    CreateUserApplicationRecords: true 
-  },
-  databaseSettings: {
-    connectionTimeout: 45000,
-    requestTimeout: 30000,
-    metadataCacheRefreshInterval: isFinite(Number(process.env.METADATA_CACHE_REFRESH_INTERVAL))
-      ? Number(process.env.METADATA_CACHE_REFRESH_INTERVAL)
-      : 180000,
-  },
-  viewingSystem: {
-    enableSmartFilters: true,
-  },
-  restApiOptions: {
-    enabled: false, // Disabled by default
-    basePath: '/rest',
-    // Example of entity and schema filtering (uncomment and customize as needed):
-    // includeEntities: ['Users', 'Entity*', 'Entity Fields'], // Only allow these entities (supports wildcards)
-    // excludeEntities: ['Password', 'APIKey*', 'Credential'], // Exclude sensitive entities (supports wildcards)
-    // includeSchemas: ['public', 'CRM'], // Only allow entities from these schemas
-    // excludeSchemas: ['internal', 'security', '__mj'] // Exclude entire schemas
-  },
-  askSkip: {
-    url: process.env.ASK_SKIP_URL, // Base URL for Skip API (e.g., http://localhost:3001)
-    chatURL: process.env.ASK_SKIP_CHAT_URL,
-    learningCycleURL: process.env.ASK_SKIP_LEARNING_URL,
-    learningCycleIntervalInMinutes: process.env.ASK_SKIP_LEARNING_CYCLE_INTERVAL_IN_MINUTES,
-    learningCycleEnabled: process.env.ASK_SKIP_RUN_LEARNING_CYCLES,
-    learningCycleRunUponStartup: process.env.ASK_SKIP_RUN_LEARNING_CYCLES_UPON_STARTUP,
-    orgID: process.env.ASK_SKIP_ORGANIZATION_ID,
-    apiKey: process.env.ASK_SKIP_API_KEY,
-    organizationInfo: process.env.ASK_SKIP_ORGANIZATION_INFO,
-    entitiesToSend: {
-      excludeSchemas: [],
-      includeEntitiesFromExcludedSchemas: [
-      ],
-    },
-  },
-  sqlLogging: {
-    enabled: true,  // Master switch for SQL logging capability
-    defaultOptions: {
-      formatAsMigration: false,
-      statementTypes: 'both', // 'queries' | 'mutations' | 'both'
-      batchSeparator: 'GO',
-      prettyPrint: true,
-      logRecordChangeMetadata: false,
-      retainEmptyLogFiles: false,
-      verboseOutput: false // Set to true to enable debug console output for SQL logging
-    },
-    allowedLogDirectory: './logs/sql', // Restrict where logs can be written
-    maxActiveSessions: 5, // Limit concurrent logging sessions
-    autoCleanupEmptyFiles: true,
-    sessionTimeout: 3600000 // 1 hour in ms, auto-close sessions after this
-  },
-  scheduledJobs: {
-    enabled: true, // Set to true to enable scheduled jobs execution
-    systemUserEmail: 'not.set@nowhere.com', // User context for executing jobs
-    maxConcurrentJobs: 5, // Maximum number of jobs that can run simultaneously
-    defaultLockTimeout: 600000, // 10 minutes in ms - default timeout for job locks
-    staleLockCleanupInterval: 300000 // 5 minutes in ms - interval for checking stale locks
-  },
-  telemetry: {
-    enabled: true, // Enable server-side telemetry collection
-    level: 'standard' // 'minimal' | 'standard' | 'verbose' | 'debug'
-  },
-  /**
-   * Authentication Provider Configuration
-   * This replaces the legacy individual provider fields (webClientID, tenantID, auth0Domain, etc.)
-   * Each provider encapsulates its issuer URL, audience, JWKS URI, and provider-specific config
-   */
-  authProviders: [
-    // Microsoft Azure AD / Entra ID
-    process.env.TENANT_ID && process.env.WEB_CLIENT_ID ? {
-      name: 'azure',
-      type: 'msal',
-      issuer: `https://login.microsoftonline.com/${process.env.TENANT_ID}/v2.0`,
-      audience: process.env.WEB_CLIENT_ID,
-      jwksUri: `https://login.microsoftonline.com/${process.env.TENANT_ID}/discovery/v2.0/keys`,
-      clientId: process.env.WEB_CLIENT_ID,
-      tenantId: process.env.TENANT_ID
-    } : null,
-    
-    // Auth0
-    process.env.AUTH0_DOMAIN && process.env.AUTH0_CLIENT_ID ? {
-      name: 'auth0',
-      type: 'auth0',
-      issuer: `https://${process.env.AUTH0_DOMAIN}/`,
-      audience: process.env.AUTH0_CLIENT_ID,
-      jwksUri: `https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`,
-      clientId: process.env.AUTH0_CLIENT_ID,
-      clientSecret: process.env.AUTH0_CLIENT_SECRET,
-      domain: process.env.AUTH0_DOMAIN
-    } : null,
-    
-    // Okta (uncomment and configure if needed)
-    // process.env.OKTA_DOMAIN && process.env.OKTA_CLIENT_ID ? {
-    //   name: 'okta',
-    //   type: 'okta',
-    //   issuer: `https://${process.env.OKTA_DOMAIN}/oauth2/default`,
-    //   audience: process.env.OKTA_CLIENT_ID,
-    //   jwksUri: `https://${process.env.OKTA_DOMAIN}/oauth2/default/v1/keys`,
-    //   clientId: process.env.OKTA_CLIENT_ID,
-    //   domain: process.env.OKTA_DOMAIN
-    // } : null,
-    
-    // AWS Cognito (uncomment and configure if needed)
-    // process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID ? {
-    //   name: 'cognito',
-    //   type: 'cognito',
-    //   issuer: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}`,
-    //   audience: process.env.COGNITO_CLIENT_ID,
-    //   jwksUri: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
-    //   clientId: process.env.COGNITO_CLIENT_ID,
-    //   userPoolId: process.env.COGNITO_USER_POOL_ID,
-    //   region: process.env.AWS_REGION
-    // } : null,
-    
-    // Google OAuth (uncomment and configure if needed)
-    // process.env.GOOGLE_CLIENT_ID ? {
-    //   name: 'google',
-    //   type: 'google',
-    //   issuer: 'https://accounts.google.com',
-    //   audience: process.env.GOOGLE_CLIENT_ID,
-    //   jwksUri: 'https://www.googleapis.com/oauth2/v3/certs',
-    //   clientId: process.env.GOOGLE_CLIENT_ID,
-    //   clientSecret: process.env.GOOGLE_CLIENT_SECRET
-    // } : null
-  ].filter(Boolean) // Remove any null entries from providers that aren't configured
-};
-
-/** @type {MCPServerConfig} */
-const mcpServerConfig = {
   mcpServerSettings: {
     port: 3100,
     enableMCPServer: true,
+    systemApiKey: 'MY_API_KEY_FOR_MCP_SERVER',
+
+    // Authentication configuration
+    // Supports: 'apiKey' (default), 'oauth', 'both', 'none'
+    // OAuth uses the same auth providers as MJExplorer - no extra config needed!
+    // Token audience is derived from the provider's config (WEB_CLIENT_ID env var for Azure AD)
+    // Scopes are auto-generated from auth providers (e.g., api://{clientId}/.default for Azure AD)
+    auth: {
+      mode: 'both', // 'apiKey' | 'oauth' | 'both' | 'none'
+      // resourceIdentifier: auto-generated as http://localhost:{port} for MCP client discovery
+      // scopes: auto-generated from auth providers, or override with explicit array
+
+      // OAuth Proxy - enables dynamic client registration (RFC 7591) for MCP clients
+      // When enabled, the MCP Server acts as an OAuth Authorization Server that proxies
+      // auth to the configured upstream provider (Azure AD, Auth0, etc.)
+      // This allows MCP clients like Claude Code to authenticate without manual app registration
+      proxy: {
+        enabled: true, // Enable OAuth proxy for dynamic client registration
+        upstreamProvider: 'auth0', // Optional: specify provider by name (defaults to first)
+        // clientTtlMs: 24 * 60 * 60 * 1000, // 24 hours (default)
+        // stateTtlMs: 10 * 60 * 1000, // 10 minutes (default)
+
+        // Consent Screen - prompts users to select which scopes to grant
+        // Scopes are loaded from __mj.APIScope table in the database
+        // When false, all available scopes are granted automatically
+        enableConsentScreen: true,
+
+        // JWT Signing - the proxy issues its own JWTs (not upstream provider tokens)
+        // Configure a secret for consistent token validation across server restarts
+        // If not set, tokens won't be signed and consent screen won't work!
+        // REQUIRED for consent screen to function
+        jwtSigningSecret: process.env.MCP_JWT_SECRET,
+        jwtExpiresIn: '1h', // Token expiration (default: 1h)
+      },
+    },
+
     actionTools: [
       {
         actionName: 'NOT YET SUPPORTED',
         actionCategory: '*',
-      }
+      },
     ],
     entityTools: [
       {
-        schemaName: 'CRM',
+        schemaName: '*',
         entityName: '*',
         get: true,
         create: true,
@@ -390,143 +176,178 @@ const mcpServerConfig = {
         delete: true,
         runView: true,
       },
-    ]
-  }
-}
-
-/** @type {A2AServerConfig} */
-const a2aServerConfig = {
-  a2aServerSettings: {
-    port: 3200,
-    enableA2AServer: true,
-    agentName: "MemberJunction",
-    agentDescription: "Access MemberJunction data and capabilities via the A2A protocol",
-    streamingEnabled: true,
-    entityCapabilities: [
+    ],
+    agentTools: [
       {
-        schemaName: 'CRM',
-        entityName: '*',
-        get: true,
-        create: true,
-        update: true,
-        delete: true,
-        runView: true,
+        agentName: '*', // All agents (or specific name pattern)
+        execute: true,
+        status: true,
+        cancel: true,
       },
-    ]
-  }
-}
-/** @type {QueryGenConfig} */
-const queryGenConfig = {
-  /**
-   * QueryGen Configuration
-   *
-   * Configuration for automated query generation from entity metadata.
-   */
-
-  // Entity Filtering
-  includeEntities: ["Members"], // If provided, ONLY these entities will be processed (allowlist)
-  excludeEntities: [], // If provided, these entities will be excluded (denylist)
-  excludeSchemas: ['sys', 'INFORMATION_SCHEMA', '__mj'],
-
-  // modelOverride: 'GPT-OSS-120B',    // Override model for all prompts (e.g., "GPT-OSS-120B")
-  // vendorOverride: 'Groq',   // Override vendor for all prompts (e.g., "Groq")
-
-  // Entity Grouping
-  questionsPerGroup: 2, // Number of business questions to generate per entity group
-
-  // AI Configuration
-  // modelOverride: 'GPT-OSS-120B', // Uncomment to override model for all prompts
-  // vendorOverride: 'Groq', // Uncomment to override vendor for all prompts
-  embeddingModel: 'text-embedding-3-small',
-
-  // Iteration Limits
-  maxRefinementIterations: 3, // Maximum times to refine a query
-  maxFixingIterations: 5, // Maximum times to attempt fixing a broken query
-
-  // Few-Shot Learning
-  topSimilarQueries: 5, // Number of similar golden queries to use as examples
-
-  // Similarity Weighting (used for finding similar golden queries)
-  similarityWeights: {
-    userQuestion: 0.2, // Weight for user question similarity
-    description: 0.40, // Weight for description similarity
-    technicalDescription: 0.40, // Weight for technical description similarity
+    ],
   },
 
-  // Output Configuration
-  outputMode: 'metadata', // 'metadata' | 'database' | 'both'
-  outputDirectory: './Demos/metadata/queries',
-  outputCategoryDirectory: './Demos/metadata/query-categories', // Optional: directory for category metadata
-  externalizeSQLToFiles: true, // When true, creates separate .sql files and uses @file: references
-
-  // Query Category Configuration
-  rootQueryCategory: 'Golden-Queries', // Root category for all generated queries
-  autoCreateEntityQueryCategories: true, // When true, creates entity-specific sub-categories
-
-  // Performance
-  parallelGenerations: 1, // Number of queries to generate in parallel
-  enableCaching: true,
-
-  // Validation
-  testWithSampleData: true, // Test generated queries against the database
-  requireMinRows: 0, // Minimum rows required for query to be valid
-  maxRefinementRows: 5, // Maximum rows to return when testing during refinement
-
-  // Verbose Logging
-  verbose: true, // Enable detailed logging output
-}
-
-/** @type {CodeGenConfig & MJConfig & MJServerConfig & MCPServerConfig & A2AServerConfig} */
-const config = {
-  ...codegenConfig,
-  ...mjServerConfig,
-  ...mcpServerConfig,
-  ...a2aServerConfig,
-  queryGen: queryGenConfig,
-
   /**
-   * Shared Configuration and Environment Variables
+   * ====================
+   * A2A Server Overrides
+   * ====================
    */
 
-  // Used for MJCLI, CodeGenLib, and MJServer
-  dbHost: process.env.DB_HOST ?? 'localhost',
-  dbPort: process.env.DB_PORT,
-  dbDatabase: process.env.DB_DATABASE,
-  codeGenLogin: process.env.CODEGEN_DB_USERNAME,
-  codeGenPassword: process.env.CODEGEN_DB_PASSWORD,
-  dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE,
-  dbUsername: process.env.DB_USERNAME,
-  dbPassword: process.env.DB_PASSWORD,
-  dbReadOnlyUsername: process.env.DB_READ_ONLY_USERNAME,
-  dbReadOnlyPassword: process.env.DB_READ_ONLY_PASSWORD,
+  a2aServerSettings: {
+    enableA2AServer: true, // Override default (false)
+    entityCapabilities: [
+      {
+        schemaName: '*',
+        entityName: '*',
+        get: true,
+        create: true,
+        update: true,
+        delete: true,
+        runView: true,
+      },
+    ],
+  },
 
-  // Used only for CodeGenLib
-  outputCode: process.env.OUTPUT_CODE,
+  /**
+   * ====================
+   * Server Extensions
+   * ====================
+   */
+  serverExtensions: [
+    {
+      Enabled: true,
+      DriverClass: 'SlackMessagingExtension',
+      RootPath: '/webhook/slack',
+      Settings: {
+        DefaultAgentName: process.env.MJ_BOT_DEFAULT_AGENT_NAME || 'Sage',
+        ContextUserEmail: process.env.MJ_BOT_CONTEXT_USER_EMAIL || 'your-service-account@company.com',
+        BotToken: process.env.SLACK_BOT_TOKEN,
+        SigningSecret: process.env.SLACK_SIGNING_SECRET,
+        ConnectionMode: 'http',
+        MaxThreadMessages: 50,
+        StreamingUpdateIntervalMs: 1500,
+        ExplorerBaseURL: 'http://localhost:4201',
+        SlashCommands: {
+          '/sage': 'Sage',
+          '/skip': 'Skip',
+          '/research': 'Research Agent',
+          '/marketing': 'Marketing Agent',
+          '/codesmith': 'Codesmith Agent',
+          '/query': 'Query Builder',
+        },
+      }
+    },
+    {
+      Enabled: true,
+      DriverClass: 'TeamsMessagingExtension',
+      RootPath: '/webhook/teams',
+      Settings: {
+        DefaultAgentName: process.env.MJ_BOT_DEFAULT_AGENT_NAME || 'Sage',
+        ContextUserEmail: process.env.MJ_BOT_CONTEXT_USER_EMAIL || 'your-service-account@company.com',
+        MicrosoftAppId: process.env.MICROSOFT_APP_ID,
+        MicrosoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
+        MaxThreadMessages: 50,
+        StreamingUpdateIntervalMs: 2000,
+      }
+    }
+  ],
 
-  // Used for CodeGenLib and MJAPI
-  dbInstanceName: process.env.DB_INSTANCE_NAME,
-  mjCoreSchema: process.env.MJ_CORE_SCHEMA ?? '__mj',
+  /**
+   * ====================
+   * QueryGen Overrides
+   * ====================
+   */
 
-  // Used only for MJAPI
-  graphqlPort: process.env.GRAPHQL_PORT ?? 4000,
-  ___codeGenAPIURL: process.env.CODEGEN_API_URL,
-  ___codeGenAPIPort: process.env.CODEGEN_API_PORT,
-  ___codeGenAPISubmissionDelay: process.env.CODEGEN_API_SUBMISSION_DELAY,
-  graphqlRootPath: process.env.GRAPHQL_ROOT_PATH ?? '/',
-  enableIntrospection: process.env.ENABLE_INTROSPECTION,
-  websiteRunFromPackage: process.env.WEBSITE_RUN_FROM_PACKAGE,
-  userEmailMap: process.env.USER_EMAIL_MAP,
-  ___skipAPIurl: process.env.ASK_SKIP_API_URL,
-  ___skipLearningAPIurl: process.env.ASK_SKIP_LEARNING_API_URL,
-  ___skipLearningCycleIntervalInMinutes: process.env.ASK_SKIP_LEARNING_CYCLE_INTERVAL_IN_MINUTES,
-  ___skipRunLearningCycles: process.env.ASK_SKIP_RUN_LEARNING_CYCLES,
-  ___skipAPIOrgId: process.env.ASK_SKIP_ORGANIZATION_ID,
-  apiKey: process.env.MJ_API_KEY,
-  baseUrl: process.env.GRAPHQL_BASE_URL ?? 'http://localhost',
-  publicUrl: process.env.MJAPI_PUBLIC_URL, // Public URL for callbacks (e.g., ngrok URL when developing)
+  queryGen: {
+    includeEntities: [], // Override to specific entities
+  },
 
-  // Used only for MJCLI
-  migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',
+  /**
+   * ====================
+   * OAuth Providers (for MCP Server auth.mode: 'oauth' or 'both')
+   * ====================
+   *
+   * AUTH PROVIDERS ARE AUTO-CONFIGURED FROM ENVIRONMENT VARIABLES:
+   *
+   * Azure AD / Entra ID (if TENANT_ID and WEB_CLIENT_ID are set in .env):
+   *   - Automatically creates an 'azure' provider using these env vars
+   *   - No manual authProviders config needed!
+   *
+   * Auth0 (if AUTH0_DOMAIN and AUTH0_CLIENT_ID are set in .env):
+   *   - Automatically creates an 'auth0' provider using these env vars
+   *   - Optional: AUTH0_CLIENT_SECRET
+   *
+   * MANUAL OVERRIDE: Only add authProviders below if you need to:
+   *   - Use Okta, Cognito, or Google (no env var defaults yet)
+   *   - Override the auto-configured settings
+   *   - Add multiple providers
+   *
+   * authProviders: [
+   *   {
+   *     name: 'azure-ad',
+   *     type: 'msal',
+   *     clientId: 'your-client-id',
+   *     tenantId: 'your-tenant-id',
+   *     issuer: 'https://login.microsoftonline.com/{tenant}/v2.0',
+   *     audience: 'api://your-app-id',
+   *     jwksUri: 'https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys'
+   *   }
+   * ],
+   *
+   * Supported provider types: 'msal' (Azure AD), 'auth0', 'okta', 'cognito', 'google'
+   */
+
+  /**
+   * ====================
+   * API Key Generation
+   * ====================
+   *
+   * Configuration for API key generation parameters.
+   *
+   * WARNING: Changing these values after API keys have been issued will
+   * INVALIDATE all existing keys. Only modify before creating any keys,
+   * or be prepared to rotate all keys.
+   *
+   * All properties are optional and default to:
+   *   prefix: 'mj_sk_'       - Prefix prepended to generated keys
+   *   entropyBytes: 32        - Random bytes of entropy (64 hex chars / 43 base64url chars)
+   *   encoding: 'hex'         - Key body encoding: 'hex' or 'base64url'
+   *   hashAlgorithm: 'sha256' - Hash algorithm for key storage
+   *
+   * Example: base64url encoding with custom prefix for shorter keys:
+   *   apiKeyGeneration: {
+   *     prefix: 'skip-',
+   *     entropyBytes: 50,
+   *     encoding: 'base64url',
+   *   },
+   */
+  // apiKeyGeneration: {
+  //   prefix: 'mj_sk_',
+  //   entropyBytes: 32,
+  //   encoding: 'hex',
+  //   hashAlgorithm: 'sha256',
+  // },
+
+  /**
+   * ====================
+   * All Other Settings
+   * ====================
+   *
+   * These use defaults from their respective packages:
+   *
+   * - verboseOutput, logging, settings → @memberjunction/codegen-lib defaults
+   * - userHandling, databaseSettings, viewingSystem → @memberjunction/server defaults
+   * - scheduledJobs, telemetry, sqlLogging → @memberjunction/server defaults
+   * - restApiOptions, askSkip → @memberjunction/server defaults
+   * - authProviders → @memberjunction/server defaults (from environment variables)
+   *
+   * Environment variables (DB_HOST, DB_DATABASE, GRAPHQL_PORT, TENANT_ID, etc.)
+   * are all handled by DEFAULT_SERVER_CONFIG.
+   */
+
+  // Override example: To set a custom publicUrl for OAuth callbacks, uncomment:
+  // publicUrl: 'https://your-custom-url.com',
+  //
+  // Note: If MJAPI_PUBLIC_URL env var is set, it will be used automatically.
+  // If neither is set, the server constructs it from baseUrl + port + path.
 };
-
-module.exports = config;

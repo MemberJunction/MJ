@@ -2,8 +2,8 @@
 
 .filter-panel {
   height: 100%;
-  background: white;
-  border-right: 1px solid #e5e7eb;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-default);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -12,19 +12,19 @@
 /* Header */
 .filter-panel-header {
   padding: 20px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--mj-bg-surface-sunken);
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #fafbfc 0%, #f8fafc 100%);
+  background: var(--mj-bg-surface-card);
 }
 
 .filter-panel-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--mj-text-primary);
   flex: 1;
   letter-spacing: -0.02em;
 }
@@ -36,18 +36,18 @@
   margin-right: 16px;
   font-size: 13px;
   padding: 6px 12px;
-  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
   border-radius: 20px;
-  border: 1px solid #c4b5fd;
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
 }
 
 .filter-panel-header .filter-summary-inline .summary-value {
   font-weight: 700;
-  color: #6366f1;
+  color: var(--mj-brand-primary);
 }
 
 .filter-panel-header .filter-summary-inline .summary-label {
-  color: #7c3aed;
+  color: var(--mj-brand-primary-hover);
   font-weight: 500;
 }
 
@@ -56,7 +56,7 @@
   border: none;
   padding: 8px;
   cursor: pointer;
-  color: #94a3b8;
+  color: var(--mj-text-disabled);
   border-radius: 8px;
   transition: all 0.2s ease;
   display: flex;
@@ -65,8 +65,8 @@
 }
 
 .filter-panel-header .close-btn:hover {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
 }
 
 .filter-panel-header .close-btn .fa-solid {
@@ -93,14 +93,14 @@
   margin-bottom: 10px;
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--mj-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.75px;
 }
 
 .filter-group .filter-label .fa-solid {
   font-size: 13px;
-  color: #6366f1;
+  color: var(--mj-brand-primary);
   width: 16px;
 }
 
@@ -108,24 +108,24 @@
 .filter-group .filter-select {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--mj-border-default);
   border-radius: 10px;
   font-size: 14px;
-  background: white;
+  background: var(--mj-bg-surface);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
-  color: #334155;
+  color: var(--mj-text-secondary);
 }
 
 .filter-group .filter-input:focus,
 .filter-group .filter-select:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
 .filter-group .filter-input::placeholder {
-  color: #94a3b8;
+  color: var(--mj-text-disabled);
 }
 
 .filter-group .filter-select {
@@ -141,16 +141,16 @@
 .filter-actions {
   margin-top: 28px;
   padding-top: 20px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--mj-bg-surface-sunken);
 }
 
 .filter-actions .reset-btn {
   width: 100%;
   padding: 12px 16px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 10px;
-  color: #64748b;
+  color: var(--mj-text-muted);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -163,9 +163,9 @@
 }
 
 .filter-actions .reset-btn:hover {
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-  border-color: #cbd5e1;
-  color: #475569;
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-border-strong);
+  color: var(--mj-text-secondary);
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
@@ -180,15 +180,15 @@
 }
 
 .filter-content::-webkit-scrollbar-track {
-  background: #f8fafc;
+  background: var(--mj-bg-surface-card);
   border-radius: 3px;
 }
 
 .filter-content::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--mj-border-strong);
   border-radius: 3px;
 }
 
 .filter-content::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--mj-text-disabled);
 }

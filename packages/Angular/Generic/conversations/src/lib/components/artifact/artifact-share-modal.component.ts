@@ -1,10 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
-import { WindowModule } from '@progress/kendo-angular-dialog';
-import { ButtonModule } from '@progress/kendo-angular-buttons';
+import { MJWindowComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { UserInfo } from '@memberjunction/core';
-import { ArtifactEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity } from '@memberjunction/core-entities';
 import { ArtifactPermissionService, ArtifactPermission, ArtifactPermissionSet } from '../../services/artifact-permission.service';
 import { UserPickerComponent, UserSearchResult } from '../shared/user-picker.component';
 
@@ -16,16 +15,17 @@ interface PermissionDisplay extends ArtifactPermission {
 @Component({
     selector: 'mj-artifact-share-modal',
     standalone: true,
-    imports: [CommonModule, FormsModule, WindowModule, ButtonModule, UserPickerComponent],
+    imports: [FormsModule, MJWindowComponent, MJButtonDirective, UserPickerComponent],
     template: `
         @if (isOpen && artifact) {
-            <kendo-window
-                [title]="'Share: ' + artifact.Name"
-                [width]="600"
-                [height]="500"
-                [minWidth]="400"
-                [minHeight]="400"
-                (close)="onCancel()"
+            <mj-window
+                [Title]="'Share: ' + artifact.Name"
+                [Width]="600"
+                [Height]="500"
+                [MinWidth]="400"
+                [MinHeight]="400"
+                [Visible]="true"
+                (Close)="onCancel()"
             >
                 <div class="share-modal-content">
                     <!-- Add User Section -->
@@ -87,11 +87,11 @@ interface PermissionDisplay extends ArtifactPermission {
                                 </div>
 
                                 <div class="form-actions">
-                                    <button kendoButton (click)="onAddUser()" [disabled]="!selectedUser" class="btn-primary">
+                                    <button mjButton variant="primary" (click)="onAddUser()" [disabled]="!selectedUser">
                                         <i class="fa-solid fa-plus"></i>
                                         Add User
                                     </button>
-                                    <button kendoButton (click)="onClearSelection()" class="btn-secondary">
+                                    <button mjButton (click)="onClearSelection()">
                                         Cancel
                                     </button>
                                 </div>
@@ -167,17 +167,17 @@ interface PermissionDisplay extends ArtifactPermission {
                                         @if (canModifyPermissions) {
                                             <div class="permission-actions">
                                                 @if (!permission.isEditing) {
-                                                    <button kendoButton class="btn-icon" (click)="onEditPermission(permission)" title="Edit">
+                                                    <button mjButton variant="flat" size="sm" (click)="onEditPermission(permission)" title="Edit">
                                                         <i class="fa-solid fa-pen"></i>
                                                     </button>
-                                                    <button kendoButton class="btn-icon btn-danger" (click)="onRevokePermission(permission)" title="Remove">
+                                                    <button mjButton variant="danger" size="sm" (click)="onRevokePermission(permission)" title="Remove">
                                                         <i class="fa-solid fa-xmark"></i>
                                                     </button>
                                                 } @else {
-                                                    <button kendoButton class="btn-icon btn-success" (click)="onSavePermission(permission)" title="Save">
+                                                    <button mjButton variant="success" size="sm" (click)="onSavePermission(permission)" title="Save">
                                                         <i class="fa-solid fa-check"></i>
                                                     </button>
-                                                    <button kendoButton class="btn-icon" (click)="onCancelEdit(permission)" title="Cancel">
+                                                    <button mjButton variant="flat" size="sm" (click)="onCancelEdit(permission)" title="Cancel">
                                                         <i class="fa-solid fa-xmark"></i>
                                                     </button>
                                                 }
@@ -191,16 +191,16 @@ interface PermissionDisplay extends ArtifactPermission {
                 </div>
 
                 <div class="modal-actions">
-                    <button kendoButton (click)="onCancel()">Close</button>
+                    <button mjButton (click)="onCancel()">Close</button>
                 </div>
-            </kendo-window>
+            </mj-window>
         }
     `,
     styleUrls: ['./artifact-share-modal.component.css']
 })
 export class ArtifactShareModalComponent implements OnInit, OnChanges {
     @Input() isOpen: boolean = false;
-    @Input() artifact: ArtifactEntity | null = null;
+    @Input() artifact: MJArtifactEntity | null = null;
     @Input() currentUser!: UserInfo;
 
     @Output() saved = new EventEmitter<void>();
@@ -294,6 +294,8 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
             isOwner,
             availablePermissions: this.availablePermissions
         });
+
+        this.cdr.detectChanges(); // zone.js 0.15: async permission checks don't trigger CD
     }
 
     getExcludedUserIds(): string[] {

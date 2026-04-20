@@ -1,5 +1,6 @@
 import { EntityField } from "./baseEntity";
 import { EntityInfo } from "./entityInfo";
+import { UUIDsEqual } from "@memberjunction/global";
 
 
 /**
@@ -389,12 +390,59 @@ export class CompositeKey extends FieldValueCollection {
     * @param compositeKey the composite key to compare against
     * @returns true if the primary key values are the same, false if they are different
     */
-    Equals(compositeKey: CompositeKey): boolean {
+    public Equals(compositeKey: CompositeKey): boolean {
         if(!compositeKey){
             return false;
         }
 
         return this.EqualsKey(compositeKey.KeyValuePairs);
+    }
+
+    /**
+     * Utility function to compare either single composite keys or arrays of composite keys.
+     * When comparing arrays, both order and content must match.
+     * @param key1 First key or array of keys to compare
+     * @param key2 Second key or array of keys to compare
+     * @returns true if the keys are equal, false otherwise. Returns false if types don't match (single vs array).
+     */
+    public static EqualsEx(key1: CompositeKey | Array<CompositeKey> | null | undefined, key2: CompositeKey | Array<CompositeKey> | null | undefined): boolean {
+        // Handle null/undefined cases
+        if (key1 == null && key2 == null) {
+            return true;
+        }
+        if (key1 == null || key2 == null) {
+            return false;
+        }
+
+        const isArray1 = Array.isArray(key1);
+        const isArray2 = Array.isArray(key2);
+
+        // Type mismatch - single vs array
+        if (isArray1 !== isArray2) {
+            return false;
+        }
+
+        // Both are single CompositeKeys
+        if (!isArray1) {
+            return (key1 as CompositeKey).Equals(key2 as CompositeKey);
+        }
+
+        // Both are arrays
+        const arr1 = key1 as Array<CompositeKey>;
+        const arr2 = key2 as Array<CompositeKey>;
+
+        if (arr1.length !== arr2.length) {
+            return false;
+        }
+
+        // Compare each element in order
+        for (let i = 0; i < arr1.length; i++) {
+            if (!arr1[i].Equals(arr2[i])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
 
@@ -453,7 +501,16 @@ export class CompositeKey extends FieldValueCollection {
 
         for( const [index, kvPair] of kvPairs.entries()){
             const sourcekvPair = this.KeyValuePairs[index];
-            if(kvPair.FieldName !== sourcekvPair.FieldName || kvPair.Value !== sourcekvPair.Value){
+            if(kvPair.FieldName !== sourcekvPair.FieldName){
+                return false;
+            }
+            // Use case-insensitive comparison for string values (handles UUID case differences
+            // between SQL Server uppercase and PostgreSQL lowercase)
+            if (typeof kvPair.Value === 'string' && typeof sourcekvPair.Value === 'string') {
+                if (!UUIDsEqual(kvPair.Value, sourcekvPair.Value)) {
+                    return false;
+                }
+            } else if (kvPair.Value !== sourcekvPair.Value) {
                 return false;
             }
         }

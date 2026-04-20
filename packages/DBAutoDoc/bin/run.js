@@ -1,12 +1,22 @@
 #!/usr/bin/env node
+import { config as dotenvConfig } from 'dotenv';
+import { fileURLToPath } from 'url';
+import { resolve, dirname } from 'path';
 
-// Load environment variables from .env file in current working directory
-require('dotenv').config()
+// Load .env from repo root (3 levels up from bin/run.js) so MJ config vars are available
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenvConfig({ path: resolve(__dirname, '../../../.env') });
+// Also load from CWD if present (for local overrides)
+dotenvConfig();
 
-// Load AI providers to prevent tree shaking
-const { LoadAIProviders } = require('@memberjunction/ai-provider-bundle');
-LoadAIProviders();
+// Commands that need the full MJ server bootstrap (database connectivity, AI providers, etc.)
+const heavyCommands = ['analyze', 'generate-queries', 'export-sample-queries', 'prune'];
+const commandArg = process.argv[2];
+const needsBootstrap = heavyCommands.includes(commandArg);
 
-const oclif = require('@oclif/core')
+if (needsBootstrap) {
+  await import('@memberjunction/server-bootstrap/mj-class-registrations');
+}
 
-oclif.run().then(oclif.flush).catch(oclif.Errors.handle)
+const { execute } = await import('@oclif/core');
+await execute({ dir: import.meta.url });

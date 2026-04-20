@@ -1,0 +1,117 @@
+<div class="notification-preferences-container">
+    @if (loading) {
+        <mj-loading text="Loading notification preferences..."></mj-loading>
+    } @else {
+        <div class="content">
+            @if (viewModels.length === 0) {
+                <!-- Empty state -->
+                <div class="empty-state">
+                    <i class="fa-solid fa-bell-slash"></i>
+                    <p>No notification types configured yet.</p>
+                </div>
+            } @else {
+                <!-- Notification type cards -->
+                <div class="notification-types-grid">
+                    @for (vm of viewModels; track vm.type.ID) {
+                        <article class="notification-type-card"
+                                 [class.changed]="vm.changed"
+                                 role="region"
+                                 [attr.aria-label]="'Notification settings for ' + vm.type.Name">
+
+                            <div class="card-header" [style.border-left-color]="getTypeColor(vm.type)">
+                                <div class="icon-wrapper" [style.background-color]="getTypeColor(vm.type) + '20'">
+                                    <i [class]="'fa-solid ' + getTypeIcon(vm.type)" [style.color]="getTypeColor(vm.type)" [attr.aria-hidden]="true"></i>
+                                </div>
+                                <div class="header-text">
+                                    <h4>{{ vm.type.Name }}</h4>
+                                    <p class="type-description">{{ vm.type.Description }}</p>
+                                </div>
+                            </div>
+
+                            <div class="card-body">
+                                <!-- Delivery channel checkboxes -->
+                                <div class="preference-row">
+                                    <label class="delivery-label" [attr.id]="'delivery-label-' + vm.type.ID">Delivery Channels</label>
+
+                                    <div class="delivery-checkboxes" role="group" [attr.aria-labelledby]="'delivery-label-' + vm.type.ID">
+                                        <label class="channel-checkbox">
+                                            <input type="checkbox"
+                                                   [(ngModel)]="vm.inAppEnabled"
+                                                   (change)="onChannelChange(vm)"
+                                                   [disabled]="!getAllowUserPreference(vm.type)"
+                                                   [attr.aria-label]="'Enable in-app notifications for ' + vm.type.Name">
+                                            <i class="fa-solid fa-bell" aria-hidden="true"></i>
+                                            <span>In-App</span>
+                                        </label>
+
+                                        <label class="channel-checkbox">
+                                            <input type="checkbox"
+                                                   [(ngModel)]="vm.emailEnabled"
+                                                   (change)="onChannelChange(vm)"
+                                                   [disabled]="!getAllowUserPreference(vm.type)"
+                                                   [attr.aria-label]="'Enable email notifications for ' + vm.type.Name">
+                                            <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+                                            <span>Email</span>
+                                        </label>
+
+                                        <label class="channel-checkbox">
+                                            <input type="checkbox"
+                                                   [(ngModel)]="vm.smsEnabled"
+                                                   (change)="onChannelChange(vm)"
+                                                   [disabled]="!getAllowUserPreference(vm.type)"
+                                                   [attr.aria-label]="'Enable SMS notifications for ' + vm.type.Name">
+                                            <i class="fa-solid fa-mobile" aria-hidden="true"></i>
+                                            <span>SMS</span>
+                                        </label>
+                                    </div>
+
+                                    @if (!getAllowUserPreference(vm.type)) {
+                                        <div class="info-message" role="alert" aria-live="polite">
+                                            <i class="fa-solid fa-info-circle" aria-hidden="true"></i>
+                                            <span>This notification type's delivery channels cannot be customized.</span>
+                                        </div>
+                                    }
+                                </div>
+
+                                <!-- Auto-expire info -->
+                                @if (getTypeAutoExpireDays(vm.type)) {
+                                    <div class="metadata-row">
+                                        <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                                        <span class="metadata-text">
+                                            Auto-marks as read after {{ getTypeAutoExpireDays(vm.type) }} day(s)
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+
+            <!-- Action buttons -->
+            @if (hasChanges) {
+                <div class="actions" role="group" aria-label="Save or cancel changes">
+                    <button class="btn btn-secondary"
+                            type="button"
+                            (click)="cancel()"
+                            [disabled]="saving"
+                            [attr.aria-busy]="saving">
+                        Cancel
+                    </button>
+                    <button class="btn btn-primary"
+                            type="button"
+                            (click)="save()"
+                            [disabled]="saving"
+                            [attr.aria-busy]="saving">
+                        @if (saving) {
+                            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                        } @else {
+                            <i class="fa-solid fa-save" aria-hidden="true"></i>
+                        }
+                        <span>{{ saving ? 'Saving...' : 'Save Preferences' }}</span>
+                    </button>
+                </div>
+            }
+        </div>
+    }
+</div>

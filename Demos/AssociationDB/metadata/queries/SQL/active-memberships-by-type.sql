@@ -1,0 +1,1 @@
+SELECT mt.Name AS MembershipType, COUNT(m.ID) AS ActiveMembershipCount FROM [AssociationDemo].[vwMemberships] m INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON m.MembershipTypeID = mt.ID WHERE m.Status = 'Active' GROUP BY mt.Name ORDER BY ActiveMembershipCount DESC

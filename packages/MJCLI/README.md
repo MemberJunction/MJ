@@ -1,916 +1,428 @@
 # @memberjunction/cli
 
-The official command-line interface (CLI) for MemberJunction, providing essential tools for installation, database management, code generation, AI operations, testing, and database documentation.
+The official command-line interface for MemberJunction. Provides tools for installation, database migrations, code generation, metadata sync, AI operations, testing, database documentation, and query generation.
+
+## Architecture
+
+```mermaid
+graph TD
+    subgraph "@memberjunction/cli (mj)"
+        A[CLI Entry Point] --> B[Commands]
+        B --> C[install]
+        B --> D[migrate]
+        B --> E[codegen]
+        B --> F[sync]
+        B --> G[ai]
+        B --> H[test]
+        B --> I[dbdoc]
+        B --> J[querygen]
+        B --> K[bump]
+        B --> L[clean]
+
+        A --> M[Hooks]
+        M --> N[init]
+        M --> O[prerun]
+    end
+
+    subgraph "Underlying Engines"
+        P["@memberjunction/codegen-lib"]
+        Q["@memberjunction/metadata-sync"]
+        R["@memberjunction/testing-cli"]
+        S["@memberjunction/db-auto-doc"]
+        T["@memberjunction/query-gen"]
+        U["@memberjunction/ai-cli"]
+    end
+
+    E --> P
+    F --> Q
+    H --> R
+    I --> S
+    J --> T
+    G --> U
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style E fill:#7c5295,stroke:#563a6b,color:#fff
+    style F fill:#7c5295,stroke:#563a6b,color:#fff
+    style G fill:#b8762f,stroke:#8a5722,color:#fff
+    style H fill:#b8762f,stroke:#8a5722,color:#fff
+    style I fill:#b8762f,stroke:#8a5722,color:#fff
+    style J fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Overview
 
-The MemberJunction CLI (`mj`) is a comprehensive toolset designed to streamline the development and maintenance of MemberJunction applications. It handles everything from initial installation to ongoing database migrations, code generation, AI agent execution, testing, and automated database documentation.
+The `mj` CLI is built on the oclif framework and acts as a unified entry point for all MemberJunction development tools. Each command group delegates to a specialized package.
 
 ## Installation
 
-### Global Installation (Recommended)
 ```bash
+# Global (recommended)
 npm install -g @memberjunction/cli
-```
 
-### Local Installation
-```bash
+# Local
 npm install --save-dev @memberjunction/cli
 ```
 
-## Prerequisites
-
-- **Node.js**: Version 20.0.0 or higher
-- **SQL Server**: Access to a SQL Server instance for database operations
-- **Disk Space**: At least 2GB of free disk space for installation
+**Requires Node.js 20.0.0 or higher.**
 
 ## Configuration
 
-The CLI uses a configuration file system powered by [cosmiconfig](https://github.com/davidtheclark/cosmiconfig). It searches for configuration in the following locations:
+Uses [cosmiconfig](https://github.com/davidtheclark/cosmiconfig) to find configuration:
 
-- `.mjrc`
-- `.mjrc.json`
-- `.mjrc.yaml`
-- `.mjrc.yml`
-- `.mjrc.js`
-- `.mjrc.cjs`
-- `mj.config.js`
-- `mj.config.cjs`
-- `package.json` (in a `"mj"` property)
+- `mj.config.js` / `mj.config.cjs`
+- `.mjrc` / `.mjrc.json` / `.mjrc.yaml`
+- `package.json` (in `"mj"` property)
 
-### Configuration Schema
+### Database Environment Variables
 
-```typescript
-interface MJConfig {
-  dbHost: string;              // Database server hostname (default: 'localhost')
-  dbDatabase: string;          // Database name
-  dbPort: number;              // Database port (default: 1433)
-  codeGenLogin: string;        // Database login for CodeGen operations
-  codeGenPassword: string;     // Database password for CodeGen operations
-  migrationsLocation?: string; // Location of migration files (default: 'filesystem:./migrations')
-  dbTrustServerCertificate?: boolean; // Trust server certificate (default: false)
-  coreSchema?: string;         // Core schema name (default: '__mj')
-  cleanDisabled?: boolean;     // Disable database cleaning (default: true)
-  mjRepoUrl?: string;          // MemberJunction repository URL
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_HOST` | `localhost` | SQL Server hostname or IP |
+| `DB_PORT` | `1433` | SQL Server port |
+| `DB_DATABASE` | | Database name |
+| `CODEGEN_DB_USERNAME` | | SQL Server login |
+| `CODEGEN_DB_PASSWORD` | | SQL Server password |
+| `DB_ENCRYPT` | `true` | Encrypt the connection (required for Azure SQL) |
+| `DB_TRUST_SERVER_CERTIFICATE` | `false` | Trust self-signed certificates (set `true` for local dev) |
 
-  // AI-specific settings (optional)
-  aiSettings?: {
-    defaultTimeout?: number;    // Default timeout for AI operations (default: 300000ms)
-    outputFormat?: 'compact' | 'json' | 'table'; // Default output format
-    logLevel?: 'info' | 'debug' | 'verbose';     // Logging detail level
-    enableChat?: boolean;       // Enable chat features (default: true)
-    chatHistoryLimit?: number;  // Chat history size limit
-  };
-}
-```
-
-### Example Configuration
-
-```javascript
-// mj.config.cjs
-module.exports = {
-  dbHost: 'localhost',
-  dbDatabase: 'MemberJunction',
-  dbPort: 1433,
-  codeGenLogin: 'sa',
-  codeGenPassword: 'YourPassword123!',
-  dbTrustServerCertificate: true,
-  coreSchema: '__mj'
-};
-```
+These can also be set in `mj.config.cjs` as `dbHost`, `dbPort`, `dbDatabase`, `codeGenLogin`, `codeGenPassword`, `dbEncrypt`, and `dbTrustServerCertificate`.
 
 ## Commands
 
-### Core Commands
+### mj install
 
-#### `mj install`
-
-Performs a complete installation of MemberJunction, including:
-- Database setup
-- Generated entities configuration
-- API server configuration
-- Explorer UI configuration
+Interactive installer for new MemberJunction environments.
 
 ```bash
-mj install [--verbose]
+mj install
 ```
 
-The install command will:
-1. Verify Node.js version and disk space requirements
-2. Check for required directories (GeneratedEntities, SQL Scripts, MJAPI, MJExplorer)
-3. Prompt for configuration values or read from `install.config.json`
-4. Create `.env` files with database and authentication settings
-5. Run npm installations and link packages
-6. Execute CodeGen to generate initial code
+Sets up the database schema, applies migrations, and generates initial code.
 
-#### `mj codegen`
+### mj migrate
 
-Runs the MemberJunction code generation process to create TypeScript entities and metadata from your database schema.
+Run database migrations (powered by [Skyway](https://github.com/MemberJunction/skyway)).
 
 ```bash
-mj codegen [--skipdb]
+mj migrate
+mj migrate [--verbose] [--tag <version>] [--schema <name>] [--dir <path>]
 ```
 
 Options:
-- `--skipdb`: Skip database migration before running code generation
-
-#### `mj migrate`
-
-Applies database migrations to update your MemberJunction schema to the latest version.
-
-```bash
-mj migrate [--verbose] [--tag <version>]
-```
-
-Options:
-- `--verbose`: Enable detailed logging
-- `--tag <version>`: Specify a version tag for migrations (e.g., 'v2.10.0')
-
-#### `mj bump`
-
-Updates all @memberjunction/* package dependencies to a specified version.
-
-```bash
-mj bump [--recursive] [--dry] [--quiet] [--tag <version>] [--verbose]
-```
-
-Options:
-- `-r, --recursive`: Update dependencies in all subdirectories
-- `-d, --dry`: Preview changes without writing to files
-- `-q, --quiet`: Only output paths of updated packages
-- `-t, --tag <version>`: Target version (defaults to CLI version)
 - `-v, --verbose`: Enable detailed logging
+- `-t, --tag <version>`: Specify a version tag for migrations (e.g., 'v2.10.0')
+- `-s, --schema <name>`: Target schema (overrides `coreSchema` from config)
+- `--dir <path>`: Migration source directory (overrides `migrationsLocation` from config)
 
-Example - Update all packages recursively and run npm install:
+**Schema Handling:**
+- When using `--schema`, the specified schema will be automatically created if it doesn't exist
+- This enables migrating to new schemas without manual DDL setup
+- The schema creation uses Flyway's `createSchemas` feature
+
+Examples:
 ```bash
-mj bump -rqt v2.10.0 | xargs -n1 -I{} npm install --prefix {}
+# Basic migration
+mj migrate
+
+# Migrate to a specific version tag
+mj migrate --tag v2.10.0
+
+# Migrate a custom schema with custom migrations directory
+mj migrate --schema __BCSaaS --dir ./migrations/v1
+
+# Verbose output for debugging
+mj migrate --verbose
 ```
 
-#### `mj clean`
+### mj codegen
 
-Resets the MemberJunction database to a pre-installation state. **Use with caution!**
-
-```bash
-mj clean [--verbose]
-```
-
-Note: This command is disabled by default. Set `cleanDisabled: false` in your configuration to enable it.
-
----
-
-### `mj sync` - Metadata Synchronization
-
-Manages MemberJunction metadata synchronization between database and local files. This suite of commands enables version control, IDE-based editing, and CI/CD integration for MJ metadata.
+Run MemberJunction code generation.
 
 ```bash
-mj sync [COMMAND] [OPTIONS]
+# Run full code generation
+mj codegen
+
+# Generate class registration manifests only
+mj codegen manifest
+mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/manifest.ts
 ```
 
-Available sync commands:
-- `validate` - Validate metadata files for correctness
-- `init` - Initialize a directory for metadata sync
-- `pull` - Pull metadata from database to local files
-- `push` - Push local file changes to database
-- `status` - Show status of local vs database metadata
-- `watch` - Watch for changes and auto-sync
-- `file-reset` - Reset file checksums after manual edits
+#### v5.0 Entity Name Migration Commands
 
-**📚 For detailed documentation:** See the [MetadataSync README](../MetadataSync/README.md)
+Starting in MemberJunction v5.0, all 272 core entity names are being normalized with the `"MJ: "` prefix to prevent naming collisions on client systems (e.g., `"Actions"` becomes `"MJ: Actions"`). The database migration handles the rename automatically, but hardcoded entity name strings in your TypeScript source, Angular HTML templates, and metadata JSON files also need updating. These three commands automate that process.
 
-#### Adding Comments to JSON Metadata Files
+All three commands share the same workflow:
+1. **Dry-run first** (default) -- scans and reports what would change, without modifying any files.
+2. **Fix mode** (`--fix`) -- applies the changes in place.
+3. **Rename map** -- built dynamically by parsing `@RegisterClass(BaseEntity, 'MJ: XYZ')` decorators from `entity_subclasses.ts`. No hardcoded list to maintain.
 
-Since JSON doesn't support comments natively, you can add documentation to your metadata files using custom keys with an underscore prefix. These keys are preserved but ignored during sync operations:
+> These commands will be kept for 1-2 years to support the v5.0 upgrade window, then removed.
 
-```json
-{
-  "_comments": [
-    "This file configures encryption for sensitive fields",
-    "See /metadata/encryption-keys/ for key configuration"
-  ],
-  "fields": {
-    "Name": "My Entity",
-    "Encrypt": true
-  },
-  "_note": "Comments can appear anywhere in the record"
-}
-```
+##### mj codegen 5-0-fix-entity-names
 
-**Key points:**
-- Use underscore prefix (`_comments`, `_note`, etc.) by convention
-- Comments are preserved in their original position after sync operations
-- Reserved keys: `fields`, `relatedEntities`, `primaryKey`, `sync`, `deleteRecord`
+Scans **TypeScript source files** (`.ts`) using the TypeScript compiler AST to find hardcoded entity names that need the `"MJ: "` prefix. This is the most comprehensive scanner -- it understands code context, not just string matching.
 
-See the [MetadataSync README](../MetadataSync/README.md#adding-comments-to-json-metadata-files) for complete documentation.
+**Detected patterns:**
 
-#### Quick Examples:
+| Pattern | Example |
+|---------|---------|
+| `GetEntityObject` calls | `md.GetEntityObject<T>('Actions')` |
+| `OpenEntityRecord` calls | `this.OpenEntityRecord('Entities', id)` |
+| `navigateToEntity` calls | `navigateToEntity('Templates')` |
+| `BuildRelationshipViewParamsByEntityName` calls | `BuildRelationshipViewParamsByEntityName('Roles')` |
+| `NewRecordValues` calls | `NewRecordValues('Users')` |
+| `IsCurrentTab` calls | `IsCurrentTab('Queries')` |
+| `EntityName:` property assignments | `EntityName: 'AI Agent Examples'` |
+| `.Name ===` / `.Entity ===` comparisons | `entity.Name === 'Actions'` |
+| `@RegisterClass` decorator (BaseEntity) | `@RegisterClass(BaseEntity, 'Actions')` |
+
+**Default exclusions:** `node_modules`, `dist`, `build`, `.git`, `__tests__`, `*.d.ts`, `*.spec.ts`, `*.test.ts`, `generated/`, `Demos/`
+
 ```bash
-# Validate all metadata files
-mj sync validate
+# Dry-run: scan entire packages/ directory
+mj codegen 5-0-fix-entity-names --path packages/
 
-# Pull AI Prompts from database
-mj sync pull --entity="AI Prompts"
+# Dry-run: scan a single file
+mj codegen 5-0-fix-entity-names --path packages/Angular/Explorer/dashboards/src/Actions/components/actions-overview.component.ts
 
-# Push changes to database
+# Apply fixes
+mj codegen 5-0-fix-entity-names --path packages/ --fix
+
+# Custom entity_subclasses.ts location
+mj codegen 5-0-fix-entity-names --path packages/ --entity-subclasses ./path/to/entity_subclasses.ts
+
+# Quiet mode (summary only)
+mj codegen 5-0-fix-entity-names --path packages/ -q
+```
+
+##### mj codegen 5-0-fix-html-entity-names
+
+Scans **Angular HTML template files** (`.html`) using targeted regex patterns for entity name references in template expressions and attribute values.
+
+**Detected patterns:**
+
+| Pattern | Example |
+|---------|---------|
+| Method calls in event/property bindings | `(click)="navigateToEntity('Actions')"` |
+| `OpenEntityRecord` / `openEntityRecord` | `(click)="OpenEntityRecord('Entities', id)"` |
+| `BuildRelationshipViewParamsByEntityName` | `[Params]="BuildRelationshipViewParamsByEntityName('Roles')"` |
+| `RowsEntityName` attribute | `RowsEntityName="Users"` |
+| `JoinEntityName` attribute | `JoinEntityName="Roles"` |
+
+**Default exclusions:** `node_modules`, `dist`, `build`, `.git`, `generated/`, `Demos/`
+
+```bash
+# Dry-run: scan Angular templates
+mj codegen 5-0-fix-html-entity-names --path packages/Angular/
+
+# Apply fixes
+mj codegen 5-0-fix-html-entity-names --path packages/Angular/ --fix
+
+# Verbose output showing individual file progress
+mj codegen 5-0-fix-html-entity-names --path packages/ -v
+```
+
+##### mj codegen 5-0-fix-metadata-names
+
+Scans **metadata JSON files** (including dotfiles like `.mj-sync.json`) for entity name references that need the `"MJ: "` prefix. Targets the `metadata/` directory used by `mj sync`.
+
+**Detected patterns:**
+
+| Pattern | Example |
+|---------|---------|
+| `@lookup:` entity name | `@lookup:Entities.Name=Dashboards` |
+| `@lookup:` value (in Entities lookups) | `@lookup:MJ: Entities.Name=Actions` |
+| Folder config `entity`/`entityName` | `.mj-sync.json` with `"entity": "Dashboards"` |
+| `relatedEntities` object keys | `"relatedEntities": { "Actions": [...] }` |
+| `fields.Name` in Entities folders | Entity record data files where Name is the entity name |
+
+```bash
+# Dry-run: scan metadata directory
+mj codegen 5-0-fix-metadata-names --path metadata/
+
+# Apply fixes
+mj codegen 5-0-fix-metadata-names --path metadata/ --fix
+
+# Scan a specific subdirectory
+mj codegen 5-0-fix-metadata-names --path metadata/resource-types
+
+# Scan and fix a single file
+mj codegen 5-0-fix-metadata-names --path metadata/entities/.audit-related-entities.json --fix
+```
+
+##### Common flags (all three commands)
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--path <dir\|file>` | `-p` | File or directory to scan. Defaults to current directory. |
+| `--fix` | | Apply fixes in place. Without this flag, runs in dry-run mode. |
+| `--entity-subclasses <path>` | | Path to `entity_subclasses.ts`. Auto-detected if omitted. |
+| `--quiet` | `-q` | Suppress detailed output, show summary only. |
+| `--verbose` | `-v` | Show detailed progress for each file scanned. |
+
+##### Recommended migration workflow
+
+```bash
+# 1. Scan everything first (dry-run)
+mj codegen 5-0-fix-entity-names --path packages/
+mj codegen 5-0-fix-html-entity-names --path packages/
+mj codegen 5-0-fix-metadata-names --path metadata/
+
+# 2. Review the output, then apply
+mj codegen 5-0-fix-entity-names --path packages/ --fix
+mj codegen 5-0-fix-html-entity-names --path packages/ --fix
+mj codegen 5-0-fix-metadata-names --path metadata/ --fix
+
+# 3. Build and test
+npm run build
+```
+
+### mj sync
+
+Metadata synchronization between JSON files and the database.
+
+```bash
+# Initialize metadata directory
+mj sync init
+
+# Check sync status
+mj sync status
+
+# Pull metadata from database to files
+mj sync pull
+
+# Push metadata from files to database
 mj sync push
 
-# Watch for changes
+# Validate metadata files
+mj sync validate
+
+# Watch for file changes
 mj sync watch
+
+# Reset file state
+mj sync file-reset
 ```
 
----
+### mj ai
 
-### `mj ai` - AI Operations
-
-Execute AI agents and actions using MemberJunction's AI framework. This command provides access to 20+ AI agents and 30+ actions for various tasks.
+AI-powered operations.
 
 ```bash
-mj ai [COMMAND] [OPTIONS]
+mj ai
 ```
 
-Available AI commands:
-- `agents list` - List available AI agents
-- `agents run` - Execute an AI agent with a prompt or start interactive chat
-- `actions list` - List available AI actions
-- `actions run` - Execute an AI action with parameters
-- `prompts list` - List available AI models for direct prompt execution
-- `prompts run` - Execute a direct prompt with an AI model
-- `audit agent-run` - Audit and analyze AI agent execution runs for debugging
+### mj test
 
-**📚 For detailed documentation:** See the [AI-CLI README](../AI/AICLI/README.md)
-
-#### Quick Examples:
+Testing framework operations (delegates to `@memberjunction/testing-cli`).
 
 ```bash
-# List all available agents
-mj ai agents list
+# Run a test
+mj test run --name "My Test"
 
-# Execute an agent with a prompt
-mj ai agents run -a "Skip: Requirements Expert" -p "Create a dashboard for sales metrics"
+# Run a suite
+mj test suite --name "My Suite"
 
-# Start interactive chat with an agent
-mj ai agents run -a "Child Component Generator Sub-agent" --chat
-
-# List all available actions
-mj ai actions list --output=table
-
-# Execute an action with parameters
-mj ai actions run -n "Get Weather" --param "Location=Boston"
-
-# Execute action with multiple parameters
-mj ai actions run -n "Send Single Message" \
-  --param "To=user@example.com" \
-  --param "Subject=Test Message" \
-  --param "Body=Hello from MJ CLI"
-
-# Validate action without executing
-mj ai actions run -n "Calculate Expression" --param "Expression=2+2*3" --dry-run
-
-# List available AI models
-mj ai prompts list
-
-# Execute a direct prompt
-mj ai prompts run -p "Explain quantum computing in simple terms"
-
-# Use a specific model
-mj ai prompts run -p "Write a Python function to sort a list" --model "gpt-4"
-
-# Audit recent agent runs
-mj ai audit agent-run --list --status failed --days 7
-
-# Audit specific run with summary
-mj ai audit agent-run <run-id>
-
-# Examine specific step in detail
-mj ai audit agent-run <run-id> --step 3 --detail full
-
-# Analyze errors in a run
-mj ai audit agent-run <run-id> --errors
-
-# Export full audit data
-mj ai audit agent-run <run-id> --export full --file audit.json
-
-# Use system prompt and temperature
-mj ai prompts run -p "Generate a haiku" --system "You are a poet" --temperature 0.3
-```
-
-#### AI Command Options:
-
-**Agent Commands:**
-- `-a, --agent <name>`: Agent name (required)
-- `-p, --prompt <text>`: Prompt to execute
-- `-c, --chat`: Start interactive chat mode
-- `-o, --output <format>`: Output format (compact, json, table)
-- `-v, --verbose`: Show detailed execution information
-- `--timeout <ms>`: Execution timeout in milliseconds (default: 300000)
-
-**Action Commands:**
-- `-n, --name <name>`: Action name (required)
-- `-p, --param <key=value>`: Action parameters (can be specified multiple times)
-- `--dry-run`: Validate without executing
-- `-o, --output <format>`: Output format (compact, json, table)
-- `-v, --verbose`: Show detailed execution information
-- `--timeout <ms>`: Execution timeout in milliseconds (default: 300000)
-
-**Prompt Commands:**
-- `-p, --prompt <text>`: The prompt to execute (required)
-- `-m, --model <name>`: AI model to use (e.g., gpt-4, claude-3-opus)
-- `-s, --system <text>`: System prompt to set context
-- `-t, --temperature <0.0-2.0>`: Temperature for response creativity
-- `--max-tokens <number>`: Maximum tokens for the response
-- `-c, --configuration <id>`: AI Configuration ID to use
-- `-o, --output <format>`: Output format (compact, json, table)
-- `-v, --verbose`: Show detailed execution information
-- `--timeout <ms>`: Execution timeout in milliseconds (default: 300000)
-
-**Audit Commands:**
-- `<run-id>`: Agent Run ID (UUID) to audit (optional for --list mode)
-- `-l, --list`: List recent agent runs (filter with other options)
-- `-a, --agent <name>`: Filter by agent name (requires --list)
-- `--status <status>`: Filter by status: success, failed, running, all (default: all)
-- `--days <number>`: Number of days to look back (default: 7)
-- `--limit <number>`: Maximum runs to return (default: 50)
-- `-s, --step <number>`: Show details for specific step (1-based index)
-- `-d, --detail <level>`: Detail level for step: minimal, standard, detailed, full (default: standard)
-- `-e, --errors`: Show only error details and context
-- `--export <type>`: Export data: full, summary, steps
-- `-f, --file <path>`: Output file path for export
-- `--max-tokens <number>`: Max tokens per field (default: 5000, 0 = no limit)
-- `-o, --output <format>`: Output format (compact, json, table, markdown)
-- `-v, --verbose`: Show detailed diagnostic information
-
-#### AI Features:
-
-**Progress Tracking**: Real-time visual progress indicators during agent execution
-- Compact single-line progress in normal mode
-- Detailed progress with metadata in verbose mode
-- Visual icons for each execution phase (🚀 initialization, ✓ validation, 💭 execution, etc.)
-
-**Text Formatting**: Automatic formatting of long AI responses for better readability
-- Word wrapping at console width
-- Paragraph and list preservation
-- Code block highlighting
-- JSON syntax coloring
-
-**Interactive Chat**: Full conversation context maintained across messages
-- Agent remembers previous exchanges
-- Natural back-and-forth dialogue
-- Exit with "exit", "quit", or Ctrl+C
-
-**Agent Run Auditing**: Comprehensive debugging and analysis tools
-- List recent runs with filtering by agent, status, and date
-- View run summaries with performance metrics and step breakdowns
-- Deep dive into specific steps with smart truncation for large payloads
-- Automatic error pattern detection with suggested fixes
-- Multiple output formats including markdown for AI assistants
-- Export capabilities for offline analysis
-- Optimized for read-only performance with `simple` result type
-
-#### AI Configuration:
-
-Add AI-specific settings to your `mj.config.cjs`:
-
-```javascript
-module.exports = {
-  // Existing database settings...
-
-  aiSettings: {
-    defaultTimeout: 300000,
-    outputFormat: 'compact',
-    logLevel: 'info',
-    enableChat: true,
-    chatHistoryLimit: 10
-  }
-};
-```
-
-Execution logs are stored in `.mj-ai/logs/` for debugging and audit purposes.
-
----
-
-### `mj test` - Testing Framework
-
-Execute and manage tests using MemberJunction's comprehensive testing framework. Run database-driven tests, test suites, and view execution history.
-
-```bash
-mj test [COMMAND] [OPTIONS]
-```
-
-Available test commands:
-- `run` - Execute a single test by ID or name
-- `suite` - Execute a test suite
-- `list` - List available tests, suites, and types
-- `validate` - Validate test definitions without executing
-- `history` - View test execution history
-- `compare` - Compare test runs for regression detection
-
-**📚 For detailed documentation:** See the [Testing CLI README](../TestingFramework/CLI/README.md)
-
-#### Quick Examples:
-
-```bash
-# Run a single test
-mj test run <test-id>
-
-# Run a test by name
-mj test run --name="Active Members Count"
-
-# Run a test suite
-mj test suite <suite-id>
-
-# Run suite by name
-mj test suite --name="Agent Quality Suite"
-
-# List all tests
+# List tests
 mj test list
 
-# List test suites
-mj test list --suites
+# View history
+mj test history --name "My Test"
 
-# List test types
-mj test list --types
+# Compare runs
+mj test compare --run1 id1 --run2 id2
 
-# Filter by test type
-mj test list --type=agent-eval
-
-# Validate all tests
-mj test validate --all
-
-# Validate specific test type
-mj test validate --type=agent-eval
-
-# View test execution history
-mj test history --test=<test-id>
-
-# Compare two test runs
-mj test compare <run-id-1> <run-id-2>
-
-# Output formats
-mj test run <test-id> --format=json --output=results.json
-mj test suite <suite-id> --format=markdown --output=report.md
+# Validate test config
+mj test validate --name "My Test"
 ```
 
-#### Test Command Options:
+### mj dbdoc
 
-**Run Command:**
-- `<testId>`: Test ID to execute
-- `-n, --name <name>`: Test name to execute
-- `-e, --environment <env>`: Environment context (dev, staging, prod)
-- `-f, --format <format>`: Output format (console, json, markdown)
-- `-o, --output <path>`: Output file path
-- `--dry-run`: Validate without executing
-- `-v, --verbose`: Show detailed execution information
-
-**Suite Command:**
-- `<suiteId>`: Test suite ID to execute
-- `-n, --name <name>`: Test suite name to execute
-- `-f, --format <format>`: Output format (console, json, markdown)
-- `-o, --output <path>`: Output file path
-- `-v, --verbose`: Show detailed execution information
-
-**List Command:**
-- `--suites`: List test suites instead of tests
-- `--types`: List test types
-- `-t, --type <type>`: Filter by test type
-- `--tag <tag>`: Filter by tag
-- `-s, --status <status>`: Filter by status
-- `-f, --format <format>`: Output format (console, json, markdown)
-- `-v, --verbose`: Show detailed information
-
-**Validate Command:**
-- `<testId>`: Test ID to validate
-- `-a, --all`: Validate all tests
-- `-t, --type <type>`: Validate tests by type
-- `--save-report`: Save validation report to file
-- `-f, --format <format>`: Output format (console, json, markdown)
-- `-o, --output <path>`: Output file path
-- `-v, --verbose`: Show detailed information
-
-**History Command:**
-- `-t, --test <id>`: Filter by test ID
-- `-r, --recent <n>`: Number of recent runs to show
-- `--from <date>`: Show history from date (YYYY-MM-DD)
-- `-s, --status <status>`: Filter by status
-- `-f, --format <format>`: Output format (console, json, markdown)
-- `-o, --output <path>`: Output file path
-- `-v, --verbose`: Show detailed information
-
-**Compare Command:**
-- `<runId1>`: First test run ID to compare
-- `<runId2>`: Second test run ID to compare
-- `-v, --version <versions>`: Compare runs by version
-- `-c, --commit <commits>`: Compare runs by git commit
-- `--diff-only`: Show only differences
-- `-f, --format <format>`: Output format (console, json, markdown)
-- `-o, --output <path>`: Output file path
-- `--verbose`: Show detailed information
-
----
-
-### `mj dbdoc` - Database Documentation
-
-AI-powered database documentation generator for SQL Server, MySQL, and PostgreSQL. Analyzes your database structure, uses AI to generate comprehensive descriptions, and saves them as database metadata.
+Database documentation generation.
 
 ```bash
-mj dbdoc [COMMAND] [OPTIONS]
-```
-
-Available dbdoc commands:
-- `init` - Initialize a new DBAutoDoc project
-- `analyze` - Analyze database and generate documentation
-- `generate-queries` - Generate sample SQL queries from existing analysis state
-- `export` - Export documentation in multiple formats (SQL, Markdown, HTML, CSV, Mermaid)
-- `export-sample-queries` - Export sample queries to MemberJunction metadata format
-- `status` - Show analysis status and progress
-- `reset` - Reset analysis state
-
-**📚 For detailed documentation:** See the [DBAutoDoc README](../DBAutoDoc/README.md)
-
-#### Quick Examples:
-
-```bash
-# Initialize new project (interactive wizard)
+# Initialize documentation
 mj dbdoc init
 
-# Analyze database
+# Analyze database schema
 mj dbdoc analyze
 
-# Resume from existing state
-mj dbdoc analyze --resume ./output/run-6/state.json
-
-# Use custom config
-mj dbdoc analyze --config ./my-config.json
-
-# Generate sample SQL queries from existing state
-mj dbdoc generate-queries --from-state ./output/run-1/state.json
-
-# Generate with custom settings
-mj dbdoc generate-queries --from-state ./output/run-1/state.json \
-  --queries-per-table 10 \
-  --output-dir ./queries
-
-# Export sample queries to MemberJunction metadata format
-mj dbdoc export-sample-queries \
-  --input ./output/sample-queries.json \
-  --output ./metadata/queries/.queries.json
-
-# Export with separate SQL files and category
-mj dbdoc export-sample-queries \
-  --input ./output/sample-queries.json \
-  --output ./metadata/queries/.queries.json \
-  --separate-sql-files \
-  --category "Database Documentation" \
-  --min-confidence 0.8
-
-# Export all formats
-mj dbdoc export --sql --markdown --html --csv --mermaid
-
-# Export specific state file
-mj dbdoc export --state-file ./output/run-6/state.json --sql --markdown
-
-# Apply SQL directly to database
-mj dbdoc export --sql --apply
-
-# Export with filtering
-mj dbdoc export --approved-only --confidence-threshold 0.8
+# Export documentation
+mj dbdoc export
 
 # Check status
 mj dbdoc status
 
-# Reset state
-mj dbdoc reset --force
+# Reset documentation
+mj dbdoc reset
+
+# Generate sample queries
+mj dbdoc generate-queries
+mj dbdoc export-sample-queries
 ```
 
-#### DBAutoDoc Command Options:
+### mj querygen
 
-**Init Command:**
-- Interactive wizard guides you through:
-  - Database connection configuration
-  - AI provider setup (OpenAI, Anthropic, Google, Groq)
-  - Resource limits and guardrails
-  - Optional seed context for better analysis
-
-**Analyze Command:**
-- `-r, --resume <path>`: Resume from an existing state file
-- `-c, --config <path>`: Path to config file (default: ./config.json)
-
-**Generate Queries Command:**
-- `--from-state <path>`: Path to existing state.json file from previous analysis (required)
-- `--output-dir <path>`: Output directory for generated queries (optional)
-- `-c, --config <path>`: Path to config file for database connection and AI settings (default: ./config.json)
-- `--queries-per-table <number>`: Number of queries to generate per table (optional, overrides config)
-- `--max-execution-time <ms>`: Maximum execution time for query validation in milliseconds (optional, overrides config)
-
-**Export Sample Queries Command:**
-- `-i, --input <path>`: Path to sample-queries.json file from generate-queries (required)
-- `-o, --output <path>`: Output path for the .queries.json metadata file (required)
-- `--separate-sql-files`: Write SQL to separate files and use @file: references
-- `--sql-dir <name>`: Directory for SQL files when using --separate-sql-files (default: SQL)
-- `--category <name>`: Category name for @lookup reference (e.g., "Database Documentation")
-- `--status <value>`: Status to assign (Approved/Pending/Rejected/Expired, default: Pending)
-- `--min-confidence <value>`: Minimum confidence threshold to export (0-1, default: 0)
-- `--validated-only`: Only export queries that were successfully validated
-- `--append`: Append to existing metadata file instead of overwriting
-- `--include-primary-key`: Include primaryKey and sync fields (for updating existing records)
-
-**Export Command:**
-- `-s, --state-file <path>`: Path to state JSON file
-- `-o, --output-dir <path>`: Output directory for generated files
-- `--sql`: Generate SQL script with database-specific metadata statements
-- `--markdown`: Generate Markdown documentation with ERD diagrams
-- `--html`: Generate interactive HTML documentation
-- `--csv`: Generate CSV exports (tables.csv and columns.csv)
-- `--mermaid`: Generate Mermaid ERD diagram files (.mmd and .html)
-- `--report`: Generate analysis report with metrics
-- `--apply`: Apply SQL script directly to database
-- `--approved-only`: Only export approved items
-- `--confidence-threshold <value>`: Minimum confidence threshold (default: 0)
-
-**Status Command:**
-- `-s, --state-file <path>`: Path to state JSON file
-
-**Reset Command:**
-- `-f, --force`: Force reset without confirmation
-
-#### DBAutoDoc Features:
-
-**Core Capabilities:**
-- 🤖 **AI-Powered Analysis** - Uses OpenAI, Anthropic, Google, or Groq
-- 🔄 **Iterative Refinement** - Multi-pass analysis with backpropagation
-- 📊 **Topological Processing** - Analyzes tables in dependency order
-- 📈 **Data-Driven** - Leverages cardinality, statistics, and sample data
-- 🎯 **Convergence Detection** - Automatically knows when analysis is complete
-- 💾 **State Tracking** - Full audit trail of all iterations
-- 🔌 **Standalone** - Works with ANY database, no MemberJunction required
-
-**Multi-Database Support:**
-- SQL Server (extended properties)
-- PostgreSQL (COMMENT syntax)
-- MySQL (column/table comments)
-
-**Advanced Features:**
-- 🔍 **Relationship Discovery** - Detect missing primary and foreign keys
-- 🎯 **Sample Query Generation** - Generate reference SQL queries for AI agent training with alignment tracking
-- 🛡️ **Granular Guardrails** - Multi-level resource controls
-- ⏸️ **Resume Capability** - Pause and resume from checkpoint
-- 📦 **Programmatic API** - Use as a library in your applications
-
-**Output Formats:**
-- SQL Scripts (database-specific metadata)
-- Markdown Documentation (human-readable with ERD)
-- HTML Documentation (interactive, searchable)
-- CSV Exports (spreadsheet-ready)
-- Mermaid Diagrams (standalone ERD files)
-- Analysis Reports (detailed metrics)
-- Sample Queries (JSON with SQL, metadata, and alignment tracking)
-
-**Sample Query Generation:**
-
-DBAutoDoc can generate reference SQL queries that solve the **query alignment problem** where multi-query patterns (summary + detail) have inconsistent filtering logic. These "gold standard" queries include:
-- Explicit filtering rules for consistency
-- Alignment tracking via `relatedQueryIds`
-- Query patterns (Summary+Detail, Multi-Entity Drilldown, Time Series)
-- Validated, executable SQL
-- Perfect for few-shot prompting in AI agents like Skip
-
-Enable in config:
-```json
-{
-  "analysis": {
-    "sampleQueryGeneration": {
-      "enabled": true,
-      "queriesPerTable": 5,
-      "includeMultiQueryPatterns": true,
-      "validateAlignment": true
-    }
-  }
-}
-```
-
-Or generate separately from existing state:
-```bash
-mj dbdoc generate-queries --from-state ./output/run-1/state.json
-```
-
-**Export to MemberJunction Metadata:**
-
-Transform generated queries into MemberJunction's Query entity format for use with AI agents like Skip:
-```bash
-mj dbdoc export-sample-queries \
-  --input ./output/sample-queries.json \
-  --output ./metadata/queries/.queries.json \
-  --category "Database Documentation" \
-  --separate-sql-files
-
-# Then sync to database
-mj sync push ./metadata/queries/
-```
-
-**Use Cases:**
-- Training AI agents to generate consistent multi-query patterns
-- Creating reference examples for few-shot prompting
-- Documenting common query patterns for your database
-- Validating that related queries use consistent filtering logic
-- Syncing generated queries to MemberJunction's Query entity for use by Skip
-
----
-
-### `mj querygen` - AI-Powered SQL Query Generation
-
-Generate domain-specific SQL query templates using artificial intelligence. QueryGen analyzes your database schema, generates business questions, creates SQL queries with Nunjucks templates, tests them, and exports to metadata format.
+Query generation tools.
 
 ```bash
-mj querygen [COMMAND] [OPTIONS]
-```
-
-Available querygen commands:
-- `generate` - Generate SQL query templates for entities using AI
-- `validate` - Validate existing query templates
-- `export` - Export queries from database to metadata files
-
-**📚 For detailed documentation:** See the [QueryGen README](../QueryGen/README.md)
-
-#### Quick Examples:
-
-```bash
-# Generate queries for all entities
 mj querygen generate
-
-# Generate for specific entities with verbose output
-mj querygen generate --entities "Customers,Orders" --verbose
-
-# Control entity grouping and refinement
-mj querygen generate --max-entities 2 --max-refinements 3
-
-# Export to specific directory
-mj querygen generate --output ./metadata/queries
-
-# Choose output mode
-mj querygen generate --mode database  # Write directly to database
-mj querygen generate --mode both      # Both metadata and database
-
-# Validate existing queries
-mj querygen validate
-
-# Validate specific directory
-mj querygen validate --path ./metadata/queries --verbose
-
-# Export queries from database to metadata
 mj querygen export
-
-# Export to custom location
-mj querygen export --output ./exported-queries --verbose
+mj querygen validate
 ```
 
-#### QueryGen Command Options:
+### mj bump
 
-**Generate Command:**
-- `-e, --entities <value>`: Specific entities to generate queries for (comma-separated)
-- `-x, --exclude-entities <value>`: Entities to exclude (comma-separated)
-- `-s, --exclude-schemas <value>`: Schemas to exclude (comma-separated)
-- `-m, --max-entities <value>`: Max entities per group (default: 3)
-- `-r, --max-refinements <value>`: Max refinement iterations (default: 3)
-- `-f, --max-fixes <value>`: Max error-fixing attempts (default: 5)
-- `--model <value>`: Preferred AI model
-- `--vendor <value>`: Preferred AI vendor
-- `-o, --output <value>`: Output directory (default: ./metadata/queries)
-- `--mode <option>`: Output mode: metadata|database|both (default: metadata)
-- `-v, --verbose`: Verbose output
-
-**Validate Command:**
-- `-p, --path <value>`: Path to queries metadata file or directory (default: ./metadata/queries)
-- `-v, --verbose`: Verbose output
-
-**Export Command:**
-- `-o, --output <value>`: Output directory (default: ./metadata/queries)
-- `-v, --verbose`: Verbose output
-
-#### QueryGen Features:
-
-**11-Phase Pipeline:**
-1. Entity Analysis - Analyzes database schema and relationships
-2. Entity Grouping - Creates logical groups of related entities
-3. Business Question Generation - Uses AI to generate domain questions
-4. Vector Similarity Search - Finds similar examples for few-shot learning
-5. SQL Generation - Creates Nunjucks SQL templates with AI
-6. Query Testing - Executes and validates queries
-7. Error Fixing - Automatically fixes SQL errors using AI
-8. Query Evaluation - Assesses query quality
-9. Query Refinement - Iteratively improves queries
-10. Testing & Validation - Comprehensive validation workflow
-11. Metadata Export - Exports to MJ metadata or database
-
-**AI-Powered Features:**
-- Generates realistic business questions for your domain
-- Creates SQL queries with proper Nunjucks templating
-- Automatically tests and fixes SQL errors
-- Refines queries based on evaluation feedback
-- Uses few-shot learning with golden query examples
-
-**Integration:**
-- Outputs to MemberJunction metadata format
-- Compatible with `mj sync push` for database synchronization
-- Supports both metadata files and direct database writes
-- Uses MJ's Query entity with automatic field/parameter extraction
-
----
-
-### Utility Commands
-
-#### `mj help`
-
-Display help information for any command.
+Version management for packages.
 
 ```bash
-mj help [COMMAND]
+mj bump
 ```
 
-#### `mj version`
+### mj clean
 
-Display the CLI version and additional system information.
+Clean build artifacts.
 
 ```bash
-mj version [--verbose] [--json]
+mj clean
 ```
-
-## Environment Variables
-
-The CLI respects the following environment variables:
-
-- Standard Node.js environment variables
-- Database connection variables set in `.env` files
-- Authentication provider settings (MSAL, Auth0)
-
-## Integration with MemberJunction Packages
-
-The CLI integrates seamlessly with other MemberJunction packages:
-
-- **[@memberjunction/codegen-lib](../CodeGenLib)**: Powers the code generation functionality
-- **[@memberjunction/metadata-sync](../MetadataSync)**: Provides metadata synchronization capabilities ([README](../MetadataSync/README.md))
-- **[@memberjunction/query-gen](../QueryGen)**: AI-powered SQL query template generation ([README](../QueryGen/README.md))
-- **[@memberjunction/ai-cli](../AI/AICLI)**: Enables AI agent and action execution ([README](../AI/AICLI/README.md))
-- **[@memberjunction/testing-cli](../TestingFramework/CLI)**: Testing framework for database-driven tests ([README](../TestingFramework/CLI/README.md))
-- **[@memberjunction/db-auto-doc](../DBAutoDoc)**: AI-powered database documentation generator ([README](../DBAutoDoc/README.md))
-- **Generated Entities**: Automatically linked during installation
-- **MJAPI**: Configured and linked during installation
-- **MJExplorer**: UI configuration handled during installation
 
 ## Hooks
 
-The CLI implements the following hooks:
+| Hook | Timing | Purpose |
+|------|--------|---------|
+| `init` | Before any command | Loads configuration, initializes environment |
+| `prerun` | Before command execution | Validates configuration, connects to database |
 
-- **prerun**: Displays the MemberJunction ASCII banner and version information
+## Plugin System
 
-## Development
+The CLI includes these oclif plugins:
 
-### Building from Source
+- `@oclif/plugin-help` -- Auto-generated help text
+- `@oclif/plugin-version` -- Version display
+- `@oclif/plugin-warn-if-update-available` -- Update notifications (checks daily)
 
-```bash
-npm run build
-```
+## Dependencies
 
-### Scripts
-
-- `build`: Compile TypeScript to JavaScript
-- `prepack`: Build and generate oclif manifest
-- `postpack`: Clean up generated files
-
-## Technical Details
-
-- Built with [oclif](https://oclif.io/) framework
-- Uses TypeScript for type safety
-- Implements Flyway for database migrations
-- Supports both global and project-specific configurations
-- Includes comprehensive error handling and validation
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Node Version Error**: Ensure you're using Node.js 20 or higher
-2. **Database Connection**: Verify your database credentials and network access
-3. **Disk Space**: The installation requires at least 2GB of free space
-4. **Configuration Not Found**: Check that your config file is in a supported location
-
-### Debug Mode
-
-Run any command with the `--verbose` flag for detailed logging:
-
-```bash
-mj install --verbose
-mj codegen --verbose
-mj ai agents run -a "My Agent" -p "My prompt" --verbose
-mj test run <test-id> --verbose
-mj dbdoc analyze --verbose
-```
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/codegen-lib` | Code generation engine |
+| `@memberjunction/metadata-sync` | Metadata synchronization |
+| `@memberjunction/testing-cli` | Testing framework CLI |
+| `@memberjunction/db-auto-doc` | Database documentation |
+| `@memberjunction/query-gen` | Query generation |
+| `@memberjunction/ai-cli` | AI operations |
+| `@memberjunction/config` | Configuration management |
+| `@memberjunction/server-bootstrap-lite` | Lightweight server initialization |
+| `@memberjunction/sqlserver-dataprovider` | Database connectivity |
+| `@oclif/core` | CLI framework |
+| `cosmiconfig` | Configuration file loading |
+| `@memberjunction/skyway-core` | Database migration execution |
+| `simple-git` | Git operations |
+| `figlet` | ASCII art for banners |
 
 ## License
 
-ISC License - see the [LICENSE](https://github.com/MemberJunction/MJ/blob/main/LICENSE) file for details.
-
-## Repository
-
-[https://github.com/MemberJunction/MJ](https://github.com/MemberJunction/MJ)
-
-## Support
-
-For issues and feature requests, please visit the [GitHub Issues](https://github.com/MemberJunction/MJ/issues) page.
+ISC

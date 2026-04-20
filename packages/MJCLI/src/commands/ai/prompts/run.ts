@@ -1,5 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { PromptService, OutputFormatter } from '@memberjunction/ai-cli';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 
@@ -55,6 +54,8 @@ export default class PromptsRun extends Command {
   };
 
   async run(): Promise<void> {
+    const { PromptService, OutputFormatter } = await import('@memberjunction/ai-cli');
+
     const { flags } = await this.parse(PromptsRun);
     const service = new PromptService();
     const formatter = new OutputFormatter(flags.output as 'compact' | 'json' | 'table');

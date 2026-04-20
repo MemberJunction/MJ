@@ -1,10 +1,10 @@
 import { Directive, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
-import { DashboardEntityExtended, ResourceData } from '@memberjunction/core-entities';
+import { MJDashboardEntityExtended, ResourceData } from '@memberjunction/core-entities';
 import { BaseResourceComponent } from './base-resource-component';
 
 export interface DashboardConfig {
-  dashboard: DashboardEntityExtended;
+  dashboard: MJDashboardEntityExtended;
   userState?: any;
 }
 
@@ -47,11 +47,15 @@ export abstract class BaseDashboard extends BaseResourceComponent implements OnI
   protected _config: DashboardConfig | null = null;
 
   async ngOnInit() {
+    super.ngOnInit();
     this.initDashboard();
     await this.loadData();
+    this.NotifyLoadComplete();
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+    super.ngOnDestroy();
+  }
 
   /**
    * This method will result in the dashboard being reloaded.

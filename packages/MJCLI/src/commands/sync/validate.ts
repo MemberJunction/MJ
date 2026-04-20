@@ -3,16 +3,6 @@ import ora from 'ora-classic';
 import chalk from 'chalk';
 import * as path from 'path';
 import fs from 'fs-extra';
-import {
-  ValidationService,
-  FormattingService,
-  loadMJConfig,
-  initializeProvider,
-  getSyncEngine,
-  getSystemUser,
-  resetSyncEngine,
-  configManager
-} from '@memberjunction/metadata-sync';
 
 export default class Validate extends Command {
   static description = 'Validate metadata files';
@@ -32,6 +22,11 @@ export default class Validate extends Command {
   };
   
   async run(): Promise<void> {
+    const {
+      ValidationService, FormattingService, loadMJConfig, initializeProvider,
+      getSyncEngine, getSystemUser, resetSyncEngine, configManager,
+    } = await import('@memberjunction/metadata-sync');
+
     const { flags } = await this.parse(Validate);
     const spinner = ora();
     

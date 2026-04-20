@@ -191,7 +191,3 @@ export class BedrockEmbedding extends BaseEmbeddings {
     }
   }
 }
-
-export function LoadBedrockEmbedding() {
-  // this does nothing but prevents the class from being removed by the tree shaker
-}

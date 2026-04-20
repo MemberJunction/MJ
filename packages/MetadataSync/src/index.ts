@@ -1,4 +1,5 @@
-import { LoadAIPromptEntityExtendedServerSubClass } from '@memberjunction/core-entities-server';
+// Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
+import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 
 // Core library exports
 export { FileBackupManager } from './lib/file-backup-manager';
@@ -76,5 +77,3 @@ export type {
   ReferenceType,
   ParsedReference
 } from './types/validation';
-
-LoadAIPromptEntityExtendedServerSubClass();

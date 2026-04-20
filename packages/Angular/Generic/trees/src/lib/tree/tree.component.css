@@ -1,0 +1,432 @@
+/**
+ * Tree Component Styles
+ *
+ * Uses CSS custom properties for easy theming.
+ * Containers can override these variables to customize appearance.
+ */
+
+/* ========================================
+   CSS Variables (Theming)
+   ======================================== */
+
+:host {
+    /* Colors */
+    --tree-bg: var(--mj-bg-surface);
+    --tree-border-color: var(--mj-border-default);
+    --tree-text-color: var(--mj-text-primary);
+    --tree-text-secondary: var(--mj-text-muted);
+    --tree-text-muted: var(--mj-text-disabled);
+
+    /* Node Colors */
+    --tree-node-hover-bg: var(--mj-bg-surface-sunken);
+    --tree-node-selected-bg: var(--mj-brand-primary-subtle);
+    --tree-node-selected-border: var(--mj-brand-primary);
+    --tree-node-focused-outline: color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
+    --tree-node-match-bg: var(--mj-status-warning-subtle);
+
+    /* Icon Colors */
+    --tree-icon-color: var(--mj-brand-primary);
+    --tree-icon-leaf-color: var(--mj-text-muted);
+    --tree-toggle-color: var(--mj-text-disabled);
+
+    /* Spacing */
+    --tree-node-padding-y: 8px;
+    --tree-node-padding-x: 12px;
+    --tree-node-gap: 8px;
+    --tree-icon-size: 16px;
+    --tree-toggle-size: 12px;
+
+    /* Animation */
+    --tree-transition-duration: 150ms;
+    --tree-animation-easing: ease-out;
+
+    /* Badge */
+    --tree-badge-bg: var(--mj-border-default);
+    --tree-badge-color: var(--mj-text-muted);
+    --tree-badge-size: 12px;
+
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* ========================================
+   Container
+   ======================================== */
+
+.tree-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: var(--tree-bg);
+    border-radius: var(--mj-radius-md);
+    overflow: hidden;
+    outline: none;
+}
+
+.tree-container:focus-visible {
+    outline: 2px solid var(--tree-node-focused-outline);
+    outline-offset: -2px;
+}
+
+/* ========================================
+   Loading State
+   ======================================== */
+
+.tree-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    gap: 12px;
+    color: var(--tree-text-muted);
+}
+
+.tree-loading__spinner {
+    font-size: var(--mj-text-2xl);
+    color: var(--tree-icon-color);
+}
+
+.tree-loading__text {
+    font-size: var(--mj-text-sm);
+}
+
+/* ========================================
+   Error State
+   ======================================== */
+
+.tree-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    gap: 12px;
+    text-align: center;
+}
+
+.tree-error__icon {
+    font-size: 32px;
+    color: var(--mj-status-error);
+}
+
+.tree-error__message {
+    font-size: var(--mj-text-sm);
+    color: var(--tree-text-secondary);
+    max-width: 280px;
+}
+
+.tree-error__retry {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid var(--tree-border-color);
+    border-radius: var(--mj-radius-md);
+    background: var(--tree-bg);
+    color: var(--tree-text-color);
+    font-size: var(--mj-text-sm);
+    cursor: pointer;
+    transition: all var(--tree-transition-duration) var(--tree-animation-easing);
+}
+
+.tree-error__retry:hover {
+    background: var(--tree-node-hover-bg);
+    border-color: var(--tree-icon-color);
+    color: var(--tree-icon-color);
+}
+
+/* ========================================
+   Empty State
+   ======================================== */
+
+.tree-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 16px;
+    gap: 12px;
+    color: var(--tree-text-muted);
+}
+
+.tree-empty__icon {
+    font-size: 40px;
+    opacity: 0.5;
+}
+
+.tree-empty__message {
+    font-size: var(--mj-text-sm);
+}
+
+/* ========================================
+   Toolbar
+   ======================================== */
+
+.tree-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--tree-border-color);
+    background: var(--tree-node-hover-bg);
+}
+
+.tree-toolbar__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: var(--mj-radius-sm);
+    background: transparent;
+    color: var(--tree-text-secondary);
+    cursor: pointer;
+    transition: all var(--tree-transition-duration) var(--tree-animation-easing);
+}
+
+.tree-toolbar__btn:hover {
+    background: var(--tree-bg);
+    color: var(--tree-icon-color);
+}
+
+/* ========================================
+   Tree Content
+   ======================================== */
+
+.tree-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 4px 0;
+}
+
+/* ========================================
+   Tree Node
+   ======================================== */
+
+.tree-node {
+    display: flex;
+    align-items: center;
+    gap: var(--tree-node-gap);
+    padding: var(--tree-node-padding-y) var(--tree-node-padding-x);
+    cursor: pointer;
+    user-select: none;
+    border-left: 3px solid transparent;
+    transition: all var(--tree-transition-duration) var(--tree-animation-easing);
+    min-height: 36px;
+}
+
+.tree-node:hover {
+    background: var(--tree-node-hover-bg);
+}
+
+.tree-node--selected {
+    background: var(--tree-node-selected-bg);
+    border-left-color: var(--tree-node-selected-border);
+}
+
+.tree-node--selected:hover {
+    background: var(--tree-node-selected-bg);
+}
+
+.tree-node--focused {
+    outline: 2px solid var(--tree-node-focused-outline);
+    outline-offset: -2px;
+}
+
+/* Search highlight for matching text portion */
+.tree-search-highlight {
+    background: var(--tree-node-match-bg);
+    padding: 1px 2px;
+    border-radius: 2px;
+    font-weight: 500;
+}
+
+/* ========================================
+   Toggle Button
+   ======================================== */
+
+.tree-node-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    border-radius: var(--mj-radius-sm);
+    transition: all var(--tree-transition-duration) var(--tree-animation-easing);
+}
+
+.tree-node-toggle:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.tree-node-toggle__icon {
+    font-size: var(--tree-toggle-size);
+    color: var(--tree-toggle-color);
+    transition: transform var(--tree-transition-duration) var(--tree-animation-easing);
+}
+
+.tree-node--expanded .tree-node-toggle__icon {
+    color: var(--tree-icon-color);
+}
+
+.tree-node-toggle__spacer {
+    width: var(--tree-toggle-size);
+}
+
+.tree-node-leaf-spacer {
+    width: 20px;
+    flex-shrink: 0;
+}
+
+/* ========================================
+   Node Icon
+   ======================================== */
+
+.tree-node-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tree-icon-size);
+    flex-shrink: 0;
+    font-size: var(--tree-icon-size);
+    color: var(--tree-icon-color);
+}
+
+.tree-node--leaf .tree-node-icon {
+    color: var(--tree-icon-leaf-color);
+}
+
+/* ========================================
+   Node Content
+   ======================================== */
+
+.tree-node-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tree-node-label {
+    font-size: var(--mj-text-sm);
+    font-weight: 500;
+    color: var(--tree-text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-node--leaf .tree-node-label {
+    font-weight: 400;
+}
+
+.tree-node-description {
+    font-size: var(--mj-text-xs);
+    color: var(--tree-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ========================================
+   Node Badge
+   ======================================== */
+
+.tree-node-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: var(--tree-badge-bg);
+    color: var(--tree-badge-color);
+    font-size: var(--tree-badge-size);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+/* ========================================
+   Selection Indicator
+   ======================================== */
+
+.tree-node-selected-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--mj-radius-full);
+    background: var(--tree-node-selected-border);
+    color: var(--mj-text-inverse);
+    font-size: 10px;
+    flex-shrink: 0;
+}
+
+/* ========================================
+   Children Container
+   ======================================== */
+
+.tree-node-children {
+    overflow: hidden;
+}
+
+.tree-node-children--animated {
+    animation: tree-expand var(--tree-transition-duration) var(--tree-animation-easing);
+}
+
+@keyframes tree-expand {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========================================
+   Scrollbar Styling
+   ======================================== */
+
+.tree-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tree-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tree-content::-webkit-scrollbar-thumb {
+    background: var(--tree-border-color);
+    border-radius: var(--mj-radius-sm);
+}
+
+.tree-content::-webkit-scrollbar-thumb:hover {
+    background: var(--tree-toggle-color);
+}
+
+/* ========================================
+   Responsive Adjustments
+   ======================================== */
+
+@media (max-width: 480px) {
+    :host {
+        --tree-node-padding-y: 10px;
+        --tree-node-padding-x: 10px;
+        --tree-icon-size: 18px;
+    }
+
+    .tree-node-label {
+        font-size: var(--mj-text-base);
+    }
+}

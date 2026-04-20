@@ -1,6 +1,6 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { CollectionEntity, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
@@ -8,12 +8,14 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 import { Subject, takeUntil } from 'rxjs';
 import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSortOrder } from '../../models/collection-view.model';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Full-panel Collections view component
  * Comprehensive collection management with artifacts display
  */
 @Component({
+  standalone: false,
   selector: 'mj-collections-full-view',
   template: `
     <div class="collections-view" (keydown)="handleKeyboardShortcut($event)">
@@ -25,325 +27,539 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
             <i class="fas fa-home"></i>
             <a class="breadcrumb-link" (click)="navigateToRoot()">Collections</a>
           </div>
-          <span class="breadcrumb-path" *ngIf="breadcrumbs.length > 0">
-            <ng-container *ngFor="let crumb of breadcrumbs; let last = last">
-              <i class="fas fa-chevron-right breadcrumb-separator"></i>
-              <a class="breadcrumb-link"
-                 [class.active]="last"
-                 (click)="navigateTo(crumb)">
-                {{ crumb.name }}
-              </a>
-            </ng-container>
-          </span>
+          @if (breadcrumbs.length > 0) {
+            <span class="breadcrumb-path">
+              @for (crumb of breadcrumbs; track crumb; let last = $last) {
+                <i class="fas fa-chevron-right breadcrumb-separator"></i>
+                <a class="breadcrumb-link"
+                  [class.active]="last"
+                  (click)="navigateTo(crumb)">
+                  {{ crumb.name }}
+                </a>
+              }
+            </span>
+          }
         </div>
-
+    
         <!-- Action buttons -->
         <div class="collections-actions">
           <!-- View mode toggle -->
           <button class="btn-icon"
-                  (click)="toggleViewMode()"
-                  [title]="viewMode === 'grid' ? 'Switch to List View' : 'Switch to Grid View'">
+            (click)="toggleViewMode()"
+            [title]="viewMode === 'grid' ? 'Switch to List View' : 'Switch to Grid View'">
             <i class="fas" [ngClass]="viewMode === 'grid' ? 'fa-list' : 'fa-th'"></i>
           </button>
-
+    
           <!-- Select mode toggle -->
           <button class="btn-icon"
-                  [class.active]="isSelectMode"
-                  (click)="toggleSelectMode()"
-                  [title]="isSelectMode ? 'Exit Select Mode' : 'Select Items'">
+            [class.active]="isSelectMode"
+            (click)="toggleSelectMode()"
+            [title]="isSelectMode ? 'Exit Select Mode' : 'Select Items'">
             <i class="fas fa-check-square"></i>
           </button>
-
+    
           <!-- Sort dropdown (grid view only) -->
-          <div class="dropdown-container" *ngIf="viewMode === 'grid'">
-            <button class="btn-icon"
-                    (click)="showSortDropdown = !showSortDropdown"
-                    title="Sort options">
-              <i class="fas fa-sort"></i>
-            </button>
-            <div class="dropdown-menu" *ngIf="showSortDropdown">
-              <button class="dropdown-item"
-                      [class.active]="sortBy === 'name'"
-                      (click)="setSortBy('name')">
-                <i class="fas fa-sort-alpha-down"></i>
-                <span>Sort by Name</span>
+          @if (viewMode === 'grid') {
+            <div class="dropdown-container">
+              <button class="btn-icon"
+                (click)="showSortDropdown = !showSortDropdown"
+                title="Sort options">
+                <i class="fas fa-sort"></i>
               </button>
-              <button class="dropdown-item"
-                      [class.active]="sortBy === 'date'"
-                      (click)="setSortBy('date')">
-                <i class="fas fa-calendar"></i>
-                <span>Sort by Date</span>
-              </button>
-              <button class="dropdown-item"
-                      [class.active]="sortBy === 'type'"
-                      (click)="setSortBy('type')">
-                <i class="fas fa-tag"></i>
-                <span>Sort by Type</span>
-              </button>
+              @if (showSortDropdown) {
+                <div class="dropdown-menu">
+                  <button class="dropdown-item"
+                    [class.active]="sortBy === 'name'"
+                    (click)="setSortBy('name')">
+                    <i class="fas fa-sort-alpha-down"></i>
+                    <span>Sort by Name</span>
+                  </button>
+                  <button class="dropdown-item"
+                    [class.active]="sortBy === 'date'"
+                    (click)="setSortBy('date')">
+                    <i class="fas fa-calendar"></i>
+                    <span>Sort by Date</span>
+                  </button>
+                  <button class="dropdown-item"
+                    [class.active]="sortBy === 'type'"
+                    (click)="setSortBy('type')">
+                    <i class="fas fa-tag"></i>
+                    <span>Sort by Type</span>
+                  </button>
+                </div>
+              }
             </div>
-          </div>
-
+          }
+    
           <!-- Search -->
           <div class="search-container">
             <i class="fas fa-search"></i>
             <input type="text"
-                   class="search-input"
-                   placeholder="Search..."
-                   [(ngModel)]="searchQuery"
-                   (ngModelChange)="onSearchChange($event)">
-            <button class="search-clear"
-                    *ngIf="searchQuery"
-                    (click)="searchQuery = ''; onSearchChange('')"
-                    title="Clear search">
-              <i class="fas fa-times"></i>
-            </button>
+              class="search-input"
+              placeholder="Search..."
+              [(ngModel)]="searchQuery"
+              (ngModelChange)="onSearchChange($event)">
+            @if (searchQuery) {
+              <button class="search-clear"
+                (click)="searchQuery = ''; onSearchChange('')"
+                title="Clear search">
+                <i class="fas fa-times"></i>
+              </button>
+            }
           </div>
+
+          <!-- Current collection actions (visible when inside a collection) -->
+          @if (currentCollectionId && currentCollection) {
+            <div class="toolbar-separator"></div>
+            <div class="toolbar-actions-group">
+              @if (canShareCurrent()) {
+                <button class="btn-icon"
+                  (click)="shareCurrentCollection()"
+                  [title]="'Share: ' + currentCollection.Name">
+                  <i class="fas fa-share-nodes"></i>
+                </button>
+              }
+              @if (canEditCurrent()) {
+                <button class="btn-icon"
+                  (click)="editCurrentCollection()"
+                  [title]="'Edit: ' + currentCollection.Name">
+                  <i class="fas fa-pen-to-square"></i>
+                </button>
+              }
+              @if (canDeleteCurrent()) {
+                <button class="btn-icon btn-icon-danger"
+                  (click)="deleteCurrentCollection()"
+                  [title]="'Delete: ' + currentCollection.Name">
+                  <i class="fas fa-trash"></i>
+                </button>
+              }
+            </div>
+          }
 
           <!-- New dropdown -->
-          <div class="dropdown-container" *ngIf="canEditCurrent()">
-            <button class="btn-primary"
-                    (click)="showNewDropdown = !showNewDropdown">
-              <i class="fas fa-plus"></i>
-              <span>New</span>
-              <i class="fas fa-chevron-down"></i>
-            </button>
-            <div class="dropdown-menu dropdown-menu-right" *ngIf="showNewDropdown">
-              <button class="dropdown-item" (click)="createCollection()">
-                <i class="fas fa-folder-plus"></i>
-                <span>New Collection</span>
+          @if (canEditCurrent()) {
+            <div class="dropdown-container">
+              <button class="btn-primary"
+                (click)="showNewDropdown = !showNewDropdown">
+                <i class="fas fa-plus"></i>
+                <span>New</span>
+                <i class="fas fa-chevron-down"></i>
               </button>
-              <button class="dropdown-item"
-                      (click)="addArtifact()"
-                      [disabled]="!currentCollectionId">
-                <i class="fas fa-file-plus"></i>
-                <span>New Artifact</span>
-              </button>
+              @if (showNewDropdown) {
+                <div class="dropdown-menu dropdown-menu-right">
+                  <button class="dropdown-item" (click)="createCollection()">
+                    <i class="fas fa-folder-plus"></i>
+                    <span>New Collection</span>
+                  </button>
+                  <button class="dropdown-item"
+                    (click)="addArtifact()"
+                    [disabled]="!currentCollectionId">
+                    <i class="fas fa-file-plus"></i>
+                    <span>New Artifact</span>
+                  </button>
+                </div>
+              }
             </div>
-          </div>
-
+          }
+    
           <!-- Refresh button -->
           <button class="btn-icon" (click)="refresh()" title="Refresh">
             <i class="fas fa-sync"></i>
           </button>
         </div>
       </div>
-
+    
       <!-- Multi-select toolbar (appears when items selected) -->
-      <div class="selection-toolbar" *ngIf="selectedItems.size > 0">
-        <div class="selection-info">
-          <span class="selection-count">{{ selectedItems.size }} selected</span>
+      @if (selectedItems.size > 0) {
+        <div class="selection-toolbar">
+          <div class="selection-info">
+            <span class="selection-count">{{ selectedItems.size }} selected</span>
+          </div>
+          <div class="selection-actions">
+            <button class="btn-toolbar" (click)="clearSelection()">
+              <i class="fas fa-times"></i>
+              Clear Selection
+            </button>
+            <button class="btn-toolbar btn-danger" (click)="deleteSelected()">
+              <i class="fas fa-trash"></i>
+              Delete Selected
+            </button>
+          </div>
         </div>
-        <div class="selection-actions">
-          <button class="btn-toolbar" (click)="clearSelection()">
-            <i class="fas fa-times"></i>
-            Clear Selection
-          </button>
-          <button class="btn-toolbar btn-danger" (click)="deleteSelected()">
-            <i class="fas fa-trash"></i>
-            Delete Selected
-          </button>
-        </div>
-      </div>
-
+      }
+    
       <!-- Content area -->
       <div class="collections-content">
         <!-- Loading state -->
-        <div *ngIf="isLoading" class="loading-state">
-          <mj-loading text="Loading collections..." size="large"></mj-loading>
-        </div>
-
-        <!-- Empty state -->
-        <div *ngIf="!isLoading && unifiedItems.length === 0" class="empty-state">
-          <i class="fas fa-folder-open"></i>
-
-          <!-- Search returned no results -->
-          <ng-container *ngIf="searchQuery">
-            <h3>No items found</h3>
-            <p>Try adjusting your search</p>
-          </ng-container>
-
-          <!-- Empty root level -->
-          <ng-container *ngIf="!searchQuery && !currentCollectionId">
-            <h3>No collections yet</h3>
-            <p>Create your first collection to get started</p>
-            <button class="btn-primary"
-                    (click)="createCollection()"
-                    *ngIf="canEditCurrent()">
-              <i class="fas fa-plus"></i>
-              Create Collection
-            </button>
-          </ng-container>
-
-          <!-- Empty collection (has parent) -->
-          <ng-container *ngIf="!searchQuery && currentCollectionId">
-            <h3>This collection is empty</h3>
-            <p>Use the <strong>New</strong> button above to add collections or artifacts</p>
-          </ng-container>
-        </div>
-
-        <!-- Grid view -->
-        <div *ngIf="!isLoading && unifiedItems.length > 0 && viewMode === 'grid'"
-             class="unified-grid"
-             [class.select-mode]="isSelectMode">
-          <div *ngFor="let item of unifiedItems"
-               class="grid-item"
-               [class.selected]="item.selected"
-               [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
-               (click)="onItemClick(item, $event)"
-               (dblclick)="onItemDoubleClick(item, $event)"
-               (contextmenu)="onItemContextMenu(item, $event)">
-
-            <!-- Selection checkbox (only visible in select mode) -->
-            <div class="item-checkbox"
-                 *ngIf="isSelectMode"
-                 (click)="toggleItemSelection(item, $event)">
-              <i class="fas"
-                 [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"></i>
-            </div>
-
-            <!-- Folder item -->
-            <div *ngIf="item.type === 'folder'"
-                 class="grid-item-content"
-                 [title]="item.description || item.name">
-              <div class="grid-icon folder-icon">
-                <i class="fas fa-folder"></i>
-                <div class="shared-badge" *ngIf="item.isShared" title="Shared">
-                  <i class="fas fa-users"></i>
-                </div>
-              </div>
-              <div class="grid-info">
-                <div class="grid-name">{{ item.name }}</div>
-                <div class="grid-description" *ngIf="item.description">
-                  {{ item.description }}
-                </div>
-                <div class="grid-meta" *ngIf="item.itemCount !== undefined">
-                  {{ getItemCountText(item.itemCount) }}
-                </div>
-                <div class="grid-owner" *ngIf="item.isShared && item.owner">
-                  <i class="fas fa-user"></i>
-                  {{ item.owner }}
-                </div>
-              </div>
-            </div>
-
-            <!-- Artifact item -->
-            <div *ngIf="item.type === 'artifact'"
-                 class="grid-item-content"
-                 [title]="item.description || item.name">
-              <div class="grid-icon artifact-icon">
-                <i class="fas" [ngClass]="item.icon"></i>
-              </div>
-              <div class="grid-info">
-                <div class="grid-name">{{ item.name }}</div>
-                <div class="grid-description" *ngIf="item.description">
-                  {{ item.description }}
-                </div>
-                <div class="grid-meta">
-                  <span class="version-badge" *ngIf="item.versionNumber">
-                    v{{ item.versionNumber }}
-                  </span>
-                  <span class="artifact-type-badge" *ngIf="item.artifactType">
-                    {{ item.artifactType }}
-                  </span>
-                </div>
-              </div>
-            </div>
+        @if (isLoading) {
+          <div class="loading-state">
+            <mj-loading text="Loading collections..." size="large"></mj-loading>
           </div>
-        </div>
-
-        <!-- List view -->
-        <div *ngIf="!isLoading && unifiedItems.length > 0 && viewMode === 'list'"
-             class="unified-list"
-             [class.select-mode]="isSelectMode">
-          <table class="list-table">
-            <thead>
-              <tr>
-                <th class="col-checkbox" *ngIf="isSelectMode">
-                  <i class="fas"
-                     [ngClass]="selectedItems.size === unifiedItems.length ? 'fa-check-square' : 'fa-square'"
-                     (click)="selectedItems.size === unifiedItems.length ? clearSelection() : selectAll()"></i>
-                </th>
-                <th class="col-name sortable" (click)="setSortBy('name')">
-                  <span>Name</span>
-                  <i class="fas fa-sort" *ngIf="sortBy !== 'name'"></i>
-                  <i class="fas" *ngIf="sortBy === 'name'"
-                     [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
-                </th>
-                <th class="col-type sortable" (click)="setSortBy('type')">
-                  <span>Type</span>
-                  <i class="fas fa-sort" *ngIf="sortBy !== 'type'"></i>
-                  <i class="fas" *ngIf="sortBy === 'type'"
-                     [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
-                </th>
-                <th class="col-modified sortable" (click)="setSortBy('date')">
-                  <span>Modified</span>
-                  <i class="fas fa-sort" *ngIf="sortBy !== 'date'"></i>
-                  <i class="fas" *ngIf="sortBy === 'date'"
-                     [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
-                </th>
-                <th class="col-owner">Owner</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let item of unifiedItems"
-                  class="list-item"
-                  [class.selected]="item.selected"
-                  [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
-                  (click)="onItemClick(item, $event)"
-                  (dblclick)="onItemDoubleClick(item, $event)"
-                  (contextmenu)="onItemContextMenu(item, $event)">
-
-                <td class="col-checkbox" *ngIf="isSelectMode">
-                  <i class="fas"
-                     [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"
-                     (click)="toggleItemSelection(item, $event)"></i>
-                </td>
-
-                <td class="col-name">
-                  <div class="list-name-cell">
+        }
+    
+        <!-- Empty state -->
+        @if (!isLoading && unifiedItems.length === 0) {
+          <div class="empty-state">
+            <i class="fas fa-folder-open"></i>
+            <!-- Search returned no results -->
+            @if (searchQuery) {
+              <h3>No items found</h3>
+              <p>Try adjusting your search</p>
+            }
+            <!-- Empty root level -->
+            @if (!searchQuery && !currentCollectionId) {
+              <h3>No collections yet</h3>
+              <p>Create your first collection to get started</p>
+              @if (canEditCurrent()) {
+                <button class="btn-primary empty-state-cta"
+                  (click)="createCollection()"
+                  >
+                  <i class="fas fa-plus"></i>
+                  Create Collection
+                </button>
+              }
+            }
+            <!-- Empty collection (has parent) -->
+            @if (!searchQuery && currentCollectionId) {
+              <h3>This collection is empty</h3>
+              <p>Use the <strong>New</strong> button above to add collections or artifacts</p>
+            }
+          </div>
+        }
+    
+        <!-- Grid view -->
+        @if (!isLoading && unifiedItems.length > 0 && viewMode === 'grid') {
+          <div
+            class="unified-grid"
+            [class.select-mode]="isSelectMode">
+            @for (item of PagedItems; track item) {
+              <div
+                class="grid-item"
+                [class.selected]="item.selected"
+                [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
+                (click)="onItemClick(item, $event)"
+                (dblclick)="onItemDoubleClick(item, $event)"
+                (contextmenu)="onItemContextMenu(item, $event)">
+                <!-- Selection checkbox (only visible in select mode) -->
+                @if (isSelectMode) {
+                  <div class="item-checkbox"
+                    (click)="toggleItemSelection(item, $event)">
                     <i class="fas"
-                       [ngClass]="item.type === 'folder' ? 'fa-folder' : item.icon"></i>
-                    <span>{{ item.name }}</span>
-                    <i class="fas fa-users shared-indicator"
-                       *ngIf="item.isShared"
-                       title="Shared"></i>
+                    [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"></i>
                   </div>
-                </td>
+                }
+                <!-- Folder item -->
+                @if (item.type === 'folder') {
+                  <div
+                    class="grid-item-content"
+                    [title]="item.description || item.name">
+                    <div class="grid-icon folder-icon">
+                      <i class="fas fa-folder"></i>
+                      @if (item.isShared) {
+                        <div class="shared-badge" title="Shared">
+                          <i class="fas fa-users"></i>
+                        </div>
+                      }
+                    </div>
+                    <div class="grid-info">
+                      <div class="grid-name">{{ item.name }}</div>
+                      @if (item.description) {
+                        <div class="grid-description">
+                          {{ item.description }}
+                        </div>
+                      }
+                      @if (item.itemCount !== undefined) {
+                        <div class="grid-meta">
+                          {{ getItemCountText(item.itemCount) }}
+                        </div>
+                      }
+                      @if (item.isShared && item.owner) {
+                        <div class="grid-owner">
+                          <i class="fas fa-user"></i>
+                          {{ item.owner }}
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+                <!-- Artifact item -->
+                @if (item.type === 'artifact') {
+                  <div
+                    class="grid-item-content"
+                    [title]="item.description || item.name">
+                    <div class="grid-icon artifact-icon">
+                      <i class="fas" [ngClass]="item.icon"></i>
+                    </div>
+                    <div class="grid-info">
+                      <div class="grid-name">{{ item.name }}</div>
+                      @if (item.description) {
+                        <div class="grid-description">
+                          {{ item.description }}
+                        </div>
+                      }
+                      <div class="grid-meta">
+                        @if (item.versionNumber) {
+                          <span class="version-badge">
+                            v{{ item.versionNumber }}
+                          </span>
+                        }
+                        @if (item.artifactType) {
+                          <span class="artifact-type-badge">
+                            {{ item.artifactType }}
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
 
-                <td class="col-type">
-                  <span *ngIf="item.type === 'folder'">Folder</span>
-                  <span *ngIf="item.type === 'artifact'" class="artifact-type-badge">
-                    {{ item.artifactType }}
-                  </span>
-                </td>
+          <!-- Pagination controls (grid mode, when more than one page) -->
+          @if (TotalPages > 1) {
+            <div class="pagination-bar">
+              <span class="pagination-info">
+                {{ (CurrentPage - 1) * PageSize + 1 }}–{{ CurrentPage * PageSize < unifiedItems.length ? CurrentPage * PageSize : unifiedItems.length }}
+                of {{ unifiedItems.length }} items
+              </span>
+              <div class="pagination-controls">
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(1)"
+                  title="First page">
+                  <i class="fas fa-angles-left"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(CurrentPage - 1)"
+                  title="Previous page">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="pagination-page-info">
+                  Page {{ CurrentPage }} of {{ TotalPages }}
+                </span>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(CurrentPage + 1)"
+                  title="Next page">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(TotalPages)"
+                  title="Last page">
+                  <i class="fas fa-angles-right"></i>
+                </button>
+              </div>
+            </div>
+          }
+        }
+    
+        <!-- List view -->
+        @if (!isLoading && unifiedItems.length > 0 && viewMode === 'list') {
+          <div
+            class="unified-list"
+            [class.select-mode]="isSelectMode">
+            <table class="list-table">
+              <thead>
+                <tr>
+                  @if (isSelectMode) {
+                    <th class="col-checkbox">
+                      <i class="fas"
+                        [ngClass]="selectedItems.size === unifiedItems.length ? 'fa-check-square' : 'fa-square'"
+                      (click)="selectedItems.size === unifiedItems.length ? clearSelection() : selectAll()"></i>
+                    </th>
+                  }
+                  <th class="col-name sortable" (click)="setSortBy('name')">
+                    <span>Name</span>
+                    @if (sortBy !== 'name') {
+                      <i class="fas fa-sort"></i>
+                    }
+                    @if (sortBy === 'name') {
+                      <i class="fas"
+                      [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
+                    }
+                  </th>
+                  <th class="col-type sortable" (click)="setSortBy('type')">
+                    <span>Type</span>
+                    @if (sortBy !== 'type') {
+                      <i class="fas fa-sort"></i>
+                    }
+                    @if (sortBy === 'type') {
+                      <i class="fas"
+                      [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
+                    }
+                  </th>
+                  <th class="col-modified sortable" (click)="setSortBy('date')">
+                    <span>Modified</span>
+                    @if (sortBy !== 'date') {
+                      <i class="fas fa-sort"></i>
+                    }
+                    @if (sortBy === 'date') {
+                      <i class="fas"
+                      [ngClass]="sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'"></i>
+                    }
+                  </th>
+                  <th class="col-owner">Owner</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of PagedItems; track item) {
+                  <tr
+                    class="list-item"
+                    [class.selected]="item.selected"
+                    [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
+                    (click)="onItemClick(item, $event)"
+                    (dblclick)="onItemDoubleClick(item, $event)"
+                    (contextmenu)="onItemContextMenu(item, $event)">
+                    @if (isSelectMode) {
+                      <td class="col-checkbox">
+                        <i class="fas"
+                          [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"
+                        (click)="toggleItemSelection(item, $event)"></i>
+                      </td>
+                    }
+                    <td class="col-name">
+                      <div class="list-name-cell">
+                        <i class="fas"
+                        [ngClass]="item.type === 'folder' ? 'fa-folder' : item.icon"></i>
+                        <span>{{ item.name }}</span>
+                        @if (item.isShared) {
+                          <i class="fas fa-users shared-indicator"
+                          title="Shared"></i>
+                        }
+                      </div>
+                    </td>
+                    <td class="col-type">
+                      @if (item.type === 'folder') {
+                        <span>Folder</span>
+                      }
+                      @if (item.type === 'artifact') {
+                        <span class="artifact-type-badge">
+                          {{ item.artifactType }}
+                        </span>
+                      }
+                    </td>
+                    <td class="col-modified">
+                      @if (item.lastModified) {
+                        <span>
+                          {{ item.lastModified | date:'short' }}
+                        </span>
+                      }
+                    </td>
+                    <td class="col-owner">
+                      @if (item.owner) {
+                        <span>{{ item.owner }}</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
 
-                <td class="col-modified">
-                  <span *ngIf="item.lastModified">
-                    {{ item.lastModified | date:'short' }}
-                  </span>
-                </td>
-
-                <td class="col-owner">
-                  <span *ngIf="item.owner">{{ item.owner }}</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+          <!-- Pagination controls (list mode only, when more than one page) -->
+          @if (TotalPages > 1) {
+            <div class="pagination-bar">
+              <span class="pagination-info">
+                {{ (CurrentPage - 1) * PageSize + 1 }}–{{ CurrentPage * PageSize < unifiedItems.length ? CurrentPage * PageSize : unifiedItems.length }}
+                of {{ unifiedItems.length }} items
+              </span>
+              <div class="pagination-controls">
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(1)"
+                  title="First page">
+                  <i class="fas fa-angles-left"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(CurrentPage - 1)"
+                  title="Previous page">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="pagination-page-info">
+                  Page {{ CurrentPage }} of {{ TotalPages }}
+                </span>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(CurrentPage + 1)"
+                  title="Next page">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(TotalPages)"
+                  title="Last page">
+                  <i class="fas fa-angles-right"></i>
+                </button>
+              </div>
+            </div>
+          }
+        }
       </div>
     </div>
 
-    <!-- Modals (unchanged) -->
+    <!-- Context Menu -->
+    @if (showContextMenu && contextMenuItem) {
+      <div class="context-menu-backdrop" (click)="closeContextMenu()"></div>
+      <div class="context-menu"
+        [style.left.px]="contextMenuPosition.x"
+        [style.top.px]="contextMenuPosition.y">
+        @if (contextMenuItem.type === 'folder' && contextMenuItem.collection) {
+          <button class="context-menu-item" (click)="onContextMenuAction('open')">
+            <i class="fas fa-folder-open"></i>
+            <span>Open</span>
+          </button>
+          <div class="context-menu-divider"></div>
+          @if (canShare(contextMenuItem.collection)) {
+            <button class="context-menu-item" (click)="onContextMenuAction('share')">
+              <i class="fas fa-share-nodes"></i>
+              <span>Share</span>
+            </button>
+          }
+          @if (canEdit(contextMenuItem.collection)) {
+            <button class="context-menu-item" (click)="onContextMenuAction('edit')">
+              <i class="fas fa-pen-to-square"></i>
+              <span>Edit</span>
+            </button>
+          }
+          @if (canDelete(contextMenuItem.collection)) {
+            <div class="context-menu-divider"></div>
+            <button class="context-menu-item context-menu-danger" (click)="onContextMenuAction('delete')">
+              <i class="fas fa-trash"></i>
+              <span>Delete</span>
+            </button>
+          }
+        }
+        @if (contextMenuItem.type === 'artifact') {
+          <button class="context-menu-item" (click)="onContextMenuAction('view')">
+            <i class="fas fa-eye"></i>
+            <span>View</span>
+          </button>
+          @if (canEditCurrent()) {
+            <div class="context-menu-divider"></div>
+            <button class="context-menu-item context-menu-danger" (click)="onContextMenuAction('remove')">
+              <i class="fas fa-times-circle"></i>
+              <span>Remove from Collection</span>
+            </button>
+          }
+        }
+      </div>
+    }
+
+    <!-- Modals -->
     <mj-collection-form-modal
       [isOpen]="isFormModalOpen"
       [collection]="editingCollection"
-      [parentCollection]="currentCollection || undefined"
+      [parentCollection]="editingCollection ? undefined : (currentCollection || undefined)"
       [environmentId]="environmentId"
       [currentUser]="currentUser"
       (saved)="onCollectionSaved($event)"
       (cancelled)="onFormCancelled()">
     </mj-collection-form-modal>
-
+    
     <mj-artifact-create-modal
       [isOpen]="isArtifactModalOpen"
       [collectionId]="currentCollectionId || ''"
@@ -352,7 +568,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       (saved)="onArtifactSaved($event)"
       (cancelled)="onArtifactModalCancelled()">
     </mj-artifact-create-modal>
-
+    
     <mj-collection-share-modal
       [isOpen]="isShareModalOpen"
       [collection]="sharingCollection"
@@ -361,14 +577,21 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       (saved)="onPermissionsChanged()"
       (cancelled)="onShareModalCancelled()">
     </mj-collection-share-modal>
-  `,
+    `,
   styles: [`
+    :host {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+
     /* Main container */
     .collections-view {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #FAFAFA;
+      background: var(--mj-bg-surface-sunken);
       position: relative;
     }
 
@@ -377,9 +600,9 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       display: flex;
       align-items: center;
       padding: 12px 20px;
-      border-bottom: 1px solid #E5E7EB;
+      border-bottom: 1px solid var(--mj-border-default);
       gap: 16px;
-      background: white;
+      background: var(--mj-bg-surface);
     }
 
     .collections-breadcrumb {
@@ -397,12 +620,12 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .breadcrumb-item i {
-      color: #6B7280;
+      color: var(--mj-text-muted);
       font-size: 14px;
     }
 
     .breadcrumb-link {
-      color: #111827;
+      color: var(--mj-text-primary);
       font-weight: 500;
       cursor: pointer;
       text-decoration: none;
@@ -412,11 +635,11 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .breadcrumb-link:hover {
-      color: #0076D6;
+      color: var(--mj-brand-primary);
     }
 
     .breadcrumb-link.active {
-      color: #6B7280;
+      color: var(--mj-text-muted);
       cursor: default;
     }
 
@@ -428,7 +651,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .breadcrumb-separator {
-      color: #D1D5DB;
+      color: var(--mj-border-strong);
       font-size: 10px;
     }
 
@@ -444,10 +667,10 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
-      background: #007AFF;
+      background: var(--mj-brand-primary);
       border: none;
       border-radius: 6px;
-      color: white;
+      color: var(--mj-text-inverse);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
@@ -455,7 +678,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .btn-primary:hover {
-      background: #0051D5;
+      background: var(--mj-brand-primary-hover);
     }
 
     .btn-primary i.fa-chevron-down {
@@ -466,10 +689,10 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .btn-icon {
       padding: 6px 10px;
       background: transparent;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
       cursor: pointer;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       transition: all 150ms ease;
       display: flex;
       align-items: center;
@@ -477,19 +700,19 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .btn-icon:hover {
-      background: #F9FAFB;
-      color: #111827;
-      border-color: #9CA3AF;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
+      border-color: var(--mj-text-disabled);
     }
 
     .btn-icon.active {
-      background: #EFF6FF;
-      color: #007AFF;
-      border-color: #007AFF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
     }
 
     .btn-icon.active:hover {
-      background: #DBEAFE;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     /* Dropdown menus */
@@ -502,8 +725,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       top: calc(100% + 4px);
       left: 0;
       min-width: 200px;
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       padding: 4px;
@@ -524,7 +747,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       background: transparent;
       border: none;
       border-radius: 4px;
-      color: #111827;
+      color: var(--mj-text-primary);
       font-size: 13px;
       cursor: pointer;
       text-align: left;
@@ -532,7 +755,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .dropdown-item:hover:not(:disabled) {
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .dropdown-item:disabled {
@@ -541,24 +764,24 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .dropdown-item.active {
-      background: #EFF6FF;
-      color: #007AFF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .dropdown-item i {
       font-size: 14px;
       width: 16px;
       text-align: center;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .dropdown-item.active i {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .dropdown-divider {
       height: 1px;
-      background: #E5E7EB;
+      background: var(--mj-border-default);
       margin: 4px 0;
     }
 
@@ -573,7 +796,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .search-container i.fa-search {
       position: absolute;
       left: 10px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       font-size: 13px;
       pointer-events: none;
     }
@@ -581,7 +804,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .search-input {
       width: 100%;
       padding: 6px 32px 6px 32px;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
       font-size: 13px;
       outline: none;
@@ -589,8 +812,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .search-input:focus {
-      border-color: #007AFF;
-      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .search-clear {
@@ -599,7 +822,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       padding: 4px;
       background: transparent;
       border: none;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       border-radius: 4px;
       display: flex;
@@ -608,8 +831,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .search-clear:hover {
-      background: #F3F4F6;
-      color: #6B7280;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
     }
 
     /* Selection toolbar */
@@ -618,8 +841,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       align-items: center;
       justify-content: space-between;
       padding: 8px 20px;
-      background: #EFF6FF;
-      border-bottom: 1px solid #BFDBFE;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
     }
 
     .selection-info {
@@ -631,7 +854,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .selection-count {
       font-size: 13px;
       font-weight: 600;
-      color: #1E40AF;
+      color: var(--mj-brand-primary);
     }
 
     .selection-actions {
@@ -644,10 +867,10 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
-      background: white;
-      border: 1px solid #D1D5DB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
-      color: #374151;
+      color: var(--mj-text-secondary);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
@@ -655,22 +878,24 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .btn-toolbar:hover {
-      background: #F9FAFB;
-      border-color: #9CA3AF;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-text-disabled);
     }
 
     .btn-toolbar.btn-danger {
-      color: #DC2626;
-      border-color: #FCA5A5;
+      color: var(--mj-status-error);
+      border-color: color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
     }
 
     .btn-toolbar.btn-danger:hover {
-      background: #FEE2E2;
-      border-color: #DC2626;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border-color: var(--mj-status-error);
     }
 
     /* Content area */
     .collections-content {
+      display: flex;
+      flex-direction: column;
       flex: 1;
       overflow-y: auto;
       padding: 20px;
@@ -682,22 +907,23 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100%;
-      color: #9CA3AF;
+      flex: 1;
+      min-height: 0;
+      color: var(--mj-text-disabled);
       text-align: center;
-      padding: 48px 24px;
+      padding: 24px;
     }
 
-    .empty-state i {
+    .empty-state > i {
       font-size: 64px;
       margin-bottom: 24px;
       opacity: 0.3;
-      color: #D1D5DB;
+      color: var(--mj-border-strong);
     }
 
     .empty-state h3 {
       margin: 0 0 8px 0;
-      color: #374151;
+      color: var(--mj-text-secondary);
       font-size: 18px;
       font-weight: 600;
     }
@@ -705,7 +931,13 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .empty-state p {
       margin: 0 0 24px 0;
       font-size: 14px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
+    }
+
+    .empty-state .empty-state-cta {
+      padding: 10px 20px;
+      font-size: 14px;
+      border-radius: 8px;
     }
 
     .empty-state-actions {
@@ -721,13 +953,14 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 16px;
       padding: 4px;
+      flex-shrink: 0;
     }
 
     .grid-item {
       display: flex;
       flex-direction: column;
       padding: 12px;
-      background: white;
+      background: var(--mj-bg-surface);
       border: 2px solid transparent;
       border-radius: 8px;
       cursor: pointer;
@@ -737,23 +970,23 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .grid-item:hover {
-      background: #F9FAFB;
-      border-color: #D1D5DB;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-border-strong);
     }
 
     .grid-item.selected {
-      background: #EFF6FF;
-      border-color: #007AFF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: var(--mj-brand-primary);
     }
 
     .grid-item.active {
-      background: #FEF3C7;
-      border-color: #F59E0B;
-      box-shadow: 0 0 0 1px #F59E0B;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      border-color: var(--mj-status-warning);
+      box-shadow: 0 0 0 1px var(--mj-status-warning);
     }
 
     .grid-item.active:hover {
-      background: #FDE68A;
+      background: color-mix(in srgb, var(--mj-status-warning) 25%, var(--mj-bg-surface));
     }
 
     /* Select mode styling for grid */
@@ -762,8 +995,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .unified-grid.select-mode .grid-item:hover {
-      background: #EFF6FF;
-      border-color: #93C5FD;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
     }
 
     .item-checkbox {
@@ -781,13 +1014,13 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .item-checkbox i {
       font-size: 16px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       transition: color 150ms ease;
     }
 
     .grid-item.selected .item-checkbox i,
     .item-checkbox:hover i {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .grid-item-content {
@@ -808,21 +1041,21 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .grid-icon.folder-icon {
-      background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%);
+      background: var(--mj-brand-primary);
     }
 
     .grid-icon.folder-icon i {
       font-size: 36px;
-      color: white;
+      color: var(--mj-text-inverse);
     }
 
     .grid-icon.artifact-icon {
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .grid-icon.artifact-icon i {
       font-size: 32px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .shared-badge {
@@ -831,17 +1064,17 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       right: -4px;
       width: 20px;
       height: 20px;
-      background: #10B981;
+      background: var(--mj-status-success);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 2px solid white;
+      border: 2px solid var(--mj-bg-surface);
     }
 
     .shared-badge i {
       font-size: 10px;
-      color: white;
+      color: var(--mj-text-inverse);
     }
 
     .grid-info {
@@ -852,7 +1085,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .grid-name {
       font-size: 13px;
       font-weight: 500;
-      color: #111827;
+      color: var(--mj-text-primary);
       line-height: 1.3;
       margin-bottom: 4px;
       /* Allow wrapping to 2 lines max */
@@ -865,7 +1098,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .grid-description {
       font-size: 11px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       line-height: 1.3;
       margin-bottom: 4px;
       /* Allow wrapping to 2 lines max */
@@ -878,13 +1111,13 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .grid-meta {
       font-size: 11px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       margin-top: 4px;
     }
 
     .grid-owner {
       font-size: 11px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       margin-top: 2px;
     }
 
@@ -896,8 +1129,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .version-badge {
       display: inline-block;
       padding: 2px 6px;
-      background: #FEF3C7;
-      color: #92400E;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
       border-radius: 3px;
       font-size: 10px;
       font-weight: 600;
@@ -908,8 +1141,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .artifact-type-badge {
       display: inline-block;
       padding: 2px 6px;
-      background: #DBEAFE;
-      color: #1E40AF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
       border-radius: 3px;
       font-size: 10px;
       font-weight: 500;
@@ -918,10 +1151,11 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     /* List view */
     .unified-list {
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       overflow: hidden;
+      flex-shrink: 0;
     }
 
     .list-table {
@@ -930,8 +1164,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table thead {
-      background: #F9FAFB;
-      border-bottom: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .list-table th {
@@ -939,7 +1173,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       text-align: left;
       font-size: 12px;
       font-weight: 600;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -951,7 +1185,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table th.sortable:hover {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .list-table th.sortable span {
@@ -969,7 +1203,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table tbody tr {
-      border-bottom: 1px solid #F3F4F6;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
       transition: background 150ms ease;
       cursor: pointer;
       user-select: none;
@@ -980,26 +1214,26 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table tbody tr:hover {
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .list-table tbody tr.selected {
-      background: #EFF6FF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     .list-table tbody tr.active {
-      background: #FEF3C7;
-      border-left: 3px solid #F59E0B;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      border-left: 3px solid var(--mj-status-warning);
     }
 
     .list-table tbody tr.active:hover {
-      background: #FDE68A;
+      background: color-mix(in srgb, var(--mj-status-warning) 25%, var(--mj-bg-surface));
     }
 
     .list-table td {
       padding: 12px 16px;
       font-size: 13px;
-      color: #374151;
+      color: var(--mj-text-secondary);
     }
 
     .col-checkbox {
@@ -1009,14 +1243,14 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .col-checkbox i {
       font-size: 16px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       transition: color 150ms ease;
     }
 
     .col-checkbox i:hover,
     .list-table tbody tr.selected .col-checkbox i {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .col-name {
@@ -1031,18 +1265,18 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .list-name-cell i {
       font-size: 16px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       width: 20px;
       text-align: center;
     }
 
     .list-name-cell .fa-folder {
-      color: #3B82F6;
+      color: var(--mj-brand-primary);
     }
 
     .shared-indicator {
       font-size: 12px;
-      color: #10B981;
+      color: var(--mj-status-success);
       margin-left: auto;
     }
 
@@ -1057,6 +1291,154 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .col-owner {
       width: 150px;
     }
+
+    /* Pagination */
+    .pagination-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      margin-top: 8px;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--mj-text-secondary);
+      flex-shrink: 0;
+    }
+
+    .pagination-info {
+      white-space: nowrap;
+    }
+
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .pagination-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary);
+      cursor: pointer;
+      transition: all 150ms ease;
+      font-size: 12px;
+    }
+
+    .pagination-btn:hover:not(:disabled) {
+      background: var(--mj-bg-surface-hover);
+      border-color: var(--mj-border-strong);
+      color: var(--mj-text-primary);
+    }
+
+    .pagination-btn:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+
+    .pagination-page-info {
+      padding: 0 8px;
+      white-space: nowrap;
+      font-weight: 500;
+    }
+
+    /* Toolbar separator and action group */
+    .toolbar-separator {
+      width: 1px;
+      height: 24px;
+      background: var(--mj-border-strong);
+      margin: 0 4px;
+    }
+
+    .toolbar-actions-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-icon-danger {
+      color: var(--mj-status-error);
+      border-color: color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
+    }
+
+    .btn-icon-danger:hover {
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
+      border-color: var(--mj-status-error);
+    }
+
+    /* Context menu */
+    .context-menu-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1999;
+    }
+
+    .context-menu {
+      position: fixed;
+      min-width: 180px;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+      padding: 4px;
+      z-index: 2000;
+    }
+
+    .context-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: var(--mj-text-primary);
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 100ms ease;
+    }
+
+    .context-menu-item:hover {
+      background: var(--mj-bg-surface-sunken);
+    }
+
+    .context-menu-item i {
+      font-size: 14px;
+      width: 16px;
+      text-align: center;
+      color: var(--mj-text-muted);
+    }
+
+    .context-menu-danger {
+      color: var(--mj-status-error);
+    }
+
+    .context-menu-danger i {
+      color: var(--mj-status-error);
+    }
+
+    .context-menu-danger:hover {
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+    }
+
+    .context-menu-divider {
+      height: 1px;
+      background: var(--mj-border-default);
+      margin: 4px 0;
+    }
   `]
 })
 export class CollectionsFullViewComponent implements OnInit, OnDestroy {
@@ -1067,22 +1449,22 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     versionId?: string | null;
   }>();
 
-  public collections: CollectionEntity[] = [];
-  public artifactVersions: Array<{ version: ArtifactVersionEntity; artifact: ArtifactEntity }> = [];
-  public filteredCollections: CollectionEntity[] = [];
-  public filteredArtifactVersions: Array<{ version: ArtifactVersionEntity; artifact: ArtifactEntity }> = [];
+  public collections: MJCollectionEntity[] = [];
+  public artifactVersions: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> = [];
+  public filteredCollections: MJCollectionEntity[] = [];
+  public filteredArtifactVersions: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> = [];
   public isLoading: boolean = false;
   public breadcrumbs: Array<{ id: string; name: string }> = [];
   public currentCollectionId: string | null = null;
-  public currentCollection: CollectionEntity | null = null;
+  public currentCollection: MJCollectionEntity | null = null;
 
   public isFormModalOpen: boolean = false;
-  public editingCollection?: CollectionEntity;
+  public editingCollection?: MJCollectionEntity;
   public isArtifactModalOpen: boolean = false;
 
   public userPermissions: Map<string, CollectionPermission> = new Map();
   public isShareModalOpen: boolean = false;
-  public sharingCollection: CollectionEntity | null = null;
+  public sharingCollection: MJCollectionEntity | null = null;
 
   // New UI state for Mac Finder-style view
   public viewMode: CollectionViewMode = 'grid';
@@ -1094,7 +1476,37 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public showNewDropdown: boolean = false;
   public showSortDropdown: boolean = false;
   public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
+  private itemCountMap: Map<string, number> = new Map();
   public isSelectMode: boolean = false; // Toggle for selection mode
+
+  // Pagination state
+  public PageSize: number = 50;
+  public CurrentPage: number = 1;
+
+  /** Total number of pages based on current items and page size */
+  get TotalPages(): number {
+    return Math.max(1, Math.ceil(this.unifiedItems.length / this.PageSize));
+  }
+
+  /** Items for the current page */
+  get PagedItems(): CollectionViewItem[] {
+    const start = (this.CurrentPage - 1) * this.PageSize;
+    return this.unifiedItems.slice(start, start + this.PageSize);
+  }
+
+  /** Navigate to a specific page */
+  GoToPage(page: number): void {
+    this.CurrentPage = Math.max(1, Math.min(page, this.TotalPages));
+  }
+
+  IsArtifactActive(item: CollectionViewItem): boolean {
+    return UUIDsEqual(item.artifact?.ID, this.activeArtifactId);
+  }
+
+  // Context menu state
+  public showContextMenu: boolean = false;
+  public contextMenuPosition: { x: number; y: number } = { x: 0, y: 0 };
+  public contextMenuItem: CollectionViewItem | null = null;
 
   private destroy$ = new Subject<void>();
   private isNavigatingProgrammatically = false;
@@ -1104,7 +1516,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     private artifactState: ArtifactStateService,
     private collectionState: CollectionStateService,
     private permissionService: CollectionPermissionService,
-    private artifactIconService: ArtifactIconService
+    private artifactIconService: ArtifactIconService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
@@ -1206,6 +1619,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       this.buildUnifiedItemList();
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -1226,7 +1640,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
       const filter = `${baseFilter} AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
 
-      const result = await rv.RunView<CollectionEntity>(
+      const result = await rv.RunView<MJCollectionEntity>(
         {
           EntityName: 'MJ: Collections',
           ExtraFilter: filter,
@@ -1239,11 +1653,60 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
       if (result.Success) {
         this.collections = result.Results || [];
-        await this.loadUserPermissions();
+        await Promise.all([
+          this.loadUserPermissions(),
+          this.loadItemCounts()
+        ]);
         this.filteredCollections = [...this.collections];
       }
     } catch (error) {
       console.error('Failed to load collections:', error);
+    }
+  }
+
+  /**
+   * Load item counts (child collections + artifacts) for all visible collections
+   */
+  private async loadItemCounts(): Promise<void> {
+    this.itemCountMap.clear();
+    if (this.collections.length === 0) return;
+
+    const collectionIds = this.collections.map(c => c.ID);
+    const inClause = collectionIds.map(id => `'${id}'`).join(',');
+
+    const rv = new RunView();
+    const [childResult, artifactResult] = await rv.RunViews(
+      [
+        {
+          EntityName: 'MJ: Collections',
+          ExtraFilter: `ParentID IN (${inClause})`,
+          Fields: ['ID', 'ParentID'],
+          ResultType: 'simple'
+        },
+        {
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID IN (${inClause})`,
+          Fields: ['ID', 'CollectionID'],
+          ResultType: 'simple'
+        }
+      ],
+      this.currentUser
+    );
+
+    // Count children per parent
+    if (childResult.Success && childResult.Results) {
+      for (const child of childResult.Results) {
+        const parentId = (child as Record<string, string>).ParentID;
+        this.itemCountMap.set(parentId, (this.itemCountMap.get(parentId) || 0) + 1);
+      }
+    }
+
+    // Count artifacts per collection
+    if (artifactResult.Success && artifactResult.Results) {
+      for (const ca of artifactResult.Results) {
+        const collId = (ca as Record<string, string>).CollectionID;
+        this.itemCountMap.set(collId, (this.itemCountMap.get(collId) || 0) + 1);
+      }
     }
   }
 
@@ -1297,7 +1760,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  async openCollection(collection: CollectionEntity): Promise<void> {
+  async openCollection(collection: MJCollectionEntity): Promise<void> {
     this.isNavigatingProgrammatically = true;
     try {
       this.breadcrumbs.push({ id: collection.ID, name: collection.Name });
@@ -1329,7 +1792,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
         // Load the collection entity
         const md = new Metadata();
-        this.currentCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+        this.currentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
         await this.currentCollection.Load(crumb.id);
 
         await this.loadData();
@@ -1370,6 +1833,16 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Update a breadcrumb entry's name in place (e.g., after rename)
+   */
+  private updateBreadcrumbName(collectionId: string, newName: string): void {
+    const crumb = this.breadcrumbs.find(b => UUIDsEqual(b.id, collectionId));
+    if (crumb) {
+      crumb.name = newName;
+    }
+  }
+
+  /**
    * Navigate to a collection by ID, building the breadcrumb trail
    * Used for deep linking from search results or URL parameters
    */
@@ -1380,7 +1853,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
       // Load the target collection
       const md = new Metadata();
-      const targetCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      const targetCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
       await targetCollection.Load(collectionId);
 
       if (!targetCollection || !targetCollection.ID) {
@@ -1394,7 +1867,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       let currentId: string | null = targetCollection.ParentID;
 
       while (currentId) {
-        const parentCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+        const parentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
         await parentCollection.Load(currentId);
 
         if (parentCollection && parentCollection.ID) {
@@ -1457,7 +1930,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.isFormModalOpen = true;
   }
 
-  async editCollection(collection: CollectionEntity): Promise<void> {
+  async editCollection(collection: MJCollectionEntity): Promise<void> {
     const canEdit = await this.validatePermission(collection, 'edit');
     if (!canEdit) return;
 
@@ -1465,7 +1938,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.isFormModalOpen = true;
   }
 
-  async deleteCollection(collection: CollectionEntity): Promise<void> {
+  async deleteCollection(collection: MJCollectionEntity): Promise<void> {
     console.log('deleteCollection called for:', collection.Name, collection.ID);
 
     // Validate user has delete permission
@@ -1498,7 +1971,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     const rv = new RunView();
 
     // Step 1: Find and delete all child collections recursively
-    const childrenResult = await rv.RunView<CollectionEntity>(
+    const childrenResult = await rv.RunView<MJCollectionEntity>(
       {
         EntityName: 'MJ: Collections',
         ExtraFilter: `ParentID='${collectionId}'`,
@@ -1536,7 +2009,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     // Step 4: Delete the collection itself
     const md = new Metadata();
-    const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+    const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
     await collection.Load(collectionId);
     const deleted = await collection.Delete();
 
@@ -1545,14 +2018,22 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  async onCollectionSaved(collection: CollectionEntity): Promise<void> {
+  async onCollectionSaved(collection: MJCollectionEntity): Promise<void> {
     this.isFormModalOpen = false;
     this.editingCollection = undefined;
     await this.loadCollections();
     // Reload current collection permission (it was cleared by loadUserPermissions)
     await this.loadCurrentCollectionPermission();
+
+    // Update breadcrumb and currentCollection if the saved collection is in the trail
+    this.updateBreadcrumbName(collection.ID, collection.Name);
+    if (this.currentCollection && UUIDsEqual(this.currentCollection.ID, collection.ID)) {
+      this.currentCollection = collection;
+    }
+
     // Rebuild unified list to show new collection
     this.buildUnifiedItemList();
+    this.cdr.detectChanges();
   }
 
   onFormCancelled(): void {
@@ -1571,16 +2052,17 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.isArtifactModalOpen = true;
   }
 
-  async onArtifactSaved(artifact: ArtifactEntity): Promise<void> {
+  async onArtifactSaved(artifact: MJArtifactEntity): Promise<void> {
     this.isArtifactModalOpen = false;
     await this.loadArtifacts();
+    this.cdr.detectChanges();
   }
 
   onArtifactModalCancelled(): void {
     this.isArtifactModalOpen = false;
   }
 
-  async removeArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): Promise<void> {
+  async removeArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {
     if (!this.currentCollectionId) return;
 
     // Validate user has delete permission on current collection
@@ -1613,6 +2095,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
             await joinRecord.Delete();
           }
           await this.loadArtifacts();
+          this.buildUnifiedItemList();
         } else {
           await this.dialogService.alert('Error', 'Collection artifact link not found.');
         }
@@ -1623,18 +2106,18 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  viewArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
+  viewArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
     this.activeArtifactId = item.artifact.ID;
     this.artifactState.openArtifact(item.artifact.ID, item.version.VersionNumber);
   }
 
   // Permission validation and checking methods
   private async validatePermission(
-    collection: CollectionEntity | null,
+    collection: MJCollectionEntity | null,
     requiredPermission: 'edit' | 'delete' | 'share'
   ): Promise<boolean> {
     // Owner has all permissions (including backwards compatibility for null OwnerID)
-    if (!collection?.OwnerID || collection.OwnerID === this.currentUser.ID) {
+    if (!collection?.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
       return true;
     }
 
@@ -1664,27 +2147,27 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     return true;
   }
 
-  canEdit(collection: CollectionEntity): boolean {
+  canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
     return permission?.canEdit || false;
   }
 
-  canDelete(collection: CollectionEntity): boolean {
+  canDelete(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
     return permission?.canDelete || false;
   }
 
-  canShare(collection: CollectionEntity): boolean {
+  canShare(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
@@ -1707,13 +2190,21 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     return this.canDelete(this.currentCollection);
   }
 
-  isShared(collection: CollectionEntity): boolean {
+  canShareCurrent(): boolean {
+    // At root level, no share needed
+    if (!this.currentCollectionId || !this.currentCollection) {
+      return false;
+    }
+    return this.canShare(this.currentCollection);
+  }
+
+  isShared(collection: MJCollectionEntity): boolean {
     // Collection is shared if user is not the owner and OwnerID is set
-    return collection.OwnerID != null && collection.OwnerID !== this.currentUser.ID;
+    return collection.OwnerID != null && !UUIDsEqual(collection.OwnerID, this.currentUser.ID);
   }
 
   // Sharing methods
-  async shareCollection(collection: CollectionEntity): Promise<void> {
+  async shareCollection(collection: MJCollectionEntity): Promise<void> {
     // Validate user has share permission
     const canShare = await this.validatePermission(collection, 'share');
     if (!canShare) return;
@@ -1725,6 +2216,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   async onPermissionsChanged(): Promise<void> {
     // Reload collections and permissions after sharing changes
     await this.loadCollections();
+    this.cdr.detectChanges();
   }
 
   onShareModalCancelled(): void {
@@ -1732,11 +2224,30 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.sharingCollection = null;
   }
 
+  // Header toolbar action methods
+  shareCurrentCollection(): void {
+    if (this.currentCollection) {
+      this.shareCollection(this.currentCollection);
+    }
+  }
+
+  editCurrentCollection(): void {
+    if (this.currentCollection) {
+      this.editCollection(this.currentCollection);
+    }
+  }
+
+  deleteCurrentCollection(): void {
+    if (this.currentCollection) {
+      this.deleteCollection(this.currentCollection);
+    }
+  }
+
   /**
    * Get the icon for an artifact using the centralized icon service.
    * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
    */
-  public getArtifactIcon(artifact: ArtifactEntity): string {
+  public getArtifactIcon(artifact: MJArtifactEntity): string {
     return this.artifactIconService.getArtifactIcon(artifact);
   }
 
@@ -1756,7 +2267,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         name: collection.Name,
         description: collection.Description || undefined,
         icon: 'fa-folder',
-        itemCount: 0, // TODO: calculate actual count
+        itemCount: this.itemCountMap.get(collection.ID) || 0,
         owner: collection.Owner || undefined,
         isShared: this.isShared(collection),
         selected: this.selectedItems.has(collection.ID),
@@ -1781,8 +2292,10 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       });
     }
 
-    // Apply sorting
+    // Apply sorting and reset pagination
     this.unifiedItems = this.sortItems(items);
+    this.CurrentPage = 1;
+    this.cdr.detectChanges();
   }
 
   /**
@@ -1842,8 +2355,10 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public toggleSelectMode(): void {
     this.isSelectMode = !this.isSelectMode;
     if (!this.isSelectMode) {
-      // Clear selection when exiting select mode
+      // Clear selection when exiting select mode (clearSelection calls buildUnifiedItemList which calls cdr)
       this.clearSelection();
+    } else {
+      this.cdr.detectChanges();
     }
   }
 
@@ -1943,7 +2458,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Multi-select: Delete selected items (Phase 3)
+   * Multi-select: Delete selected items
    */
   public async deleteSelected(): Promise<void> {
     if (this.selectedItems.size === 0) return;
@@ -1956,16 +2471,49 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     if (!confirmed) return;
 
-    // TODO: Implement batch delete
-    this.clearSelection();
+    const selectedViewItems = this.unifiedItems.filter(item => this.selectedItems.has(item.id));
+    const folderItems = selectedViewItems.filter(item => item.type === 'folder' && item.collection);
+    const artifactItems = selectedViewItems.filter(item => item.type === 'artifact' && item.version);
+
+    try {
+      for (const item of folderItems) {
+        await this.deleteCollectionRecursive(item.collection!.ID);
+      }
+
+      if (artifactItems.length > 0 && this.currentCollectionId) {
+        const rv = new RunView();
+        for (const item of artifactItems) {
+          const result = await rv.RunView<MJCollectionArtifactEntity>({
+            EntityName: 'MJ: Collection Artifacts',
+            ExtraFilter: `CollectionID='${this.currentCollectionId}' AND ArtifactVersionID='${item.version!.ID}'`,
+            ResultType: 'entity_object'
+          }, this.currentUser);
+
+          if (result.Success && result.Results) {
+            for (const joinRecord of result.Results) {
+              await joinRecord.Delete();
+            }
+          }
+        }
+      }
+
+      this.clearSelection();
+      await this.loadCollections();
+      if (artifactItems.length > 0) {
+        await this.loadArtifacts();
+      }
+      this.buildUnifiedItemList();
+    } catch (error) {
+      console.error('Error deleting selected items:', error);
+      await this.dialogService.alert('Error', `An error occurred while deleting: ${error}`);
+    }
   }
 
   /**
    * Get count of items in folder (Phase 1)
    */
   private async getCollectionItemCount(collectionId: string): Promise<number> {
-    // TODO: Query for actual count
-    return 0;
+    return this.itemCountMap.get(collectionId) || 0;
   }
 
   /**
@@ -2083,18 +2631,82 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle right-click context menu
-   * Opens browser context menu for now - can be extended with custom menu
+   * Handle right-click context menu - shows custom context menu with permission-gated actions
    */
   public onItemContextMenu(item: CollectionViewItem, event: MouseEvent): void {
-    // Select the item if not already selected
-    if (!item.selected) {
-      this.clearSelection();
-      this.toggleItemSelection(item, event);
-    }
+    event.preventDefault();
+    event.stopPropagation();
 
-    // Allow browser's default context menu for now
-    // Future enhancement: implement custom context menu with actions
-    // event.preventDefault();
+    // Close any open dropdowns
+    this.showNewDropdown = false;
+    this.showSortDropdown = false;
+
+    this.contextMenuItem = item;
+    this.contextMenuPosition = this.clampContextMenuPosition(event.clientX, event.clientY);
+    this.showContextMenu = true;
+    this.cdr.detectChanges();
+  }
+
+  /** Clamp menu position to keep it within the viewport */
+  private clampContextMenuPosition(x: number, y: number): { x: number; y: number } {
+    const menuWidth = 200;
+    const menuHeight = 200;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    return {
+      x: Math.min(x, viewportWidth - menuWidth),
+      y: Math.min(y, viewportHeight - menuHeight)
+    };
+  }
+
+  public closeContextMenu(): void {
+    this.showContextMenu = false;
+    this.contextMenuItem = null;
+    this.cdr.detectChanges();
+  }
+
+  /** Handle context menu action dispatch */
+  public onContextMenuAction(action: string): void {
+    const item = this.contextMenuItem;
+    this.closeContextMenu();
+    if (!item) return;
+
+    switch (action) {
+      case 'open':
+        this.openItem(item);
+        break;
+      case 'view':
+        this.openItem(item);
+        break;
+      case 'share':
+        if (item.collection) {
+          this.shareCollection(item.collection);
+        }
+        break;
+      case 'edit':
+        if (item.collection) {
+          this.editCollection(item.collection);
+        }
+        break;
+      case 'delete':
+        if (item.collection) {
+          this.deleteCollection(item.collection);
+        }
+        break;
+      case 'remove':
+        if (item.artifact && item.version) {
+          this.removeArtifact({ artifact: item.artifact, version: item.version });
+        }
+        break;
+    }
+  }
+
+  /** Close context menu on Escape key */
+  @HostListener('document:keydown.escape')
+  public onEscapeKey(): void {
+    if (this.showContextMenu) {
+      this.closeContextMenu();
+    }
   }
 }

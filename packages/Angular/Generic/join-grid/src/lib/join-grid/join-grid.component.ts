@@ -35,6 +35,7 @@ export class JoinGridRow {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-join-grid',
   templateUrl: './join-grid.component.html',
   styleUrls: ['./join-grid.component.css']
@@ -526,6 +527,10 @@ export class JoinGridComponent implements AfterViewInit {
 
   public _IsColumnChecked(cell: JoinGridCell): boolean {
     return cell?.data !== undefined;
+  }
+
+  public OnDropdownValueChange(row: JoinGridRow, colIndex: number, newValue: unknown): void {
+    this.UpdateCellValueDirect(row, colIndex, String(newValue));
   }
 
   public async UpdateCellValueDirect(row: JoinGridRow, colIndex: number, newValue: string) {

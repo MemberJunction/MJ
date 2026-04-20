@@ -2,8 +2,10 @@
   {
     "fields": {
       "Name": "Memory Manager",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=System",
       "Description": "System agent that automatically extracts notes and examples from conversations and agent runs. Analyzes user ratings and artifact usage to identify valuable learnings. Runs on a 15-minute schedule.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "DriverClass": "MemoryManagerAgent",
       "Status": "Active",
       "ExecutionOrder": 0,
       "ArtifactCreationMode": "Never",
@@ -22,7 +24,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Memory Manager - Extract Notes",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Memory Manager - Extract Notes",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -30,28 +32,14 @@
             "ID": "F2BCE847-E5A4-437E-8BF3-1C9C79D4A813"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.056Z",
-            "checksum": "20e3548eade4dc96a0e8579ee5d3855c3f77ee888201a78d36ae3deb976ac4e4"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "A1575099-1576-45E9-A6FD-88102FB7E510"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Memory Manager - Extract Notes",
-              "resolved": "38129618-88C2-470F-9A32-A631AFB4371E"
-            }
-          ]
+            "lastModified": "2026-02-13T21:09:23.521Z",
+            "checksum": "aae7e9dd9735334e70da92b548f2a8db9e3d151e2f8746898f87fd7037144bfb"
+          }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Memory Manager - Extract Examples",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Memory Manager - Extract Examples",
             "ExecutionOrder": 1,
             "Status": "Active"
           },
@@ -59,23 +47,9 @@
             "ID": "D71FB930-97A5-4BFB-B1D0-AAFA98AA542F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.057Z",
-            "checksum": "53f2ea146d71da50959266683b930c4186816ca486a5efbbd5c427e2507f1566"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "A1575099-1576-45E9-A6FD-88102FB7E510"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Memory Manager - Extract Examples",
-              "resolved": "14BFD6A6-57E0-4A5B-9AE0-579123DA495B"
-            }
-          ]
+            "lastModified": "2026-02-13T21:09:23.523Z",
+            "checksum": "958d1dd8ef7d48bf7fa4bc3955b0fde33ca3f717118ca8487a2ee248e9c5df3c"
+          }
         }
       ]
     },
@@ -83,16 +57,8 @@
       "ID": "A1575099-1576-45E9-A6FD-88102FB7E510"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:35.036Z",
-      "checksum": "d3b47703def5e9b2624c542db5aa78abe1288bd8795c11ea07cf2ccaa0df2897"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+      "lastModified": "2026-03-13T19:10:49.388Z",
+      "checksum": "79374524a4e12f218d894e0dccaaaaa0cbe43b500c293aa13ead307ed8717f49"
+    }
   }
 ]

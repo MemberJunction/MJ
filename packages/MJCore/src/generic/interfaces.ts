@@ -5,8 +5,9 @@ import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { RunQueryParams } from "./runQuery";
+import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
@@ -85,40 +86,84 @@ export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
  */
 export class PotentialDuplicate extends CompositeKey {
     ProbabilityScore: number;
+    /** Full vector metadata snapshot from the vector DB (Name, Description, EntityIcon, etc.) */
+    VectorMetadata?: Record<string, string>;
+}
+
+/**
+ * Configuration options for duplicate detection behavior.
+ * Controls retrieval, scoring, hybrid search, and reranking parameters.
+ */
+export interface DuplicateDetectionOptions {
+    /** ID of an existing Duplicate Run record to continue */
+    DuplicateRunID?: string;
+    /** Number of nearest neighbors to retrieve per record (default: 5) */
+    TopK?: number;
+    /** Enable post-retrieval reranking via BaseReranker (default: false) */
+    ReRankingEnabled?: boolean;
+    /** AI Model ID for the reranker; if omitted, uses default reranker */
+    ReRankingModelID?: string;
+    /** Max candidates to send to reranker per record (default: all retrieved) */
+    ReRankingTopK?: number;
+    /** Fusion method when combining vector + keyword results (default: 'rrf') */
+    FusionMethod?: 'rrf' | 'weighted';
+    /** Weight for keyword search in hybrid mode: 0.0 = pure vector, 1.0 = pure keyword (default: 0.3) */
+    KeywordSearchWeight?: number;
+    /** Enable incremental mode — only check records not in a completed prior run (default: false) */
+    IncrementalOnly?: boolean;
+    /**
+     * Re-vectorize records before detection (default: false).
+     * When false, assumes vectors already exist in the index from a prior sync.
+     * Set to true to force a fresh vectorization pass before running detection.
+     */
+    Revectorize?: boolean;
+    /** Progress callback invoked at natural milestones during detection */
+    OnProgress?: (progress: DuplicateDetectionProgress) => void;
+    /**
+     * Override the entity document's PotentialMatchThreshold for this run.
+     * Value between 0 and 1 (e.g., 0.30 = 30%). If omitted, uses the entity document's value.
+     */
+    PotentialMatchThreshold?: number;
+    /**
+     * Override the entity document's AbsoluteMatchThreshold for this run.
+     * Value between 0 and 1. If omitted, uses the entity document's value.
+     */
+    AbsoluteMatchThreshold?: number;
+}
+
+/**
+ * Progress information emitted during long-running duplicate detection operations.
+ */
+export interface DuplicateDetectionProgress {
+    Phase: 'Vectorizing' | 'Loading' | 'Embedding' | 'Querying' | 'Matching' | 'Merging';
+    TotalRecords: number;
+    ProcessedRecords: number;
+    MatchesFound: number;
+    CurrentRecordID?: string;
+    ElapsedMs: number;
 }
 
 /**
  * Request parameters for finding potential duplicate records.
- * Supports various matching strategies including list-based and document-based comparisons.
- * Can use either a pre-defined list or entity document for duplicate detection.
+ * Supports list-based batch detection and single-record checks.
  */
 export class PotentialDuplicateRequest {
-    /**
-    * The ID of the entity the record belongs to
-    **/
+    /** The ID of the entity the record belongs to */
     EntityID: string;
-    /**
-    * The ID of the List entity to use
-    **/
-    ListID: string;
-    /**
-     * The Primary Key values of each record
-     * we're checking for duplicates
-     */
-    RecordIDs: CompositeKey[]; 
-    /**
-    * The ID of the entity document to use
-    **/
+    /** The ID of the List entity to use for batch detection (optional — if omitted, records are loaded directly from the entity) */
+    ListID?: string;
+    /** The Primary Key values of each record being checked for duplicates */
+    RecordIDs: CompositeKey[];
+    /** The ID of the entity document defining the vectorization template */
     EntityDocumentID?: string;
-    /**
-    * The minimum score in order to consider a record a potential duplicate
-    **/
+    /** Optional saved view ID — run this view to determine which records to check */
+    ViewID?: string;
+    /** Optional SQL filter applied to the entity to determine which records to check */
+    ExtraFilter?: string;
+    /** Minimum score to consider a record a potential duplicate */
     ProbabilityScore?: number;
-
-    /**
-    * Additional options to pass to the provider
-    **/
-    Options?: any;
+    /** Detection options controlling retrieval, scoring, and behavior */
+    Options?: DuplicateDetectionOptions;
 }
 
 /**
@@ -159,13 +204,58 @@ export class PotentialDuplicateResponse {
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
+    Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>
 
-    Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>  
+    Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>
 
     Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean>
 
     GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]>
+
+    /**
+     * Discovers which IS-A child entity, if any, has a record with the given primary key.
+     * Used by BaseEntity.InitializeChildEntity() after loading a record to find the
+     * most-derived child type. Implementations should execute a single UNION ALL query
+     * across all child entity tables for efficiency.
+     *
+     * @param entityInfo The parent entity's EntityInfo (to find its child entity types)
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user for server-side operations
+     * @returns The child entity name if found, or null if no child record exists
+     */
+    FindISAChildEntity?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string } | null>;
+
+    /**
+     * Discovers ALL IS-A child entities that have records with the given primary key.
+     * Used for overlapping subtype parents (AllowMultipleSubtypes = true) where multiple
+     * children can coexist. Same UNION ALL query as FindISAChildEntity, but returns all matches.
+     *
+     * @param entityInfo The parent entity's EntityInfo (to find its child entity types)
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user for server-side operations
+     * @returns Array of child entity names found (empty if none)
+     */
+    FindISAChildEntities?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string }[]>;
+
+    /**
+     * Begin an independent provider-level transaction for IS-A chain orchestration.
+     * Returns a provider-specific transaction object (e.g., sql.Transaction for SQLServer).
+     * Separate from the provider's internal transaction management (TransactionGroup system).
+     * Optional — client-side providers (GraphQL) do not implement this.
+     */
+    BeginISATransaction?(): Promise<unknown>;
+
+    /**
+     * Commit an IS-A chain transaction.
+     * @param txn The transaction object returned from BeginISATransaction()
+     */
+    CommitISATransaction?(txn: unknown): Promise<void>;
+
+    /**
+     * Rollback an IS-A chain transaction.
+     * @param txn The transaction object returned from BeginISATransaction()
+     */
+    RollbackISATransaction?(txn: unknown): Promise<void>;
 }
 
 /**
@@ -202,11 +292,27 @@ export class EntitySaveOptions {
     /**
      * When set to true, the entity will skip the asynchronous ValidateAsync() method during save.
      * This is an advanced setting and should only be used when you are sure the async validation is not needed.
-     * The default behavior is to run the async validation and the default value is undefined. 
+     * The default behavior is to run the async validation and the default value is undefined.
      * Also, you can set an Entity level default in a BaseEntity subclass by overriding the DefaultSkipAsyncValidation() getter property.
      * @see BaseEntity.DefaultSkipAsyncValidation
      */
     SkipAsyncValidation?: boolean = undefined;
+
+    /**
+     * When true, this entity is being saved as part of an IS-A parent chain
+     * initiated by a child entity. Provider behavior:
+     * - GraphQLDataProvider: full ORM pipeline runs, skip network call
+     * - SQLServerDataProvider: real save using shared ProviderTransaction
+     */
+    IsParentEntitySave?: boolean = false;
+
+    /**
+     * The entity name of the child that initiated this parent save in an IS-A chain.
+     * Used by server-side providers to skip the active branch when propagating
+     * Record Change entries to sibling branches of overlapping parents.
+     * Only set when IsParentEntitySave is true.
+     */
+    ISAActiveChildEntityName?: string;
 }
 
 /**
@@ -230,6 +336,13 @@ export class EntityDeleteOptions {
      * Subclasses can also override the Delete() method to provide custom logic that will be invoked when ReplayOnly is set to true
      */
     ReplayOnly?: boolean = false;
+
+    /**
+     * When true, this entity is being deleted as part of an IS-A parent chain
+     * initiated by a child entity. The child deletes itself first (FK constraint),
+     * then cascades deletion to its parent.
+     */
+    IsParentEntityDelete?: boolean = false;
 }
 
 /**
@@ -311,6 +424,43 @@ export interface ILocalStorageProvider {
 }
 
 /**
+ * Provider interface for filesystem operations.
+ * Enables environment-specific file I/O without requiring `eval("require('fs')")` or other
+ * bundler-unfriendly patterns. Server-side providers (e.g. SQLServerDataProvider) supply a
+ * Node.js implementation; browser-side providers return null from IMetadataProvider.FileSystemProvider.
+ *
+ * Follows the same pattern as ILocalStorageProvider — defined in core, implemented per environment.
+ */
+export interface IFileSystemProvider {
+    /**
+     * Appends content to a file, creating it if it doesn't exist.
+     * @param filePath - Full path to the file
+     * @param content - Content to append
+     */
+    AppendToFile(filePath: string, content: string): Promise<void>;
+
+    /**
+     * Writes content to a file, overwriting if it exists.
+     * @param filePath - Full path to the file
+     * @param content - Content to write
+     */
+    WriteFile(filePath: string, content: string): Promise<void>;
+
+    /**
+     * Reads content from a file.
+     * @param filePath - Full path to the file
+     * @returns File content or null if file doesn't exist
+     */
+    ReadFile(filePath: string): Promise<string | null>;
+
+    /**
+     * Checks if a file exists.
+     * @param filePath - Full path to the file
+     */
+    FileExists(filePath: string): Promise<boolean>;
+}
+
+/**
  * Core interface for metadata providers in MemberJunction.
  * Provides access to all system metadata including entities, applications, security, and queries.
  * This is the primary interface for accessing MemberJunction's metadata layer.
@@ -324,6 +474,18 @@ export interface IMetadataProvider {
     Config(configData: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean>
 
     get Entities(): EntityInfo[]
+
+    /**
+     * O(1) entity lookup by name (case-insensitive, trimmed).
+     * Falls back to linear search if the internal Map hasn't been built yet.
+     */
+    EntityByName(entityName: string): EntityInfo | undefined
+
+    /**
+     * O(1) entity lookup by ID (UUID-normalized).
+     * Falls back to linear search if the internal Map hasn't been built yet.
+     */
+    EntityByID(entityID: string): EntityInfo | undefined
 
     get Applications(): ApplicationInfo[]
 
@@ -348,6 +510,12 @@ export interface IMetadataProvider {
     get QueryEntities(): QueryEntityInfo[]
 
     get QueryParameters(): QueryParameterInfo[]
+
+    get QueryDependencies(): QueryDependencyInfo[]
+
+    get SQLDialects(): SQLDialectInfo[]
+
+    get QuerySQLs(): QuerySQLInfo[]
 
     get Libraries(): LibraryInfo[]
 
@@ -422,21 +590,44 @@ export interface IMetadataProvider {
 
 
     /**
-     * Returns the Name of the specific recordId for a given entityName. This is done by 
-     * looking for the IsNameField within the EntityFields collection for a given entity. 
-     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
-     * @param entityName 
-     * @param CompositeKey 
+     * Returns the Name of the specific recordId for a given entityName. This is done by
+     * looking for the IsNameField within the EntityFields collection for a given entity.
+     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned
+     * @param entityName
+     * @param CompositeKey
+     * @param contextUser - optional user context for permissions
+     * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns the name of the record
      */
-    GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>
+    GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh?: boolean): Promise<string>
 
     /**
      * Returns one or more record names using the same logic as GetEntityRecordName, but for multiple records at once - more efficient to use this method if you need to get multiple record names at once
-     * @param info 
+     * @param info
+     * @param contextUser - optional user context for permissions
+     * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns an array of EntityRecordNameResult objects
      */
-    GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>
+    GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh?: boolean): Promise<EntityRecordNameResult[]>
+
+    /**
+     * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
+     * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param loadIfNeeded - If set to true, will load from database if not already cached
+     * @returns The cached display name, or undefined if not in cache
+     */
+    GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined>;
+
+    /**
+     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
+     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param recordName - The display name to cache
+     */
+    SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void
 
     GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<boolean>
 
@@ -452,6 +643,13 @@ export interface IMetadataProvider {
 
     get LocalStorageProvider(): ILocalStorageProvider
 
+    /**
+     * Returns the filesystem provider for the current environment, or null if filesystem
+     * operations are not available (e.g. in browser environments).
+     * Server-side providers should return a NodeFileSystemProvider instance.
+     */
+    get FileSystemProvider(): IFileSystemProvider | null
+
     RefreshRemoteMetadataTimestamps(providerToUse?: IMetadataProvider): Promise<boolean>
 
     SaveLocalMetadataToStorage(): Promise<void>
@@ -459,11 +657,16 @@ export interface IMetadataProvider {
     RemoveLocalMetadataFromStorage(): Promise<void>
 
     /**
-     * Always retrieves data from the server - this method does NOT check cache. To use cached local values if available, call GetAndCacheDatasetByName() instead
-     * @param datasetName 
-     * @param itemFilters 
+     * Retrieves a dataset by name. When `forceRefresh` is true, bypasses any in-memory or local cache
+     * and fetches directly from the database. When false (default), server-side providers may serve
+     * from LocalCacheManager if `TrustLocalCacheCompletely` is true.
+     * @param datasetName
+     * @param itemFilters
+     * @param contextUser
+     * @param providerToUse
+     * @param forceRefresh When true, bypasses all caching and fetches fresh data from the database
      */
-    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType>;
+    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, forceRefresh?: boolean): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
@@ -541,6 +744,25 @@ export interface IMetadataProvider {
 }
 
 /**
+ * Single aggregate result value - can be a number, string, Date, boolean, or null
+ */
+export type AggregateValue = number | string | Date | boolean | null;
+
+/**
+ * Result of a single aggregate expression calculation
+ */
+export interface AggregateResult {
+    /** The expression that was calculated */
+    expression: string;
+    /** The alias (or expression if no alias provided) */
+    alias: string;
+    /** The calculated value */
+    value: AggregateValue;
+    /** If calculation failed, the error message */
+    error?: string;
+}
+
+/**
  * Result of a RunView() execution.
  * Contains the query results along with execution metadata like timing,
  * row counts, and error information.
@@ -576,6 +798,35 @@ export type RunViewResult<T = any> = {
      * If Success is false, this will contain a message describing the error condition.
      */
     ErrorMessage: string;
+
+    /**
+     * Results of aggregate calculations, in same order as input Aggregates array.
+     * Only present if Aggregates were requested in RunViewParams.
+     */
+    AggregateResults?: AggregateResult[];
+
+    /**
+     * Execution time for aggregate query specifically (in milliseconds).
+     * Only present if Aggregates were requested.
+     */
+    AggregateExecutionTime?: number;
+
+    /**
+     * If an `OnDataChanged` callback was provided in {@link RunViewParams}, this function
+     * unregisters that callback. Call this during cleanup (e.g., Angular `ngOnDestroy`,
+     * React effect cleanup) to prevent memory leaks.
+     *
+     * For long-lived callers like engines, this is typically not needed — the callback
+     * persists for the process lifetime.
+     *
+     * @example
+     * ```typescript
+     * const result = await rv.RunView({ EntityName: 'Users', OnDataChanged: (e) => { ... } });
+     * // Later:
+     * result.Unsubscribe?.();
+     * ```
+     */
+    Unsubscribe?: () => void;
 }
 
 /**
@@ -598,6 +849,118 @@ export interface IRunViewProvider {
      * @returns Response containing status and fresh data only for stale caches
      */
     RunViewsWithCacheCheck?<T = unknown>(params: RunViewWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunViewsWithCacheCheckResponse<T>>
+
+    /**
+     * Performs a full-text search across all entities that have FullTextSearchEnabled=true in their metadata.
+     * Uses the database-native full-text search capabilities (SQL Server FREETEXT via CodeGen-generated functions,
+     * PostgreSQL tsvector/GIN indexes, etc.) through the existing RunView + UserSearchString infrastructure.
+     *
+     * @param params Search parameters including the search text and optional entity name filter
+     * @param contextUser Optional user context for permissions and row-level security
+     * @returns Array of search results grouped by entity, with title, snippet, and relevance score
+     *
+     * @see {@link FullTextSearchParams} for parameter details
+     * @see {@link FullTextSearchResult} for result structure
+     * @see /packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md for comprehensive documentation
+     */
+    FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult>
+}
+
+// ============================================================================
+// FULL-TEXT SEARCH TYPES
+// ============================================================================
+
+/**
+ * Parameters for the FullTextSearch method.
+ */
+export type FullTextSearchParams = {
+    /**
+     * The search text to find across entities. This is passed as UserSearchString to RunView,
+     * which routes it through the database-native full-text search infrastructure
+     * (SQL Server FREETEXT functions or PostgreSQL tsvector queries).
+     */
+    SearchText: string;
+
+    /**
+     * Optional list of entity names to restrict the search to. Each entity in this list
+     * MUST have FullTextSearchEnabled=true — entities without FTS enabled will be silently skipped.
+     * If not provided, ALL entities with FullTextSearchEnabled=true are searched.
+     */
+    EntityNames?: string[];
+
+    /**
+     * Maximum number of rows to return per entity. Defaults to 10 if not specified.
+     * Helps control result set size when searching across many entities.
+     */
+    MaxRowsPerEntity?: number;
+}
+
+/**
+ * A single matched record from a full-text search.
+ */
+export type FullTextSearchResultItem = {
+    /**
+     * The name of the entity this result came from (e.g., "MJ: AI Models")
+     */
+    EntityName: string;
+
+    /**
+     * The primary key value of the matched record
+     */
+    RecordID: string;
+
+    /**
+     * The display title for this result, sourced from the entity's best "name" field
+     * (Name, Title, Subject, etc.)
+     */
+    Title: string;
+
+    /**
+     * A text snippet providing context for the match, sourced from the entity's best
+     * "description" field (Description, Summary, Body, etc.). Truncated to ~200 chars.
+     */
+    Snippet: string;
+
+    /**
+     * Relevance score for ranking. Uses rank-based scoring (1/(rank+1)) to be
+     * compatible with Reciprocal Rank Fusion (RRF) when combined with vector search results.
+     */
+    Score: number;
+}
+
+/**
+ * Result of a FullTextSearch operation across multiple entities.
+ */
+export type FullTextSearchResult = {
+    /**
+     * Whether the search completed successfully
+     */
+    Success: boolean;
+
+    /**
+     * Error message if Success is false
+     */
+    ErrorMessage?: string;
+
+    /**
+     * All matched records across all searched entities, ordered by relevance score descending
+     */
+    Results: FullTextSearchResultItem[];
+
+    /**
+     * Total number of results found
+     */
+    TotalCount: number;
+
+    /**
+     * Number of entities that were searched
+     */
+    EntitiesSearched: number;
+
+    /**
+     * Time taken to execute the search in milliseconds
+     */
+    ElapsedMs: number;
 }
 
 // ============================================================================
@@ -640,8 +1003,26 @@ export type RunViewWithCacheCheckParams = {
 }
 
 /**
+ * Differential update data containing only changes since the client's cached state.
+ * Used to efficiently update client caches without transferring the entire dataset.
+ */
+export type DifferentialData<T = unknown> = {
+    /**
+     * Records that have been created or updated since the client's maxUpdatedAt.
+     * These should be merged into the client's cache, replacing any existing records with the same primary key.
+     */
+    updatedRows: T[];
+    /**
+     * Primary key values (as concatenated strings) of records that have been deleted.
+     * Format uses CompositeKey.ToConcatenatedString() - e.g., "ID|abc123" or "Field1|val1||Field2|val2"
+     * These should be removed from the client's cache.
+     */
+    deletedRecordIDs: string[];
+}
+
+/**
  * Result for a single RunView with cache check.
- * The server returns either 'current' (cache is valid) or 'stale' (with fresh data).
+ * The server returns 'current' (cache valid), 'differential' (partial update), or 'stale' (full refresh needed).
  */
 export type RunViewWithCacheCheckResult<T = unknown> = {
     /**
@@ -650,26 +1031,38 @@ export type RunViewWithCacheCheckResult<T = unknown> = {
     viewIndex: number;
     /**
      * 'current' means the client's cache is still valid - no data returned
-     * 'stale' means the cache is outdated - fresh data is included in results
+     * 'differential' means only changes are returned - client should merge with existing cache
+     * 'stale' means full refresh is needed - fresh data is included in results (fallback when entity doesn't track changes)
      * 'error' means there was an error checking/executing the view
      */
-    status: 'current' | 'stale' | 'error';
+    status: 'current' | 'differential' | 'stale' | 'error';
     /**
-     * The fresh results - only populated when status is 'stale'
+     * The fresh results - only populated when status is 'stale' (full refresh)
      */
     results?: T[];
     /**
-     * The maximum __mj_UpdatedAt from the results - only when status is 'stale'
+     * Differential update data - only populated when status is 'differential'
+     * Contains updated/created rows and deleted record IDs since client's maxUpdatedAt
+     */
+    differentialData?: DifferentialData<T>;
+    /**
+     * The maximum __mj_UpdatedAt from the results - populated when status is 'stale' or 'differential'
      */
     maxUpdatedAt?: string;
     /**
-     * The row count of the results - only when status is 'stale'
+     * The row count of the results - populated when status is 'stale' or 'differential'
+     * For 'differential', this is the NEW total row count after applying the delta
      */
     rowCount?: number;
     /**
      * Error message if status is 'error'
      */
     errorMessage?: string;
+    /**
+     * Aggregate results - populated when status is 'stale' or 'differential' and aggregates were requested.
+     * For 'differential', aggregates are always re-computed fresh (can't be incrementally updated).
+     */
+    aggregateResults?: AggregateResult[];
 }
 
 /**
@@ -705,6 +1098,16 @@ export type RunQueryResult = {
      * Only differs from RowCount when StartRow or MaxRows are used.
      */
     TotalRowCount: number;
+    /**
+     * The page number returned (1-based). Derived from StartRow and MaxRows.
+     * Undefined when paging is not active.
+     */
+    PageNumber?: number;
+    /**
+     * The page size used for this result.
+     * Undefined when paging is not active.
+     */
+    PageSize?: number;
     ExecutionTime: number;
     ErrorMessage: string;
     /**
@@ -850,6 +1253,16 @@ export interface IRunQueryProvider {
      * @returns Response containing status and fresh data only for stale caches
      */
     RunQueriesWithCacheCheck?<T = unknown>(params: RunQueryWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunQueriesWithCacheCheckResponse<T>>
+
+    /**
+     * Executes a query from a `QueryExecutionSpec` — the lower-layer interface-based entry point.
+     * Runs the full pipeline: composition resolution → Nunjucks template processing → SQL execution.
+     * Used for both saved queries (upper layer maps QueryInfo to spec) and transient test queries.
+     * @param spec - The execution spec describing the query, parameters, and inline dependencies
+     * @param contextUser - Optional user context for permissions (required server-side)
+     * @returns Query results including data rows and execution metadata
+     */
+    ExecuteQueryFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult>
 }
 
 /**
@@ -968,6 +1381,9 @@ export class AllMetadata {
     AllQueryPermissions: QueryPermissionInfo[] = [];
     AllQueryEntities: QueryEntityInfo[] = [];
     AllQueryParameters: QueryParameterInfo[] = [];
+    AllQueryDependencies: QueryDependencyInfo[] = [];
+    AllSQLDialects: SQLDialectInfo[] = [];
+    AllQuerySQLs: QuerySQLInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];
     AllExplorerNavigationItems: ExplorerNavigationItem[] = [];

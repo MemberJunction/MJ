@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "GetConversationArtifactsMap",
-      "CategoryID": "@lookup:Query Categories.Name=Conversations",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Conversations",
       "UserQuestion": "What artifacts are linked to messages in this conversation?",
       "Description": "Returns a lightweight map of all artifacts linked to conversation messages, without loading full content. Optimized for quick display with lazy-loading support.",
       "SQL": "@file:SQL/get-conversation-artifacts-map.sql",
@@ -16,16 +16,8 @@
       "ID": "EE272535-9D1D-4E4B-8613-1332CB564501"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:36.338Z",
-      "checksum": "9d563f277c23c8b258bca96ecff8ff81521ecc12e09911562769c164cde26fa5"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Query Categories.Name=Conversations",
-        "resolved": "5FB6FAFF-8904-490D-9BEE-CA1FF906BD44"
-      }
-    ]
+      "lastModified": "2026-02-13T21:09:25.606Z",
+      "checksum": "d789fc92b9019c355c728224d7427d55601208b637024d6f88d1b8e3cbbaf01d"
+    }
   }
 ]

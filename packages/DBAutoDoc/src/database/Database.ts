@@ -182,37 +182,54 @@ export class DataSampler {
     tableName: string,
     columns: ColumnDefinition[]
   ): Promise<void> {
+    let columnErrors = 0;
+
     for (const column of columns) {
-      const stats = await this.driver.getColumnStatistics(
-        schemaName,
-        tableName,
-        column.name,
-        column.dataType,
-        this.config.cardinalityThreshold,
-        this.config.sampleSize
-      );
+      try {
+        const stats = await this.driver.getColumnStatistics(
+          schemaName,
+          tableName,
+          column.name,
+          column.dataType,
+          this.config.cardinalityThreshold,
+          this.config.sampleSize
+        );
 
-      // Convert AutoDocColumnStatistics to ColumnStatistics
-      column.statistics = {
-        totalRows: stats.totalRows,
-        distinctCount: stats.distinctCount,
-        uniquenessRatio: stats.uniquenessRatio,
-        nullCount: stats.nullCount,
-        nullPercentage: stats.nullPercentage,
-        sampleValues: stats.sampleValues,
-        min: stats.min,
-        max: stats.max,
-        avg: stats.avg,
-        stdDev: stats.stdDev,
-        avgLength: stats.avgLength,
-        maxLength: stats.maxLength,
-        minLength: stats.minLength
-      };
+        // Convert AutoDocColumnStatistics to ColumnStatistics
+        column.statistics = {
+          totalRows: stats.totalRows,
+          distinctCount: stats.distinctCount,
+          uniquenessRatio: stats.uniquenessRatio,
+          nullCount: stats.nullCount,
+          nullPercentage: stats.nullPercentage,
+          sampleValues: stats.sampleValues,
+          min: stats.min,
+          max: stats.max,
+          avg: stats.avg,
+          stdDev: stats.stdDev,
+          avgLength: stats.avgLength,
+          maxLength: stats.maxLength,
+          minLength: stats.minLength
+        };
 
-      // Set possible values if low cardinality
-      if (stats.valueDistribution && stats.valueDistribution.length > 0) {
-        column.possibleValues = stats.valueDistribution.map(v => v.value);
+        // Set possible values if low cardinality
+        if (stats.valueDistribution && stats.valueDistribution.length > 0) {
+          column.possibleValues = stats.valueDistribution.map(v => v.value);
+        }
+      } catch (error) {
+        columnErrors++;
+        console.error(
+          `  Failed to get statistics for ${schemaName}.${tableName}.${column.name}: ${(error as Error).message}`
+        );
+        // Leave column without statistics - table analysis will continue
+        // AI can still generate descriptions based on column name and type
       }
+    }
+
+    if (columnErrors > 0) {
+      console.warn(
+        `  Warning: ${columnErrors} column(s) in ${schemaName}.${tableName} failed statistics gathering`
+      );
     }
   }
 }

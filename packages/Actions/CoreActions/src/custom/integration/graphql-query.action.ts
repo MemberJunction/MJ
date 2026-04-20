@@ -241,10 +241,3 @@ export class GraphQLQueryAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the GraphQLQueryAction class is included in the bundle
- */
-export function LoadGraphQLQueryAction() {
-    // Stub function to prevent tree shaking
-}

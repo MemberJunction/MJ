@@ -10,7 +10,7 @@ import { CLIConfig } from '../types';
 
 // Load environment variables BEFORE loading config
 // This ensures process.env is populated when mj.config.cjs is evaluated
-dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true, quiet: true });
 
 export interface MJConfig {
     // Database settings
@@ -69,7 +69,7 @@ export async function loadMJConfig(): Promise<MJConfig> {
         throw new Error(`No mj.config.cjs configuration found. Ensure you're running from the MJ repository root.`);
     }
 
-    cachedConfig = result.config;
+    cachedConfig = result.config as MJConfig;
     return cachedConfig;
 }
 

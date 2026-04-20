@@ -1,27 +1,28 @@
-import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, ElementRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Component, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata } from '@memberjunction/core';
-import { AIAgentRunEntityExtended, AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentRunEntityExtended, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { TimelineItem, AIAgentRunTimelineComponent } from './ai-agent-run-timeline.component';
-import { AIAgentRunFormComponent } from '../../generated/Entities/AIAgentRun/aiagentrun.form.component';
+import { MJAIAgentRunFormComponent } from '../../generated/Entities/MJAIAgentRun/mjaiagentrun.form.component';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component';
 import { AIAgentRunVisualizationComponent } from './ai-agent-run-visualization.component';
 import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.service';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
 @Component({
+  standalone: false,
   selector: 'mj-ai-agent-run-form',
   templateUrl: './ai-agent-run.component.html',
   styleUrls: ['./ai-agent-run.component.css']
 })
-export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent implements OnInit, OnDestroy {
-  public record!: AIAgentRunEntityExtended;
+export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent implements OnInit, OnDestroy {
+  public record!: MJAIAgentRunEntityExtended;
   
   private destroy$ = new Subject<void>();
   
@@ -34,7 +35,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   analyticsLoaded = false;
   visualizationLoaded = false;
   
-  agent: AIAgentEntityExtended | null = null;
+  agent: MJAIAgentEntityExtended | null = null;
   
   // Cost metrics using shared service
   costMetrics: AgentRunCostMetrics | null = null;
@@ -52,20 +53,13 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   @ViewChild(AIAgentRunAnalyticsComponent) analyticsComponent?: AIAgentRunAnalyticsComponent;
   @ViewChild(AIAgentRunVisualizationComponent) visualizationComponent?: AIAgentRunVisualizationComponent;
 
-  // Instance of data helper per component
-  public dataHelper: AIAgentRunDataHelper;
+  // Field injections
+  private navigationService = inject(NavigationService);
+  private costService = inject(AIAgentRunCostService);
+  private appManager = inject(ApplicationManager);
 
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    protected router: Router,
-    route: ActivatedRoute,
-    cdr: ChangeDetectorRef,
-    private costService: AIAgentRunCostService
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-    this.dataHelper = new AIAgentRunDataHelper();
-  }
+  // Instance of data helper per component
+  public dataHelper = new AIAgentRunDataHelper();
   
   async ngOnInit() {
     await super.ngOnInit();
@@ -94,9 +88,10 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
     
     try {
       const md = new Metadata();
-      const agent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+      const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
       if (agent && await agent.Load(this.record.AgentID)) {
         this.agent = agent;
+        this.cdr.detectChanges();
       }
     } catch (error) {
       console.error('Error loading agent:', error);
@@ -171,7 +166,7 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   }
   
   navigateToActionLog(logId: string) {
-    SharedService.Instance.OpenEntityRecord("Action Execution Logs", CompositeKey.FromID(logId));
+    SharedService.Instance.OpenEntityRecord("MJ: Action Execution Logs", CompositeKey.FromID(logId));
   }
   
   openEntityRecord(entityName: string, recordId: string | null) {
@@ -182,6 +177,27 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
   
   navigateToEntityRecord(event: { entityName: string; recordId: string }) {
     SharedService.Instance.OpenEntityRecord(event.entityName, CompositeKey.FromID(event.recordId));
+  }
+
+  /**
+   * Navigate to the conversation in the Chat application
+   */
+  navigateToConversation() {
+    if (!this.record?.ConversationID) return;
+
+    // Find the Chat app
+    const chatApp = this.appManager.GetAllApps().find(app => app.Name === 'Chat');
+    if (!chatApp) {
+      console.warn('Chat application not found');
+      return;
+    }
+
+    // Navigate to the Conversations nav item with the conversationId parameter
+    this.navigationService.OpenNavItemByName(
+      'Conversations',
+      { conversationId: this.record.ConversationID },
+      chatApp.ID
+    );
   }
   
   refreshData() {
@@ -613,10 +629,4 @@ export class AIAgentRunFormComponentExtended extends AIAgentRunFormComponent imp
       return null;
     }
   }
-}
-
-
-// Loader function for AIAgentRunFormComponent
-export function LoadAIAgentRunFormComponent() {
-    // This function is called to ensure the form is loaded
 }

@@ -23,21 +23,29 @@
     
     <div class="header-controls">
       <div class="view-toggle">
-        <button 
-          type="button" 
+        <button
+          type="button"
           class="view-btn"
           [class.active]="viewMode === 'grid'"
           (click)="setViewMode('grid')"
           title="Grid View">
           <i class="fa-solid fa-grip"></i>
         </button>
-        <button 
-          type="button" 
+        <button
+          type="button"
           class="view-btn"
           [class.active]="viewMode === 'list'"
           (click)="setViewMode('list')"
           title="List View">
           <i class="fa-solid fa-list"></i>
+        </button>
+        <button
+          type="button"
+          class="view-btn"
+          [class.active]="viewMode === 'tree'"
+          (click)="setViewMode('tree')"
+          title="Category Tree View">
+          <i class="fa-solid fa-folder-tree"></i>
         </button>
       </div>
       
@@ -54,19 +62,11 @@
 
   <!-- Main Content with Splitter -->
   <div class="main-content" >
-    <kendo-splitter 
-      class="main-splitter"
-      orientation="horizontal"
-      (layoutChange)="onMainSplitterChange($event)"
-      >
-      
+    <as-split direction="horizontal" class="main-splitter">
+
       <!-- Filter Panel (Left) -->
-      <kendo-splitter-pane 
-        [size]="filterPanelVisible ? '320px' : '0px'"
-        [collapsible]="false"
-        [resizable]="filterPanelVisible"
-        [scrollable]="false"
-        [hidden]="!filterPanelVisible">
+      @if (filterPanelVisible) {
+      <as-split-area [size]="20" [minSize]="15" [maxSize]="30">
         <mj-agent-filter-panel
           [agents]="agents"
           [filteredAgents]="filteredAgents"
@@ -76,12 +76,11 @@
           (resetFilters)="onResetFilters()"
           (closePanel)="toggleFilterPanel()">
         </mj-agent-filter-panel>
-      </kendo-splitter-pane>
-      
+      </as-split-area>
+      }
+
       <!-- Agents List Panel -->
-      <kendo-splitter-pane
-        [resizable]="true"
-        [scrollable]="true">
+      <as-split-area>
         <div class="agents-content">
           <!-- Loading State -->
           @if (isLoading) {
@@ -122,22 +121,16 @@
                             }
                           </div>
                           <div class="agent-details">
-                            <h4 class="agent-name">{{ agent.Name }}</h4>
+                            <h4 class="agent-name" [innerHTML]="agent.Name | highlightSearch:currentFilters.searchTerm"></h4>
                             <div class="agent-meta">
-                              <span class="meta-item">
-                                <i class="fa-solid fa-microchip"></i>
-                                {{ agent.ExecutionMode }}
+                              <span class="meta-item type-badge">
+                                <i class="fa-solid fa-tag"></i>
+                                {{ getAgentTypeName(agent) }}
                               </span>
                               @if (agent.Status) {
                                 <span class="meta-item" [class]="'status-' + agent.Status.toLowerCase()">
                                   <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
                                   {{ agent.Status }}
-                                </span>
-                              }
-                              @if (agent.ExposeAsAction) {
-                                <span class="meta-item">
-                                  <i class="fa-solid fa-bolt"></i>
-                                  Exposed
                                 </span>
                               }
                             </div>
@@ -151,7 +144,7 @@
                       <!-- Card Body -->
                       <div class="card-body">
                         @if (agent.Description) {
-                          <p class="agent-description">{{ agent.Description }}</p>
+                          <p class="agent-description" [innerHTML]="agent.Description | highlightSearch:currentFilters.searchTerm"></p>
                         } @else {
                           <p class="agent-description text-muted">No description provided</p>
                         }
@@ -210,6 +203,25 @@
                 </div>
               }
               
+              <!-- Tree View (mj-tree component) -->
+              @if (viewMode === 'tree') {
+                <div class="agents-tree">
+                  <mj-tree
+                    [BranchConfig]="CategoryBranchConfig"
+                    [LeafConfig]="AgentLeafConfig"
+                    [SelectionMode]="'single'"
+                    [SelectableTypes]="'leaf'"
+                    [ShowDescriptions]="true"
+                    [ShowBadges]="true"
+                    [ShowExpandCollapseAll]="true"
+                    [EmptyMessage]="'No agents found'"
+                    [EmptyIcon]="'fa-solid fa-robot'"
+                    (AfterNodeClick)="onTreeNodeClick($event)"
+                    (AfterNodeDoubleClick)="onTreeNodeDoubleClick($event)">
+                  </mj-tree>
+                </div>
+              }
+
               <!-- List View -->
               @if (viewMode === 'list') {
                 <div class="agents-list">
@@ -224,19 +236,12 @@
                             <i class="fa-solid fa-chevron-up sort-icon"></i>
                           </span>
                         </th>
+                        <th>Type</th>
                         <th (click)="sortBy('Status')"
                             [class.sorted]="sortColumn === 'Status'"
                             [class.desc]="sortColumn === 'Status' && sortDirection === 'desc'">
                           <span class="sort-header">
                             Status
-                            <i class="fa-solid fa-chevron-up sort-icon"></i>
-                          </span>
-                        </th>
-                        <th (click)="sortBy('ExecutionMode')"
-                            [class.sorted]="sortColumn === 'ExecutionMode'"
-                            [class.desc]="sortColumn === 'ExecutionMode' && sortDirection === 'desc'">
-                          <span class="sort-header">
-                            Execution Mode
                             <i class="fa-solid fa-chevron-up sort-icon"></i>
                           </span>
                         </th>
@@ -256,22 +261,21 @@
                                 }
                               </div>
                               <div>
-                                <div class="agent-name">{{ agent.Name }}</div>
+                                <div class="agent-name" [innerHTML]="agent.Name | highlightSearch:currentFilters.searchTerm"></div>
                                 @if (agent.Description) {
-                                  <div class="agent-description-small">{{ agent.Description }}</div>
+                                  <div class="agent-description-small" [innerHTML]="agent.Description | highlightSearch:currentFilters.searchTerm"></div>
                                 }
                               </div>
                             </div>
                           </td>
                           <td>
-                            <span class="status-badge" [class]="'status-' + (agent.Status || 'unknown').toLowerCase()">
-                              {{ agent.Status || 'Unknown' }}
+                            <span class="type-badge">
+                              {{ getAgentTypeName(agent) }}
                             </span>
                           </td>
                           <td>
-                            <span class="execution-mode">
-                              <i [class]="getExecutionModeIcon(agent.ExecutionMode)"></i>
-                              {{ agent.ExecutionMode }}
+                            <span class="status-badge" [class]="'status-' + (agent.Status || 'unknown').toLowerCase()">
+                              {{ agent.Status || 'Unknown' }}
                             </span>
                           </td>
                           <td>
@@ -305,8 +309,8 @@
             }
           }
         </div>
-      </kendo-splitter-pane>
-    </kendo-splitter>
+      </as-split-area>
+    </as-split>
   </div>
 
   <!-- Detail Panel Overlay -->
@@ -339,7 +343,7 @@
 
       <!-- Panel Content -->
       <div class="detail-panel-content">
-        <!-- Status Section -->
+        <!-- Status and Type Section -->
         <div class="detail-section">
           <div class="detail-badges">
             <span class="status-badge" [class]="'status-' + (selectedAgent.Status || 'unknown').toLowerCase()">

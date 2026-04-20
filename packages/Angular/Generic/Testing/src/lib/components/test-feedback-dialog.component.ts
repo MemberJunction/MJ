@@ -1,7 +1,6 @@
-import { Component, OnInit, Input } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { Metadata, UserInfo, RunView } from '@memberjunction/core';
-import { TestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 
 export interface TestFeedbackDialogData {
   testRunId: string;
@@ -9,96 +8,257 @@ export interface TestFeedbackDialogData {
   currentUser: UserInfo;
 }
 
+export interface TestFeedbackDialogResult {
+  success: boolean;
+  feedbackId?: string;
+}
+
 @Component({
+  standalone: false,
   selector: 'mj-test-feedback-dialog',
   template: `
-    <kendo-dialog
-      [title]="existingFeedback ? 'Update Test Feedback' : 'Provide Test Feedback'"
-      [width]="600"
-      [height]="680"
-      (close)="onCancel()">
-
-      <div class="feedback-dialog-content" *ngIf="!isLoading">
-        <div class="feedback-section">
-          <label class="feedback-label">Overall Rating</label>
-          <div class="star-rating">
-            <span *ngFor="let star of [1,2,3,4,5]"
-                  class="star"
-                  [class.selected]="star <= rating"
-                  [class.hover]="star <= hoverRating"
-                  (click)="setRating(star)"
-                  (mouseenter)="hoverRating = star"
-                  (mouseleave)="hoverRating = 0">
-              <i class="fas fa-star"></i>
-            </span>
-            <span class="rating-text" *ngIf="rating > 0">{{ rating }} / 5</span>
+    @if (visible) {
+      <div class="dialog-overlay" (click)="onOverlayClick($event)">
+        <div class="dialog-container" (click)="$event.stopPropagation()">
+          <div class="dialog-header">
+            <h2 class="dialog-title">Provide Test Feedback</h2>
+            <button type="button" class="dialog-close" (click)="onCancel()" [disabled]="isSaving">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+          <div class="dialog-body">
+            @if (!isLoading) {
+              <div class="feedback-dialog-content">
+                <div class="feedback-section">
+                  <label class="feedback-label">Overall Rating</label>
+                  <div class="rating-scale">
+                    <div class="rating-numbers">
+                      @for (num of ratingNumbers; track num) {
+                        <button
+                          type="button"
+                          class="rating-button"
+                          [class.selected]="num === rating"
+                          [class.hover]="num === hoverRating"
+                          [class.low]="num <= 3"
+                          [class.mid]="num >= 4 && num <= 6"
+                          [class.high]="num >= 7"
+                          (click)="setRating(num)"
+                          (mouseenter)="hoverRating = num"
+                          (mouseleave)="hoverRating = 0">
+                          {{ num }}
+                        </button>
+                      }
+                    </div>
+                    <div class="rating-labels">
+                      <span class="label-low">Poor</span>
+                      <span class="label-mid">Average</span>
+                      <span class="label-high">Excellent</span>
+                    </div>
+                    @if (rating > 0) {
+                      <div class="rating-description">
+                        <span class="rating-value">{{ rating }}</span> / 10
+                        <span class="rating-label">{{ getRatingLabel() }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+                <div class="feedback-section">
+                  <label class="feedback-label" for="correct">Was the result correct?</label>
+                  <div class="correctness-options">
+                    <label class="radio-option">
+                      <input type="radio" name="correct" [value]="true" [(ngModel)]="isCorrect">
+                      <span>Yes</span>
+                    </label>
+                    <label class="radio-option">
+                      <input type="radio" name="correct" [value]="false" [(ngModel)]="isCorrect">
+                      <span>No</span>
+                    </label>
+                    <label class="radio-option">
+                      <input type="radio" name="correct" [value]="null" [(ngModel)]="isCorrect">
+                      <span>Not Sure</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="feedback-section">
+                  <label class="feedback-label" for="comments">Correction Summary / Comments <span class="optional-hint">(optional)</span></label>
+                  <textarea
+                    id="comments"
+                    class="feedback-textarea"
+                    [(ngModel)]="comments"
+                    placeholder="Provide detailed feedback, corrections, or comments about this test execution..."
+                  rows="6"></textarea>
+                </div>
+                @if (isSaving) {
+                  <div class="feedback-info">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Saving feedback...</span>
+                  </div>
+                }
+                @if (errorMessage) {
+                  <div class="feedback-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>{{ errorMessage }}</span>
+                  </div>
+                }
+              </div>
+            }
+            @if (isLoading) {
+              <div class="feedback-dialog-content">
+                <div class="feedback-info">
+                  <i class="fas fa-spinner fa-spin"></i>
+                  <span>Loading existing feedback...</span>
+                </div>
+              </div>
+            }
+          </div>
+          <div class="dialog-actions">
+            <button
+              class="btn btn-primary"
+              (click)="onSubmit()"
+              [disabled]="!canSubmit() || isSaving || isLoading">
+              <i class="fas" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-check'"></i>
+              {{ isSaving ? 'Saving...' : (existingFeedback ? 'Update Feedback' : 'Submit Feedback') }}
+            </button>
+            <button class="btn btn-secondary" (click)="onCancel()" [disabled]="isSaving || isLoading">Cancel</button>
           </div>
         </div>
-
-        <div class="feedback-section">
-          <label class="feedback-label" for="correct">Was the result correct?</label>
-          <div class="correctness-options">
-            <label class="radio-option">
-              <input type="radio" name="correct" [value]="true" [(ngModel)]="isCorrect">
-              <span>Yes</span>
-            </label>
-            <label class="radio-option">
-              <input type="radio" name="correct" [value]="false" [(ngModel)]="isCorrect">
-              <span>No</span>
-            </label>
-            <label class="radio-option">
-              <input type="radio" name="correct" [value]="null" [(ngModel)]="isCorrect">
-              <span>Not Sure</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="feedback-section">
-          <label class="feedback-label" for="comments">Correction Summary / Comments</label>
-          <textarea
-            id="comments"
-            class="feedback-textarea"
-            [(ngModel)]="comments"
-            placeholder="Provide detailed feedback, corrections, or comments about this test execution..."
-            rows="10"></textarea>
-        </div>
-
-        <div class="feedback-info" *ngIf="isSaving">
-          <i class="fas fa-spinner fa-spin"></i>
-          <span>Saving feedback...</span>
-        </div>
-
-        <div class="feedback-error" *ngIf="errorMessage">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ errorMessage }}</span>
-        </div>
       </div>
-
-      <div class="feedback-dialog-content" *ngIf="isLoading">
-        <div class="feedback-info">
-          <i class="fas fa-spinner fa-spin"></i>
-          <span>Loading existing feedback...</span>
-        </div>
-      </div>
-
-      <kendo-dialog-actions>
-        <button kendoButton (click)="onCancel()" [disabled]="isSaving || isLoading">Cancel</button>
-        <button kendoButton
-                [primary]="true"
-                (click)="onSubmit()"
-                [disabled]="!canSubmit() || isSaving || isLoading">
-          <i class="fas" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-check'"></i>
-          {{ isSaving ? 'Saving...' : (existingFeedback ? 'Update Feedback' : 'Submit Feedback') }}
-        </button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
+    }
   `,
   styles: [`
+    :host {
+      display: block;
+    }
+
+    .dialog-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--mj-bg-overlay, rgba(0, 0, 0, 0.5));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      animation: overlayFadeIn 0.15s ease-out;
+    }
+
+    @keyframes overlayFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .dialog-container {
+      background: var(--mj-bg-surface);
+      border-radius: 8px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      width: 600px;
+      max-width: 90vw;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      animation: dialogSlideIn 0.2s ease-out;
+    }
+
+    @keyframes dialogSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(16px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .dialog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--mj-border-default);
+    }
+
+    .dialog-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+    }
+
+    .dialog-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px 8px;
+      color: var(--mj-text-muted);
+      font-size: 16px;
+      border-radius: 4px;
+      transition: background 0.15s ease;
+    }
+
+    .dialog-close:hover {
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
+    }
+
+    .dialog-body {
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .dialog-actions {
+      display: flex;
+      gap: 8px;
+      padding: 16px 20px;
+      border-top: 1px solid var(--mj-border-default);
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
+      border-color: var(--mj-brand-primary);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--mj-brand-primary-hover);
+    }
+
+    .btn-secondary {
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
+      border-color: var(--mj-border-default);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--mj-bg-surface-hover);
+    }
+
     .feedback-dialog-content {
       padding: 20px;
       display: flex;
       flex-direction: column;
       gap: 24px;
+      overflow: visible;
     }
 
     .feedback-section {
@@ -110,36 +270,127 @@ export interface TestFeedbackDialogData {
     .feedback-label {
       font-weight: 600;
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
-    .star-rating {
+    .optional-hint {
+      font-weight: 400;
+      font-size: 12px;
+      color: var(--mj-text-disabled);
+    }
+
+    .rating-scale {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .rating-numbers {
+      display: flex;
+      gap: 6px;
+      justify-content: space-between;
+    }
+
+    .rating-button {
+      flex: 1;
+      height: 40px;
+      border: 2px solid var(--mj-border-default);
+      border-radius: 8px;
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-muted);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .rating-button:hover,
+    .rating-button.hover {
+      transform: scale(1.1);
+      box-shadow: var(--mj-shadow-md);
+    }
+
+    .rating-button.low:hover,
+    .rating-button.low.hover {
+      border-color: var(--mj-status-error);
+      background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
+    }
+
+    .rating-button.mid:hover,
+    .rating-button.mid.hover {
+      border-color: var(--mj-status-warning);
+      background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
+    }
+
+    .rating-button.high:hover,
+    .rating-button.high.hover {
+      border-color: var(--mj-status-success);
+      background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
+    }
+
+    .rating-button.selected {
+      transform: scale(1.1);
+      box-shadow: var(--mj-shadow-md);
+    }
+
+    .rating-button.selected.low {
+      border-color: var(--mj-status-error);
+      background: var(--mj-status-error);
+      color: var(--mj-text-inverse);
+    }
+
+    .rating-button.selected.mid {
+      border-color: var(--mj-status-warning);
+      background: var(--mj-status-warning);
+      color: var(--mj-text-inverse);
+    }
+
+    .rating-button.selected.high {
+      border-color: var(--mj-status-success);
+      background: var(--mj-status-success);
+      color: var(--mj-text-inverse);
+    }
+
+    .rating-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--mj-text-disabled);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 0 4px;
+    }
+
+    .label-low { color: var(--mj-status-error); }
+    .label-mid { color: var(--mj-status-warning); }
+    .label-high { color: var(--mj-status-success); }
+
+    .rating-description {
       display: flex;
       align-items: center;
       gap: 8px;
-    }
-
-    .star {
-      font-size: 28px;
-      color: #ddd;
-      cursor: pointer;
-      transition: color 0.2s ease;
-    }
-
-    .star.selected,
-    .star.hover {
-      color: #ffa500;
-    }
-
-    .star:hover {
-      transform: scale(1.1);
-    }
-
-    .rating-text {
+      padding: 10px 14px;
+      background: var(--mj-bg-surface-sunken);
+      border-radius: 8px;
       font-size: 14px;
+      color: var(--mj-text-muted);
+    }
+
+    .rating-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--mj-text-primary);
+    }
+
+    .rating-label {
+      margin-left: auto;
       font-weight: 600;
-      color: #666;
-      margin-left: 8px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
     }
 
     .correctness-options {
@@ -154,7 +405,7 @@ export interface TestFeedbackDialogData {
       gap: 8px;
       cursor: pointer;
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .radio-option input[type="radio"] {
@@ -166,18 +417,20 @@ export interface TestFeedbackDialogData {
     .feedback-textarea {
       width: 100%;
       padding: 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 14px;
       font-family: inherit;
       resize: vertical;
       min-height: 120px;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
     }
 
     .feedback-textarea:focus {
       outline: none;
-      border-color: #2196f3;
-      box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .feedback-info {
@@ -185,9 +438,9 @@ export interface TestFeedbackDialogData {
       align-items: center;
       gap: 8px;
       padding: 12px;
-      background: #e3f2fd;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
       border-radius: 4px;
-      color: #1976d2;
+      color: var(--mj-brand-primary);
       font-size: 14px;
     }
 
@@ -196,15 +449,50 @@ export interface TestFeedbackDialogData {
       align-items: center;
       gap: 8px;
       padding: 12px;
-      background: #ffebee;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
       border-radius: 4px;
-      color: #c62828;
+      color: var(--mj-status-error);
       font-size: 14px;
     }
   `]
 })
 export class TestFeedbackDialogComponent implements OnInit {
-  @Input() data!: TestFeedbackDialogData;
+  private _data!: TestFeedbackDialogData;
+  private _visible = false;
+  private dataLoaded = false;
+
+  readonly ratingNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+  @Input()
+  set data(value: TestFeedbackDialogData) {
+    this._data = value;
+    if (value && this._visible && !this.dataLoaded) {
+      this.initializeWithData();
+    }
+  }
+  get data(): TestFeedbackDialogData {
+    return this._data;
+  }
+
+  @Input()
+  set visible(value: boolean) {
+    const wasVisible = this._visible;
+    this._visible = value;
+    if (value && !wasVisible) {
+      this.resetForm();
+      if (this._data && !this.dataLoaded) {
+        this.initializeWithData();
+      }
+    }
+    if (!value && wasVisible) {
+      this.dataLoaded = false;
+    }
+  }
+  get visible(): boolean {
+    return this._visible;
+  }
+
+  @Output() closed = new EventEmitter<TestFeedbackDialogResult>();
 
   rating = 0;
   hoverRating = 0;
@@ -213,19 +501,34 @@ export class TestFeedbackDialogComponent implements OnInit {
   isSaving = false;
   isLoading = false;
   errorMessage = '';
-  existingFeedback: TestRunFeedbackEntity | null = null;
+  existingFeedback: MJTestRunFeedbackEntity | null = null;
 
   private metadata = new Metadata();
 
-  constructor(private dialogRef: DialogRef) {}
+  constructor(
+    private cdr: ChangeDetectorRef
+  ) {}
 
   async ngOnInit(): Promise<void> {
-    if (!this.data) {
-      this.errorMessage = 'Invalid dialog data';
-      return;
+    if (this._visible && this._data && !this.dataLoaded) {
+      await this.initializeWithData();
     }
+  }
 
-    // Load existing feedback if it exists
+  private resetForm(): void {
+    this.rating = 0;
+    this.hoverRating = 0;
+    this.isCorrect = null;
+    this.comments = '';
+    this.isSaving = false;
+    this.isLoading = false;
+    this.errorMessage = '';
+    this.existingFeedback = null;
+  }
+
+  private async initializeWithData(): Promise<void> {
+    if (this.dataLoaded) return;
+    this.dataLoaded = true;
     await this.loadExistingFeedback();
   }
 
@@ -234,7 +537,7 @@ export class TestFeedbackDialogComponent implements OnInit {
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<TestRunFeedbackEntity>({
+      const result = await rv.RunView<MJTestRunFeedbackEntity>({
         EntityName: 'MJ: Test Run Feedbacks',
         ExtraFilter: `TestRunID='${this.data.testRunId}' AND ReviewerUserID='${this.data.currentUser.ID}'`,
         ResultType: 'entity_object'
@@ -250,18 +553,28 @@ export class TestFeedbackDialogComponent implements OnInit {
       }
     } catch (error) {
       console.error('Error loading existing feedback:', error);
-      // Don't show error to user - just allow them to create new feedback
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
-  setRating(star: number): void {
-    this.rating = star;
+  setRating(value: number): void {
+    this.rating = value;
+  }
+
+  getRatingLabel(): string {
+    if (this.rating <= 3) return 'Poor';
+    if (this.rating <= 5) return 'Below Average';
+    if (this.rating <= 6) return 'Average';
+    if (this.rating <= 7) return 'Good';
+    if (this.rating <= 8) return 'Very Good';
+    if (this.rating <= 9) return 'Excellent';
+    return 'Outstanding';
   }
 
   canSubmit(): boolean {
-    return this.rating > 0 && this.comments.trim().length > 0;
+    return this.rating > 0;
   }
 
   async onSubmit(): Promise<void> {
@@ -273,14 +586,12 @@ export class TestFeedbackDialogComponent implements OnInit {
     this.errorMessage = '';
 
     try {
-      let feedback: TestRunFeedbackEntity;
+      let feedback: MJTestRunFeedbackEntity;
 
       if (this.existingFeedback) {
-        // Update existing feedback
         feedback = this.existingFeedback;
       } else {
-        // Create new feedback entity
-        feedback = await this.metadata.GetEntityObject<TestRunFeedbackEntity>(
+        feedback = await this.metadata.GetEntityObject<MJTestRunFeedbackEntity>(
           'MJ: Test Run Feedbacks',
           this.data.currentUser
         );
@@ -288,7 +599,6 @@ export class TestFeedbackDialogComponent implements OnInit {
         feedback.ReviewerUserID = this.data.currentUser.ID;
       }
 
-      // Update fields (for both new and existing)
       feedback.Rating = this.rating;
       feedback.IsCorrect = this.isCorrect;
       feedback.CorrectionSummary = this.comments.trim() || null;
@@ -296,7 +606,7 @@ export class TestFeedbackDialogComponent implements OnInit {
       const result = await feedback.Save();
 
       if (result) {
-        this.dialogRef.close({ success: true, feedbackId: feedback.ID });
+        this.closed.emit({ success: true, feedbackId: feedback.ID });
       } else {
         this.errorMessage = feedback.LatestResult?.Message || 'Failed to save feedback';
         this.isSaving = false;
@@ -308,6 +618,12 @@ export class TestFeedbackDialogComponent implements OnInit {
   }
 
   onCancel(): void {
-    this.dialogRef.close({ success: false });
+    this.closed.emit({ success: false });
+  }
+
+  onOverlayClick(event: MouseEvent): void {
+    if (event.target === event.currentTarget && !this.isSaving) {
+      this.onCancel();
+    }
   }
 }

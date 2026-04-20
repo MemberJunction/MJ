@@ -3,15 +3,6 @@ import { confirm, checkbox } from '@inquirer/prompts';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import * as path from 'path';
-import {
-  FileResetService,
-  loadMJConfig,
-  initializeProvider,
-  getSyncEngine,
-  getSystemUser,
-  resetSyncEngine,
-  configManager
-} from '@memberjunction/metadata-sync';
 
 export default class FileReset extends Command {
   static description = 'Reset file metadata sections';
@@ -33,6 +24,11 @@ export default class FileReset extends Command {
   };
   
   async run(): Promise<void> {
+    const {
+      FileResetService, loadMJConfig, initializeProvider,
+      getSyncEngine, getSystemUser, resetSyncEngine, configManager,
+    } = await import('@memberjunction/metadata-sync');
+
     const { flags } = await this.parse(FileReset);
     const spinner = ora();
     

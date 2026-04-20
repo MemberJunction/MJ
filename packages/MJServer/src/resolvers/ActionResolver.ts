@@ -6,8 +6,9 @@ import { ActionParam, ActionResult } from "@memberjunction/actions-base";
 import { Field, InputType, ObjectType } from "type-graphql";
 import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
 import { AppContext, ProviderInfo } from "../types.js";
-import { CopyScalarsAndArrays } from "@memberjunction/global";
+import { CopyScalarsAndArrays, UUIDsEqual } from "@memberjunction/global";
 import { GetReadOnlyProvider } from "../util.js";
+import { ResolverBase } from "../generic/ResolverBase.js";
 
 /**
  * Input type for action parameters
@@ -171,7 +172,7 @@ export class ActionResultOutput {
  * Handles running actions and entity actions through GraphQL
  */
 @Resolver()
-export class ActionResolver {
+export class ActionResolver extends ResolverBase {
   /**
    * Mutation for running an action
    * @param input The input parameters for running the action
@@ -184,6 +185,9 @@ export class ActionResolver {
     @Ctx() ctx: AppContext
   ): Promise<ActionResultOutput> {
     try {
+      // Check API key scope authorization for action execution
+      await this.CheckAPIKeyScopeAuthorization('action:execute', input.ActionID, ctx.userPayload);
+
       // Get the user from context
       const user = ctx.userPayload.userRecord;
       if (!user) {
@@ -217,7 +221,7 @@ export class ActionResolver {
    * @private
    */
   private findActionById(actionID: string): any {
-    const action = ActionEngineServer.Instance.Actions.find(a => a.ID === actionID);
+    const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, actionID));
     if (!action) {
       throw new Error(`Action with ID ${actionID} not found`);
     }
@@ -326,6 +330,9 @@ export class ActionResolver {
     @Ctx() ctx: AppContext
   ): Promise<ActionResultOutput> {
     try {
+      // Check API key scope authorization for entity action execution
+      await this.CheckAPIKeyScopeAuthorization('action:execute', input.EntityActionID, ctx.userPayload);
+
       const user = ctx.userPayload.userRecord;
       if (!user) {
         throw new Error("User is not authenticated");
@@ -370,7 +377,7 @@ export class ActionResolver {
    * @private
    */
   private getEntityAction(actionID: string): any {
-    const entityAction = EntityActionEngineServer.Instance.EntityActions.find(ea => ea.ID === actionID);
+    const entityAction = EntityActionEngineServer.Instance.EntityActions.find(ea => UUIDsEqual(ea.ID, actionID));
     if (!entityAction) {
       throw new Error(`EntityAction with ID ${actionID} not found`);
     }
@@ -412,7 +419,7 @@ export class ActionResolver {
         throw new Error(`Entity with name ${input.EntityName} not found`);
       }
     } else if (input.EntityID) {
-      entity = md.Entities.find(e => e.ID === input.EntityID);
+      entity = md.Entities.find(e => UUIDsEqual(e.ID, input.EntityID));
       if (!entity) {
         throw new Error(`Entity with ID ${input.EntityID} not found`);
       }

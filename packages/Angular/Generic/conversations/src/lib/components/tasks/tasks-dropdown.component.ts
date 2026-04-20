@@ -10,6 +10,7 @@ import { takeUntil } from 'rxjs/operators';
  * Shows ALL active tasks across ALL conversations, grouped by current vs other
  */
 @Component({
+  standalone: false,
   selector: 'mj-tasks-dropdown',
   template: `
     <div class="tasks-dropdown-container">
@@ -20,90 +21,113 @@ import { takeUntil } from 'rxjs/operators';
         [class.has-tasks]="allTasks.length > 0"
         [title]="allTasks.length > 0 ? allTasks.length + ' active task' + (allTasks.length > 1 ? 's' : '') : 'View tasks'">
         <i class="fas fa-bolt"></i>
-        <span class="task-count-badge" *ngIf="allTasks.length > 0">{{ allTasks.length }}</span>
+        @if (allTasks.length > 0) {
+          <span class="task-count-badge">{{ allTasks.length }}</span>
+        }
       </button>
-
-      <div class="active-tasks-dropdown" *ngIf="isOpen">
-        <div class="dropdown-header">
-          <div class="header-left">
-            <i class="fas fa-circle-notch fa-spin" *ngIf="allTasks.length > 0"></i>
-            <i class="fas fa-tasks" *ngIf="allTasks.length === 0"></i>
-            <span>Active Tasks ({{ allTasks.length }})</span>
-          </div>
-          <button class="close-btn" (click)="closeDropdown()">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-
-        <div class="dropdown-content">
-          <!-- Current Conversation Tasks -->
-          <div class="section" *ngIf="currentConversationTasks.length > 0">
-            <div class="section-header">
-              <i class="fas fa-comment"></i>
-              <span>Current Conversation ({{ currentConversationTasks.length }})</span>
+    
+      @if (isOpen) {
+        <div class="active-tasks-dropdown">
+          <div class="dropdown-header">
+            <div class="header-left">
+              @if (allTasks.length > 0) {
+                <i class="fas fa-circle-notch fa-spin"></i>
+              }
+              @if (allTasks.length === 0) {
+                <i class="fas fa-tasks"></i>
+              }
+              <span>Active Tasks ({{ allTasks.length }})</span>
             </div>
-            <div class="active-task-item"
-                 *ngFor="let task of currentConversationTasks"
-                 (click)="onTaskClick(task)">
-              <div class="task-status-indicator active"></div>
-              <div class="task-content">
-                <div class="task-title">
-                  <img *ngIf="getAgentLogoUrl(task.agentName)"
-                       [src]="getAgentLogoUrl(task.agentName)"
-                       class="agent-logo"
-                       [alt]="task.agentName" />
-                  <i *ngIf="!getAgentLogoUrl(task.agentName)"
-                     [class]="getAgentIconClass(task.agentName)"></i>
-                  {{ task.agentName }}
+            <button class="close-btn" (click)="closeDropdown()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="dropdown-content">
+            <!-- Current Conversation Tasks -->
+            @if (currentConversationTasks.length > 0) {
+              <div class="section">
+                <div class="section-header">
+                  <i class="fas fa-comment"></i>
+                  <span>Current Conversation ({{ currentConversationTasks.length }})</span>
                 </div>
-                <div class="task-status-text">{{ getTrimmedStatus(task.status) }}</div>
-                <div class="task-elapsed">{{ getElapsedTime(task) }}</div>
+                @for (task of currentConversationTasks; track task) {
+                  <div class="active-task-item"
+                    (click)="onTaskClick(task)">
+                    <div class="task-status-indicator active"></div>
+                    <div class="task-content">
+                      <div class="task-title">
+                        @if (getAgentLogoUrl(task.agentName)) {
+                          <img
+                            [src]="getAgentLogoUrl(task.agentName)"
+                            class="agent-logo"
+                            [alt]="task.agentName" />
+                        }
+                        @if (!getAgentLogoUrl(task.agentName)) {
+                          <i
+                          [class]="getAgentIconClass(task.agentName)"></i>
+                        }
+                        {{ task.agentName }}
+                      </div>
+                      <div class="task-status-text">{{ getTrimmedStatus(task.status) }}</div>
+                      <div class="task-elapsed">{{ getElapsedTime(task) }}</div>
+                    </div>
+                  </div>
+                }
               </div>
-            </div>
-          </div>
-
-          <!-- Other Conversations Tasks -->
-          <div class="section" *ngIf="otherConversationTasks.length > 0">
-            <div class="section-header">
-              <i class="fas fa-comments"></i>
-              <span>Other Conversations ({{ otherConversationTasks.length }})</span>
-            </div>
-            <div class="active-task-item clickable"
-                 *ngFor="let task of otherConversationTasks"
-                 (click)="onTaskClick(task)">
-              <div class="task-status-indicator active"></div>
-              <div class="task-content">
-                <div class="task-title">
-                  <img *ngIf="getAgentLogoUrl(task.agentName)"
-                       [src]="getAgentLogoUrl(task.agentName)"
-                       class="agent-logo"
-                       [alt]="task.agentName" />
-                  <i *ngIf="!getAgentLogoUrl(task.agentName)"
-                     [class]="getAgentIconClass(task.agentName)"></i>
-                  {{ task.agentName }}
-                  <span class="go-btn">
-                    <i class="fas fa-arrow-right"></i>
-                  </span>
+            }
+            <!-- Other Conversations Tasks -->
+            @if (otherConversationTasks.length > 0) {
+              <div class="section">
+                <div class="section-header">
+                  <i class="fas fa-comments"></i>
+                  <span>Other Conversations ({{ otherConversationTasks.length }})</span>
                 </div>
-                <div class="task-conversation" *ngIf="task.conversationName">
-                  <i class="fas fa-message"></i>
-                  {{ task.conversationName }}
-                </div>
-                <div class="task-status-text">{{ getTrimmedStatus(task.status) }}</div>
-                <div class="task-elapsed">{{ getElapsedTime(task) }}</div>
+                @for (task of otherConversationTasks; track task) {
+                  <div class="active-task-item clickable"
+                    (click)="onTaskClick(task)">
+                    <div class="task-status-indicator active"></div>
+                    <div class="task-content">
+                      <div class="task-title">
+                        @if (getAgentLogoUrl(task.agentName)) {
+                          <img
+                            [src]="getAgentLogoUrl(task.agentName)"
+                            class="agent-logo"
+                            [alt]="task.agentName" />
+                        }
+                        @if (!getAgentLogoUrl(task.agentName)) {
+                          <i
+                          [class]="getAgentIconClass(task.agentName)"></i>
+                        }
+                        {{ task.agentName }}
+                        <span class="go-btn">
+                          <i class="fas fa-arrow-right"></i>
+                        </span>
+                      </div>
+                      @if (task.conversationName) {
+                        <div class="task-conversation">
+                          <i class="fas fa-message"></i>
+                          {{ task.conversationName }}
+                        </div>
+                      }
+                      <div class="task-status-text">{{ getTrimmedStatus(task.status) }}</div>
+                      <div class="task-elapsed">{{ getElapsedTime(task) }}</div>
+                    </div>
+                  </div>
+                }
               </div>
-            </div>
-          </div>
-
-          <!-- No Tasks State -->
-          <div *ngIf="allTasks.length === 0" class="no-tasks">
-            <i class="fas fa-check-circle"></i>
-            <p>No active tasks</p>
+            }
+            <!-- No Tasks State -->
+            @if (allTasks.length === 0) {
+              <div class="no-tasks">
+                <i class="fas fa-check-circle"></i>
+                <p>No active tasks</p>
+              </div>
+            }
           </div>
         </div>
-      </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .tasks-dropdown-container {
       position: relative;
@@ -111,10 +135,8 @@ import { takeUntil } from 'rxjs/operators';
 
     .active-tasks-btn {
       background: transparent;
-      color: #6B7280;
       padding: 8px 12px;
       border-radius: 6px;
-      background: transparent;
       border: none;
       color: rgba(255,255,255,0.7);
       cursor: pointer;
@@ -126,18 +148,18 @@ import { takeUntil } from 'rxjs/operators';
     }
 
     .active-tasks-btn:hover {
-      background: #F9FAFB;
-      color: #111827;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .active-tasks-btn.active {
-      background: #F9FAFB;
-      color: #111827;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .task-count-badge {
-      background: #EF4444;
-      color: white;
+      background: var(--mj-status-error);
+      color: var(--mj-text-inverse);
       padding: 2px 5px;
       border-radius: 10px;
       font-size: 11px;
@@ -145,17 +167,17 @@ import { takeUntil } from 'rxjs/operators';
       min-width: 18px;
       text-align: center;
       line-height: 1;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .active-tasks-dropdown {
       position: absolute;
       top: calc(100% + 8px);
       right: 0;
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: var(--mj-shadow-lg);
       z-index: 1000;
       min-width: 420px;
       max-width: 500px;
@@ -163,7 +185,7 @@ import { takeUntil } from 'rxjs/operators';
 
     .dropdown-header {
       padding: 12px 16px;
-      border-bottom: 1px solid #E5E7EB;
+      border-bottom: 1px solid var(--mj-border-default);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -174,17 +196,17 @@ import { takeUntil } from 'rxjs/operators';
       align-items: center;
       gap: 8px;
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
     }
 
     .header-left i {
-      color: var(--accent, #1e40af);
+      color: var(--mj-brand-primary);
     }
 
     .close-btn {
       background: none;
       border: none;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       cursor: pointer;
       font-size: 18px;
       padding: 0;
@@ -197,8 +219,8 @@ import { takeUntil } from 'rxjs/operators';
     }
 
     .close-btn:hover {
-      background: #F3F4F6;
-      color: #111827;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .dropdown-content {
@@ -208,7 +230,7 @@ import { takeUntil } from 'rxjs/operators';
 
     .section {
       padding: 12px;
-      border-bottom: 1px solid #F3F4F6;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .section:last-child {
@@ -221,7 +243,7 @@ import { takeUntil } from 'rxjs/operators';
       gap: 8px;
       font-size: 12px;
       font-weight: 600;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 12px;
@@ -237,8 +259,8 @@ import { takeUntil } from 'rxjs/operators';
       gap: 12px;
       padding: 10px 12px;
       border-radius: 6px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       margin-bottom: 8px;
       transition: all 0.2s ease;
     }
@@ -248,8 +270,8 @@ import { takeUntil } from 'rxjs/operators';
     }
 
     .active-task-item.clickable:hover {
-      background: #EEF2FF;
-      border-color: #C7D2FE;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
       transform: translateX(2px);
     }
 
@@ -264,7 +286,7 @@ import { takeUntil } from 'rxjs/operators';
     }
 
     .task-status-indicator.active {
-      background: #3B82F6;
+      background: var(--mj-brand-primary);
       animation: pulse 2s ease-in-out infinite;
     }
 
@@ -284,14 +306,14 @@ import { takeUntil } from 'rxjs/operators';
     .task-title {
       font-size: 14px;
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 6px;
     }
 
     .task-title i {
-      color: #3B82F6;
+      color: var(--mj-brand-primary);
       font-size: 12px;
     }
 
@@ -304,7 +326,7 @@ import { takeUntil } from 'rxjs/operators';
 
     .go-btn {
       margin-left: auto;
-      color: #3B82F6;
+      color: var(--mj-brand-primary);
       font-size: 10px;
       opacity: 0.7;
     }
@@ -315,7 +337,7 @@ import { takeUntil } from 'rxjs/operators';
 
     .task-conversation {
       font-size: 11px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       display: flex;
       align-items: center;
       gap: 4px;
@@ -327,7 +349,7 @@ import { takeUntil } from 'rxjs/operators';
 
     .task-status-text {
       font-size: 12px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -335,21 +357,21 @@ import { takeUntil } from 'rxjs/operators';
 
     .task-elapsed {
       font-size: 11px;
-      color: #3B82F6;
+      color: var(--mj-brand-primary);
       font-weight: 600;
     }
 
     .no-tasks {
       padding: 40px 16px;
       text-align: center;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
     }
 
     .no-tasks i {
       font-size: 32px;
       margin-bottom: 8px;
       opacity: 0.5;
-      color: #10B981;
+      color: var(--mj-status-success);
     }
 
     .no-tasks p {

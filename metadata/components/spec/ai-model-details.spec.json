@@ -9,7 +9,7 @@
     "mode": "views",
     "entities": [
       {
-        "name": "AI Models",
+        "name": "MJ: AI Models",
         "description": "Core AI model definitions and specifications",
         "displayFields": [
           "ID",

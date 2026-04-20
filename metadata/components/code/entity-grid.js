@@ -26,7 +26,7 @@ function EntityGrid({
         
         // Use RunView to fetch all entities from the system
         const result = await utilities.rv.RunView({
-          EntityName: 'Entities' // MJ entity name for entities metadata
+          EntityName: 'MJ: Entities' // MJ entity name for entities metadata
         });
         
         if (result.Success) {
@@ -91,7 +91,7 @@ function EntityGrid({
   return (
     <div style={{ padding: '10px', width: '100%' }}>
       <DataGrid
-        entityName="Entities"
+        entityName="MJ: Entities"
         data={entities}  // null initially, then array of entity objects
         columns={columns}
         filterFields={filterFields}

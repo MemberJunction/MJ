@@ -9,34 +9,26 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 //***********************************************************
-// MJ
+// MJ - Consolidated Module Bundles
 //***********************************************************
-import { ExplorerCoreModule, SystemValidationBannerComponent, ShellModule } from '@memberjunction/ng-explorer-core';
-import { CoreGeneratedFormsModule, LoadCoreGeneratedForms, LoadCoreCustomForms } from '@memberjunction/ng-core-entity-forms';
-LoadCoreGeneratedForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
-LoadCoreCustomForms(); // prevent tree shaking - dynamic loaded components don't have a static code path to them so Webpack will tree shake them out
-
+import {
+  MJExplorerModulesBundle,
+  SharedService
+} from '@memberjunction/ng-explorer-modules';
 import { AuthServicesModule, RedirectComponent, MJAuthBase } from '@memberjunction/ng-auth-services';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
-import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-import { SharedService } from '@memberjunction/ng-shared';
-import { LoadResourceWrappers } from '@memberjunction/ng-explorer-core';
+import { MJExplorerAppModule } from '@memberjunction/ng-explorer-app';
 
-//***********************************************************
-// Kendo
-//***********************************************************
-import { GridModule } from '@progress/kendo-angular-grid';
-import { LayoutModule } from '@progress/kendo-angular-layout';
-import { IconsModule } from '@progress/kendo-angular-icons';
-import { NavigationModule } from '@progress/kendo-angular-navigation';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { LabelModule } from '@progress/kendo-angular-label';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DialogsModule } from '@progress/kendo-angular-dialog';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
-import { NotificationModule } from '@progress/kendo-angular-notification';
+// Lazy loading infrastructure
+import { LazyModuleRegistry, LAZY_FEATURE_CONFIG } from '@memberjunction/ng-explorer-core';
+
+// Import lite class registrations manifest (excludes lazy-loaded dashboard and settings packages)
+import {CLASS_REGISTRATIONS} from '@memberjunction/ng-bootstrap-lite';
+
+// Import supplemental manifest for user-defined classes (generated at prestart with --exclude-packages @memberjunction)
+import {CLASS_REGISTRATIONS as LOCAL_CLASSES} from './generated/class-registrations-manifest';
+
+// static code path builder
+const combinedClasses = [...CLASS_REGISTRATIONS, ...LOCAL_CLASSES];
 
 //***********************************************************
 //MSAL
@@ -48,14 +40,8 @@ import { InteractionType } from '@azure/msal-browser';
 // Project stuff
 //***********************************************************
 import { AppComponent } from './app.component';
-import { GeneratedFormsModule, LoadGeneratedForms } from './generated/generated-forms.module';
-import { environment } from 'src/environments/environment';
-import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
-import { NavigationItemDemoComponent } from './demo/navigation-item.component';
-import { HelloDashboardComponent } from './demo/hello-dashboard/hello-dashboard.component';
-
-LoadGeneratedForms(); // prevent tree shaking and component loss through this call
-LoadResourceWrappers(); // prevent tree shaking and component loss through this call
+import { GeneratedFormsModule } from './generated/generated-forms.module';
+import { environment } from '../environments/environment';
 
 /**
  * Set your default interaction type for MSALGuard here. If you have any
@@ -79,36 +65,25 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
 @NgModule({
   declarations: [
     AppComponent, 
-    NavigationItemDemoComponent,
-    HelloDashboardComponent
   ],
   imports: [
+    // Angular Core Modules
     BrowserModule,
-    FormsModule,
     BrowserAnimationsModule,
-    LayoutModule,
-    IconsModule,
-    InputsModule,
-    DateInputsModule,
-    NavigationModule,
-    ButtonsModule,
-    GridModule,
-    DropDownsModule,
-    LabelModule,
-    DialogsModule,
-    UserViewGridModule,
-    ExplorerSettingsModule,
-    LinkDirectivesModule,
-    ContainerDirectivesModule,
-    ExplorerCoreModule,
-    CoreGeneratedFormsModule,
-    GeneratedFormsModule,
-    NotificationModule,
+    FormsModule,
     ReactiveFormsModule,
+
+    // MJ Consolidated Bundle (includes all MJ + Kendo modules)
+    MJExplorerModulesBundle,
+
+    // Auth (needs forRoot configuration)
     AuthServicesModule.forRoot(environment),
-    ShellModule,
-    // Import standalone components
-    SystemValidationBannerComponent,
+
+    // Explorer App Shell (includes login UI, validation, and mj-shell wrapper)
+    MJExplorerAppModule.forRoot(environment),
+
+    // App-specific modules
+    GeneratedFormsModule
   ],
   providers: [
     SharedService,
@@ -117,6 +92,15 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
       provide: APP_INITIALIZER,
       useFactory: initializeAuth,
       deps: [MJAuthBase],
+      multi: true
+    },
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (lazyRegistry: LazyModuleRegistry) => () => {
+        lazyRegistry.RegisterBulk(LAZY_FEATURE_CONFIG);
+        lazyRegistry.WireToClassFactory();
+      },
+      deps: [LazyModuleRegistry],
       multi: true
     }
   ],

@@ -1,10 +1,15 @@
 import * as parser from '@babel/parser';
-import traverse, { NodePath } from '@babel/traverse';
+import _traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
+
+// @babel/traverse is CJS - in Node.js ESM, the function is at .default
+// See: https://github.com/babel/babel/discussions/13093
+type TraverseModule = typeof _traverse & { default?: typeof _traverse };
+const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
 import { ComponentSpec, ComponentQueryDataRequirement, SimpleEntityFieldInfo } from '@memberjunction/interactive-component-types';
 import type { EntityFieldInfo, EntityInfo, RunQueryResult, RunViewResult } from '@memberjunction/core';
 import { Metadata } from '@memberjunction/core';
-import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
 import { LibraryLintCache } from './library-lint-cache';
 import { ComponentExecutionOptions } from './component-runner';
@@ -6811,6 +6816,8 @@ Correct pattern:
             '{' + globalVar, // In object literal
             '<' + globalVar, // JSX component
             globalVar + ' ', // Followed by space (various uses)
+            'unwrapLibraryComponents(' + globalVar, // unwrapLibraryComponents(antd, ...)
+            'unwrapLibraryComponents( ' + globalVar, // unwrapLibraryComponents( antd, ...)
           ];
 
           const isUsed = usagePatterns.some((pattern) => functionBody.includes(pattern));
@@ -8107,9 +8114,34 @@ const extendedCallbacks = { ...callbacks, onCustomEvent: handler };
           return violations;
         }
 
-        // Track whether RunQuery is called anywhere
+        const allQueryNames = componentSpec!.dataRequirements!.queries!.map((q) => q.name).filter(Boolean);
+
+        // In hierarchical components, the root's dataRequirements contains the complete
+        // set of queries for the entire tree, but child components can own subsets and
+        // call RunQuery themselves. Collect query names claimed by child dependencies
+        // so we only require the root to call RunQuery for unclaimed queries.
+        const childClaimedQueries = new Set<string>();
+        if (componentSpec!.dependencies) {
+          for (const dep of componentSpec!.dependencies) {
+            if (dep.dataRequirements?.queries) {
+              for (const q of dep.dataRequirements.queries) {
+                if (q.name) {
+                  childClaimedQueries.add(q.name);
+                }
+              }
+            }
+          }
+        }
+
+        const unclaimedQueryNames = allQueryNames.filter((name) => !childClaimedQueries.has(name));
+
+        // If all queries are delegated to child components, no violation for the root
+        if (unclaimedQueryNames.length === 0) {
+          return violations;
+        }
+
+        // Track whether RunQuery is called anywhere in the root component's code
         let hasRunQueryCall = false;
-        const queryNames = componentSpec!.dataRequirements!.queries!.map((q) => q.name).filter(Boolean);
 
         traverse(ast, {
           CallExpression(path: NodePath<t.CallExpression>) {
@@ -8140,27 +8172,27 @@ const extendedCallbacks = { ...callbacks, onCustomEvent: handler };
           },
         });
 
-        // If queries are defined but RunQuery is never called, that's a critical violation
+        // If unclaimed queries exist but RunQuery is never called, that's a critical violation
         if (!hasRunQueryCall) {
           violations.push({
             rule: 'required-queries-not-called',
             severity: 'critical',
             line: 1,
             column: 0,
-            message: `Component has ${queryNames.length} defined ${queryNames.length === 1 ? 'query' : 'queries'} in dataRequirements (mode: '${mode}') but never calls RunQuery. Queries defined: ${queryNames.join(', ')}`,
+            message: `Component has ${unclaimedQueryNames.length} defined ${unclaimedQueryNames.length === 1 ? 'query' : 'queries'} in dataRequirements (mode: '${mode}') but never calls RunQuery. Queries defined: ${unclaimedQueryNames.join(', ')}`,
             suggestion: {
               text: `When dataRequirements.mode is '${mode}' and includes queries, you must use utilities.rq.RunQuery to execute them, not RunView.`,
-              example: `// Your dataRequirements defines these queries: ${queryNames.join(', ')}
+              example: `// Your dataRequirements defines these queries: ${unclaimedQueryNames.join(', ')}
 // Mode is set to: '${mode}'
 
 // ❌ WRONG - Using RunView for a query:
 const result = await utilities.rv.RunView({
-  EntityName: '${queryNames[0] || 'QueryName'}'
+  EntityName: '${unclaimedQueryNames[0] || 'QueryName'}'
 });
 
 // ✅ CORRECT - Using RunQuery for queries:
 const result = await utilities.rq.RunQuery({
-  QueryName: '${queryNames[0] || 'QueryName'}'
+  QueryName: '${unclaimedQueryNames[0] || 'QueryName'}'
 });
 
 // Key differences:

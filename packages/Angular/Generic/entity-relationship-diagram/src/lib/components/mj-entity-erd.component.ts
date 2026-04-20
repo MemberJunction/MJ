@@ -111,6 +111,7 @@ export interface OpenEntityRecordEvent {
  * @see ERDDiagramComponent for the underlying generic component
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-erd',
   template: `
     <mj-erd-diagram
@@ -334,9 +335,6 @@ export class MJEntityERDComponent implements OnChanges {
       depth: this.depth
     });
 
-    // DEBUG: Log node count for debugging depth issues
-    console.log(`[mj-entity-erd] buildERDData called with depth=${this.depth}, entities=${this.entities.length}, allEntities=${allEntities.length}, resultNodes=${result.nodes.length}, resultLinks=${result.links.length}`);
-
     // Note: Links are derived automatically by the ERD diagram component
     // from the node field relationships (relatedNodeId)
     this.erdNodes = result.nodes;
@@ -357,7 +355,7 @@ export class MJEntityERDComponent implements OnChanges {
       this.entityDoubleClick.emit({ entity, node: event.node });
       // Also emit openRecord for convenience - container handles navigation
       this.openRecord.emit({
-        EntityName: 'Entities',
+        EntityName: 'MJ: Entities',
         RecordID: entity.ID,
         entity
       });

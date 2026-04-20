@@ -1,8 +1,8 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
-import * as archiver from "archiver";
-import * as unzipper from "unzipper";
+import archiver from "archiver";
+import unzipper from "unzipper";
 import { Readable } from "stream";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 import { BaseAction } from '@memberjunction/actions';
@@ -192,7 +192,7 @@ export class FileCompressAction extends BaseFileHandlerAction {
 
         // Finalize archive
         await archive.finalize();
-        const buffer = Buffer.concat(chunks);
+        const buffer = Buffer.concat(chunks as unknown as Uint8Array[]);
 
         // Save to storage if requested
         if (outputFileId) {
@@ -328,11 +328,4 @@ export class FileCompressAction extends BaseFileHandlerAction {
             return false;
         }
     }
-}
-
-/**
- * Loader function to ensure the FileCompressAction class is included in the bundle
- */
-export function LoadFileCompressAction() {
-    // Stub function to prevent tree shaking
 }

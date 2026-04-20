@@ -2,6 +2,7 @@ import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from 'ty
 import { AppContext } from '../types.js';
 import { LogError, Metadata } from '@memberjunction/core';
 import { GetReadOnlyProvider } from '../util.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 @ObjectType()
 export class DatasetResultType {
@@ -35,13 +36,16 @@ export class DatasetItemFilterTypeGQL {
 
 
 @Resolver(DatasetResultType)
-export class DatasetResolverExtended {
+export class DatasetResolverExtended extends ResolverBase {
   @Query(() => DatasetResultType)
   async GetDatasetByName(
     @Arg('DatasetName', () => String) DatasetName: string,
-    @Ctx() {providers}: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     @Arg('ItemFilters', () => [DatasetItemFilterTypeGQL], { nullable: 'itemsAndList' }) ItemFilters?: DatasetItemFilterTypeGQL[]
   ) {
+    // Check API key scope authorization for dataset read
+    await this.CheckAPIKeyScopeAuthorization('dataset:read', DatasetName, userPayload);
+
     try {
       const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
       const result = await md.GetDatasetByName(DatasetName, ItemFilters);
@@ -86,13 +90,16 @@ export class DatasetStatusResultType {
 }
 
 @Resolver(DatasetStatusResultType)
-export class DatasetStatusResolver {
+export class DatasetStatusResolver extends ResolverBase {
   @Query(() => DatasetStatusResultType)
   async GetDatasetStatusByName(
     @Arg('DatasetName', () => String) DatasetName: string,
-    @Ctx() {providers}: AppContext,
+    @Ctx() { providers, userPayload }: AppContext,
     @Arg('ItemFilters', () => [DatasetItemFilterTypeGQL], { nullable: 'itemsAndList' }) ItemFilters?: DatasetItemFilterTypeGQL[]
   ) {
+    // Check API key scope authorization for dataset read
+    await this.CheckAPIKeyScopeAuthorization('dataset:read', DatasetName, userPayload);
+
     try {
       const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
       const result = await md.GetDatasetStatusByName(DatasetName, ItemFilters);
@@ -112,5 +119,41 @@ export class DatasetStatusResolver {
       LogError(err);
       throw new Error('Error retrieving Dataset Status: ' + DatasetName + '\n\n' + err);
     }
+  }
+
+  /**
+   * Batch version: fetch status for multiple datasets in a single round-trip.
+   * Reduces N separate GetDatasetStatusByName calls to 1 network request.
+   */
+  @Query(() => [DatasetStatusResultType])
+  async GetMultipleDatasetStatusByName(
+    @Arg('DatasetNames', () => [String]) DatasetNames: string[],
+    @Ctx() { providers, userPayload }: AppContext,
+  ): Promise<DatasetStatusResultType[]> {
+    const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
+    const results: DatasetStatusResultType[] = [];
+
+    // Execute all status checks in parallel
+    const statusPromises = DatasetNames.map(async (name) => {
+      await this.CheckAPIKeyScopeAuthorization('dataset:read', name, userPayload);
+      return md.GetDatasetStatusByName(name);
+    });
+
+    const statuses = await Promise.all(statusPromises);
+
+    for (const result of statuses) {
+      if (result) {
+        results.push({
+          DatasetID: result.DatasetID,
+          DatasetName: result.DatasetName,
+          Success: result.Success,
+          Status: result.Status,
+          LatestUpdateDate: result.LatestUpdateDate,
+          EntityUpdateDates: JSON.stringify(result.EntityUpdateDates),
+        } as DatasetStatusResultType);
+      }
+    }
+
+    return results;
   }
 }

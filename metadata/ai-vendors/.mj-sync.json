@@ -16,7 +16,12 @@
     "externalizeFields": [],
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,
-    "lookupFields": {},
+    "lookupFields": {
+      "CredentialTypeID": {
+        "entity": "MJ: Credential Types",
+        "field": "Name"
+      }
+    },
     "relatedEntities": {}
   }
 }

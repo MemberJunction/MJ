@@ -56,17 +56,11 @@
 
   <!-- Main Content with Splitter -->
   <div class="main-content">
-    <kendo-splitter
-      class="main-splitter"
-      orientation="horizontal">
+    <as-split direction="horizontal" class="main-splitter">
 
       <!-- Filter Panel (Left) -->
-      <kendo-splitter-pane
-        [size]="showFilters ? '320px' : '0px'"
-        [collapsible]="false"
-        [resizable]="showFilters"
-        [scrollable]="false"
-        [hidden]="!showFilters">
+      @if (showFilters) {
+      <as-split-area [size]="20" [minSize]="15" [maxSize]="30">
         <div class="filter-panel">
           <div class="filter-panel-header">
             <h3>Prompt Filters</h3>
@@ -145,12 +139,11 @@
             </div>
           </div>
         </div>
-      </kendo-splitter-pane>
+      </as-split-area>
+      }
 
       <!-- Prompts List Panel -->
-      <kendo-splitter-pane
-        [resizable]="true"
-        [scrollable]="true">
+      <as-split-area>
         <div class="prompts-content">
           <!-- Loading State -->
           @if (isLoading) {
@@ -189,7 +182,7 @@
                             <i [class]="getPromptIcon(prompt)"></i>
                           </div>
                           <div class="prompt-details">
-                            <h4 class="prompt-name">{{ prompt.Name }}</h4>
+                            <h4 class="prompt-name" [innerHTML]="prompt.Name | highlightSearch:searchTerm"></h4>
                             <div class="prompt-meta">
                               <span class="meta-item">
                                 <i class="fa-solid fa-folder"></i>
@@ -212,7 +205,7 @@
                       <!-- Card Body -->
                       <div class="card-body">
                         @if (prompt.Description) {
-                          <p class="prompt-description">{{ prompt.Description }}</p>
+                          <p class="prompt-description" [innerHTML]="prompt.Description | highlightSearch:searchTerm"></p>
                         } @else {
                           <p class="prompt-description text-muted">No description provided</p>
                         }
@@ -228,7 +221,7 @@
                               <div class="stat-item">
                                 <span class="stat-label">Template</span>
                                 <span class="stat-value">
-                                  @if (prompt.TemplateEntity) {
+                                  @if (prompt.MJTemplateEntity) {
                                     <i class="fa-solid fa-check" style="color: #28a745;"></i> Yes
                                   } @else {
                                     <i class="fa-solid fa-times" style="color: #dc3545;"></i> No
@@ -320,9 +313,9 @@
                                 <i [class]="getPromptIcon(prompt)"></i>
                               </div>
                               <div>
-                                <div class="prompt-name">{{ prompt.Name }}</div>
+                                <div class="prompt-name" [innerHTML]="prompt.Name | highlightSearch:searchTerm"></div>
                                 @if (prompt.Description) {
-                                  <div class="prompt-description-small">{{ prompt.Description }}</div>
+                                  <div class="prompt-description-small" [innerHTML]="prompt.Description | highlightSearch:searchTerm"></div>
                                 }
                               </div>
                             </div>
@@ -335,10 +328,10 @@
                             </span>
                           </td>
                           <td>
-                            @if (prompt.TemplateEntity) {
+                            @if (prompt.MJTemplateEntity) {
                               <i class="fa-solid fa-check-circle" style="color: #28a745;"></i>
                             } @else {
-                              <i class="fa-solid fa-times-circle" style="color: #6c757d;"></i>
+                              <i class="fa-solid fa-times-circle" style="color: var(--mj-text-muted);"></i>
                             }
                           </td>
                           <td>
@@ -372,8 +365,8 @@
             }
           }
         </div>
-      </kendo-splitter-pane>
-    </kendo-splitter>
+      </as-split-area>
+    </as-split>
   </div>
 
   <!-- Detail Panel Overlay -->
@@ -409,7 +402,7 @@
               <i class="fa-solid fa-circle" style="font-size: 8px;"></i>
               {{ selectedPrompt.Status || 'Unknown' }}
             </span>
-            @if (selectedPrompt.TemplateEntity) {
+            @if (selectedPrompt.MJTemplateEntity) {
               <span class="feature-badge">
                 <i class="fa-solid fa-file-code"></i>
                 Has Template

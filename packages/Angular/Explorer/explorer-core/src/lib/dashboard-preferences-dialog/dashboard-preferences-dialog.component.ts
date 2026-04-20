@@ -1,14 +1,16 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { LogError, Metadata, RunView } from '@memberjunction/core';
-import { DashboardEntityExtended, DashboardUserPreferenceEntity, ApplicationEntity } from '@memberjunction/core-entities';
+import { MJDashboardEntityExtended, MJDashboardUserPreferenceEntity, MJApplicationEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface DashboardPreferencesResult {
   saved: boolean;
-  preferences?: DashboardUserPreferenceEntity[];
+  preferences?: MJDashboardUserPreferenceEntity[];
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-dashboard-preferences-dialog',
   templateUrl: './dashboard-preferences-dialog.component.html',
   styleUrls: ['./dashboard-preferences-dialog.component.css']
@@ -18,8 +20,8 @@ export class DashboardPreferencesDialogComponent implements OnInit {
   @Input() public scope: 'Global' | 'App' = 'Global';
   @Output() public result = new EventEmitter<DashboardPreferencesResult>();
 
-  public availableDashboards: DashboardEntityExtended[] = [];
-  public configuredDashboards: DashboardEntityExtended[] = [];
+  public availableDashboards: MJDashboardEntityExtended[] = [];
+  public configuredDashboards: MJDashboardEntityExtended[] = [];
   public applicationName: string = '';
   public loading: boolean = true;
   public saving: boolean = false;
@@ -29,8 +31,8 @@ export class DashboardPreferencesDialogComponent implements OnInit {
   public preferenceMode: 'personal' | 'system' = 'personal';
 
   private originalConfiguredIds: string[] = [];
-  private currentUserPreferences: DashboardUserPreferenceEntity[] = [];
-  private allAvailableDashboards: DashboardEntityExtended[] = [];
+  private currentUserPreferences: MJDashboardUserPreferenceEntity[] = [];
+  private allAvailableDashboards: MJDashboardEntityExtended[] = [];
 
   async ngOnInit(): Promise<void> {
     try {
@@ -71,11 +73,11 @@ export class DashboardPreferencesDialogComponent implements OnInit {
 
     // Filter dashboards by scope
     const appFilter = this.applicationId ? ` AND ApplicationID='${this.applicationId}'` : ' AND ApplicationID IS NULL';
-    this.allAvailableDashboards = dashList.Results.filter((d: DashboardEntityExtended) => {
+    this.allAvailableDashboards = dashList.Results.filter((d: MJDashboardEntityExtended) => {
       if (this.scope === 'Global') {
         return d.Scope === 'Global' && !d.ApplicationID;
       } else {
-        return d.ApplicationID === this.applicationId; // ignore scope for dashboards that match app id, sometimes they have a global scope as they can be shown globally as well as app specific
+        return UUIDsEqual(d.ApplicationID, this.applicationId) // ignore scope for dashboards that match app id, sometimes they have a global scope as they can be shown globally as well as app specific
       }
     });
 
@@ -97,7 +99,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       const ds = await md.GetAndCacheDatasetByName("MJ_Metadata");
       const appList = ds.Results.find(r => r.Code === 'Applications');
       if (appList) {
-        const app = appList.Results.find((a: ApplicationEntity) => a.ID === this.applicationId);
+        const app = appList.Results.find((a: MJApplicationEntity) => UUIDsEqual(a.ID, this.applicationId));
         this.applicationName = app?.Name || 'Unknown Application';
       }
     } catch (error) {
@@ -127,7 +129,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
 
     console.log('Loading preferences with filter:', filter);
 
-    const prefsResult = await rv.RunView<DashboardUserPreferenceEntity>({
+    const prefsResult = await rv.RunView<MJDashboardUserPreferenceEntity>({
       EntityName: 'MJ: Dashboard User Preferences',
       ExtraFilter: filter,
       ResultType: 'entity_object',
@@ -143,8 +145,8 @@ export class DashboardPreferencesDialogComponent implements OnInit {
     
     // Get configured dashboards in the right order
     this.configuredDashboards = this.currentUserPreferences
-      .map(pref => this.allAvailableDashboards.find(d => d.ID === pref.DashboardID))
-      .filter((d): d is DashboardEntityExtended => d !== undefined);
+      .map(pref => this.allAvailableDashboards.find(d => UUIDsEqual(d.ID, pref.DashboardID)))
+      .filter((d): d is MJDashboardEntityExtended => d !== undefined);
     
     // Get available dashboards (not configured)
     this.availableDashboards = this.allAvailableDashboards
@@ -152,7 +154,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       .sort((a, b) => a.Name.localeCompare(b.Name));
   }
 
-  public onDrop(event: CdkDragDrop<DashboardEntityExtended[]>): void {
+  public onDrop(event: CdkDragDrop<MJDashboardEntityExtended[]>): void {
     try {
       if (event.previousContainer === event.container) {
         // Reordering within the same list
@@ -184,9 +186,9 @@ export class DashboardPreferencesDialogComponent implements OnInit {
     }
   }
 
-  public addDashboard(dashboard: DashboardEntityExtended): void {
+  public addDashboard(dashboard: MJDashboardEntityExtended): void {
     try {
-      const index = this.availableDashboards.findIndex(d => d.ID === dashboard.ID);
+      const index = this.availableDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID));
       if (index !== -1) {
         this.availableDashboards.splice(index, 1);
         this.configuredDashboards.push(dashboard);
@@ -203,9 +205,9 @@ export class DashboardPreferencesDialogComponent implements OnInit {
     }
   }
 
-  public removeDashboard(dashboard: DashboardEntityExtended): void {
+  public removeDashboard(dashboard: MJDashboardEntityExtended): void {
     try {
-      const index = this.configuredDashboards.findIndex(d => d.ID === dashboard.ID);
+      const index = this.configuredDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID));
       if (index !== -1) {
         this.configuredDashboards.splice(index, 1);
         this.availableDashboards.push(dashboard);
@@ -292,7 +294,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       
       console.log('Loading existing preferences with filter:', userFilter);
       
-      const existingPrefs = await rv.RunView<DashboardUserPreferenceEntity>({
+      const existingPrefs = await rv.RunView<MJDashboardUserPreferenceEntity>({
         EntityName: 'MJ: Dashboard User Preferences',
         ExtraFilter: userFilter,
         ResultType: 'entity_object',
@@ -302,7 +304,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       console.log('Found existing preferences:', existingPreferences.length);
 
       // Create maps for efficient lookups
-      const existingByDashboardId = new Map<string, DashboardUserPreferenceEntity>();
+      const existingByDashboardId = new Map<string, MJDashboardUserPreferenceEntity>();
       existingPreferences.forEach(pref => {
         existingByDashboardId.set(pref.DashboardID, pref);
       });
@@ -322,7 +324,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       }
 
       // Step 2: Update existing preferences or create new ones
-      const newPreferences: DashboardUserPreferenceEntity[] = [];
+      const newPreferences: MJDashboardUserPreferenceEntity[] = [];
       
       for (let i = 0; i < this.configuredDashboards.length; i++) {
         const dashboard = this.configuredDashboards[i];
@@ -342,7 +344,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
         } else {
           // Create new preference
           console.log(`Creating new preference for dashboard ${dashboard.Name}, order: ${newDisplayOrder}`);
-          prefEntity = await md.GetEntityObject<DashboardUserPreferenceEntity>('MJ: Dashboard User Preferences');
+          prefEntity = await md.GetEntityObject<MJDashboardUserPreferenceEntity>('MJ: Dashboard User Preferences');
           
           // Set UserID based on preference mode
           if (this.isSysAdmin && this.scope === 'Global' && this.preferenceMode === 'system') {

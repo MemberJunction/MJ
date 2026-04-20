@@ -84,16 +84,26 @@ export default class Init extends Command {
         type: 'list',
         name: 'provider',
         message: 'AI Provider:',
-        choices: ['openai', 'anthropic', 'groq']
+        choices: ['gemini', 'openai', 'anthropic', 'groq', 'mistral', 'vertex', 'azure', 'cerebras', 'openrouter', 'xai', 'bedrock'],
+        default: 'gemini',
+        loop: false
       },
       {
         type: 'input',
         name: 'model',
         message: 'Model name:',
         default: (answers: any) => {
+          if (answers.provider === 'gemini') return 'gemini-3-flash-preview';
           if (answers.provider === 'openai') return 'gpt-4-turbo-preview';
           if (answers.provider === 'anthropic') return 'claude-3-opus-20240229';
           if (answers.provider === 'groq') return 'mixtral-8x7b-32768';
+          if (answers.provider === 'mistral') return 'mistral-small-latest';
+          if (answers.provider === 'vertex') return 'gemini-1.5-flash';
+          if (answers.provider === 'azure') return 'gpt-4';
+          if (answers.provider === 'cerebras') return 'llama-3.1-8b';
+          if (answers.provider === 'openrouter') return 'anthropic/claude-3-opus';
+          if (answers.provider === 'xai') return 'grok-2';
+          if (answers.provider === 'bedrock') return 'anthropic.claude-3-sonnet-20240229-v1:0';
           return '';
         }
       },
@@ -221,6 +231,19 @@ export default class Init extends Command {
         maxTables: queryAnswers.maxTables !== undefined ? queryAnswers.maxTables : 10
       };
     }
+
+    // Output directory configuration
+    const outputAnswers = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'outputDir',
+        message: 'Output directory for analysis results:',
+        default: './output'
+      }
+    ]);
+
+    // Set output directory
+    config.output.outputDir = outputAnswers.outputDir;
 
     // Save configuration
     await ConfigLoader.save(config, './config.json');

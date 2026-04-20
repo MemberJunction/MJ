@@ -1,0 +1,611 @@
+[
+  {
+    "fields": {
+      "Name": "Azua",
+      "Code": "AZ",
+      "ISO3166_2": "DO-AZ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Azua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "6AE86C9D-6429-4E71-A636-68003F09E0D1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.069Z",
+      "checksum": "999a1276d054947c7b0f0d1482d5de7be3759a078bfc8dddac30d635a595c33c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bahoruco",
+      "Code": "BR",
+      "ISO3166_2": "DO-BR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bahoruco"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "32FA2391-8D2A-400C-BBB4-D7CA8C6617DE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.083Z",
+      "checksum": "9568a16863720509d366c30b6439ef276da4e36d0472f4411aeb3ba38267dbc6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Barahona",
+      "Code": "BH",
+      "ISO3166_2": "DO-BH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Barahona"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "88B79256-B423-4D12-91C6-9D0378F58A47"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.100Z",
+      "checksum": "de460e1d4b38996fdb3fe5cd7c822374fcaaefeb42e8382d6a494b30848d789b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dajabón",
+      "Code": "DA",
+      "ISO3166_2": "DO-DA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dajabón"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "9D1987B1-54CB-42F7-A920-F81447A875B1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.121Z",
+      "checksum": "1b88d1f70c5fb633e9486515fdf6bbd919bcba1b15cf51936267e8963275aa06"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Distrito National (Santo Domingo)",
+      "Code": "DN",
+      "ISO3166_2": "DO-DN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Distrito National (Santo Domingo)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "10777C98-739E-4604-BCFC-08806F825C65"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.143Z",
+      "checksum": "78d94619e1688cda8af8a250ac3d1452f2092c0a2a76e2133465cccfcd68b593"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Duarte",
+      "Code": "DU",
+      "ISO3166_2": "DO-DU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Duarte"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "694653B2-2B4D-4041-B458-5A0F2350C3E8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.163Z",
+      "checksum": "2af8e78a1350ea3011d7d1cb9f21bb639de6b9f21725ed44c59774f16d15d43c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Seibo",
+      "Code": "SE",
+      "ISO3166_2": "DO-SE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "El Seibo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "7A2E20B3-FB81-4F5B-AA86-B869210CF486"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.183Z",
+      "checksum": "af4d9360d4b6e1182cd2bc1641501e8eed6653b6ff4a497748aebcfefe9f94f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hato Mayor",
+      "Code": "HM",
+      "ISO3166_2": "DO-HM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Hato Mayor"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "E4D59B73-B114-44EA-97A0-548E1B1CBD20"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.203Z",
+      "checksum": "f59ce875e5a7bdd4e35b42fef70c0a3b5df659e344424417f106fce6829772fc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Independencia",
+      "Code": "IN",
+      "ISO3166_2": "DO-IN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Independencia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "FE4BE7CA-049D-4120-9733-5FECE930835B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.220Z",
+      "checksum": "b6e501675bd1d2437ba6cdd66eaa9a1b6b2d773dae6c1f3c61beb545c094f3db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Altagracia",
+      "Code": "AL",
+      "ISO3166_2": "DO-AL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "La Altagracia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "E50DD3EB-DCC9-478F-8CA0-88C5FA1D3E9C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.234Z",
+      "checksum": "0fc14374712cdf585ec874ba96c0044dd04ea08f071b3b91ab3d147be36717f2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Estrelleta [Elías Piña]",
+      "Code": "EP",
+      "ISO3166_2": "DO-EP",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "La Estrelleta [Elías Piña]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "DBD94218-FD98-4A5A-A23C-7AC30907A485"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.298Z",
+      "checksum": "449b7938e2ad4cee8313231ca3d43c60dfcbd860f8ff716204fb9c7d474d4e0d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Romana",
+      "Code": "RO",
+      "ISO3166_2": "DO-RO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "La Romana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "A8A50B8F-E98A-406F-8672-66191911191B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.314Z",
+      "checksum": "36c8578fa0e8e913a4d15d4e9ae946e150fe4a4ea6fe75dd9a2c7f2e14cb9f44"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Vega",
+      "Code": "VE",
+      "ISO3166_2": "DO-VE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "La Vega"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "AAEC2586-0200-460E-8882-C4C64D26C557"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.330Z",
+      "checksum": "807f26a6b010f673303f4936646b04bb9daf0fd262225756c759582c5b4ee1f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "María Trinidad Sánchez",
+      "Code": "MT",
+      "ISO3166_2": "DO-MT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "María Trinidad Sánchez"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "D575BFFF-1A36-4E7E-854B-31EA5B6BD554"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.348Z",
+      "checksum": "1be2c280b89589e18bcece6acb5443a74690bd3d7b3e8151c39ce778d13e3690"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Monseñor Nouel",
+      "Code": "MN",
+      "ISO3166_2": "DO-MN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Monseñor Nouel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "779D8E49-C687-4CBC-B219-69DAE2921C99"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.364Z",
+      "checksum": "1bb984db3cc22dbc1a6a03d96b66e466e3e976bea2ab4e76c5fe722f0aa29c72"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Monte Cristi",
+      "Code": "MC",
+      "ISO3166_2": "DO-MC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Monte Cristi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "9C85B8C3-26AA-4A60-9DA9-C428D4DCC819"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.380Z",
+      "checksum": "49387feb0e2ff33957a0f9f2a6fbe88ae97b8e479ef500ab9eecc6d76e999e5e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Monte Plata",
+      "Code": "MP",
+      "ISO3166_2": "DO-MP",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Monte Plata"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "0306C6F6-5685-48F8-AEF0-2D7697649DB6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.395Z",
+      "checksum": "ec4de8131a1242d0b18c1651f72cad79a1e44413a754d7abc861e72cd7adedb8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pedernales",
+      "Code": "PN",
+      "ISO3166_2": "DO-PN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pedernales"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "00E9381F-CCAB-4FA3-8EAC-A6D2345C737C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.413Z",
+      "checksum": "76bbeb1414751c46cf9267a79b5f12ec73c28752ff09d2f9702bc6077ac81da8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Peravia",
+      "Code": "PR",
+      "ISO3166_2": "DO-PR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Peravia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "375B7A12-8A0A-41CD-B2E4-E6B74F012043"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.429Z",
+      "checksum": "82fc034924f419c4d9e9383cea1fc2c49f349b6b0df01e830a1a62711cfed76f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Puerto Plata",
+      "Code": "PP",
+      "ISO3166_2": "DO-PP",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Puerto Plata"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "882DA6CE-2284-4DA6-9261-34F4AC943559"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.443Z",
+      "checksum": "5cfec1dfe172df59ebc8849825c85488648eb9795a8445558333cd1d0bdaf220"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Salcedo",
+      "Code": "SC",
+      "ISO3166_2": "DO-SC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Salcedo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "A7B7854C-EFCB-4D1D-943A-1464A5D42C64"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.496Z",
+      "checksum": "010b33a7c38ceb8e8787f71df41dafc193c02b2004f10d44b67352713e234df7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Samaná",
+      "Code": "SM",
+      "ISO3166_2": "DO-SM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Samaná"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "E1FE0303-8C65-4C4F-8AA9-9C9330012D69"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.513Z",
+      "checksum": "f8b5e9a49d1f72413e7ca659efa2c5fc7a620151a3370e3059cac99d181e3b13"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Cristóbal",
+      "Code": "CR",
+      "ISO3166_2": "DO-CR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "San Cristóbal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "4F13FF2B-0A61-4E2A-ABF5-64DC51C5340C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.529Z",
+      "checksum": "c9482b91c3dc583b4f1c4b011cd093b599e504401eb21ce524b224ebc0e4d102"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Juan",
+      "Code": "JU",
+      "ISO3166_2": "DO-JU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "San Juan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "6A3DF2B7-EFB8-4A7A-B999-8ACC92C00B4D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.544Z",
+      "checksum": "2b572ec9194c1fe0c69dc8db51aed3fe46f33a9c1f8aaaaa926f6237cbc4f43d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Pedro de Macorís",
+      "Code": "PM",
+      "ISO3166_2": "DO-PM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "San Pedro de Macorís"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "8F126AE1-F8B1-4BBA-BA53-42A11A9D6D0F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.561Z",
+      "checksum": "a468ffe3b0a41cf7699de3a59b0f0b5177373b87ba057ceaa0443240d46ba139"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sanchez Ramírez",
+      "Code": "SZ",
+      "ISO3166_2": "DO-SZ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sanchez Ramírez"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "2951D184-EE68-4E61-9509-173EB18B7C7A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.577Z",
+      "checksum": "0045a91991a5b90417bd88c36bdcf806fde65d03b6c0dea4822d120e5c88c08c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santiago",
+      "Code": "ST",
+      "ISO3166_2": "DO-ST",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Santiago"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "E365178E-A00D-4BD6-9EBA-9DE00EBB7332"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.594Z",
+      "checksum": "505ca96976bbd883e85559b5305760a8c247f923c02f898adbdbffb15ecc4175"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santiago Rodríguez",
+      "Code": "SR",
+      "ISO3166_2": "DO-SR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Santiago Rodríguez"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "25CAE96B-FFB5-455F-9021-353F32826F05"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.610Z",
+      "checksum": "1a0c9f07a0e21cdd2dc4ec433f7ad1e7f11c50a1ab11fbc7b5418fc8e37a1517"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Valverde",
+      "Code": "VA",
+      "ISO3166_2": "DO-VA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Valverde"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DO"
+    },
+    "primaryKey": {
+      "ID": "95F24D48-B310-4D20-8764-B66494E15402"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.624Z",
+      "checksum": "b2e881243a2a99982ff7b127e181937e61e591fb5485e77f4cd2279e49493b34"
+    }
+  }
+]

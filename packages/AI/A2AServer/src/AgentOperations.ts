@@ -1,6 +1,7 @@
 import { Metadata, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
-import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AgentRunner } from "@memberjunction/ai-agents";
 import { ChatMessage } from "@memberjunction/ai";
 
@@ -38,7 +39,7 @@ export class AgentOperations {
             await aiEngine.Config(false, this.contextUser);
             
             const allAgents = aiEngine.Agents;
-            let agents: AIAgentEntityExtended[] = [];
+            let agents: MJAIAgentEntityExtended[] = [];
             
             if (pattern === '*') {
                 agents = allAgents;
@@ -87,10 +88,10 @@ export class AgentOperations {
             const aiEngine = AIEngine.Instance;
             await aiEngine.Config(false, this.contextUser);
             
-            let agent: AIAgentEntityExtended | null = null;
+            let agent: MJAIAgentEntityExtended | null = null;
             
             if (parameters.agentId) {
-                agent = aiEngine.Agents.find(a => a.ID === parameters.agentId) || null;
+                agent = aiEngine.Agents.find(a => UUIDsEqual(a.ID, parameters.agentId)) || null;
                 if (!agent) {
                     throw new Error(`Agent not found with ID: ${parameters.agentId}`);
                 }
@@ -154,7 +155,7 @@ export class AgentOperations {
             
             // Load the agent run from database
             const md = new Metadata();
-            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.contextUser);
+            const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.contextUser);
             const loaded = await agentRun.Load(runId);
             
             if (!loaded) {
@@ -202,7 +203,7 @@ export class AgentOperations {
             
             // Load the agent run from database
             const md = new Metadata();
-            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.contextUser);
+            const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.contextUser);
             const loaded = await agentRun.Load(runId);
             
             if (!loaded) {

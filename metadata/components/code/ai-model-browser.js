@@ -42,7 +42,7 @@ function AIModelBrowser({ utilities, styles, components, callbacks, savedUserSet
         
         // Load AI Models
         const modelsResult = await utilities.rv.RunView({
-          EntityName: 'AI Models',
+          EntityName: 'MJ: AI Models',
           Fields: ['ID', 'Name', 'APIName', 'Description', 'AIModelTypeID', 'InputTokenLimit', 
                    'CostRank', 'IsActive', '__mj_CreatedAt', '__mj_UpdatedAt'],
           OrderBy: `${sortBy} ${sortDirection.toUpperCase()}`,
@@ -59,7 +59,7 @@ function AIModelBrowser({ utilities, styles, components, callbacks, savedUserSet
         
         // Load Model Types for filter
         const typesResult = await utilities.rv.RunView({
-          EntityName: 'AI Model Types',
+          EntityName: 'MJ: AI Model Types',
           Fields: ['ID', 'Name', 'Description'],
           OrderBy: 'Name ASC'
         });
@@ -150,7 +150,7 @@ function AIModelBrowser({ utilities, styles, components, callbacks, savedUserSet
           
           if (promptIds.length > 0) {
             const promptsResult = await utilities.rv.RunView({
-              EntityName: 'AI Prompts',
+              EntityName: 'MJ: AI Prompts',
               Fields: ['ID', 'Name', 'Description', 'CategoryID'],
               ExtraFilter: `ID IN ('${promptIds.join("','")}')`
             });
@@ -268,7 +268,7 @@ function AIModelBrowser({ utilities, styles, components, callbacks, savedUserSet
   const handleOpenRecord = useCallback((modelName) => {
     console.log('Opening AI Model record:', modelName);
     if (callbacks?.OpenEntityRecord && modelName) {
-      callbacks.OpenEntityRecord('AI Models', [{ FieldName: 'Name', Value: modelName }]);
+      callbacks.OpenEntityRecord('MJ: AI Models', [{ FieldName: 'Name', Value: modelName }]);
     }
   }, [callbacks]);
   

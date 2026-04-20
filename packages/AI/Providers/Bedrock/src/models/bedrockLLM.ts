@@ -1,16 +1,18 @@
-import { 
-  BaseLLM, 
-  ChatParams, 
-  ChatResult, 
-  ChatResultChoice, 
-  ChatMessageRole, 
-  ClassifyParams, 
-  ClassifyResult, 
-  SummarizeParams, 
-  SummarizeResult, 
-  ModelUsage, 
+import {
+  BaseLLM,
+  ChatParams,
+  ChatResult,
+  ChatResultChoice,
+  ChatMessageRole,
+  ClassifyParams,
+  ClassifyResult,
+  SummarizeParams,
+  SummarizeResult,
+  ModelUsage,
   ChatMessage,
-  ErrorAnalyzer 
+  ChatMessageContentBlock,
+  ErrorAnalyzer,
+  parseBase64DataUrl
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { 
@@ -50,6 +52,14 @@ export class BedrockLLM extends BaseLLM {
   }
 
   /**
+   * Bedrock supports assistant prefill for Claude (anthropic.*) models.
+   * The provider implementation handles per-model-prefix gating internally.
+   */
+  public override get SupportsPrefill(): boolean {
+    return true;
+  }
+
+  /**
    * Implementation of non-streaming chat completion for Amazon Bedrock
    */
   protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
@@ -67,13 +77,21 @@ export class BedrockLLM extends BaseLLM {
       
       if (modelId.startsWith('anthropic.')) {
         // Anthropic Claude models
+        const claudeMessages = [...bedrockParams.messages];
+        // Append assistant prefill if specified — Claude on Bedrock supports this natively
+        if (params.assistantPrefill) {
+          claudeMessages.push({ role: 'assistant', content: params.assistantPrefill });
+        }
         requestBody = {
           anthropic_version: "bedrock-2023-05-31",
           max_tokens: params.maxOutputTokens || 1024,
-          messages: bedrockParams.messages,
+          messages: claudeMessages,
           temperature: params.temperature || 0.7,
           top_p: 0.9
         };
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+          requestBody.stop_sequences = params.stopSequences;
+        }
       } else if (modelId.startsWith('ai21.')) {
         // AI21 models
         requestBody = {
@@ -82,6 +100,9 @@ export class BedrockLLM extends BaseLLM {
           temperature: params.temperature || 0.7,
           topP: 0.9
         };
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+          requestBody.stopSequences = params.stopSequences;
+        }
       } else if (modelId.startsWith('amazon.titan-')) {
         // Amazon Titan models
         requestBody = {
@@ -92,6 +113,9 @@ export class BedrockLLM extends BaseLLM {
             topP: 0.9
           }
         };
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+          requestBody.textGenerationConfig.stopSequences = params.stopSequences;
+        }
       } else if (modelId.startsWith('meta.')) {
         // Meta Llama models
         requestBody = {
@@ -100,10 +124,11 @@ export class BedrockLLM extends BaseLLM {
           temperature: params.temperature || 0.7,
           top_p: 0.9
         };
+        // Note: Meta Llama models on Bedrock don't support stop sequences in the request body
       } else {
         throw new Error(`Unsupported model provider for Bedrock: ${modelId}`);
       }
-      
+
       // Invoke the model
       const command = new InvokeModelCommand({
         modelId: modelId,
@@ -209,13 +234,21 @@ export class BedrockLLM extends BaseLLM {
     
     if (modelId.startsWith('anthropic.')) {
       // Anthropic Claude models
+      const claudeMessages = [...bedrockParams.messages];
+      // Append assistant prefill if specified — Claude on Bedrock supports this natively
+      if (params.assistantPrefill) {
+        claudeMessages.push({ role: 'assistant', content: params.assistantPrefill });
+      }
       requestBody = {
         anthropic_version: "bedrock-2023-05-31",
         max_tokens: params.maxOutputTokens || 1024,
-        messages: bedrockParams.messages,
+        messages: claudeMessages,
         temperature: params.temperature || 0.7,
         top_p: 0.9
       };
+      if (params.stopSequences != null && params.stopSequences.length > 0) {
+        requestBody.stop_sequences = params.stopSequences;
+      }
     } else if (modelId.startsWith('ai21.')) {
       // AI21 models
       requestBody = {
@@ -224,6 +257,9 @@ export class BedrockLLM extends BaseLLM {
         temperature: params.temperature || 0.7,
         topP: 0.9
       };
+      if (params.stopSequences != null && params.stopSequences.length > 0) {
+        requestBody.stopSequences = params.stopSequences;
+      }
     } else if (modelId.startsWith('amazon.titan-')) {
       // Amazon Titan models
       requestBody = {
@@ -234,6 +270,9 @@ export class BedrockLLM extends BaseLLM {
           topP: 0.9
         }
       };
+      if (params.stopSequences != null && params.stopSequences.length > 0) {
+        requestBody.textGenerationConfig.stopSequences = params.stopSequences;
+      }
     } else if (modelId.startsWith('meta.')) {
       // Meta Llama models
       requestBody = {
@@ -242,10 +281,11 @@ export class BedrockLLM extends BaseLLM {
         temperature: params.temperature || 0.7,
         top_p: 0.9
       };
+      // Note: Meta Llama models on Bedrock don't support stop sequences in the request body
     } else {
       throw new Error(`Unsupported model provider for Bedrock: ${modelId}`);
     }
-    
+
     // Invoke the model with streaming
     const command = new InvokeModelWithResponseStreamCommand({
       modelId: modelId,
@@ -366,14 +406,96 @@ export class BedrockLLM extends BaseLLM {
 
   /**
    * Convert MemberJunction chat messages to Bedrock-compatible messages
+   * Supports multimodal content for Claude models (images via base64)
    */
   private convertToBedrockMessages(messages: ChatMessage[]): any[] {
     return messages.map(msg => {
+      const role = this.mapRole(msg.role);
+
+      // If content is a simple string, return as-is for text-only models
+      // or wrap in content array for Claude models
+      if (typeof msg.content === 'string') {
+        return {
+          role,
+          content: msg.content
+        };
+      }
+
+      // Content is an array of ChatMessageContentBlock - convert to Bedrock format
+      const contentBlocks = msg.content as ChatMessageContentBlock[];
+      const bedrockContent: any[] = [];
+
+      for (const block of contentBlocks) {
+        if (block.type === 'text') {
+          bedrockContent.push({
+            type: 'text',
+            text: block.content
+          });
+        } else if (block.type === 'image_url') {
+          // Convert image to Bedrock/Claude format
+          const imageBlock = this.formatImageForBedrock(block);
+          if (imageBlock) {
+            bedrockContent.push(imageBlock);
+          }
+        }
+        // Note: audio_url, video_url, file_url not yet supported by Bedrock Claude
+      }
+
       return {
-        role: this.mapRole(msg.role),
-        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+        role,
+        content: bedrockContent.length > 0 ? bedrockContent : msg.content
       };
     });
+  }
+
+  /**
+   * Format an image content block for Bedrock Claude API
+   * Claude expects: { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "..." } }
+   */
+  private formatImageForBedrock(block: ChatMessageContentBlock): any | null {
+    const content = block.content;
+
+    // Check if it's a data URL (data:image/png;base64,...)
+    const parsed = parseBase64DataUrl(content);
+    if (parsed) {
+      return {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: parsed.mediaType,
+          data: parsed.data
+        }
+      };
+    }
+
+    // Check if it's raw base64 with mimeType provided
+    if (block.mimeType && !content.startsWith('http')) {
+      return {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: block.mimeType,
+          data: content
+        }
+      };
+    }
+
+    // URLs are not supported by Bedrock Claude - must be base64
+    if (content.startsWith('http://') || content.startsWith('https://')) {
+      console.warn('Bedrock Claude does not support image URLs, only base64. Skipping image.');
+      return null;
+    }
+
+    // If we can't determine the format, try to use it as base64 with a default type
+    console.warn('Image content block has unknown format, attempting to use as base64 JPEG');
+    return {
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: 'image/jpeg',
+        data: content
+      }
+    };
   }
 
   /**
@@ -406,8 +528,4 @@ export class BedrockLLM extends BaseLLM {
       }
     }).join('');
   }
-}
-
-export function LoadBedrockLLM() {
-  // this does nothing but prevents the class from being removed by the tree shaker
 }

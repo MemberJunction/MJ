@@ -1,0 +1,68 @@
+[
+  {
+    "fields": {
+      "Name": "Active Users",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Demos",
+      "Description": "Returns all active users with basic profile info. Designed as a reusable building block for composed queries.",
+      "SQL": "@file:SQL/demos/active-users.sql",
+      "TechnicalDescription": "Simple base query selecting active users from vwUsers. Marked as Reusable so other queries can reference it via {{query:\"Demos/Active Users\"}} composition syntax.",
+      "Status": "Approved",
+      "QualityRank": 8,
+      "ExecutionCostRank": 1,
+      "Reusable": true,
+      "UsesTemplate": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "D972EBBA-AEB3-46F2-9ED1-B8986173039C"
+    },
+    "sync": {
+      "lastModified": "2026-03-11T20:52:37.958Z",
+      "checksum": "1cf8f4a7da64fd6b99218699ffa82496826080e5868cbb689774e2effdddb1d7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Recent Entity Changes",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Demos",
+      "Description": "Returns recent record changes grouped by entity name. Accepts a lookbackDays parameter to control the time window.",
+      "SQL": "@file:SQL/demos/recent-entity-changes.sql",
+      "TechnicalDescription": "Parameterized reusable query using Nunjucks template for lookbackDays. Groups record changes by entity and provides count/date range metrics. Can be composed into other queries with static or pass-through parameters.",
+      "Status": "Approved",
+      "QualityRank": 8,
+      "ExecutionCostRank": 2,
+      "Reusable": true,
+      "UsesTemplate": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "C3F7F066-789A-42A2-ACFD-2C113B5D2E30"
+    },
+    "sync": {
+      "lastModified": "2026-03-11T20:56:07.380Z",
+      "checksum": "8e94e609f019b218c8f56514a5ba49dfca3d44a7858c737a22d26ffa14c9d29a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "User Activity Summary",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Demos",
+      "Description": "Composed query that joins Active Users with Recent Entity Changes to show each user's recent activity level. Demonstrates the {{query:\"...\"}} composition syntax.",
+      "SQL": "@file:SQL/demos/user-activity-summary.sql",
+      "TechnicalDescription": "This query demonstrates MJ query composition by referencing two reusable queries:\n1. {{query:\"Demos/Active Users\"}} - provides the user base\n2. {{query:\"Demos/Recent Entity Changes(lookbackDays='30')\"}} - provides change metrics with a static 30-day lookback\n\nAt execution time, the composition engine resolves these references into CTEs before the SQL is sent to the database.",
+      "Status": "Approved",
+      "QualityRank": 7,
+      "ExecutionCostRank": 3,
+      "Reusable": false,
+      "UsesTemplate": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "C2162354-AB2F-4244-8659-C5A4E213E9FA"
+    },
+    "sync": {
+      "lastModified": "2026-03-11T20:52:37.686Z",
+      "checksum": "65c01072fed9b2e4b2a1d171f033ab0700887cf404eb07064e3b7e04e049f94a"
+    }
+  }
+]

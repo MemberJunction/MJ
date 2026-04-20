@@ -1,8 +1,8 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
-import * as xml2js from "xml2js";
-import * as xpath from "xpath";
+import xml2js from "xml2js";
+import xpath from "xpath";
 import { DOMParser } from "@xmldom/xmldom";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 import { BaseAction } from '@memberjunction/actions';
@@ -308,11 +308,4 @@ export class XMLParserAction extends BaseFileHandlerAction {
             });
         });
     }
-}
-
-/**
- * Loader function to ensure the XMLParserAction class is included in the bundle
- */
-export function LoadXMLParserAction() {
-    // Stub function to prevent tree shaking
 }

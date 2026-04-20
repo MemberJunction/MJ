@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { SuiteHierarchyNode } from '../../services/testing-instrumentation.service';
 
 @Component({
+  standalone: false,
   selector: 'app-suite-tree',
   template: `
     <div class="suite-tree">
@@ -47,15 +48,15 @@ import { SuiteHierarchyNode } from '../../services/testing-instrumentation.servi
       height: 100%;
       display: flex;
       flex-direction: column;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       overflow: hidden;
     }
 
     .tree-header {
       padding: 16px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -65,14 +66,14 @@ import { SuiteHierarchyNode } from '../../services/testing-instrumentation.servi
       margin: 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     .tree-header h4 i {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .tree-actions {
@@ -81,20 +82,20 @@ import { SuiteHierarchyNode } from '../../services/testing-instrumentation.servi
     }
 
     .tree-action-btn {
-      background: white;
-      border: 1px solid #ddd;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       padding: 6px 10px;
       border-radius: 4px;
       cursor: pointer;
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-secondary);
       transition: all 0.2s ease;
     }
 
     .tree-action-btn:hover {
-      background: #e9ecef;
-      border-color: #ccc;
-      color: #333;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-border-strong);
+      color: var(--mj-text-primary);
     }
 
     .tree-action-btn i {
@@ -113,13 +114,13 @@ import { SuiteHierarchyNode } from '../../services/testing-instrumentation.servi
       align-items: center;
       justify-content: center;
       padding: 40px 20px;
-      color: #999;
+      color: var(--mj-text-disabled);
       gap: 12px;
     }
 
     .no-suites i {
       font-size: 36px;
-      color: #ddd;
+      color: var(--mj-border-default);
     }
 
     .no-suites p {
@@ -160,6 +161,7 @@ export class SuiteTreeComponent {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-suite-tree-node',
   template: `
     <div class="tree-node" [style.padding-left.px]="level * 16">
@@ -167,20 +169,23 @@ export class SuiteTreeComponent {
         class="node-content"
         [class.selected]="node.id === selectedId"
         (click)="onClick()"
-      >
-        <button
-          class="expand-btn"
-          *ngIf="node.children && node.children.length > 0"
-          (click)="onToggle($event)"
         >
-          <i class="fa-solid" [class.fa-chevron-right]="!node.expanded" [class.fa-chevron-down]="node.expanded"></i>
-        </button>
-        <span class="expand-placeholder" *ngIf="!node.children || node.children.length === 0"></span>
-
+        @if (node.children && node.children.length > 0) {
+          <button
+            class="expand-btn"
+            (click)="onToggle($event)"
+            >
+            <i class="fa-solid" [class.fa-chevron-right]="!node.expanded" [class.fa-chevron-down]="node.expanded"></i>
+          </button>
+        }
+        @if (!node.children || node.children.length === 0) {
+          <span class="expand-placeholder"></span>
+        }
+    
         <i class="fa-solid fa-folder suite-icon"></i>
-
+    
         <span class="suite-name">{{ node.name }}</span>
-
+    
         <div class="suite-metrics">
           <span class="test-count" title="Test Count">
             <i class="fa-solid fa-flask"></i>
@@ -191,7 +196,7 @@ export class SuiteTreeComponent {
           </span>
         </div>
       </div>
-
+    
       @if (node.expanded && node.children && node.children.length > 0) {
         @for (child of node.children; track child.id) {
           <div>
@@ -206,7 +211,7 @@ export class SuiteTreeComponent {
         }
       }
     </div>
-  `,
+    `,
   styles: [`
     .tree-node {
       margin-bottom: 2px;
@@ -223,12 +228,12 @@ export class SuiteTreeComponent {
     }
 
     .node-content:hover {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
     }
 
     .node-content.selected {
-      background: rgba(33, 150, 243, 0.1);
-      border-left: 3px solid #2196f3;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      border-left: 3px solid var(--mj-brand-primary);
     }
 
     .expand-btn {
@@ -236,14 +241,14 @@ export class SuiteTreeComponent {
       border: none;
       cursor: pointer;
       padding: 2px 6px;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 10px;
       transition: color 0.2s ease;
       min-width: 20px;
     }
 
     .expand-btn:hover {
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .expand-placeholder {
@@ -252,14 +257,14 @@ export class SuiteTreeComponent {
 
     .suite-icon {
       font-size: 12px;
-      color: #ff9800;
+      color: var(--mj-status-warning);
     }
 
     .suite-name {
       flex: 1;
       font-size: 12px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -276,8 +281,8 @@ export class SuiteTreeComponent {
       display: flex;
       align-items: center;
       gap: 3px;
-      color: #666;
-      background: #f0f0f0;
+      color: var(--mj-text-secondary);
+      background: var(--mj-bg-surface-sunken);
       padding: 2px 6px;
       border-radius: 10px;
     }
@@ -295,23 +300,23 @@ export class SuiteTreeComponent {
     }
 
     .pass-rate.excellent {
-      background: rgba(76, 175, 80, 0.1);
-      color: #4caf50;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .pass-rate.good {
-      background: rgba(139, 195, 74, 0.1);
-      color: #8bc34a;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .pass-rate.fair {
-      background: rgba(255, 193, 7, 0.1);
-      color: #ffc107;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
     }
 
     .pass-rate.poor {
-      background: rgba(244, 67, 54, 0.1);
-      color: #f44336;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
   `]
 })

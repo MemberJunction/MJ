@@ -1,0 +1,26 @@
+<nav class="action-breadcrumb" aria-label="Category navigation">
+  @for (item of Breadcrumbs; track item.id; let i = $index; let last = $last) {
+    @if (!last) {
+      <button class="breadcrumb-item"
+        (click)="selectCategory(item.id)"
+        [title]="item.name">
+        @if (i === 0) {
+          <i [class]="item.icon"></i>
+        }
+        <span class="breadcrumb-text">{{ item.name }}</span>
+      </button>
+      <span class="breadcrumb-separator">
+        <i class="fa-solid fa-chevron-right"></i>
+      </span>
+    } @else {
+      <span class="breadcrumb-item current" [title]="item.name">
+        @if (Breadcrumbs.length === 1) {
+          <i [class]="item.icon"></i>
+        } @else {
+          <i class="fa-solid fa-folder-open"></i>
+        }
+        <span class="breadcrumb-text">{{ item.name }}</span>
+      </span>
+    }
+  }
+</nav>

@@ -11,11 +11,14 @@
  */
 
 import { Command } from 'commander';
+import { createRequire } from 'node:module';
 import { generateCommand } from './commands/generate';
 import { validateCommand } from './commands/validate';
 import { exportCommand } from './commands/export';
 
-const packageJson = require('../../package.json');
+// Use createRequire to import JSON (compatible with ESM)
+const require = createRequire(import.meta.url);
+const packageJson = require('../../package.json') as { version: string };
 
 const program = new Command();
 

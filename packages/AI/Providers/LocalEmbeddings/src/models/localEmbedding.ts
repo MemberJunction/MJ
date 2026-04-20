@@ -17,16 +17,58 @@ interface TransformersModule {
 let pipeline: TransformersModule['pipeline'] | null = null;
 let env: TransformersEnv | null = null;
 let transformersLoaded = false;
+let transformersLoadingPromise: Promise<void> | null = null;
 let pendingSettings: Record<string, unknown> = {};
 
+// Retry configuration for model downloads
+const DEFAULT_MAX_RETRIES = 5;
+const DEFAULT_INITIAL_DELAY_MS = 2000;
+const DEFAULT_MAX_DELAY_MS = 30000;
+
+/**
+ * Delays execution for the specified number of milliseconds
+ */
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Calculates exponential backoff delay with jitter
+ */
+function calculateBackoffDelay(attempt: number, initialDelay: number, maxDelay: number): number {
+    // Exponential backoff: initialDelay * 2^attempt
+    const exponentialDelay = initialDelay * Math.pow(2, attempt);
+    // Add jitter (±25%) to prevent thundering herd
+    const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);
+    const delayWithJitter = exponentialDelay + jitter;
+    // Cap at max delay
+    return Math.min(delayWithJitter, maxDelay);
+}
+
+/**
+ * Loads the @xenova/transformers ESM module with proper synchronization.
+ * Uses a loading promise to prevent multiple concurrent imports when
+ * parallel embedding requests occur during startup.
+ */
 async function loadTransformers(): Promise<void> {
-    if (!transformersLoaded) {
+    // Fast path: already loaded
+    if (transformersLoaded) {
+        return;
+    }
+
+    // If currently loading, wait for the same promise (prevents duplicate imports)
+    if (transformersLoadingPromise) {
+        return transformersLoadingPromise;
+    }
+
+    // Start loading and store the promise for concurrent callers to reuse
+    transformersLoadingPromise = (async () => {
         // Use dynamic import to load ESM module in CommonJS context
         // This approach is cleaner than Function constructor and TypeScript-friendly
         const transformers = await (eval('import("@xenova/transformers")') as Promise<TransformersModule>);
         pipeline = transformers.pipeline;
         env = transformers.env;
-        
+
         // Configure Transformers.js settings
         env.allowLocalModels = true;
         // Note: localURL might not be available in all versions of transformers.js
@@ -34,7 +76,7 @@ async function loadTransformers(): Promise<void> {
             env.localURL = process.env.TRANSFORMERS_LOCAL_URL || '';
         }
         env.cacheDir = process.env.TRANSFORMERS_CACHE_DIR || './.cache/transformers';
-        
+
         // Apply any pending settings that were set before transformers was loaded
         if (pendingSettings.cacheDir) {
             env.cacheDir = pendingSettings.cacheDir as string;
@@ -42,9 +84,11 @@ async function loadTransformers(): Promise<void> {
         if (pendingSettings.localURL && 'localURL' in env) {
             env.localURL = pendingSettings.localURL as string;
         }
-        
+
         transformersLoaded = true;
-    }
+    })();
+
+    return transformersLoadingPromise;
 }
 
 @RegisterClass(BaseEmbeddings, 'LocalEmbedding')
@@ -90,25 +134,136 @@ export class LocalEmbedding extends BaseEmbeddings {
     }
 
     /**
-     * Load a pipeline for the specified model
+     * Load a pipeline for the specified model with retry logic.
+     * Uses exponential backoff to handle transient network failures when
+     * downloading models from HuggingFace Hub on first startup.
      */
     private async loadPipeline(modelId: string): Promise<unknown> {
-        try {
-            if (!pipeline) {
-                throw new Error('Transformers module not loaded');
-            }
-            // Create feature extraction pipeline
-            const pipe = await pipeline('feature-extraction', modelId, {
-                quantized: true, // Use quantized models for better performance
-            });
-            
-            return pipe;
-        } catch (error) {
-            const errorInfo = ErrorAnalyzer.analyzeError(error, 'LocalEmbedding');
-            console.error(`Failed to load model ${modelId}:`, errorInfo);
-            const errorMessage = typeof errorInfo === 'string' ? errorInfo : (errorInfo as any).message || 'Unknown error';
-            throw new Error(`Failed to load local embedding model ${modelId}: ${errorMessage}`);
+        if (!pipeline) {
+            throw new Error('Transformers module not loaded');
         }
+
+        const maxRetries = DEFAULT_MAX_RETRIES;
+        let lastError: unknown = null;
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                if (attempt === 0) {
+                    // First attempt - let user know download may take time
+                    console.log(`Loading embedding model ${modelId} from HuggingFace (first-time download may take a moment)...`);
+                } else {
+                    const backoffDelay = calculateBackoffDelay(attempt - 1, DEFAULT_INITIAL_DELAY_MS, DEFAULT_MAX_DELAY_MS);
+                    console.log(`  Retrying download (attempt ${attempt + 1}/${maxRetries})...`);
+                    await delay(backoffDelay);
+                }
+
+                // Create feature extraction pipeline
+                const pipe = await pipeline('feature-extraction', modelId, {
+                    quantized: true, // Use quantized models for better performance
+                });
+
+                if (attempt > 0) {
+                    console.log(`Successfully loaded model ${modelId} on attempt ${attempt + 1}`);
+                } else {
+                    console.log(`Model ${modelId} loaded successfully`);
+                }
+
+                return pipe;
+            } catch (error) {
+                lastError = error;
+
+                // Check if this is a transient network error worth retrying
+                const isTransientError = this.isTransientNetworkError(error);
+
+                if (isTransientError && attempt < maxRetries - 1) {
+                    // Brief message for transient errors - full details only on final failure
+                    const briefReason = this.getBriefErrorReason(error);
+                    console.warn(`  Connection issue: ${briefReason}`);
+                    // Continue to next retry attempt
+                } else {
+                    // Final attempt or non-transient error - log full details
+                    const errorInfo = ErrorAnalyzer.analyzeError(error, 'LocalEmbedding');
+                    console.error(`Failed to load model ${modelId} after ${attempt + 1} attempt(s):`, errorInfo);
+                    break;
+                }
+            }
+        }
+
+        // All retries exhausted
+        const errorInfo = ErrorAnalyzer.analyzeError(lastError, 'LocalEmbedding');
+        const errorMessage = typeof errorInfo === 'string'
+            ? errorInfo
+            : (errorInfo as { message?: string }).message || 'Unknown error';
+        throw new Error(`Failed to load local embedding model ${modelId}: ${errorMessage}`);
+    }
+
+    /**
+     * Determines if an error is a transient network error that should be retried.
+     */
+    private isTransientNetworkError(error: unknown): boolean {
+        if (!error) return false;
+
+        const errorObj = error as { cause?: { code?: string }; code?: string; message?: string };
+
+        // Check for common transient error codes
+        const transientCodes = [
+            'UND_ERR_CONNECT_TIMEOUT',
+            'ECONNRESET',
+            'ECONNREFUSED',
+            'ETIMEDOUT',
+            'ENOTFOUND',
+            'EAI_AGAIN',
+            'EPIPE',
+            'EHOSTUNREACH',
+            'ENETUNREACH'
+        ];
+
+        const errorCode = errorObj.cause?.code || errorObj.code;
+        if (errorCode && transientCodes.includes(errorCode)) {
+            return true;
+        }
+
+        // Check error message for network-related keywords
+        const errorMessage = errorObj.message?.toLowerCase() || '';
+        const transientKeywords = ['timeout', 'network', 'connection', 'fetch failed', 'socket hang up'];
+        if (transientKeywords.some(keyword => errorMessage.includes(keyword))) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns a brief, user-friendly description of the error for retry logging.
+     */
+    private getBriefErrorReason(error: unknown): string {
+        if (!error) return 'unknown error';
+
+        const errorObj = error as { cause?: { code?: string; message?: string }; code?: string; message?: string };
+        const errorCode = errorObj.cause?.code || errorObj.code;
+
+        // Map error codes to friendly messages
+        const codeMessages: Record<string, string> = {
+            'UND_ERR_CONNECT_TIMEOUT': 'connection timeout',
+            'ECONNRESET': 'connection reset',
+            'ECONNREFUSED': 'connection refused',
+            'ETIMEDOUT': 'request timeout',
+            'ENOTFOUND': 'host not found',
+            'EAI_AGAIN': 'DNS lookup timeout',
+            'EHOSTUNREACH': 'host unreachable',
+            'ENETUNREACH': 'network unreachable'
+        };
+
+        if (errorCode && codeMessages[errorCode]) {
+            return codeMessages[errorCode];
+        }
+
+        // Fall back to error message
+        if (errorObj.message) {
+            return errorObj.message.substring(0, 50);
+        }
+
+        return 'network error';
     }
 
     /**
@@ -283,8 +438,4 @@ export class LocalEmbedding extends BaseEmbeddings {
     public async preloadModel(modelName: string): Promise<void> {
         await this.getPipeline(modelName);
     }
-}
-
-export function LoadLocalEmbedding() {
-    // This function prevents the class from being removed by tree shaking
 }

@@ -1,15 +1,6 @@
 # @memberjunction/encryption
 
-Comprehensive and general purpose encryption package. Used for field-level encryption for MemberJunction entities. Field-level encryption provides transparent encrypt-on-save and decrypt-on-load operations, configurable per field via entity metadata. This package can be used for any other use-cases where encryption/decryption is required.
-
-## Features
-
-- **AES-256-GCM Encryption** - Industry-standard authenticated encryption (AEAD) that prevents tampering
-- **Pluggable Key Sources** - Environment variables, config files, or custom providers (vault services, cloud KMS)
-- **Declarative Configuration** - Enable encryption via EntityField metadata without code changes
-- **Transparent Operation** - Automatic encryption on save, decryption on load
-- **Key Rotation Support** - Full re-encryption with transactional safety
-- **Secure Defaults** - API responses hide encrypted fields by default
+Server-side field-level encryption engine for MemberJunction with pluggable key sources. This package provides transparent encrypt-on-save and decrypt-on-load operations for entity fields, configurable entirely through database metadata. It supports AES-256-GCM authenticated encryption, multiple key source backends (environment variables, configuration files, AWS KMS, Azure Key Vault), and full key rotation with transactional safety.
 
 ## Installation
 
@@ -17,14 +8,84 @@ Comprehensive and general purpose encryption package. Used for field-level encry
 npm install @memberjunction/encryption
 ```
 
-## Quick Start
-
-### 1. Set Up Encryption Key
-
-Create a 256-bit (32 byte) encryption key:
+For cloud key management, install the optional provider dependencies:
 
 ```bash
-# Generate a secure key
+# AWS KMS support
+npm install @aws-sdk/client-kms
+
+# Azure Key Vault support
+npm install @azure/keyvault-secrets @azure/identity
+```
+
+## Overview
+
+The encryption package sits between MemberJunction's entity system and the database, intercepting save and load operations on fields marked for encryption. When a field has `Encrypt = true` in its EntityField metadata, the engine automatically encrypts the value before writing to the database and decrypts it when reading, providing application-level transparency.
+
+The system is designed around three database-driven configuration entities -- Encryption Keys, Encryption Algorithms, and Encryption Key Sources -- which together define *what* key material to use, *which* algorithm to apply, and *where* to retrieve the raw key bytes from. This metadata-driven approach means encryption can be enabled or disabled on individual fields without code changes.
+
+```mermaid
+flowchart TD
+    subgraph App["Application Layer"]
+        Entity["Entity Save/Load"]
+    end
+
+    subgraph Engine["EncryptionEngine"]
+        Encrypt["Encrypt()"]
+        Decrypt["Decrypt()"]
+        Cache["Key Material Cache\n5-min TTL"]
+    end
+
+    subgraph Sources["Key Source Providers"]
+        ENV["EnvVarKeySource"]
+        CFG["ConfigFileKeySource"]
+        AWS["AWSKMSKeySource"]
+        AZR["AzureKeyVaultKeySource"]
+        CUST["Custom Provider"]
+    end
+
+    subgraph DB["Database"]
+        Meta["Encryption Metadata\nKeys / Algorithms / Sources"]
+        Data["Encrypted Field Data\n$ENC$..."]
+    end
+
+    Entity --> Encrypt
+    Entity --> Decrypt
+    Encrypt --> Cache
+    Decrypt --> Cache
+    Cache --> ENV
+    Cache --> CFG
+    Cache --> AWS
+    Cache --> AZR
+    Cache --> CUST
+    Encrypt --> Data
+    Decrypt --> Data
+    Engine --> Meta
+
+    style App fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Engine fill:#7c5295,stroke:#563a6b,color:#fff
+    style Sources fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style DB fill:#b8762f,stroke:#8a5722,color:#fff
+```
+
+## Key Features
+
+- **AES-256-GCM Encryption** -- Industry-standard authenticated encryption (AEAD) that prevents both eavesdropping and tampering
+- **Pluggable Key Sources** -- Environment variables, config files, AWS KMS, Azure Key Vault, or custom providers via the ClassFactory pattern
+- **Declarative Configuration** -- Enable encryption on any entity field via database metadata without code changes
+- **Transparent Operation** -- Automatic encryption on save and decryption on load
+- **Key Rotation Support** -- Full re-encryption with transactional safety, batch processing, and progress tracking
+- **Secure Defaults** -- API responses hide encrypted fields by default; plaintext must be explicitly opted into
+- **Self-Describing Format** -- Encrypted values embed the key ID, algorithm, IV, ciphertext, and auth tag for algorithm-agnostic decryption
+- **Multi-Level Caching** -- Key configurations and key material are cached with configurable TTL for performance
+
+## Quick Start
+
+### 1. Set Up an Encryption Key
+
+Generate a 256-bit (32-byte) encryption key:
+
+```bash
 openssl rand -base64 32
 ```
 
@@ -34,12 +95,11 @@ Store it in an environment variable:
 export MJ_ENCRYPTION_KEY_PII=your-base64-key-here
 ```
 
-### 2. Configure the Encryption Key in Database
+### 2. Register the Key in the Database
 
-Run the migration to create encryption infrastructure, then register your key:
+After running the encryption migration, register your key:
 
 ```sql
--- Insert your encryption key (after running the migration)
 INSERT INTO [${flyway:defaultSchema}].[EncryptionKey] (
     ID, Name, Description, EncryptionKeySourceID, EncryptionAlgorithmID,
     KeyLookupValue, KeyVersion, Marker, IsActive, Status, ActivatedAt
@@ -61,7 +121,7 @@ VALUES (
 
 ### 3. Enable Encryption on Entity Fields
 
-Update the EntityField metadata to enable encryption:
+Update EntityField metadata to enable encryption:
 
 ```sql
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -75,7 +135,7 @@ WHERE Entity = 'Contacts'
 
 ### 4. Encrypt Existing Data
 
-After enabling encryption on a field, run the EnableFieldEncryption action:
+After enabling encryption on a field, run the action to encrypt existing plaintext data:
 
 ```typescript
 import { EnableFieldEncryptionAction } from '@memberjunction/encryption';
@@ -90,21 +150,137 @@ const result = await action.Run({
 });
 ```
 
+## Architecture
+
+### Class Hierarchy
+
+```mermaid
+classDiagram
+    class BaseEngine {
+        +Config()
+        +Load()
+        +Loaded: boolean
+    }
+
+    class EncryptionEngineBase {
+        +EncryptionKeys: EncryptionKeyEntity[]
+        +EncryptionAlgorithms: EncryptionAlgorithmEntity[]
+        +EncryptionKeySources: EncryptionKeySourceEntity[]
+        +GetKeyByID(keyId)
+        +GetKeyConfiguration(keyId)
+        +ValidateKey(keyId)
+    }
+
+    class EncryptionEngine {
+        +Instance: EncryptionEngine
+        +Encrypt(plaintext, keyId, user)
+        +Decrypt(value, user)
+        +IsEncrypted(value)
+        +ParseEncryptedValue(value)
+        +ValidateKeyMaterial(lookup, keyId, user)
+        +EncryptWithLookup(plaintext, keyId, lookup, user)
+        +ClearCaches()
+    }
+
+    class EncryptionKeySourceBase {
+        +SourceName: string
+        +ValidateConfiguration()
+        +GetKey(lookupValue, version)
+        +KeyExists(lookupValue)
+        +Initialize()
+        +Dispose()
+    }
+
+    class EnvVarKeySource
+    class ConfigFileKeySource
+    class AWSKMSKeySource
+    class AzureKeyVaultKeySource
+
+    BaseEngine <|-- EncryptionEngineBase
+    EncryptionEngineBase <|-- EncryptionEngine
+    EncryptionKeySourceBase <|-- EnvVarKeySource
+    EncryptionKeySourceBase <|-- ConfigFileKeySource
+    EncryptionKeySourceBase <|-- AWSKMSKeySource
+    EncryptionKeySourceBase <|-- AzureKeyVaultKeySource
+
+    EncryptionEngine --> EncryptionKeySourceBase : resolves via ClassFactory
+
+    style EncryptionEngine fill:#7c5295,stroke:#563a6b,color:#fff
+    style EncryptionEngineBase fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style EncryptionKeySourceBase fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
+
+The `EncryptionEngineBase` (defined in `@memberjunction/core-entities`) provides metadata caching for encryption keys, algorithms, and key sources. It works in both client and server contexts. The `EncryptionEngine` in this package extends it with actual cryptographic operations using Node.js `crypto`, making it server-side only.
+
+### Encrypted Value Format
+
+Encrypted values are stored as self-describing strings that embed everything needed for decryption:
+
+```
+$ENC$<keyId>$<algorithm>$<iv>$<ciphertext>$<authTag>
+```
+
+For example:
+
+```
+$ENC$550e8400-e29b-41d4-a716-446655440000$AES-256-GCM$Base64IV$Base64Ciphertext$Base64AuthTag
+```
+
+This format enables:
+- Quick detection of encrypted values via the `$ENC$` marker
+- Identification of which key was used (for multi-key environments)
+- Algorithm-agnostic decryption
+- Key rotation without format changes
+
+### Encryption and Decryption Flow
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant EE as EncryptionEngine
+    participant Cache as Key Cache
+    participant KS as Key Source
+    participant Crypto as Node.js crypto
+
+    Note over App,Crypto: Encryption Flow
+    App->>EE: Encrypt(plaintext, keyId, user)
+    EE->>EE: buildKeyConfiguration(keyId)
+    EE->>Cache: Check key material cache
+    alt Cache miss
+        Cache->>KS: GetKey(lookupValue, version)
+        KS-->>Cache: Buffer (raw key bytes)
+    end
+    Cache-->>EE: Key material (Buffer)
+    EE->>Crypto: createCipheriv(algo, key, randomIV)
+    Crypto-->>EE: Ciphertext + Auth Tag
+    EE-->>App: $ENC$keyId$algo$iv$ciphertext$authTag
+
+    Note over App,Crypto: Decryption Flow
+    App->>EE: Decrypt(encryptedValue, user)
+    EE->>EE: ParseEncryptedValue(value)
+    EE->>EE: buildKeyConfiguration(parsed.keyId)
+    EE->>Cache: Check key material cache
+    Cache-->>EE: Key material (Buffer)
+    EE->>Crypto: createDecipheriv(algo, key, iv)
+    Crypto-->>EE: Plaintext
+    EE-->>App: Decrypted string
+```
+
 ## API Response Behavior
 
-The encryption system provides secure-by-default API responses:
+The encryption system provides secure-by-default API responses controlled by two EntityField flags:
 
 | AllowDecryptInAPI | SendEncryptedValue | API Response |
-|-------------------|-------------------|--------------|
-| true | N/A | Decrypted plaintext |
-| false | true | Encrypted ciphertext ($ENC$...) |
-| false | false | NULL (most secure, **default**) |
+|---|---|---|
+| `true` | N/A | Decrypted plaintext |
+| `false` | `true` | Encrypted ciphertext (`$ENC$...`) |
+| `false` | `false` | `NULL` (most secure, **default**) |
 
 ## Key Source Providers
 
 ### Environment Variable (Default)
 
-The simplest option - store keys in environment variables:
+The simplest option -- store keys in environment variables. Best for development and containerized deployments with secret injection.
 
 ```bash
 # Generate a 256-bit key
@@ -114,9 +290,11 @@ openssl rand -base64 32
 export MJ_ENCRYPTION_KEY_PII=your-base64-key-here
 ```
 
-Database configuration:
+**Database configuration:**
 - **EncryptionKeySourceID**: `38A961D2-022B-49C2-919F-1825A0E9C6F9`
 - **KeyLookupValue**: Environment variable name (e.g., `MJ_ENCRYPTION_KEY_PII`)
+
+For versioned keys (during rotation), the provider appends `_V{version}` to the variable name (e.g., `MJ_ENCRYPTION_KEY_PII_V2` for version 2).
 
 ### Configuration File
 
@@ -130,17 +308,15 @@ module.exports = {
 };
 ```
 
-Database configuration:
+**Database configuration:**
 - **EncryptionKeySourceID**: `CBF9632D-EF05-42E2-82F6-5BAC79FAA565`
 - **KeyLookupValue**: Key name in config (e.g., `pii_master_key`)
 
+Uses cosmiconfig to locate configuration files in standard locations (`mj.config.cjs`, `mj.config.js`, `.mjrc.json`, `.mjrc.yaml`).
+
 ### AWS KMS
 
-Uses AWS Key Management Service with envelope encryption. Install the optional dependency:
-
-```bash
-npm install @aws-sdk/client-kms
-```
+Uses AWS Key Management Service with envelope encryption. The raw key is encrypted by a KMS Customer Master Key (CMK) and decrypted at runtime.
 
 **Setup:**
 
@@ -155,88 +331,43 @@ npm install @aws-sdk/client-kms
    ```
 3. Store the output (base64 CiphertextBlob) as the KeyLookupValue
 
-**Authentication:** Uses the standard AWS credential chain:
-- Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
-- IAM role (on EC2, ECS, Lambda)
-- Shared credentials file
+**Authentication:** Uses the standard AWS credential chain (environment variables, IAM role, shared credentials file).
 
-Database configuration:
+**Database configuration:**
 - **EncryptionKeySourceID**: `D8E4F521-3A7B-4C9E-8F12-6B5A4C3D2E1F`
 - **KeyLookupValue**: Base64-encoded CiphertextBlob from GenerateDataKey
 
-```sql
-INSERT INTO [${flyway:defaultSchema}].[EncryptionKey] (
-    ID, Name, EncryptionKeySourceID, EncryptionAlgorithmID,
-    KeyLookupValue, IsActive, Status
-)
-VALUES (
-    NEWID(),
-    'AWS KMS PII Key',
-    'D8E4F521-3A7B-4C9E-8F12-6B5A4C3D2E1F',  -- AWS KMS
-    'B2E88E95-D09B-4DA6-B0AE-511B21B70952',  -- AES-256-GCM
-    'AQIDAHh...base64-ciphertext-blob...',    -- From GenerateDataKey
-    1,
-    'Active'
-);
-```
-
 ### Azure Key Vault
 
-Retrieves keys from Azure Key Vault secrets. Install the optional dependencies:
-
-```bash
-npm install @azure/keyvault-secrets @azure/identity
-```
+Retrieves keys from Azure Key Vault secrets.
 
 **Setup:**
 
 1. Create an Azure Key Vault
 2. Create a secret containing your base64-encoded key:
    ```bash
-   # Generate key
    KEY=$(openssl rand -base64 32)
-
-   # Store in Key Vault
    az keyvault secret set \
      --vault-name your-vault-name \
      --name mj-encryption-key \
      --value "$KEY"
    ```
 
-**Authentication:** Uses DefaultAzureCredential:
-- Managed Identity (on Azure VMs, App Service, Functions)
-- Service principal (`AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`)
-- Azure CLI credentials
+**Authentication:** Uses DefaultAzureCredential (Managed Identity, service principal, or Azure CLI).
 
-Database configuration:
+**Database configuration:**
 - **EncryptionKeySourceID**: `A2B3C4D5-E6F7-8901-2345-6789ABCDEF01`
-- **KeyLookupValue**: Full secret URL or secret name (if `AZURE_KEYVAULT_URL` is set)
+- **KeyLookupValue**: Full secret URL or just the secret name (if `AZURE_KEYVAULT_URL` is set)
 
-```sql
-INSERT INTO [${flyway:defaultSchema}].[EncryptionKey] (
-    ID, Name, EncryptionKeySourceID, EncryptionAlgorithmID,
-    KeyLookupValue, IsActive, Status
-)
-VALUES (
-    NEWID(),
-    'Azure Key Vault PII Key',
-    'A2B3C4D5-E6F7-8901-2345-6789ABCDEF01',  -- Azure Key Vault
-    'B2E88E95-D09B-4DA6-B0AE-511B21B70952',  -- AES-256-GCM
-    'https://your-vault.vault.azure.net/secrets/mj-encryption-key',
-    1,
-    'Active'
-);
-```
-
-**Tip:** Set `AZURE_KEYVAULT_URL` to use short secret names:
 ```bash
+# With AZURE_KEYVAULT_URL set, use short names:
 export AZURE_KEYVAULT_URL=https://your-vault.vault.azure.net
-# Then KeyLookupValue can just be: mj-encryption-key
+# Then KeyLookupValue can be: mj-encryption-key
 ```
 
 ### Custom Provider
 
-Extend `EncryptionKeySourceBase` for other vault services:
+Extend `EncryptionKeySourceBase` to integrate any key management system:
 
 ```typescript
 import { RegisterClass } from '@memberjunction/global';
@@ -261,9 +392,42 @@ export class HashiCorpVaultKeySource extends EncryptionKeySourceBase {
 }
 ```
 
-## Key Rotation
+The provider lifecycle is: **Construction** -> **Initialize()** (async setup) -> **GetKey()/KeyExists()** (per-operation) -> **Dispose()** (cleanup).
 
-Rotate keys without downtime using the RotateEncryptionKey action:
+## Programmatic API
+
+### EncryptionEngine
+
+The `EncryptionEngine` is a singleton accessed via `EncryptionEngine.Instance`:
+
+```typescript
+import { EncryptionEngine } from '@memberjunction/encryption';
+
+const engine = EncryptionEngine.Instance;
+
+// Encrypt a value
+const encrypted = await engine.Encrypt(
+    'sensitive-data',
+    encryptionKeyId,
+    contextUser
+);
+
+// Decrypt a value (non-encrypted values pass through unchanged)
+const decrypted = await engine.Decrypt(encrypted, contextUser);
+
+// Check if a value is encrypted
+if (engine.IsEncrypted(someValue)) {
+    const parts = engine.ParseEncryptedValue(someValue);
+    console.log(`Encrypted with key: ${parts.keyId}`);
+}
+
+// Clear caches (after key rotation or config changes)
+engine.ClearCaches();
+```
+
+### Key Rotation
+
+Rotate keys without downtime using the `RotateEncryptionKeyAction`:
 
 ```typescript
 import { RotateEncryptionKeyAction } from '@memberjunction/encryption';
@@ -282,126 +446,160 @@ const result = await action.Run({
     ContextUser: currentUser
 });
 
-// 3. After rotation, update environment to use new key
-// export MJ_ENCRYPTION_KEY_PII=new-key-value
-// Remove MJ_ENCRYPTION_KEY_PII_V2
+// 3. After rotation completes, update environment to use new key
 ```
 
-## Programmatic API
+The rotation process:
+
+```mermaid
+flowchart TD
+    A["Validate new key\nis accessible"] --> B["Set key status\nto 'Rotating'"]
+    B --> C["Find all fields\nusing this key"]
+    C --> D["For each field:\nLoad records in batches"]
+    D --> E["Decrypt with\nold key"]
+    E --> F["Re-encrypt with\nnew key"]
+    F --> G["Save updated\nrecord"]
+    G --> H{More records?}
+    H -- Yes --> D
+    H -- No --> I["Update key metadata\nLookupValue + Version"]
+    I --> J["Set status\nback to 'Active'"]
+    J --> K["Clear engine\ncaches"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#b8762f,stroke:#8a5722,color:#fff
+    style I fill:#b8762f,stroke:#8a5722,color:#fff
+    style J fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style K fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
+
+## API Reference
 
 ### EncryptionEngine
 
-```typescript
-import { EncryptionEngine } from '@memberjunction/encryption';
+| Method | Description |
+|--------|-------------|
+| `Instance` | Static property returning the singleton instance |
+| `Config(forceRefresh?, contextUser?, provider?)` | Loads encryption metadata from the database |
+| `Encrypt(plaintext, encryptionKeyId, contextUser?)` | Encrypts a value using the specified key |
+| `Decrypt(value, contextUser?)` | Decrypts an encrypted value; passes through non-encrypted values |
+| `IsEncrypted(value, marker?)` | Checks if a value is encrypted (synchronous) |
+| `ParseEncryptedValue(value)` | Parses an encrypted string into its component parts |
+| `ValidateKeyMaterial(lookupValue, keyId, contextUser?)` | Validates that key material is accessible and the correct length |
+| `EncryptWithLookup(plaintext, keyId, lookupValue, contextUser?)` | Encrypts using a specific key lookup value (used during rotation) |
+| `ClearCaches()` | Clears the key material cache |
+| `ClearAllCaches()` | Clears all caches including base class metadata |
 
-const engine = EncryptionEngine.Instance;
+### EncryptionKeySourceBase
 
-// Encrypt a value
-const encrypted = await engine.Encrypt(
-    'sensitive-data',
-    encryptionKeyId,
-    contextUser
-);
+| Member | Description |
+|--------|-------------|
+| `SourceName` | Abstract property returning the human-readable source name |
+| `ValidateConfiguration()` | Abstract method to validate source configuration |
+| `GetKey(lookupValue, keyVersion?)` | Abstract method to retrieve raw key bytes |
+| `KeyExists(lookupValue)` | Abstract method to check if a key exists |
+| `Initialize()` | Virtual async method for one-time setup (default: no-op) |
+| `Dispose()` | Virtual async method for cleanup (default: no-op) |
 
-// Decrypt a value
-const decrypted = await engine.Decrypt(encrypted, contextUser);
+### Interfaces
 
-// Check if a value is encrypted
-if (engine.IsEncrypted(someValue)) {
-    const parts = engine.ParseEncryptedValue(someValue);
-    console.log(`Encrypted with key: ${parts.keyId}`);
-}
+| Interface | Description |
+|-----------|-------------|
+| `EncryptedValueParts` | Parsed components of an encrypted value string (marker, keyId, algorithm, iv, ciphertext, authTag) |
+| `KeyConfiguration` | Complete runtime key configuration (key ID, version, marker, algorithm details, source details) |
+| `EncryptionKeySourceConfig` | Configuration passed to key source providers (lookupValue, additionalConfig) |
+| `RotateKeyParams` / `RotateKeyResult` | Parameters and results for key rotation operations |
+| `EnableFieldEncryptionParams` / `EnableFieldEncryptionResult` | Parameters and results for field encryption operations |
 
-// Clear caches (after key rotation)
-engine.ClearCaches();
-```
+### Actions
 
-## Encrypted Value Format
+| Action | Registered Name | Description |
+|--------|----------------|-------------|
+| `EnableFieldEncryptionAction` | `Enable Field Encryption` | Encrypts existing plaintext data on a newly-encrypted field |
+| `RotateEncryptionKeyAction` | `Rotate Encryption Key` | Re-encrypts all data from an old key to a new key |
 
-Encrypted values are stored as self-describing strings:
+## Database Schema
 
-```
-$ENC$<keyId>$<algorithm>$<iv>$<ciphertext>$<authTag>
-```
+The encryption infrastructure uses three metadata entities plus extensions to EntityField:
 
-Example:
-```
-$ENC$550e8400-e29b-41d4-a716-446655440000$AES-256-GCM$Base64IV$Base64Ciphertext$Base64AuthTag
-```
+**MJ: Encryption Key Sources** -- Where keys are stored (env vars, config files, vaults)
 
-This format allows:
-- Quick detection of encrypted values
-- Identification of which key was used
-- Algorithm-agnostic decryption
-- Future-proof key rotation
+**MJ: Encryption Algorithms** -- Available algorithms (AES-256-GCM, etc.) with Node.js crypto identifiers
+
+**MJ: Encryption Keys** -- Configured keys linking a source and algorithm together
+
+**EntityField extensions:**
+- `Encrypt` -- Enable encryption for this field
+- `EncryptionKeyID` -- Which key to use
+- `AllowDecryptInAPI` -- Whether to return plaintext in API responses
+- `SendEncryptedValue` -- Whether to return ciphertext when decryption is not allowed
+
+## Performance
+
+- Key configurations are cached via `BaseEngine` with auto-refresh on entity changes
+- Key material is cached with a 5-minute TTL
+- Encryption and decryption use Node.js native `crypto` module (hardware-accelerated where available)
+- Batch processing for key rotation and initial encryption (configurable batch size)
+- Lazy loading -- the encryption engine is only activated when needed
+- Cloud providers (AWS KMS, Azure Key Vault) use lazy SDK loading to avoid import cost when not used
 
 ## Security Considerations
 
 1. **Key Management**
-   - Never store keys in the database
-   - Use environment variables or secure vault services
+   - Never store keys in the database -- use environment variables or secure vault services
    - Rotate keys regularly (recommended: annually)
    - Generate keys with `openssl rand -base64 32`
 
 2. **Authenticated Encryption**
    - AES-256-GCM provides both confidentiality and integrity
    - Auth tag prevents tampering with ciphertext
-   - Random IVs prevent pattern analysis
+   - Random IVs for each encryption operation prevent pattern analysis
 
 3. **API Security**
-   - Default: encrypted fields return `null` to clients
+   - Default: encrypted fields return `null` to API clients
    - Explicitly enable `AllowDecryptInAPI` only when needed
-   - Consider using `SendEncryptedValue` for client-side decryption scenarios
+   - Use `SendEncryptedValue` for client-side decryption scenarios
 
 4. **Key Rotation**
    - Plan for rotation before key compromise
-   - Test rotation in staging environment first
+   - Test rotation in a staging environment first
    - Monitor rotation progress for large datasets
    - Keep old keys accessible until rotation completes
-
-## Database Schema
-
-The encryption infrastructure includes three new tables:
-
-- **MJ: Encryption Key Sources** - Where keys come from (env vars, config, vaults)
-- **MJ: Encryption Algorithms** - Available algorithms (AES-256-GCM, etc.)
-- **MJ: Encryption Keys** - Configured keys linking sources and algorithms
-
-EntityField extensions:
-- **Encrypt** - Enable encryption for this field
-- **EncryptionKeyID** - Which key to use
-- **AllowDecryptInAPI** - Whether to decrypt in API responses
-- **SendEncryptedValue** - Send ciphertext when decryption not allowed
-
-## Performance
-
-- Key configurations are cached with 5-minute TTL
-- Key material is cached with 5-minute TTL
-- Encryption/decryption uses Node.js native crypto (fast)
-- Batch processing for key rotation and initial encryption
-- Lazy loading - encryption engine only activated when needed
+   - Key status is set to `Rotating` during the operation for visibility
 
 ## Troubleshooting
 
 ### "Encryption key not found"
-- Check that the key exists in `MJ: Encryption Keys` table
-- Verify `IsActive = 1` and `Status = 'Active'`
-- Check that the referenced algorithm and source are also active
+- Verify the key exists in the `MJ: Encryption Keys` table
+- Check that `IsActive = 1` and `Status = 'Active'`
+- Ensure the referenced algorithm and source are also active
 
 ### "Key length mismatch"
 - Ensure your key is exactly 32 bytes (256 bits) for AES-256
 - Generate with: `openssl rand -base64 32`
-- The base64 string should be ~44 characters
+- The base64 string should be approximately 44 characters
 
-### "Failed to decrypt"
-- The key may have been rotated - check KeyVersion
+### "Failed to decrypt" / Auth tag mismatch
+- The key may have been rotated -- check `KeyVersion`
 - The data may be corrupted
-- Auth tag mismatch indicates tampering
+- Auth tag mismatch indicates the data was tampered with or the wrong key was used
 
 ### API returns null for encrypted fields
-- Check `AllowDecryptInAPI` flag on the EntityField
-- Default is `false` for security
-- Update to `true` if API clients need plaintext
+- Check the `AllowDecryptInAPI` flag on the EntityField
+- The default is `false` for security
+- Set to `true` if API clients need plaintext
+
+## Dependencies
+
+This package depends on:
+- [@memberjunction/global](../MJGlobal/README.md) -- Class registration and the `ENCRYPTION_MARKER` constant
+- [@memberjunction/core](../MJCore/README.md) -- `BaseEngine`, `RunView`, `Metadata`, `UserInfo`
+- [@memberjunction/core-entities](../MJCoreEntities/README.md) -- `EncryptionEngineBase` and encryption entity types
+- [@memberjunction/credentials](../Credentials/Engine/README.md) -- Credential management
+- [@memberjunction/actions-base](../Actions/Base/README.md) -- `RunActionParams` and `ActionResultSimple` for action definitions
+
+Optional (for cloud key sources):
+- `@aws-sdk/client-kms` -- AWS KMS integration
+- `@azure/keyvault-secrets` + `@azure/identity` -- Azure Key Vault integration
 
 ## License
 

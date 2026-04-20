@@ -236,7 +236,129 @@ VALUES
      DATEADD(DAY, 115, @EndDate), DATEADD(DAY, 144, @EndDate),
      0.00, 49.00, 1.0,
      'Financial planning for cheese startups. Pricing, cash flow management, and scaling production.',
-     'Draft');
+     'Draft'),
+
+-- UPCOMING EVENTS (0-90 Days) - Guaranteed visibility in "next 30 days" views
+-- These events ensure there's always something happening in any 30-day window
+
+    -- Week 1 (Days 2-6)
+    (NEWID(), 'Cheese Photography Workshop', 'Workshop',
+     DATEADD(DAY, 2, @EndDate), DATEADD(DAY, 2, @EndDate), 'America/Los_Angeles',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/cheese-photo', 100,
+     DATEADD(DAY, -7, @EndDate), DATEADD(DAY, 1, @EndDate),
+     25.00, 75.00, 0.5,
+     'Learn to capture stunning cheese photography for marketing and social media. Lighting, composition, and styling techniques.',
+     'Registration Open'),
+
+    (NEWID(), 'Local Chapter Leadership Call', 'Chapter Meeting',
+     DATEADD(DAY, 5, @EndDate), DATEADD(DAY, 5, @EndDate), 'America/Chicago',
+     'Virtual', 1, 'Teams', 'https://teams.microsoft.com/chapter-leads', 50,
+     DATEADD(DAY, -5, @EndDate), DATEADD(DAY, 4, @EndDate),
+     0.00, 0.00, 0.0,
+     'Monthly call for chapter leaders to share best practices and coordinate regional activities.',
+     'Registration Open'),
+
+    -- Week 2 (Days 8-14)
+    (NEWID(), 'Cheese Tasting Techniques', 'Workshop',
+     DATEADD(DAY, 10, @EndDate), DATEADD(DAY, 10, @EndDate), 'America/New_York',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/tasting', 200,
+     DATEADD(DAY, -10, @EndDate), DATEADD(DAY, 9, @EndDate),
+     15.00, 45.00, 1.0,
+     'Professional cheese tasting and evaluation. Develop your palate, identify flavor notes, and conduct tasting sessions.',
+     'Registration Open'),
+
+    (NEWID(), 'Small Batch Cheesemaking Equipment Guide', 'Webinar',
+     DATEADD(DAY, 12, @EndDate), DATEADD(DAY, 12, @EndDate), 'America/Chicago',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/equipment', 300,
+     DATEADD(DAY, -8, @EndDate), DATEADD(DAY, 11, @EndDate),
+     0.00, 35.00, 1.0,
+     'Essential equipment for starting a small cheese operation. Cost-effective solutions and vendor recommendations.',
+     'Registration Open'),
+
+    -- Week 3 (Days 18-21)
+    (NEWID(), 'Cheese Cave Tour: Virtual Edition', 'Virtual Summit',
+     DATEADD(DAY, 18, @EndDate), DATEADD(DAY, 18, @EndDate), 'America/Los_Angeles',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/cave-tour', 500,
+     DATEADD(DAY, -5, @EndDate), DATEADD(DAY, 17, @EndDate),
+     0.00, 25.00, 0.0,
+     'Live virtual tour of award-winning cheese caves. See aging facilities and ask questions to master cheesemakers.',
+     'Registration Open'),
+
+    (NEWID(), 'Cheese Board Competition: Spring Edition', 'Conference',
+     DATEADD(DAY, 21, @EndDate), DATEADD(DAY, 21, @EndDate), 'America/Chicago',
+     'Hybrid', 0, NULL, 'https://cheesemakers.org/competition-spring', 75,
+     DATEADD(DAY, -30, @EndDate), DATEADD(DAY, 14, @EndDate),
+     50.00, 100.00, 0.0,
+     'Submit your best cheese board designs for judging. Categories: Traditional, Modern, and Innovative Pairings.',
+     'Registration Open'),
+
+    -- Week 4 (Days 25-28)
+    (NEWID(), 'Dairy Farm Partnership Strategies', 'Webinar',
+     DATEADD(DAY, 25, @EndDate), DATEADD(DAY, 25, @EndDate), 'America/New_York',
+     'Virtual', 1, 'Teams', 'https://teams.microsoft.com/dairy-partnership', 200,
+     DATEADD(DAY, -10, @EndDate), DATEADD(DAY, 24, @EndDate),
+     0.00, 40.00, 1.0,
+     'Build strong relationships with dairy farms. Contract negotiation, quality agreements, and long-term partnerships.',
+     'Registration Open'),
+
+    (NEWID(), 'Regulatory Update: FDA Cheese Standards', 'Webinar',
+     DATEADD(DAY, 28, @EndDate), DATEADD(DAY, 28, @EndDate), 'America/Chicago',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/fda-update', 400,
+     DATEADD(DAY, -14, @EndDate), DATEADD(DAY, 27, @EndDate),
+     0.00, 50.00, 1.5,
+     'Latest FDA regulations affecting cheese production. Standards of identity, labeling requirements, and compliance updates.',
+     'Registration Open'),
+
+    -- Week 5-6 (Days 35-42)
+    (NEWID(), 'Cheese & Beverage Pairing Masterclass', 'Workshop',
+     DATEADD(DAY, 35, @EndDate), DATEADD(DAY, 35, @EndDate), 'America/Los_Angeles',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/pairing', 150,
+     DATEADD(DAY, -20, @EndDate), DATEADD(DAY, 34, @EndDate),
+     30.00, 80.00, 1.5,
+     'Master the art of pairing cheese with wine, beer, spirits, and non-alcoholic beverages. Professional sommelier instruction.',
+     'Registration Open'),
+
+    (NEWID(), 'Cheese Retail & Merchandising Best Practices', 'Webinar',
+     DATEADD(DAY, 40, @EndDate), DATEADD(DAY, 40, @EndDate), 'America/Chicago',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/retail', 250,
+     DATEADD(DAY, -15, @EndDate), DATEADD(DAY, 39, @EndDate),
+     0.00, 45.00, 1.0,
+     'Optimize cheese sales in retail environments. Display strategies, customer education, and inventory management.',
+     'Registration Open'),
+
+    -- Week 7-8 (Days 50-56)
+    (NEWID(), 'Artisan Cheese Troubleshooting Clinic', 'Workshop',
+     DATEADD(DAY, 52, @EndDate), DATEADD(DAY, 52, @EndDate), 'America/New_York',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/troubleshoot', 100,
+     DATEADD(DAY, -20, @EndDate), DATEADD(DAY, 51, @EndDate),
+     20.00, 60.00, 1.5,
+     'Solve common cheesemaking problems. Bring your challenges and get expert advice on texture, flavor, and production issues.',
+     'Registration Open'),
+
+    (NEWID(), 'Cheese Industry Networking Mixer', 'Networking',
+     DATEADD(DAY, 55, @EndDate), DATEADD(DAY, 55, @EndDate), 'America/Chicago',
+     'Virtual', 1, 'Gather', 'https://gather.town/cheese-mixer', 200,
+     DATEADD(DAY, -10, @EndDate), DATEADD(DAY, 54, @EndDate),
+     0.00, 15.00, 0.0,
+     'Casual networking event for cheese professionals. Meet colleagues, share experiences, and build connections in a virtual space.',
+     'Registration Open'),
+
+    -- Week 10-12 (Days 70-85)
+    (NEWID(), 'Grant Writing for Cheese Businesses', 'Webinar',
+     DATEADD(DAY, 72, @EndDate), DATEADD(DAY, 72, @EndDate), 'America/Los_Angeles',
+     'Virtual', 1, 'Zoom', 'https://zoom.us/j/grants', 150,
+     DATEADD(DAY, -25, @EndDate), DATEADD(DAY, 71, @EndDate),
+     0.00, 55.00, 1.0,
+     'Navigate agricultural grants and funding opportunities. Application strategies, USDA programs, and state-level resources.',
+     'Registration Open'),
+
+    (NEWID(), 'Seasonal Cheese Innovation Workshop', 'Workshop',
+     DATEADD(DAY, 85, @EndDate), DATEADD(DAY, 85, @EndDate), 'America/New_York',
+     'Virtual', 1, 'Teams', 'https://teams.microsoft.com/seasonal', 100,
+     DATEADD(DAY, -30, @EndDate), DATEADD(DAY, 84, @EndDate),
+     35.00, 95.00, 2.0,
+     'Create seasonal cheese varieties and limited releases. Recipe development, market testing, and production planning.',
+     'Registration Open');
 
 
 -- ============================================================================

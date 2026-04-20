@@ -1,0 +1,1 @@
+SELECT TOP {{ topN | sqlNumber }} r.ID, r.Title, r.ResourceType, r.Category, r.AverageRating, r.RatingCount, r.ViewCount, r.DownloadCount, r.PublishedDate FROM [AssociationDemo].[vwResources] r WHERE r.Status = 'Published' AND r.RatingCount >= {{ minReviews | sqlNumber }} ORDER BY r.AverageRating DESC, r.RatingCount DESC

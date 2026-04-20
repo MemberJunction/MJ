@@ -1,16 +1,40 @@
 # @memberjunction/angular-elements-demo
 
-This package demonstrates how to leverage Angular Elements to create reusable web components from MemberJunction Angular components that can be embedded in any web application, regardless of the framework used. By converting Angular components into standard Web Components (Custom Elements), this demo shows how powerful MemberJunction functionality can be used in non-Angular environments.
+Demonstrates how to leverage Angular Elements to create reusable web components from MemberJunction Angular components that can be embedded in any web application, regardless of the framework used.
 
 ## Overview
 
-Angular Elements provides a bridge between Angular's powerful component model and the Web Components standard. This allows developers to:
+Angular Elements provides a bridge between Angular's powerful component model and the Web Components standard. By converting Angular components into standard Custom Elements, MemberJunction functionality can be used in non-Angular environments including React, Vue, and plain HTML pages.
 
-1. Create components using Angular's rich feature set and tooling
-2. Package those components as standard custom HTML elements
-3. Use these elements in any modern web application or page
+```mermaid
+graph TD
+    A["Angular Components"] -->|"createCustomElement()"| B["Custom Elements<br/>(Web Components)"]
+    B --> C["mj-hello-world"]
+    B --> D["mj-entity-list-demo"]
+    B --> E["mj-entity-detail-demo"]
+    B --> F["mj-listener-demo"]
 
-This approach gives you the best of both worlds - Angular's powerful development environment and the universal compatibility of Web Components.
+    G["Any Web Page"] --> C
+    G --> D
+    G --> E
+    G --> F
+
+    D -->|"rowClicked event"| E
+    H["MJ GraphQL API"] --> C
+    H --> D
+    H --> E
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style E fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style F fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style G fill:#b8762f,stroke:#8a5722,color:#fff
+    style H fill:#2d6a9f,stroke:#1a4971,color:#fff
+```
+
+This approach gives you the best of both worlds -- Angular's powerful development environment and the universal compatibility of Web Components.
 
 ## Strategic Value
 

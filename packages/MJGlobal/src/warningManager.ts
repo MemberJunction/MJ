@@ -12,11 +12,13 @@
  * ```typescript
  * const wm = WarningManager.Instance;
  * wm.RecordEntityDeprecationWarning('User Preferences', 'BaseEntity::constructor');
- * wm.RecordFieldDeprecationWarning('AI Prompts', 'OldField', 'AIPromptEntity::validate');
+ * wm.RecordFieldDeprecationWarning('MJ: AI Prompts', 'OldField', 'MJAIPromptEntity::validate');
  * wm.RecordFieldNotFoundWarning('Users', 'DeletedColumn', 'BaseEntity::SetMany');
  * // Warnings will be flushed automatically after debounce period
  * ```
  */
+
+import { BaseSingleton } from './BaseSingleton';
 
 /**
  * Configuration options for the warning system
@@ -85,10 +87,11 @@ interface PendingRedundantLoadWarning {
 /**
  * Singleton class that manages warnings across the entire application session.
  * Tracks which warnings have been shown and batches them for clean, grouped output.
+ *
+ * Uses BaseSingleton to guarantee a single instance across the entire process,
+ * even if bundlers duplicate this module across multiple execution paths.
  */
-export class WarningManager {
-    private static instance: WarningManager;
-
+export class WarningManager extends BaseSingleton<WarningManager> {
     // Tracking for deprecation warnings
     private warnedDeprecatedEntities: Set<string> = new Set();
     private warnedDeprecatedFields: Map<string, Set<string>> = new Map(); // entityName -> Set<fieldName>
@@ -107,26 +110,25 @@ export class WarningManager {
 
     private debounceTimer: NodeJS.Timeout | null = null;
 
-    private config: WarningConfig;
+    private config: WarningConfig = {
+        DebounceMs: 10000,
+        ShowAll: false,
+        DisableWarnings: false,
+        GroupWarnings: true
+    };
 
-    private constructor() {
-        // Initialize with default configuration
-        this.config = {
-            DebounceMs: 10000,
-            ShowAll: false,
-            DisableWarnings: false,
-            GroupWarnings: true
-        };
+    /**
+     * Use WarningManager.Instance to get the singleton instance.
+     */
+    public constructor() {
+        super();
     }
 
     /**
      * Gets the singleton instance of the WarningManager
      */
     public static get Instance(): WarningManager {
-        if (!WarningManager.instance) {
-            WarningManager.instance = new WarningManager();
-        }
-        return WarningManager.instance;
+        return WarningManager.getInstance<WarningManager>();
     }
 
     /**
@@ -199,7 +201,7 @@ export class WarningManager {
      *
      * @param entityName - The name of the entity containing the deprecated field
      * @param fieldName - The name of the deprecated field
-     * @param callerName - The name of the caller (e.g., 'AIPromptEntity::validate')
+     * @param callerName - The name of the caller (e.g., 'MJAIPromptEntity::validate')
      * @returns true if this warning should be emitted immediately (when ShowAll is true)
      */
     public RecordFieldDeprecationWarning(entityName: string, fieldName: string, callerName: string): boolean {

@@ -1,16 +1,36 @@
-# Component Registry Client SDK
+# @memberjunction/component-registry-client-sdk
 
-A TypeScript SDK for interacting with Component Registry servers. This package provides a robust REST API client for fetching, searching, and managing interactive components from remote registries.
+TypeScript SDK for interacting with Component Registry servers. Provides a robust REST API client for fetching, searching, and managing interactive components from remote registries.
+
+## Overview
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant SDK as RegistryClient SDK
+    participant Reg as Component Registry Server
+
+    App->>SDK: getComponent(namespace, name)
+    SDK->>SDK: Apply retry policy
+    SDK->>Reg: GET /api/v1/components/:ns/:name
+    Reg-->>SDK: Component specification
+    SDK-->>App: Typed component object
+
+    App->>SDK: searchComponents(query)
+    SDK->>Reg: GET /api/v1/components/search?q=...
+    Reg-->>SDK: Search results
+    SDK-->>App: ComponentSearchResult[]
+```
 
 ## Features
 
-- 🚀 **Native Fetch**: Uses native fetch API, no external HTTP dependencies
-- 🔄 **Retry Logic**: Automatic retry with exponential backoff
-- ⏱️ **Timeout Support**: Configurable request timeouts
-- 🔍 **Type Safety**: Full TypeScript support with comprehensive types
-- 📦 **Component Management**: Get, search, and resolve component dependencies
-- 🔒 **Authentication**: Support for API key and Bearer token authentication
-- 🏗️ **Registry Integration**: Used by MJServer for external registry communication
+- **Native Fetch** -- Uses native fetch API, no external HTTP dependencies
+- **Retry Logic** -- Automatic retry with exponential backoff
+- **Timeout Support** -- Configurable request timeouts
+- **Type Safety** -- Full TypeScript support with comprehensive types
+- **Component Management** -- Get, search, and resolve component dependencies
+- **Authentication** -- Support for API key and Bearer token authentication
+- **Registry Integration** -- Used by MJServer for external registry communication
 
 ## Installation
 

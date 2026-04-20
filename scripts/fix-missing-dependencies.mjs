@@ -129,14 +129,8 @@ for (const [packagePath, deps] of missingDeps.entries()) {
     let version;
     if (dep.startsWith('@memberjunction/')) {
       version = mjVersion;
-    } else if (dep.startsWith('@progress/kendo-angular-')) {
-      // Use fixed version for Kendo packages to match Angular 18
-      version = '16.2.0';
-    } else if (dep.startsWith('@angular/')) {
-      // Use fixed version for Angular packages
-      version = '18.0.2';
     } else {
-      // Try to find version from another package that uses it
+      // Try to find version from another package in the workspace that already uses it
       version = findVersionInWorkspace(dep) || 'latest';
     }
 

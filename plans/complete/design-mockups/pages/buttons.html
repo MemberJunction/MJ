@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buttons - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .demo-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--mj-space-4);
+      align-items: center;
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      margin-bottom: var(--mj-space-4);
+    }
+    .demo-row.dark-demo {
+      background: var(--mj-color-neutral-800);
+    }
+    .code-block {
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: var(--mj-space-4);
+      font-family: var(--mj-font-family-mono);
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-secondary);
+      overflow-x: auto;
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Buttons</h1>
+      <p>Button styles for primary actions, secondary options, and various states.</p>
+    </header>
+
+    <!-- Brand Color Comparison -->
+    <section class="section">
+      <h2 class="section-title">Brand Color Comparison</h2>
+      <p class="mj-text-secondary mj-mb-4">All brand button colors at a glance for easy comparison.</p>
+      <div class="demo-row">
+        <button class="mj-btn mj-btn-primary">Primary (Blue)</button>
+        <button class="mj-btn mj-btn-accent">Accent (Amber)</button>
+        <button class="mj-btn mj-btn-tertiary">Tertiary (Cyan)</button>
+        <button class="mj-btn mj-btn-secondary">Secondary</button>
+        <button class="mj-btn mj-btn-danger">Danger</button>
+      </div>
+    </section>
+
+    <!-- Primary Buttons -->
+    <section class="section">
+      <h2 class="section-title">Primary Buttons</h2>
+      <p class="mj-text-secondary mj-mb-4">Use for main actions like "Save", "Submit", or "Create".</p>
+      <div class="demo-row">
+        <button class="mj-btn mj-btn-primary">Primary Button</button>
+        <button class="mj-btn mj-btn-primary">
+          <i class="fa-solid fa-plus"></i> Add New
+        </button>
+        <button class="mj-btn mj-btn-primary" disabled>Disabled</button>
+      </div>
+      <div class="code-block">
+        &lt;button class="mj-btn mj-btn-primary"&gt;Primary Button&lt;/button&gt;
+      </div>
+    </section>
+
+    <!-- Secondary Buttons -->
+    <section class="section">
+      <h2 class="section-title">Secondary Buttons</h2>
+      <p class="mj-text-secondary mj-mb-4">Use for secondary actions like "Cancel", "Back", or "Filter".</p>
+      <div class="demo-row">
+        <button class="mj-btn mj-btn-secondary">Secondary</button>
+        <button class="mj-btn mj-btn-secondary">
+          <i class="fa-solid fa-filter"></i> Filter
+        </button>
+        <button class="mj-btn mj-btn-secondary" disabled>Disabled</button>
+      </div>
+      <div class="code-block">
+        &lt;button class="mj-btn mj-btn-secondary"&gt;Secondary&lt;/button&gt;
+      </div>
+    </section>
+
+    <!-- Ghost Buttons -->
+    <section class="section">
+      <h2 class="section-title">Ghost Buttons</h2>
+      <p class="mj-text-secondary mj-mb-4">Use for tertiary actions or in toolbars where minimal visual weight is needed.</p>
+      <div class="demo-row">
+        <button class="mj-btn mj-btn-ghost">Ghost</button>
+        <button class="mj-btn mj-btn-ghost">
+          <i class="fa-solid fa-download"></i> Export
+        </button>
+        <button class="mj-btn mj-btn-ghost" disabled>Disabled</button>
+      </div>
+      <div class="code-block">
+        &lt;button class="mj-btn mj-btn-ghost"&gt;Ghost&lt;/button&gt;
+      </div>
+    </section>
+
+    <!-- Accent Buttons -->
+    <section class="section">
+      <h2 class="section-title">Accent Buttons</h2>
+      <p class="mj-text-secondary mj-mb-4">Use for highlighted actions, important callouts, or promotional CTAs. Amber/warm color provides visual emphasis.</p>
+      <div class="demo-row">
+        <button class="mj-btn mj-btn-accent">Upgrade Now</button>
+        <button class="mj-btn mj-btn-accent">
+          <i class="fa-solid fa-star"></i> Featured
+        </button>
+        <button class="mj-btn mj-btn-accent" disabled>Disabled</button>
+      </div>
+      <div class="code-block">
+        &lt;button class="mj-btn mj-btn-accent"&gt;Upgrade Now&lt;/button&gt;
+      </div>
+    </section>
+
+    <!-- Tertiary Buttons -->
+    <section class="section">
+      <h2 class="section-title">Tertiary Buttons</h2>
+      <p class="mj-text-secondary mj-mb-4">Use for secondary highlighted actions or complementary CTAs. Cyan/teal color provides an alternative accent.</p>
+      <div class="demo-row">
+        <button class="mj-btn mj-btn-tertiary">Learn More</button>
+        <button class="mj-btn mj-btn-tertiary">
+          <i class="fa-solid fa-info-circle"></i> Details
+        </button>
+        <button class="mj-btn mj-btn-tertiary" disabled>Disabled</button>
+      </div>
+      <div class="code-block">
+        &lt;button class="mj-btn mj-btn-tertiary"&gt;Learn More&lt;/button&gt;
+      </div>
+    </section>
+
+    <!-- Danger Buttons -->
+    <section class="section">
+      <h2 class="section-title">Danger Buttons</h2>
+      <p class="mj-text-secondary mj-mb-4">Use for destructive actions like "Delete", "Remove", or "Revoke".</p>
+      <div class="demo-row">
+        <button class="mj-btn mj-btn-danger">Delete</button>
+        <button class="mj-btn mj-btn-danger">
+          <i class="fa-solid fa-trash"></i> Remove
+        </button>
+        <button class="mj-btn mj-btn-danger" disabled>Disabled</button>
+      </div>
+      <div class="code-block">
+        &lt;button class="mj-btn mj-btn-danger"&gt;Delete&lt;/button&gt;
+      </div>
+    </section>
+
+    <!-- Button Sizes -->
+    <section class="section">
+      <h2 class="section-title">Button Sizes</h2>
+      <p class="mj-text-secondary mj-mb-4">Small, default, and large button sizes for different contexts.</p>
+      <div class="demo-row">
+        <button class="mj-btn mj-btn-primary mj-btn-sm">Small</button>
+        <button class="mj-btn mj-btn-primary">Default</button>
+        <button class="mj-btn mj-btn-primary mj-btn-lg">Large</button>
+      </div>
+      <div class="code-block">
+&lt;button class="mj-btn mj-btn-primary mj-btn-sm"&gt;Small&lt;/button&gt;
+&lt;button class="mj-btn mj-btn-primary"&gt;Default&lt;/button&gt;
+&lt;button class="mj-btn mj-btn-primary mj-btn-lg"&gt;Large&lt;/button&gt;
+      </div>
+    </section>
+
+    <!-- Icon Buttons -->
+    <section class="section">
+      <h2 class="section-title">Icon Buttons</h2>
+      <p class="mj-text-secondary mj-mb-4">Icon-only buttons for compact interfaces and toolbars.</p>
+      <div class="demo-row">
+        <button class="mj-btn-icon"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+        <button class="mj-btn-icon"><i class="fa-solid fa-pen"></i></button>
+        <button class="mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+        <button class="mj-btn-icon"><i class="fa-solid fa-copy"></i></button>
+        <button class="mj-btn-icon"><i class="fa-solid fa-download"></i></button>
+      </div>
+      <div class="code-block">
+        &lt;button class="mj-btn-icon"&gt;&lt;i class="fa-solid fa-ellipsis-vertical"&gt;&lt;/i&gt;&lt;/button&gt;
+      </div>
+    </section>
+
+    <!-- Button Groups -->
+    <section class="section">
+      <h2 class="section-title">Button Groups</h2>
+      <p class="mj-text-secondary mj-mb-4">Common button groupings for dialogs and action areas.</p>
+      <div class="demo-row">
+        <div class="mj-flex mj-gap-2">
+          <button class="mj-btn mj-btn-primary">Save</button>
+          <button class="mj-btn mj-btn-secondary">Cancel</button>
+        </div>
+      </div>
+      <div class="demo-row">
+        <div class="mj-flex mj-gap-2">
+          <button class="mj-btn mj-btn-primary">Submit</button>
+          <button class="mj-btn mj-btn-secondary">Save as Draft</button>
+          <button class="mj-btn mj-btn-ghost">Cancel</button>
+        </div>
+      </div>
+      <div class="demo-row">
+        <div class="mj-flex mj-gap-2">
+          <button class="mj-btn mj-btn-danger">Delete</button>
+          <button class="mj-btn mj-btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- With Icons -->
+    <section class="section">
+      <h2 class="section-title">Buttons with Icons</h2>
+      <p class="mj-text-secondary mj-mb-4">Leading and trailing icons in buttons.</p>
+      <div class="demo-row">
+        <button class="mj-btn mj-btn-primary">
+          <i class="fa-solid fa-plus"></i> Create
+        </button>
+        <button class="mj-btn mj-btn-secondary">
+          <i class="fa-solid fa-arrow-up-from-bracket"></i> Upload
+        </button>
+        <button class="mj-btn mj-btn-ghost">
+          Next <i class="fa-solid fa-arrow-right"></i>
+        </button>
+        <button class="mj-btn mj-btn-primary">
+          <i class="fa-solid fa-play"></i> Run
+        </button>
+      </div>
+    </section>
+
+    <!-- Dashboard Control Buttons -->
+    <section class="section">
+      <h2 class="section-title">Dashboard Control Buttons</h2>
+      <p class="mj-text-secondary mj-mb-4">Button patterns used in existing AI dashboards. These classes are available alongside the mj-* classes.</p>
+
+      <h4 class="mj-text-sm mj-font-semibold mj-mb-3 mj-mt-6">Control Buttons</h4>
+      <p class="mj-text-secondary mj-mb-4 mj-text-sm">General dashboard control buttons for settings, refresh, and other controls.</p>
+      <div class="demo-row">
+        <button class="control-btn">
+          <i class="fa-solid fa-cog"></i> Settings
+        </button>
+        <button class="control-btn primary">
+          <i class="fa-solid fa-refresh"></i> Refresh
+        </button>
+        <button class="control-btn">
+          <i class="fa-solid fa-download"></i> Export
+        </button>
+      </div>
+      <div class="code-block">
+&lt;button class="control-btn"&gt;Settings&lt;/button&gt;
+&lt;button class="control-btn primary"&gt;Refresh&lt;/button&gt;
+      </div>
+
+      <h4 class="mj-text-sm mj-font-semibold mj-mb-3 mj-mt-6">Action Buttons</h4>
+      <p class="mj-text-secondary mj-mb-4 mj-text-sm">Card action buttons for entity cards and detail panels.</p>
+      <div class="demo-row">
+        <button class="action-btn">
+          <i class="fa-solid fa-eye"></i> View
+        </button>
+        <button class="action-btn-primary">
+          <i class="fa-solid fa-pen"></i> Edit
+        </button>
+        <button class="action-btn-small">
+          <i class="fa-solid fa-play"></i> Run
+        </button>
+        <button class="action-btn-small">
+          <i class="fa-solid fa-copy"></i> Clone
+        </button>
+      </div>
+      <div class="code-block">
+&lt;button class="action-btn"&gt;View&lt;/button&gt;
+&lt;button class="action-btn-primary"&gt;Edit&lt;/button&gt;
+&lt;button class="action-btn-small"&gt;Run&lt;/button&gt;
+      </div>
+
+      <h4 class="mj-text-sm mj-font-semibold mj-mb-3 mj-mt-6">View Toggle Buttons</h4>
+      <p class="mj-text-secondary mj-mb-4 mj-text-sm">Toggle between grid and list views.</p>
+      <div class="demo-row">
+        <div class="view-toggle">
+          <button class="view-btn active" title="Grid view">
+            <i class="fa-solid fa-grip"></i>
+          </button>
+          <button class="view-btn" title="List view">
+            <i class="fa-solid fa-list"></i>
+          </button>
+        </div>
+      </div>
+      <div class="code-block">
+&lt;div class="view-toggle"&gt;
+  &lt;button class="view-btn active"&gt;&lt;i class="fa-solid fa-grip"&gt;&lt;/i&gt;&lt;/button&gt;
+  &lt;button class="view-btn"&gt;&lt;i class="fa-solid fa-list"&gt;&lt;/i&gt;&lt;/button&gt;
+&lt;/div&gt;
+      </div>
+
+      <h4 class="mj-text-sm mj-font-semibold mj-mb-3 mj-mt-6">Filter Toggle Button</h4>
+      <p class="mj-text-secondary mj-mb-4 mj-text-sm">Toggle filter panel visibility.</p>
+      <div class="demo-row">
+        <button class="filter-toggle-btn">
+          <i class="fa-solid fa-filter"></i> Filters
+        </button>
+        <button class="filter-toggle-btn active">
+          <i class="fa-solid fa-filter"></i> Filters (2)
+        </button>
+      </div>
+      <div class="code-block">
+&lt;button class="filter-toggle-btn"&gt;Filters&lt;/button&gt;
+&lt;button class="filter-toggle-btn active"&gt;Filters (2)&lt;/button&gt;
+      </div>
+    </section>
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+</body>
+</html>

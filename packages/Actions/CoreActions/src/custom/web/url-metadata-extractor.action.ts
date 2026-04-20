@@ -513,10 +513,3 @@ export class URLMetadataExtractorAction extends BaseAction {
             .trim();
     }
 }
-
-/**
- * Loader function to ensure the URLMetadataExtractorAction class is included in the bundle.
- */
-export function LoadURLMetadataExtractorAction() {
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
-}

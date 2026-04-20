@@ -1,25 +1,30 @@
 <div>
-    <kendo-textbox
-      class="find-textbox"
-      type="text"
-      placeholder="Start typing to search..."
-      [(ngModel)]="searchTerm"
-      (ngModelChange)="onSearchTermChange($event)"
-    >
-    </kendo-textbox>
-    <button class="find-button" kendoButton (click)="onFind()">Find</button>
-  
-    <div *ngIf="loading">Searching...</div>
-    <div *ngIf="!loading && records.length > 0">
-      <kendo-grid 
-        [data]="records" 
-        [height]="280" 
-        [selectable]="{ mode: 'single' }"
-        (selectionChange)="onSelectionChange($event)"
-      >
-        <kendo-grid-column *ngFor="let field of DisplayFields" [field]="field.Name" [title]="field.DisplayNameOrName"></kendo-grid-column>
-      </kendo-grid>
+  <input
+    type="text"
+    class="mj-input find-textbox"
+    placeholder="Start typing to search..."
+    [(ngModel)]="searchTerm"
+    (ngModelChange)="onSearchTermChange($event)" />
+  <button mjButton variant="primary" class="find-button" (click)="onFind()">Find</button>
+
+  @if (loading) {
+    <div>Searching...</div>
+  }
+  @if (!loading && records.length > 0) {
+    <div class="find-grid-wrapper">
+      <ag-grid-angular
+        class="find-grid"
+        [theme]="GridTheme"
+        [rowData]="records"
+        [columnDefs]="ColumnDefs"
+        [defaultColDef]="DefaultColDef"
+        [rowSelection]="RowSelectionConfig"
+        (selectionChanged)="onSelectionChange($event)"
+        (gridReady)="onGridReady($event)">
+      </ag-grid-angular>
     </div>
-    <div *ngIf="!loading && records.length === 0 && searchHasRun">No records found.</div>
+  }
+  @if (!loading && records.length === 0 && searchHasRun) {
+    <div>No records found.</div>
+  }
 </div>
-  

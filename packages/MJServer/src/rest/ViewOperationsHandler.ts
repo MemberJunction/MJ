@@ -142,7 +142,7 @@ export class ViewOperationsHandler {
             
             // Run a view to get the available views
             const params: RunViewParams = {
-                EntityName: 'User Views',
+                EntityName: 'MJ: User Views',
                 ExtraFilter: `Entity = '${entityName}'`
             };
             

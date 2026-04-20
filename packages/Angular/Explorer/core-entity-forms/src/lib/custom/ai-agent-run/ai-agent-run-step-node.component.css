@@ -5,8 +5,8 @@
   padding: 12px;
   padding-left: 22px; /* Add extra padding to accommodate expand button */
   margin-bottom: 8px;
-  background: white;
-  border: 1px solid #e0e6ed;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
@@ -14,15 +14,15 @@
 }
 
 .timeline-item:hover {
-  border-color: #c1c9d2;
-  background: #f8f9fa;
+  border-color: var(--mj-border-strong);
+  background: var(--mj-bg-surface-sunken);
   transform: translateX(2px);
 }
 
 .timeline-item.selected {
-  border-color: #2196f3;
-  background: #e3f2fd;
-  box-shadow: 0 0 0 1px #2196f3;
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  box-shadow: 0 0 0 1px var(--mj-brand-primary);
 }
 
 /* Expand/Collapse Button */
@@ -32,8 +32,8 @@
   top: 12px;
   width: 24px;
   height: 24px;
-  border: 1px solid #e0e6ed;
-  background: white;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -44,13 +44,13 @@
 }
 
 .expand-toggle:hover {
-  background: #f8f9fa;
-  border-color: #c1c9d2;
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-border-strong);
 }
 
 .expand-toggle i {
   font-size: 10px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 
 /* Timeline Marker */
@@ -62,7 +62,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--mj-text-inverse);
   font-size: 14px;
   position: relative;
   overflow: hidden;
@@ -76,23 +76,23 @@
 }
 
 .timeline-marker[data-color="info"] {
-  background: linear-gradient(135deg, #2196f3, #1976d2);
+  background: var(--mj-brand-primary);
 }
 
 .timeline-marker[data-color="success"] {
-  background: linear-gradient(135deg, #4caf50, #388e3c);
+  background: var(--mj-status-success);
 }
 
 .timeline-marker[data-color="error"] {
-  background: linear-gradient(135deg, #f44336, #d32f2f);
+  background: var(--mj-status-error);
 }
 
 .timeline-marker[data-color="warning"] {
-  background: linear-gradient(135deg, #ff9800, #f57c00);
+  background: var(--mj-status-warning);
 }
 
 .timeline-marker[data-color="secondary"] {
-  background: linear-gradient(135deg, #9e9e9e, #757575);
+  background: var(--mj-text-disabled);
 }
 
 /* Timeline Content */
@@ -112,7 +112,7 @@
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--mj-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -120,7 +120,7 @@
 
 .timeline-time {
   font-size: 11px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   font-family: monospace;
   white-space: nowrap;
   margin-left: 12px;
@@ -128,13 +128,13 @@
 
 .timeline-subtitle {
   font-size: 12px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   margin-bottom: 4px;
 }
 
 .timeline-additional-info {
   font-size: 11px;
-  color: #868e96;
+  color: var(--mj-text-muted);
   margin-bottom: 4px;
   font-style: italic;
 }
@@ -143,7 +143,7 @@
   display: flex;
   gap: 12px;
   font-size: 11px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 
 .duration {
@@ -160,19 +160,19 @@
 }
 
 .status[data-status="Running"] {
-  color: #1976d2;
+  color: var(--mj-brand-primary);
 }
 
 .status[data-status="Completed"] {
-  color: #388e3c;
+  color: var(--mj-status-success);
 }
 
 .status[data-status="Failed"] {
-  color: #d32f2f;
+  color: var(--mj-status-error);
 }
 
 .status[data-status="Cancelled"] {
-  color: #f57c00;
+  color: var(--mj-status-warning);
 }
 
 /* Timeline Actions */
@@ -185,7 +185,7 @@
 .btn-link {
   background: none;
   border: none;
-  color: #2196f3;
+  color: var(--mj-brand-primary);
   font-size: 11px;
   cursor: pointer;
   padding: 4px 8px;
@@ -198,8 +198,8 @@
 }
 
 .btn-link:hover {
-  background: rgba(33, 150, 243, 0.1);
-  color: #1976d2;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  color: var(--mj-brand-primary);
 }
 
 .btn-link i {
@@ -216,13 +216,13 @@
 
 /* Type-specific styling */
 .timeline-item[data-type="subrun"] {
-  background: linear-gradient(to right, #f3f7ff, white);
+  background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
 }
 
 .timeline-item[data-type="action"] {
-  border-left: 3px solid #4caf50;
+  border-left: 3px solid var(--mj-status-success);
 }
 
 .timeline-item[data-type="prompt"] {
-  border-left: 3px solid #2196f3;
+  border-left: 3px solid var(--mj-brand-primary);
 }

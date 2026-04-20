@@ -1,10 +1,13 @@
-import { Component, Input, Output, EventEmitter, OnChanges, OnInit, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, NgZone } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
-import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView } from '@memberjunction/core';
-import { BaseEntity } from '@memberjunction/core';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams, Metadata, CompositeKey } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
+import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
+import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
+import { MapDisplayState, MapRenderMode } from '@memberjunction/ng-map-view';
 import {
   EntityViewMode,
   EntityViewerConfig,
@@ -18,12 +21,19 @@ import {
   SortState,
   SortChangedEvent,
   PaginationState,
-  ViewGridStateConfig,
+  ViewGridState,
   GridStateChangedEvent,
   TimelineSegmentGrouping,
   TimelineOrientation,
   TimelineState
 } from '../types';
+import {
+  AfterRowClickEventArgs,
+  AfterRowDoubleClickEventArgs,
+  AfterSortEventArgs
+} from '../entity-data-grid/events/grid-events';
+import { GridToolbarConfig, GridSelectionMode, ForeignKeyClickEvent } from '../entity-data-grid/models/grid-types';
+import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.component';
 
 /**
  * EntityViewerComponent - Full-featured composite component for viewing entity data
@@ -59,6 +69,7 @@ import {
  * ```
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-viewer',
   templateUrl: './entity-viewer.component.html',
   styleUrls: ['./entity-viewer.component.css'],
@@ -66,25 +77,110 @@ import {
     'style': 'display: block; height: 100%;'
   }
 })
-export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
+export class EntityViewerComponent implements OnInit, OnDestroy {
+  /**
+   * Maximum records to load in map mode. Map view needs all records for
+   * geographic visualization — paging doesn't make sense for maps. This cap
+   * prevents unbounded queries on very large entities.
+   */
+  private static readonly MAP_MAX_RECORDS = 10000;
+
   // ========================================
-  // INPUTS
+  // INPUTS (using getter/setter pattern)
   // ========================================
+
+  private _entity: EntityInfo | null = null;
+  private _records: Record<string, unknown>[] | null = null;
+  private _config: Partial<EntityViewerConfig> = {};
+  private _viewMode: EntityViewMode | null = null;
+  private _filterText: string | null = null;
+  private _sortState: SortState | null = null;
+  private _viewEntity: MJUserViewEntityExtended | null = null;
+  private _timelineConfig: TimelineState | null = null;
+  private _initialized = false;
+
+  /** Whether a deferred reload has been queued via deferReload() */
+  private _reloadDeferred = false;
 
   /**
    * The entity to display records for
    */
-  @Input() entity: EntityInfo | null = null;
+  @Input()
+  get entity(): EntityInfo | null {
+    return this._entity;
+  }
+  set entity(value: EntityInfo | null) {
+    const previousEntity = this._entity;
+    this._entity = value;
+
+    // Detect date fields for timeline support
+    this.detectDateFields();
+
+    // Detect geocoding support for map view
+    this.updateGeoCodingSupport();
+
+    if (this._initialized) {
+      // If entity changed to a different entity, clear all stale state from the old entity
+      if (value && previousEntity && !UUIDsEqual(value.ID, previousEntity.ID)) {
+        if (this._viewEntity && !UUIDsEqual(this._viewEntity.EntityID, value.ID)) {
+          this._viewEntity = null;
+        }
+        // Clear sort state — it references fields from the old entity (e.g., FirstName)
+        // and would produce invalid ORDER BY on the new entity
+        this.internalSortState = null;
+      }
+
+      if (value && !this._records) {
+        // Reset state for new entity - synchronously clear all data and force change detection
+        // before starting the async load to prevent stale data display
+        this.resetPaginationState();
+        this.internalRecords = [];
+        this.totalRecordCount = 0;
+        this.filteredRecordCount = 0;
+        this.cdr.detectChanges();
+        // Defer the actual load so all input bindings (viewEntity, gridState, etc.)
+        // complete before we fire the RunView — prevents duplicate loads with stale state
+        this.deferReload();
+      } else if (!value) {
+        this.internalRecords = [];
+        this.totalRecordCount = 0;
+        this.filteredRecordCount = 0;
+        this.resetPaginationState();
+        this.cdr.detectChanges();
+      }
+    }
+  }
 
   /**
    * Pre-loaded records (optional - if not provided, component loads data)
    */
-  @Input() records: BaseEntity[] | null = null;
+  @Input()
+  get records(): Record<string, unknown>[] | null {
+    return this._records;
+  }
+  set records(value: Record<string, unknown>[] | null) {
+    this._records = value;
+
+    if (value) {
+      this.internalRecords = value;
+      this.totalRecordCount = value.length;
+      this.filteredRecordCount = value.length;
+      // Update timeline with new records
+      this.updateTimelineGroups();
+    }
+  }
 
   /**
    * Configuration options for the viewer
    */
-  @Input() config: Partial<EntityViewerConfig> = {};
+  @Input()
+  get config(): Partial<EntityViewerConfig> {
+    return this._config;
+  }
+  set config(value: Partial<EntityViewerConfig>) {
+    this._config = value;
+    this.applyConfig();
+  }
 
   /**
    * Currently selected record ID (primary key string)
@@ -95,18 +191,76 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * External view mode - allows parent to control view mode
    * Supports two-way binding: [(viewMode)]="state.viewMode"
    */
-  @Input() viewMode: EntityViewMode | null = null;
+  @Input()
+  get viewMode(): EntityViewMode | null {
+    return this._viewMode;
+  }
+  set viewMode(value: EntityViewMode | null) {
+    this._viewMode = value;
+    if (value !== null) {
+      this.internalViewMode = value;
+    }
+  }
 
   /**
    * External filter text - allows parent to control filter
    * Supports two-way binding: [(filterText)]="state.filterText"
    */
-  @Input() filterText: string | null = null;
+  @Input()
+  get filterText(): string | null {
+    return this._filterText;
+  }
+  set filterText(value: string | null) {
+    const oldFilter = this.debouncedFilterText;
+    this._filterText = value;
+
+    const newFilter = value ?? '';
+    this.internalFilterText = newFilter;
+    this.debouncedFilterText = newFilter;
+
+    if (this._initialized) {
+      // If server-side filtering and filter changed, reload from page 1
+      // Keep existing records visible during refresh for better UX
+      if (this.effectiveConfig.serverSideFiltering && newFilter !== oldFilter && !this._records) {
+        this.resetPaginationState(false);
+        this.loadData();
+      } else {
+        this.updateFilteredCount();
+      }
+      this.cdr.detectChanges();
+    }
+  }
 
   /**
    * External sort state - allows parent to control sorting
    */
-  @Input() sortState: SortState | null = null;
+  @Input()
+  get sortState(): SortState | null {
+    return this._sortState;
+  }
+  set sortState(value: SortState | null) {
+    const oldSort = this.internalSortState;
+    this._sortState = value;
+
+    if (value !== null) {
+      this.internalSortState = value;
+
+      if (this._initialized) {
+        // If sort changed and using server-side sorting, reload
+        // Keep existing records visible during refresh for better UX
+        if (this.effectiveConfig.serverSideSorting && !this._records) {
+          const sortChanged = !oldSort || !value ||
+            oldSort.field !== value.field ||
+            oldSort.direction !== value.direction;
+
+          if (sortChanged) {
+            this.resetPaginationState(false);
+            this.loadData();
+          }
+        }
+      }
+    }
+  }
 
   /**
    * Custom grid column definitions
@@ -123,13 +277,28 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * When provided, the component will use the view's WhereClause, GridState, SortState, etc.
    * The view's filter is additive - UserSearchString is applied ON TOP of the view's WhereClause
    */
-  @Input() viewEntity: UserViewEntityExtended | null = null;
+  @Input()
+  get viewEntity(): MJUserViewEntityExtended | null {
+    return this._viewEntity;
+  }
+  set viewEntity(value: MJUserViewEntityExtended | null) {
+    this._viewEntity = value;
+
+    if (this._initialized && this._entity && !this._records) {
+      // Apply view's sort state if available, then defer the reload.
+      // Deferring ensures all sibling input bindings (gridState, etc.) are
+      // updated before we fire the RunView — prevents duplicate loads.
+      this.applySortStateFromView(value);
+      this.resetPaginationState();
+      this.deferReload();
+    }
+  }
 
   /**
    * Grid state configuration from a User View
    * Controls column visibility, widths, order, and sort settings
    */
-  @Input() gridState: ViewGridStateConfig | null = null;
+  @Input() gridState: ViewGridState | null = null;
 
   /**
    * Timeline configuration state
@@ -151,13 +320,48 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
     if (!isEqual) {
       this._timelineConfig = value;
-      if (value && this.entity) {
+      if (value && this._entity) {
         this.configureTimeline();
         this.cdr.markForCheck();
       }
     }
   }
-  private _timelineConfig: TimelineState | null = null;
+
+  /**
+   * Whether to show the grid toolbar.
+   * When false, the grid is displayed without its own toolbar - useful when
+   * entity-viewer provides its own filter/actions in the header.
+   * @default false
+   */
+  @Input() showGridToolbar: boolean = false;
+
+  /**
+   * Grid toolbar configuration - controls which buttons are shown and their behavior
+   * When not provided, uses sensible defaults
+   */
+  @Input() gridToolbarConfig: Partial<GridToolbarConfig> | null = null;
+
+  /**
+   * Grid selection mode
+   * @default 'single'
+   */
+  @Input() gridSelectionMode: GridSelectionMode = 'single';
+
+  /**
+   * Show the "Add to List" button in the grid toolbar.
+   * Requires gridSelectionMode to be 'multiple' for best UX.
+   * @default false
+   */
+  @Input() showAddToListButton: boolean = false;
+
+  /**
+   * Whether to render the Recycle Bin chip in the viewer header.
+   * The chip auto-hides itself when the entity has no deleted records,
+   * doesn't track changes, or the user lacks Delete permission — so it
+   * stays out of the way on entities where it's not relevant.
+   * @default true
+   */
+  @Input() ShowRecycleBin: boolean = true;
 
   // ========================================
   // OUTPUTS
@@ -208,6 +412,46 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    */
   @Output() timelineConfigChange = new EventEmitter<TimelineState>();
 
+  /**
+   * Emitted when the Add/New button is clicked in the grid toolbar
+   */
+  @Output() addRequested = new EventEmitter<void>();
+
+  /**
+   * Emitted when the Delete button is clicked in the grid toolbar
+   * Includes the selected records to be deleted
+   */
+  @Output() deleteRequested = new EventEmitter<{ records: Record<string, unknown>[] }>();
+
+  /**
+   * Emitted when the Refresh button is clicked in the grid toolbar
+   */
+  @Output() refreshRequested = new EventEmitter<void>();
+
+  /**
+   * Emitted when the Export button is clicked in the grid toolbar
+   */
+  @Output() exportRequested = new EventEmitter<{ format: 'excel' | 'csv' | 'json' }>();
+
+  /**
+   * Emitted when the Add to List button is clicked in the grid toolbar.
+   * Parent components should handle this to show the list management dialog.
+   */
+  @Output() addToListRequested = new EventEmitter<{
+    entityInfo: EntityInfo;
+    records: Record<string, unknown>[];
+    recordIds: string[];
+  }>();
+
+  /**
+   * Emitted when grid selection changes.
+   * Parent components can use this to track selected records for their own toolbar buttons.
+   */
+  @Output() selectionChanged = new EventEmitter<{
+    records: Record<string, unknown>[];
+    recordIds: string[];
+  }>();
+
   // ========================================
   // INTERNAL STATE
   // ========================================
@@ -217,7 +461,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   public debouncedFilterText: string = '';
   public isLoading: boolean = false;
   public loadingMessage: string = 'Loading...';
-  public internalRecords: BaseEntity[] = [];
+  public internalRecords: Record<string, unknown>[] = [];
   public totalRecordCount: number = 0;
   public filteredRecordCount: number = 0;
 
@@ -226,6 +470,11 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
   /** Current sort state */
   public internalSortState: SortState | null = null;
+
+  /** Cached grid params to avoid recreating object on every change detection */
+  private _cachedGridParams: RunViewParams | null = null;
+  private _lastGridParamsEntity: string | null = null;
+  private _lastGridParamsViewEntity: MJUserViewEntityExtended | null = null;
 
   /** Pagination state */
   public pagination: PaginationState = {
@@ -243,14 +492,17 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   /** Whether the current entity has date fields available for timeline view */
   public hasDateFields: boolean = false;
 
+  /** Whether the current entity supports geocoding (has SupportsGeoCoding = 1) */
+  public HasGeoCoding: boolean = false;
+
   /** Available date fields from the entity (sorted by priority) */
   public availableDateFields: EntityFieldInfo[] = [];
 
   /** Timeline groups configuration for the timeline component */
-  get timelineGroups(): TimelineGroup<BaseEntity>[] {
+  get timelineGroups(): TimelineGroup<Record<string, unknown>>[] {
     return this._timelineGroups;
   }
-  set timelineGroups(value: TimelineGroup<BaseEntity>[]) {
+  set timelineGroups(value: TimelineGroup<Record<string, unknown>>[]) {
     const prev = this._timelineGroups;
     this._timelineGroups = value;
 
@@ -265,7 +517,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       this.cdr.markForCheck();
     }
   }
-  private _timelineGroups: TimelineGroup<BaseEntity>[] = [];
+  private _timelineGroups: TimelineGroup<Record<string, unknown>>[] = [];
 
   /** Timeline sort order */
   public timelineSortOrder: TimelineSortOrder = 'desc';
@@ -285,11 +537,77 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   /** Track if this is the first load (vs. load more) */
   private isInitialLoad: boolean = true;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  /** Reference to the data grid component for flushing pending changes */
+  @ViewChild(EntityDataGridComponent) private dataGridRef: EntityDataGridComponent | undefined;
+
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
+
+  // ========================================
+  // PUBLIC METHODS
+  // ========================================
+
+  /**
+   * Ensures any pending grid state changes are saved immediately without waiting for debounce.
+   * Call this before switching views or entities to ensure changes are saved.
+   */
+  public EnsurePendingChangesSaved(): void {
+    this.dataGridRef?.EnsurePendingChangesSaved();
+  }
 
   // ========================================
   // COMPUTED PROPERTIES
   // ========================================
+
+  /**
+   * Get the effective entity - uses entity input if provided, otherwise derives from viewEntity
+   * This allows callers to provide just a viewEntity without explicitly setting the entity input.
+   * Uses fallback resolution when ViewEntityInfo is not available.
+   */
+  get effectiveEntity(): EntityInfo | null {
+    if (this.entity) {
+      return this.entity;
+    }
+    // Auto-derive from viewEntity if available
+    if (this.viewEntity) {
+      return this.getEntityInfoFromViewEntity(this.viewEntity);
+    }
+    return null;
+  }
+
+  /**
+   * Gets EntityInfo from a ViewEntity with multiple fallback strategies.
+   * Priority: 1) ViewEntityInfo property (set by Load)
+   *           2) Entity name lookup (virtual field)
+   *           3) EntityID lookup
+   * Returns null if entity cannot be determined.
+   */
+  private getEntityInfoFromViewEntity(viewEntity: MJUserViewEntityExtended): EntityInfo | null {
+    // First try: ViewEntityInfo is the preferred source (set by MJUserViewEntityExtended.Load)
+    if (viewEntity.ViewEntityInfo) {
+      return viewEntity.ViewEntityInfo;
+    }
+
+    const md = new Metadata();
+
+    // Second try: Look up by Entity name (virtual field that returns entity name)
+    if (viewEntity.Entity) {
+      const entityByName = md.Entities.find(e => e.Name === viewEntity.Entity);
+      if (entityByName) {
+        return entityByName;
+      }
+    }
+
+    // Third try: Look up by EntityID
+    if (viewEntity.EntityID) {
+      const entityById = md.Entities.find(e => UUIDsEqual(e.ID, viewEntity.EntityID));
+      if (entityById) {
+        return entityById;
+      }
+    }
+
+    console.warn(`[EntityViewer] Could not determine entity for view "${viewEntity.Name}" (ID: ${viewEntity.ID})`);
+    return null;
+  }
 
   /**
    * Get the effective view mode (external or internal)
@@ -337,6 +655,17 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
+   * Get the OrderBy string for mj-entity-data-grid from the effective sort state
+   */
+  get effectiveSortOrderBy(): string {
+    const sortState = this.effectiveSortState;
+    if (!sortState?.field || !sortState.direction) {
+      return '';
+    }
+    return `${sortState.field} ${sortState.direction.toUpperCase()}`;
+  }
+
+  /**
    * Get merged configuration with defaults
    */
   get effectiveConfig(): Required<EntityViewerConfig> {
@@ -344,9 +673,54 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
+   * Get cached grid params - only recreates object when entity or viewEntity changes
+   * This prevents Angular from seeing a new object reference on every change detection
+   * which would cause the grid to reinitialize
+   */
+  get gridParams(): RunViewParams | null {
+    const entity = this.effectiveEntity;
+    if (!entity) {
+      return null;
+    }
+
+    // Check if we need to recreate the params object
+    const entityChanged = this._lastGridParamsEntity !== entity.Name;
+    const viewEntityChanged = this._lastGridParamsViewEntity !== this.viewEntity;
+
+    if (entityChanged || viewEntityChanged || !this._cachedGridParams) {
+      this._lastGridParamsEntity = entity.Name;
+      this._lastGridParamsViewEntity = this.viewEntity ?? null;
+      this._cachedGridParams = {
+        EntityName: entity.Name,
+        ViewEntity: this.viewEntity || undefined
+      };
+    }
+
+    return this._cachedGridParams;
+  }
+
+  /**
+   * Get the effective grid toolbar configuration
+   * Merges user-provided config with defaults appropriate for entity-viewer context
+   */
+  get effectiveGridToolbarConfig(): GridToolbarConfig {
+    const defaults: GridToolbarConfig = {
+      showSearch: false, // Entity-viewer has its own filter
+      showRefresh: true,
+      showAdd: true,
+      showDelete: true,
+      showExport: true,
+      showColumnChooser: true,
+      showRowCount: true,
+      showSelectionCount: true
+    };
+    return { ...defaults, ...this.gridToolbarConfig };
+  }
+
+  /**
    * Get the records to display (external or internal)
    */
-  get displayRecords(): BaseEntity[] {
+  get displayRecords(): Record<string, unknown>[] {
     return this.records ?? this.internalRecords;
   }
 
@@ -354,7 +728,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Get filtered records - when using server-side filtering, records are already filtered
    * When using client-side filtering, apply filter locally
    */
-  get filteredRecords(): BaseEntity[] {
+  get filteredRecords(): Record<string, unknown>[] {
     const records = this.displayRecords;
 
     // If server-side filtering is enabled, records are already filtered
@@ -375,7 +749,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     return records.filter(record => {
       const matchResult = this.recordMatchesFilter(record, filterText, visibleFields);
       if (matchResult.matches && matchResult.matchedField && !matchResult.matchedInVisibleField) {
-        const recordKey = record.PrimaryKey.ToConcatenatedString();
+        const recordKey = buildPkString(record, this.entity!);
         this.hiddenFieldMatches.set(recordKey, matchResult.matchedField);
       }
       return matchResult.matches;
@@ -386,7 +760,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Check if a record matches the filter text (client-side)
    */
   private recordMatchesFilter(
-    record: BaseEntity,
+    record: Record<string, unknown>,
     filterText: string,
     visibleFields: Set<string>
   ): { matches: boolean; matchedField: string | null; matchedInVisibleField: boolean } {
@@ -398,7 +772,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     for (const field of this.entity.Fields) {
       if (!this.shouldSearchField(field)) continue;
 
-      const value = record.Get(field.Name);
+      const value = record[field.Name];
       if (value == null) continue;
 
       const stringValue = String(value).toLowerCase();
@@ -471,16 +845,17 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   /**
    * Check if a record matched on a hidden field
    */
-  public hasHiddenFieldMatch(record: BaseEntity): boolean {
-    if (!this.debouncedFilterText) return false;
-    return this.hiddenFieldMatches.has(record.PrimaryKey.ToConcatenatedString());
+  public hasHiddenFieldMatch(record: Record<string, unknown>): boolean {
+    if (!this.debouncedFilterText || !this.entity) return false;
+    return this.hiddenFieldMatches.has(buildPkString(record, this.entity));
   }
 
   /**
    * Get the name of the hidden field that matched for display
    */
-  public getHiddenMatchFieldName(record: BaseEntity): string {
-    const fieldName = this.hiddenFieldMatches.get(record.PrimaryKey.ToConcatenatedString());
+  public getHiddenMatchFieldName(record: Record<string, unknown>): string {
+    if (!this.entity) return '';
+    const fieldName = this.hiddenFieldMatches.get(buildPkString(record, this.entity));
     if (!fieldName || !this.entity) return '';
     const field = this.entity.Fields.find(f => f.Name === fieldName);
     return field ? field.DisplayNameOrName : fieldName;
@@ -507,103 +882,43 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       };
     }
 
-    // Note: We don't call loadData() here because ngOnChanges runs before ngOnInit
-    // and already handles the initial entity binding. Calling loadData() here would
-    // result in duplicate data loading (200 records instead of 100).
+    // Mark as initialized - setters will now trigger data loading
+    this._initialized = true;
+
+    // If viewEntity was set before initialization, extract its sort state now.
+    // The viewEntity setter skips this when _initialized is false.
+    if (this._viewEntity) {
+      this.applySortStateFromView(this._viewEntity);
+    }
+
+    // If entity was set before initialization, load data now.
+    // Use deferReload so all inputs are settled before the first RunView.
+    if (this._entity && !this._records) {
+      this.deferReload();
+    }
   }
 
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['config']) {
-      this.applyConfig();
+  /**
+   * Defers a data reload to a microtask so that all Angular input bindings
+   * (entity, viewEntity, gridState, etc.) complete before we fire a RunView.
+   * Multiple calls within the same change detection cycle collapse into one load.
+   */
+  private deferReload(): void {
+    if (this._reloadDeferred) {
+      return; // already queued or in-flight
     }
-
-    if (changes['entity']) {
-      // Detect date fields for timeline support
-      this.detectDateFields();
-
-      if (this.entity && !this.records) {
-        // Reset state for new entity - synchronously clear all data and force change detection
-        // before starting the async load to prevent stale data display
-        this.resetPaginationState();
-        this.cdr.detectChanges();
-        this.loadData();
-      } else if (!this.entity) {
-        this.internalRecords = [];
-        this.totalRecordCount = 0;
-        this.filteredRecordCount = 0;
-        this.resetPaginationState();
-        this.cdr.detectChanges();
-      }
-    }
-
-    if (changes['records'] && this.records) {
-      this.internalRecords = this.records;
-      this.totalRecordCount = this.records.length;
-      this.filteredRecordCount = this.records.length;
-      // Update timeline with new records
-      this.updateTimelineGroups();
-    }
-
-    // Timeline config is now handled by setter - no ngOnChanges handling needed
-
-    // Handle external filter text changes (from parent component)
-    if (changes['filterText']) {
-      const newFilter = this.filterText ?? '';
-      const oldFilter = this.debouncedFilterText;
-
-      this.internalFilterText = newFilter;
-      this.debouncedFilterText = newFilter;
-
-      // If server-side filtering and filter changed, reload from page 1
-      if (this.effectiveConfig.serverSideFiltering && newFilter !== oldFilter && !this.records) {
-        this.resetPaginationState();
-        this.loadData();
-      } else {
-        this.updateFilteredCount();
-      }
-      this.cdr.detectChanges();
-    }
-
-    // Handle external view mode changes
-    if (changes['viewMode'] && this.viewMode !== null) {
-      this.internalViewMode = this.viewMode;
-    }
-
-    // Handle external sort state changes
-    if (changes['sortState'] && this.sortState !== null) {
-      const oldSort = this.internalSortState;
-      this.internalSortState = this.sortState;
-
-      // If sort changed and using server-side sorting, reload
-      if (this.effectiveConfig.serverSideSorting && !this.records) {
-        const sortChanged = !oldSort || !this.sortState ||
-          oldSort.field !== this.sortState.field ||
-          oldSort.direction !== this.sortState.direction;
-
-        if (sortChanged) {
-          this.resetPaginationState();
-          this.loadData();
+    this._reloadDeferred = true;
+    Promise.resolve().then(async () => {
+      try {
+        if (this._initialized && this._entity && !this._records) {
+          await this.loadData();
         }
+      } finally {
+        // Clear only after loadData fully completes (including the async RunView).
+        // This prevents any re-entry via deferReload() during the entire load cycle.
+        this._reloadDeferred = false;
       }
-    }
-
-    // Handle viewEntity changes - reload data when view changes
-    if (changes['viewEntity']) {
-      if (this.entity && !this.records) {
-        // Apply view's sort state if available
-        if (this.viewEntity) {
-          const viewSortInfo = this.viewEntity.ViewSortInfo;
-          if (viewSortInfo && viewSortInfo.length > 0) {
-            this.internalSortState = {
-              field: viewSortInfo[0].field,
-              direction: viewSortInfo[0].direction === 'Desc' ? 'desc' : 'asc'
-            };
-          }
-        }
-        this.resetPaginationState();
-        this.loadData();
-      }
-    }
+    });
   }
 
   ngOnDestroy(): void {
@@ -614,6 +929,44 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   // ========================================
   // CONFIGURATION
   // ========================================
+
+  /**
+   * Extracts sort state from a view entity, checking ViewSortInfo first then
+   * falling back to GridState.sortSettings. Resets internalSortState if the
+   * view has no sort defined (prevents stale sort from a previous view).
+   */
+  private applySortStateFromView(view: MJUserViewEntityExtended | null): void {
+    if (!view) {
+      this.internalSortState = null;
+      return;
+    }
+
+    // Priority 1: SortState column (via ViewSortInfo)
+    const viewSortInfo = view.ViewSortInfo;
+    if (viewSortInfo && viewSortInfo.length > 0) {
+      this.internalSortState = {
+        field: viewSortInfo[0].field,
+        direction: viewSortInfo[0].direction?.toLowerCase() === 'desc' ? 'desc' : 'asc'
+      };
+      return;
+    }
+
+    // Priority 2: GridState.sortSettings (sort may only be stored here)
+    if (view.GridState) {
+      const gridState = view.GridStateObject;
+      if (gridState?.sortSettings && gridState.sortSettings.length > 0) {
+        const firstSort = gridState.sortSettings[0];
+        this.internalSortState = {
+          field: firstSort.field,
+          direction: firstSort.dir === 'desc' ? 'desc' : 'asc'
+        };
+        return;
+      }
+    }
+
+    // No sort defined — reset to prevent stale sort from previous view
+    this.internalSortState = null;
+  }
 
   private applyConfig(): void {
     const config = this.effectiveConfig;
@@ -637,8 +990,9 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         this.filterTextChange.emit(filterText);
 
         // If server-side filtering and filter changed, reload from page 1
+        // Keep existing records visible during refresh for better UX
         if (this.effectiveConfig.serverSideFiltering && filterText !== oldFilter && !this.records) {
-          this.resetPaginationState();
+          this.resetPaginationState(false);
           this.loadData();
         } else {
           this.updateFilteredCount();
@@ -663,19 +1017,22 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
 
   /**
    * Reset pagination state for a fresh load.
-   * Clears all record data and counts to prevent stale data display during entity switches.
+   * When clearRecords is true (default), clears all record data - use for entity switches.
+   * When clearRecords is false, keeps existing records visible during refresh - use for sort/filter changes.
    */
-  private resetPaginationState(): void {
+  private resetPaginationState(clearRecords: boolean = true): void {
     this.pagination = {
       currentPage: 0,
       pageSize: this.effectiveConfig.pageSize,
-      totalRecords: 0,
+      totalRecords: clearRecords ? 0 : this.pagination.totalRecords,
       hasMore: false,
       isLoading: false
     };
-    this.internalRecords = [];
-    this.totalRecordCount = 0;
-    this.filteredRecordCount = 0;
+    if (clearRecords) {
+      this.internalRecords = [];
+      this.totalRecordCount = 0;
+      this.filteredRecordCount = 0;
+    }
     this.isInitialLoad = true;
   }
 
@@ -683,27 +1040,37 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   // DATA LOADING
   // ========================================
 
+  // Sequence counter for tracking load requests and detecting stale responses
+  private _loadSequence = 0;
+  // Flag: a reload was requested while a load was already in progress
+  private _pendingReload = false;
+
   /**
    * Load data for the current entity with server-side filtering/sorting/pagination
    */
   public async loadData(): Promise<void> {
-    if (!this.entity) {
+    const entity = this.effectiveEntity;
+    if (!entity) {
       this.internalRecords = [];
       this.totalRecordCount = 0;
       this.filteredRecordCount = 0;
       return;
     }
 
-    // Prevent concurrent loads which can cause duplicate records
+    // Increment sequence to track this load request
+    const loadId = ++this._loadSequence;
+
+    // If a load is already in progress, set a flag so we reload once the current
+    // load completes. We can't use deferReload() here because the microtask would
+    // fire while isLoading is still true, causing an infinite loop.
     if (this.isLoading) {
+      this._pendingReload = true;
       return;
     }
 
     this.isLoading = true;
     this.pagination.isLoading = true;
-    this.loadingMessage = this.isInitialLoad
-      ? `Loading ${this.entity.Name}...`
-      : 'Loading more records...';
+    this.loadingMessage = `Loading ${entity.Name}...`;
     this.cdr.detectChanges();
 
     const startTime = Date.now();
@@ -713,46 +1080,65 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
       const rv = new RunView();
 
       // Build OrderBy clause
-      // Priority: 1) External sort state 2) View's OrderByClause 3) undefined
+      // Priority: 1) External/internal sort state  2) View's OrderByClause
+      //           3) GridState.sortSettings (saved user defaults)  4) undefined
       let orderBy: string | undefined;
       const sortState = this.effectiveSortState;
       if (config.serverSideSorting && sortState?.field && sortState.direction) {
         orderBy = `${sortState.field} ${sortState.direction.toUpperCase()}`;
       } else if (this.viewEntity?.OrderByClause) {
         orderBy = this.viewEntity.OrderByClause;
+      } else if (this.gridState?.sortSettings?.length) {
+        orderBy = this.gridState.sortSettings
+          .map(s => `${s.field} ${(s.dir || 'asc').toUpperCase()}`)
+          .join(', ');
       }
 
-      // Calculate StartRow for pagination
-      const startRow = this.pagination.currentPage * config.pageSize;
+      // Map mode loads all records (up to MAP_MAX_RECORDS) since paging
+      // doesn't make sense for geographic visualization. Other modes use
+      // standard page-based pagination.
+      const isMapMode = this.effectiveViewMode === 'map';
+      const maxRows = isMapMode ? EntityViewerComponent.MAP_MAX_RECORDS : config.pageSize;
+      const startRow = isMapMode ? 0 : this.pagination.currentPage * config.pageSize;
 
       // Build ExtraFilter from view's WhereClause if available
       // The view's WhereClause is the "business filter" - UserSearchString is additive
       const extraFilter = this.viewEntity?.WhereClause || undefined;
 
-      const result = await rv.RunView({
-        EntityName: this.entity.Name,
-        ResultType: 'entity_object',
-        MaxRows: config.pageSize,
+      const result = await rv.RunView<Record<string, unknown>>({
+        EntityName: entity.Name,
+        ResultType: 'simple',
+        Fields: computeFieldsList(entity, this.gridState),
+        MaxRows: maxRows,
         StartRow: startRow,
         OrderBy: orderBy,
         ExtraFilter: extraFilter,
-        UserSearchString: config.serverSideFiltering ? this.debouncedFilterText || undefined : undefined
+        // Only use UserSearchString for regular text search, NOT for smart filters
+        // Smart filters generate WhereClause via AI on the server, so the prompt text should not be passed as UserSearchString
+        UserSearchString: config.serverSideFiltering && !this.viewEntity?.SmartFilterEnabled
+          ? this.debouncedFilterText || undefined
+          : undefined
       });
 
+      // Check if this load is still the current one (detect stale responses)
+      if (loadId !== this._loadSequence) {
+        return;
+      }
+
       if (result.Success) {
-        // Append or replace records based on whether this is initial load
-        if (this.isInitialLoad) {
-          this.internalRecords = result.Results;
-        } else {
-          this.internalRecords = [...this.internalRecords, ...result.Results];
-        }
+
+        // Always replace records (page-based navigation, not accumulation)
+        this.internalRecords = result.Results;
 
         this.totalRecordCount = result.TotalRowCount;
         this.filteredRecordCount = this.internalRecords.length;
 
         // Update pagination state
         this.pagination.totalRecords = result.TotalRowCount;
-        this.pagination.hasMore = this.internalRecords.length < result.TotalRowCount;
+        this.pagination.hasMore = false; // No longer used with page-based paging
+
+        // Re-check geo support after data loads (effectiveEntity may have resolved via viewEntity)
+        this.updateGeoCodingSupport();
 
         this.dataLoaded.emit({
           totalRowCount: result.TotalRowCount,
@@ -769,7 +1155,6 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         // Update timeline groups with new data
         this.updateTimelineGroups();
       } else {
-        console.error('Failed to load records:', result.ErrorMessage);
         if (this.isInitialLoad) {
           this.internalRecords = [];
         }
@@ -777,38 +1162,48 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
         this.filteredRecordCount = 0;
       }
     } catch (error) {
-      console.error('Error loading records:', error);
       if (this.isInitialLoad) {
         this.internalRecords = [];
       }
       this.totalRecordCount = 0;
       this.filteredRecordCount = 0;
     } finally {
-      this.isLoading = false;
-      this.pagination.isLoading = false;
-      this.isInitialLoad = false;
-      this.cdr.detectChanges();
+      // Use ngZone.run() to ensure state changes trigger change detection.
+      // With es2022 native async/await + zone.js 0.16, the await resumes
+      // outside Angular's zone, so detectChanges() alone may not flush properly.
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.pagination.isLoading = false;
+        this.isInitialLoad = false;
+        this.cdr.detectChanges();
+      });
+
+      // If a reload was requested while we were loading, trigger it now.
+      // isLoading is false at this point so loadData() won't re-enter the pending path.
+      if (this._pendingReload) {
+        this._pendingReload = false;
+        this.resetPaginationState();
+        this.loadData();
+      }
     }
   }
 
   /**
-   * Load more records (next page)
+   * Handle page change from PaginationComponent
    */
-  public loadMore(): void {
-    if (this.pagination.isLoading || !this.pagination.hasMore) {
-      return;
-    }
-
-    this.pagination.currentPage++;
+  public onPageChange(event: PageChangeEvent): void {
+    this.pagination.currentPage = event.PageNumber - 1; // Convert 1-based to 0-based
+    this.isInitialLoad = true; // Treat page navigation as a fresh load for loading state
     this.loadData();
   }
 
   /**
    * Refresh data (re-load from server, starting at page 1)
+   * Keeps existing records visible during refresh for better UX
    */
   public refresh(): void {
     if (!this.records) {
-      this.resetPaginationState();
+      this.resetPaginationState(false);
       this.loadData();
     }
   }
@@ -821,10 +1216,21 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Set the view mode and emit change event
    */
   setViewMode(mode: EntityViewMode): void {
-    if (this.effectiveViewMode !== mode) {
+    const previousMode = this.effectiveViewMode;
+    if (previousMode !== mode) {
       this.internalViewMode = mode;
       this.viewModeChange.emit(mode);
-      this.cdr.detectChanges();
+
+      // Reload data when switching to/from map mode because map loads all
+      // records (up to MAP_MAX_RECORDS) while other modes use page-based pagination.
+      const switchingToMap = mode === 'map' && previousMode !== 'map';
+      const switchingFromMap = mode !== 'map' && previousMode === 'map';
+      if (switchingToMap || switchingFromMap) {
+        this.resetPaginationState();
+        this.loadData();
+      } else {
+        this.cdr.detectChanges();
+      }
     }
   }
 
@@ -862,13 +1268,14 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     this.sortChanged.emit(event);
 
     // If server-side sorting, reload from page 1
+    // Keep existing records visible during refresh for better UX
     if (this.effectiveConfig.serverSideSorting && !this.records) {
       const sortChanged = !oldSort || !event.sort ||
         oldSort.field !== event.sort?.field ||
         oldSort.direction !== event.sort?.direction;
 
       if (sortChanged) {
-        this.resetPaginationState();
+        this.resetPaginationState(false);
         this.loadData();
       }
     }
@@ -900,10 +1307,162 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
-   * Handle load more from pagination component
+   * Handle page change from the data grid's pager
    */
-  onLoadMore(): void {
-    this.loadMore();
+  onGridPageChange(event: PageChangeEvent): void {
+    this.onPageChange(event);
+  }
+
+  // ========================================
+  // DATA GRID EVENT HANDLERS
+  // ========================================
+
+  /**
+   * Handle row click from mj-entity-data-grid
+   * Maps to recordSelected event for parent components
+   */
+  onDataGridRowClick(event: AfterRowClickEventArgs): void {
+    const entity = this.effectiveEntity;
+    if (!entity || !event.row) return;
+
+    this.recordSelected.emit({
+      record: event.row,
+      entity: entity,
+      compositeKey: buildCompositeKey(event.row, entity)
+    });
+  }
+
+  /**
+   * Handle row double-click from mj-entity-data-grid
+   * Maps to recordOpened event for parent components
+   */
+  onDataGridRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
+    const entity = this.effectiveEntity;
+    if (!entity || !event.row) return;
+
+    this.recordOpened.emit({
+      record: event.row,
+      entity: entity,
+      compositeKey: buildCompositeKey(event.row, entity)
+    });
+  }
+
+  /**
+   * Handle sort changed from mj-entity-data-grid
+   * Maps to sortChanged event for parent components
+   */
+  onDataGridSortChanged(event: AfterSortEventArgs): void {
+    // Convert the data grid's sort state to our SortState format
+    const newSort: SortState | null = event.newSortState && event.newSortState.length > 0
+      ? {
+          field: event.newSortState[0].field,
+          direction: event.newSortState[0].direction
+        }
+      : null;
+
+    this.internalSortState = newSort;
+    this.sortChanged.emit({ sort: newSort });
+
+    // If server-side sorting, reload from page 1.
+    // Use deferReload() so that if a view-switch reload is already in-flight
+    // (e.g., AG Grid fired an async sortChanged from applySortStateToGrid),
+    // we don't trigger a redundant second RunView.
+    // For normal user-initiated column-header clicks, no deferred reload is
+    // pending so deferReload() fires immediately — no UX difference.
+    if (this.effectiveConfig.serverSideSorting && !this.records) {
+      this.resetPaginationState(false);
+      this.deferReload();
+    }
+  }
+
+  /**
+   * Handle foreign key link click from mj-entity-data-grid
+   * Bubbles the event up for parent components to handle navigation
+   */
+  /**
+   * Handle foreign key link click from mj-entity-data-grid
+   * Converts to recordOpened event for seamless navigation integration
+   */
+  onForeignKeyClick(event: ForeignKeyClickEvent): void {
+    // Look up the related entity by name
+    const md = new Metadata();
+    const relatedEntity = event.relatedEntityName
+      ? md.Entities.find(e => e.Name === event.relatedEntityName)
+      : md.Entities.find(e => UUIDsEqual(e.ID, event.relatedEntityId));
+
+    if (!relatedEntity) {
+      return;
+    }
+
+    // Create composite key using the target entity's actual primary key field name
+    const pkFieldName = relatedEntity.FirstPrimaryKey?.Name || 'ID';
+    const compositeKey = new CompositeKey([{ FieldName: pkFieldName, Value: event.recordId }]);
+
+    // Emit recordOpened for the related entity (record is undefined since it's not loaded)
+    this.recordOpened.emit({
+      entity: relatedEntity,
+      compositeKey
+    });
+  }
+
+  /**
+   * Handle Add/New button click from data grid toolbar
+   */
+  onGridAddRequested(): void {
+    this.addRequested.emit();
+  }
+
+  /**
+   * Handle Refresh button click from data grid toolbar
+   */
+  onGridRefreshRequested(): void {
+    this.refreshRequested.emit();
+    // Also trigger an internal refresh
+    this.refresh();
+  }
+
+  /**
+   * Handle Delete button click from data grid toolbar
+   */
+  onGridDeleteRequested(records: Record<string, unknown>[]): void {
+    this.deleteRequested.emit({ records });
+  }
+
+  /**
+   * Handle Export button click from data grid toolbar
+   */
+  onGridExportRequested(): void {
+    this.exportRequested.emit({ format: 'excel' });
+  }
+
+  /**
+   * Handle Add to List button click from data grid toolbar.
+   * Forwards the event to parent components for list management.
+   */
+  onGridAddToListRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[]; recordIds: string[] }): void {
+    this.addToListRequested.emit(event);
+  }
+
+  /**
+   * Handle selection change from data grid.
+   * Converts selected keys to records and forwards to parent components.
+   */
+  onGridSelectionChange(selectedKeys: string[]): void {
+    const entity = this.effectiveEntity;
+    if (!entity) return;
+
+    // Find the actual records from our filtered records
+    const records = this.filteredRecords.filter(record => {
+      const key = buildPkString(record, entity);
+      return selectedKeys.includes(key);
+    });
+
+    // Get the raw primary key values for list management
+    const recordIds = records.map(record =>
+      String(record[entity.PrimaryKeys[0].Name])
+    );
+
+    this.selectionChanged.emit({ records, recordIds });
   }
 
   // ========================================
@@ -914,14 +1473,73 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
    * Handle timeline event click - emit as record selection
    */
   onTimelineEventClick(event: AfterEventClickArgs): void {
-    const record = event.event.entity as BaseEntity;
-    if (record && this.entity) {
+    const record = event.event.entity as Record<string, unknown>;
+    const entity = this.effectiveEntity;
+    if (record && entity) {
       this.recordSelected.emit({
         record,
-        entity: this.entity,
-        compositeKey: record.PrimaryKey
+        entity: entity,
+        compositeKey: buildCompositeKey(record, entity)
       });
     }
+  }
+
+  /**
+   * Update HasGeoCoding based on the current effectiveEntity.
+   * Called from entity setter and after data loads (when effectiveEntity may resolve via viewEntity).
+   */
+  private updateGeoCodingSupport(): void {
+    const entity = this.effectiveEntity;
+    const newValue = !!(entity && entity.SupportsGeoCoding);
+    if (newValue !== this.HasGeoCoding) {
+      this.HasGeoCoding = newValue;
+      this.fallbackFromMapIfNeeded();
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Handle map marker click — emit the record for the parent to handle (open record, etc.)
+   */
+  onMapMarkerClick(event: { RecordID: string; Latitude: number; Longitude: number; Record: Record<string, unknown> }): void {
+    const entity = this.effectiveEntity;
+    if (event.Record && entity) {
+      const compositeKey = buildCompositeKey(event.Record, entity);
+      // Emit both recordSelected (for detail panels) and recordOpened (for navigation)
+      this.recordSelected.emit({
+        record: event.Record,
+        entity: entity,
+        compositeKey
+      });
+      this.recordOpened.emit({
+        record: event.Record,
+        entity: entity,
+        compositeKey
+      });
+    }
+  }
+
+  /** Map display state (zoom, center) — passed from parent for persistence across reloads. */
+  @Input() mapDisplayState: Partial<MapDisplayState> | null = null;
+
+  /** Map render mode — separate from DisplayState for clear single-source-of-truth. */
+  @Input() mapRenderMode: MapRenderMode = 'point';
+
+  /** Emitted when the map's display state changes (zoom, center). */
+  @Output() mapDisplayStateChange = new EventEmitter<MapDisplayState>();
+
+  /** Emitted when the map's render mode changes (user clicks mode buttons). */
+  @Output() mapRenderModeChange = new EventEmitter<MapRenderMode>();
+
+  /**
+   * Handle map display state changes — bubble up to parent for persistence.
+   */
+  onMapDisplayStateChange(state: MapDisplayState): void {
+    this.mapDisplayStateChange.emit(state);
+  }
+
+  onMapRenderModeChange(mode: MapRenderMode): void {
+    this.mapRenderModeChange.emit(mode);
   }
 
   /**
@@ -1026,6 +1644,16 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
+   * If currently on map view but geocoding is no longer available,
+   * fall back to grid view
+   */
+  private fallbackFromMapIfNeeded(): void {
+    if (this.effectiveViewMode === 'map' && !this.HasGeoCoding) {
+      this.setViewMode('grid');
+    }
+  }
+
+  /**
    * Sort date fields by priority:
    * 1. DefaultInView=true fields, sorted by Sequence (lowest first)
    * 2. Other date fields, sorted by Sequence (lowest first)
@@ -1091,7 +1719,7 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     const titleField = this.findTitleField();
 
     // Create a single group for the current data
-    const group = new TimelineGroup<BaseEntity>();
+    const group = new TimelineGroup<Record<string, unknown>>();
     group.DataSourceType = 'array';
     group.EntityObjects = this.filteredRecords;
     group.TitleFieldName = titleField;
@@ -1193,3 +1821,4 @@ export class EntityViewerComponent implements OnInit, OnChanges, OnDestroy {
     return firstOther?.Name || null;
   }
 }
+

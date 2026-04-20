@@ -202,7 +202,7 @@ export class RotateEncryptionKeyAction {
 
             // Step 4: Find all entity fields using this key
             const fieldsResult = await rv.RunView({
-                EntityName: 'Entity Fields',
+                EntityName: 'MJ: Entity Fields',
                 ExtraFilter: `EncryptionKeyID = '${encryptionKeyId}' AND Encrypt = 1`,
                 ResultType: 'simple'
             }, contextUser);

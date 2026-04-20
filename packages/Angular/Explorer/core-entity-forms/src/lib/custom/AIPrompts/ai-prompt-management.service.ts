@@ -1,11 +1,11 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
-import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
+import { MJDialogService, MJDialogRef } from '@memberjunction/ng-ui-components';
 import { Observable, Subject } from 'rxjs';
-import { TemplateEntity } from '@memberjunction/core-entities';
-import { 
-  TemplateSelectorDialogComponent, 
-  TemplateSelectorConfig, 
-  TemplateSelectorResult 
+import { MJTemplateEntity } from '@memberjunction/core-entities';
+import {
+  TemplateSelectorDialogComponent,
+  TemplateSelectorConfig,
+  TemplateSelectorResult
 } from './template-selector-dialog.component';
 
 @Injectable({
@@ -13,27 +13,22 @@ import {
 })
 export class AIPromptManagementService {
 
-  constructor(private dialogService: DialogService) {}
+  constructor(private dialogService: MJDialogService) {}
 
   /**
    * Opens the template selector dialog for linking existing templates to AI prompts
    */
   openTemplateSelectorDialog(config: TemplateSelectorConfig & { viewContainerRef?: ViewContainerRef }): Observable<TemplateSelectorResult | null> {
-    const dialogRef: DialogRef = this.dialogService.open({
+    const dialogRef: MJDialogRef = this.dialogService.open({
       title: config.title,
       content: TemplateSelectorDialogComponent,
       width: 800,
       height: 600,
-      minWidth: 600,
-      minHeight: 400,
-      preventAction: (action) => {
-        // Prevent closing on backdrop click
-        return action === 'close';
-      }
+      minWidth: 600
     });
 
     // Configure the dialog component
-    const dialogComponent = dialogRef.content.instance as TemplateSelectorDialogComponent;
+    const dialogComponent = dialogRef.Content!.instance as unknown as TemplateSelectorDialogComponent;
     dialogComponent.config = {
       title: config.title,
       showCreateNew: config.showCreateNew ?? true,
@@ -58,7 +53,7 @@ export class AIPromptManagementService {
     });
 
     // Handle dialog close
-    dialogRef.result.subscribe({
+    dialogRef.Result.subscribe({
       next: () => {
         // Dialog was closed, emit null if no result was already emitted
         if (!resultSubject.closed) {
@@ -83,10 +78,10 @@ export class AIPromptManagementService {
     promptId?: string;
     promptName?: string;
     viewContainerRef?: ViewContainerRef;
-  }): Observable<TemplateEntity | null> {
+  }): Observable<MJTemplateEntity | null> {
     // For now, we'll return a placeholder - in a full implementation,
     // this would open a template creation dialog
-    const resultSubject = new Subject<TemplateEntity | null>();
+    const resultSubject = new Subject<MJTemplateEntity | null>();
     
     // Simulate async operation
     setTimeout(() => {

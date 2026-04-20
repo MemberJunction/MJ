@@ -13,7 +13,3 @@ export class xAILLM extends OpenAILLM {
         super(apiKey, ___url);
     }
 }
-
-export function LoadxAILLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

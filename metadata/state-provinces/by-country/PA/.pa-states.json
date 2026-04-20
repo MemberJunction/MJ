@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Botas del Toro",
+      "Code": "1",
+      "ISO3166_2": "PA-1",
+      "Latitude": 9.2074,
+      "Longitude": -82.6597,
+      "BoundaryGeoJSON": "@file:by-country/PA/boundaries/PA-1.geojson",
+      "CommonAliases": [
+        "Botas del Toro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PA"
+    },
+    "primaryKey": {
+      "ID": "0A17A371-92F6-4940-BA66-47C4EA640A30"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.585Z",
+      "checksum": "e247125e1e6eed9e498debe2b51250daefe95fbb6ce4067d3c9886320dcfa622"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chiriquī",
+      "Code": "4",
+      "ISO3166_2": "PA-4",
+      "Latitude": 8.3082,
+      "Longitude": -82.0992,
+      "BoundaryGeoJSON": "@file:by-country/PA/boundaries/PA-4.geojson",
+      "CommonAliases": [
+        "Chiriquī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PA"
+    },
+    "primaryKey": {
+      "ID": "0D588530-F472-49E2-AF91-ACD6F4C89A53"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.601Z",
+      "checksum": "7051dfb68c1722ce009efac38bbabaea25c5bb27750deec379565c8e7d9c28c4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Coclé",
+      "Code": "2",
+      "ISO3166_2": "PA-2",
+      "Latitude": 8.5771,
+      "Longitude": -80.4314,
+      "BoundaryGeoJSON": "@file:by-country/PA/boundaries/PA-2.geojson",
+      "CommonAliases": [
+        "Coclé"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PA"
+    },
+    "primaryKey": {
+      "ID": "A043D0B5-334F-49C1-9677-75EBF3AAAE0D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.617Z",
+      "checksum": "6034659a7eb794a6f92f4fb70afdb7fbe4593a5cd8383340a0913a48c8696d7e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Colón",
+      "Code": "3",
+      "ISO3166_2": "PA-3",
+      "Latitude": 9.1702,
+      "Longitude": -79.9683,
+      "BoundaryGeoJSON": "@file:by-country/PA/boundaries/PA-3.geojson",
+      "CommonAliases": [
+        "Colón"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PA"
+    },
+    "primaryKey": {
+      "ID": "80694AA3-5DB1-4897-8D27-F3FBCD921303"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.634Z",
+      "checksum": "8c79feedcd051b3d59836ca5dbe0c01e59ffbcf1b1ebb5c28aeef55dc4bc1a5a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Comarca de San Blas",
+      "Code": "0",
+      "ISO3166_2": "PA-0",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Comarca de San Blas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PA"
+    },
+    "primaryKey": {
+      "ID": "6AD5C8F0-FD18-439B-8828-40E4F38B1F30"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.650Z",
+      "checksum": "73bfb843a914b0ad3903429f6c4b3e6366bd7de6afc056e752e340ed63aaad20"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Darién",
+      "Code": "5",
+      "ISO3166_2": "PA-5",
+      "Latitude": 7.9019,
+      "Longitude": -77.7067,
+      "BoundaryGeoJSON": "@file:by-country/PA/boundaries/PA-5.geojson",
+      "CommonAliases": [
+        "Darién"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PA"
+    },
+    "primaryKey": {
+      "ID": "5B793566-9D4D-4125-89C7-89FBF04353E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.669Z",
+      "checksum": "f696bb31c46fcb4fa8e566c4b4f88b79d770041421831d8a4eb8d9367e78837a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Herrera",
+      "Code": "6",
+      "ISO3166_2": "PA-6",
+      "Latitude": 7.8563,
+      "Longitude": -80.6613,
+      "BoundaryGeoJSON": "@file:by-country/PA/boundaries/PA-6.geojson",
+      "CommonAliases": [
+        "Herrera"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PA"
+    },
+    "primaryKey": {
+      "ID": "AAB142EE-751C-4315-BCD0-5D83ACD80A54"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.685Z",
+      "checksum": "248b80b77f965d04bd1b3f609b6f198eb343c1e0438555070d0b917528b02ee6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Los Santos",
+      "Code": "7",
+      "ISO3166_2": "PA-7",
+      "Latitude": 7.584,
+      "Longitude": -80.3927,
+      "BoundaryGeoJSON": "@file:by-country/PA/boundaries/PA-7.geojson",
+      "CommonAliases": [
+        "Los Santos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PA"
+    },
+    "primaryKey": {
+      "ID": "58C7117F-E791-4358-8F52-277F3805EEFF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.701Z",
+      "checksum": "8a99445ea9dcfe98c12c94c1327096f7a38b07d247eb839081c5860868053dd9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Panamá",
+      "Code": "8",
+      "ISO3166_2": "PA-8",
+      "Latitude": 9.0863,
+      "Longitude": -78.9283,
+      "BoundaryGeoJSON": "@file:by-country/PA/boundaries/PA-8.geojson",
+      "CommonAliases": [
+        "Panamá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PA"
+    },
+    "primaryKey": {
+      "ID": "3054BBC6-E715-4E42-93CB-526452D8A105"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.718Z",
+      "checksum": "9eabccea8d9eb4a7bfe860df0ffb3908dd01606df17d16e2965e974e541684ef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Veraguas",
+      "Code": "9",
+      "ISO3166_2": "PA-9",
+      "Latitude": 8.2255,
+      "Longitude": -81.1447,
+      "BoundaryGeoJSON": "@file:by-country/PA/boundaries/PA-9.geojson",
+      "CommonAliases": [
+        "Veraguas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PA"
+    },
+    "primaryKey": {
+      "ID": "ECB31263-F7B0-4FE9-83E1-C3B37F088680"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.732Z",
+      "checksum": "fa89b6338f4bdc19328a58c1baedf2c2ce57d876fc7f885946c81926a8851264"
+    }
+  }
+]

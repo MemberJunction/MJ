@@ -2,49 +2,6 @@
  * Public API Surface of dashboards
  */
 
-import { LoadEntityAdminDashboard } from './EntityAdmin/entity-admin-dashboard.component';
-import { LoadComponentStudioDashboard } from './ComponentStudio/component-studio-dashboard.component';
-import { LoadSchedulingDashboard } from './Scheduling/scheduling-dashboard.component';
-import { LoadTestingDashboard } from './Testing/testing-dashboard.component';
-import { LoadDataExplorerDashboard } from './DataExplorer/data-explorer-dashboard.component';
-import { LoadCommunicationDashboard } from './Communication/communication-dashboard.component';
-import { LoadCredentialsDashboard } from './Credentials/credentials-dashboard.component';
-import { LoadCredentialsOverviewResource } from './Credentials/components/credentials-overview-resource.component';
-import { LoadCredentialsListResource } from './Credentials/components/credentials-list-resource.component';
-import { LoadCredentialsTypesResource } from './Credentials/components/credentials-types-resource.component';
-import { LoadCredentialsCategoriesResource } from './Credentials/components/credentials-categories-resource.component';
-import { LoadCredentialsAuditResource } from './Credentials/components/credentials-audit-resource.component';
-// System Diagnostics
-import { LoadSystemDiagnosticsResource } from './SystemDiagnostics/system-diagnostics.component';
-
-import {
-  LoadActionsOverviewResource,
-  LoadActionsMonitorResource,
-  LoadActionsScheduleResource,
-  LoadActionsCodeResource,
-  LoadActionsEntitiesResource,
-  LoadActionsSecurityResource
-} from './Actions';
-import { LoadCommunicationMonitorResource } from './Communication/communication-monitor-resource.component';
-import { LoadCommunicationLogsResource } from './Communication/communication-logs-resource.component';
-import { LoadCommunicationProvidersResource } from './Communication/communication-providers-resource.component';
-import { LoadCommunicationRunsResource } from './Communication/communication-runs-resource.component';
-
-import {
-  LoadTestingOverviewResource,
-  LoadTestingExecutionResource,
-  LoadTestingAnalyticsResource,
-  LoadTestingVersionResource,
-  LoadTestingFeedbackResource
-} from './Testing/components';
-import {
-  LoadSchedulingMonitorResource,
-  LoadSchedulingJobsResource,
-  LoadSchedulingHistoryResource,
-  LoadSchedulingTypesResource,
-  LoadSchedulingHealthResource
-} from './Scheduling/components';
-
 // Dashboards
 export * from './EntityAdmin/entity-admin-dashboard.component';
 export * from './ComponentStudio';
@@ -54,38 +11,77 @@ export * from './DataExplorer';
 export * from './Communication/communication-dashboard.component';
 export * from './Credentials';
 export * from './SystemDiagnostics';
+export * from './Lists';
 
 // Export AI components as resources (BaseResourceComponent-based)
 export {
   ExecutionMonitoringComponent,
-  LoadAIMonitorResource,
   PromptManagementComponent,
-  LoadAIPromptsResource,
   AgentConfigurationComponent,
-  LoadAIAgentsResource,
   ModelManagementComponent,
-  LoadAIModelsResource,
   SystemConfigurationComponent,
-  LoadAIConfigResource,
   KPICardComponent,
   LiveExecutionWidgetComponent,
   TimeSeriesChartComponent,
-  PerformanceHeatmapComponent
+  PerformanceHeatmapComponent,
+  AgentRequestsResourceComponent,
+  AutotaggingPipelineResourceComponent,
+  VectorManagementResourceComponent,
+  DuplicateDetectionResourceComponent,
+  AIAnalyticsResourceComponent,
+  LoadAIAnalyticsResource,
+  AnalyticsFilterBarComponent,
+  AIOverviewHubComponent,
+  LoadAIOverviewHub,
+  AnalyticsExecutiveSummaryComponent,
+  LoadAnalyticsExecutiveSummary,
+  AnalyticsPromptRunsComponent,
+  LoadAnalyticsPromptRuns,
+  AnalyticsAgentRunsComponent,
+  LoadAnalyticsAgentRuns,
+  AnalyticsModelPerformanceComponent,
+  LoadAnalyticsModelPerformance,
+  AnalyticsCostBudgetComponent,
+  LoadAnalyticsCostBudget,
+  AnalyticsErrorAnalysisComponent,
+  LoadAnalyticsErrorAnalysis,
+  AnalyticsUsagePatternsComponent,
+  LoadAnalyticsUsagePatterns
 } from './AI/index';
+
+// Knowledge Hub components
+export {
+  KnowledgeConfigResourceComponent,
+  LoadKnowledgeConfigResource
+} from './KnowledgeHub/components/config/knowledge-config-resource.component';
+export { SearchResultDetailComponent } from './KnowledgeHub/components/results-detail/search-result-detail.component';
+export {
+  ClusterVisualizationResourceComponent,
+  LoadClusterVisualizationResource
+} from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
+export {
+  AnalyticsResourceComponent,
+  LoadAnalyticsResource
+} from './KnowledgeHub/components/analytics/analytics-resource.component';
 
 // Export Actions components as resources (BaseResourceComponent-based)
 export {
   ActionsOverviewComponent,
-  LoadActionsOverviewResource,
-  LoadActionsMonitorResource,
   ScheduledActionsComponent,
-  LoadActionsScheduleResource,
   CodeManagementComponent,
-  LoadActionsCodeResource,
   EntityIntegrationComponent,
-  LoadActionsEntitiesResource,
   SecurityPermissionsComponent,
-  LoadActionsSecurityResource
+  // Action Explorer components
+  ActionExplorerComponent,
+  ActionTreePanelComponent,
+  ActionToolbarComponent,
+  ActionBreadcrumbComponent,
+  ActionCardComponent,
+  ActionListItemComponent,
+  NewCategoryPanelComponent,
+  NewActionPanelComponent,
+  // State service
+  ActionExplorerStateService
 } from './Actions';
 
 // Re-export Actions ExecutionMonitoringComponent with alias to avoid conflict with AI version
@@ -93,103 +89,90 @@ export { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } f
 
 // Export Scheduling components as resources (BaseResourceComponent-based)
 export {
-  SchedulingMonitorResourceComponent,
-  LoadSchedulingMonitorResource,
+  SchedulingOverviewResourceComponent,
   SchedulingJobsResourceComponent,
-  LoadSchedulingJobsResource,
-  SchedulingHistoryResourceComponent,
-  LoadSchedulingHistoryResource,
-  SchedulingTypesResourceComponent,
-  LoadSchedulingTypesResource,
-  SchedulingHealthResourceComponent,
-  LoadSchedulingHealthResource
+  SchedulingActivityResourceComponent
 } from './Scheduling/components';
 
 // Export Communication components as resources
 export {
-  CommunicationMonitorResourceComponent,
-  LoadCommunicationMonitorResource
+  CommunicationMonitorResourceComponent
 } from './Communication/communication-monitor-resource.component';
 export {
-  CommunicationLogsResourceComponent,
-  LoadCommunicationLogsResource
+  CommunicationLogsResourceComponent
 } from './Communication/communication-logs-resource.component';
 export {
-  CommunicationProvidersResourceComponent,
-  LoadCommunicationProvidersResource
+  CommunicationProvidersResourceComponent
 } from './Communication/communication-providers-resource.component';
 export {
-  CommunicationRunsResourceComponent,
-  LoadCommunicationRunsResource
+  CommunicationRunsResourceComponent
 } from './Communication/communication-runs-resource.component';
-
+export {
+  CommunicationTemplatesResourceComponent
+} from './Communication/communication-templates-resource.component';
 
 // Export Testing components as resources (BaseResourceComponent-based)
 export {
-  TestingOverviewResourceComponent,
-  LoadTestingOverviewResource,
-  TestingExecutionResourceComponent,
-  LoadTestingExecutionResource,
+  TestingDashboardTabResourceComponent,
+  TestingRunsResourceComponent,
   TestingAnalyticsResourceComponent,
-  LoadTestingAnalyticsResource,
-  TestingVersionResourceComponent,
-  LoadTestingVersionResource,
-  TestingFeedbackResourceComponent,
-  LoadTestingFeedbackResource
+  TestingReviewResourceComponent,
+  TestingExplorerResourceComponent
 } from './Testing/components';
 
-// Module
-export * from './module';
+// Query Browser
+export {
+  QueryBrowserResourceComponent
+} from './QueryBrowser/query-browser-resource.component';
 
-// Call tree shaking functions to prevent tree shaking
-LoadEntityAdminDashboard();
-LoadComponentStudioDashboard();
-LoadSchedulingDashboard();
-LoadTestingDashboard();
+// Dashboard Browser
+export {
+  DashboardBrowserResourceComponent
+} from './DashboardBrowser/dashboard-browser-resource.component';
+export {
+  DashboardShareDialogComponent,
+  UserSharePermission,
+  ShareDialogResult
+} from './DashboardBrowser/dashboard-share-dialog.component';
 
-// Actions resource loaders
-LoadActionsOverviewResource();
-LoadActionsMonitorResource();
-LoadActionsScheduleResource();
-LoadActionsCodeResource();
-LoadActionsEntitiesResource();
-LoadActionsSecurityResource();
+// Home Application and Dashboard
+export { HomeApplication } from './Home/home-application';
+export { HomeDashboardComponent } from './Home/home-dashboard.component';
 
-// Scheduling resource loaders
-LoadSchedulingMonitorResource();
-LoadSchedulingJobsResource();
-LoadSchedulingHistoryResource();
-LoadSchedulingTypesResource();
-LoadSchedulingHealthResource();
+// Application Roles
+export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from './ApplicationRoles/application-roles-resource.component';
 
-// Testing resource loaders
-LoadTestingOverviewResource();
-LoadTestingExecutionResource();
-LoadTestingAnalyticsResource();
-LoadTestingVersionResource();
-LoadTestingFeedbackResource();
+// API Keys
+export { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
+export { APIKeyCreateDialogComponent, APIKeyCreateResult } from './APIKeys/api-key-create-dialog.component';
+export { APIKeyEditPanelComponent } from './APIKeys/api-key-edit-panel.component';
+export { APIKeyListComponent, APIKeyFilter } from './APIKeys/api-key-list.component';
+export { APIApplicationsPanelComponent } from './APIKeys/api-applications-panel.component';
+export { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
+export { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
 
-// Data Explorer Dashboard loader
-LoadDataExplorerDashboard();
+// MCP (Model Context Protocol)
+export * from './MCP';
 
-// Communication Dashboard loader
-LoadCommunicationDashboard();
+// Version History Dashboard Components
+export * from './VersionHistory';
 
-// Communication resource loaders
-LoadCommunicationMonitorResource();
-LoadCommunicationLogsResource();
-LoadCommunicationProvidersResource();
-LoadCommunicationRunsResource();
+// Integration Dashboard
+export * from './Integration';
 
-// Credentials Dashboard loader
-LoadCredentialsDashboard();
+// NOTE: DashboardsModule (backward-compatible wrapper that imports ALL feature modules) is
+// intentionally not re-exported from the barrel to enable ESBuild code splitting.
+// Consumers who need it: import { DashboardsModule } from '@memberjunction/ng-dashboards/module'
 
-// Credentials resource loaders
-LoadCredentialsOverviewResource();
-LoadCredentialsListResource();
-LoadCredentialsTypesResource();
-LoadCredentialsCategoriesResource();
-LoadCredentialsAuditResource();
-
-// System Diagnostics resource loader
-LoadSystemDiagnosticsResource();
+// Feature modules for lazy loading
+export * from './core-dashboards.module';
+export * from './ai-dashboards.module';
+export * from './actions-dashboards.module';
+export * from './testing-dashboards.module';
+export * from './scheduling-dashboards.module';
+export * from './communication-dashboards.module';
+export * from './credentials-dashboards.module';
+export * from './data-explorer-dashboards.module';
+export * from './lists-dashboards.module';
+export * from './component-studio-dashboards.module';
+export * from './shared/shared-dashboard-widgets.module';

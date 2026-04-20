@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "MCP OAuth Token",
+  "description": "OAuth2 tokens for MCP server connections",
+  "properties": {
+    "accessToken": {
+      "type": "string",
+      "description": "OAuth2 access token for authenticating MCP API requests",
+      "minLength": 1
+    },
+    "refreshToken": {
+      "type": "string",
+      "description": "OAuth2 refresh token for obtaining new access tokens when the current one expires"
+    }
+  },
+  "required": ["accessToken"],
+  "additionalProperties": false
+}

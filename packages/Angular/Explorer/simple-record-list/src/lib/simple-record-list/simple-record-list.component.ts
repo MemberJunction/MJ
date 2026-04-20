@@ -1,11 +1,11 @@
 import { Component, OnInit, Input, EventEmitter, Output } from '@angular/core';
 
 import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { Router } from '@angular/router';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
  
  
 @Component({
+  standalone: false,
   selector: 'mj-simple-record-list',
   templateUrl: './simple-record-list.component.html',
   styleUrls: ['./simple-record-list.component.css']
@@ -85,8 +85,8 @@ export class SimpleRecordListComponent implements OnInit {
   public isLoading: boolean = false;
   public records: BaseEntity[] = [];
 
-  constructor(private router: Router) { 
-  } 
+  constructor() {
+  }
       
   ngOnInit(): void {
     this.Refresh()

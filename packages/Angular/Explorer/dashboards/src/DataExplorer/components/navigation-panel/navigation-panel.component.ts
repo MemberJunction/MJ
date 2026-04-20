@@ -1,6 +1,8 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ViewChild } from '@angular/core';
 import { EntityInfo, Metadata, CompositeKey } from '@memberjunction/core';
-import { RecentItem, FavoriteItem } from '../../models/explorer-state.interface';
+import { UUIDsEqual } from '@memberjunction/global';
+import { TreeBranchConfig, TreeLeafConfig, TreeNode, TreeComponent } from '@memberjunction/ng-trees';
+import { RecentItem, FavoriteItem, AppEntityGroup } from '../../models/explorer-state.interface';
 
 /**
  * Event emitted when a record should be opened in a full tab
@@ -19,11 +21,12 @@ export interface SelectRecordEvent {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-explorer-navigation-panel',
   templateUrl: './navigation-panel.component.html',
   styleUrls: ['./navigation-panel.component.css']
 })
-export class NavigationPanelComponent {
+export class NavigationPanelComponent implements OnChanges {
   @Input() entities: EntityInfo[] = [];
   @Input() selectedEntityName: string | null = null;
   @Input() favorites: FavoriteItem[] = [];
@@ -34,6 +37,10 @@ export class NavigationPanelComponent {
    * If provided, only items matching these entities will be shown.
    */
   @Input() allowedEntityNames: Set<string> | null = null;
+  /** Application-based entity groups from the parent dashboard */
+  @Input() appEntityGroups: AppEntityGroup[] = [];
+  /** Optional application ID filter for the tree */
+  @Input() applicationIdFilter: string | null = null;
 
   // Section expansion states
   @Input() favoritesSectionExpanded = true;
@@ -49,24 +56,116 @@ export class NavigationPanelComponent {
   @Output() selectRecord = new EventEmitter<SelectRecordEvent>();
   /** Emitted when a collapsed icon is clicked - expands panel and focuses section */
   @Output() expandAndFocus = new EventEmitter<'favorites' | 'recent' | 'entities'>();
+  /** Emitted when a nav panel app group is toggled */
+  @Output() appGroupToggled = new EventEmitter<string>();
 
   private metadata = new Metadata();
 
-  // Entity search/filter
+  // Tree configuration for entity list
+  public treeBranchConfig: TreeBranchConfig = {
+    EntityName: 'MJ: Applications',
+    DisplayField: 'Name',
+    IDField: 'ID',
+    IconField: 'Icon',
+    OrderBy: 'Name'
+  };
+
+  public treeLeafConfig: TreeLeafConfig = {
+    EntityName: 'MJ: Entities',
+    ParentField: '', // Using JunctionConfig for M2M relationship
+    DisplayField: 'Name',
+    IDField: 'ID',
+    IconField: 'Icon',
+    JunctionConfig: {
+      EntityName: 'MJ: Application Entities',
+      BranchForeignKey: 'ApplicationID',
+      LeafForeignKey: 'EntityID'
+    },
+    OrderBy: 'Name'
+  };
+
+  @ViewChild('entityTree') entityTree?: TreeComponent;
+
+  /** Selected entity ID for tree highlighting */
+  public selectedEntityIds: string[] = [];
+
+  /** Search term for filtering the entity tree */
   public entitySearchTerm = '';
 
-  /**
-   * Get filtered entities based on search term
-   */
-  get filteredEntities(): EntityInfo[] {
-    if (!this.entitySearchTerm) {
-      return this.entities;
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['selectedEntityName']) {
+      this.updateSelectedEntityKey();
     }
-    const term = this.entitySearchTerm.toLowerCase();
-    return this.entities.filter(e =>
-      e.Name.toLowerCase().includes(term) ||
-      (e.Description && e.Description.toLowerCase().includes(term))
-    );
+    if (changes['applicationIdFilter']) {
+      this.updateTreeBranchFilter();
+    }
+  }
+
+  /**
+   * Update the selected entity IDs for tree highlighting when selected entity changes
+   */
+  private updateSelectedEntityKey(): void {
+    if (this.selectedEntityName) {
+      const entity = this.metadata.Entities.find(e => e.Name === this.selectedEntityName);
+      if (entity) {
+        this.selectedEntityIds = [entity.ID];
+        return;
+      }
+    }
+    this.selectedEntityIds = [];
+  }
+
+  /**
+   * Update the tree's branch filter when application filter changes
+   */
+  private updateTreeBranchFilter(): void {
+    if (this.applicationIdFilter) {
+      this.treeBranchConfig = {
+        ...this.treeBranchConfig,
+        ExtraFilter: `ID='${this.applicationIdFilter}'`
+      };
+    } else {
+      this.treeBranchConfig = {
+        ...this.treeBranchConfig,
+        ExtraFilter: undefined
+      };
+    }
+  }
+
+  /**
+   * Filter the entity tree when search term changes
+   */
+  onEntitySearchChanged(): void {
+    if (this.entityTree) {
+      this.entityTree.FilterNodes(this.entitySearchTerm, {
+        searchBranches: true,
+        searchLeaves: true,
+        caseSensitive: false
+      });
+    }
+  }
+
+  /**
+   * Clear the entity search
+   */
+  clearEntitySearch(): void {
+    this.entitySearchTerm = '';
+    this.onEntitySearchChanged();
+  }
+
+  /**
+   * Handle tree selection change - map TreeNode to EntityInfo and emit
+   */
+  onTreeEntitySelected(nodes: TreeNode[]): void {
+    if (!nodes || nodes.length === 0) return;
+    const node = nodes[0];
+    if (node.Type !== 'leaf') return;
+
+    // Find the EntityInfo by ID from the node
+    const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, node.ID));
+    if (entity) {
+      this.entitySelected.emit(entity);
+    }
   }
 
   /**

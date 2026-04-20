@@ -3,23 +3,16 @@
     "Name": "AI",
     "Description": "AI Administration",
     "Icon": "fa-solid fa-robot",
-    "DefaultForNewUser": true,
+    "DefaultForNewUser": false,
     "Color": "#d32f2f",
     "DefaultSequence": 1001,
     "DefaultNavItems": [
       {
-        "Label": "Monitor",
-        "Icon": "fa-solid fa-chart-line",
+        "Label": "Overview",
+        "Icon": "fa-solid fa-grid-2",
         "ResourceType": "Custom",
         "DriverClass": "AIMonitorResource",
         "isDefault": true
-      },
-      {
-        "Label": "Prompts",
-        "Icon": "fa-solid fa-comment-dots",
-        "ResourceType": "Custom",
-        "DriverClass": "AIPromptsResource",
-        "isDefault": false
       },
       {
         "Label": "Agents",
@@ -29,10 +22,38 @@
         "isDefault": false
       },
       {
+        "Label": "Agent Requests",
+        "Icon": "fa-solid fa-inbox",
+        "ResourceType": "Custom",
+        "DriverClass": "AIAgentRequestsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Prompts",
+        "Icon": "fa-solid fa-comment-dots",
+        "ResourceType": "Custom",
+        "DriverClass": "AIPromptsResource",
+        "isDefault": false
+      },
+      {
         "Label": "Models",
         "Icon": "fa-solid fa-microchip",
         "ResourceType": "Custom",
         "DriverClass": "AIModelsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "MCP",
+        "Icon": "fa-solid fa-plug-circle-bolt",
+        "ResourceType": "Custom",
+        "DriverClass": "MCPResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Analytics",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "AIAnalyticsResource",
         "isDefault": false
       },
       {
@@ -45,13 +66,13 @@
     ]
   },
   "relatedEntities": {
-    "Application Entities": []
+    "MJ: Application Entities": []
   },
   "primaryKey": {
     "ID": "7ACD423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:38.099Z",
-    "checksum": "41cf89add8013d30b8fb3eeedbe4d23669a135d94bba5028673094bcef768f29"
+    "lastModified": "2026-04-18T17:49:56.890Z",
+    "checksum": "c97bc373ed9953f54092fb940f0aa926584b550fdc97c8251e3e89ab45c39b00"
   }
 }

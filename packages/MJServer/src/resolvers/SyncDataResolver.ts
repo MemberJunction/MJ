@@ -3,7 +3,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { BaseEntity, CompositeKey, EntityDeleteOptions, EntitySaveOptions, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
-import { DatasetItemEntity } from '@memberjunction/core-entities';
+import { MJDatasetItemEntity } from '@memberjunction/core-entities';
 
 
 
@@ -134,8 +134,8 @@ export class SyncDataResolver {
     protected async GetLowercaseMetadataEntitiesList(user: UserInfo, forceRefresh: boolean = false): Promise<string[]> {
         if (forceRefresh || __metadata_DatasetItems.length === 0) {
             const rv = new RunView(); // cache this, veyr simple - should use an engine for this stuff later
-            const result = await rv.RunView<DatasetItemEntity>({
-                EntityName: "Dataset Items",
+            const result = await rv.RunView<MJDatasetItemEntity>({
+                EntityName: "MJ: Dataset Items",
                 ExtraFilter: "Dataset = 'MJ_Metadata'",
             }, user)
             if (result && result.Success) {

@@ -1,0 +1,36 @@
+{
+  "entityName": "Templates",
+  "primaryKey": {
+    "ID": "AA9845D4-B5B2-4E18-9587-50CCB6906A4D"
+  },
+  "sync": {
+    "lastModified": "2026-02-13T21:09:21.760Z",
+    "checksum": "c721c0543e111c93325e0706a7841a0c60884e87d5d723a03ec61d232bc0c58b"
+  },
+  "fields": {
+    "Name": "Agent Completion - SMS",
+    "Description": "SMS template for AI agent completion notifications",
+    "UserID": "@lookup:MJ: Users.Name=System",
+    "IsActive": true
+  },
+  "relatedEntities": {
+    "MJ: Template Contents": [
+      {
+        "primaryKey": {
+          "ID": "F1E3C4B5-2345-5678-9ABC-DEF123456789"
+        },
+        "fields": {
+          "TemplateID": "@parent:ID",
+          "TypeID": "@lookup:MJ: Template Content Types.Name=Text",
+          "TemplateText": "@file:templates/agent-completion-sms.txt",
+          "Priority": 100,
+          "IsActive": true
+        },
+        "sync": {
+          "lastModified": "2026-02-13T21:09:21.780Z",
+          "checksum": "9f6e36b87118560b534bc4552cc9ac6e8adfdab1c8536fecdd06309cb73edb99"
+        }
+      }
+    ]
+  }
+}

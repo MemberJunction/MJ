@@ -1,0 +1,35 @@
+@if (authBase.isAuthenticated() | async) {
+  <div class="app-main">
+    <mj-system-validation-banner></mj-system-validation-banner>
+    @if (!HasError) {
+      <mj-shell class="app-body"></mj-shell>
+    }
+    @if (HasError && !showValidationOnly) {
+      <div>
+        <h1>System Error</h1>
+        <hr/>
+        {{ErrorMessage}}
+      </div>
+    }
+  </div>
+}
+
+@if (!(authBase.isAuthenticated() | async)) {
+  <div class="login-wrapper">
+    <div class="main-banner">
+      <div class="title">
+        <div class="mj-logo-wordmark-login" role="img" aria-label="MemberJunction Logo"></div>
+      </div>
+      <h1 class="text-header">
+        Welcome <br/> Back
+      </h1>
+    </div>
+    <div class="login-btn">
+      <h3>Log In</h3>
+      <p>{{subHeaderText}}</p>
+      <button (click)="authBase.login()">
+        Log in
+      </button>
+    </div>
+  </div>
+}

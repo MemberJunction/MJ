@@ -1,16 +1,56 @@
 #!/usr/bin/env node
+/**
+ * @fileoverview CLI entry point for the MemberJunction MCP Server.
+ *
+ * This module provides the command-line interface for starting and managing
+ * the MCP server. It supports:
+ * - Starting the server with optional tool filtering
+ * - Listing available tools without starting the server
+ * - Loading filter configuration from JSON files
+ *
+ * @example
+ * ```bash
+ * # Start server with all tools
+ * npx @memberjunction/ai-mcp-server
+ *
+ * # Start with filtered tools
+ * npx @memberjunction/ai-mcp-server --include "Get_*,Run_Agent"
+ *
+ * # List available tools
+ * npx @memberjunction/ai-mcp-server --list-tools
+ * ```
+ *
+ * @module @memberjunction/ai-mcp-server/cli
+ */
+
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
+
+// Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
+import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
+
+// Import supplemental manifest for user-defined classes (generated at prestart with --exclude-packages @memberjunction)
+import './generated/class-registrations-manifest.js';
+
 import { initializeServer, listAvailableTools, ToolFilterOptions } from './Server.js';
 
+/** CLI argument types */
 interface CLIArguments {
+    /** Comma-separated tool patterns to include */
     include?: string;
+    /** Comma-separated tool patterns to exclude */
     exclude?: string;
+    /** Path to JSON file with filter configuration */
     toolsFile?: string;
+    /** If true, list tools and exit without starting server */
     listTools: boolean;
 }
 
-async function main() {
+/**
+ * Main CLI entry point.
+ * Parses command-line arguments and either lists tools or starts the server.
+ */
+async function main(): Promise<void> {
     const argv = await yargs(hideBin(process.argv))
         .option('include', {
             alias: 'i',

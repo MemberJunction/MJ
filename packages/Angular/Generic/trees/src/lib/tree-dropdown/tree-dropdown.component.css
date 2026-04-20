@@ -1,0 +1,386 @@
+/**
+ * Tree Dropdown Component Styles
+ *
+ * Uses CSS custom properties for easy theming.
+ * Containers can override these variables to customize appearance.
+ */
+
+/* ========================================
+   CSS Variables (Theming)
+   ======================================== */
+
+:host {
+    /* Colors */
+    --dropdown-bg: var(--mj-bg-surface);
+    --dropdown-border-color: var(--mj-border-strong);
+    --dropdown-border-hover: var(--mj-text-disabled);
+    --dropdown-border-focus: var(--mj-brand-primary);
+    --dropdown-text-color: var(--mj-text-primary);
+    --dropdown-text-placeholder: var(--mj-text-disabled);
+    --dropdown-shadow: var(--mj-shadow-lg);
+
+    /* Trigger */
+    --dropdown-trigger-bg: var(--mj-bg-surface);
+    --dropdown-trigger-height: 40px;
+    --dropdown-trigger-padding: 8px 12px;
+    --dropdown-trigger-radius: var(--mj-radius-md);
+
+    /* Search */
+    --dropdown-search-bg: var(--mj-bg-surface-card);
+    --dropdown-search-height: 36px;
+
+    /* Animation */
+    --dropdown-animation-duration: 150ms;
+    --dropdown-animation-easing: ease-out;
+
+    display: block;
+    position: relative;
+    width: 100%;
+}
+
+/* ========================================
+   Container
+   ======================================== */
+
+.tree-dropdown {
+    position: relative;
+    width: 100%;
+}
+
+.tree-dropdown--disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* ========================================
+   Trigger
+   ======================================== */
+
+.tree-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: var(--dropdown-trigger-height);
+    padding: var(--dropdown-trigger-padding);
+    background: var(--dropdown-trigger-bg);
+    border: 1px solid var(--dropdown-border-color);
+    border-radius: var(--dropdown-trigger-radius);
+    cursor: pointer;
+    outline: none;
+    transition: all var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-trigger:hover {
+    border-color: var(--dropdown-border-hover);
+}
+
+.tree-dropdown-trigger:focus,
+.tree-dropdown-trigger--open {
+    border-color: var(--dropdown-border-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+.tree-dropdown-trigger--disabled {
+    cursor: not-allowed;
+    background: var(--mj-bg-surface-card);
+}
+
+.tree-dropdown-trigger__content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.tree-dropdown-trigger__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--mj-text-sm);
+    flex-shrink: 0;
+}
+
+.tree-dropdown-trigger__text {
+    flex: 1;
+    font-size: var(--mj-text-sm);
+    color: var(--dropdown-text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-dropdown-trigger__text--placeholder {
+    color: var(--dropdown-text-placeholder);
+}
+
+.tree-dropdown-trigger__loading {
+    display: flex;
+    align-items: center;
+    color: var(--dropdown-border-focus);
+    font-size: var(--mj-text-xs);
+}
+
+.tree-dropdown-trigger__actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.tree-dropdown-trigger__clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: var(--mj-radius-full);
+    background: var(--mj-border-default);
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    font-size: 10px;
+    transition: all var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-trigger__clear:hover {
+    background: var(--mj-border-strong);
+    color: var(--mj-text-primary);
+}
+
+.tree-dropdown-trigger__chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    color: var(--dropdown-text-placeholder);
+    font-size: var(--mj-text-xs);
+    transition: transform var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-trigger--open .tree-dropdown-trigger__chevron {
+    transform: rotate(180deg);
+}
+
+/* ========================================
+   Dropdown Panel
+   ======================================== */
+
+.tree-dropdown-panel {
+    position: fixed;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    background: var(--dropdown-bg);
+    border: 1px solid var(--dropdown-border-color);
+    border-radius: var(--mj-radius-md);
+    box-shadow: var(--dropdown-shadow);
+    overflow: hidden;
+    animation: dropdown-open var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+    /* Ensure the panel respects its maxHeight and allows child scrolling */
+    box-sizing: border-box;
+}
+
+.tree-dropdown-panel--above {
+    transform-origin: bottom center;
+}
+
+.tree-dropdown-panel--below {
+    transform-origin: top center;
+}
+
+@keyframes dropdown-open {
+    from {
+        opacity: 0;
+        transform: scaleY(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scaleY(1);
+    }
+}
+
+/* ========================================
+   Search
+   ======================================== */
+
+.tree-dropdown-search {
+    padding: 8px;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--dropdown-search-bg);
+}
+
+.tree-dropdown-search__input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: var(--dropdown-search-height);
+    padding: 0 10px;
+    background: var(--dropdown-bg);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md);
+    transition: all var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-search__input-wrapper:focus-within {
+    border-color: var(--dropdown-border-focus);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.tree-dropdown-search__icon {
+    color: var(--mj-text-disabled);
+    font-size: var(--mj-text-xs);
+    flex-shrink: 0;
+}
+
+.tree-dropdown-search__input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: var(--mj-text-sm);
+    color: var(--dropdown-text-color);
+    outline: none;
+    min-width: 0;
+}
+
+.tree-dropdown-search__input::placeholder {
+    color: var(--dropdown-text-placeholder);
+}
+
+.tree-dropdown-search__clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: var(--mj-radius-full);
+    background: var(--mj-border-default);
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    font-size: 9px;
+    flex-shrink: 0;
+    transition: all var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-search__clear:hover {
+    background: var(--mj-border-strong);
+    color: var(--mj-text-primary);
+}
+
+/* ========================================
+   Tree Container
+   ======================================== */
+
+.tree-dropdown-tree {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    max-height: 100%;
+}
+
+.tree-dropdown-tree mj-tree {
+    display: block;
+    height: auto;
+    max-height: 100%;
+}
+
+/* Override tree styles for dropdown context */
+.tree-dropdown-tree ::ng-deep .tree-container {
+    border-radius: 0;
+    height: auto;
+    max-height: none;
+}
+
+.tree-dropdown-tree ::ng-deep .tree-content {
+    padding: 4px 0;
+}
+
+.tree-dropdown-tree ::ng-deep .tree-node {
+    padding: 6px 12px;
+    min-height: 32px;
+}
+
+.tree-dropdown-tree ::ng-deep .tree-empty {
+    padding: 24px 16px;
+}
+
+.tree-dropdown-tree ::ng-deep .tree-loading {
+    padding: 24px 16px;
+}
+
+/* ========================================
+   Portal Container (in body)
+   ======================================== */
+
+:host ::ng-deep .mj-tree-dropdown-portal {
+    pointer-events: none;
+}
+
+:host ::ng-deep .mj-tree-dropdown-portal > * {
+    pointer-events: auto;
+}
+
+/* ========================================
+   Multiple Selection Pills
+   ======================================== */
+
+.tree-dropdown-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+}
+
+.tree-dropdown-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: var(--mj-brand-primary-subtle);
+    border-radius: var(--mj-radius-lg);
+    font-size: var(--mj-text-xs);
+    color: var(--mj-brand-primary);
+}
+
+.tree-dropdown-pill__remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    border: none;
+    border-radius: var(--mj-radius-full);
+    background: transparent;
+    color: var(--mj-brand-primary);
+    cursor: pointer;
+    font-size: 8px;
+    transition: background var(--dropdown-animation-duration) var(--dropdown-animation-easing);
+}
+
+.tree-dropdown-pill__remove:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+}
+
+/* ========================================
+   Responsive
+   ======================================== */
+
+@media (max-width: 480px) {
+    :host {
+        --dropdown-trigger-height: 44px;
+    }
+
+    .tree-dropdown-trigger__text {
+        font-size: var(--mj-text-base);
+    }
+
+    .tree-dropdown-search__input {
+        font-size: var(--mj-text-base); /* Prevents zoom on iOS */
+    }
+}

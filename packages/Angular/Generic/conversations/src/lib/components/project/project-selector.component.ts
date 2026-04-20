@@ -1,73 +1,57 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewContainerRef } from '@angular/core';
-import { ProjectEntity, ConversationEntity } from '@memberjunction/core-entities';
+import { MJProjectEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { DialogService as KendoDialogService } from '@progress/kendo-angular-dialog';
+import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { DialogService } from '../../services/dialog.service';
 import { ProjectFormModalComponent } from './project-form-modal.component';
+import { UUIDsEqual } from '@memberjunction/global';
 
-export interface ProjectWithStats extends ProjectEntity {
+export interface ProjectWithStats extends MJProjectEntity {
   conversationCount?: number;
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-project-selector',
   template: `
     <div class="project-selector">
-      <kendo-dropdownlist
-        [data]="projectsWithStats"
-        [value]="selectedProject"
-        [textField]="'Name'"
-        [valueField]="'ID'"
-        [disabled]="disabled"
-        (valueChange)="onProjectChange($event)">
-        <ng-template kendoDropDownListItemTemplate let-dataItem>
-          <div class="project-item">
-            <i class="fa-solid {{ dataItem.Icon || 'fa-folder' }}"
-               [style.color]="dataItem.Color || '#0076B6'"></i>
-            <div class="project-info">
-              <span class="project-name">{{ dataItem.Name }}</span>
-              @if (showStats && dataItem.conversationCount != null) {
-                <span class="project-stats">{{ dataItem.conversationCount }} conversations</span>
-              }
-            </div>
-          </div>
-        </ng-template>
-        <ng-template kendoDropDownListValueTemplate let-dataItem>
-          <div class="project-item">
-            <i class="fa-solid {{ dataItem.Icon || 'fa-folder' }}"
-               [style.color]="dataItem.Color || '#0076B6'"></i>
-            <span>{{ dataItem.Name }}</span>
-          </div>
-        </ng-template>
-      </kendo-dropdownlist>
+      <select
+        class="mj-select project-dropdown"
+        [ngModel]="selectedProject?.ID || ''"
+        (ngModelChange)="onProjectSelectChange($event)"
+        [disabled]="disabled">
+        <option value="" disabled>Select a project...</option>
+        @for (project of projectsWithStats; track project.ID) {
+          <option [value]="project.ID">{{ project.Name }}{{ showStats && project.conversationCount != null ? ' (' + project.conversationCount + ')' : '' }}</option>
+        }
+      </select>
 
       <div class="project-actions">
         @if (selectedProject) {
-          <button
-            kendoButton
-            [icon]="'edit'"
+          <button mjButton
+            variant="flat"
+            size="sm"
             [disabled]="disabled"
             (click)="onEditProject()"
-            title="Edit Project"
-            class="btn-icon">
+            title="Edit Project">
+            <i class="fa-solid fa-pen"></i>
           </button>
-          <button
-            kendoButton
-            [icon]="'trash'"
+          <button mjButton
+            variant="danger"
+            size="sm"
             [disabled]="disabled"
             (click)="onDeleteProject()"
-            title="Delete Project"
-            class="btn-icon btn-danger">
+            title="Delete Project">
+            <i class="fa-solid fa-trash"></i>
           </button>
         }
-        <button
-          kendoButton
-          [icon]="'plus'"
+        <button mjButton
+          variant="primary"
+          size="sm"
           [disabled]="disabled"
           (click)="onCreateProject()"
-          title="Create New Project"
-          [themeColor]="'primary'"
-          class="btn-icon">
+          title="Create New Project">
+          <i class="fa-solid fa-plus"></i>
         </button>
       </div>
     </div>
@@ -78,7 +62,7 @@ export interface ProjectWithStats extends ProjectEntity {
       gap: 8px;
       align-items: center;
     }
-    .project-selector kendo-dropdownlist {
+    .project-dropdown {
       flex: 1;
       min-width: 200px;
     }
@@ -123,17 +107,17 @@ export class ProjectSelectorComponent implements OnInit {
   @Input() disabled: boolean = false;
   @Input() showStats: boolean = true;
 
-  @Output() projectSelected = new EventEmitter<ProjectEntity | null>();
-  @Output() projectCreated = new EventEmitter<ProjectEntity>();
-  @Output() projectUpdated = new EventEmitter<ProjectEntity>();
+  @Output() projectSelected = new EventEmitter<MJProjectEntity | null>();
+  @Output() projectCreated = new EventEmitter<MJProjectEntity>();
+  @Output() projectUpdated = new EventEmitter<MJProjectEntity>();
   @Output() projectDeleted = new EventEmitter<string>();
 
   public projectsWithStats: ProjectWithStats[] = [];
-  public selectedProject: ProjectEntity | null = null;
+  public selectedProject: MJProjectEntity | null = null;
 
   constructor(
     private dialogService: DialogService,
-    private kendoDialogService: KendoDialogService,
+    private mjDialogService: MJDialogService,
     private viewContainerRef: ViewContainerRef
   ) {}
 
@@ -154,15 +138,15 @@ export class ProjectSelectorComponent implements OnInit {
           ResultType: 'entity_object'
         },
         {
-          EntityName: 'Conversations',
+          EntityName: 'MJ: Conversations',
           ExtraFilter: `EnvironmentID='${this.environmentId}'`,
           ResultType: 'entity_object'
         }
       ], this.currentUser);
 
       if (projectsResult.Success && conversationsResult.Success) {
-        const projects = projectsResult.Results as ProjectEntity[] || [];
-        const conversations = conversationsResult.Results as ConversationEntity[] || [];
+        const projects = projectsResult.Results as MJProjectEntity[] || [];
+        const conversations = conversationsResult.Results as MJConversationEntity[] || [];
 
         // Calculate conversation counts per project
         const conversationCounts = this.calculateConversationCounts(conversations);
@@ -175,7 +159,7 @@ export class ProjectSelectorComponent implements OnInit {
         });
 
         if (this.selectedProjectId) {
-          this.selectedProject = this.projectsWithStats.find(p => p.ID === this.selectedProjectId) || null;
+          this.selectedProject = this.projectsWithStats.find(p => UUIDsEqual(p.ID, this.selectedProjectId)) || null;
         }
       }
     } catch (error) {
@@ -183,7 +167,7 @@ export class ProjectSelectorComponent implements OnInit {
     }
   }
 
-  private calculateConversationCounts(conversations: ConversationEntity[]): Map<string, number> {
+  private calculateConversationCounts(conversations: MJConversationEntity[]): Map<string, number> {
     const counts = new Map<string, number>();
 
     for (const conv of conversations) {
@@ -195,24 +179,29 @@ export class ProjectSelectorComponent implements OnInit {
     return counts;
   }
 
-  onProjectChange(project: ProjectEntity | null): void {
+  onProjectChange(project: MJProjectEntity | null): void {
     this.selectedProject = project;
     this.projectSelected.emit(project);
   }
 
+  onProjectSelectChange(projectId: string): void {
+    const project = this.projectsWithStats.find(p => UUIDsEqual(p.ID, projectId)) || null;
+    this.onProjectChange(project);
+  }
+
   onCreateProject(): void {
-    const dialogRef = this.kendoDialogService.open({
+    const dialogRef = this.mjDialogService.open({
       content: ProjectFormModalComponent,
       width: 600,
       minWidth: 400
     });
 
-    const modalInstance = dialogRef.content.instance as ProjectFormModalComponent;
+    const modalInstance = dialogRef.Content!.instance as unknown as ProjectFormModalComponent;
     modalInstance.dialogRef = dialogRef;
     modalInstance.environmentId = this.environmentId;
     modalInstance.currentUser = this.currentUser;
 
-    modalInstance.projectSaved.subscribe(async (project: ProjectEntity) => {
+    modalInstance.projectSaved.subscribe(async (project: MJProjectEntity) => {
       this.projectCreated.emit(project);
       await this.loadProjects();
       this.selectedProject = project;
@@ -223,19 +212,19 @@ export class ProjectSelectorComponent implements OnInit {
   onEditProject(): void {
     if (!this.selectedProject) return;
 
-    const dialogRef = this.kendoDialogService.open({
+    const dialogRef = this.mjDialogService.open({
       content: ProjectFormModalComponent,
       width: 600,
       minWidth: 400
     });
 
-    const modalInstance = dialogRef.content.instance as ProjectFormModalComponent;
+    const modalInstance = dialogRef.Content!.instance as unknown as ProjectFormModalComponent;
     modalInstance.dialogRef = dialogRef;
     modalInstance.project = this.selectedProject;
     modalInstance.environmentId = this.environmentId;
     modalInstance.currentUser = this.currentUser;
 
-    modalInstance.projectSaved.subscribe(async (project: ProjectEntity) => {
+    modalInstance.projectSaved.subscribe(async (project: MJProjectEntity) => {
       this.projectUpdated.emit(project);
       await this.loadProjects();
       this.selectedProject = project;
@@ -267,7 +256,7 @@ export class ProjectSelectorComponent implements OnInit {
 
     try {
       const md = new Metadata();
-      const project = await md.GetEntityObject<ProjectEntity>('MJ: Projects', this.currentUser);
+      const project = await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.currentUser);
       await project.Load(projectId);
 
       const deleted = await project.Delete();

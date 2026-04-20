@@ -4,7 +4,7 @@
  * @module @memberjunction/react-runtime/utilities
  */
 
-import { ComponentLibraryEntity } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity } from '@memberjunction/core-entities';
 import {
   DependencyGraph,
   DependencyNode,
@@ -61,7 +61,7 @@ export class LibraryDependencyResolver {
    * @param libraries - All available libraries
    * @returns Dependency graph structure
    */
-  buildDependencyGraph(libraries: ComponentLibraryEntity[]): DependencyGraph {
+  buildDependencyGraph(libraries: MJComponentLibraryEntity[]): DependencyGraph {
     const nodes = new Map<string, DependencyNode>();
     const roots = new Set<string>();
 
@@ -144,8 +144,8 @@ export class LibraryDependencyResolver {
    * @param graph - Dependency graph
    * @returns Sorted array of libraries to load in order
    */
-  topologicalSort(graph: DependencyGraph): ComponentLibraryEntity[] {
-    const result: ComponentLibraryEntity[] = [];
+  topologicalSort(graph: DependencyGraph): MJComponentLibraryEntity[] {
+    const result: MJComponentLibraryEntity[] = [];
     const visited = new Set<string>();
     const tempMarked = new Set<string>();
 
@@ -334,7 +334,7 @@ export class LibraryDependencyResolver {
    */
   resolveVersionConflicts(
     requirements: VersionRequirement[],
-    availableLibraries: ComponentLibraryEntity[]
+    availableLibraries: MJComponentLibraryEntity[]
   ): ResolvedVersion {
     if (requirements.length === 0) {
       throw new Error('No version requirements provided');
@@ -414,7 +414,7 @@ export class LibraryDependencyResolver {
    */
   getLoadOrder(
     requestedLibs: string[],
-    allLibs: ComponentLibraryEntity[],
+    allLibs: MJComponentLibraryEntity[],
     options?: DependencyResolutionOptions
   ): LoadOrderResult {
     const errors: string[] = [];
@@ -441,7 +441,7 @@ export class LibraryDependencyResolver {
     }
 
     // Build a map for quick lookup (case-insensitive)
-    const libMap = new Map<string, ComponentLibraryEntity[]>();
+    const libMap = new Map<string, MJComponentLibraryEntity[]>();
     for (const lib of allLibs) {
       if (!lib?.Name) {
         warnings.push(`Library with missing name found in available libraries`);
@@ -525,7 +525,7 @@ export class LibraryDependencyResolver {
     }
 
     // Resolve version conflicts for each library
-    const resolvedLibraries: ComponentLibraryEntity[] = [];
+    const resolvedLibraries: MJComponentLibraryEntity[] = [];
     for (const libName of needed) {
       const requirements = versionRequirements.get(libName) || [];
       const versions = libMap.get(libName.toLowerCase()) || [];
@@ -591,7 +591,7 @@ export class LibraryDependencyResolver {
    * @param library - Library to get dependencies for
    * @returns Map of dependency names to version specs
    */
-  getDirectDependencies(library: ComponentLibraryEntity): Map<string, string> {
+  getDirectDependencies(library: MJComponentLibraryEntity): Map<string, string> {
     return this.parseDependencies(library.Dependencies);
   }
 
@@ -604,7 +604,7 @@ export class LibraryDependencyResolver {
    */
   getTransitiveDependencies(
     libraryName: string,
-    allLibs: ComponentLibraryEntity[],
+    allLibs: MJComponentLibraryEntity[],
     maxDepth: number = 10
   ): Set<string> {
     const dependencies = new Set<string>();
@@ -613,7 +613,7 @@ export class LibraryDependencyResolver {
     let depth = 0;
 
     // Build lookup map (case-insensitive)
-    const libMap = new Map<string, ComponentLibraryEntity>();
+    const libMap = new Map<string, MJComponentLibraryEntity>();
     for (const lib of allLibs) {
       libMap.set(lib.Name.toLowerCase(), lib);
     }

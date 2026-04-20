@@ -56,9 +56,9 @@
       </div>
     </div>
 
-    <kendo-splitter orientation="horizontal">
+    <as-split direction="horizontal">
       @if (showFilters) {
-        <kendo-splitter-pane size="320" min="250" max="400">
+        <as-split-area [size]="20" [minSize]="15" [maxSize]="25">
           <div class="filter-panel">
             <div class="filter-panel-header">
               <h3>Model Filters</h3>
@@ -179,10 +179,10 @@
               </div>
             </div>
           </div>
-        </kendo-splitter-pane>
+        </as-split-area>
       }
 
-      <kendo-splitter-pane>
+      <as-split-area>
         <div class="content-area">
           @if (filteredModels.length === 0) {
             <div class="empty-state">
@@ -209,7 +209,7 @@
                             <i [class]="getModelIcon(model)"></i>
                           </div>
                           <div class="model-details">
-                            <h4 class="model-name">{{ model.Name || 'Unnamed Model' }}</h4>
+                            <h4 class="model-name" [innerHTML]="(model.Name || 'Unnamed Model') | highlightSearch:searchTerm"></h4>
                             <div class="model-meta">
                               @if (model.Vendor) {
                                 <span class="meta-item">
@@ -245,7 +245,7 @@
                       <!-- Card Body -->
                       <div class="card-body">
                         @if (model.Description) {
-                          <p class="model-description">{{ model.Description }}</p>
+                          <p class="model-description" [innerHTML]="model.Description | highlightSearch:searchTerm"></p>
                         } @else {
                           <p class="model-description text-muted">No description provided</p>
                         }
@@ -368,7 +368,7 @@
                           <td>
                             <div class="name-cell">
                               <i [class]="getModelIcon(model)"></i>
-                              {{ model.Name || 'Unnamed Model' }}
+                              <span [innerHTML]="(model.Name || 'Unnamed Model') | highlightSearch:searchTerm"></span>
                             </div>
                           </td>
                           <td>{{ model.Vendor || '-' }}</td>
@@ -407,8 +407,8 @@
             }
           }
         </div>
-      </kendo-splitter-pane>
-    </kendo-splitter>
+      </as-split-area>
+    </as-split>
 
     <!-- Detail Panel Overlay -->
     @if (detailPanelVisible) {

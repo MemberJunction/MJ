@@ -8,12 +8,28 @@ import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
 import { FKCandidate, FKEvidence, PKCandidate } from '../types/discovery.js';
 import { RelationshipDiscoveryConfig } from '../types/config.js';
+import { ColumnStatsCache } from './ColumnStatsCache.js';
 
 export class FKDetector {
   constructor(
     private driver: BaseAutoDocDriver,
-    private config: RelationshipDiscoveryConfig
+    private config: RelationshipDiscoveryConfig,
+    private statsCache?: ColumnStatsCache
   ) {}
+
+  /**
+   * Returns the list of FK-eligible column names for a table.
+   * A column is FK-eligible if it has a key-compatible data type and values look like keys.
+   * This list constrains what the LLM is allowed to recommend as FKs.
+   */
+  public getFKEligibleColumns(schemaName: string, tableName: string): string[] {
+    if (!this.statsCache) return [];
+    const tableStats = this.statsCache.getTableStats(schemaName, tableName);
+    if (!tableStats) return [];
+    return Array.from(tableStats.columns.values())
+      .filter(col => col.fkEligible)
+      .map(col => col.columnName);
+  }
 
   /**
    * Detect foreign key candidates for a table
@@ -27,11 +43,19 @@ export class FKDetector {
   ): Promise<FKCandidate[]> {
     const candidates: FKCandidate[] = [];
 
+    const tableStartTime = Date.now();
     console.log(`[FKDetector] Analyzing table ${sourceSchema}.${sourceTable.name} with ${sourceTable.columns.length} columns`);
     console.log(`[FKDetector] Available PKs: ${discoveredPKs.length}`);
 
     // For each column in source table
     for (const sourceColumn of sourceTable.columns) {
+      // Tier 1: Skip non-key data types (dates, booleans, floats — never FK columns)
+      if (this.isNonKeyDataType(sourceColumn.dataType)) {
+        console.log(`[FKDetector]   Skip ${sourceColumn.name} - non-key data type (${sourceColumn.dataType})`);
+        this.markFKIneligible(sourceSchema, sourceTable.name, sourceColumn.name);
+        continue;
+      }
+
       // Skip if column is a discovered PK
       const isPK = discoveredPKs.some(pk =>
         pk.schemaName === sourceSchema &&
@@ -39,9 +63,24 @@ export class FKDetector {
         pk.columnNames.includes(sourceColumn.name)
       );
 
+      // GATE 8: Source column is a discovered PK — skip FK candidate generation.
+      // PK-as-FK (identifying relationships) are rare and require semantic reasoning,
+      // so we leave those for the LLM to propose during table analysis iterations.
       if (isPK) {
-        console.log(`[FKDetector]   Skip ${sourceColumn.name} - is a PK`);
+        console.log(`[FKDetector] GATE8 skip: ${sourceColumn.name} - source is a discovered PK (LLM can propose if identifying relationship)`);
         continue;
+      }
+
+      // Tier 2: For string columns, sample values and check if they look like keys
+      if (this.isStringDataType(sourceColumn.dataType)) {
+        const looksLikeKey = await this.columnValuesLookLikeKeys(
+          sourceSchema, sourceTable.name, sourceColumn.name
+        );
+        if (!looksLikeKey) {
+          console.log(`[FKDetector]   Skip ${sourceColumn.name} - values don't look like keys`);
+          this.markFKIneligible(sourceSchema, sourceTable.name, sourceColumn.name);
+          continue;
+        }
       }
 
       // Find potential target tables/columns
@@ -58,7 +97,8 @@ export class FKDetector {
         console.log(`[FKDetector]     Targets: ${potentialTargets.map(t => `${t.schemaName}.${t.tableName}.${t.columnName}`).join(', ')}`);
       }
 
-      // Analyze each potential target
+      // Analyze each potential target, collect per-column candidates
+      const columnCandidates: FKCandidate[] = [];
       for (const target of potentialTargets) {
         const candidate = await this.analyzeFKCandidate(
           sourceSchema,
@@ -76,13 +116,44 @@ export class FKDetector {
         }
 
         if (candidate && candidate.confidence >= this.config.confidence.foreignKeyMinimum * 100) {
-          candidates.push(candidate);
+          columnCandidates.push(candidate);
           console.log(`[FKDetector]     ✓ Added FK candidate: ${sourceColumn.name} -> ${target.tableName}.${target.columnName}`);
         }
       }
+
+      // GATE 5: Fan-out limiter — keep only top 3 candidates per source column
+      // When a column matches many targets (e.g., BusinessEntityID in 9 tables),
+      // the correct FK is almost always among the top 3 by confidence.
+      const MAX_TARGETS_PER_COLUMN = 3;
+      if (columnCandidates.length > MAX_TARGETS_PER_COLUMN) {
+        columnCandidates.sort((a, b) => b.confidence - a.confidence);
+        const cut = columnCandidates.length - MAX_TARGETS_PER_COLUMN;
+        console.log(`[FKDetector] GATE5: ${sourceColumn.name} has ${columnCandidates.length} targets, keeping top ${MAX_TARGETS_PER_COLUMN}, cutting ${cut}`);
+        columnCandidates.length = MAX_TARGETS_PER_COLUMN;
+      }
+
+      // Fan-out penalty: when a source column has multiple FK targets,
+      // reduce confidence proportionally. This ensures multi-target FKs
+      // drop below the interim ground truth lock threshold (90) so the
+      // pruner can evaluate and pick the correct one.
+      if (columnCandidates.length > 1) {
+        let fanoutMultiplier = 1.0;
+        if (columnCandidates.length === 2) fanoutMultiplier = 0.85;
+        else if (columnCandidates.length === 3) fanoutMultiplier = 0.75;
+        else fanoutMultiplier = 0.65;
+        
+        for (const c of columnCandidates) {
+          const before = c.confidence;
+          c.confidence = Math.round(c.confidence * fanoutMultiplier);
+          console.log(`[FKDetector] Fan-out penalty: ${sourceColumn.name} -> ${c.targetTable}.${c.targetColumn} conf ${before} -> ${c.confidence} (x${fanoutMultiplier}, ${columnCandidates.length} targets)`);
+        }
+      }
+
+      candidates.push(...columnCandidates);
     }
 
-    console.log(`[FKDetector] Table ${sourceSchema}.${sourceTable.name}: Found ${candidates.length} FK candidates`);
+    const elapsed = ((Date.now() - tableStartTime) / 1000).toFixed(1);
+    console.log(`[FKDetector] Table ${sourceSchema}.${sourceTable.name}: Found ${candidates.length} FK candidates (${elapsed}s)`);
 
     // Sort by confidence descending
     return candidates.sort((a, b) => b.confidence - a.confidence);
@@ -116,6 +187,18 @@ export class FKDetector {
           );
 
           if (idColumn) {
+            // GATE 1: Target column must be PK-eligible (zero nulls, zero blanks, 100% unique)
+            if (!this.isTargetPKEligible(schema.name, matchingTable.name, idColumn.name)) {
+              console.log(`[FKDetector] GATE1 reject: ${sourceColumn.name} -> ${schema.name}.${matchingTable.name}.${idColumn.name} (target not PK-eligible)`);
+              continue;
+            }
+
+            // GATE 3: Skip rowguid target columns
+            if (idColumn.name.toLowerCase() === 'rowguid') {
+              console.log(`[FKDetector] GATE3 reject: ${sourceColumn.name} -> ${schema.name}.${matchingTable.name}.${idColumn.name} (rowguid target)`);
+              continue;
+            }
+
             const isPK = discoveredPKs.some(pk =>
               pk.schemaName === schema.name &&
               pk.tableName === matchingTable.name &&
@@ -134,6 +217,7 @@ export class FKDetector {
     }
 
     // Pattern 2: Check all discovered PKs with similar names
+    // (PKs are already PK-eligible by definition, no Gate 1 check needed)
     for (const pk of discoveredPKs) {
       const pkSchema = schemas.find(s => s.name === pk.schemaName);
       if (!pkSchema) continue;
@@ -142,6 +226,9 @@ export class FKDetector {
       if (!pkTable || pkTable.name === sourceTable) continue;
 
       for (const pkColumnName of pk.columnNames) {
+        // GATE 3: Skip rowguid target columns
+        if (pkColumnName.toLowerCase() === 'rowguid') continue;
+
         const similarity = this.calculateNameSimilarity(sourceColumn.name, pkColumnName);
         if (similarity > 0.6) {
           targets.push({
@@ -165,6 +252,15 @@ export class FKDetector {
         );
 
         if (matchingColumn) {
+          // GATE 3: Skip rowguid target columns
+          if (matchingColumn.name.toLowerCase() === 'rowguid') continue;
+
+          // GATE 1: Target column must be PK-eligible
+          if (!this.isTargetPKEligible(schema.name, table.name, matchingColumn.name)) {
+            console.log(`[FKDetector] GATE1 reject: ${sourceColumn.name} -> ${schema.name}.${table.name}.${matchingColumn.name} (target not PK-eligible)`);
+            continue;
+          }
+
           const isPK = discoveredPKs.some(pk =>
             pk.schemaName === schema.name &&
             pk.tableName === table.name &&
@@ -259,6 +355,18 @@ export class FKDetector {
   }
 
   /**
+   * GATE 1 helper: Check if a target column is PK-eligible using cached stats.
+   * A column is PK-eligible if it has zero nulls, zero blanks, and 100% unique values.
+   * If no stats are available, returns true (fail-open to avoid blocking valid candidates).
+   */
+  private isTargetPKEligible(schemaName: string, tableName: string, columnName: string): boolean {
+    if (!this.statsCache) return true; // No cache = fail-open
+    const stats = this.statsCache.getColumnStats(schemaName, tableName, columnName);
+    if (!stats) return true; // No stats for this column = fail-open
+    return stats.pkEligible;
+  }
+
+  /**
    * Analyze a specific FK candidate
    */
   private async analyzeFKCandidate(
@@ -291,6 +399,16 @@ export class FKDetector {
       targetColumn,
       this.config.sampling.valueOverlapSampleSize
     );
+
+    // GATE 6 (supersedes GATE 2): Value overlap must be >= 75%
+    // A real FK should have near-perfect containment — source values must exist in target.
+    // Allows some orphaned records (common in DBs without enforced referential integrity)
+    // but rejects coincidental overlap from unrelated columns.
+    const MIN_VALUE_OVERLAP = 0.75;
+    if (overlapResult < MIN_VALUE_OVERLAP) {
+      console.log(`[FKDetector] GATE6 reject: ${sourceColumn.name} -> ${targetSchema}.${targetTable}.${targetColumn} (value overlap ${(overlapResult * 100).toFixed(1)}% < ${MIN_VALUE_OVERLAP * 100}% minimum)`);
+      return null;
+    }
 
     // Get column statistics for cardinality analysis
     const sourceStats = await this.driver.getColumnStatisticsForDiscovery(
@@ -348,7 +466,7 @@ export class FKDetector {
     }
 
     // Calculate confidence
-    const confidence = this.calculateFKConfidence(evidence, targetIsPK);
+    const confidence = this.calculateFKConfidence(evidence, targetIsPK, sourceColumn.name);
 
     // Don't return if confidence too low
     if (confidence < 40) {
@@ -406,42 +524,188 @@ export class FKDetector {
   }
 
   /**
-   * Calculate FK confidence score (0-100)
+   * Tier 1: Check if a data type can never be a key column.
+   * Dates, booleans, floats, and money types are never used as keys.
    */
-  private calculateFKConfidence(evidence: FKEvidence, targetIsPK: boolean): number {
+  private isNonKeyDataType(dataType: string): boolean {
+    const normalized = dataType.toLowerCase().replace(/\([^)]*\)/g, '').trim();
+    const nonKeyTypes = [
+      'date', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime', 'time', 'timestamp',
+      'bit', 'boolean', 'bool',
+      'float', 'real', 'double', 'decimal', 'numeric', 'money', 'smallmoney',
+      'image', 'binary', 'varbinary', 'xml', 'geography', 'geometry', 'hierarchyid',
+    ];
+    return nonKeyTypes.some(t => normalized === t || normalized.startsWith(t));
+  }
+
+  /**
+   * Check if a data type is a string/character type that needs value sampling.
+   */
+  private isStringDataType(dataType: string): boolean {
+    const normalized = dataType.toLowerCase();
+    return ['varchar', 'char', 'nvarchar', 'nchar', 'text', 'ntext'].some(t => normalized.includes(t));
+  }
+
+  /**
+   * Tier 2: Sample a few values from a string column and check if they look like
+   * key values (UUIDs, numeric strings, short codes) vs data values (emails, URLs,
+   * long text, names with spaces).
+   */
+  private async columnValuesLookLikeKeys(
+    schemaName: string,
+    tableName: string,
+    columnName: string
+  ): Promise<boolean> {
+    try {
+      const samples = await this.driver.getSampleValues(schemaName, tableName, columnName, 10);
+      if (!samples || samples.length === 0) return false;
+
+      // Filter out nulls and empty strings
+      const values = samples.filter(v => v != null && String(v).trim().length > 0).map(v => String(v));
+      if (values.length === 0) return false;
+
+      let nonKeyCount = 0;
+      for (const val of values) {
+        if (this.valueLooksLikeNonKey(val)) {
+          nonKeyCount++;
+        }
+      }
+
+      // If majority of sampled values look like non-keys, skip this column
+      return nonKeyCount < values.length * 0.5;
+    } catch {
+      // If sampling fails, don't filter — let it proceed to analysis
+      return true;
+    }
+  }
+
+  /**
+   * Check if a single string value looks like non-key data.
+   * Returns true for emails, URLs, long text, sentences, etc.
+   */
+  private valueLooksLikeNonKey(value: string): boolean {
+    // Emails
+    if (/@/.test(value) && /\.\w{2,}$/.test(value)) return true;
+
+    // URLs
+    if (/^https?:\/\//i.test(value) || /^www\./i.test(value)) return true;
+
+    // Long text (keys are rarely > 100 chars)
+    if (value.length > 100) return true;
+
+    // Sentences — multiple words with spaces (3+ words suggests descriptive text)
+    const wordCount = value.trim().split(/\s+/).length;
+    if (wordCount >= 3) return true;
+
+    return false;
+  }
+
+  /**
+   * Steep containment curve — true FKs should have near-perfect containment.
+   * Returns 0-1 multiplier applied to the containment weight.
+   *
+   *   < 90%       →  0%    (not a FK)
+   *   90-95%      → 10%    (possible, dirty data)
+   *   95-98%      → 30%    (likely, some orphans)
+   *   98-99.5%    → 50%    (strong, few orphans)
+   *   99.5-99.99% → 80%    (very strong)
+   *   100%        → 100%   (perfect containment)
+   */
+  private calculateContainmentMultiplier(containment: number): number {
+    if (containment >= 1.0) return 1.0;
+    if (containment >= 0.995) return 0.8;
+    if (containment >= 0.98) return 0.5;
+    if (containment >= 0.95) return 0.3;
+    if (containment >= 0.90) return 0.1;
+    return 0;
+  }
+
+  /**
+   * Calculate FK confidence score (0-100)
+   *
+   * Value containment is the strongest signal — if source values exist in the target,
+   * that's strong evidence of a FK relationship regardless of naming conventions.
+   * When target is not a detected PK, the PK bonus weight is redistributed to
+   * value overlap so databases without declared PKs aren't penalized.
+   * Columns containing "ID" in the name get a 10% bonus as this is the most
+   * common naming convention for foreign key columns across databases.
+   */
+  private calculateFKConfidence(evidence: FKEvidence, targetIsPK: boolean, sourceColumnName: string): number {
     let score = 0;
 
-    // Value overlap is critical (40% weight)
-    score += evidence.valueOverlap * 40;
+    // Value containment — source values must be contained within target values.
+    // Uses a steep curve: anything below 90% gets zero credit since true FKs
+    // should have near-perfect containment. Orphans can happen but divergence
+    // beyond 10% strongly suggests it's not a FK relationship.
+    const containmentWeight = targetIsPK ? 55 : 70;
+    const containmentMultiplier = this.calculateContainmentMultiplier(evidence.valueOverlap);
+    score += containmentMultiplier * containmentWeight;
 
-    // Naming match (20% weight)
-    score += evidence.namingMatch * 20;
+    // ID-in-name bonus (10%) — columns containing "ID" are very likely FK columns
+    // Matches: CustomerID, AccHeaderID, CreatedByID, PRODUCTID, etc.
+    if (/id/i.test(sourceColumnName)) {
+      score += 10;
+    }
 
-    // Cardinality check (15% weight)
+    // Naming match (10% weight) — helpful but not critical,
+    // many real-world DBs have non-standard naming
+    score += evidence.namingMatch * 10;
+
+    // Cardinality check (10% weight)
     // We want many:one ratio (ratio > 1 is good)
     const cardinalityScore = Math.min(evidence.cardinalityRatio, 2) / 2; // Cap at 2:1
-    score += cardinalityScore * 15;
+    score += cardinalityScore * 10;
 
-    // Target is PK bonus (15% weight)
+    // Target is PK bonus (15% weight) — only when target is actually a detected PK
     if (targetIsPK) {
       score += 15;
     }
 
-    // Null handling (10% weight)
+    // Null handling (5% weight)
     // Some nulls are OK (optional FK), but too many is suspicious
-    const nullScore = evidence.nullPercentage < 0.3 ? 10 :
-                     evidence.nullPercentage < 0.7 ? 5 : 0;
+    const nullScore = evidence.nullPercentage < 0.3 ? 5 :
+                     evidence.nullPercentage < 0.7 ? 2.5 : 0;
     score += nullScore;
 
     // Penalties
-    if (evidence.orphanCount > evidence.sampleSize * 0.2) {
-      score *= 0.7; // 30% penalty for many orphans
-    }
+    // Note: orphan penalty removed — the steep containment curve already
+    // handles this (orphans reduce containment ratio directly)
 
     if (!evidence.dataTypeMatch) {
       score *= 0.5; // 50% penalty for type mismatch
     }
 
-    return Math.round(Math.min(score, 100));
+    // GATE 4: Row-count ratio confidence multiplier
+    // When source has far fewer distinct values than target, the direction is likely wrong
+    // (tiny table pointing at huge table = probable reverse/sibling relationship)
+    if (evidence.cardinalityRatio > 0) {
+      let ratioMultiplier = 1.0;
+      if (evidence.cardinalityRatio < 0.1) {
+        ratioMultiplier = 0.5;  // Severe penalty: source has <10% of target's distinct values
+      } else if (evidence.cardinalityRatio < 0.5) {
+        ratioMultiplier = 0.7;  // Moderate penalty: suspicious direction
+      } else if (evidence.cardinalityRatio > 5.0) {
+        ratioMultiplier = 1.2;  // Boost: strong child→parent signal
+      }
+      if (ratioMultiplier !== 1.0) {
+        const beforeGate4 = score;
+        score *= ratioMultiplier;
+        console.log(`[FKDetector] GATE4: cardRatio=${evidence.cardinalityRatio.toFixed(2)}, multiplier=${ratioMultiplier}, score ${beforeGate4.toFixed(0)} -> ${score.toFixed(0)}`);
+      }
+    }
+
+    return Math.round(Math.min(Math.max(score, 0), 100));
+  }
+
+  /**
+   * Mark a column as not eligible to be a FK source in the stats cache.
+   * This prevents the LLM from recommending it as a FK.
+   */
+  private markFKIneligible(schemaName: string, tableName: string, columnName: string): void {
+    if (!this.statsCache) return;
+    const stats = this.statsCache.getColumnStats(schemaName, tableName, columnName);
+    if (stats) {
+      stats.fkEligible = false;
+    }
   }
 }

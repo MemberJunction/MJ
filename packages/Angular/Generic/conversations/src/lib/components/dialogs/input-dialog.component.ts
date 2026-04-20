@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
 
 @Component({
+  standalone: false,
   selector: 'mj-input-dialog',
   template: `
     <div class="input-dialog-content">
@@ -9,42 +9,50 @@ import { DialogRef } from '@progress/kendo-angular-dialog';
       <div class="input-field">
         <label class="input-label">
           {{ inputLabel }}
-          <span *ngIf="required" class="required-mark">*</span>
+          @if (required) {
+            <span class="required-mark">*</span>
+          }
         </label>
-        <textarea
-          *ngIf="inputType === 'textarea'"
-          [(ngModel)]="value"
-          [placeholder]="placeholder"
-          class="k-textarea">
-        </textarea>
-        <input
-          *ngIf="inputType !== 'textarea'"
-          [(ngModel)]="value"
-          [type]="inputType || 'text'"
-          [placeholder]="placeholder"
-          class="k-textbox"
-          (keydown.enter)="onEnterKey($event)">
+        @if (inputType === 'textarea') {
+          <textarea
+            [(ngModel)]="value"
+            [placeholder]="placeholder"
+            class="mj-textarea">
+          </textarea>
+        }
+        @if (inputType !== 'textarea') {
+          <input
+            [(ngModel)]="value"
+            [type]="inputType || 'text'"
+            [placeholder]="placeholder"
+            class="mj-input"
+            (keydown.enter)="onEnterKey($event)">
+        }
       </div>
-      <div class="input-field" *ngIf="secondInputLabel">
-        <label class="input-label">
-          {{ secondInputLabel }}
-          <span *ngIf="secondInputRequired" class="required-mark">*</span>
-        </label>
-        <textarea
-          [(ngModel)]="secondValue"
-          [placeholder]="secondInputPlaceholder"
-          class="k-textarea">
-        </textarea>
-      </div>
+      @if (secondInputLabel) {
+        <div class="input-field">
+          <label class="input-label">
+            {{ secondInputLabel }}
+            @if (secondInputRequired) {
+              <span class="required-mark">*</span>
+            }
+          </label>
+          <textarea
+            [(ngModel)]="secondValue"
+            [placeholder]="secondInputPlaceholder"
+            class="mj-textarea">
+          </textarea>
+        </div>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .input-dialog-content {
       padding: 8px 0;
     }
     .dialog-message {
       margin: 0 0 16px 0;
-      color: #333;
+      color: var(--mj-text-primary);
       font-size: 14px;
     }
     .input-field {
@@ -55,28 +63,30 @@ import { DialogRef } from '@progress/kendo-angular-dialog';
     .input-label {
       font-weight: 500;
       font-size: 13px;
-      color: #555;
+      color: var(--mj-text-secondary);
     }
     .required-mark {
-      color: #DC2626;
+      color: var(--mj-status-error);
       margin-left: 2px;
     }
-    .k-textbox,
-    .k-textarea {
+    .mj-input,
+    .mj-textarea {
       width: 100%;
       padding: 8px 12px;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 14px;
       font-family: inherit;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
     }
-    .k-textbox:focus,
-    .k-textarea:focus {
+    .mj-input:focus,
+    .mj-textarea:focus {
       outline: none;
-      border-color: #3B82F6;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
     }
-    .k-textarea {
+    .mj-textarea {
       min-height: 80px;
       resize: vertical;
     }
@@ -94,14 +104,12 @@ export class InputDialogComponent {
   @Input() secondInputRequired: boolean = false;
   @Input() secondValue: string = '';
 
-  constructor(public dialogRef: DialogRef) {}
-
   onEnterKey(event: Event): void {
     const keyEvent = event as KeyboardEvent;
     if (this.inputType !== 'textarea') {
       keyEvent.preventDefault();
-      // Trigger OK button click
-      const okButton = document.querySelector('.k-dialog-actions button.k-primary') as HTMLButtonElement;
+      // Trigger OK/primary button click in the MJ dialog
+      const okButton = document.querySelector('.mj-dialog-actions .mj-btn--primary') as HTMLButtonElement;
       if (okButton) {
         okButton.click();
       }

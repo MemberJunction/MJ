@@ -14,8 +14,7 @@ import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
 import { RunView, CompositeKey } from '@memberjunction/core';
 import { ResourceData } from "@memberjunction/core-entities";
-import { AIPromptRunEntityExtended, AIAgentRunEntityExtended, AIModelEntityExtended } from '@memberjunction/ai-core-plus';
-import { RegisterClass } from '@memberjunction/global';
+import { MJAIPromptRunEntityExtended, MJAIAgentRunEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
 export interface DrillDownTab {
@@ -60,20 +59,13 @@ export interface ExecutionMonitoringState {
   activeTabId: string;
   splitterSizes?: number[];
 }
-
-/**
- * Tree-shaking prevention function - ensures component is included in builds
- */
-export function LoadAIMonitorResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * AI Monitor Resource - displays AI execution monitoring and analytics
  * Extends BaseResourceComponent to work with the resource type system
  */
-@RegisterClass(BaseResourceComponent, 'AIMonitorResource')
+// @RegisterClass removed — AIOverviewHubComponent now registers as 'AIMonitorResource'
 @Component({
+  standalone: false,
   selector: 'app-execution-monitoring',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -124,12 +116,12 @@ export function LoadAIMonitorResource() {
       </div>
 
       <!-- Main Dashboard with Kendo Splitter -->
-      <kendo-splitter class="dashboard-splitter" orientation="vertical" (layoutChange)="onSplitterLayoutChange($event)">
+      <as-split direction="vertical" class="dashboard-splitter">
         <!-- Top Row: System Health and Trends Chart -->
-        <kendo-splitter-pane size="45%" [resizable]="true" [collapsible]="false">
-          <kendo-splitter orientation="horizontal" (layoutChange)="onSplitterLayoutChange($event)">
+        <as-split-area [size]="45">
+          <as-split direction="horizontal">
             <!-- System Health -->
-            <kendo-splitter-pane size="30%" [resizable]="true" [collapsible]="true" [collapsed]="false">
+            <as-split-area [size]="30">
               <div class="dashboard-section system-status">
                 <div class="status-container">
                   <div class="chart-header">
@@ -187,10 +179,10 @@ export function LoadAIMonitorResource() {
                   }
                 </div>
               </div>
-            </kendo-splitter-pane>
-            
+            </as-split-area>
+
             <!-- Drill-down Tab Container -->
-            <kendo-splitter-pane [resizable]="true" [collapsible]="false">
+            <as-split-area [size]="70">
               <div class="dashboard-section drill-down-container">
                 <div class="drill-down-tabs">
                   <div class="tab-header">
@@ -350,15 +342,15 @@ export function LoadAIMonitorResource() {
                   </div>
                 </div>
               </div>
-            </kendo-splitter-pane>
-          </kendo-splitter>
-        </kendo-splitter-pane>
+            </as-split-area>
+          </as-split>
+        </as-split-area>
 
         <!-- Bottom Row: Analysis Panels with Expansion Layout -->
-        <kendo-splitter-pane [resizable]="true" [collapsible]="false">
-          <kendo-splitter orientation="horizontal" (layoutChange)="onSplitterLayoutChange($event)">
+        <as-split-area [size]="55">
+          <as-split direction="horizontal">
             <!-- Left: Performance Heatmap -->
-            <kendo-splitter-pane size="50%" [resizable]="true" [collapsible]="false">
+            <as-split-area [size]="50">
               <div class="dashboard-section performance-matrix">
                 <app-performance-heatmap
                   [data]="(performanceMatrix$ | async) ?? []"
@@ -366,10 +358,10 @@ export function LoadAIMonitorResource() {
                   [config]="heatmapConfig"
                 ></app-performance-heatmap>
               </div>
-            </kendo-splitter-pane>
+            </as-split-area>
 
             <!-- Right: Analysis Panels with Collapsible Sections -->
-            <kendo-splitter-pane [resizable]="true" [collapsible]="false">
+            <as-split-area [size]="50">
               <div class="dashboard-section analysis-panels">
                 
                 <!-- Cost Analysis Panel -->
@@ -475,10 +467,10 @@ export function LoadAIMonitorResource() {
                   }
                 </div>
               </div>
-            </kendo-splitter-pane>
-          </kendo-splitter>
-        </kendo-splitter-pane>
-      </kendo-splitter>
+            </as-split-area>
+          </as-split>
+        </as-split-area>
+      </as-split>
 
       <!-- Execution Details Modal -->
       @if (selectedExecution) {
@@ -599,7 +591,7 @@ export function LoadAIMonitorResource() {
   styles: [`
     .execution-monitoring {
       padding: 0;
-      background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+      background: var(--mj-bg-surface-card);
       width: 100%;
       height: 100%;
       position: relative;
@@ -619,7 +611,7 @@ export function LoadAIMonitorResource() {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(255, 255, 255, 0.7);
+      background: color-mix(in srgb, var(--mj-bg-surface) 70%, transparent);
       z-index: 999;
       display: flex;
       align-items: center;
@@ -629,7 +621,7 @@ export function LoadAIMonitorResource() {
 
     /* === Dashboard Header - Clean White Style === */
     .monitoring-header {
-      background: white;
+      background: var(--mj-bg-surface);
       padding: 16px 24px;
       display: flex;
       justify-content: space-between;
@@ -637,7 +629,7 @@ export function LoadAIMonitorResource() {
       flex-wrap: wrap;
       gap: 16px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-      border-bottom: 1px solid #e0e6ed;
+      border-bottom: 1px solid var(--mj-border-default);
       position: relative;
       z-index: 10;
     }
@@ -646,14 +638,14 @@ export function LoadAIMonitorResource() {
       margin: 0;
       font-size: 20px;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 12px;
     }
 
     .monitoring-title i {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       font-size: 22px;
     }
 
@@ -672,30 +664,30 @@ export function LoadAIMonitorResource() {
     }
 
     .time-range-control label {
-      color: #64748b;
+      color: var(--mj-text-muted);
       font-weight: 500;
     }
 
     .time-range-control select {
       padding: 8px 14px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       font-size: 13px;
-      background: #f8fafc;
-      color: #1e293b;
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-primary);
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .time-range-control select:hover:not(:disabled) {
-      background: #f1f5f9;
-      border-color: #cbd5e1;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-border-strong);
     }
 
     .time-range-control select:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .time-range-control select:disabled {
@@ -704,13 +696,13 @@ export function LoadAIMonitorResource() {
     }
 
     .time-range-control select option {
-      background: white;
-      color: #1e293b;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
     }
 
     .refresh-btn {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       padding: 8px 16px;
       border-radius: 8px;
@@ -721,13 +713,13 @@ export function LoadAIMonitorResource() {
       align-items: center;
       gap: 8px;
       transition: all 0.2s ease;
-      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
     }
 
     .refresh-btn:hover:not(:disabled) {
-      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      background: var(--mj-brand-primary-hover);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
     }
 
     .refresh-btn:disabled {
@@ -762,36 +754,25 @@ export function LoadAIMonitorResource() {
     }
 
     .dashboard-section {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
+      box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
       overflow: hidden;
       height: 100%;
       display: flex;
       flex-direction: column;
-      border: 1px solid rgba(99, 102, 241, 0.08);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
       transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .dashboard-section:hover {
-      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.12);
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
     }
 
-    /* Ensure splitter panes take full height */
-    :host ::ng-deep .k-splitter-pane {
+    /* Ensure splitter areas take full height */
+    :host ::ng-deep as-split-area > .as-split-area-content {
       overflow: hidden;
-    }
-
-    :host ::ng-deep .k-splitter .k-splitter-pane {
       padding: 10px;
-    }
-
-    :host ::ng-deep .k-splitter-horizontal > .k-splitter-pane {
-      padding: 10px 5px;
-    }
-
-    :host ::ng-deep .k-splitter-vertical > .k-splitter-pane {
-      padding: 5px 10px;
     }
 
     /* Cost Analysis Styles */
@@ -810,14 +791,14 @@ export function LoadAIMonitorResource() {
       margin: 0;
       font-size: 16px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     .chart-title i {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
     }
 
     .cost-bars, .efficiency-items {
@@ -832,7 +813,7 @@ export function LoadAIMonitorResource() {
       align-items: center;
       gap: 12px;
       padding: 8px 0;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .cost-bar-item:last-child {
@@ -849,33 +830,33 @@ export function LoadAIMonitorResource() {
     .model-name {
       font-size: 12px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .cost-value {
       font-size: 11px;
-      color: #8b5cf6;
+      color: var(--mj-brand-primary);
       font-weight: 600;
     }
 
     .cost-bar-container {
       flex: 1;
       height: 8px;
-      background: linear-gradient(90deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
       border-radius: 4px;
       overflow: hidden;
     }
 
     .cost-bar {
       height: 100%;
-      background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+      background: var(--mj-brand-primary);
       border-radius: 4px;
       transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .token-info {
       font-size: 10px;
-      color: #666;
+      color: var(--mj-text-muted);
       min-width: 80px;
       text-align: right;
     }
@@ -883,7 +864,7 @@ export function LoadAIMonitorResource() {
     /* Token Efficiency Styles */
     .efficiency-item {
       padding: 12px 0;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .efficiency-item:last-child {
@@ -899,7 +880,7 @@ export function LoadAIMonitorResource() {
 
     .efficiency-ratio {
       font-size: 11px;
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       font-weight: 600;
     }
 
@@ -911,7 +892,7 @@ export function LoadAIMonitorResource() {
 
     .token-bar {
       height: 8px;
-      background: rgba(99, 102, 241, 0.1);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
       border-radius: 4px;
       overflow: hidden;
       display: flex;
@@ -923,33 +904,33 @@ export function LoadAIMonitorResource() {
     }
 
     .token-segment--input {
-      background: linear-gradient(90deg, #6366f1 0%, #818cf8 100%);
+      background: var(--mj-brand-primary);
     }
 
     .token-segment--output {
-      background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%);
+      background: var(--mj-brand-accent);
     }
 
     .token-labels {
       display: flex;
       justify-content: space-between;
       font-size: 10px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     .input-label {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       font-weight: 500;
     }
 
     .output-label {
-      color: #8b5cf6;
+      color: var(--mj-brand-accent);
       font-weight: 500;
     }
 
     .cost-per-token {
       font-size: 10px;
-      color: #999;
+      color: var(--mj-text-disabled);
       margin-top: 4px;
     }
 
@@ -966,7 +947,7 @@ export function LoadAIMonitorResource() {
       align-items: center;
       gap: 12px;
       padding: 12px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border-radius: 6px;
     }
 
@@ -981,23 +962,23 @@ export function LoadAIMonitorResource() {
     }
 
     .status-icon--success {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
-      color: #10b981;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .status-icon--warning {
-      background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.15) 100%);
-      color: #f59e0b;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
     }
 
     .status-icon--info {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
-      color: #6366f1;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .status-icon--primary {
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%);
-      color: #8b5cf6;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .status-info {
@@ -1006,20 +987,20 @@ export function LoadAIMonitorResource() {
 
     .status-label {
       font-size: 12px;
-      color: #666;
+      color: var(--mj-text-muted);
       font-weight: 500;
     }
 
     .status-value {
       font-size: 18px;
       font-weight: 700;
-      color: #333;
+      color: var(--mj-text-primary);
       margin: 2px 0;
     }
 
     .status-subtitle {
       font-size: 10px;
-      color: #999;
+      color: var(--mj-text-disabled);
     }
 
     /* Execution Modal Styles */
@@ -1038,7 +1019,7 @@ export function LoadAIMonitorResource() {
     }
 
     .execution-modal-content {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       max-width: 800px;
       width: 100%;
@@ -1050,7 +1031,7 @@ export function LoadAIMonitorResource() {
 
     .execution-modal-header {
       padding: 20px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -1060,7 +1041,7 @@ export function LoadAIMonitorResource() {
       margin: 0;
       font-size: 18px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .modal-header-actions {
@@ -1070,8 +1051,8 @@ export function LoadAIMonitorResource() {
     }
 
     .open-record-btn {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       padding: 8px 16px;
       border-radius: 8px;
@@ -1082,13 +1063,13 @@ export function LoadAIMonitorResource() {
       align-items: center;
       gap: 6px;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
     }
 
     .open-record-btn:hover {
-      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      background: var(--mj-brand-primary-hover);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
     }
 
     .open-record-btn i {
@@ -1099,13 +1080,13 @@ export function LoadAIMonitorResource() {
       background: none;
       border: none;
       font-size: 16px;
-      color: #999;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       padding: 4px;
     }
 
     .close-btn:hover {
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .execution-modal-body {
@@ -1124,8 +1105,8 @@ export function LoadAIMonitorResource() {
       margin: 0 0 12px 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
-      border-bottom: 1px solid #f0f0f0;
+      color: var(--mj-text-primary);
+      border-bottom: 1px solid var(--mj-border-default);
       padding-bottom: 6px;
     }
 
@@ -1143,7 +1124,7 @@ export function LoadAIMonitorResource() {
 
     .detail-item label {
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-muted);
       font-weight: 500;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1151,7 +1132,7 @@ export function LoadAIMonitorResource() {
 
     .detail-item span {
       font-size: 13px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .status-badge {
@@ -1164,27 +1145,27 @@ export function LoadAIMonitorResource() {
     }
 
     .status-badge--completed {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
-      color: #10b981;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .status-badge--running {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
-      color: #6366f1;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .status-badge--failed {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
-      color: #ef4444;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     .error-message {
-      background: #fff3e0;
-      border: 1px solid #ffcc02;
+      background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+      border: 1px solid var(--mj-status-warning);
       border-radius: 4px;
       padding: 12px;
       font-size: 12px;
-      color: #e65100;
+      color: var(--mj-status-error);
       font-family: monospace;
     }
 
@@ -1195,7 +1176,7 @@ export function LoadAIMonitorResource() {
     }
 
     .child-execution {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border-radius: 4px;
       padding: 12px;
       display: flex;
@@ -1212,15 +1193,15 @@ export function LoadAIMonitorResource() {
     .child-name {
       font-size: 12px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .child-type {
       font-size: 10px;
-      background: #e0e0e0;
+      background: var(--mj-border-default);
       padding: 2px 6px;
       border-radius: 3px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     .child-status {
@@ -1233,7 +1214,7 @@ export function LoadAIMonitorResource() {
       display: flex;
       gap: 12px;
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     .loading-details {
@@ -1260,8 +1241,8 @@ export function LoadAIMonitorResource() {
 
     .tab-header {
       display: flex;
-      border-bottom: 1px solid rgba(99, 102, 241, 0.1);
-      background: linear-gradient(180deg, #f8f9ff 0%, #f3f4f6 100%);
+      border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+      background: var(--mj-bg-surface-card);
       min-height: 44px;
       overflow-x: auto;
     }
@@ -1277,7 +1258,7 @@ export function LoadAIMonitorResource() {
       cursor: pointer;
       font-size: 13px;
       font-weight: 500;
-      color: #64748b;
+      color: var(--mj-text-muted);
       white-space: nowrap;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       min-width: 120px;
@@ -1285,14 +1266,14 @@ export function LoadAIMonitorResource() {
     }
 
     .tab-item:hover {
-      background: rgba(99, 102, 241, 0.05);
-      color: #6366f1;
+      background: color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
+      color: var(--mj-brand-primary);
     }
 
     .tab-item.active {
-      background: white;
-      color: #6366f1;
-      border-bottom-color: #6366f1;
+      background: var(--mj-bg-surface);
+      color: var(--mj-brand-primary);
+      border-bottom-color: var(--mj-brand-primary);
       font-weight: 600;
     }
 
@@ -1305,7 +1286,7 @@ export function LoadAIMonitorResource() {
     .tab-close {
       background: none;
       border: none;
-      color: #999;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       padding: 2px;
       border-radius: 2px;
@@ -1320,7 +1301,7 @@ export function LoadAIMonitorResource() {
 
     .tab-close:hover {
       background: rgba(0, 0, 0, 0.1);
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .tab-content {
@@ -1366,14 +1347,14 @@ export function LoadAIMonitorResource() {
       align-items: center;
       margin-bottom: 20px;
       padding-bottom: 12px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .drill-down-header h4 {
       margin: 0;
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -1387,19 +1368,19 @@ export function LoadAIMonitorResource() {
     }
 
     .timestamp {
-      color: #666;
-      background: #f0f0f0;
+      color: var(--mj-text-muted);
+      background: var(--mj-bg-surface-sunken);
       padding: 4px 8px;
       border-radius: 4px;
     }
 
     .metric-badge {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       padding: 4px 10px;
       border-radius: 6px;
       font-weight: 600;
-      box-shadow: 0 2px 4px rgba(99, 102, 241, 0.25);
+      box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
     }
 
     .loading-spinner {
@@ -1407,7 +1388,7 @@ export function LoadAIMonitorResource() {
       align-items: center;
       justify-content: center;
       padding: 40px;
-      color: #666;
+      color: var(--mj-text-muted);
       gap: 12px;
     }
 
@@ -1415,7 +1396,7 @@ export function LoadAIMonitorResource() {
       display: flex;
       flex-direction: column;
       gap: 0;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       overflow: hidden;
     }
@@ -1424,11 +1405,11 @@ export function LoadAIMonitorResource() {
       display: grid;
       grid-template-columns: 80px 1fr 120px 100px 100px 80px 100px 120px;
       gap: 12px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       padding: 12px 16px;
       font-size: 11px;
       font-weight: 600;
-      color: #666;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -1438,27 +1419,27 @@ export function LoadAIMonitorResource() {
       grid-template-columns: 80px 1fr 120px 100px 100px 80px 100px 120px;
       gap: 12px;
       padding: 12px 16px;
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid var(--mj-bg-surface-sunken);
       cursor: pointer;
       transition: background 0.2s ease;
       align-items: center;
     }
 
     .table-row:hover {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
     }
 
     .table-cell {
       font-size: 12px;
-      color: #333;
+      color: var(--mj-text-primary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     .type-badge {
-      background: linear-gradient(135deg, rgba(100, 116, 139, 0.1) 0%, rgba(71, 85, 105, 0.1) 100%);
-      color: #64748b;
+      background: color-mix(in srgb, var(--mj-text-muted) 10%, var(--mj-bg-surface));
+      color: var(--mj-text-muted);
       padding: 3px 8px;
       border-radius: 4px;
       font-size: 10px;
@@ -1468,13 +1449,13 @@ export function LoadAIMonitorResource() {
     }
 
     .type-badge--prompt {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
-      color: #6366f1;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .type-badge--agent {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
-      color: #10b981;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .no-data {
@@ -1483,13 +1464,13 @@ export function LoadAIMonitorResource() {
       align-items: center;
       justify-content: center;
       padding: 60px 20px;
-      color: #999;
+      color: var(--mj-text-disabled);
       gap: 16px;
     }
 
     .no-data i {
       font-size: 48px;
-      color: #ddd;
+      color: var(--mj-border-default);
     }
 
     .no-data p {
@@ -1520,13 +1501,13 @@ export function LoadAIMonitorResource() {
       flex-direction: column;
       gap: 6px;
       padding: 16px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border-radius: 6px;
     }
 
     .info-item label {
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-muted);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1535,7 +1516,7 @@ export function LoadAIMonitorResource() {
 
     .info-item span {
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
       font-weight: 500;
     }
 
@@ -1547,20 +1528,20 @@ export function LoadAIMonitorResource() {
     }
 
     .status-indicator.active {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .status-indicator.active::before {
       content: '';
       width: 6px;
       height: 6px;
-      background: #4caf50;
+      background: var(--mj-status-success);
       border-radius: 50%;
     }
 
     .model-description {
       padding: 20px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
     }
 
@@ -1568,13 +1549,13 @@ export function LoadAIMonitorResource() {
       margin: 0 0 12px 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .model-description p {
       margin: 0;
       font-size: 13px;
-      color: #666;
+      color: var(--mj-text-muted);
       line-height: 1.5;
     }
 
@@ -1594,21 +1575,21 @@ export function LoadAIMonitorResource() {
       padding: 12px;
       height: 100%;
       overflow-y: auto;
-      background: linear-gradient(180deg, #f8f9ff 0%, #f3f4f6 100%);
+      background: var(--mj-bg-surface-card);
     }
 
     .analysis-panel {
       margin-bottom: 12px;
       border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
-      background: white;
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+      background: var(--mj-bg-surface);
       overflow: hidden;
-      border: 1px solid rgba(99, 102, 241, 0.08);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .analysis-panel:hover {
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
     }
 
     .analysis-panel:last-child {
@@ -1617,8 +1598,8 @@ export function LoadAIMonitorResource() {
 
     .panel-header {
       padding: 14px 18px;
-      background: linear-gradient(180deg, #fafbff 0%, #f8f9fc 100%);
-      border-bottom: 1px solid rgba(99, 102, 241, 0.08);
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
       cursor: pointer;
       display: flex;
       justify-content: space-between;
@@ -1627,7 +1608,7 @@ export function LoadAIMonitorResource() {
     }
 
     .panel-header:hover {
-      background: linear-gradient(180deg, #f0f1ff 0%, #e8e9ff 100%);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .panel-title {
@@ -1635,24 +1616,24 @@ export function LoadAIMonitorResource() {
       align-items: center;
       gap: 10px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       font-size: 14px;
     }
 
     .panel-title i {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       width: 18px;
     }
 
     .panel-toggle-icon {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       font-size: 12px;
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .panel-content {
       padding: 18px;
-      border-top: 1px solid rgba(99, 102, 241, 0.05);
+      border-top: 1px solid color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
       animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
@@ -1725,18 +1706,10 @@ export function LoadAIMonitorResource() {
       }
 
       /* Reduce padding on smaller screens */
-      :host ::ng-deep .k-splitter .k-splitter-pane {
+      :host ::ng-deep as-split-area > .as-split-area-content {
         padding: 5px;
       }
 
-      :host ::ng-deep .k-splitter-horizontal > .k-splitter-pane {
-        padding: 5px 2px;
-      }
-
-      :host ::ng-deep .k-splitter-vertical > .k-splitter-pane {
-        padding: 2px 5px;
-      }
-      
       .tab-header {
         overflow-x: auto;
       }
@@ -1766,7 +1739,7 @@ export function LoadAIMonitorResource() {
       .table-cell:before {
         content: attr(data-label) ': ';
         font-weight: 600;
-        color: #666;
+        color: var(--mj-text-muted);
         font-size: 11px;
         text-transform: uppercase;
       }
@@ -1791,7 +1764,7 @@ export function LoadAIMonitorResource() {
   `]
 })
 export class ExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private stateChangeSubject$ = new Subject<ExecutionMonitoringState>();
 
   // Configuration
@@ -1847,7 +1820,6 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
   constructor(
     private instrumentationService: AIInstrumentationService,
-    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -1889,6 +1861,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   ngOnInit() {
+    super.ngOnInit();
     // Load initial state if provided from resource configuration
     if (this.Data?.Configuration) {
       this.loadUserState(this.Data.Configuration);
@@ -1923,6 +1896,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
     this.stateChangeSubject$.complete();
@@ -2033,7 +2007,6 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       }
     ];
   }
-
 
   onTimeRangeChange(): void {
     // Simply change time range - loading state is managed by the service
@@ -2357,12 +2330,12 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       
       // Load executions for this time period
       const [promptResults, agentResults] = await Promise.all([
-        new RunView().RunView<AIPromptRunEntityExtended>({
+        new RunView().RunView<MJAIPromptRunEntityExtended>({
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
           OrderBy: 'RunAt DESC' 
         }),
-        new RunView().RunView<AIAgentRunEntityExtended>({
+        new RunView().RunView<MJAIAgentRunEntityExtended>({
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
           OrderBy: 'StartedAt DESC' 
@@ -2436,8 +2409,8 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     try {
       // Find model by name
       const rv = new RunView();
-      const result = await rv.RunView<AIModelEntityExtended>({
-        EntityName: 'AI Models',
+      const result = await rv.RunView<MJAIModelEntityExtended>({
+        EntityName: 'MJ: AI Models',
         ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'` 
       });
       

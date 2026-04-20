@@ -1,6 +1,7 @@
 import { EntityFieldInfo, EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import * as fs from 'fs';
 import * as path from 'path';
+import { minimatch } from 'minimatch';
 import {
   ValidationResult,
   ValidationError,
@@ -224,6 +225,22 @@ export class ValidationService {
     parentContext?: { entity: string; field: string },
     depth: number = 0,
   ): Promise<void> {
+    // Skip validation for deletion records - they don't need field validation or reference checks
+    if ((entityData as any).deleteRecord?.delete === true) {
+      // Only validate that primaryKey exists for deletion records
+      if (!entityData.primaryKey) {
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: entityInfo.Name,
+          file: filePath,
+          message: 'Deletion record is missing required "primaryKey" property',
+          suggestion: 'Add primaryKey to identify the record to delete',
+        });
+      }
+      return; // Skip all other validation for deletion records
+    }
+
     // Check nesting depth
     if (depth > this.options.maxNestingDepth) {
       this.addWarning({
@@ -236,10 +253,24 @@ export class ValidationService {
       });
     }
 
-    // Validate fields
-    if (entityData.fields) {
-      await this.validateFields(entityData.fields, entityInfo, filePath, parentContext);
+    // Validate that 'fields' property exists (required)
+    if (!entityData.fields) {
+      const context = parentContext
+        ? `Related entity "${parentContext.field}" in ${parentContext.entity}`
+        : `Record`;
+      this.addError({
+        type: 'field',
+        severity: 'error',
+        entity: entityInfo.Name,
+        file: filePath,
+        message: `${context} is missing required "fields" property. Did you mean "fields" instead of "field"?`,
+        suggestion: 'Each record must have a "fields" object containing the entity field values',
+      });
+      return; // Can't continue validation without fields
     }
+
+    // Validate fields
+    await this.validateFields(entityData.fields, entityInfo, filePath, parentContext);
 
     // Track dependencies
     this.trackEntityDependencies(entityData, entityInfo.Name, filePath);
@@ -285,7 +316,7 @@ export class ValidationService {
       if (!fieldInfo) {
         // Check if this might be a virtual property (getter/setter)
         try {
-          const entityInstance = await this.metadata.GetEntityObject(entityInfo.Name);
+          const entityInstance = await this.metadata.GetEntityObject(entityInfo.Name, getSystemUser());
           // we use this approach instead of checking Entity Fields because
           // some sub-classes implement setter properties that allow you to set
           // values that are not physically in the database but are resolved by the sub-class
@@ -341,8 +372,8 @@ export class ValidationService {
     // Check for required fields
     if (this.options.checkBestPractices) {
       for (const field of entityFields) {
-        // Skip if field allows null or has a value already
-        if (field.AllowsNull || fields[field.Name]) {
+        // Skip if field allows null or has a value already (use 'in' to handle falsy values like 0, false, "")
+        if (field.AllowsNull || field.Name in fields) {
           continue;
         }
 
@@ -376,6 +407,11 @@ export class ValidationService {
 
         // Skip Template field if TemplateText is provided
         if (field.Name === 'Template' && fields['TemplateText']) {
+          continue;
+        }
+
+        // Skip Path on Applications - it is auto-calculated by the server on save
+        if (field.Name === 'Path' && entityInfo.Name === 'MJ: Applications') {
           continue;
         }
 
@@ -474,39 +510,55 @@ export class ValidationService {
     
     // Convert value to string for comparison (in case it's a number or boolean)
     const stringValue = String(value);
-    
-    // Check if the value is in the allowed list
-    if (!allowedValues.includes(stringValue)) {
-      // Check case-insensitive match as a warning
-      const caseInsensitiveMatch = allowedValues.find((av: string) => 
-        av.toLowerCase() === stringValue.toLowerCase()
+
+    // Support comma-delimited multi-value fields (e.g., "Data Expert, Requirements Expert").
+    // Only treat as multi-value if the whole string isn't itself an allowed value and
+    // every comma-separated segment matches an allowed value (case-insensitive).
+    // This avoids incorrectly splitting values that legitimately contain commas.
+    let valuesToCheck = [stringValue];
+    if (stringValue.includes(',') && !allowedValues.includes(stringValue)) {
+      const segments = stringValue.split(',').map((v: string) => v.trim()).filter((v: string) => v.length > 0);
+      const allSegmentsValid = segments.every((seg: string) =>
+        allowedValues.some((av: string) => av.toLowerCase() === seg.toLowerCase())
       );
-      
-      if (caseInsensitiveMatch) {
-        this.addWarning({
-          type: 'validation',
-          severity: 'warning',
-          entity: entityInfo.Name,
-          field: fieldInfo.Name,
-          file: filePath,
-          message: `Field "${fieldInfo.Name}" has value "${stringValue}" which differs in case from allowed value "${caseInsensitiveMatch}"`,
-          suggestion: `Use "${caseInsensitiveMatch}" for consistency`,
-        });
-      } else {
-        // Format the allowed values list for display
-        const allowedValuesList = allowedValues.length <= 10 
-          ? allowedValues.join(', ')
-          : allowedValues.slice(0, 10).join(', ') + `, ... (${allowedValues.length - 10} more)`;
-        
-        this.addError({
-          type: 'field',
-          severity: 'error',
-          entity: entityInfo.Name,
-          field: fieldInfo.Name,
-          file: filePath,
-          message: `Field "${fieldInfo.Name}" has invalid value "${stringValue}"`,
-          suggestion: `Allowed values are: ${allowedValuesList}`,
-        });
+      if (allSegmentsValid) {
+        valuesToCheck = segments;
+      }
+    }
+
+    for (const singleValue of valuesToCheck) {
+      if (!allowedValues.includes(singleValue)) {
+        // Check case-insensitive match as a warning
+        const caseInsensitiveMatch = allowedValues.find((av: string) =>
+          av.toLowerCase() === singleValue.toLowerCase()
+        );
+
+        if (caseInsensitiveMatch) {
+          this.addWarning({
+            type: 'validation',
+            severity: 'warning',
+            entity: entityInfo.Name,
+            field: fieldInfo.Name,
+            file: filePath,
+            message: `Field "${fieldInfo.Name}" has value "${singleValue}" which differs in case from allowed value "${caseInsensitiveMatch}"`,
+            suggestion: `Use "${caseInsensitiveMatch}" for consistency`,
+          });
+        } else {
+          // Format the allowed values list for display
+          const allowedValuesList = allowedValues.length <= 10
+            ? allowedValues.join(', ')
+            : allowedValues.slice(0, 10).join(', ') + `, ... (${allowedValues.length - 10} more)`;
+
+          this.addError({
+            type: 'field',
+            severity: 'error',
+            entity: entityInfo.Name,
+            field: fieldInfo.Name,
+            file: filePath,
+            message: `Field "${fieldInfo.Name}" has invalid value "${singleValue}"`,
+            suggestion: `Allowed values are: ${allowedValuesList}`,
+          });
+        }
       }
     }
   }
@@ -1002,7 +1054,6 @@ export class ValidationService {
 
     // Apply include filter (whitelist)
     if (this.options.include && this.options.include.length > 0) {
-      const minimatch = require('minimatch').minimatch;
       filteredDirs = directories.filter(dirName => {
         return this.options.include!.some(pattern =>
           minimatch(dirName, pattern, { nocase: true })
@@ -1012,7 +1063,6 @@ export class ValidationService {
 
     // Apply exclude filter (blacklist)
     if (this.options.exclude && this.options.exclude.length > 0) {
-      const minimatch = require('minimatch').minimatch;
       filteredDirs = filteredDirs.filter(dirName => {
         return !this.options.exclude!.some(pattern =>
           minimatch(dirName, pattern, { nocase: true })
@@ -1029,10 +1079,13 @@ export class ValidationService {
   private async getMatchingFiles(dir: string, pattern: string): Promise<string[]> {
     const files = fs.readdirSync(dir).filter((f) => fs.statSync(path.join(dir, f)).isFile());
 
+    // Strip leading **/ from glob patterns (we only match in current directory)
+    const normalizedPattern = pattern.replace(/^\*\*\//, '');
+
     // Simple glob pattern matching
-    if (pattern === '*.json') {
+    if (normalizedPattern === '*.json') {
       return files.filter((f) => f.endsWith('.json') && !f.startsWith('.mj-'));
-    } else if (pattern === '.*.json') {
+    } else if (normalizedPattern === '.*.json') {
       return files.filter((f) => f.startsWith('.') && f.endsWith('.json') && !f.startsWith('.mj-'));
     }
 
@@ -1169,7 +1222,7 @@ export class ValidationService {
       // Load all user roles with role names
       const result = await rv.RunView(
         {
-          EntityName: 'User Roles',
+          EntityName: 'MJ: User Roles',
           ExtraFilter: '',
           OrderBy: 'UserID',
           MaxRows: 10000,

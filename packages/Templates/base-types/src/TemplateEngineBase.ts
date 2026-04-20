@@ -1,5 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntityExtended, TemplateParamEntity } from "@memberjunction/core-entities";
+import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
+import { UUIDsEqual } from "@memberjunction/global";
 
 /**
  * TemplateEngine is used for accessing template metadata/caching it, and rendering templates
@@ -14,11 +15,11 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
 
 
     private _Metadata: {
-        TemplateContentTypes: TemplateContentTypeEntity[],
-        TemplateCategories: TemplateCategoryEntity[],
-        Templates: TemplateEntityExtended[],
-        TemplateContents: TemplateContentEntity[],
-        TemplateParams: TemplateParamEntity[]
+        TemplateContentTypes: MJTemplateContentTypeEntity[],
+        TemplateCategories: MJTemplateCategoryEntity[],
+        Templates: MJTemplateEntityExtended[],
+        TemplateContents: MJTemplateContentEntity[],
+        TemplateParams: MJTemplateParamEntity[]
     };
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
@@ -36,25 +37,25 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // post-process the template content and params to associate them with a template
         this.Templates.forEach((t) => {
-            t.Content = this.TemplateContents.filter((tc) => tc.TemplateID === t.ID);
-            t.Params = this.TemplateParams.filter((tp) => tp.TemplateID === t.ID);
+            t.Content = this.TemplateContents.filter((tc) => UUIDsEqual(tc.TemplateID, t.ID));
+            t.Params = this.TemplateParams.filter((tp) => UUIDsEqual(tp.TemplateID, t.ID));
         });
     }
 
-    public get Templates(): TemplateEntityExtended[] {
+    public get Templates(): MJTemplateEntityExtended[] {
         return this._Metadata.Templates;
     }
 
-    public get TemplateContentTypes(): TemplateContentTypeEntity[] {
+    public get TemplateContentTypes(): MJTemplateContentTypeEntity[] {
         return this._Metadata.TemplateContentTypes;
     }
-    public get TemplateCategories(): TemplateCategoryEntity[] {
+    public get TemplateCategories(): MJTemplateCategoryEntity[] {
         return this._Metadata.TemplateCategories;
     }
-    public get TemplateContents(): TemplateContentEntity[] {
+    public get TemplateContents(): MJTemplateContentEntity[] {
         return this._Metadata.TemplateContents;
     }
-    public get TemplateParams(): TemplateParamEntity[] {
+    public get TemplateParams(): MJTemplateParamEntity[] {
         return this._Metadata.TemplateParams;
     }
 
@@ -63,7 +64,7 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
      * @param templateName 
      * @returns 
      */
-    public FindTemplate(templateName: string): TemplateEntityExtended {
+    public FindTemplate(templateName: string): MJTemplateEntityExtended {
         return this.Templates.find((t) => t.Name.trim().toLowerCase() === templateName.trim().toLowerCase())
     }
 }

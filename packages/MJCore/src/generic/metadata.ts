@@ -1,10 +1,10 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, IRunViewProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType, FullTextSearchParams, FullTextSearchResult } from "./interfaces";
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
 import { LogError, LogStatus } from "./logging";
 import { LibraryInfo } from "./libraryInfo";
@@ -17,6 +17,30 @@ import { RunView } from "../views/runView";
  */
 export class Metadata {
     private static _globalProviderKey: string = 'MJ_MetadataProvider';
+    private _entityMapByName = new Map<string, EntityInfo>();
+    private _entityMapByID = new Map<string, EntityInfo>();
+    private _entityMapPopulated = false;
+
+    /**
+     * Bolt Optimization: Populate entity maps on demand to ensure O(1) hash map lookups
+     * in EntityByName and EntityByID instead of O(N) array scans.
+     */
+    private PopulateEntityMaps() {
+        if (this._entityMapPopulated) return;
+
+        const entities = this.Entities;
+        if (!entities || entities.length === 0) return;
+
+        this._entityMapByName.clear();
+        this._entityMapByID.clear();
+        for (const e of entities) {
+            this._entityMapByName.set(e.Name.toLowerCase().trim(), e);
+            if (e.ID) {
+                this._entityMapByID.set(NormalizeUUID(e.ID), e);
+            }
+        }
+        this._entityMapPopulated = true;
+    }
     /**
      * When an application initializes, the Provider package that is being used for that application will handle setting the provider globally via this static property. 
      * This is done so that the provider can be accessed from anywhere in the application without having to pass it around. This pattern is used sparingly in MJ.
@@ -41,6 +65,7 @@ export class Metadata {
      * @returns 
      */
     public async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
+        this._entityMapPopulated = false;
         return await Metadata.Provider.Refresh(providerToUse);
     }
 
@@ -64,15 +89,44 @@ export class Metadata {
         if (!entityName || typeof entityName !== 'string' || entityName.trim().length === 0) {
             throw new Error('EntityByName: entityName must be a non-empty string');
         }
-        return this.Entities.find(e => e.Name.toLowerCase().trim() === entityName.toLowerCase().trim());
+        try {
+            const p = Metadata.Provider;
+            if (p?.EntityByName) {
+                return p.EntityByName(entityName);
+            }
+        } catch { /* Provider not set — fall through to search */ }
+
+        const key = entityName.trim().toLowerCase();
+        this.PopulateEntityMaps();
+
+        if (this._entityMapPopulated) {
+            return this._entityMapByName.get(key);
+        }
+
+        return this.Entities.find(e => e.Name.toLowerCase().trim() === key);
     }
     /**
      * Helper method to find an entity by ID
-     * @param entityID 
-     * @returns 
+     * @param entityID
+     * @returns
      */
     public EntityByID(entityID: string): EntityInfo {
-        return this.Entities.find(e => e.ID === entityID);
+        if (!entityID) return undefined;
+        try {
+            const p = Metadata.Provider;
+            if (p?.EntityByID) {
+                return p.EntityByID(entityID);
+            }
+        } catch { /* Provider not set — fall through to search */ }
+
+        const key = NormalizeUUID(entityID);
+        this.PopulateEntityMaps();
+
+        if (this._entityMapPopulated) {
+            return this._entityMapByID.get(key);
+        }
+
+        return this.Entities.find(e => UUIDsEqual(e.ID, entityID));
     }
 
     public get Queries(): QueryInfo[] {
@@ -134,7 +188,7 @@ export class Metadata {
      * @returns 
      */
     public EntityIDFromName(entityName: string): string {
-        let entity = this.Entities.find(e => e.Name == entityName);
+        const entity = this.EntityByName(entityName);
         if (entity != null)
             return entity.ID;
         else
@@ -143,15 +197,15 @@ export class Metadata {
 
     /**
      * Helper function to return an Entity Name from an Entity ID
-     * @param entityID 
-     * @returns 
+     * @param entityID
+     * @returns
      */
     public EntityNameFromID(entityID: string): string {
-        let entity = this.Entities.find(e => e.ID == entityID);
-        if(entity){
+        const entity = this.EntityByID(entityID);
+        if (entity) {
             return entity.Name;
         }
-        else{
+        else {
             LogError(`Entity ID: ${entityID} not found`);
             return null;
         }
@@ -162,11 +216,11 @@ export class Metadata {
      * @param entityID
      */
     public EntityFromEntityID(entityID: string): EntityInfo | null {
-        let entity = this.Entities.find(e => e.ID == entityID);
-        if(entity){
+        const entity = this.EntityByID(entityID);
+        if (entity) {
             return entity;
         }
-        else{
+        else {
             LogError(`Entity ID: ${entityID} not found`);
             return null;
         }
@@ -188,13 +242,13 @@ export class Metadata {
      * if an entity has TrackRecordChanges = 1, which is the default for most entities. If TrackRecordChanges = 0, this method will return an empty array.
      * 
      * This method is defined in the @memberjunction/core package, which is lower level in the dependency 
-     * hierarchy than the @memberjunction/core-entities package where the RecordChangeEntity class is defined.
-     * For this reason, we are not using the RecordChangeEntity class here, but rather returning a generic type T.
-     * When you call this method, you can specify the type T to be the RecordChangeEntity class or any other class that matches the structure of the record changes.
+     * hierarchy than the @memberjunction/core-entities package where the MJRecordChangeEntity class is defined.
+     * For this reason, we are not using the MJRecordChangeEntity class here, but rather returning a generic type T.
+     * When you call this method, you can specify the type T to be the MJRecordChangeEntity class or any other class that matches the structure of the record changes.
      * For example:
      * ```typescript
      * const md = new Metadata();
-     * const changes: RecordChangeEntity[] = await md.GetRecordChanges<RecordChangeEntity>('MyEntity', myPrimaryKey);
+     * const changes: MJRecordChangeEntity[] = await md.GetRecordChanges<MJRecordChangeEntity>('MyEntity', myPrimaryKey);
      * ```
      * @param entityName 
      * @param primaryKey 
@@ -213,7 +267,7 @@ export class Metadata {
             }
             const rv = new RunView();
             const result = await rv.RunView<T>({
-                EntityName: "Record Changes",
+                EntityName: "MJ: Record Changes",
                 ExtraFilter: `Entity='${entityName}' AND RecordID='${primaryKey.ToConcatenatedString()}'`,
                 OrderBy: "ChangedAt DESC"
             }, contextUser);
@@ -335,7 +389,7 @@ export class Metadata {
      * 
      * @example
      * // Load by named field
-     * const user = await metadata.GetEntityObject<UserEntity>('Users', CompositeKey.FromKeyValuePair('Email', 'user@example.com'));
+     * const user = await metadata.GetEntityObject<MJUserEntity>('Users', CompositeKey.FromKeyValuePair('Email', 'user@example.com'));
      * 
      * @example
      * // Load with composite key
@@ -402,13 +456,13 @@ export class Metadata {
      * @param primaryKey
      * @returns the name of the record
      */
-    public async GetEntityRecordName(entityName: string, primaryKey: CompositeKey, contextUser?: UserInfo): Promise<string> {
+    public async GetEntityRecordName(entityName: string, primaryKey: CompositeKey, contextUser?: UserInfo, forceRefresh: boolean = false): Promise<string> {
         let result = primaryKey.Validate();
         if(!result.IsValid){
             throw new Error(result.ErrorMessage);
         }
-        
-        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKey, contextUser);
+
+        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKey, contextUser, forceRefresh);
     }
 
     /**
@@ -416,7 +470,7 @@ export class Metadata {
      * @param info 
      * @returns an array of EntityRecordNameResult objects
      */
-    public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
+    public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh: boolean = false): Promise<EntityRecordNameResult[]> {
         // valiate to make sure we don't have any null primary keys being sent in
         for (let i = 0; i < info.length; i++) {
             if (!info[i].CompositeKey.KeyValuePairs || info[i].CompositeKey.KeyValuePairs.length == 0) {
@@ -432,7 +486,7 @@ export class Metadata {
             }
 
         }
-        return await Metadata.Provider.GetEntityRecordNames(info, contextUser);          
+        return await Metadata.Provider.GetEntityRecordNames(info, contextUser, forceRefresh);
     }
 
     /**
@@ -558,6 +612,44 @@ export class Metadata {
      */
     get ConfigData(): ProviderConfigDataBase {
         return Metadata.Provider.ConfigData;
+    }
+
+    /**
+     * Performs a full-text search across all entities with FullTextSearchEnabled=true.
+     * Uses the database-native full-text search capabilities through the provider stack.
+     *
+     * @param params Search parameters — SearchText is required, EntityNames and MaxRowsPerEntity are optional
+     * @param contextUser Optional user context for permissions
+     * @returns Search results with title, snippet, and relevance score per match
+     *
+     * @example
+     * ```typescript
+     * const md = new Metadata();
+     * const results = await md.FullTextSearch({
+     *     SearchText: 'claude',
+     *     MaxRowsPerEntity: 5
+     * });
+     * // results.Results contains matches across all FTS-enabled entities
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Search only specific entities
+     * const results = await md.FullTextSearch({
+     *     SearchText: 'quarterly report',
+     *     EntityNames: ['MJ: AI Models', 'MJ: AI Prompts'],
+     *     MaxRowsPerEntity: 10
+     * }, contextUser);
+     * ```
+     *
+     * @see /packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md
+     */
+    public async FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult> {
+        const provider = Metadata.Provider as unknown as IRunViewProvider;
+        if (!provider.FullTextSearch) {
+            return { Success: false, ErrorMessage: 'Provider does not support FullTextSearch', Results: [], TotalCount: 0, EntitiesSearched: 0, ElapsedMs: 0 };
+        }
+        return provider.FullTextSearch(params, contextUser);
     }
 
 }

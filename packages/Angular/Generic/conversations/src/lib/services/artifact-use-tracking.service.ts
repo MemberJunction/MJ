@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Metadata, UserInfo } from '@memberjunction/core';
-import { ArtifactUseEntity } from '@memberjunction/core-entities';
+import { MJArtifactUseEntity } from '@memberjunction/core-entities';
 
 /**
  * Service for tracking artifact usage events.
@@ -61,7 +61,7 @@ export class ArtifactUseTrackingService {
             }
 
             const md = new Metadata();
-            const usage = await md.GetEntityObject<ArtifactUseEntity>('MJ: Artifact Uses');
+            const usage = await md.GetEntityObject<MJArtifactUseEntity>('MJ: Artifact Uses');
 
             usage.ArtifactVersionID = artifactVersionId;
             usage.UserID = currentUser.ID;

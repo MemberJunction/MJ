@@ -1,14 +1,19 @@
 import { Component, Input } from '@angular/core';
 
 @Component({
+  standalone: false,
   selector: 'app-cost-display',
   template: `
     <div class="cost-display" [class]="getMagnitudeClass()">
-      <i class="fa-solid fa-dollar-sign cost-icon" *ngIf="showIcon"></i>
+      @if (showIcon) {
+        <i class="fa-solid fa-dollar-sign cost-icon"></i>
+      }
       <span class="cost-value">{{ formatCost(cost) }}</span>
-      <span class="cost-label" *ngIf="label">{{ label }}</span>
+      @if (label) {
+        <span class="cost-label">{{ label }}</span>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .cost-display {
       display: inline-flex;
@@ -36,19 +41,19 @@ import { Component, Input } from '@angular/core';
     }
 
     .cost-display--low {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .cost-display--medium {
-      color: #ff9800;
+      color: var(--mj-status-warning);
     }
 
     .cost-display--high {
-      color: #f44336;
+      color: var(--mj-status-error);
     }
 
     .cost-display--normal {
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     @media (max-width: 768px) {

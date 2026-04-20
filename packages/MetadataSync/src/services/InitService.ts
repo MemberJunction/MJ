@@ -44,7 +44,7 @@ export class InitService {
       // Set up entity directory if requested
       if (options.setupEntity && options.setupEntity !== 'no') {
         const entityName = options.setupEntity === 'ai-prompts' 
-          ? 'AI Prompts'
+          ? 'MJ: AI Prompts'
           : options.entityName || '';
           
         const dirName = options.setupEntity === 'ai-prompts'

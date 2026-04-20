@@ -7,6 +7,7 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
  * Viewer component for HTML artifacts
  */
 @Component({
+  standalone: false,
   selector: 'mj-html-artifact-viewer',
   template: `
     <div class="html-artifact-viewer" [ngClass]="cssClass">

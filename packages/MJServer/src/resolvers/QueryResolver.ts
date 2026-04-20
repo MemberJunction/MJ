@@ -6,6 +6,7 @@ import { GraphQLJSONObject } from 'graphql-type-json';
 import { Metadata } from '@memberjunction/core';
 import { GetReadOnlyProvider } from '../util.js';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 /**
  * Input type for batch query execution - allows running multiple queries in a single network call
@@ -59,6 +60,12 @@ export class RunQueryResultType {
 
   @Field()
   TotalRowCount: number;
+
+  @Field(() => Int, { nullable: true })
+  PageNumber?: number;
+
+  @Field(() => Int, { nullable: true })
+  PageSize?: number;
 
   @Field()
   ExecutionTime: number;
@@ -141,7 +148,7 @@ export class RunQueriesWithCacheCheckOutput {
 }
 
 @Resolver()
-export class RunQueryResolver {
+export class RunQueryResolver extends ResolverBase {
   private async findQuery(md: IMetadataProvider, QueryID: string, QueryName?: string, CategoryID?: string, CategoryPath?: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
     // Filter queries based on provided criteria
     const queries = md.Queries.filter(q => {
@@ -175,7 +182,7 @@ export class RunQueryResolver {
     }
   }
   @Query(() => RunQueryResultType)
-  async GetQueryData(@Arg('QueryID', () => String) QueryID: string, 
+  async GetQueryData(@Arg('QueryID', () => String) QueryID: string,
                      @Ctx() context: AppContext,
                      @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
                      @Arg('CategoryPath', () => String, {nullable: true}) CategoryPath?: string,
@@ -184,6 +191,9 @@ export class RunQueryResolver {
                      @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                      @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
                      @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
+    // Check API key scope authorization for query execution
+    await this.CheckAPIKeyScopeAuthorization('query:run', QueryID, context.userPayload);
+
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const md = provider as unknown as IMetadataProvider;
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
@@ -229,13 +239,15 @@ export class RunQueryResolver {
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      PageNumber: result.PageNumber,
+      PageSize: result.PageSize,
       CacheHit: (result as any).CacheHit,
       CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
   }
 
   @Query(() => RunQueryResultType)
-  async GetQueryDataByName(@Arg('QueryName', () => String) QueryName: string, 
+  async GetQueryDataByName(@Arg('QueryName', () => String) QueryName: string,
                            @Ctx() context: AppContext,
                            @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
                            @Arg('CategoryPath', () => String, {nullable: true}) CategoryPath?: string,
@@ -244,6 +256,9 @@ export class RunQueryResolver {
                            @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                            @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
                            @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
+    // Check API key scope authorization for query execution
+    await this.CheckAPIKeyScopeAuthorization('query:run', QueryName, context.userPayload);
+
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
     const result = await rq.RunQuery(
@@ -269,6 +284,8 @@ export class RunQueryResolver {
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      PageNumber: result.PageNumber,
+      PageSize: result.PageSize,
       CacheHit: (result as any).CacheHit,
       CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
@@ -325,6 +342,8 @@ export class RunQueryResolver {
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      PageNumber: result.PageNumber,
+      PageSize: result.PageSize,
       CacheHit: (result as any).CacheHit,
       CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
@@ -367,6 +386,8 @@ export class RunQueryResolver {
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      PageNumber: result.PageNumber,
+      PageSize: result.PageSize,
       CacheHit: (result as any).CacheHit,
       CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
@@ -381,6 +402,10 @@ export class RunQueryResolver {
     @Arg('input', () => [RunQueryInput]) input: RunQueryInput[],
     @Ctx() context: AppContext
   ): Promise<RunQueryResultType[]> {
+    // Check API key scope authorization for batch query execution
+    // We check against '*' since this runs multiple queries
+    await this.CheckAPIKeyScopeAuthorization('query:run', '*', context.userPayload);
+
     const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
 
@@ -413,6 +438,8 @@ export class RunQueryResolver {
         ExecutionTime: result.ExecutionTime ?? 0,
         ErrorMessage: result.ErrorMessage || '',
         AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+        PageNumber: result.PageNumber,
+        PageSize: result.PageSize,
         CacheHit: (result as Record<string, unknown>).CacheHit as boolean | undefined,
         CacheTTLRemaining: (result as Record<string, unknown>).CacheTTLRemaining as number | undefined
       };
@@ -460,6 +487,8 @@ export class RunQueryResolver {
         ExecutionTime: result.ExecutionTime ?? 0,
         ErrorMessage: result.ErrorMessage || '',
         AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+        PageNumber: result.PageNumber,
+        PageSize: result.PageSize,
         CacheHit: (result as Record<string, unknown>).CacheHit as boolean | undefined,
         CacheTTLRemaining: (result as Record<string, unknown>).CacheTTLRemaining as number | undefined
       };
@@ -478,6 +507,9 @@ export class RunQueryResolver {
     @Arg('input', () => [RunQueryWithCacheCheckInput]) input: RunQueryWithCacheCheckInput[],
     @Ctx() context: AppContext
   ): Promise<RunQueriesWithCacheCheckOutput> {
+    // Check API key scope authorization for batch query execution
+    await this.CheckAPIKeyScopeAuthorization('query:run', '*', context.userPayload);
+
     try {
       const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
 

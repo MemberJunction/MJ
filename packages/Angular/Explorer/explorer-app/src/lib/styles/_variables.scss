@@ -1,0 +1,29 @@
+/* ===========================================
+   Legacy Variables (with token fallbacks)
+
+   These variables maintain backward compatibility
+   with existing styles while the codebase migrates
+   to design tokens.
+
+   DEPRECATED: Use design tokens from _tokens.scss
+   These will be removed in a future version.
+   =========================================== */
+
+:root {
+  /* Legacy colors - map to design tokens where possible */
+  --navy: var(--mj-color-brand-900);
+  --light-blue: var(--mj-color-accent-300);
+  --gray-600: var(--mj-color-neutral-100);
+  --gray-700: var(--mj-color-neutral-200);
+  --gray-800: var(--mj-color-neutral-400);
+  --gray-900: var(--mj-color-neutral-700);
+  --mj-blue: var(--mj-color-brand-500);
+  --white-color: var(--mj-color-neutral-0);
+  --med-gray: var(--mj-color-neutral-200);
+
+  /* Legacy effects - map to design tokens */
+  --shadow: var(--mj-shadow-md);
+  --border-radius: var(--mj-radius-lg);
+  --transition-time: var(--mj-transition-base);
+
+}

@@ -1,0 +1,67 @@
+<div class="view-header">
+  <!-- View Name (click to edit) -->
+  <div class="view-name-container">
+    @if (IsEditing) {
+      <input
+        type="text"
+        class="name-input"
+        [(ngModel)]="EditValue"
+        (keydown.enter)="ConfirmEdit()"
+        (keydown.escape)="CancelEdit()"
+        (blur)="ConfirmEdit()"
+        #nameInput
+      />
+    } @else {
+      <span
+        class="view-name"
+        [class.editable]="CanEdit"
+        (click)="StartEdit()"
+        [title]="CanEdit ? 'Click to rename' : ViewName">
+        {{ ViewName }}
+      </span>
+    }
+
+    <!-- Shared Indicator -->
+    @if (IsShared) {
+      <span class="shared-badge" title="Shared view">
+        <i class="fa-solid fa-users"></i>
+      </span>
+    }
+
+    <!-- Modified Badge -->
+    @if (IsModified) {
+      <span class="modified-badge">Modified</span>
+    }
+  </div>
+
+  <!-- Actions (shown when modified) -->
+  @if (IsModified && CanEdit) {
+    <div class="view-actions">
+      <button
+        class="action-btn save-btn"
+        (click)="OnSave()"
+        [disabled]="IsSaving"
+        title="Save changes">
+        @if (IsSaving) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+        } @else {
+          <i class="fa-solid fa-save"></i>
+        }
+      </button>
+      <button
+        class="action-btn save-as-btn"
+        (click)="OnSaveAsNew()"
+        [disabled]="IsSaving"
+        title="Save as new view">
+        <i class="fa-solid fa-plus"></i>
+      </button>
+      <button
+        class="action-btn revert-btn"
+        (click)="OnRevert()"
+        [disabled]="IsSaving"
+        title="Revert to saved state">
+        <i class="fa-solid fa-undo"></i>
+      </button>
+    </div>
+  }
+</div>

@@ -1,233 +1,120 @@
 # @memberjunction/ng-tasks
 
-Angular components for task visualization and management with Gantt chart support.
-
-## Features
-
-- 📋 **Simple List View** - Clean hierarchical task list with indentation for subtasks
-- 📊 **Gantt Chart View** - Timeline visualization using Frappe Gantt
-- 🔄 **View Toggle** - Easy switching between list and Gantt views
-- 🎨 **Clean Design** - Modern, minimal UI that matches MemberJunction aesthetics
-- 📦 **Standalone Components** - Can be used independently or together
-- 🔗 **Dependency Support** - Visualizes task dependencies and relationships
+Angular components for task visualization and management with Gantt chart support. Provides a simple hierarchical list view and a Gantt timeline view with dependency arrows, both working with MemberJunction `TaskEntity` data.
 
 ## Installation
 
-This package is part of the MemberJunction monorepo. Install from the repository root:
-
 ```bash
-npm install
+npm install @memberjunction/ng-tasks
+```
+
+## Overview
+
+The tasks package provides two interchangeable visualization modes for task data: a clean hierarchical list and a Gantt chart timeline. A wrapper component provides a toggle to switch between views. Tasks support dependencies via `DependsOnTaskID`, displayed as indentation in list view and dependency arrows in Gantt view.
+
+```mermaid
+flowchart TD
+    subgraph Container["TaskComponent"]
+        A["View Toggle"]
+        A -->|simple| B["SimpleTaskViewerComponent"]
+        A -->|gantt| C["GanttTaskViewerComponent"]
+    end
+    subgraph List["Simple View"]
+        D["Hierarchical list with indentation"]
+        E["Status icons and color coding"]
+        F["Expand/collapse subtasks"]
+    end
+    subgraph Gantt["Gantt View"]
+        G["Timeline bars"]
+        H["Dependency arrows"]
+        I["Progress indicators"]
+    end
+
+    B --> List
+    C --> Gantt
+
+    style Container fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style List fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style Gantt fill:#7c5295,stroke:#563a6b,color:#fff
+```
+
+## Usage
+
+### Standalone Component Import
+
+```typescript
+import { TaskComponent } from '@memberjunction/ng-tasks';
+
+@Component({
+  imports: [TaskComponent],
+  // ...
+})
+export class YourComponent {}
+```
+
+### Basic Usage
+
+```html
+<mj-task
+  [tasks]="projectTasks"
+  [title]="'Project Tasks'"
+  [description]="'Active tasks for Q1'"
+  [viewMode]="'simple'"
+  (taskClicked)="onTaskClick($event)"
+  (viewModeChanged)="onViewModeChange($event)">
+</mj-task>
+```
+
+### Individual Sub-Components
+
+```html
+<!-- List view only -->
+<mj-simple-task-viewer
+  [tasks]="tasks"
+  (taskClicked)="onTaskClick($event)">
+</mj-simple-task-viewer>
+
+<!-- Gantt view only -->
+<mj-gantt-task-viewer
+  [tasks]="tasks"
+  (taskClicked)="onTaskClick($event)">
+</mj-gantt-task-viewer>
 ```
 
 ## Components
 
-### TaskComponent
+| Component | Selector | Purpose |
+|-----------|----------|---------|
+| `TaskComponent` | `mj-task` | Composite wrapper with view toggle |
+| `SimpleTaskViewerComponent` | `mj-simple-task-viewer` | Hierarchical list view |
+| `GanttTaskViewerComponent` | `mj-gantt-task-viewer` | Gantt chart timeline |
 
-Main component that composes SimpleTaskViewer and GanttTaskViewer with view toggle.
+## TaskComponent API
 
-```typescript
-import { TaskComponent } from '@memberjunction/ng-tasks';
+### Inputs
 
-@Component({
-  template: `
-    <mj-task
-      [tasks]="myTasks"
-      [title]="'Project Tasks'"
-      [description]="'Tasks for the current project'"
-      [viewMode]="'simple'"
-      (taskClicked)="onTaskClick($event)"
-      (viewModeChanged)="onViewModeChange($event)">
-    </mj-task>
-  `
-})
-export class MyComponent {
-  myTasks: TaskEntity[] = [...];
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `tasks` | `TaskEntity[]` | `[]` | Array of task entities |
+| `title` | `string` | `undefined` | Optional header title |
+| `description` | `string` | `undefined` | Optional header description |
+| `showHeader` | `boolean` | `true` | Show the header area |
+| `viewMode` | `TaskViewMode` | `'simple'` | Initial view mode: `'simple'` or `'gantt'` |
 
-  onTaskClick(task: TaskEntity) {
-    console.log('Task clicked:', task);
-  }
+### Outputs
 
-  onViewModeChange(mode: TaskViewMode) {
-    console.log('View mode changed to:', mode);
-  }
-}
-```
+| Event | Type | Description |
+|-------|------|-------------|
+| `taskClicked` | `EventEmitter<TaskEntity>` | Task was clicked |
+| `viewModeChanged` | `EventEmitter<TaskViewMode>` | View mode toggled |
 
-**Inputs:**
-- `tasks: TaskEntity[]` - Array of tasks to display
-- `title?: string` - Optional header title
-- `description?: string` - Optional header description
-- `showHeader: boolean` - Whether to show the header (default: true)
-- `viewMode: TaskViewMode` - Initial view mode: 'simple' or 'gantt' (default: 'simple')
+## Exported Types
 
-**Outputs:**
-- `taskClicked: EventEmitter<TaskEntity>` - Emitted when a task is clicked
-- `viewModeChanged: EventEmitter<TaskViewMode>` - Emitted when view mode changes
-
-### SimpleTaskViewerComponent
-
-Displays tasks in a clean, hierarchical list format.
-
-```typescript
-import { SimpleTaskViewerComponent } from '@memberjunction/ng-tasks';
-
-@Component({
-  template: `
-    <mj-simple-task-viewer
-      [tasks]="myTasks"
-      (taskClicked)="onTaskClick($event)">
-    </mj-simple-task-viewer>
-  `
-})
-export class MyComponent {
-  myTasks: TaskEntity[] = [...];
-}
-```
-
-**Features:**
-- Hierarchical display with indentation
-- Expand/collapse for tasks with subtasks
-- Status icons with color coding
-- Due dates and assignee information
-- Click to interact with tasks
-
-### GanttTaskViewerComponent
-
-Displays tasks in a Gantt chart timeline using Frappe Gantt.
-
-```typescript
-import { GanttTaskViewerComponent } from '@memberjunction/ng-tasks';
-
-@Component({
-  template: `
-    <mj-gantt-task-viewer
-      [tasks]="myTasks"
-      (taskClicked)="onTaskClick($event)">
-    </mj-gantt-task-viewer>
-  `
-})
-export class MyComponent {
-  myTasks: TaskEntity[] = [...];
-}
-```
-
-**Features:**
-- Timeline-based visualization
-- Task dependencies with arrows
-- Progress indicators
-- Interactive task bars
-- Hover tooltips with task details
-- Multiple view modes (Day, Week, Month)
-
-## Task Data Structure
-
-Tasks must be `TaskEntity` objects from `@memberjunction/core-entities`. Key fields:
-
-```typescript
-interface TaskEntity {
-  ID: string;
-  Title: string;
-  Description?: string;
-  Status: 'Pending' | 'In Progress' | 'Complete';
-  StartDate?: Date;
-  DueDate?: Date;
-  DependsOnTaskID?: string;  // For task dependencies
-  AssignedTo?: string;
-  // ... other MJ entity fields
-}
-```
-
-## Task Dependencies
-
-Tasks can have dependencies using the `DependsOnTaskID` field:
-
-```typescript
-const tasks = [
-  {
-    ID: 'task-1',
-    Title: 'Design Database Schema',
-    Status: 'Complete',
-    StartDate: new Date('2025-01-01'),
-    DueDate: new Date('2025-01-05')
-  },
-  {
-    ID: 'task-2',
-    Title: 'Implement Backend API',
-    Status: 'In Progress',
-    StartDate: new Date('2025-01-06'),
-    DueDate: new Date('2025-01-15'),
-    DependsOnTaskID: 'task-1'  // Depends on task-1
-  },
-  {
-    ID: 'task-3',
-    Title: 'Build Frontend UI',
-    Status: 'Pending',
-    StartDate: new Date('2025-01-16'),
-    DueDate: new Date('2025-01-25'),
-    DependsOnTaskID: 'task-2'  // Depends on task-2
-  }
-];
-```
-
-In **Simple View**, dependent tasks are indented under their parent tasks.
-In **Gantt View**, dependency arrows connect the tasks.
-
-## Styling
-
-The components use a clean, modern design that matches MemberJunction's aesthetic:
-
-- **Colors:** Blue (#3B82F6) for primary actions, gray scale for text
-- **Typography:** System fonts with consistent sizing
-- **Spacing:** Comfortable padding and margins
-- **Icons:** Font Awesome icons throughout
-
-You can customize styles by targeting the component classes or using Angular's view encapsulation.
-
-## Integration with Conversations
-
-The ng-tasks package is designed to work seamlessly with the conversations package:
-
-```typescript
-import { TaskComponent } from '@memberjunction/ng-tasks';
-
-@Component({
-  selector: 'mj-tasks-full-view',
-  imports: [TaskComponent],
-  template: `
-    <mj-task
-      [tasks]="allTasks"
-      [title]="'All Tasks'"
-      [viewMode]="'simple'"
-      (taskClicked)="navigateToTask($event)">
-    </mj-task>
-  `
-})
-export class TasksFullViewComponent {
-  // ... component implementation
-}
-```
-
-## Browser Support
-
-- Chrome/Edge (latest)
-- Firefox (latest)
-- Safari (latest)
+- `TaskViewMode` -- `'simple' | 'gantt'`
+- `GanttTask` -- Interface for Gantt chart task data
 
 ## Dependencies
 
-- **Angular:** ^18.0.0
-- **Frappe Gantt:** ^0.6.1 (for Gantt view)
-- **@memberjunction/core:** ^2.104.0
-- **@memberjunction/core-entities:** ^2.104.0
-
-## License
-
-MIT
-
-## Contributing
-
-This package is part of the MemberJunction open-source project. Contributions are welcome!
-
-## Support
-
-For issues or questions, please file an issue on the [MemberJunction GitHub repository](https://github.com/MemberJunction/MJ).
+- [@memberjunction/core](../../MJCore/README.md) -- Core framework
+- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- TaskEntity
+- `frappe-gantt` -- Gantt chart rendering (peer dependency)

@@ -1,10 +1,39 @@
-# OpenRouter Provider for MemberJunction
+# @memberjunction/ai-openrouter
 
-This package provides integration with OpenRouter's API for accessing multiple AI models through a unified interface within the MemberJunction framework.
+MemberJunction AI provider for OpenRouter, a unified API gateway that provides access to 100+ AI models from multiple providers (OpenAI, Anthropic, Google, Meta, Mistral, and more) through a single endpoint.
 
-## Overview
+## Architecture
 
-The OpenRouter provider implements MemberJunction's AI framework interfaces, allowing seamless access to 100+ AI models from various providers (OpenAI, Anthropic, Google, Meta, etc.) through OpenRouter's unified API.
+```mermaid
+graph TD
+    A["OpenRouterLLM<br/>(Provider)"] -->|extends| B["OpenAILLM<br/>(@memberjunction/ai-openai)"]
+    B -->|extends| C["BaseLLM<br/>(@memberjunction/ai)"]
+    A -->|overrides base URL| D["OpenRouter API<br/>(openrouter.ai/api/v1)"]
+    D -->|routes to| E["OpenAI"]
+    D -->|routes to| F["Anthropic"]
+    D -->|routes to| G["Google"]
+    D -->|routes to| H["Meta / Mistral / Others"]
+    C -->|registered via| I["@RegisterClass"]
+
+    style A fill:#7c5295,stroke:#563a6b,color:#fff
+    style B fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style C fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style D fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style E fill:#b8762f,stroke:#8a5722,color:#fff
+    style F fill:#b8762f,stroke:#8a5722,color:#fff
+    style G fill:#b8762f,stroke:#8a5722,color:#fff
+    style H fill:#b8762f,stroke:#8a5722,color:#fff
+    style I fill:#b8762f,stroke:#8a5722,color:#fff
+```
+
+## Features
+
+- **Multi-Model Access**: Access models from OpenAI, Anthropic, Google, Meta, Mistral, xAI, and many more
+- **Automatic Routing**: OpenRouter handles provider selection and failover
+- **OpenAI Compatible**: Inherits all features from the OpenAI provider
+- **Streaming**: Full streaming support for real-time responses
+- **Thinking/Reasoning**: Thinking block extraction for reasoning models
+- **Response Formats**: JSON mode support for compatible models
 
 ## Installation
 
@@ -12,166 +41,44 @@ The OpenRouter provider implements MemberJunction's AI framework interfaces, all
 npm install @memberjunction/ai-openrouter
 ```
 
-## Configuration
-
-Configure the OpenRouter provider in your MemberJunction setup:
-
-```typescript
-import { OpenRouterLLM } from '@memberjunction/ai-openrouter';
-
-// The provider will automatically use the API key from AIModelAPIConnection
-// configuration in the database
-```
-
-## Features
-
-- **Multi-Model Support**: Access models from OpenAI, Anthropic, Google, Meta, Mistral, and more
-- **Automatic Routing**: OpenRouter automatically routes requests to the best available provider
-- **Response Format Support**: JSON mode support for compatible models
-- **Streaming**: Full streaming support for real-time responses
-- **Tool/Function Calling**: Support for models with function calling capabilities
-- **Comprehensive Error Handling**: Detailed error messages and retry logic
-
 ## Usage
 
-### Basic Text Generation
-
 ```typescript
 import { OpenRouterLLM } from '@memberjunction/ai-openrouter';
-import { GetAIAPIKey } from '@memberjunction/ai';
 
-const llm = new OpenRouterLLM();
-const apiKey = await GetAIAPIKey('OpenRouter');
+const llm = new OpenRouterLLM('your-openrouter-api-key');
 
-const result = await llm.InvokeModel({
-  apiKey,
-  modelName: 'anthropic/claude-3.5-sonnet',
-  messages: [
-    { role: 'user', content: 'Explain quantum computing in simple terms' }
-  ]
+const result = await llm.ChatCompletion({
+    model: 'anthropic/claude-sonnet-4-20250514',
+    messages: [
+        { role: 'user', content: 'Explain quantum computing in simple terms.' }
+    ]
 });
 
-console.log(result.data.OutputText);
+console.log(result.data.choices[0].message.content);
 ```
 
-### Streaming Responses
+## How It Works
 
-```typescript
-const result = await llm.InvokeModel({
-  apiKey,
-  modelName: 'openai/gpt-4-turbo',
-  messages: [
-    { role: 'user', content: 'Write a story about a robot' }
-  ],
-  streaming: true,
-  streamCallback: (token) => {
-    process.stdout.write(token);
-  }
-});
-```
-
-### JSON Response Format
-
-```typescript
-const result = await llm.InvokeModel({
-  apiKey,
-  modelName: 'anthropic/claude-3.5-sonnet',
-  messages: [
-    { role: 'user', content: 'List 3 programming languages as JSON' }
-  ],
-  responseFormat: 'json_object'
-});
-
-const languages = JSON.parse(result.data.OutputText);
-```
-
-### Using Tools/Functions
-
-```typescript
-const tools = [{
-  type: 'function',
-  function: {
-    name: 'get_weather',
-    description: 'Get the current weather',
-    parameters: {
-      type: 'object',
-      properties: {
-        location: { type: 'string', description: 'City name' }
-      },
-      required: ['location']
-    }
-  }
-}];
-
-const result = await llm.InvokeModel({
-  apiKey,
-  modelName: 'openai/gpt-4-turbo',
-  messages: [
-    { role: 'user', content: 'What\'s the weather in New York?' }
-  ],
-  tools,
-  toolChoice: 'auto'
-});
-```
+`OpenRouterLLM` is a thin subclass of `OpenAILLM` that redirects all API calls to OpenRouter's endpoint at `https://openrouter.ai/api/v1`. Since OpenRouter implements an OpenAI-compatible API, all chat, streaming, and parameter handling logic is inherited from the OpenAI provider.
 
 ## Supported Models
 
-OpenRouter provides access to models from:
+OpenRouter provides access to models from many providers. Use the provider-prefixed model names:
 
-- **OpenAI**: GPT-4, GPT-3.5, o1-preview, o1-mini
-- **Anthropic**: Claude 3.5 Sonnet, Claude 3 Opus/Haiku
-- **Google**: Gemini Pro, Gemini Flash
-- **Meta**: Llama 3.1 (8B, 70B, 405B)
-- **Mistral**: Mistral Large, Mixtral
-- **xAI**: Grok
-- **And many more...**
+- `openai/gpt-4`, `openai/gpt-4-turbo`
+- `anthropic/claude-sonnet-4-20250514`, `anthropic/claude-3-opus`
+- `google/gemini-pro`, `google/gemini-flash`
+- `meta-llama/llama-3.1-70b`
+- `mistralai/mistral-large`
+- And 100+ more at [openrouter.ai/models](https://openrouter.ai/models)
 
-See [OpenRouter's model list](https://openrouter.ai/models) for complete details.
+## Class Registration
 
-## Model Parameters
+Registered as `OpenRouterLLM` via `@RegisterClass(BaseLLM, 'OpenRouterLLM')`.
 
-The following parameters can be configured:
+## Dependencies
 
-- `temperature`: Controls randomness (0.0 to 2.0)
-- `maxTokens`: Maximum tokens to generate
-- `topP`: Nucleus sampling parameter
-- `topK`: Top-k sampling parameter
-- `frequencyPenalty`: Penalize frequent tokens
-- `presencePenalty`: Penalize tokens based on presence
-- `stopSequences`: Sequences that stop generation
-- `seed`: For deterministic outputs (when supported)
-
-## Error Handling
-
-The provider includes comprehensive error handling:
-
-```typescript
-try {
-  const result = await llm.InvokeModel({...});
-  if (!result.success) {
-    console.error('Model invocation failed:', result.errorMessage);
-  }
-} catch (error) {
-  console.error('Unexpected error:', error);
-}
-```
-
-## API Key Management
-
-API keys are managed through MemberJunction's AIModelAPIConnection system. Configure your OpenRouter API key in the database:
-
-1. Add an AIModelAPIConnection record for OpenRouter
-2. Set the APIKey field to your OpenRouter API key
-3. The provider will automatically retrieve and use this key
-
-## Rate Limiting
-
-OpenRouter handles rate limiting across all providers. The package includes automatic retry logic for rate limit errors.
-
-## Contributing
-
-This package is part of the MemberJunction open-source project. Contributions are welcome!
-
-## License
-
-MIT - See the MemberJunction repository for details.
+- `@memberjunction/ai` - Core AI abstractions
+- `@memberjunction/ai-openai` - OpenAI provider (parent class)
+- `@memberjunction/global` - Class registration

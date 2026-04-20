@@ -1,2 +1,97 @@
-<mj-user-view-grid [Params]="params" [AutoRefreshOnInit]="false">
-</mj-user-view-grid>
+<div class="search-result-container">
+  <!-- Content Header — matches Data Explorer layout -->
+  <div class="content-header">
+    <div class="header-left">
+      <i [class]="EntityIcon" class="entity-icon"></i>
+      <h2 class="entity-title">{{ EntityInfo?.DisplayNameOrName || entity }}</h2>
+      @if (SearchState === 'loading') {
+        <span class="record-count">Searching for "{{ searchInput }}"...</span>
+      } @else if (SearchState === 'no-results') {
+        <span class="record-count">No results for "{{ searchInput }}"</span>
+      } @else if (ResultCount > 0) {
+        <span class="record-count">{{ ResultCount | number }} {{ ResultCount === 1 ? 'result' : 'results' }} for "{{ searchInput }}"</span>
+      }
+    </div>
+
+    @if (SearchState === 'viewer' && EntityInfo) {
+      <div class="header-right">
+        <!-- New Record -->
+        <button
+          class="header-action-btn"
+          (click)="OnCreateNewRecord()"
+          title="New Record">
+          <i class="fa-solid fa-plus"></i>
+        </button>
+
+        <!-- View Mode Toggle -->
+        <div class="view-mode-toggle">
+          <button
+            class="toggle-btn"
+            [class.active]="CurrentViewMode === 'grid'"
+            (click)="SetViewMode('grid')"
+            title="Grid View">
+            <i class="fa-solid fa-list"></i>
+          </button>
+          <button
+            class="toggle-btn"
+            [class.active]="CurrentViewMode === 'cards'"
+            (click)="SetViewMode('cards')"
+            title="Cards View">
+            <i class="fa-solid fa-grip"></i>
+          </button>
+          @if (HasDateFields) {
+            <button
+              class="toggle-btn"
+              [class.active]="CurrentViewMode === 'timeline'"
+              (click)="SetViewMode('timeline')"
+              title="Timeline View">
+              <i class="fa-solid fa-timeline"></i>
+            </button>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Loading state -->
+  @if (SearchState === 'loading') {
+    <div class="loading-container">
+      <mj-loading text="Searching..."></mj-loading>
+    </div>
+  }
+
+  <!-- No results -->
+  @if (SearchState === 'no-results') {
+    <div class="empty-state">
+      <i class="fa-solid fa-magnifying-glass empty-icon"></i>
+      <p>No results found for "<strong>{{ searchInput }}</strong>" in {{ entity }}</p>
+      <p class="empty-hint">Try a different search term or entity</p>
+    </div>
+  }
+
+  <!-- Single result — auto-navigating to entity form -->
+  @if (SearchState === 'single-result') {
+    <div class="single-result-state">
+      <i class="fa-solid fa-arrow-right redirect-icon"></i>
+      <p>Found 1 result &mdash; opening record...</p>
+    </div>
+  }
+
+  <!-- Entity Viewer (2+ results) -->
+  @if (SearchState === 'viewer' && EntityInfo) {
+    <div class="viewer-container">
+      <mj-entity-viewer
+        [entity]="EntityInfo"
+        [viewMode]="CurrentViewMode"
+        [filterText]="searchInput"
+        [config]="ViewerConfig"
+        [showGridToolbar]="true"
+        [gridToolbarConfig]="GridToolbarConfig"
+        (viewModeChange)="OnViewModeChanged($event)"
+        (dataLoaded)="OnDataLoaded($event)"
+        (recordOpened)="OnRecordOpened($event)"
+        (addRequested)="OnCreateNewRecord()">
+      </mj-entity-viewer>
+    </div>
+  }
+</div>

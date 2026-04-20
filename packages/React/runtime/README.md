@@ -1,21 +1,70 @@
 # @memberjunction/react-runtime
 
-Platform-agnostic React component runtime for MemberJunction. This package provides core compilation, registry, execution capabilities, and dynamic library management for React components in any JavaScript environment.
+Platform-agnostic React component runtime for MemberJunction. Provides core compilation, registry, dynamic library management, and execution capabilities for React components in any JavaScript environment.
+
+## Architecture
+
+```mermaid
+graph TD
+    subgraph "@memberjunction/react-runtime"
+        A[createReactRuntime] --> B[ComponentCompiler]
+        A --> C[ComponentRegistry]
+        A --> D[ComponentResolver]
+        A --> E[ComponentManager]
+
+        B --> F["Babel Standalone<br/>(JSX Compilation)"]
+
+        C --> G[Component Store]
+        C --> H[Namespace Support]
+
+        D --> I[Component Resolution]
+        D --> J[Dependency Resolution]
+
+        E --> K[Load + Compile + Register]
+
+        subgraph "Utilities"
+            L[LibraryLoader]
+            M[LibraryRegistry]
+            N[CacheManager]
+            O[ResourceManager]
+            P[ErrorBoundary]
+            Q[PropBuilder]
+            R[ReactRootManager]
+        end
+    end
+
+    subgraph "Runtime APIs"
+        S[ComponentHierarchyRegistrar]
+        T[StandardLibraries]
+        U[ComponentErrorAnalyzer]
+    end
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#7c5295,stroke:#563a6b,color:#fff
+    style E fill:#7c5295,stroke:#563a6b,color:#fff
+    style L fill:#b8762f,stroke:#8a5722,color:#fff
+    style N fill:#b8762f,stroke:#8a5722,color:#fff
+    style P fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Overview
 
-The React Runtime package enables dynamic compilation and execution of React components from source code, with flexible external library management. It works in both browser and Node.js environments, making it suitable for client-side rendering, server-side testing, and multi-tenant applications with different library requirements.
+This package enables dynamic compilation and execution of React components at runtime. Components can be loaded from MemberJunction's database, compiled with Babel, registered into a component registry, and rendered with full dependency resolution.
 
-## Features
+**Key capabilities:**
 
-- **Dynamic Compilation**: Transform JSX and React code at runtime using Babel
-- **Component Registry**: Manage compiled components with namespace support
-- **Dependency Resolution**: Handle component hierarchies and dependencies
-- **Dynamic Library Management**: Configure and load external libraries at runtime
-- **Error Boundaries**: Comprehensive error handling for React components
-- **Platform Agnostic**: Works in any JavaScript environment
-- **Type Safe**: Full TypeScript support with strict typing
-- **Organization-Specific Libraries**: Support for different library sets per organization
+- **Component Compilation**: Transpiles JSX/TSX source code using Babel standalone
+- **Component Registry**: LRU-cached registry with namespace support for up to 1000 components
+- **Component Resolution**: Resolves component specs against the registry with dependency tracking
+- **Component Manager**: Unified API for loading, compiling, and registering components in one call
+- **Library Management**: Dynamic library loading, registration, and dependency resolution
+- **Error Boundaries**: Configurable error boundary creation with logging
+- **Prop Building**: Type-safe prop construction with callback normalization and style processing
+- **React Root Management**: Managed React root lifecycle for mounting/unmounting components
+- **Caching**: LRU cache with configurable TTL for compiled components
+- **UMD Build**: Ships both CommonJS and UMD bundles for browser environments
 
 ## Installation
 
@@ -23,737 +72,139 @@ The React Runtime package enables dynamic compilation and execution of React com
 npm install @memberjunction/react-runtime
 ```
 
-## Basic Usage
+## Usage
 
-### Creating a Runtime Instance
+### Quick Start
 
 ```typescript
 import { createReactRuntime } from '@memberjunction/react-runtime';
 import * as Babel from '@babel/standalone';
 
-// Create runtime with Babel instance
-const runtime = createReactRuntime(Babel);
-
-// The runtime now includes the unified ComponentManager
-const { compiler, registry, resolver, manager } = runtime;
-```
-
-## NEW: Unified ComponentManager (Recommended)
-
-The ComponentManager is a new unified API that simplifies component loading by handling fetching, compilation, registration, and caching in a single, efficient operation. It eliminates duplicate work and provides better performance.
-
-### Why Use ComponentManager?
-
-- **Single API**: One method handles everything - no need to coordinate multiple components
-- **Efficient**: Automatically prevents duplicate fetching and compilation
-- **Smart Caching**: Multi-level caching with automatic invalidation
-- **Registry Tracking**: Built-in usage tracking for licensing compliance
-- **Better Error Handling**: Comprehensive error reporting with phases
-
-### Loading a Component Hierarchy
-
-```typescript
-import { ComponentSpec } from '@memberjunction/interactive-component-types';
-
-const componentSpec: ComponentSpec = {
-  name: 'Dashboard',
-  location: 'registry',
-  registry: 'SkipAI',
-  namespace: 'analytics',
-  version: '1.0.0',
-  dependencies: [
-    { name: 'Chart', location: 'registry', registry: 'SkipAI' },
-    { name: 'Grid', location: 'embedded', code: '...' }
-  ]
-};
-
-// Load the entire hierarchy with one call
-const result = await runtime.manager.loadHierarchy(componentSpec, {
-  contextUser: currentUser,
-  defaultNamespace: 'Global',
-  defaultVersion: 'latest',
-  returnType: 'both'
-});
-
-if (result.success) {
-  // Everything is loaded and ready
-  const rootComponent = result.rootComponent;
-  const resolvedSpec = result.resolvedSpec;
-  
-  console.log(`Loaded ${result.loadedComponents.length} components`);
-  console.log(`Stats:`, result.stats);
-}
-```
-
-### Loading a Single Component
-
-```typescript
-// For simple single component loading
-const result = await runtime.manager.loadComponent(componentSpec, {
-  contextUser: currentUser,
-  forceRefresh: false, // Use cache if available
-  trackUsage: true     // Track usage for licensing
-});
-
-if (result.success) {
-  const component = result.component;
-  const wasFromCache = result.fromCache;
-}
-```
-
-### Configuration Options
-
-```typescript
 const runtime = createReactRuntime(Babel, {
-  manager: {
-    debug: true,                  // Enable debug logging
-    maxCacheSize: 100,            // Max cached specs
-    cacheTTL: 3600000,           // 1 hour cache TTL
-    enableUsageTracking: true,    // Track registry usage
-    dependencyBatchSize: 5,       // Parallel dependency loading
-    fetchTimeout: 30000          // 30 second timeout
-  }
+    compiler: { minify: false, sourceMaps: true, cache: true },
+    registry: { maxComponents: 500 }
 });
+
+// Compile a component from source
+const compiled = runtime.compiler.compile(`
+    function MyComponent({ name }) {
+        return <div>Hello, {name}!</div>;
+    }
+`);
+
+// Register it
+runtime.registry.register('MyComponent', compiled);
+
+// Resolve for rendering
+const resolved = runtime.resolver.resolve({ name: 'MyComponent' });
 ```
 
-### Cache Management
+### Component Manager (Unified API)
 
 ```typescript
-// Clear all caches
-runtime.manager.clearCache();
-
-// Get cache statistics
-const stats = runtime.manager.getCacheStats();
-console.log(`Cached specs: ${stats.fetchCacheSize}`);
-console.log(`Usage notifications: ${stats.notificationsCount}`);
-```
-
-## Legacy Approach (Still Supported)
-
-### Compiling a Component (Old Way)
-
-```typescript
-const componentCode = `
-  function MyComponent({ data, userState, callbacks }) {
-    return (
-      <div>
-        <h1>Hello, {data.name}!</h1>
-        <button onClick={() => callbacks.RefreshData()}>
-          Refresh
-        </button>
-      </div>
-    );
-  }
-`;
-
-// Compile the component
-const result = await runtime.compiler.compile({
-  componentName: 'MyComponent',
-  componentCode: componentCode
+const result = await runtime.manager.load({
+    componentSpec: { name: 'MyWidget', source: jsxSource },
+    autoRegister: true,
+    resolveLibraries: true
 });
 
 if (result.success) {
-  // Register the compiled component
-  runtime.registry.register(
-    'MyComponent',
-    result.component.component,
-    'MyNamespace',
-    'v1'
-  );
+    // Component is compiled, registered, and ready to render
+    const Component = result.component;
 }
 ```
 
-## Dynamic Library Management (New)
-
-### Loading Libraries with Configuration
+### Library Management
 
 ```typescript
-import { LibraryLoader, StandardLibraryManager } from '@memberjunction/react-runtime';
+import { LibraryRegistry, LibraryLoader } from '@memberjunction/react-runtime';
 
-// Define custom library configuration
-const libraryConfig = {
-  libraries: [
-    {
-      id: 'lodash',
-      name: 'lodash',
-      displayName: 'Lodash',
-      category: 'utility',
-      globalVariable: '_',
-      version: '4.17.21',
-      cdnUrl: 'https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js',
-      description: 'Utility library',
-      isEnabled: true,
-      isCore: false
-    },
-    {
-      id: 'chart-js',
-      name: 'Chart',
-      displayName: 'Chart.js',
-      category: 'charting',
-      globalVariable: 'Chart',
-      version: '4.4.0',
-      cdnUrl: 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js',
-      isEnabled: true,
-      isCore: false
-    }
-    // ... more libraries
-  ],
-  metadata: {
-    version: '1.0.0',
-    lastUpdated: '2024-01-01'
-  }
-};
-
-// Load libraries with custom configuration
-const result = await LibraryLoader.loadAllLibraries(libraryConfig);
-```
-
-### Managing Library Configurations
-
-```typescript
-import { StandardLibraryManager } from '@memberjunction/react-runtime';
-
-// Set a custom configuration
-StandardLibraryManager.setConfiguration(libraryConfig);
-
-// Get enabled libraries
-const enabledLibs = StandardLibraryManager.getEnabledLibraries();
-
-// Get libraries by category
-const chartingLibs = StandardLibraryManager.getLibrariesByCategory('charting');
-const uiLibs = StandardLibraryManager.getLibrariesByCategory('ui');
-
-// Get component libraries (excludes runtime-only libraries)
-const componentLibs = StandardLibraryManager.getComponentLibraries();
-
-// Reset to default configuration
-StandardLibraryManager.resetToDefault();
-```
-
-### Library Categories
-
-Libraries are organized into categories:
-- **`runtime`**: Core runtime libraries (React, ReactDOM, Babel) - not exposed to components
-- **`ui`**: UI component libraries (Ant Design, React Bootstrap)
-- **`charting`**: Data visualization libraries (Chart.js, D3.js)
-- **`utility`**: Utility libraries (Lodash, Day.js)
-
-### Runtime-Only Libraries
-
-Libraries marked with `isRuntimeOnly: true` are used by the runtime infrastructure but not exposed to generated components. This includes React, ReactDOM, and Babel.
-
-### Using the Component
-
-```typescript
-// Get React context (provided by your environment)
-const React = window.React; // or require('react')
-const ReactDOM = window.ReactDOM; // or require('react-dom')
-
-// Create runtime context with loaded libraries
-const context = { 
-  React, 
-  ReactDOM,
-  libraries: result.libraries // From LibraryLoader
-};
-
-// Get the compiled component
-const MyComponent = runtime.registry.get('MyComponent', 'MyNamespace');
-
-// Execute the component factory
-const componentObject = MyComponent(context);
-
-// The componentObject contains the React component and method accessors
-const { component, print, refresh, getCurrentDataState, isDirty } = componentObject;
-
-// Render with props
-const props = {
-  data: { name: 'World' },
-  userState: {},
-  callbacks: {
-    OpenEntityRecord: (entityName, key) => console.log('Open entity:', entityName),
-    RegisterMethod: (methodName, handler) => {
-      // Component will register its methods here
-    }
-  }
-};
-
-React.createElement(component, props);
-```
-
-## Component Methods System
-
-### Overview
-
-Components can expose methods that allow containers to interact with them beyond just passing props. This enables scenarios like:
-- AI agents introspecting component state
-- Containers checking if components have unsaved changes
-- Programmatic validation and reset operations
-- Custom business logic exposed by components
-
-### How Components Register Methods
-
-Components register their methods during initialization using the `RegisterMethod` callback:
-
-```typescript
-function MyComponent({ callbacks, data, userState }) {
-  const [currentData, setCurrentData] = React.useState(data);
-  const [isDirty, setIsDirty] = React.useState(false);
-  
-  // Register methods on mount
-  React.useEffect(() => {
-    if (callbacks?.RegisterMethod) {
-      // Register standard methods
-      callbacks.RegisterMethod('getCurrentDataState', () => {
-        return currentData;
-      });
-      
-      callbacks.RegisterMethod('isDirty', () => {
-        return isDirty;
-      });
-      
-      callbacks.RegisterMethod('reset', () => {
-        setCurrentData(data);
-        setIsDirty(false);
-      });
-      
-      callbacks.RegisterMethod('validate', () => {
-        // Custom validation logic
-        if (!currentData.name) {
-          return { valid: false, errors: ['Name is required'] };
-        }
-        return true;
-      });
-      
-      // Register custom methods
-      callbacks.RegisterMethod('exportToCSV', () => {
-        // Custom export logic
-        return convertToCSV(currentData);
-      });
-    }
-  }, [callbacks, currentData, isDirty]);
-  
-  return (
-    <div>
-      {/* Component UI */}
-    </div>
-  );
-}
-```
-
-### Standard Methods
-
-The ComponentObject interface defines standard methods that components can optionally implement:
-
-- **`getCurrentDataState()`**: Returns the current data being displayed
-- **`getDataStateHistory()`**: Returns an array of timestamped state changes
-- **`validate()`**: Validates the component state
-- **`isDirty()`**: Checks if there are unsaved changes
-- **`reset()`**: Resets the component to initial state
-- **`scrollTo(target)`**: Scrolls to a specific element
-- **`focus(target)`**: Sets focus to an element
-- **`print()`**: Prints the component content
-- **`refresh()`**: Refreshes the component data
-
-### Using Component Methods
-
-After compilation, the ComponentObject provides typed access to standard methods:
-
-```typescript
-// Compile the component
-const result = await compiler.compile({
-  componentName: 'MyComponent',
-  componentCode: componentCode
+// Register a library for dependency resolution
+LibraryRegistry.register({
+    name: 'recharts',
+    module: rechartsModule,
+    version: '2.x'
 });
 
-// Get the component object
-const componentObject = result.component.component(context);
-
-// Call standard methods directly (type-safe)
-const currentData = componentObject.getCurrentDataState();
-const isDirty = componentObject.isDirty();
-const validationResult = componentObject.validate();
-
-if (isDirty) {
-  componentObject.reset();
-}
-
-// Call custom methods via invokeMethod
-if (componentObject.hasMethod('exportToCSV')) {
-  const csvData = componentObject.invokeMethod('exportToCSV');
-}
-```
-
-### Method Availability
-
-All methods are optional. The runtime provides sensible defaults when methods aren't registered:
-
-- `getCurrentDataState()` returns `undefined`
-- `getDataStateHistory()` returns `[]`
-- `isDirty()` returns `false`
-- `validate()` returns `true`
-- Other methods perform no operation if not implemented
-
-### Integration with Angular
-
-The Angular wrapper (`@memberjunction/ng-react`) provides strongly-typed access to all standard methods:
-
-```typescript
-export class MyDashboard {
-  @ViewChild(MJReactComponent) reactComponent!: MJReactComponent;
-  
-  checkComponentState() {
-    // Standard methods have full TypeScript support
-    if (this.reactComponent.isDirty()) {
-      const data = this.reactComponent.getCurrentDataState();
-      console.log('Component has unsaved changes:', data);
-    }
-    
-    // Validate before saving
-    const validation = this.reactComponent.validate();
-    if (validation === true || validation.valid) {
-      // Save data...
-    }
-    
-    // Custom methods
-    if (this.reactComponent.hasMethod('generateReport')) {
-      const report = this.reactComponent.invokeMethod('generateReport', options);
-    }
-  }
-}
-```
-
-### Method Declaration in Component Spec
-
-Components can declare their supported methods in the ComponentSpec for discovery:
-
-```typescript
-const componentSpec = {
-  name: 'MyComponent',
-  code: '...',
-  methods: [
-    {
-      name: 'getCurrentDataState',
-      category: 'standard',
-      description: 'Returns current component data',
-      returnType: 'DataState | undefined'
-    },
-    {
-      name: 'exportToExcel',
-      category: 'custom',
-      description: 'Exports data to Excel format',
-      parameters: [{
-        name: 'options',
-        type: '{includeHeaders?: boolean, sheetName?: string}',
-        required: false
-      }],
-      returnType: 'Promise<Blob>'
-    }
-  ]
-};
-```
-
-## Advanced Features
-
-### Component Hierarchies
-
-```typescript
-const parentSpec = {
-  componentName: 'ParentComponent',
-  componentCode: '...',
-  childComponents: [
-    {
-      componentName: 'ChildComponent1',
-      componentCode: '...'
-    },
-    {
-      componentName: 'ChildComponent2',
-      componentCode: '...'
-    }
-  ]
-};
-
-// Resolve all components in hierarchy
-const components = runtime.resolver.resolveComponents(parentSpec);
+// Load libraries dynamically
+const loader = new LibraryLoader();
+const result = await loader.load({ name: 'recharts', url: cdnUrl });
 ```
 
 ### Error Boundaries
 
 ```typescript
-import { createErrorBoundary } from '@memberjunction/react-runtime';
+import { createErrorBoundary, withErrorBoundary } from '@memberjunction/react-runtime';
 
-const ErrorBoundary = createErrorBoundary(React, {
-  onError: (error, errorInfo) => {
-    console.error('Component error:', error);
-  },
-  fallback: <div>Something went wrong</div>,
-  recovery: 'retry'
+// Create an error boundary component
+const ErrorBoundary = createErrorBoundary({
+    fallback: (error) => <div>Something went wrong: {error.message}</div>,
+    onError: (error) => logError(error)
 });
 
-// Wrap your component
-<ErrorBoundary>
-  <YourComponent />
-</ErrorBoundary>
+// Or wrap an existing component
+const SafeComponent = withErrorBoundary(MyComponent, { fallback: ErrorFallback });
 ```
 
-### Component Registry Management
+### Prop Building
 
 ```typescript
-// Check if component exists
-if (runtime.registry.has('MyComponent')) {
-  // Get component with reference counting
-  const component = runtime.registry.get('MyComponent');
-  
-  // Release when done
-  runtime.registry.release('MyComponent');
-}
+import { buildComponentProps, normalizeCallbacks } from '@memberjunction/react-runtime';
 
-// Get registry statistics
-const stats = runtime.registry.getStats();
-console.log(`Total components: ${stats.totalComponents}`);
-
-// Clean up unused components
-const removed = runtime.registry.cleanup();
-console.log(`Removed ${removed} unused components`);
+const props = buildComponentProps(rawData, {
+    normalizeStyles: true,
+    normalizeCallbacks: true,
+    validateProps: true
+});
 ```
 
-### External Registry Components
+## Exported Modules
 
-The React Runtime supports loading components from external registries through the `ComponentRegistryService`:
-
-```typescript
-// Component specs can reference external registries
-const componentSpec = {
-  name: 'DataGrid',
-  location: 'registry',
-  registry: 'MJ',  // Registry name (globally unique)
-  namespace: 'core/ui',
-  version: 'latest',
-  // ... other spec fields
-};
-
-// The runtime will:
-// 1. Look up the registry by name in ComponentRegistries
-// 2. Fetch the component via GraphQL/MJServer
-// 3. Calculate SHA-256 hash of the spec for cache validation
-// 4. Compile and cache the component
-```
-
-#### GraphQL Client Configuration
-
-The `ComponentRegistryService` requires a GraphQL client for fetching from external registries. It supports two configuration approaches:
-
-1. **Automatic Fallback** (Recommended): If no client is explicitly provided, the service automatically creates a `GraphQLComponentRegistryClient` using `Metadata.Provider`
-   ```typescript
-   // No explicit client needed - will create one from Metadata.Provider
-   const registryService = ComponentRegistryService.getInstance(compiler, context);
-   // The service will automatically:
-   // 1. Check if a client was provided
-   // 2. If not, dynamically import @memberjunction/graphql-dataprovider
-   // 3. Create a GraphQLComponentRegistryClient with Metadata.Provider
-   // 4. Cache and reuse this client for subsequent calls
-   ```
-
-2. **Explicit Client**: Provide a custom GraphQL client that implements `IComponentRegistryClient`
-   ```typescript
-   // Custom client implementation
-   const customClient: IComponentRegistryClient = {
-     GetRegistryComponent: async (params) => { /* ... */ }
-   };
-   
-   // Pass during creation
-   const registryService = ComponentRegistryService.getInstance(
-     compiler, context, debug, customClient
-   );
-   
-   // Or set later
-   registryService.setGraphQLClient(customClient);
-   ```
-
-The automatic fallback ensures external registry fetching works out-of-the-box in MemberJunction environments where `Metadata.Provider` is configured. The dynamic import approach allows the React runtime to function even when `@memberjunction/graphql-dataprovider` is not available.
-
-#### Component Caching with SHA-256 Validation
-
-The runtime uses SHA-256 hashing to ensure cached components are up-to-date:
-
-```typescript
-// When fetching external components:
-// 1. Fetch spec from registry
-// 2. Calculate SHA-256 hash using Web Crypto API
-// 3. Compare with cached component's hash
-// 4. Recompile only if spec has changed
-
-// Note: Requires secure context (HTTPS or localhost)
-// Web Crypto API is used for consistent hashing across environments
-```
-
-#### Registry Types
-
-- **Local Registry** (`registry` field undefined): Components stored in local database
-- **External Registry** (`registry` field defined): Components fetched from remote registries via MJServer
-
-## Debug Configuration
-
-The React runtime includes comprehensive debug logging that can be controlled via environment configuration. This is useful for troubleshooting component loading, compilation, and runtime issues.
-
-### Enabling Debug Mode
-
-Debug mode controls verbose console logging throughout the React runtime. When enabled, you'll see detailed information about:
-
-- Component compilation and registration
-- Library loading and initialization
-- Component lifecycle events
-- Method registration and invocation
-- Cache hits and misses
-- Performance metrics
-
-### Configuration Methods
-
-#### Option 1: Angular Environment (Recommended for MJExplorer)
-
-Set the `DEBUG` flag in your Angular environment files:
-
-```typescript
-// In environment.development.ts
-export const environment = {
-  // ... other settings
-  DEBUG: true  // Enable detailed debug logging
-};
-
-// In main.ts (before Angular bootstraps)
-import { environment } from './environments/environment';
-import { ReactDebugConfig } from '@memberjunction/ng-react';
-
-ReactDebugConfig.setDebugMode(environment.DEBUG || false);
-```
-
-#### Option 2: Window Global (For Quick Testing)
-
-Useful for temporarily enabling debug mode without changing code:
-
-```typescript
-// In browser console or before React components load
-(window as any).__MJ_REACT_DEBUG_MODE__ = true;
-```
-
-#### Option 3: Direct API Call
-
-Call the API directly in your initialization code:
-
-```typescript
-import { ReactDebugConfig } from '@memberjunction/ng-react';
-
-// Enable debug mode
-ReactDebugConfig.setDebugMode(true);
-
-// Check current debug mode
-const isDebug = ReactDebugConfig.getDebugMode();
-```
-
-### Debug Mode Priority
-
-The debug mode follows this priority order (highest to lowest):
-
-1. **Window global override** (`__MJ_REACT_DEBUG_MODE__`) - Highest priority
-2. **Static property** (set via `setDebugMode()` or environment) - Default
-3. **Default** - `false` (debug disabled)
-
-### When to Enable Debug Mode
-
-✅ **Enable in these scenarios:**
-- During local development
-- When troubleshooting component loading failures
-- When debugging component compilation errors
-- When investigating library dependency issues
-- When analyzing runtime performance
-
-❌ **Disable in these scenarios:**
-- Production environments (cleaner console output)
-- Staging environments (unless actively debugging)
-- Performance profiling (reduces console overhead)
-- Automated testing (reduces noise in logs)
-
-### Example Debug Output
-
-When debug mode is enabled, you'll see output like:
-
-```
-[ReactRuntime] Compiling component: Dashboard
-[ReactRuntime] Component registered: Dashboard (namespace: analytics, version: 1.0.0)
-[ReactRuntime] Loading library: lodash (version: 4.17.21)
-[ReactRuntime] Library loaded successfully: lodash
-[ReactRuntime] Cache hit for component: Chart@analytics:1.0.0
-[ReactRuntime] Method registered: getCurrentDataState
-[ReactRuntime] Component hierarchy loaded: 5 components in 234ms
-```
+| Module | Key Exports |
+|--------|-------------|
+| **Compiler** | `ComponentCompiler`, `getBabelConfig`, `getJSXConfig` |
+| **Registry** | `ComponentRegistry`, `ComponentResolver`, `ComponentRegistryService` |
+| **Manager** | `ComponentManager`, `LoadOptions`, `LoadResult` |
+| **Runtime** | `createErrorBoundary`, `buildComponentProps`, `ComponentHierarchyRegistrar`, `ReactRootManager` |
+| **Utilities** | `LibraryLoader`, `LibraryRegistry`, `CacheManager`, `ResourceManager`, `StandardLibraries` |
 
 ## Configuration
 
-### Compiler Configuration
-
 ```typescript
-const runtime = createReactRuntime(Babel, {
-  compiler: {
-    babel: {
-      presets: ['react'],
-      plugins: ['transform-optional-chaining']
+const DEFAULT_CONFIGS = {
+    compiler: {
+        babel: { presets: ['react'], plugins: [] },
+        minify: false,
+        sourceMaps: false,
+        cache: true,
+        maxCacheSize: 100
     },
-    minify: true,
-    sourceMaps: true,
-    cache: true,
-    maxCacheSize: 200
-  }
-});
+    registry: {
+        maxComponents: 1000,
+        cleanupInterval: 60000,
+        useLRU: true,
+        enableNamespaces: true
+    }
+};
 ```
 
-### Registry Configuration
+## Build Outputs
 
-```typescript
-const runtime = createReactRuntime(Babel, {
-  registry: {
-    maxComponents: 500,
-    cleanupInterval: 30000, // 30 seconds
-    useLRU: true,
-    enableNamespaces: true
-  }
-});
-```
+- **CommonJS**: `dist/index.js` -- for Node.js and bundler environments
+- **UMD**: `dist/umd/` -- for direct browser usage via script tags
 
-## API Reference
+## Dependencies
 
-### Types
-
-- `CompileOptions` - Options for compiling components
-- `ComponentProps` - Standard props passed to components
-- `ComponentCallbacks` - Callback functions available to components
-- `RegistryEntry` - Registry entry with metadata
-- `LibraryConfiguration` - Configuration for external libraries
-- `ExternalLibraryConfig` - Individual library configuration
-
-### Classes
-
-- `ComponentCompiler` - Compiles React components from source
-- `ComponentRegistry` - Manages compiled components
-- `ComponentResolver` - Resolves component dependencies
-- `StandardLibraryManager` - Manages library configurations
-- `LibraryLoader` - Loads external libraries dynamically
-
-### Utilities
-
-- `createErrorBoundary()` - Creates error boundary components
-- `buildComponentProps()` - Builds standardized component props
-- `wrapComponent()` - Wraps components with additional functionality
-- `createStandardLibraries()` - Creates standard library object from globals
-
-## Best Practices
-
-1. **Always Set Babel Instance**: Call `setBabelInstance()` before compiling
-2. **Use Namespaces**: Organize components with namespaces
-3. **Handle Errors**: Always check compilation results for errors
-4. **Clean Up**: Use registry cleanup for long-running applications
-5. **Type Safety**: Leverage TypeScript types for better development experience
-6. **Library Management**: Configure only necessary libraries for security and performance
-7. **Runtime Separation**: Keep runtime libraries separate from component libraries
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/core` | Core MJ functionality |
+| `@memberjunction/global` | MJGlobal utilities |
+| `@memberjunction/interactive-component-types` | Component type definitions |
+| `@memberjunction/core-entities` | Entity types |
+| `@memberjunction/graphql-dataprovider` | GraphQL data access |
+| `@babel/standalone` | Runtime JSX compilation |
+| `rxjs` | Observable patterns |
 
 ## License
 
-See the main MemberJunction LICENSE file in the repository root.
+ISC

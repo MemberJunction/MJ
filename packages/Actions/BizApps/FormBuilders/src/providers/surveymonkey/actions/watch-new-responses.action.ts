@@ -219,10 +219,3 @@ export class WatchNewSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction 
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadWatchNewSurveyMonkeyResponsesAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

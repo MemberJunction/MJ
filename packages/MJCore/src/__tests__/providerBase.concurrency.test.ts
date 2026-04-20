@@ -130,7 +130,7 @@ describe('ProviderBase Concurrency Tests', () => {
 
         test('GetEntityObject during refresh does not fail', async () => {
             /**
-             * Simulates QueryEntity trying to create child entities during parallel saves
+             * Simulates MJQueryEntity trying to create child entities during parallel saves
              * This is the exact scenario causing "Entity not found in metadata" errors
              */
 
@@ -178,7 +178,7 @@ describe('ProviderBase Concurrency Tests', () => {
                 // Random delay to simulate different save times
                 await new Promise(resolve => setTimeout(resolve, Math.random() * 100));
 
-                // Each save accesses metadata (like QueryEntity.extractAndSyncData)
+                // Each save accesses metadata (like MJQueryEntity.extractAndSyncData)
                 const entities = provider.Entities;
 
                 // CRITICAL: Should always have valid data

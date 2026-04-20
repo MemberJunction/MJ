@@ -1,0 +1,107 @@
+[
+  {
+    "fields": {
+      "Name": "Ahal",
+      "Code": "A",
+      "ISO3166_2": "TM-A",
+      "Latitude": 38.8103,
+      "Longitude": 59.0838,
+      "BoundaryGeoJSON": "@file:by-country/TM/boundaries/TM-A.geojson",
+      "CommonAliases": [
+        "Ahal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TM"
+    },
+    "primaryKey": {
+      "ID": "A85DD6FB-D1EE-42C3-89DB-98A387B93858"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.731Z",
+      "checksum": "c3e5c9138cd48f4ce54b0e11cb94cdd6e990a5dd82938aa00095fb1fa7f74d01"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Balkan",
+      "Code": "B",
+      "ISO3166_2": "TM-B",
+      "Latitude": 39.7244,
+      "Longitude": 55.2571,
+      "BoundaryGeoJSON": "@file:by-country/TM/boundaries/TM-B.geojson",
+      "CommonAliases": [
+        "Balkan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TM"
+    },
+    "primaryKey": {
+      "ID": "FEE29AEA-CD4C-405F-8782-6613B7142E31"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.749Z",
+      "checksum": "28603ed9e8a9a5c5bd82998019d0dd54c235e598ce7b8af69fa74b1082f3e0d8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Daşhowuz",
+      "Code": "D",
+      "ISO3166_2": "TM-D",
+      "Latitude": 41.3981,
+      "Longitude": 58.769,
+      "BoundaryGeoJSON": "@file:by-country/TM/boundaries/TM-D.geojson",
+      "CommonAliases": [
+        "Daşhowuz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TM"
+    },
+    "primaryKey": {
+      "ID": "8E4DA502-D48C-4384-935A-AA83D8A95D43"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.765Z",
+      "checksum": "b7cc0c9db0df5e9b6ebebee6849c20b4e448428e60f5b51a48f4ed89ff418bf9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lebap",
+      "Code": "L",
+      "ISO3166_2": "TM-L",
+      "Latitude": 38.6421,
+      "Longitude": 63.4465,
+      "BoundaryGeoJSON": "@file:by-country/TM/boundaries/TM-L.geojson",
+      "CommonAliases": [
+        "Lebap"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TM"
+    },
+    "primaryKey": {
+      "ID": "F6ACB583-ACBD-49E7-81E8-FFD921BABD8E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.781Z",
+      "checksum": "30dd96090f37c22ffa55f49a930364ab0e68e6906f25adcba6a0521572a4befd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mary",
+      "Code": "M",
+      "ISO3166_2": "TM-M",
+      "Latitude": 36.7994,
+      "Longitude": 62.5938,
+      "BoundaryGeoJSON": "@file:by-country/TM/boundaries/TM-M.geojson",
+      "CommonAliases": [
+        "Mary"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TM"
+    },
+    "primaryKey": {
+      "ID": "A8AA8B57-A5A2-4D3D-939C-DB293AE443C2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.795Z",
+      "checksum": "2d824557f50387ebeb44b6bf320761f08d1f8e7f73758754c096686d4a5f3e71"
+    }
+  }
+]

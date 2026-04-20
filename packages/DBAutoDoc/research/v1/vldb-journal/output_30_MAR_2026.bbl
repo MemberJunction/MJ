@@ -1,0 +1,177 @@
+\begin{thebibliography}{10}
+\providecommand{\url}[1]{{#1}}
+\providecommand{\urlprefix}{URL }
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{DOI~\discretionary{}{}{}#1}\else
+  \providecommand{\doi}{DOI~\discretionary{}{}{}\begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem{abedjan2015profiling}
+Abedjan, Z., Golab, L., Naumann, F.: Profiling relational data: A survey.
+\newblock The VLDB Journal \textbf{24}(4), 557--581 (2015).
+\newblock \doi{10.1007/s00778-015-0389-y}
+
+\bibitem{abedjan2018book}
+Abedjan, Z., Golab, L., Naumann, F., Papenbrock, T.: Data Profiling.
+\newblock Synthesis Lectures on Data Management. Morgan \& Claypool (2018).
+\newblock \doi{10.2200/S00878ED1V01Y201810DTM052}
+
+\bibitem{bai2022constitutional}
+Bai, Y., Kadavath, S., Kundu, S., Askell, A., Kernion, J., Jones, A., Chen, A., Goldie, A., Mirhoseini, A., McKinnon, C., et~al.: Constitutional {AI}: Harmlessness from {AI} feedback.
+\newblock arXiv preprint arXiv:2212.08073  (2022)
+
+\bibitem{bauckmann2007spider}
+Bauckmann, J., Leser, U., Naumann, F., Tietz, V.: Efficiently detecting inclusion dependencies.
+\newblock In: Proceedings of the IEEE International Conference on Data Engineering (ICDE), pp. 1448--1450 (2007)
+
+\bibitem{besta2024got}
+Besta, M., Blach, N., Kubicek, A., Gerstenberger, R., Podstawski, M., Gianinazzi, L., Gajda, J., Lehmann, T., Nyczyk, H., Slowinski, P., Hoefler, T.: Graph of thoughts: Solving elaborate problems with large language models.
+\newblock In: Proceedings of the AAAI Conference on Artificial Intelligence, vol.~38, pp. 17,682--17,690 (2024).
+\newblock \doi{10.1609/aaai.v38i16.29720}
+
+\bibitem{chen2021evaluating}
+Chen, M., Tworek, J., Jun, H., Yuan, Q., Pinto, H.P.d.O., Kaplan, J., Edwards, H., Burda, Y., Joseph, N., Brockman, G., et~al.: Evaluating large language models trained on code.
+\newblock arXiv preprint arXiv:2107.03374  (2021)
+
+\bibitem{demarchi2009sindd}
+De~Marchi, F., Lopes, S., Petit, J.M.: Unary and n-ary inclusion dependency discovery in relational databases.
+\newblock Journal of Intelligent Information Systems \textbf{32}(1), 53--73 (2009)
+
+\bibitem{dursch2019ind}
+D\"{u}rsch, F., Stebner, A., Windheuser, F., Fischer, M., Friedrich, T., Streubel, N., Bleifu\ss, T., Harmouch, H., Jiang, L., Papenbrock, T., Naumann, F.: Inclusion dependency discovery: An experimental evaluation of thirteen algorithms.
+\newblock In: Proceedings of the ACM International Conference on Information and Knowledge Management (CIKM), pp. 219--228 (2019).
+\newblock \doi{10.1145/3357384.3357916}
+
+\bibitem{feng2020codebert}
+Feng, Z., Guo, D., Tang, D., Duan, N., Feng, X., Gong, M., Shou, L., Qin, B., Liu, T., Jiang, D., Zhou, M.: {CodeBERT}: A pre-trained model for programming and natural languages.
+\newblock In: Findings of the Association for Computational Linguistics: EMNLP 2020, pp. 1536--1547 (2020).
+\newblock \doi{10.18653/v1/2020.findings-emnlp.139}
+
+\bibitem{gao2024dailsql}
+Gao, D., Wang, H., Li, Y., Sun, X., Qian, Y., Ding, B., Zhou, J.: Text-to-{SQL} empowered by large language models: A benchmark evaluation.
+\newblock Proceedings of the VLDB Endowment \textbf{17}(5), 1132--1145 (2024).
+\newblock \doi{10.14778/3641204.3641221}
+
+\bibitem{huhtala1999tane}
+Huhtala, Y., K\"arkk\"ainen, J., Porkka, P., Toivonen, H.: {TANE}: An efficient algorithm for discovering functional and approximate dependencies.
+\newblock The Computer Journal \textbf{42}(2), 100--111 (1999).
+\newblock \doi{10.1093/comjnl/42.2.100}
+
+\bibitem{hulsebos2019sherlock}
+Hulsebos, M., Hu, K., Bakker, M., Zgraggen, E., Satyanarayan, A., Kraska, T., Demiralp, c., Hidalgo, C.: Sherlock: A deep learning approach to semantic data type detection.
+\newblock In: Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD), pp. 1500--1508 (2019).
+\newblock \doi{10.1145/3292500.3330993}
+
+\bibitem{ilyas2004cords}
+Ilyas, I.F., Markl, V., Haas, P., Brown, P., Aboulnaga, A.: {CORDS}: Automatic discovery of correlations and soft functional dependencies.
+\newblock In: Proceedings of the ACM SIGMOD International Conference on Management of Data, pp. 647--658 (2004).
+\newblock \doi{10.1145/1007568.1007641}
+
+\bibitem{jiang2020holistic}
+Jiang, L., Naumann, F.: Holistic primary key and foreign key detection.
+\newblock Journal of Intelligent Information Systems \textbf{54}(3), 439--461 (2020).
+\newblock \doi{10.1007/s10844-019-00562-z}
+
+\bibitem{khatiwada2022alite}
+Khatiwada, A., Shraga, R., Gatterbauer, W., Miller, R.J.: Integrating data lake tables.
+\newblock Proceedings of the VLDB Endowment \textbf{16}(4), 932--945 (2022).
+\newblock \doi{10.14778/3574245.3574274}
+
+\bibitem{koutras2021valentine}
+Koutras, C., Siachamis, G., Ionescu, A., Psarakis, K., Brons, J., Bozovic, M., Karagiannis, S., van Keulen, M., Stoyanovich, J., Abedjan, Z.: Valentine: Evaluating matching techniques for dataset discovery.
+\newblock In: Proceedings of the IEEE International Conference on Data Engineering (ICDE), pp. 468--479 (2021).
+\newblock \doi{10.1109/ICDE51399.2021.00047}
+
+\bibitem{li2023bird}
+Li, J., Hui, B., Qu, G., Yang, J., Li, B., Li, B., Wang, B., Qin, B., Geng, R., Huo, N., et~al.: Can {LLM} already serve as a database interface? a {BIg} bench for large-scale database grounded text-to-{SQLs}.
+\newblock In: Advances in Neural Information Processing Systems (NeurIPS) (2023)
+
+\bibitem{liu2025magneto}
+Liu, Y., Pena, E.H.M., Santos, A., Wu, E., Freire, J.: Magneto: Combining small and large language models for effective schema matching.
+\newblock Proceedings of the VLDB Endowment \textbf{18}(8), 2681--2694 (2025)
+
+\bibitem{madaan2023selfrefine}
+Madaan, A., Tandon, N., Gupta, P., Hallinan, S., Gao, L., Wiegreffe, S., Alon, U., Dziri, N., Prabhumoye, S., Yang, Y., et~al.: Self-refine: Iterative refinement with self-feedback.
+\newblock In: Advances in Neural Information Processing Systems (NeurIPS) (2023)
+
+\bibitem{narayan2022foundation}
+Narayan, A., Chami, I., Orr, L., R\'{e}, C.: Can foundation models wrangle your data?
+\newblock Proceedings of the VLDB Endowment \textbf{16}(4), 738--746 (2022).
+\newblock \doi{10.14778/3574245.3574258}
+
+\bibitem{naumann2013revisited}
+Naumann, F.: Data profiling revisited.
+\newblock ACM SIGMOD Record \textbf{42}(4), 40--49 (2013).
+\newblock \doi{10.1145/2590989.2590995}
+
+\bibitem{novelli2001fun}
+Novelli, N., Cicchetti, R.: {FUN}: An efficient algorithm for mining functional and embedded dependencies.
+\newblock In: Proceedings of the International Conference on Database Theory (ICDT), \emph{LNCS}, vol. 1973, pp. 189--203. Springer (2001).
+\newblock \doi{10.1007/3-540-44503-X_13}
+
+\bibitem{papenbrock2015metanome}
+Papenbrock, T., Ehrlich, J., Marten, J., Neuber, T., Rudolph, J.P., Sch\"{o}nberg, M., Zwiener, J., Naumann, F.: Data profiling with {Metanome}.
+\newblock Proceedings of the VLDB Endowment \textbf{8}(12), 1860--1863 (2015).
+\newblock \doi{10.14778/2824032.2824086}
+
+\bibitem{papenbrock2015binder}
+Papenbrock, T., Ehrlich, J., Marten, J., Neuber, T., Rudolph, J.P., Sch\"{o}nberg, M., Zwiener, J., Naumann, F.: Divide \& conquer-based inclusion dependency discovery.
+\newblock Proceedings of the VLDB Endowment \textbf{8}(7), 774--785 (2015).
+\newblock \doi{10.14778/2752939.2752946}
+
+\bibitem{papenbrock2016hyfd}
+Papenbrock, T., Naumann, F.: A hybrid approach to functional dependency discovery.
+\newblock In: Proceedings of the ACM SIGMOD International Conference on Management of Data, pp. 821--833 (2016).
+\newblock \doi{10.1145/2882903.2915203}
+
+\bibitem{pourreza2023dinsql}
+Pourreza, M., Rafiei, D.: {DIN-SQL}: Decomposed in-context learning of text-to-{SQL} with self-correction.
+\newblock In: Advances in Neural Information Processing Systems (NeurIPS) (2023)
+
+\bibitem{rahm2001survey}
+Rahm, E., Bernstein, P.A.: A survey of approaches to automatic schema matching.
+\newblock The VLDB Journal \textbf{10}(4), 334--350 (2001).
+\newblock \doi{10.1007/s007780100057}
+
+\bibitem{rostin2009fk}
+Rostin, A., Albrecht, O., Bauckmann, J., Naumann, F., Stillger, M.: A machine learning approach to foreign key discovery.
+\newblock In: Proceedings of the International Workshop on the Web and Databases (WebDB), SIGMOD Workshop (2009)
+
+\bibitem{rumelhart1986backprop}
+Rumelhart, D.E., Hinton, G.E., Williams, R.J.: Learning representations by back-propagating errors.
+\newblock Nature \textbf{323}, 533--536 (1986)
+
+\bibitem{seedat2024matchmaker}
+Seedat, N., van~der Schaar, M.: Matchmaker: Self-improving large language model programs for schema matching.
+\newblock In: NeurIPS 2024 Workshop on Table Representation Learning (2024)
+
+\bibitem{settles2009active}
+Settles, B.: Active learning literature survey.
+\newblock Tech. Rep. CS Tech Report 1648, University of Wisconsin--Madison (2009)
+
+\bibitem{shinn2023reflexion}
+Shinn, N., Cassano, F., Gopinath, A., Narasimhan, K., Yao, S.: Reflexion: Language agents with verbal reinforcement learning.
+\newblock In: Advances in Neural Information Processing Systems (NeurIPS) (2023)
+
+\bibitem{ragleveraging2025}
+Singh, M., Kumar, A., Donaparthi, S., Karambelkar, G.: Leveraging retrieval augmented generative {LLMs} for automated metadata description generation to enhance data catalogs.
+\newblock arXiv preprint arXiv:2503.09003  (2025)
+
+\bibitem{trummer2024succinct}
+Trummer, I.: Generating succinct descriptions of database schemata for cost-efficient prompting of large language models.
+\newblock Proceedings of the VLDB Endowment \textbf{17}(11), 3511--3523 (2024).
+\newblock \doi{10.14778/3681954.3682017}
+
+\bibitem{wei2022cot}
+Wei, J., Wang, X., Schuurmans, D., Bosma, M., Ichter, B., Xia, F., Chi, E., Le, Q., Zhou, D.: Chain-of-thought prompting elicits reasoning in large language models.
+\newblock In: Advances in Neural Information Processing Systems (NeurIPS) (2022)
+
+\bibitem{yao2023tot}
+Yao, S., Yu, D., Zhao, J., Shafran, I., Griffiths, T.L., Cao, Y., Narasimhan, K.: Tree of thoughts: Deliberate problem solving with large language models.
+\newblock In: Advances in Neural Information Processing Systems (NeurIPS) (2023)
+
+\bibitem{yu2018spider}
+Yu, T., Zhang, R., Yang, K., Yasunaga, M., Wang, D., Li, Z., Ma, J., Li, I., Yao, Q., Roman, S., Zhang, Z., Radev, D.: Spider: A large-scale human-labeled dataset for complex and cross-domain semantic parsing and text-to-{SQL} task.
+\newblock In: Proceedings of the Conference on Empirical Methods in Natural Language Processing (EMNLP), pp. 3911--3921 (2018).
+\newblock \doi{10.18653/v1/D18-1425}
+
+\end{thebibliography}

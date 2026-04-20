@@ -1,5 +1,5 @@
 {
-  "entity": "Action Categories",
+  "entity": "MJ: Action Categories",
   "filePattern": "**/.*.json",
   "defaults": {
   },
@@ -17,7 +17,7 @@
     "externalizeFields": [],
     "lookupFields": {
       "ParentID": {
-        "entity": "Action Categories",
+        "entity": "MJ: Action Categories",
         "field": "ID"
       }
     },

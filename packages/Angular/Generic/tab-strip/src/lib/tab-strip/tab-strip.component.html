@@ -1,18 +1,22 @@
 <div class="tabstrip-container">
-    <!-- Tab Headers -->
-    <div class="tab-header-outer">
-      <div *ngIf="showLeftButton" class="tab-scroll-button tab-scroll-button-left" (click)="scrollLeft()">
+  <!-- Tab Headers -->
+  <div class="tab-header-outer">
+    @if (showLeftButton) {
+      <div class="tab-scroll-button tab-scroll-button-left" (click)="scrollLeft()">
         <span class="fa-solid fa-caret-left"></span>
       </div>
-      <div class="tab-header-inner" #tabInnerContainer>
-        <ng-content select="mj-tab"></ng-content> <!-- Where <mj-tab> components are projected -->
-      </div>
-      <div *ngIf="showRightButton" class="tab-scroll-button tab-scroll-button-right" (click)="scrollRight()">
+    }
+    <div class="tab-header-inner" #tabInnerContainer>
+      <ng-content select="mj-tab"></ng-content> <!-- Where <mj-tab> components are projected -->
+    </div>
+    @if (showRightButton) {
+      <div class="tab-scroll-button tab-scroll-button-right" (click)="scrollRight()">
         <span class="fa-solid fa-caret-right"></span>
       </div>
-    </div>
-    <!-- Tab Content -->
-    <div class="tab-bodies">
-      <ng-content select="mj-tab-body"></ng-content> <!-- Where <mj-tab-body> components are projected -->
-    </div>
+    }
+  </div>
+  <!-- Tab Content -->
+  <div class="tab-bodies">
+    <ng-content select="mj-tab-body"></ng-content> <!-- Where <mj-tab-body> components are projected -->
+  </div>
 </div>

@@ -271,7 +271,7 @@ export class OpenAILLM extends BaseLLM {
             model: params.model,
             messages: formattedMessages,
             temperature: params.temperature,
-            max_tokens: params.maxOutputTokens,
+            max_completion_tokens: params.maxOutputTokens,
             stream: true,
             logprobs: params.includeLogProbs === true ? true : false,
             top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
@@ -641,8 +641,4 @@ export class OpenAILLM extends BaseLLM {
                 throw new Error(`Unknown role ${role}`)
         }
     }
-}
-
-export function LoadOpenAILLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
 }

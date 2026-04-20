@@ -1,17 +1,19 @@
-<!-- 
-  Hello MJ Component Template
-  
-  This template displays:
-  1. A heading showing the count of entities (only shown when entities are loaded)
-  2. A button to trigger the loading and display of entity information
-  
-  When the Display button is clicked, it calls the showInfo() method
-  which loads the entities and emits events with the entity data.
+<!--
+Hello MJ Component Template
+
+This template displays:
+1. A heading showing the count of entities (only shown when entities are loaded)
+2. A button to trigger the loading and display of entity information
+
+When the Display button is clicked, it calls the showInfo() method
+which loads the entities and emits events with the entity data.
 -->
 <div>
-    <!-- Only show the heading when entities have been loaded -->
-    <h1 *ngIf="entityCount > 0">{{entityCount}} Entities Loaded</h1>
-    
-    <!-- Button to trigger loading and displaying entity information -->
-    <button (click)="showInfo()">Display</button>
+  <!-- Only show the heading when entities have been loaded -->
+  @if (entityCount > 0) {
+    <h1>{{entityCount}} Entities Loaded</h1>
+  }
+
+  <!-- Button to trigger loading and displaying entity information -->
+  <button (click)="showInfo()">Display</button>
 </div>

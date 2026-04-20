@@ -9,6 +9,7 @@ import { cosmiconfigSync } from 'cosmiconfig';
 import path from 'path';
 import { logStatus } from '../Misc/status_logging';
 import { LogError } from '@memberjunction/core';
+import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 
 /** Global configuration explorer for finding MJ config files */
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
@@ -170,6 +171,14 @@ const advancedGenerationFeatureSchema = z.object({
 export type AdvancedGeneration = z.infer<typeof advancedGenerationSchema>;
 const advancedGenerationSchema = z.object({
   enableAdvancedGeneration: z.boolean().default(true),
+  /** When false (default), CodeGen will NOT auto-enable FullTextSearchEnabled on entities or fields,
+   *  even if the AI smart field analysis recommends it. FTS requires database-level infrastructure
+   *  (full-text catalogs, indexes, installed FTS components) that may not be present. Admins should
+   *  enable this explicitly only when their database supports full-text search. */
+  allowFullTextSearchAutoUpdate: z.boolean().default(false),
+  /** Number of entities to process in parallel during advanced generation (default: 5).
+   *  Higher values speed up processing but increase concurrent LLM API calls. */
+  batchSize: z.number().min(1).default(5),
   // NOTE: AIVendor and AIModel have been removed. Model configuration is now per-prompt
   // in the AI Prompts table via the MJ: AI Prompt Models relationship.
   features: advancedGenerationFeatureSchema.array().default([
@@ -211,6 +220,12 @@ const advancedGenerationSchema = z.object({
       description:
         "Use AI to decide which entity relationships should have visible tabs and the best order to display those tabs. All relationships will be generated based on the Database Schema, but the EntityRelationship.DisplayInForm. The idea is that the AI will pick which of these tabs should be visible by default. In some cases an entity will have a large # of relationships and it isn't necessarily a good idea to display all of them. This feature only applies when an entity is created or new Entity Relationships are detected. This tool will not change existing EntityRelationship records.",
       enabled: false,
+    },
+    {
+      name: 'VirtualEntityFieldDecoration',
+      description:
+        'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions. Only runs for virtual entities that lack soft PK/FK annotations. Respects explicit config-defined PKs/FKs (from additionalSchemaInfo) — LLM fills in the gaps.',
+      enabled: true,
     },
   ]),
 });
@@ -275,7 +290,7 @@ const sqlOutputConfigSchema = z.object({
    * The path of the folder to use when logging is enabled.
    * If provided, a file will be created with the format "CodeGen_Run_yyyy-mm-dd_hh-mm-ss.sql"
    */
-  folderPath: z.string().default('../../migrations/v2/'),
+  folderPath: z.string().default('../../migrations/v5/'),
   /**
    * Optional, the file name that will be written WITHIN the folderPath specified.
    */
@@ -293,11 +308,59 @@ const sqlOutputConfigSchema = z.object({
    * If true, scripts that are being emitted via SQL logging that are marked by CodeGen as recurring will be SKIPPED. Defaults to false
    */
   omitRecurringScriptsFromLog: z.boolean().default(false),
+  /**
+   * Optional array of schema-to-placeholder mappings for Flyway migrations.
+   * Each mapping specifies a database schema name and its corresponding Flyway placeholder.
+   * If not provided, defaults to replacing the MJ core schema with ${flyway:defaultSchema}.
+   *
+   * Example:
+   * [
+   *   { schema: '__mj', placeholder: '${mjSchema}' },
+   *   { schema: '__BCSaaS', placeholder: '${flyway:defaultSchema}' }
+   * ]
+   */
+  schemaPlaceholders: z.array(z.object({
+    schema: z.string(),
+    placeholder: z.string()
+  })).optional(),
 });
+
+const applicationRoleDefaultSchema = z.object({
+  RoleName: z.string(),
+  CanAccess: z.boolean(),
+  CanAdmin: z.boolean(),
+});
+
+/**
+ * Settings for an application role default
+ */
+export type ApplicationRoleDefault = z.infer<typeof applicationRoleDefaultSchema>;
+
+const applicationRoleDefaultsSchema = z.object({
+  AutoAddRolesForNewApplications: z.boolean().default(true),
+  Roles: applicationRoleDefaultSchema.array().default([
+    { RoleName: 'UI', CanAccess: true, CanAdmin: false },
+    { RoleName: 'Developer', CanAccess: true, CanAdmin: true },
+    { RoleName: 'Integration', CanAccess: true, CanAdmin: false },
+  ]),
+});
+
+/**
+ * Default role assignment settings for new applications
+ */
+export type ApplicationRoleDefaults = z.infer<typeof applicationRoleDefaultsSchema>;
 
 export type NewSchemaDefaults = z.infer<typeof newSchemaDefaultsSchema>;
 const newSchemaDefaultsSchema = z.object({
   CreateNewApplicationWithSchemaName: z.boolean().default(true),
+  ApplicationRoleDefaults: applicationRoleDefaultsSchema.default({
+    AutoAddRolesForNewApplications: true,
+    Roles: [
+      { RoleName: 'UI', CanAccess: true, CanAdmin: false },
+      { RoleName: 'Developer', CanAccess: true, CanAdmin: true },
+      { RoleName: 'Integration', CanAccess: true, CanAdmin: false },
+    ],
+  }),
 });
 
 const entityPermissionSchema = z.object({
@@ -335,6 +398,12 @@ const newEntityNameRulesBySchema = z.object({
   EntityNameSuffix: z.string().default(''),
 });
 
+export type AllowCachingBySchema = z.infer<typeof allowCachingBySchemaSchema>;
+const allowCachingBySchemaSchema = z.object({
+  SchemaName: z.string(),
+  AllowCaching: z.boolean(),
+});
+
 const newEntityDefaultsSchema = z.object({
   TrackRecordChanges: z.boolean().default(true),
   AuditRecordAccess: z.boolean().default(false),
@@ -344,12 +413,23 @@ const newEntityDefaultsSchema = z.object({
   AllowUpdateAPI: z.boolean().default(true),
   AllowDeleteAPI: z.boolean().default(true),
   AllowUserSearchAPI: z.boolean().default(true),
+  AllowCaching: z.boolean().default(false),
   CascadeDeletes: z.boolean().default(false),
   UserViewMaxRows: z.number().default(1000),
   AddToApplicationWithSchemaName: z.boolean().default(true),
   IncludeFirstNFieldsAsDefaultInView: z.number().default(5),
   PermissionDefaults: newEntityPermissionDefaultsSchema,
   NameRulesBySchema: newEntityNameRulesBySchema.array().default([]),
+  /**
+   * Per-schema overrides for the AllowCaching default. When CodeGen creates a new
+   * Entity row, the schema is matched (case-insensitive) against this list and the
+   * matching entry's AllowCaching value wins over the global AllowCaching default.
+   * Schema names support the `${mj_core_schema}` placeholder. Defaults to enabling
+   * caching for the MJ core schema.
+   */
+  AllowCachingBySchema: allowCachingBySchemaSchema.array().default([
+    { SchemaName: '${mj_core_schema}', AllowCaching: true },
+  ]),
 });
 
 
@@ -377,12 +457,20 @@ const configInfoSchema = z.object({
     { name: 'auto_index_foreign_keys', value: true },
   ]),
   excludeSchemas: z.string().array().default(['sys', 'staging']),
-  excludeTables: tableInfoSchema.array().default([{ schema: '%', table: 'sys%' }]),
+  excludeTables: tableInfoSchema.array().default([
+    { schema: '%', table: 'sys%' },
+    { schema: '%', table: 'flyway_schema_history' }
+  ]),
   customSQLScripts: customSQLScriptSchema.array().default([
-    {
-      scriptFile: '../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
-      when: 'before-all',
-    },
+    // AS OF 5.3.0 we are NOT including this as it wipes out standard views and procs
+    // for ZERO reason, we have a solid baseline configuration now. We are 
+    // renaming MJ_BASE_BEFORE_SQL.sql and will maintain this but the
+    // new aproach is using Baseline scripts. Assumption == nobody outside MJ modifies
+    // anything DDL-wise INSIDE __mj schema.
+    // {
+    //   scriptFile: '../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
+    //   when: 'before-all',
+    // },
   ]),
   advancedGeneration: advancedGenerationSchema.nullish(),
   integrityChecks: integrityCheckConfigSchema.default({
@@ -414,6 +502,25 @@ const configInfoSchema = z.object({
     { workingDirectory: '../MJServer', command: 'npm', args: ['run', 'build'], when: 'after' },
     { workingDirectory: '../MJAPI', command: 'npm', args: ['start'], timeout: 30000, when: 'after' },
   ]),
+  /** Path to JSON file containing soft PK/FK definitions for tables without database constraints */
+  additionalSchemaInfo: z.string().optional(),
+
+  /** Entity and field name normalization settings for ALL CAPS database identifiers */
+  entityNaming: z.object({
+    /** Normalize ALL CAPS table/entity names to Title Case (e.g., PAYMENT -> Payment). Default: true */
+    normalizeAllCaps: z.boolean().default(true),
+    /** Split compound ALL CAPS words using dictionary matching (e.g., INDIVIDUALDESIGNATION -> Individual Designation). Default: true */
+    splitCompoundWords: z.boolean().default(true),
+    /** Normalize ALL CAPS column/field names the same way. Default: true */
+    normalizeFieldNames: z.boolean().default(true),
+    /** Additional domain-specific words for the compound word splitter */
+    additionalDomainWords: z.string().array().default([]),
+  }).default({
+    normalizeAllCaps: true,
+    splitCompoundWords: true,
+    normalizeFieldNames: true,
+    additionalDomainWords: [],
+  }),
   logging: logInfoSchema,
   newEntityDefaults: newEntityDefaultsSchema,
   newSchemaDefaults: newSchemaDefaultsSchema,
@@ -422,6 +529,8 @@ const configInfoSchema = z.object({
   SQLOutput: sqlOutputConfigSchema,
   forceRegeneration: forceRegenerationConfigSchema,
 
+  /** Database platform type: 'mssql' for SQL Server, 'postgresql' for PostgreSQL */
+  dbType: z.enum(['mssql', 'postgresql']).default('mssql'),
   dbHost: z.string(),
   dbPort: z.coerce.number().int().positive().default(1433),
   codeGenLogin: z.string(),
@@ -435,16 +544,189 @@ const configInfoSchema = z.object({
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
+  entityPackageName: z.union([
+    z.string(),
+    z.record(z.string(), z.string())
+  ]).default('mj_generatedentities'),
 
   verboseOutput: z.boolean().optional().default(false),
 });
+
+/**
+ * Default CodeGen configuration - provides sensible defaults for all CodeGen settings.
+ * These defaults can be overridden in user's mj.config.cjs file.
+ *
+ * Database connection settings come from environment variables.
+ */
+export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
+  // Database connection settings (from environment variables)
+  dbType: (process.env.DB_TYPE as 'mssql' | 'postgresql') ?? 'mssql',
+  dbHost: process.env.DB_HOST ?? 'localhost',
+  dbPort: 1433,
+  dbDatabase: process.env.DB_DATABASE ?? '',
+  codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
+  codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
+  dbInstanceName: process.env.DB_INSTANCE_NAME,
+  dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE) ? 'Y' : 'N',
+  mjCoreSchema: '__mj',
+  graphqlPort: 4000,
+  verboseOutput: false,
+
+  settings: [
+    { name: 'mj_core_schema', value: '__mj' },
+    { name: 'skip_database_generation', value: false },
+    { name: 'recompile_mj_views', value: true },
+    { name: 'auto_index_foreign_keys', value: true },
+  ],
+  logging: {
+    log: true,
+    logFile: 'codegen.output.log',
+    console: true,
+  },
+  newEntityDefaults: {
+    TrackRecordChanges: true,
+    AuditRecordAccess: false,
+    AuditViewRuns: false,
+    AllowAllRowsAPI: false,
+    AllowCreateAPI: true,
+    AllowUpdateAPI: true,
+    AllowDeleteAPI: true,
+    AllowUserSearchAPI: true,
+    AllowCaching: false,
+    CascadeDeletes: false,
+    UserViewMaxRows: 1000,
+    AddToApplicationWithSchemaName: true,
+    IncludeFirstNFieldsAsDefaultInView: 5,
+    PermissionDefaults: {
+      AutoAddPermissionsForNewEntities: true,
+      Permissions: [
+        { RoleName: 'UI', CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false },
+        { RoleName: 'Developer', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: false },
+        { RoleName: 'Integration', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
+      ],
+    },
+    NameRulesBySchema: [
+      {
+        SchemaName: '${mj_core_schema}',
+        EntityNamePrefix: 'MJ: ',
+        EntityNameSuffix: '',
+      },
+    ],
+    AllowCachingBySchema: [
+      { SchemaName: '${mj_core_schema}', AllowCaching: true },
+    ],
+  },
+  newEntityRelationshipDefaults: {
+    AutomaticallyCreateRelationships: true,
+    CreateOneToManyRelationships: true,
+  },
+  newSchemaDefaults: {
+    CreateNewApplicationWithSchemaName: true,
+    ApplicationRoleDefaults: {
+      AutoAddRolesForNewApplications: true,
+      Roles: [
+        { RoleName: 'UI', CanAccess: true, CanAdmin: false },
+        { RoleName: 'Developer', CanAccess: true, CanAdmin: true },
+        { RoleName: 'Integration', CanAccess: true, CanAdmin: false },
+      ],
+    },
+  },
+  excludeSchemas: ['sys', 'staging', '__mj'],
+  excludeTables: [
+    { schema: '%', table: 'sys%' },
+    { schema: '%', table: 'flyway_schema_history' }
+  ],
+  customSQLScripts: [],
+  dbSchemaJSONOutput: {
+    excludeEntities: [],
+    excludeSchemas: ['sys', 'staging', 'dbo'],
+    bundles: [{ name: '_Core_Apps', schemas: [], excludeSchemas: ['__mj'], excludeEntities: [] }],
+  },
+  integrityChecks: {
+    enabled: true,
+    entityFieldsSequenceCheck: true,
+  },
+  advancedGeneration: {
+    enableAdvancedGeneration: true,
+    allowFullTextSearchAutoUpdate: false,
+    batchSize: 5,
+    features: [
+      {
+        name: 'EntityNames',
+        description: 'Use AI to generate better entity names when creating new entities',
+        enabled: false,
+      },
+      {
+        name: 'DefaultInViewFields',
+        description: 'Use AI to determine which fields in an entity should be shown, by default, in a newly created User View for the entity. This is only used when creating new entities and when new fields are detected.',
+        enabled: true,
+      },
+      {
+        name: 'EntityDescriptions',
+        description: 'Use AI to generate descriptions for entities, only used when creating new entities',
+        enabled: false,
+      },
+      {
+        name: 'SmartFieldIdentification',
+        description: 'Use AI to identify the best name field and default field to show in views for each entity',
+        enabled: true,
+      },
+      {
+        name: 'TransitiveJoinIntelligence',
+        description: 'Use AI to analyze entity relationships and detect junction tables for many-to-many relationships',
+        enabled: true,
+      },
+      {
+        name: 'FormLayoutGeneration',
+        description: 'Use AI to generate semantic field categories for better form organization. This includes using AI to determine the way to layout fields on each entity form by assigning them to domain-specific categories. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
+        enabled: true,
+      },
+      {
+        name: 'ParseCheckConstraints',
+        description: 'Use AI to parse check constraints and generate a description as well as sub-class Validate() methods that reflect the logic of the constraint.',
+        enabled: true,
+      },
+      {
+        name: 'VirtualEntityFieldDecoration',
+        description: 'Use AI to analyze SQL view definitions for virtual entities and identify primary keys, foreign keys, and field descriptions.',
+        enabled: true,
+      },
+    ],
+  },
+  SQLOutput: {
+    enabled: true,
+    folderPath: './migrations/v5/',
+    appendToFile: true,
+    convertCoreSchemaToFlywayMigrationFile: true,
+    omitRecurringScriptsFromLog: true,
+  },
+  forceRegeneration: {
+    enabled: false,
+    baseViews: false,
+    spCreate: false,
+    spUpdate: false,
+    spDelete: false,
+    allStoredProcedures: false,
+    indexes: false,
+    fullTextSearch: false,
+  },
+};
+
 /**
  * Current working directory for the code generation process
  */
 export let currentWorkingDirectory: string = process.cwd();
 
-/** Parse and validate the configuration file */
-const configParsing = configInfoSchema.safeParse(configSearchResult?.config);
+/**
+ * Merge user config with DEFAULT_CODEGEN_CONFIG.
+ * Database settings come from user config or environment variables.
+ */
+const mergedConfig = configSearchResult?.config
+  ? mergeConfigs(DEFAULT_CODEGEN_CONFIG, configSearchResult.config)
+  : DEFAULT_CODEGEN_CONFIG;
+
+/** Parse and validate the merged configuration */
+const configParsing = configInfoSchema.safeParse(mergedConfig);
 // Don't log errors at module load - commands that need config will validate explicitly
 // if (!configParsing.success) {
 //   LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
@@ -468,7 +750,13 @@ export const { mjCoreSchema, dbDatabase } = configInfo;
 export function initializeConfig(cwd: string): ConfigInfo {
   currentWorkingDirectory = cwd;
 
-  const maybeConfig = configInfoSchema.safeParse(explorer.search(currentWorkingDirectory)?.config);
+  // Merge user config with DEFAULT_CODEGEN_CONFIG
+  const userConfigResult = explorer.search(currentWorkingDirectory);
+  const mergedConfig = userConfigResult?.config
+    ? mergeConfigs(DEFAULT_CODEGEN_CONFIG, userConfigResult.config)
+    : DEFAULT_CODEGEN_CONFIG;
+
+  const maybeConfig = configInfoSchema.safeParse(mergedConfig);
   // Don't log errors - let the calling code handle validation failures
   // if (!maybeConfig.success) {
   //   LogError('Error parsing config file', null, JSON.stringify(maybeConfig.error.issues, null, 2));
@@ -479,6 +767,12 @@ export function initializeConfig(cwd: string): ConfigInfo {
   if (config === undefined) {
     throw new Error('No configuration found');
   }
+
+  // Update the module-level configInfo so that helpers like
+  // resolveEntityPackageName() and getExternalEntitySchemas() see the
+  // config from the correct working directory, not the stale one from
+  // initial module load.
+  Object.assign(configInfo, config);
 
   return config;
 }
@@ -585,6 +879,43 @@ export function autoIndexForeignKeys(): boolean {
 }
 
 /**
+ * Resolves the entity package name for a given database schema.
+ *
+ * When `entityPackageName` is a plain string (legacy/default), all non-core schemas
+ * use that single package. When it is a `Record<string, string>`, each schema is
+ * mapped to its own package (used by OpenApp projects with multiple installed apps).
+ *
+ * @param schemaName The database schema name of the entity
+ * @param config     Optional config override; falls back to the module-level configInfo
+ * @returns The npm package name to use for importing entities from this schema
+ */
+export function resolveEntityPackageName(schemaName: string, config?: ConfigInfo): string {
+  const cfg = config ?? configInfo;
+  const epn = cfg.entityPackageName;
+  if (typeof epn === 'string') {
+    return epn || 'mj_generatedentities';
+  }
+  // Case-insensitive lookup: DB schema names may differ in casing from config keys
+  const lowerSchema = schemaName.toLowerCase();
+  const match = Object.keys(epn).find(k => k.toLowerCase() === lowerSchema);
+  return match ? epn[match] : 'mj_generatedentities';
+}
+
+/**
+ * Returns all schema names that have an explicit external entity package mapping.
+ * These schemas should be skipped during local entity subclass generation because
+ * their entities are provided by an installed OpenApp npm package.
+ */
+export function getExternalEntitySchemas(config?: ConfigInfo): string[] {
+  const cfg = config ?? configInfo;
+  const epn = cfg.entityPackageName;
+  if (typeof epn === 'string') {
+    return [];
+  }
+  return Object.keys(epn);
+}
+
+/**
  * Maximum length allowed for database index names
  */
 export const MAX_INDEX_NAME_LENGTH = 128;
@@ -595,4 +926,12 @@ export const MAX_INDEX_NAME_LENGTH = 128;
  */
 export function mj_core_schema(): string {
   return getSetting('mj_core_schema').value;
+}
+
+/**
+ * Returns the configured database platform type.
+ * Defaults to 'mssql' for backward compatibility.
+ */
+export function dbType(): 'mssql' | 'postgresql' {
+  return configInfo.dbType;
 }

@@ -228,7 +228,7 @@ From actual test run (AssociationDB, 58 tables, 5 tables processed):
 - ✅ 25 queries generated (5 queries × 5 tables)
 - ✅ 24 queries validated successfully (96% success rate)
 - ✅ 1 query failed with clear error message
-- ✅ 113,458 tokens used (~$0.57 at GPT-4o rates)
+- ✅ 113,458 tokens used (~$0.57 at Gemini Flash rates)
 - ✅ 312 seconds execution time (~5 minutes)
 - ✅ 95% average confidence from LLM
 

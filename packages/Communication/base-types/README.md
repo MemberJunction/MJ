@@ -1,10 +1,43 @@
 # @memberjunction/communication-types
 
-MemberJunction Communication Framework Library Generic Types - Base types and interfaces for building communication providers and engines in the MemberJunction ecosystem.
+Core types, interfaces, and abstract base classes for the MemberJunction Communication Framework. This package defines the contract that all communication providers must implement, along with shared message types, credential utilities, and the communication engine base class.
 
-## Overview
+## Architecture
 
-This package provides the foundational types, base classes, and interfaces for implementing communication functionality within MemberJunction applications. It includes base classes for communication engines and providers, message handling, and integration with the MemberJunction metadata system.
+```mermaid
+graph TD
+    subgraph base["@memberjunction/communication-types"]
+        ENGINE["CommunicationEngineBase"]
+        BCP["BaseCommunicationProvider"]
+        MSG["Message / ProcessedMessage"]
+        CRED["Credential Utilities"]
+        TYPES["Params and Result Types"]
+    end
+
+    subgraph providers["Provider Implementations"]
+        SG["SendGrid Provider"]
+        GM["Gmail Provider"]
+        TW["Twilio Provider"]
+        MSP["MS Graph Provider"]
+    end
+
+    subgraph engine["@memberjunction/communication-engine"]
+        CE["CommunicationEngine"]
+    end
+
+    ENGINE --> CE
+    BCP --> SG
+    BCP --> GM
+    BCP --> TW
+    BCP --> MSP
+    MSG --> BCP
+    CRED --> BCP
+    TYPES --> BCP
+
+    style base fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style providers fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style engine fill:#7c5295,stroke:#563a6b,color:#fff
+```
 
 ## Installation
 
@@ -12,331 +45,220 @@ This package provides the foundational types, base classes, and interfaces for i
 npm install @memberjunction/communication-types
 ```
 
-## Key Components
+## Key Exports
 
 ### CommunicationEngineBase
 
-The core engine class that manages communication metadata and orchestrates communication operations across different providers.
+Singleton base class that loads communication metadata (providers, message types, entity communication fields) and provides lifecycle management for communication runs and logs.
 
 ```typescript
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
 
-// Get the singleton instance
 const engine = CommunicationEngineBase.Instance;
+await engine.Config(false, contextUser);
 
-// Configure the engine (required before use)
-await engine.Config(false, userInfo);
-
-// Access communication metadata
-const providers = engine.Providers;
-const messageTypes = engine.BaseMessageTypes;
+// Access loaded metadata
+const providers = engine.Providers;           // MJCommunicationProviderEntityExtended[]
+const messageTypes = engine.BaseMessageTypes; // CommunicationBaseMessageTypeEntity[]
 ```
 
 ### BaseCommunicationProvider
 
-Abstract base class for implementing communication providers (email, SMS, social media, etc.).
+Abstract base class that all communication providers must extend. Defines both core operations (must implement) and extended mailbox operations (optional override).
+
+```mermaid
+classDiagram
+    class BaseCommunicationProvider {
+        <<abstract>>
+        +SendSingleMessage(message, credentials?) MessageResult
+        +GetMessages(params, credentials?) GetMessagesResult
+        +ForwardMessage(params, credentials?) ForwardMessageResult
+        +ReplyToMessage(params, credentials?) ReplyToMessageResult
+        +CreateDraft(params, credentials?) CreateDraftResult
+        +getSupportedOperations() ProviderOperation[]
+        +supportsOperation(op) boolean
+        +GetSingleMessage() GetSingleMessageResult
+        +DeleteMessage() DeleteMessageResult
+        +MoveMessage() MoveMessageResult
+        +ListFolders() ListFoldersResult
+        +MarkAsRead() MarkAsReadResult
+        +ArchiveMessage() ArchiveMessageResult
+        +SearchMessages() SearchMessagesResult
+        +ListAttachments() ListAttachmentsResult
+        +DownloadAttachment() DownloadAttachmentResult
+    }
+
+    class SendGridProvider {
+        SendSingleMessage only
+    }
+    class GmailProvider {
+        All 14 operations
+    }
+    class MSGraphProvider {
+        All 14 operations
+    }
+    class TwilioProvider {
+        Send Get Forward Reply
+    }
+
+    BaseCommunicationProvider <|-- SendGridProvider
+    BaseCommunicationProvider <|-- GmailProvider
+    BaseCommunicationProvider <|-- MSGraphProvider
+    BaseCommunicationProvider <|-- TwilioProvider
+
+    style BaseCommunicationProvider fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style SendGridProvider fill:#b8762f,stroke:#8a5722,color:#fff
+    style GmailProvider fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style MSGraphProvider fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style TwilioProvider fill:#7c5295,stroke:#563a6b,color:#fff
+```
+
+#### Core Operations (Abstract -- Must Implement)
+
+| Method | Description |
+|--------|-------------|
+| `SendSingleMessage()` | Send a single message through the provider |
+| `GetMessages()` | Retrieve messages from the provider |
+| `ForwardMessage()` | Forward a message to new recipients |
+| `ReplyToMessage()` | Reply to an existing message |
+| `CreateDraft()` | Create a draft message (return error if unsupported) |
+
+#### Extended Operations (Optional -- Override to Support)
+
+These methods have default implementations that return "not supported" errors. Override them in providers that have full mailbox access.
+
+| Method | Description |
+|--------|-------------|
+| `GetSingleMessage()` | Retrieve a single message by ID |
+| `DeleteMessage()` | Delete or trash a message |
+| `MoveMessage()` | Move a message to a different folder |
+| `ListFolders()` | List available folders/labels |
+| `MarkAsRead()` | Mark messages as read or unread |
+| `ArchiveMessage()` | Archive a message |
+| `SearchMessages()` | Search messages by query string |
+| `ListAttachments()` | List attachments on a message |
+| `DownloadAttachment()` | Download an attachment by ID |
+
+#### Capability Discovery
 
 ```typescript
-import { BaseCommunicationProvider, ProcessedMessage, MessageResult } from '@memberjunction/communication-types';
+const operations = provider.getSupportedOperations();
 
-export class MyEmailProvider extends BaseCommunicationProvider {
-    public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
-        // Implement provider-specific sending logic
-    }
-
-    public async GetMessages(params: GetMessagesParams): Promise<GetMessagesResult> {
-        // Implement message retrieval
-    }
-
-    public async ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult> {
-        // Implement message forwarding
-    }
-
-    public async ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult> {
-        // Implement message replies
-    }
-
-    public async CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult> {
-        // Implement draft creation (or return error if not supported)
-    }
+if (provider.supportsOperation('SearchMessages')) {
+    const results = await provider.SearchMessages({ Query: 'invoice' });
 }
 ```
 
 ### Message Classes
 
-#### Message
-Base class for message data:
+- **Message**: Holds all data for a single communication including optional template references, CC/BCC recipients, headers, and scheduled send time.
+- **ProcessedMessage**: Abstract subclass of `Message` with rendered content (`ProcessedBody`, `ProcessedHTMLBody`, `ProcessedSubject`) and a `Process()` method for template rendering.
+- **MessageRecipient**: Represents a single recipient with per-recipient template context data.
+- **MessageResult**: Result of a send operation including success/failure status, error details, and the processed message.
 
 ```typescript
-import { Message } from '@memberjunction/communication-types';
+import { Message, ProcessedMessage, MessageRecipient } from '@memberjunction/communication-types';
 
 const message = new Message();
-message.From = "sender@example.com";
-message.To = "recipient@example.com";
-message.Subject = "Hello";
-message.Body = "Message content";
-message.HTMLBody = "<p>HTML content</p>";
+message.From = 'sender@example.com';
+message.To = 'recipient@example.com';
+message.Subject = 'Hello';
+message.Body = 'Plain text body';
+message.HTMLBody = '<p>HTML body</p>';
+message.CCRecipients = ['cc@example.com'];
+message.BCCRecipients = ['bcc@example.com'];
+message.Headers = { 'X-Custom': 'value' };
+message.SendAt = new Date('2025-01-01');
 
-// Using templates
+// Template-based messages
 message.BodyTemplate = templateEntity;
 message.SubjectTemplate = subjectTemplateEntity;
-message.ContextData = { name: "John", company: "Acme Corp" };
+message.ContextData = { name: 'John', company: 'Acme Corp' };
 ```
 
-#### ProcessedMessage
-Abstract class for messages that have been processed (templates rendered, etc.):
+### Credential Utilities
+
+The credential system supports per-request credential overrides while maintaining backward compatibility with environment variables.
 
 ```typescript
-export class MyProcessedMessage extends ProcessedMessage {
-    public async Process(forceTemplateRefresh?: boolean, contextUser?: UserInfo): Promise<{Success: boolean, Message?: string}> {
-        // Implement template processing logic
-        this.ProcessedBody = // processed body
-        this.ProcessedHTMLBody = // processed HTML
-        this.ProcessedSubject = // processed subject
-        return { Success: true };
-    }
-}
-```
-
-#### MessageRecipient
-Information about a message recipient:
-
-```typescript
-import { MessageRecipient } from '@memberjunction/communication-types';
-
-const recipient = new MessageRecipient();
-recipient.To = "user@example.com";
-recipient.FullName = "John Doe";
-recipient.ContextData = { customField: "value" };
-```
-
-## Types and Interfaces
-
-### GetMessagesParams
-Parameters for retrieving messages:
-
-```typescript
-type GetMessagesParams<T = Record<string, any>> = {
-    NumMessages: number;
-    UnreadOnly?: boolean;
-    ContextData?: T;
-};
-```
-
-### GetMessagesResult
-Result structure for retrieved messages:
-
-```typescript
-type GetMessagesResult<T = Record<string, any>> = {
-    Success: boolean;
-    ErrorMessage?: string;
-    SourceData?: T[];
-    Messages: GetMessageMessage[];
-};
-```
-
-### ForwardMessageParams
-Parameters for forwarding messages:
-
-```typescript
-type ForwardMessageParams = {
-    MessageID: string;
-    Message?: string;
-    ToRecipients: string[];
-    CCRecipients?: string[];
-    BCCRecipients?: string[];
-};
-```
-
-### ReplyToMessageParams
-Parameters for replying to messages:
-
-```typescript
-type ReplyToMessageParams<T = Record<string, any>> = {
-    MessageID: string;
-    Message: ProcessedMessage;
-    ContextData?: T;
-};
-```
-
-### CreateDraftParams
-Parameters for creating draft messages:
-
-```typescript
-type CreateDraftParams = {
-    Message: ProcessedMessage;
-    ContextData?: Record<string, any>;
-};
-```
-
-### CreateDraftResult
-Result structure for draft creation:
-
-```typescript
-type CreateDraftResult<T = Record<string, any>> = {
-    Success: boolean;
-    ErrorMessage?: string;
-    DraftID?: string;  // Provider-specific draft identifier
-    Result?: T;        // Provider-specific result data
-};
-```
-
-## Usage Examples
-
-### Setting up the Communication Engine
-
-```typescript
-import { CommunicationEngineBase } from '@memberjunction/communication-types';
-import { UserInfo } from '@memberjunction/core';
-
-async function initializeCommunications(user: UserInfo) {
-    const engine = CommunicationEngineBase.Instance;
-    
-    // Configure the engine
-    await engine.Config(false, user);
-    
-    // Access available providers
-    const providers = engine.Providers;
-    console.log(`Available providers: ${providers.map(p => p.Name).join(', ')}`);
-    
-    // Get message types for a specific provider
-    const emailProvider = providers.find(p => p.Name === 'Email');
-    const messageTypes = emailProvider?.MessageTypes;
-}
-```
-
-### Creating a Custom Communication Provider
-
-```typescript
-import { 
-    BaseCommunicationProvider, 
-    ProcessedMessage, 
-    MessageResult,
-    GetMessagesParams,
-    GetMessagesResult 
+import {
+    ProviderCredentialsBase,
+    resolveCredentialValue,
+    validateRequiredCredentials,
+    resolveCredentials
 } from '@memberjunction/communication-types';
 
-export class CustomSMSProvider extends BaseCommunicationProvider {
-    public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
-        try {
-            // Implement SMS sending logic
-            const result = await this.sendSMS(message.To, message.ProcessedBody);
-            
-            return {
-                Message: message,
-                Success: true,
-                Error: null
-            };
-        } catch (error) {
-            return {
-                Message: message,
-                Success: false,
-                Error: error.message
-            };
-        }
-    }
+// Resolve a single credential (request value takes precedence over env fallback)
+const apiKey = resolveCredentialValue(
+    credentials?.apiKey,        // from request
+    process.env.SENDGRID_KEY,   // environment fallback
+    false                       // disableEnvironmentFallback
+);
 
-    public async GetMessages(params: GetMessagesParams): Promise<GetMessagesResult> {
-        // Implement SMS retrieval logic
-        const messages = await this.fetchSMSMessages(params.NumMessages);
-        
-        return {
-            Success: true,
-            Messages: messages.map(m => ({
-                From: m.sender,
-                To: m.recipient,
-                Body: m.text,
-                ExternalSystemRecordID: m.id
-            }))
-        };
-    }
+// Validate all required fields are present
+validateRequiredCredentials(
+    { apiKey, tenantId },
+    ['apiKey', 'tenantId'],
+    'MyProvider'
+);
 
-    public async ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult> {
-        // SMS forwarding implementation
-        return { Success: true };
-    }
-
-    public async ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult> {
-        // SMS reply implementation
-        return { Success: true };
-    }
-
-    public async CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult> {
-        // SMS providers typically don't support drafts
-        return {
-            Success: false,
-            ErrorMessage: 'SMS providers do not support draft messages'
-        };
-    }
-
-    private async sendSMS(to: string, message: string): Promise<any> {
-        // Provider-specific implementation
-    }
-
-    private async fetchSMSMessages(count: number): Promise<any[]> {
-        // Provider-specific implementation
-    }
-}
+// Resolve multiple fields with source tracking
+const result = resolveCredentials(
+    requestCredentials,
+    envCredentials,
+    ['apiKey', 'secret'],
+    false
+);
+// result.source: 'request' | 'environment' | 'mixed'
+// result.fieldSources: { apiKey: 'request', secret: 'environment' }
 ```
 
-## Integration with MemberJunction
+### Communication Runs and Logging
 
-This package integrates seamlessly with other MemberJunction packages:
-
-- **@memberjunction/core**: Provides base entity functionality and metadata system integration
-- **@memberjunction/core-entities**: Contains the entity definitions for communication-related data
-- **@memberjunction/templates-base-types**: Enables template-based message content
-- **@memberjunction/global**: Provides utility functions and global registry
-
-### Working with Communication Logs
-
-The engine provides methods for tracking communication activities:
+The engine provides methods for tracking communication activities through database entities:
 
 ```typescript
-// Start a communication run
 const run = await engine.StartRun();
-
-// Log individual messages
 const log = await engine.StartLog(processedMessage, run);
-
-// Complete the run
+// ... send message ...
+log.Status = 'Complete';
+await log.Save();
 await engine.EndRun(run);
 ```
 
+## Type Definitions
+
+All parameter and result types used across the framework:
+
+| Type | Purpose |
+|------|---------|
+| `GetMessagesParams` / `GetMessagesResult` | Message retrieval |
+| `ForwardMessageParams` / `ForwardMessageResult` | Message forwarding |
+| `ReplyToMessageParams` / `ReplyToMessageResult` | Message replies |
+| `CreateDraftParams` / `CreateDraftResult` | Draft creation |
+| `GetSingleMessageParams` / `GetSingleMessageResult` | Single message retrieval |
+| `DeleteMessageParams` / `DeleteMessageResult` | Message deletion |
+| `MoveMessageParams` / `MoveMessageResult` | Folder management |
+| `ListFoldersParams` / `ListFoldersResult` | Folder listing |
+| `MarkAsReadParams` / `MarkAsReadResult` | Read status |
+| `SearchMessagesParams` / `SearchMessagesResult` | Message search |
+| `ListAttachmentsParams` / `ListAttachmentsResult` | Attachment listing |
+| `DownloadAttachmentParams` / `DownloadAttachmentResult` | Attachment download |
+| `ProviderOperation` | Union type of all operation names |
+| `MessageFolder` / `MessageAttachment` | Data structures for folders and attachments |
+
 ## Dependencies
 
-- `@memberjunction/global`: ^2.43.0
-- `@memberjunction/core`: ^2.43.0
-- `@memberjunction/templates-base-types`: ^2.43.0
-- `@memberjunction/core-entities`: ^2.43.0
-- `rxjs`: ^7.8.1
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/core` | BaseEngine, UserInfo, logging utilities |
+| `@memberjunction/core-entities` | Generated entity types for Communication metadata |
+| `@memberjunction/global` | RegisterClass decorator and MJGlobal class factory |
+| `@memberjunction/templates-base-types` | Template entity types for message templating |
 
 ## Development
 
-### Building
-
 ```bash
-npm run build
+npm run build    # Compile TypeScript
+npm start        # Watch mode
 ```
-
-### Development Mode
-
-```bash
-npm start
-```
-
-## Extended Entity Support
-
-The package includes an extended Communication Provider entity that automatically links message types:
-
-```typescript
-import { CommunicationProviderEntityExtended } from '@memberjunction/communication-types';
-
-// The extended entity automatically includes related message types
-const provider = await md.GetEntityObject<CommunicationProviderEntityExtended>('Communication Providers');
-const messageTypes = provider.MessageTypes; // Automatically populated
-```
-
-## License
-
-ISC

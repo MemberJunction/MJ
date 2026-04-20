@@ -1,10 +1,27 @@
 # @memberjunction/ai-azure
 
-Azure AI Provider integration for MemberJunction, providing access to Microsoft Azure AI services including Azure OpenAI models, embeddings, and the Phi-4 reasoning model.
+MemberJunction AI provider for Azure OpenAI Service. This package provides both LLM and embedding capabilities through Azure's enterprise-grade deployment of OpenAI models, implementing `BaseLLM` and `BaseEmbeddings` from `@memberjunction/ai`.
 
-## Overview
+## Architecture
 
-This package implements the MemberJunction AI provider interfaces for Azure AI services, enabling seamless integration of Azure's language models and embedding services into your MemberJunction applications. It supports both standard Azure OpenAI deployments and Azure AI Studio models.
+```mermaid
+graph TD
+    A["AzureLLM<br/>(Provider)"] -->|extends| B["BaseLLM<br/>(@memberjunction/ai)"]
+    C["AzureEmbedding<br/>(Provider)"] -->|extends| D["BaseEmbeddings<br/>(@memberjunction/ai)"]
+    A -->|wraps| E["Azure AI Inference<br/>REST Client"]
+    C -->|wraps| E
+    A -->|authenticates via| F["API Key or<br/>Azure AD (Entra ID)"]
+    B -->|registered via| G["@RegisterClass"]
+    D -->|registered via| G
+
+    style A fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#7c5295,stroke:#563a6b,color:#fff
+    style B fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style D fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style E fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style F fill:#b8762f,stroke:#8a5722,color:#fff
+    style G fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Features
 
@@ -27,69 +44,42 @@ npm install @memberjunction/ai-azure
 ### Prerequisites
 
 1. An Azure subscription with Azure AI or Azure OpenAI service deployed
-2. Either:
-   - An API key for your Azure AI resource, or
-   - Azure AD credentials configured for your application
+2. Either an API key for your Azure AI resource or Azure AD credentials
 3. The endpoint URL for your Azure AI resource
 
 ### Authentication Methods
 
 #### API Key Authentication
 ```typescript
-import { LLMFactory } from '@memberjunction/ai';
-import { LoadAzureLLM } from '@memberjunction/ai-azure';
+import { AzureLLM } from '@memberjunction/ai-azure';
 
-// Register the Azure provider
-LoadAzureLLM();
+const azureLLM = new AzureLLM('your-api-key');
 
-// Create instance with API key
-const azureLLM = LLMFactory.Create("AzureLLM", "your-api-key");
-
-// Configure endpoint
-azureLLM.SetAdditionalSettings({ 
-    endpoint: "https://your-resource.openai.azure.com/"
+azureLLM.SetAdditionalSettings({
+    endpoint: 'https://your-resource.openai.azure.com/'
 });
 ```
 
 #### Azure AD Authentication
 ```typescript
-import { LLMFactory } from '@memberjunction/ai';
-import { LoadAzureLLM } from '@memberjunction/ai-azure';
+const azureLLM = new AzureLLM('');
 
-// Register the Azure provider
-LoadAzureLLM();
-
-// Create instance (empty string for API key when using Azure AD)
-const azureLLM = LLMFactory.Create("AzureLLM", "");
-
-// Configure for Azure AD
-azureLLM.SetAdditionalSettings({ 
-    endpoint: "https://your-resource.openai.azure.com/",
+azureLLM.SetAdditionalSettings({
+    endpoint: 'https://your-resource.openai.azure.com/',
     useAzureAD: true
 });
 ```
 
-## Usage Examples
+## Usage
 
-### Basic Chat Completion
+### Chat Completion
 
 ```typescript
-import { LLMFactory } from '@memberjunction/ai';
-import { LoadAzureLLM } from '@memberjunction/ai-azure';
-
-// Setup
-LoadAzureLLM();
-const azureLLM = LLMFactory.Create("AzureLLM", "your-api-key");
-azureLLM.SetAdditionalSettings({ 
-    endpoint: "https://your-resource.openai.azure.com/"
-});
-
-// Simple chat completion
 const result = await azureLLM.ChatCompletion({
-    model: "gpt-4", // or "gpt-35-turbo", "phi-4", etc.
+    model: 'gpt-4',
     messages: [
-        { role: "system", content: "You are a helpful assistant." },
-        { role: "user", content: "Explain the theory of relativity in simple terms." }
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: 'Explain the theory of relativity.' }
     ],
     maxOutputTokens: 500,
     temperature: 0.7
@@ -97,310 +87,73 @@ const result = await azureLLM.ChatCompletion({
 
 if (result.success) {
     console.log(result.data.choices[0].message.content);
-    console.log(`Tokens used: ${result.data.usage.totalTokens}`);
 }
-
-// Clean up when done
-azureLLM.ClearAdditionalSettings();
 ```
 
-### Streaming Responses
+### Streaming
 
 ```typescript
-const streamResult = await azureLLM.ChatCompletion({
-    model: "gpt-4",
-    messages: [
-        { role: "user", content: "Write a detailed story about space exploration." }
-    ],
+const result = await azureLLM.ChatCompletion({
+    model: 'gpt-4',
+    messages: [{ role: 'user', content: 'Write a detailed story.' }],
     streaming: true,
     streamingCallbacks: {
-        OnContent: (content, isComplete) => {
-            // Handle each chunk of content as it arrives
-            process.stdout.write(content);
-        },
-        OnComplete: (finalResult) => {
-            console.log("\n\nStreaming complete!");
-            console.log(`Total tokens: ${finalResult.data.usage.totalTokens}`);
-        },
-        OnError: (error) => {
-            console.error("Streaming error:", error);
-        }
+        OnContent: (content) => process.stdout.write(content),
+        OnComplete: (result) => console.log('\nDone!')
     }
 });
 ```
 
-### JSON Response Format
+### Embeddings
 
 ```typescript
-const jsonResult = await azureLLM.ChatCompletion({
-    model: "gpt-4",
-    messages: [
-        { 
-            role: "user", 
-            content: "List 3 benefits of exercise as a JSON array with 'benefit' and 'description' fields." 
-        }
-    ],
-    responseFormat: "JSON"
+import { AzureEmbedding } from '@memberjunction/ai-azure';
+
+const embedder = new AzureEmbedding('your-api-key');
+embedder.SetAdditionalSettings({
+    endpoint: 'https://your-resource.openai.azure.com/'
 });
 
-if (jsonResult.success) {
-    const benefits = JSON.parse(jsonResult.data.choices[0].message.content);
-    console.log(benefits);
-}
-```
-
-### Text Summarization
-
-```typescript
-const summary = await azureLLM.SummarizeText({
-    model: "gpt-35-turbo",
-    messages: [
-        { 
-            role: "user", 
-            content: "[Your long text to summarize here...]" 
-        }
-    ],
-    maxOutputTokens: 150
+const result = await embedder.EmbedText({
+    model: 'text-embedding-ada-002',
+    text: 'Sample text for embedding'
 });
 
-if (summary.success) {
-    console.log("Summary:", summary.summary);
-}
+console.log(`Dimensions: ${result.vector.length}`);
 ```
-
-### Text Classification
-
-```typescript
-const classification = await azureLLM.ClassifyText({
-    model: "gpt-35-turbo",
-    messages: [
-        { 
-            role: "user", 
-            content: "I absolutely loved this product! Best purchase ever!" 
-        }
-    ]
-});
-
-if (classification.success) {
-    console.log("Category:", classification.tags[0].name);
-    console.log("Confidence:", classification.tags[0].confidence);
-}
-```
-
-### Embeddings Generation
-
-```typescript
-import { EmbeddingModelFactory } from '@memberjunction/ai';
-import { LoadAzureEmbedding } from '@memberjunction/ai-azure';
-
-// Setup
-LoadAzureEmbedding();
-const embedder = EmbeddingModelFactory.Create("AzureEmbedding", "your-api-key");
-embedder.SetAdditionalSettings({ 
-    endpoint: "https://your-resource.openai.azure.com/"
-});
-
-// Single text embedding
-const embedding = await embedder.EmbedText({
-    model: "text-embedding-ada-002",
-    text: "The quick brown fox jumps over the lazy dog."
-});
-
-console.log(`Embedding dimension: ${embedding.vector.length}`);
-console.log(`First 5 values: ${embedding.vector.slice(0, 5)}`);
-
-// Batch embeddings
-const batchEmbeddings = await embedder.EmbedTexts({
-    model: "text-embedding-ada-002",
-    texts: [
-        "First document to embed",
-        "Second document to embed",
-        "Third document to embed"
-    ]
-});
-
-console.log(`Generated ${batchEmbeddings.vectors.length} embeddings`);
-
-// Clean up
-embedder.ClearAdditionalSettings();
-```
-
-## API Reference
-
-### AzureLLM Class
-
-#### Constructor
-```typescript
-constructor(apiKey: string)
-```
-
-#### Methods
-
-##### SetAdditionalSettings
-```typescript
-SetAdditionalSettings(settings: Record<string, any>): void
-```
-Configures Azure-specific settings including endpoint and authentication method.
-
-##### ClearAdditionalSettings
-```typescript
-ClearAdditionalSettings(): void
-```
-Clears all additional settings and resets the client connection.
-
-##### ChatCompletion
-```typescript
-ChatCompletion(params: ChatParams): Promise<ChatResult>
-```
-Performs a chat completion request with optional streaming support.
-
-##### SummarizeText
-```typescript
-SummarizeText(params: SummarizeParams): Promise<SummarizeResult>
-```
-Summarizes the provided text using the specified model.
-
-##### ClassifyText
-```typescript
-ClassifyText(params: ClassifyParams): Promise<ClassifyResult>
-```
-Classifies the provided text into categories.
-
-#### Properties
-
-##### SupportsStreaming
-```typescript
-get SupportsStreaming(): boolean
-```
-Returns `true` - Azure AI supports streaming responses.
-
-##### Endpoint
-```typescript
-get Endpoint(): string
-```
-Returns the configured Azure endpoint URL.
-
-### AzureEmbedding Class
-
-#### Methods
-
-##### EmbedText
-```typescript
-EmbedText(params: EmbedTextParams): Promise<EmbedTextResult>
-```
-Generates an embedding vector for a single text.
-
-##### EmbedTexts
-```typescript
-EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult>
-```
-Generates embedding vectors for multiple texts in a single request.
-
-##### GetEmbeddingModels
-```typescript
-GetEmbeddingModels(): Promise<any>
-```
-Returns available embedding models.
 
 ## Configuration Options
 
-### Additional Settings
-
-| Setting | Type | Required | Default | Description |
-|---------|------|----------|---------|-------------|
-| `endpoint` | `string` | Yes | - | Your Azure AI resource endpoint URL |
-| `useAzureAD` | `boolean` | No | `false` | Use Azure AD authentication instead of API key |
-
-## Supported Models
-
-### Language Models
-- **GPT-4**: Latest GPT-4 models including GPT-4-Turbo
-- **GPT-3.5**: GPT-3.5-Turbo models
-- **Phi-4**: Microsoft's efficient reasoning model
-- Any other models deployed in your Azure AI resource
-
-### Embedding Models
-- **text-embedding-ada-002**: 1536-dimensional embeddings
-- Other embedding models available in your Azure deployment
-
-## Dependencies
-
-- `@azure-rest/ai-inference`: Azure AI inference REST client
-- `@azure/core-auth`: Azure authentication core
-- `@azure/identity`: Azure identity and credential management
-- `@memberjunction/ai`: Core MemberJunction AI interfaces
-- `@memberjunction/global`: MemberJunction global utilities
-
-## Integration with MemberJunction
-
-This package integrates seamlessly with other MemberJunction AI packages:
-
-- **@memberjunction/ai**: Implements core interfaces like `BaseLLM` and `BaseEmbeddings`
-- **@memberjunction/ai-vectors**: Can be used with Azure embeddings for vector storage
-- **@memberjunction/ai-prompts**: Compatible with prompt templates and management
-- **@memberjunction/ai-agents**: Can power AI agents with Azure models
-
-## Error Handling
-
-```typescript
-try {
-    const result = await azureLLM.ChatCompletion({
-        model: "gpt-4",
-        messages: [{ role: "user", content: "Hello!" }]
-    });
-    
-    if (!result.success) {
-        console.error("Request failed:", result.errorMessage);
-    }
-} catch (error) {
-    console.error("Exception occurred:", error);
-}
-```
-
-## Best Practices
-
-1. **Always set endpoint**: The endpoint must be configured before making any requests
-2. **Clean up settings**: Call `ClearAdditionalSettings()` when switching configurations
-3. **Handle errors**: Always check the `success` property of results
-4. **Use appropriate models**: Choose models based on your task requirements and cost considerations
-5. **Batch requests**: Use `EmbedTexts` for multiple embeddings to reduce API calls
-6. **Monitor usage**: Track token usage through the `usage` property in results
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"Azure client not initialized"**: Ensure `SetAdditionalSettings` is called with a valid endpoint
-2. **Authentication failures**: Verify your API key or Azure AD credentials
-3. **Model not found**: Ensure the model is deployed in your Azure resource
-4. **Rate limiting**: Implement retry logic for high-volume applications
+| Setting | Type | Required | Description |
+|---------|------|----------|-------------|
+| `endpoint` | `string` | Yes | Azure AI resource endpoint URL |
+| `useAzureAD` | `boolean` | No | Use Azure AD authentication instead of API key |
 
 ## Supported Parameters
 
-The Azure provider supports the following LLM parameters (same as OpenAI since it uses OpenAI models):
+| Parameter | Supported | Notes |
+|-----------|-----------|-------|
+| temperature | Yes | 0.0 - 2.0 |
+| maxOutputTokens | Yes | Maximum tokens to generate |
+| topP | Yes | Nucleus sampling (0.0 - 1.0) |
+| frequencyPenalty | Yes | -2.0 to 2.0 |
+| presencePenalty | Yes | -2.0 to 2.0 |
+| seed | Yes | Deterministic outputs |
+| stopSequences | Yes | Stop generation sequences |
+| responseFormat | Yes | Text, JSON, Markdown |
+| streaming | Yes | Real-time streaming |
+| topK | No | Not available in Azure OpenAI |
+| minP | No | Not available in Azure OpenAI |
 
-**Supported:**
-- `temperature` - Controls randomness in the output (0.0-2.0)
-- `maxOutputTokens` - Maximum number of tokens to generate
-- `topP` - Nucleus sampling threshold (0.0-1.0)
-- `frequencyPenalty` - Reduces repetition of token sequences (-2.0 to 2.0)
-- `presencePenalty` - Reduces repetition of specific tokens (-2.0 to 2.0)
-- `seed` - For deterministic outputs
-- `stopSequences` - Array of sequences where the API will stop generating
-- `includeLogProbs` - Whether to return log probabilities
-- `responseFormat` - Output format (Text, JSON, Markdown, etc.)
+## Class Registration
 
-**Not Supported:**
-- `topK` - Not available in Azure OpenAI API
-- `minP` - Not available in Azure OpenAI API
+- `AzureLLM` -- Registered via `@RegisterClass(BaseLLM, 'AzureLLM')`
+- `AzureEmbedding` -- Registered via `@RegisterClass(BaseEmbeddings, 'AzureEmbedding')`
 
-## License
+## Dependencies
 
-MIT - See LICENSE file in the repository root
-
-## Additional Resources
-
-- [Azure AI Documentation](https://learn.microsoft.com/en-us/azure/ai-services/)
-- [Azure OpenAI Service](https://learn.microsoft.com/en-us/azure/cognitive-services/openai/)
-- [MemberJunction Documentation](https://docs.memberjunction.com)
-- [Azure AI Studio](https://ai.azure.com)
+- `@memberjunction/ai` - Core AI abstractions
+- `@memberjunction/global` - Class registration
+- `@azure-rest/ai-inference` - Azure AI inference REST client
+- `@azure/core-auth` - Azure authentication core
+- `@azure/identity` - Azure identity and credential management

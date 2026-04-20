@@ -1,0 +1,1 @@
+SELECT TOP {{ topN | sqlNumber }} fp.ID, fp.ThreadID, fp.Content, fp.AuthorID, fp.PostedDate, fp.LikeCount, fp.HelpfulCount, (fp.LikeCount + fp.HelpfulCount) AS TotalEngagement FROM [AssociationDemo].[vwForumPosts] fp WHERE fp.Status = 'Published' ORDER BY (fp.LikeCount + fp.HelpfulCount) DESC

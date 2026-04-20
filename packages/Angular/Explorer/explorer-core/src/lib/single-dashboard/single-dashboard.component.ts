@@ -1,15 +1,15 @@
 import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
-import { TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
 import { ResourceData } from '@memberjunction/core-entities';
-import { DashboardEntityExtended, ResourceTypeEntity } from '@memberjunction/core-entities';
+import { MJDashboardEntityExtended, MJResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { SharedService, RecentAccessService } from '@memberjunction/ng-shared';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
 import { Subject, debounceTime } from 'rxjs';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 
 @Component({
+  standalone: false,
   selector: 'mj-single-dashboard',
   templateUrl: './single-dashboard.component.html',
   styleUrls: ['./single-dashboard.component.css']
@@ -19,12 +19,12 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   @ViewChild('dashboardNameInput') dashboardNameInput!: ElementRef<HTMLInputElement>
 
   @Input() public ResourceData!: ResourceData;
-  @Output() public dashboardSaved: EventEmitter<DashboardEntityExtended> = new EventEmitter<DashboardEntityExtended>();
+  @Output() public dashboardSaved: EventEmitter<MJDashboardEntityExtended> = new EventEmitter<MJDashboardEntityExtended>();
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public loadStarted: EventEmitter<any> = new EventEmitter<any>();
 
   public items: DashboardItem[] = [];
-  public dashboardEntity!: DashboardEntityExtended;
+  public dashboardEntity!: MJDashboardEntityExtended;
   public config: DashboardConfigDetails = new DashboardConfigDetails();
   public isItemDialogOpened: boolean = false;
   public isEditDialogOpened: boolean = false;
@@ -33,10 +33,9 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   public allowResize: boolean = false;
   public allowReorder: boolean = false;
   public isEditingDashboard: boolean = false;
-  public selectedResource!: ResourceTypeEntity | null;
+  public selectedResource!: MJResourceTypeEntity | null;
   public selectedDashboardItem!: DashboardItem | null;
   private saveChangesSubject: Subject<any> = new Subject();
-  private selectedComponent: SingleDashboardComponent | null = null;
   private editOnLoad: boolean = false;
   private recentAccessService: RecentAccessService;
 
@@ -77,13 +76,14 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
     // load up the dashboard
     const d = this.ResourceData;
     const config = this.ResourceData.Configuration;
     if (this.ResourceData) {
       const md = new Metadata();
       let uiConfig: any = {items:[]};
-      this.dashboardEntity = await md.GetEntityObject<DashboardEntityExtended>('Dashboards');
+      this.dashboardEntity = await md.GetEntityObject<MJDashboardEntityExtended>('MJ: Dashboards');
       if (this.ResourceData.ResourceRecordID && this.ResourceData.ResourceRecordID.length > 0) {
         await this.dashboardEntity.Load(this.ResourceData.ResourceRecordID);
         // Log access to dashboard (fire-and-forget, don't await)
@@ -248,7 +248,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
       return false;
   }
 
-  public dashboardSaveComplete(entity: DashboardEntityExtended): void {
+  public dashboardSaveComplete(entity: MJDashboardEntityExtended): void {
     this.dashboardSaved.emit(entity);
   }
 
@@ -306,41 +306,32 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     return this.isEditingDashboard ? "bg-dark-grey" : "bg-blue";
   }
 
-  onReorder(e: TileLayoutReorderEvent): void {
-    const item = this.items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
+  onReorder(e: { oldIndex: number; newIndex: number; newCol?: number; newRow?: number; uniqueId?: number }): void {
+    const item = e.uniqueId != null ? this.items.find(i => i.uniqueId === e.uniqueId) : this.items[e.oldIndex];
     if (item) {
-      // move the item in our config state to the new index
       if (e.oldIndex !== e.newIndex) {
         this.items.splice(e.oldIndex, 1);
-        this.items.splice(e.newIndex, 0, item);  
+        this.items.splice(e.newIndex, 0, item);
       }
-      //item.order = e.item.order;
-      item.col = e.newCol ? e.newCol : item.col;
-      item.row = e.newRow ? e.newRow : item.row;
+      item.col = e.newCol ?? item.col;
+      item.row = e.newRow ?? item.row;
     }
   }
-  
-  onResize(e: TileLayoutResizeEvent): void {
-    const item = this.items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
-    if (item) {      
+
+  onResize(e: { newColSpan: number; newRowSpan: number; uniqueId?: number }): void {
+    const item = e.uniqueId != null ? this.items.find(i => i.uniqueId === e.uniqueId) : undefined;
+    if (item) {
       item.colSpan = e.newColSpan;
       item.rowSpan = e.newRowSpan;
     }
   }
 
   onMouseEnter(e: MouseEvent): void {
-    this.selectedComponent = <SingleDashboardComponent>(e.target as any);
+    // Available for future drag-and-drop support
   }
 
   onMouseOut(e: MouseEvent): void {
-    this.selectedComponent = null;
-  }
-
-  //Apply this style to the component we're hovering over
-  //so that it is not offset by a wide margin when we click/drag it
-  //https://github.com/telerik/kendo-angular/issues/3492
-  getSelectedComponentStyle(component: SingleDashboardComponent): string {
-    return this.selectedComponent === component ? "position: unset" : "";
+    // Available for future drag-and-drop support
   }
 
   /**

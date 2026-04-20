@@ -635,7 +635,7 @@ function AIModelDetails({
             backgroundColor: styles.colors.surface
           }}>
             <OpenRecordButton
-              entityName="AI Models"
+              entityName="MJ: AI Models"
               record={model}
               buttonText="Open Model Record"
               utilities={utilities}

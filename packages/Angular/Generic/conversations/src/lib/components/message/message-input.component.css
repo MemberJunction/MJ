@@ -12,16 +12,16 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
-  background: rgba(255, 255, 255, 0.95);
+  background: color-mix(in srgb, var(--mj-bg-surface-card) 95%, transparent);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--mj-shadow-sm);
   z-index: 10;
   pointer-events: none;
 }
 .processing-indicator i {
-  color: var(--primary-color, #007bff);
+  color: var(--mj-brand-primary);
 }
 .processing-indicator span {
   font-size: 0.9rem;
-  color: var(--text-primary, #333);
+  color: var(--mj-text-primary);
 }

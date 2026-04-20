@@ -1,48 +1,42 @@
-<!-- 
-  Entity Detail Component Template
-  
-  This template displays:
-  1. A CSS grid layout showing details of a selected entity
-  2. Field names in the left column and values in the right column
-  3. Only displays when an entity is provided (through the @Input property)
-  
-  Features:
-  - Responsive grid layout using CSS Grid
-  - Conditional display based on whether an entity has been selected
-  - Displays various properties of the MemberJunction entity
+<!--
+Entity Detail Component Template
+
+This template displays:
+1. A CSS grid layout showing details of a selected entity
+2. Field names in the left column and values in the right column
+3. Only displays when an entity is provided (through the @Input property)
+
+Features:
+- Responsive grid layout using CSS Grid
+- Conditional display based on whether an entity has been selected
+- Displays various properties of the MemberJunction entity
 -->
-<div class="detail-grid" *ngIf="entity">
+@if (entity) {
+  <div class="detail-grid">
     <!-- Grid headers -->
     <div class="grid-header">Field</div>
     <div class="grid-header">Value</div>
-
     <!-- Entity name -->
     <div class="grid-item">Name</div>
     <div class="grid-item">{{ entity.Name }}</div>
-
     <!-- Entity description -->
     <div class="grid-item">Description</div>
     <div class="grid-item">{{ entity.Description }}</div>
-
     <!-- Base view name -->
     <div class="grid-item">Base View</div>
     <div class="grid-item">{{ entity.BaseView }}</div>
-
     <!-- Database schema name -->
     <div class="grid-item">Schema</div>
     <div class="grid-item">{{ entity.SchemaName }}</div>
-
     <!-- Virtual entity flag -->
     <div class="grid-item">Virtual Entity</div>
     <div class="grid-item">{{ entity.VirtualEntity }}</div>
-
     <!-- Track record changes flag -->
     <div class="grid-item">Track Record Changes</div>
     <div class="grid-item">{{ entity.TrackRecordChanges }}</div>
-
     <!-- Add additional fields as needed -->
-
     <!-- Allow user search API flag -->
     <div class="grid-item">Allow User Search API</div>
     <div class="grid-item">{{ entity.AllowUserSearchAPI }}</div>
-</div>
+  </div>
+}

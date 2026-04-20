@@ -16,7 +16,7 @@ WITH AgentRunHierarchy AS (
 PromptRunCosts AS (
   -- Get all prompt runs for the agent run hierarchy
   SELECT 
-    pr.ID as PromptRunID,
+    pr.ID as PromptRunID, 
     pr.TotalCost,
     pr.TokensPrompt,
     pr.TokensCompletion,

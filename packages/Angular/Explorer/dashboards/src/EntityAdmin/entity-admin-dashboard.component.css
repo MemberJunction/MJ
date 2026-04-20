@@ -1,99 +1,136 @@
+/**
+ * Entity Admin Dashboard Component - MJ Design Token Styled
+ * Reference implementation for MJ design token usage
+ */
+
 .entity-admin-dashboard-container {
   overflow: hidden;
-  padding: 4px;
+  padding: var(--mj-space-2);
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--mj-bg-page);
 }
 
+/* Dashboard Header */
 .dashboard-header {
-  margin-bottom: 16px;
+  margin-bottom: var(--mj-space-4);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+
 .dashboard-header .header-info {
   flex: 1;
   display: flex;
   align-items: center;
 }
+
+/* Badge for Visible Entities Count */
 .dashboard-header .visible-entities-count {
-  font-size: 12px;
-  color: #2196f3;
-  font-weight: 600;
-  background: rgba(33, 150, 243, 0.1);
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(33, 150, 243, 0.2);
+  display: inline-flex;
+  align-items: center;
+  padding: var(--mj-space-1-5) var(--mj-space-3);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-brand-on-accent);
+  background: var(--mj-brand-accent);
+  border-radius: var(--mj-radius-md);
+  border: 1px solid var(--mj-brand-accent-subtle);
 }
+
 .dashboard-header .header-controls {
   display: flex;
-  gap: 8px;
+  gap: var(--mj-space-2);
 }
+
+/* Control Buttons */
 .dashboard-header .header-controls .control-btn {
-  padding: 8px 12px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: white;
-  cursor: pointer;
-  font-size: 12px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-4);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full);
+  cursor: pointer;
+  transition: var(--mj-transition-base);
 }
-.dashboard-header .header-controls .control-btn:hover {
-  background-color: #f0f0f0;
-  border-color: #2196f3;
+
+.dashboard-header .header-controls .control-btn:hover:not(:disabled) {
+  background: var(--mj-bg-surface-hover);
+  border-color: var(--mj-border-strong);
+  color: var(--mj-text-primary);
 }
+
 .dashboard-header .header-controls .control-btn.active {
-  background-color: #2196f3;
-  border-color: #2196f3;
-  color: white;
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
 }
+
 .dashboard-header .header-controls .control-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.38;
   cursor: not-allowed;
 }
+
 .dashboard-header .header-controls .control-btn:disabled:hover {
-  background-color: white;
-  border-color: #ccc;
+  background: var(--mj-bg-surface);
+  border-color: var(--mj-border-default);
 }
+
+.dashboard-header .header-controls .control-btn:focus-visible {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: 2px;
+}
+
 .dashboard-header .header-controls .control-btn .fa-solid {
   font-size: 14px;
 }
 
-.loading-container, .error-container {
+/* Loading and Error Containers */
+.loading-container,
+.error-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #fafafa;
+  background: var(--mj-bg-surface-sunken);
   flex: 1;
-}
-.loading-container p, .error-container p {
-  color: #666;
-  font-size: 14px;
+  border-radius: var(--mj-radius-lg);
 }
 
+.loading-container p,
+.error-container p {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-normal);
+  color: var(--mj-text-secondary);
+}
+
+/* Error Message */
 .error-message {
-  color: #d32f2f;
-  font-weight: 500;
+  color: var(--mj-status-error-text);
+  font-weight: var(--mj-font-medium);
 }
 
+/* Dashboard Content */
 .dashboard-content {
   overflow: hidden;
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0; /* Allow flex children to shrink below their content size */
+  min-height: 0;
 }
 
+/* Loading Spinner */
 .loading-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: var(--mj-space-4);
 }
 
 .loading-spinner {
@@ -110,25 +147,28 @@
   border-radius: 50%;
   animation: spin 1.5s linear infinite;
 }
+
 .spinner-ring:nth-child(1) {
-  border-top-color: #2196f3;
+  border-top-color: var(--mj-brand-primary);
   animation-delay: 0s;
 }
+
 .spinner-ring:nth-child(2) {
-  border-top-color: #9c27b0;
+  border-top-color: var(--mj-brand-tertiary);
   animation-delay: 0.3s;
   transform: scale(0.8);
 }
+
 .spinner-ring:nth-child(3) {
-  border-top-color: #ff6b35;
+  border-top-color: var(--mj-brand-accent);
   animation-delay: 0.6s;
   transform: scale(0.6);
 }
 
 .loading-text {
-  font-size: 14px;
-  color: #666;
-  font-weight: 500;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-text-secondary);
   text-align: center;
 }
 

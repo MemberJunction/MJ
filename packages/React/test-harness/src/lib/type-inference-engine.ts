@@ -6,8 +6,13 @@
  * type information for validation rules.
  */
 
-import traverse, { NodePath } from '@babel/traverse';
+import _traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
+
+// @babel/traverse is CJS - in Node.js ESM, the function is at .default
+// See: https://github.com/babel/babel/discussions/13093
+type TraverseModule = typeof _traverse & { default?: typeof _traverse };
+const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { UserInfo } from '@memberjunction/core';
 import {

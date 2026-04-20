@@ -1,19 +1,38 @@
-# MemberJunction Core Entities Server
+# @memberjunction/core-entities-server
 
 Server-side entity subclasses for MemberJunction that provide extended functionality and business logic for core entities when running in a Node.js environment.
 
 ## Overview
 
-This package contains server-side implementations of MemberJunction entity subclasses that require server-specific functionality such as:
-- Direct database access
-- File system operations
-- Server-side API integrations
-- Complex business logic that should only run on the server
-- Automatic creation/management of related entities
+This package contains server-side implementations of MemberJunction entity subclasses that require server-specific functionality such as direct database access, file system operations, server-side API integrations, complex business logic, and automatic creation/management of related entities.
 
-## Purpose
+```mermaid
+graph TD
+    A["Core Entities Server"] --> B["AIPromptEntityExtended"]
+    A --> C["QueryEntityExtended"]
+    A --> D["ComponentEntityExtended"]
+    A --> E["MJActionEntityExtended"]
+    A --> F["ApplicationEntityExtended"]
+    A --> G["Other Server Entities"]
 
-While the base `@memberjunction/core-entities` package provides entity classes that work in any JavaScript environment (browser or server), some entity operations require server-specific capabilities. This package provides those extended implementations.
+    B -->|manages| H["Templates<br/>Template Contents"]
+    C -->|manages| H
+    D -->|generates| I["Vector Embeddings"]
+
+    J["MJ Class Factory"] -->|returns server subclass| A
+    K["Core Entities<br/>(base classes)"] -->|extended by| A
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#7c5295,stroke:#563a6b,color:#fff
+    style D fill:#7c5295,stroke:#563a6b,color:#fff
+    style E fill:#7c5295,stroke:#563a6b,color:#fff
+    style F fill:#7c5295,stroke:#563a6b,color:#fff
+    style H fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style I fill:#b8762f,stroke:#8a5722,color:#fff
+    style J fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style K fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ### Key Differences from Core Entities
 
@@ -263,6 +282,123 @@ export class OrderEntityServer extends OrderEntity {
     }
 }
 ```
+
+## SQL Parser
+
+The `SQLParser` utility class extracts table/view references and column references from SQL statements. It uses `node-sql-parser` for AST-based parsing with automatic regex fallback when the AST parser fails. This class has **no dependency on MJ Metadata** — it returns raw parse results that callers cross-reference against entities themselves.
+
+### When to Use
+
+- **Virtual entity decoration**: Parse a view's SQL to identify which source entities it pulls from
+- **Query entity metadata**: Parse SQL queries to find referenced tables and columns
+- **Any server-side SQL analysis**: Extract structural information from SQL without executing it
+
+### Basic Usage — Plain SQL
+
+```typescript
+import { SQLParser } from '@memberjunction/core-entities-server';
+
+const sql = `
+  SELECT c.Name, c.Email, o.OrderDate, o.Total
+  FROM [dbo].[Customer] c
+  INNER JOIN [dbo].[Order] o ON o.CustomerID = c.ID
+  WHERE o.Status = 'Active'
+`;
+
+const result = SQLParser.Parse(sql);
+
+// Tables found in the query
+for (const table of result.Tables) {
+  console.log(`${table.SchemaName}.${table.TableName} (alias: ${table.Alias})`);
+}
+// Output:
+//   dbo.Customer (alias: c)
+//   dbo.Order (alias: o)
+
+// Columns referenced in the query
+for (const col of result.Columns) {
+  console.log(`${col.TableQualifier ? col.TableQualifier + '.' : ''}${col.ColumnName}`);
+}
+// Output:
+//   c.Name, c.Email, o.OrderDate, o.Total, o.CustomerID, c.ID, o.Status
+
+// Whether AST parsing succeeded (true) or regex fallback was used (false)
+console.log(`Used AST: ${result.UsedASTParsing}`);
+```
+
+### Nunjucks Template SQL
+
+For SQL that contains Nunjucks template syntax (e.g., MemberJunction query templates), use `ParseWithTemplatePreprocessing`. This replaces template expressions with safe placeholder values before parsing:
+
+```typescript
+import { SQLParser } from '@memberjunction/core-entities-server';
+
+const templateSQL = `
+  SELECT * FROM [dbo].[Customer]
+  WHERE Status = {{ status | sqlString }}
+  {% if regionId %}
+    AND RegionID = {{ regionId | sqlNumber }}
+  {% endif %}
+`;
+
+// Nunjucks syntax is replaced with placeholders, then parsed normally
+const result = SQLParser.ParseWithTemplatePreprocessing(templateSQL);
+console.log(result.Tables); // [{ TableName: 'Customer', SchemaName: 'dbo', Alias: 'Customer' }]
+```
+
+### Cross-Referencing with Entity Metadata
+
+The parser returns raw table/column references. To resolve them to MemberJunction entities:
+
+```typescript
+import { Metadata } from '@memberjunction/core';
+import { SQLParser } from '@memberjunction/core-entities-server';
+
+const parseResult = SQLParser.Parse(viewDefinitionSQL);
+const md = new Metadata();
+
+for (const tableRef of parseResult.Tables) {
+  const entity = md.Entities.find(e =>
+    (e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase() ||
+     e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase()) &&
+    e.SchemaName.toLowerCase() === tableRef.SchemaName.toLowerCase()
+  );
+
+  if (entity) {
+    console.log(`Table ${tableRef.TableName} → Entity "${entity.Name}"`);
+    // Access entity.Fields for full field metadata
+  }
+}
+```
+
+### Return Types
+
+```typescript
+interface SQLParseResult {
+  Tables: SQLTableReference[];   // All table/view references (FROM, JOIN, subqueries, CTEs)
+  Columns: SQLColumnReference[]; // All column references (SELECT, WHERE, JOIN ON, etc.)
+  UsedASTParsing: boolean;       // true = AST parsed, false = regex fallback
+}
+
+interface SQLTableReference {
+  TableName: string;    // Table or view name
+  SchemaName: string;   // Schema name (defaults to 'dbo')
+  Alias: string;        // Query alias, or table name if no alias
+}
+
+interface SQLColumnReference {
+  ColumnName: string;        // Column name
+  TableQualifier: string | null; // Table alias prefix (e.g., "c" in "c.Name")
+}
+```
+
+### How It Works
+
+1. **AST Parsing** (preferred): Uses `node-sql-parser` with `TransactSQL` dialect to build an AST, then recursively walks it to extract table references from `FROM`/`JOIN` clauses, subqueries, and CTEs, plus column references from `SELECT`, `WHERE`, `GROUP BY`, `ORDER BY`, and `ON` conditions.
+
+2. **Regex Fallback**: If AST parsing fails (complex SQL, dialect edge cases), a regex-based extractor finds `FROM`/`JOIN` table references. Column references are not extracted in regex mode (the `Columns` array will be empty).
+
+3. **Nunjucks Preprocessing**: `ParseWithTemplatePreprocessing` first renders the SQL through a Nunjucks environment with placeholder filters (`sqlString` → `'placeholder'`, `sqlNumber` → `0`, etc.), stripping template blocks while preserving the SQL structure. If Nunjucks rendering fails, it falls back to regex-based template removal.
 
 ## Troubleshooting
 

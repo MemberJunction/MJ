@@ -1,10 +1,23 @@
 import { EntityInfo, CompositeKey } from '@memberjunction/core';
-import { BaseEntity } from '@memberjunction/core';
+import {
+  ViewGridState,
+  MJUserViewEntity_IGridSortSetting,
+  MJUserViewEntity_IGridColumnSetting,
+  MJUserViewEntity_ITimelineState,
+  MJUserViewEntity_IDisplayCardState,
+  MJUserViewEntity_IGridDisplayState,
+} from '@memberjunction/core-entities';
+
+// Re-export core types for backward compatibility
+export type ViewColumnPinned = 'left' | 'right' | null;
+export type ViewGridSortSetting = MJUserViewEntity_IGridSortSetting;
+export type ViewGridColumnSetting = MJUserViewEntity_IGridColumnSetting;
+export { ViewGridState };
 
 /**
  * View modes supported by the EntityViewer component
  */
-export type EntityViewMode = 'grid' | 'cards' | 'timeline';
+export type EntityViewMode = 'grid' | 'cards' | 'timeline' | 'map';
 
 /**
  * Behavior when a record is selected
@@ -40,8 +53,12 @@ export interface CardDisplayField {
  * Auto-generated card template based on entity metadata
  */
 export interface CardTemplate {
-  /** Primary title field name */
-  titleField: string;
+  /**
+   * One or more field names that together form the card title.
+   * Multiple IsNameField fields are combined with spaces
+   * (e.g., ["FirstName", "LastName"] → "Elizabeth Rodriguez").
+   */
+  titleFields: string[];
   /** Secondary subtitle field name */
   subtitleField: string | null;
   /** Description/notes field name */
@@ -89,8 +106,8 @@ export interface GridColumnDef {
  * Event emitted when a record is selected (clicked)
  */
 export interface RecordSelectedEvent {
-  /** The selected entity record */
-  record: BaseEntity;
+  /** The selected record (plain object from ResultType: 'simple') */
+  record: Record<string, unknown>;
   /** The entity metadata */
   entity: EntityInfo;
   /** The composite key of the record */
@@ -101,8 +118,8 @@ export interface RecordSelectedEvent {
  * Event emitted when a record should be opened (double-click or open button)
  */
 export interface RecordOpenedEvent {
-  /** The entity record to open */
-  record: BaseEntity;
+  /** The record to open (may be undefined for FK navigation where record isn't loaded) */
+  record?: Record<string, unknown>;
   /** The entity metadata */
   entity: EntityInfo;
   /** The composite key of the record */
@@ -120,7 +137,7 @@ export interface DataLoadedEvent {
   /** Time taken to load in milliseconds */
   loadTime: number;
   /** The loaded records - allows parent to access records for state restoration */
-  records: BaseEntity[];
+  records: Record<string, unknown>[];
 }
 
 /**
@@ -191,54 +208,11 @@ export interface LoadMoreEvent {
 }
 
 /**
- * Column configuration from a User View's GridState
- * Matches the format stored in UserView.GridState JSON
- */
-export interface ViewColumnConfig {
-  /** Entity field ID */
-  ID?: string;
-  /** Field name */
-  Name: string;
-  /** Display name for column header */
-  DisplayName?: string;
-  /** Whether the column is hidden */
-  hidden?: boolean;
-  /** Column width in pixels */
-  width?: number;
-  /** Column order index */
-  orderIndex?: number;
-}
-
-/**
- * Sort configuration from a User View's GridState
- * Matches the format stored in UserView.GridState.sortSettings
- */
-export interface ViewSortConfig {
-  /** Field name to sort by */
-  field: string;
-  /** Sort direction - 'asc' or 'desc' */
-  dir: 'asc' | 'desc';
-}
-
-/**
- * Grid state configuration from a User View
- * Matches the JSON structure stored in UserView.GridState
- */
-export interface ViewGridStateConfig {
-  /** Column visibility, width, and order settings */
-  columnSettings?: ViewColumnConfig[];
-  /** Sort settings */
-  sortSettings?: ViewSortConfig[];
-  /** Filter settings (Kendo format) */
-  filter?: object;
-}
-
-/**
  * Event emitted when grid state changes (column resize, reorder, etc.)
  */
 export interface GridStateChangedEvent {
   /** The updated grid state */
-  gridState: ViewGridStateConfig;
+  gridState: ViewGridState;
   /** What changed: 'columns', 'sort', 'filter' */
   changeType: 'columns' | 'sort' | 'filter';
 }
@@ -364,40 +338,27 @@ export type TimelineOrientation = 'vertical' | 'horizontal';
 /**
  * Timeline-specific configuration state
  * Persisted in UserView.DisplayState JSON
+ *
+ * Extends the generated {@link MJUserViewEntity_ITimelineState} with Angular-specific fields.
  */
-export interface TimelineState {
-  /** The date field name to use for timeline ordering */
-  dateFieldName: string;
-  /** Time segment grouping */
-  segmentGrouping?: TimelineSegmentGrouping;
-  /** Sort order for timeline events */
-  sortOrder?: 'asc' | 'desc';
-  /** Whether segments are collapsible */
-  segmentsCollapsible?: boolean;
-  /** Whether segments start expanded */
-  segmentsDefaultExpanded?: boolean;
-  /** Timeline orientation (vertical or horizontal) */
-  orientation?: TimelineOrientation;
-}
+export type TimelineState = MJUserViewEntity_ITimelineState;
 
 /**
  * Card-specific configuration state
  * Persisted in UserView.DisplayState JSON
+ *
+ * Identical to the generated {@link MJUserViewEntity_IDisplayCardState}.
  */
-export interface CardState {
-  /** Custom card size (small, medium, large) */
-  cardSize?: 'small' | 'medium' | 'large';
-}
+export type CardState = MJUserViewEntity_IDisplayCardState;
 
 /**
  * Grid-specific configuration state
  * Persisted in UserView.DisplayState JSON
  * Note: Most grid state is already in GridState column, this is for additional settings
+ *
+ * Extends the generated {@link MJUserViewEntity_IGridDisplayState} with Angular-specific fields.
  */
-export interface GridDisplayState {
-  /** Row height preference */
-  rowHeight?: 'compact' | 'normal' | 'comfortable';
-}
+export type GridDisplayState = MJUserViewEntity_IGridDisplayState;
 
 /**
  * View display state - persisted in UserView.DisplayState
@@ -423,6 +384,63 @@ export interface ViewDisplayState {
 /**
  * Default configuration values
  */
+/**
+ * Summary of what a view configuration includes, for preview in Quick Save dialog
+ */
+export interface ViewConfigSummary {
+  /** Number of visible columns */
+  ColumnCount: number;
+  /** Number of active filters */
+  FilterCount: number;
+  /** Number of sort levels */
+  SortCount: number;
+  /** Whether smart filter is active */
+  SmartFilterActive: boolean;
+  /** Smart filter prompt text (if active) */
+  SmartFilterPrompt: string;
+  /** Number of enabled aggregates */
+  AggregateCount: number;
+}
+
+/**
+ * Event emitted by QuickSaveDialog when user saves
+ */
+export interface QuickSaveEvent {
+  /** View name */
+  Name: string;
+  /** View description (optional) */
+  Description: string;
+  /** Whether the view is shared */
+  IsShared: boolean;
+  /** Whether to save as new (true) or update existing (false) */
+  SaveAsNew: boolean;
+}
+
+/**
+ * Data emitted by QuickSaveDialog when user clicks "Customize columns, filters & sorting..."
+ * Carries the partially-filled form data so the config panel can continue the new-view creation.
+ */
+export interface QuickSaveAdvancedEvent {
+  /** View name entered so far */
+  Name: string;
+  /** View description entered so far */
+  Description: string;
+  /** Whether the view should be shared */
+  IsShared: boolean;
+}
+
+/**
+ * Result of a view save operation (for notification display)
+ */
+export interface ViewSaveResult {
+  /** Whether the save succeeded */
+  Success: boolean;
+  /** Error message (on failure) */
+  ErrorMessage?: string;
+  /** Whether this was a new view or update */
+  IsNew: boolean;
+}
+
 export const DEFAULT_VIEWER_CONFIG: Required<EntityViewerConfig> = {
   showFilter: true,
   showViewModeToggle: true,
@@ -435,7 +453,7 @@ export const DEFAULT_VIEWER_CONFIG: Required<EntityViewerConfig> = {
   filterDebounceMs: 250,
   gridColumns: [],
   cardTemplate: {
-    titleField: '',
+    titleFields: [],
     subtitleField: null,
     descriptionField: null,
     displayFields: [],

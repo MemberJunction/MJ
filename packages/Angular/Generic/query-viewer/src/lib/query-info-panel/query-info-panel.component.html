@@ -1,0 +1,275 @@
+<!-- Query Info Panel - Slide-in Panel -->
+@if (Visible && ShowOverlay) {
+  <div class="info-panel-overlay"
+    @fadeIn
+    (click)="OnClose()">
+  </div>
+}
+
+@if (Visible) {
+  <div class="info-panel"
+    @slideIn
+    [style.width.px]="PanelWidth">
+    <!-- Resize handle -->
+    <div class="resize-handle" (mousedown)="OnResizeStart($event)"></div>
+    <!-- Header -->
+    <div class="panel-header">
+      <div class="header-content">
+        <i class="fa-solid fa-circle-info header-icon"></i>
+        <div class="header-text">
+          <h3 class="header-title">Query Information</h3>
+          @if (QueryInfo) {
+            <span class="header-subtitle">{{ QueryInfo.Name }}</span>
+          }
+        </div>
+      </div>
+      <button class="close-btn" (click)="OnClose()" title="Close">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+    <!-- Content -->
+    @if (QueryInfo) {
+      <div class="panel-content">
+        <!-- Overview Section -->
+        <div class="info-section" [class.expanded]="IsSectionExpanded('overview')">
+          <div class="section-header" (click)="ToggleSection('overview')">
+            <i class="fa-solid section-icon"
+              [class.fa-chevron-down]="IsSectionExpanded('overview')"
+            [class.fa-chevron-right]="!IsSectionExpanded('overview')"></i>
+            <span class="section-title">Overview</span>
+          </div>
+          @if (IsSectionExpanded('overview')) {
+            <div class="section-content">
+              <div class="info-row">
+                <span class="info-label">Name</span>
+                <span class="info-value">{{ QueryInfo.Name }}</span>
+              </div>
+              @if (QueryInfo.Description) {
+                <div class="info-row">
+                  <span class="info-label">Description</span>
+                  <span class="info-value description">{{ QueryInfo.Description }}</span>
+                </div>
+              }
+              @if (QueryInfo.Category) {
+                <div class="info-row">
+                  <span class="info-label">Category</span>
+                  <span class="info-value">
+                    <i class="fa-solid fa-folder category-icon"></i>
+                    {{ QueryInfo.Category }}
+                  </span>
+                </div>
+              }
+              <div class="info-row">
+                <span class="info-label">Status</span>
+                <span class="info-value">
+                  <span class="status-badge" [class.approved]="QueryInfo.Status === 'Approved'">
+                    {{ QueryInfo.Status }}
+                  </span>
+                </span>
+              </div>
+              @if (QueryInfo.OriginalSQL) {
+                <div class="info-row">
+                  <span class="info-label">Has SQL</span>
+                  <span class="info-value">
+                    <i class="fa-solid fa-check text-success"></i> Yes
+                  </span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <!-- Technical Description Section -->
+        @if (QueryInfo.TechnicalDescription) {
+          <div class="info-section" [class.expanded]="IsSectionExpanded('technical')">
+            <div class="section-header" (click)="ToggleSection('technical')">
+              <i class="fa-solid section-icon"
+                [class.fa-chevron-down]="IsSectionExpanded('technical')"
+                [class.fa-chevron-right]="!IsSectionExpanded('technical')"></i>
+              <span class="section-title">Technical Description</span>
+            </div>
+            @if (IsSectionExpanded('technical')) {
+              <div class="section-content technical-description-content">
+                <mj-markdown
+                  [data]="QueryInfo.TechnicalDescription || ''"
+                  [enableMermaid]="true"
+                  [enableHighlight]="true"
+                  [enableCollapsibleHeadings]="false"
+                  [enableSmartypants]="true">
+                </mj-markdown>
+              </div>
+            }
+          </div>
+        }
+        <!-- Fields Section -->
+        <div class="info-section" [class.expanded]="IsSectionExpanded('fields')">
+          <div class="section-header" (click)="ToggleSection('fields')">
+            <i class="fa-solid section-icon"
+              [class.fa-chevron-down]="IsSectionExpanded('fields')"
+            [class.fa-chevron-right]="!IsSectionExpanded('fields')"></i>
+            <span class="section-title">Fields</span>
+            <span class="section-count">({{ QueryInfo.Fields.length || 0 }})</span>
+          </div>
+          @if (IsSectionExpanded('fields')) {
+            <div class="section-content">
+              @if (QueryInfo.Fields.length) {
+                <div class="fields-list">
+                  @for (field of QueryInfo.Fields; track TrackByField($index, field)) {
+                    <div class="field-item">
+                      <div class="field-header">
+                        <span class="field-name">{{ field.Name }}</span>
+                        <span class="field-type">{{ GetFieldTypeDisplay(field) }}</span>
+                      </div>
+                      @if (field.Description || field.SourceEntity) {
+                        <div class="field-details">
+                          @if (field.Description) {
+                            <span class="field-description">
+                              {{ field.Description }}
+                            </span>
+                          }
+                          @if (field.SourceEntity) {
+                            <span class="field-source">
+                              <i class="fa-solid fa-link"></i>
+                              {{ field.SourceEntity }}.{{ field.SourceFieldName }}
+                            </span>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="empty-section">
+                  <i class="fa-solid fa-table-columns"></i>
+                  <span>No fields defined</span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <!-- Parameters Section -->
+        <div class="info-section" [class.expanded]="IsSectionExpanded('parameters')">
+          <div class="section-header" (click)="ToggleSection('parameters')">
+            <i class="fa-solid section-icon"
+              [class.fa-chevron-down]="IsSectionExpanded('parameters')"
+            [class.fa-chevron-right]="!IsSectionExpanded('parameters')"></i>
+            <span class="section-title">Parameters</span>
+            <span class="section-count">({{ QueryInfo.Parameters.length || 0 }})</span>
+          </div>
+          @if (IsSectionExpanded('parameters')) {
+            <div class="section-content">
+              @if (QueryInfo.Parameters.length) {
+                <div class="params-list">
+                  @for (param of QueryInfo.Parameters; track TrackByParam($index, param)) {
+                    <div class="param-item">
+                      <div class="param-header">
+                        <span class="param-name">
+                          {{ param.Name }}
+                          @if (param.IsRequired) {
+                            <span class="required-badge">Required</span>
+                          }
+                        </span>
+                        <span class="param-type">{{ GetParamTypeDisplay(param) }}</span>
+                      </div>
+                      @if (param.Description || param.DefaultValue) {
+                        <div class="param-details">
+                          @if (param.Description) {
+                            <span class="param-description">
+                              {{ param.Description }}
+                            </span>
+                          }
+                          @if (param.DefaultValue) {
+                            <span class="param-default">
+                              Default: {{ param.DefaultValue }}
+                            </span>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="empty-section">
+                  <i class="fa-solid fa-sliders"></i>
+                  <span>No parameters required</span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <!-- SQL Section -->
+        <div class="info-section" [class.expanded]="IsSectionExpanded('sql')">
+          <div class="section-header" (click)="ToggleSection('sql')">
+            <i class="fa-solid section-icon"
+              [class.fa-chevron-down]="IsSectionExpanded('sql')"
+            [class.fa-chevron-right]="!IsSectionExpanded('sql')"></i>
+            <span class="section-title">SQL Query</span>
+          </div>
+          @if (IsSectionExpanded('sql')) {
+            <div class="section-content">
+              @if (QueryInfo.SQL) {
+                <div class="sql-container">
+                  <mj-code-editor
+                    [value]="QueryInfo.SQL"
+                    [readonly]="true"
+                    [language]="'sql'"
+                    (CompositionTokenClick)="OnCompositionTokenClick($event)">
+                  </mj-code-editor>
+                </div>
+              } @else {
+                <div class="empty-section">
+                  <i class="fa-solid fa-code"></i>
+                  <span>SQL not available</span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <!-- Dependent Queries Section -->
+        @if (QueryInfo.Dependents.length > 0) {
+          <div class="info-section" [class.expanded]="IsSectionExpanded('dependents')">
+            <div class="section-header" (click)="ToggleSection('dependents')">
+              <i class="fa-solid section-icon"
+                [class.fa-chevron-down]="IsSectionExpanded('dependents')"
+                [class.fa-chevron-right]="!IsSectionExpanded('dependents')"></i>
+              <span class="section-title">Dependent Queries</span>
+              <span class="section-count">({{ QueryInfo.Dependents.length }})</span>
+            </div>
+            @if (IsSectionExpanded('dependents')) {
+              <div class="section-content">
+                <div class="dependents-list">
+                  @for (dep of QueryInfo.Dependents; track dep.ID) {
+                    <div class="dependent-item" (click)="OnDependentQueryClick(dep)">
+                      <div class="dependent-header">
+                        <i class="fa-solid fa-arrow-left dependent-icon"></i>
+                        <span class="dependent-name">{{ dep.Query }}</span>
+                      </div>
+                      @if (dep.ReferencePath) {
+                        <span class="dependent-ref-path">
+                          via {{ dep.ReferencePath }}
+                        </span>
+                      }
+                    </div>
+                  }
+                </div>
+                <div class="dependents-hint">
+                  <i class="fa-solid fa-info-circle"></i>
+                  These queries reference this query via composition
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+    <!-- Footer -->
+    <div class="panel-footer">
+      <button class="btn btn-primary" (click)="OnOpenRecord()">
+        <i class="fa-solid fa-external-link-alt"></i>
+        Open Full Record
+      </button>
+      <button class="btn btn-secondary" (click)="OnClose()">
+        Close
+      </button>
+    </div>
+  </div>
+}

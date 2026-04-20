@@ -31,9 +31,22 @@ Analyze the provided entity and assign each field to a domain-specific, semantic
 - **Junction/join tables** (examples: ContactAccount, UserRole): Narrow tables with 2-4 FKs and almost NO non-FK business fields. FK ratio typically 40-80%.
 - **Reference/type tables** (examples: AccountType, OrderStatus): Usually 0-1 FKs with a few descriptive fields like Name, Description. FK ratio typically 0-20%.
 
+{% if isChildEntity %}
+### IS-A Entity Inheritance
+
+This entity uses **IS-A (table-per-type) inheritance**. It inherits fields from parent entities in the following chain:
+
+**{{ entityName }}** inherits from:
+{% for parent in parentChain %}
+{{ loop.index }}. **{{ parent.entityName }}**
+{% endfor %}
+
+Fields marked with `[Inherited from ...]` below come from a parent entity in this chain. See the **Inherited Field Handling Rules** section below for how to categorize them.
+
+{% endif %}
 ### Fields
 {% for field in fields %}
-- **{{ field.Name }}** ({{ field.Type }}){% if field.IsNullable %} - Nullable{% endif %}
+- **{{ field.Name }}** ({{ field.Type }}){% if field.IsNullable %} - Nullable{% endif %}{% if field.InheritedFromEntityName %} **[Inherited from {{ field.InheritedFromEntityName }}]**{% endif %}
   {% if field.Description %}
   {{ field.Description }}
   {% endif %}
@@ -111,6 +124,25 @@ Analyze the provided entity and assign each field to a domain-specific, semantic
 - Users should navigate 3-5 logical sections, not 10-20 tiny tabs
 - Broader categories with clear semantic groupings are more intuitive
 
+{% if isChildEntity %}
+### **CRITICAL: Inherited Field Handling (IS-A Inheritance)**
+
+This entity inherits fields from parent entities. You **MUST** handle inherited fields differently from the entity's own fields:
+
+1. **Create ONE category per parent entity** for its inherited fields. Name it using the parent entity's business domain (e.g., "Product Details" for fields inherited from Products, "Meeting Details" for fields inherited from Meetings).
+2. **Never mix inherited and own fields** in the same category. Inherited fields from the same parent go together; the child entity's own fields get their own separate categories.
+3. **Include `inheritedFromEntityName`** in the `categoryInfo` entry for each inherited category. This is the parent entity name exactly as shown in the inheritance chain above.
+4. **`__mj_` system fields** always go in "System Metadata" regardless of origin — do NOT put them in inherited categories.
+5. **Category count limits still apply** to the child's own fields. Inherited categories are additional (one per parent entity in the chain) and do not count toward the 3-5 target.
+6. **Order**: Place the child entity's own categories FIRST, then inherited categories (nearest parent first, then grandparent, etc.), then "System Metadata" last.
+
+**Example**: For entity "Webinars" (inherits from Meetings, which inherits from Products):
+- Own categories: "Webinar Details" (StartURL, MaxViewers, etc.)
+- Inherited category: "Meeting Details" (StartTime, EndTime, Location) with `inheritedFromEntityName: "Meetings"`
+- Inherited category: "Product Details" (Name, Price, SKU) with `inheritedFromEntityName: "Products"`
+- System: "System Metadata" (__mj_CreatedAt, __mj_UpdatedAt)
+
+{% endif %}
 ### Domain-Specific Categories
 
 Create categories that are **specific to this entity's business domain**, not generic labels.
@@ -170,11 +202,20 @@ For each field, you must also determine:
   - "__mj_CreatedAt" → "Created At"
 
 **2. Extended Type** - Specifies special UI treatment for the field
-- Valid values: `'Code'`, `'Email'`, `'FaceTime'`, `'Geo'`, `'MSTeams'`, `'SIP'`, `'SMS'`, `'Skype'`, `'Tel'`, `'URL'`, `'WhatsApp'`, `'ZoomMtg'`, or `null`
+- Valid values: `'Code'`, `'Email'`, `'FaceTime'`, `'Geo'`, `'GeoLatitude'`, `'GeoLongitude'`, `'GeoCountry'`, `'GeoStateProvince'`, `'GeoCity'`, `'GeoPostalCode'`, `'GeoAddress'`, `'MSTeams'`, `'SIP'`, `'SMS'`, `'Skype'`, `'Tel'`, `'URL'`, `'WhatsApp'`, `'ZoomMtg'`, or `null`
 - Use `'Email'` for email address fields - creates clickable mailto: links
 - Use `'URL'` for web address fields - creates clickable hyperlinks
 - Use `'Tel'` for phone number fields - creates clickable tel: links
 - Use `'Code'` for code/script fields (requires CodeType to be set)
+- **Geographic types** - Use these for address/location fields to enable automatic geocoding:
+  - `'GeoAddress'` for street address fields (Address, Address1, StreetAddress, BillToAddress1, ShipToAddress1)
+  - `'GeoCity'` for city fields (City, BillToCity, ShipToCity)
+  - `'GeoStateProvince'` for state/province fields (State, Province, StateProvince, BillToState, ShipToState)
+  - `'GeoCountry'` for country fields (Country, CountryCode, Nation)
+  - `'GeoPostalCode'` for postal/zip code fields (ZipCode, PostalCode, Zip)
+  - `'GeoLatitude'` for latitude fields (Latitude, Lat)
+  - `'GeoLongitude'` for longitude fields (Longitude, Lng, Lon)
+  - `'Geo'` for generic location fields that don't fit the above categories
 - Use `null` for regular text/data fields
 - Examples:
   - "EmailAddress", "Email", "ContactEmail" → `'Email'`
@@ -182,17 +223,28 @@ For each field, you must also determine:
   - "Phone", "PhoneNumber", "Mobile" → `'Tel'`
   - "SkypeID" → `'Skype'`
   - "JavaScript", "SQLStatement", "CSSCode" → `'Code'`
+  - "City", "BillToCity" → `'GeoCity'`
+  - "State", "Province" → `'GeoStateProvince'`
+  - "ZipCode", "PostalCode" → `'GeoPostalCode'`
+  - "Address", "StreetAddress" → `'GeoAddress'`
+  - "Country" → `'GeoCountry'`
+  - "Latitude" → `'GeoLatitude'`
+  - "Longitude" → `'GeoLongitude'`
 
 **3. Code Type** - For fields with ExtendedType='Code', specifies the programming language
-- Valid values: `'CSS'`, `'HTML'`, `'JavaScript'`, `'SQL'`, `'TypeScript'`, `'Other'`, or `null`
-- **Only set when ExtendedType='Code'**
+- **STRICT ENUM** — `codeType` MUST be EXACTLY one of these case-sensitive strings, or `null`:
+  `'CSS'`, `'HTML'`, `'JavaScript'`, `'SQL'`, `'TypeScript'`, `'Other'`
+- **Only set when ExtendedType='Code'**. Otherwise `codeType` MUST be `null`.
+- **Any other language (Python, Markdown, JSON, XML, YAML, Bash, Shell, C#, Java, Ruby, Go, Rust, PHP, etc.) MUST map to `'Other'` — do NOT invent new enum values.**
+- Case matters: `'javascript'` is invalid, `'JavaScript'` is correct. `'typescript'` is invalid, `'TypeScript'` is correct.
+- Never use an empty string `""` — use `null` instead.
 - Infer from field name and context:
   - "SQL", "Query", "SQLStatement" → `'SQL'`
   - "JavaScript", "Script", "JSCode" → `'JavaScript'`
   - "TypeScript", "TSCode" → `'TypeScript'`
   - "HTML", "HTMLContent" → `'HTML'`
   - "CSS", "Styles" → `'CSS'`
-  - Unknown code type → `'Other'`
+  - Any other language, or unknown → `'Other'`
 - Set to `null` for all non-code fields
 
 ### Common Patterns
@@ -226,7 +278,7 @@ Return a JSON object with this exact structure:
       "category": "Bill To Address",
       "reason": "Billing address fields for invoice delivery",
       "displayName": "Billing Address Line 1",
-      "extendedType": null,
+      "extendedType": "GeoAddress",
       "codeType": null
     }
   ],
@@ -250,6 +302,18 @@ Return a JSON object with this exact structure:
 For each **NEW category only** (not existing ones), provide:
 - **icon**: Font Awesome icon class (e.g., "fa fa-file-invoice")
 - **description**: 1 sentence describing what fields belong in this category (for UX tooltips)
+{% if isChildEntity %}
+- **inheritedFromEntityName**: (REQUIRED for inherited categories) The exact parent entity name this category's fields come from. Omit this property for the child entity's own categories.
+
+**Example for inherited category:**
+```json
+"Product Details": {
+  "icon": "fa fa-box",
+  "description": "Fields inherited from the Products entity",
+  "inheritedFromEntityName": "Products"
+}
+```
+{% endif %}
 
 {% if hasExistingCategories %}
 **IMPORTANT**: Do NOT include existing categories in `categoryInfo`. Only include categories you are creating for the first time.
@@ -437,7 +501,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Billing Address",
       "reason": "Billing address for invoice",
       "displayName": "Billing Address Line 1",
-      "extendedType": null,
+      "extendedType": "GeoAddress",
       "codeType": null
     },
     {
@@ -445,7 +509,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Billing Address",
       "reason": "Billing address city",
       "displayName": "Billing City",
-      "extendedType": null,
+      "extendedType": "GeoCity",
       "codeType": null
     },
     {
@@ -453,7 +517,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Billing Address",
       "reason": "Billing address state for tax calculation",
       "displayName": "Billing State",
-      "extendedType": null,
+      "extendedType": "GeoStateProvince",
       "codeType": null
     },
     {
@@ -461,7 +525,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Shipping Address",
       "reason": "Physical delivery address",
       "displayName": "Shipping Address Line 1",
-      "extendedType": null,
+      "extendedType": "GeoAddress",
       "codeType": null
     },
     {
@@ -469,7 +533,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Shipping Address",
       "reason": "Shipping destination city",
       "displayName": "Shipping City",
-      "extendedType": null,
+      "extendedType": "GeoCity",
       "codeType": null
     },
     {
@@ -477,7 +541,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Shipping Address",
       "reason": "Shipping destination state",
       "displayName": "Shipping State",
-      "extendedType": null,
+      "extendedType": "GeoStateProvince",
       "codeType": null
     },
     {

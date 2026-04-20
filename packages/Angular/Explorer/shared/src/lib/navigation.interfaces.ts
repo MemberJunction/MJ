@@ -28,4 +28,10 @@ export interface NavigationOptions {
    * Should be a plain object with field names as keys.
    */
   newRecordValues?: Record<string, unknown>;
+
+  /**
+   * URL query parameters to set on the tab after navigation.
+   * Use null values to remove a query param.
+   */
+  queryParams?: Record<string, string | null>;
 }

@@ -2,11 +2,15 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
+import { AgGridModule } from 'ag-grid-angular';
 
 // Import MJ modules
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
-import { MJReactModule } from '@memberjunction/ng-react';
+import { MJReactModule, AngularAdapterService } from '@memberjunction/ng-react';
 import { MJNotificationsModule } from '@memberjunction/ng-notifications';
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { NgTreesModule } from '@memberjunction/ng-trees';
 
 // Import plugin components (note: base component is abstract and NOT declared)
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
@@ -15,7 +19,16 @@ import { MarkdownArtifactViewerComponent } from './components/plugins/markdown-a
 import { HtmlArtifactViewerComponent } from './components/plugins/html-artifact-viewer.component';
 import { SvgArtifactViewerComponent } from './components/plugins/svg-artifact-viewer.component';
 import { ComponentArtifactViewerComponent } from './components/plugins/component-artifact-viewer.component';
+import { DataArtifactViewerComponent } from './components/plugins/data-artifact-viewer.component';
+import { SaveQueryPanelComponent } from './components/plugins/save-query-dialog.component';
 import { DataRequirementsViewerComponent } from './components/plugins/data-requirements-viewer/data-requirements-viewer.component';
+import { ComponentFeedbackPanelComponent } from './components/plugins/component-feedback-panel/component-feedback-panel.component';
+
+// File viewer plugins
+import { FileArtifactToolbarComponent } from './components/file-artifact-toolbar.component';
+import { PdfArtifactViewerComponent } from './components/plugins/pdf-artifact-viewer.component';
+import { XlsxArtifactViewerComponent } from './components/plugins/xlsx-artifact-viewer.component';
+import { DocxArtifactViewerComponent } from './components/plugins/docx-artifact-viewer.component';
 
 // Import artifact type plugin viewer component
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
@@ -47,9 +60,17 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     HtmlArtifactViewerComponent,
     SvgArtifactViewerComponent,
     ComponentArtifactViewerComponent,
+    DataArtifactViewerComponent,
+    SaveQueryPanelComponent,
 
     // Custom tab components (used by plugins via dynamic component tabs)
-    DataRequirementsViewerComponent
+    DataRequirementsViewerComponent,
+
+    // File viewer toolbar and plugins
+    FileArtifactToolbarComponent,
+    PdfArtifactViewerComponent,
+    XlsxArtifactViewerComponent,
+    DocxArtifactViewerComponent,
   ],
   imports: [
     CommonModule,
@@ -57,7 +78,12 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     MarkdownModule,
     CodeEditorModule,
     MJReactModule,
-    MJNotificationsModule
+    MJNotificationsModule,
+    QueryViewerModule,
+    SharedGenericModule,
+    NgTreesModule,
+    ComponentFeedbackPanelComponent,
+    AgGridModule,
   ],
   exports: [
     // Export artifact type plugin viewer
@@ -74,14 +100,21 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     MarkdownArtifactViewerComponent,
     HtmlArtifactViewerComponent,
     SvgArtifactViewerComponent,
-    ComponentArtifactViewerComponent
+    ComponentArtifactViewerComponent,
+    DataArtifactViewerComponent,
+
+    // File viewer toolbar and plugins
+    FileArtifactToolbarComponent,
+    PdfArtifactViewerComponent,
+    XlsxArtifactViewerComponent,
+    DocxArtifactViewerComponent,
   ],
   providers: [
     // Plugins are registered via @RegisterClass decorator on component classes, no providers needed
   ]
 })
 export class ArtifactsModule {
-  constructor() {
+  constructor(private adapter: AngularAdapterService) {
     // Ensure plugin components are registered on module load by referencing their classes
     // The @RegisterClass decorator on each component handles the actual registration with MJGlobal
     [
@@ -90,7 +123,16 @@ export class ArtifactsModule {
       MarkdownArtifactViewerComponent,
       HtmlArtifactViewerComponent,
       SvgArtifactViewerComponent,
-      ComponentArtifactViewerComponent
+      ComponentArtifactViewerComponent,
+      DataArtifactViewerComponent,
+      PdfArtifactViewerComponent,
+      XlsxArtifactViewerComponent,
+      DocxArtifactViewerComponent,
     ];
+
+    // PERF: Eagerly start downloading React, ReactDOM, and Babel from CDN in the background.
+    // By the time a user opens an interactive component artifact, the scripts will already
+    // be cached. The adapter.preload() is non-blocking and deduplicates with initialize().
+    this.adapter.preload();
   }
 }

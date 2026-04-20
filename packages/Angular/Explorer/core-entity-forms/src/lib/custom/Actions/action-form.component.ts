@@ -1,41 +1,40 @@
-import { Component, OnInit, ChangeDetectorRef, ElementRef, inject, ViewContainerRef } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
-import { ActionEntity, ActionParamEntity, ActionResultCodeEntity, ActionCategoryEntity, ActionExecutionLogEntity, ActionLibraryEntity, LibraryEntity } from '@memberjunction/core-entities';
+import { Component, OnInit, inject, ViewContainerRef } from '@angular/core';
+import { MJActionEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionCategoryEntity, MJActionExecutionLogEntity, MJActionLibraryEntity, MJLibraryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
-import { ActionFormComponent } from '../../generated/Entities/Action/action.form.component';
-import { DialogService } from '@progress/kendo-angular-dialog';
-import { ActionParamDialogComponent } from './action-param-dialog.component';
-import { ActionResultCodeDialogComponent } from './action-result-code-dialog.component';
+import { MJActionFormComponent } from '../../generated/Entities/MJAction/mjaction.form.component';
+import { MJDialogService, MJDialogRef } from '@memberjunction/ng-ui-components';
+import { ActionParamDialogComponent, ActionResultCodeDialogComponent } from '@memberjunction/ng-actions';
 
-@RegisterClass(BaseFormComponent, 'Actions')
+@RegisterClass(BaseFormComponent, 'MJ: Actions')
 @Component({
+  standalone: false,
     selector: 'mj-action-form',
     templateUrl: './action-form.component.html',
     styleUrls: ['./action-form.component.css']
 })
-export class ActionFormComponentExtended extends ActionFormComponent implements OnInit {
-    public record!: ActionEntity;
+export class MJActionFormComponentExtended extends MJActionFormComponent implements OnInit {
+    public record!: MJActionEntity;
     
     // Related entities
-    public category: ActionCategoryEntity | null = null;
-    public actionParams: ActionParamEntity[] = [];
-    public resultCodes: ActionResultCodeEntity[] = [];
-    public recentExecutions: ActionExecutionLogEntity[] = [];
-    public actionLibraries: ActionLibraryEntity[] = [];
-    public libraries: LibraryEntity[] = [];
+    public category: MJActionCategoryEntity | null = null;
+    public actionParams: MJActionParamEntity[] = [];
+    public resultCodes: MJActionResultCodeEntity[] = [];
+    public recentExecutions: MJActionExecutionLogEntity[] = [];
+    public actionLibraries: MJActionLibraryEntity[] = [];
+    public libraries: MJLibraryEntity[] = [];
     
     // Cached filtered params
-    private _inputParams: ActionParamEntity[] = [];
-    private _outputParams: ActionParamEntity[] = [];
+    private _inputParams: MJActionParamEntity[] = [];
+    private _outputParams: MJActionParamEntity[] = [];
     
     // Track params to delete
-    private paramsToDelete: ActionParamEntity[] = [];
+    private paramsToDelete: MJActionParamEntity[] = [];
     
     // Track result codes to delete
-    private resultCodesToDelete: ActionResultCodeEntity[] = [];
+    private resultCodesToDelete: MJActionResultCodeEntity[] = [];
     
     // Loading states
     public isLoadingParams = false;
@@ -68,18 +67,9 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     public codeLanguage = 'typescript';
     public showCodeComments = false;
     
-    private dialogService = inject(DialogService);
+    private dialogService = inject(MJDialogService);
     private viewContainerRef = inject(ViewContainerRef);
-    
-    constructor(
-        elementRef: ElementRef,
-        sharedService: SharedService,
-        router: Router,
-        route: ActivatedRoute,
-        public cdr: ChangeDetectorRef
-    ) {
-        super(elementRef, sharedService, router, route, cdr);
-    }
+    private sharedService = inject(SharedService);
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -94,12 +84,13 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                 this.loadActionLibraries(),
                 this.loadExecutionStats()
             ]);
+            this.cdr.detectChanges();
         }
     }
     
     /**
      * Override InternalSaveRecord to handle Action and related ActionParams in a transaction
-     * This follows the same pattern as AIAgentFormComponent
+     * This follows the same pattern as MJAIAgentFormComponent
      */
     protected async InternalSaveRecord(): Promise<boolean> {
         if (!this.record) {
@@ -124,8 +115,8 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             
             // Process all pending records (params and result codes to save or delete)
             for (const pendingRecord of this.PendingRecords) {
-                if (pendingRecord.entityObject.EntityInfo.Name === 'Action Params') {
-                    const param = pendingRecord.entityObject as ActionParamEntity;
+                if (pendingRecord.entityObject.EntityInfo.Name === 'MJ: Action Params') {
+                    const param = pendingRecord.entityObject as MJActionParamEntity;
                     
                     // Ensure ActionID is set for new params
                     if (!param.ActionID) {
@@ -147,8 +138,8 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                             return false;
                         }
                     }
-                } else if (pendingRecord.entityObject.EntityInfo.Name === 'Action Result Codes') {
-                    const resultCode = pendingRecord.entityObject as ActionResultCodeEntity;
+                } else if (pendingRecord.entityObject.EntityInfo.Name === 'MJ: Action Result Codes') {
+                    const resultCode = pendingRecord.entityObject as MJActionResultCodeEntity;
                     
                     // Ensure ActionID is set for new result codes
                     if (!resultCode.ActionID) {
@@ -203,12 +194,13 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
 
     private async loadCategory() {
         if (!this.record.CategoryID) return;
-        
+
         try {
             const md = new Metadata();
-            this.category = await md.GetEntityObject<ActionCategoryEntity>('Action Categories');
-            if (this.category) {
-                await this.category.Load(this.record.CategoryID);
+            const entity = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories');
+            const loaded = await entity.Load(this.record.CategoryID);
+            if (loaded) {
+                this.category = entity;
             }
         } catch (error) {
             // Error loading category
@@ -219,8 +211,8 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         this.isLoadingParams = true;
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ActionParamEntity>({
-                EntityName: 'Action Params',
+            const result = await rv.RunView<MJActionParamEntity>({
+                EntityName: 'MJ: Action Params',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
                 OrderBy: 'Name',
                 ResultType: 'entity_object'  // This ensures we get proper entity instances
@@ -250,7 +242,6 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             this._outputParams = [];
         } finally {
             this.isLoadingParams = false;
-            this.cdr.detectChanges(); // Force change detection
         }
     }
 
@@ -258,8 +249,8 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         this.isLoadingResultCodes = true;
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ActionResultCodeEntity>({
-                EntityName: 'Action Result Codes',
+            const result = await rv.RunView<MJActionResultCodeEntity>({
+                EntityName: 'MJ: Action Result Codes',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
                 OrderBy: 'IsSuccess DESC, ResultCode',
                 ResultType: 'entity_object'  // This ensures we get proper entity instances
@@ -283,8 +274,8 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         this.isLoadingExecutions = true;
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ActionExecutionLogEntity>({
-                EntityName: 'Action Execution Logs',
+            const result = await rv.RunView<MJActionExecutionLogEntity>({
+                EntityName: 'MJ: Action Execution Logs',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
                 OrderBy: 'StartedAt DESC',
                 MaxRows: 10 
@@ -308,8 +299,8 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         this.isLoadingLibraries = true;
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ActionLibraryEntity>({
-                EntityName: 'Action Libraries',
+            const result = await rv.RunView<MJActionLibraryEntity>({
+                EntityName: 'MJ: Action Libraries',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
                 OrderBy: 'Library' 
             });
@@ -324,7 +315,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                     this.libraries = [];
                     
                     for (const libId of libraryIds) {
-                        const lib = await md.GetEntityObject<LibraryEntity>('Libraries');
+                        const lib = await md.GetEntityObject<MJLibraryEntity>('MJ: Libraries');
                         if (lib && libId) {
                             await lib.Load(libId);
                             this.libraries.push(lib);
@@ -343,8 +334,8 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         try {
             const rv = new RunView();
             // Load ALL executions for accurate statistics
-            const result = await rv.RunView<ActionExecutionLogEntity>({
-                EntityName: 'Action Execution Logs',
+            const result = await rv.RunView<MJActionExecutionLogEntity>({
+                EntityName: 'MJ: Action Execution Logs',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
                 OrderBy: 'StartedAt DESC' 
             });
@@ -385,10 +376,10 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     // UI Helper Methods
     getStatusColor(): string {
         switch (this.record.Status) {
-            case 'Active': return '#28a745';
-            case 'Pending': return '#ffc107';
-            case 'Disabled': return '#dc3545';
-            default: return '#6c757d';
+            case 'Active': return 'var(--mj-status-success)';
+            case 'Pending': return 'var(--mj-status-warning)';
+            case 'Disabled': return 'var(--mj-status-error)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -402,7 +393,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     }
 
     getTypeColor(): string {
-        return this.record.Type === 'Generated' ? '#6f42c1' : '#007bff';
+        return this.record.Type === 'Generated' ? 'var(--mj-brand-primary)' : 'var(--mj-brand-primary)';
     }
 
     getTypeIcon(): string {
@@ -411,10 +402,10 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
 
     getApprovalStatusColor(): string {
         switch (this.record.CodeApprovalStatus) {
-            case 'Approved': return '#28a745';
-            case 'Pending': return '#ffc107';
-            case 'Rejected': return '#dc3545';
-            default: return '#6c757d';
+            case 'Approved': return 'var(--mj-status-success)';
+            case 'Pending': return 'var(--mj-status-warning)';
+            case 'Rejected': return 'var(--mj-status-error)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -438,10 +429,10 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
 
     getParamTypeColor(type: string): string {
         switch (type) {
-            case 'Input': return '#007bff';
-            case 'Output': return '#28a745';
-            case 'Both': return '#6f42c1';
-            default: return '#6c757d';
+            case 'Input': return 'var(--mj-brand-primary)';
+            case 'Output': return 'var(--mj-status-success)';
+            case 'Both': return 'var(--mj-brand-primary)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -473,16 +464,16 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
 
     navigateToCategory() {
         if (this.record.CategoryID) {
-            this.navigateToEntity('Action Categories', this.record.CategoryID);
+            this.navigateToEntity('MJ: Action Categories', this.record.CategoryID);
         }
     }
 
     navigateToExecution(executionId: string) {
-        this.navigateToEntity('Action Execution Logs', executionId);
+        this.navigateToEntity('MJ: Action Execution Logs', executionId);
     }
 
     navigateToLibrary(libraryId: string) {
-        this.navigateToEntity('Libraries', libraryId);
+        this.navigateToEntity('MJ: Libraries', libraryId);
     }
 
     // Actions
@@ -541,7 +532,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     }
 
     // Helper methods for template filtering
-    getInputParams(): ActionParamEntity[] {
+    getInputParams(): MJActionParamEntity[] {
         // Sort by IsRequired (required first) then by Name
         return this._inputParams.sort((a, b) => {
             if (a.IsRequired === b.IsRequired) {
@@ -551,12 +542,12 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         });
     }
 
-    getOutputParams(): ActionParamEntity[] {
+    getOutputParams(): MJActionParamEntity[] {
         // Sort by Name
         return this._outputParams.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
     }
 
-    isExecutionSuccess(execution: ActionExecutionLogEntity): boolean {
+    isExecutionSuccess(execution: MJActionExecutionLogEntity): boolean {
         const code = execution.ResultCode?.toLowerCase();
         // First check if we have a result code definition
         const resultCode = this.resultCodes.find(rc => rc.ResultCode === execution.ResultCode);
@@ -567,7 +558,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         return code === 'success' || code === 'ok' || code === 'completed' || code === '200';
     }
 
-    getExecutionDuration(execution: ActionExecutionLogEntity): number {
+    getExecutionDuration(execution: MJActionExecutionLogEntity): number {
         if (!execution.EndedAt) return 0;
         
         const startTime = new Date(execution.StartedAt).getTime();
@@ -580,9 +571,9 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
 
     getSuccessRateColor(): string {
         const rate = this.executionStats.successRate;
-        if (rate >= 80) return '#28a745'; // green
-        if (rate >= 60) return '#ffc107'; // yellow
-        return '#dc3545'; // red
+        if (rate >= 80) return 'var(--mj-status-success)';
+        if (rate >= 60) return 'var(--mj-status-warning)';
+        return 'var(--mj-status-error)';
     }
 
     // Parameter management methods
@@ -590,7 +581,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         if (!this.EditMode || !this.record.IsSaved) return;
         
         const md = new Metadata();
-        const newParam = await md.GetEntityObject<ActionParamEntity>('Action Params');
+        const newParam = await md.GetEntityObject<MJActionParamEntity>('MJ: Action Params');
         
         // Set default values
         newParam.ActionID = this.record.ID;
@@ -605,26 +596,26 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             width: 500,
             appendTo: this.viewContainerRef
         });
-        
-        const dialog = dialogRef.content.instance;
-        dialog.param = newParam;
-        dialog.isNew = true;
-        dialog.editMode = true;
-        
-        dialogRef.result.subscribe(result => {
-            if (result && (result as any).save) {
+
+        const dialog = dialogRef.Content!.instance;
+        dialog['param'] = newParam;
+        dialog['isNew'] = true;
+        dialog['editMode'] = true;
+
+        dialogRef.Result.subscribe(result => {
+            if (result && typeof result === 'object' && 'save' in result) {
                 // The dialog has already modified the newParam entity directly
                 // New entities are automatically dirty (IsSaved = false)
-                
+
                 // Add to local array
                 this.actionParams.push(newParam);
-                
+
                 // Add to pending records for saving
                 this.PendingRecords.push({
                     entityObject: newParam,
                     action: 'save'
                 });
-                
+
                 // Update the filtered arrays
                 this.updateParamArrays();
                 this.cdr.detectChanges();
@@ -632,24 +623,24 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         });
     }
 
-    async editParameter(param: ActionParamEntity) {
+    async editParameter(param: MJActionParamEntity) {
         const dialogRef = this.dialogService.open({
             content: ActionParamDialogComponent,
             width: 500,
             appendTo: this.viewContainerRef
         });
-        
-        const dialog = dialogRef.content.instance;
-        dialog.param = param;
-        dialog.isNew = false;
-        dialog.editMode = this.EditMode;
-        
-        dialogRef.result.subscribe(result => {
-            if (result && (result as any).save && this.EditMode) {
+
+        const dialog = dialogRef.Content!.instance;
+        dialog['param'] = param;
+        dialog['isNew'] = false;
+        dialog['editMode'] = this.EditMode;
+
+        dialogRef.Result.subscribe(result => {
+            if (result && typeof result === 'object' && 'save' in result && this.EditMode) {
                 // Param will be dirty from property changes in dialog
                 // Ensure it's in pending records if modified
                 if (param.Dirty) {
-                    const exists = this.PendingRecords.some(pr => 
+                    const exists = this.PendingRecords.some(pr =>
                         pr.entityObject === param && pr.action === 'save'
                     );
                     if (!exists) {
@@ -659,7 +650,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                         });
                     }
                 }
-                
+
                 // Update the local arrays
                 this.updateParamArrays();
                 this.cdr.detectChanges();
@@ -667,7 +658,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         });
     }
     
-    onParamClick(param: ActionParamEntity, event: Event) {
+    onParamClick(param: MJActionParamEntity, event: Event) {
         // Prevent event bubbling if clicking on edit/delete buttons
         const target = event.target as HTMLElement;
         if (target.closest('.param-edit-btn') || target.closest('.param-delete-btn')) {
@@ -705,8 +696,8 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         // Re-add our preserved records
         for (const record of currentPendingRecords) {
             // Only re-add if it's an Action Param or Result Code (avoid duplicates)
-            if (record.entityObject.EntityInfo.Name === 'Action Params' || 
-                record.entityObject.EntityInfo.Name === 'Action Result Codes') {
+            if (record.entityObject.EntityInfo.Name === 'MJ: Action Params' || 
+                record.entityObject.EntityInfo.Name === 'MJ: Action Result Codes') {
                 const exists = this.PendingRecords.some(pr => 
                     pr.entityObject === record.entityObject
                 );
@@ -794,7 +785,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         if (!this.EditMode || !this.record.IsSaved) return;
         
         const md = new Metadata();
-        const newResultCode = await md.GetEntityObject<ActionResultCodeEntity>('Action Result Codes');
+        const newResultCode = await md.GetEntityObject<MJActionResultCodeEntity>('MJ: Action Result Codes');
         
         // Set default values
         newResultCode.ActionID = this.record.ID;
@@ -807,45 +798,45 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
             width: 500,
             appendTo: this.viewContainerRef
         });
-        
-        const dialog = dialogRef.content.instance;
-        dialog.resultCode = newResultCode;
-        dialog.isNew = true;
-        dialog.editMode = true;
-        
-        dialogRef.result.subscribe(result => {
-            if (result && (result as any).save) {
+
+        const dialog = dialogRef.Content!.instance;
+        dialog['resultCode'] = newResultCode;
+        dialog['isNew'] = true;
+        dialog['editMode'] = true;
+
+        dialogRef.Result.subscribe(result => {
+            if (result && typeof result === 'object' && 'save' in result) {
                 // Add to local array
                 this.resultCodes.push(newResultCode);
-                
+
                 // Add to pending records for saving
                 this.PendingRecords.push({
                     entityObject: newResultCode,
                     action: 'save'
                 });
-                
+
                 this.cdr.detectChanges();
             }
         });
     }
     
-    async editResultCode(resultCode: ActionResultCodeEntity) {
+    async editResultCode(resultCode: MJActionResultCodeEntity) {
         const dialogRef = this.dialogService.open({
             content: ActionResultCodeDialogComponent,
             width: 500,
             appendTo: this.viewContainerRef
         });
-        
-        const dialog = dialogRef.content.instance;
-        dialog.resultCode = resultCode;
-        dialog.isNew = false;
-        dialog.editMode = this.EditMode;
-        
-        dialogRef.result.subscribe(result => {
-            if (result && (result as any).save && this.EditMode) {
+
+        const dialog = dialogRef.Content!.instance;
+        dialog['resultCode'] = resultCode;
+        dialog['isNew'] = false;
+        dialog['editMode'] = this.EditMode;
+
+        dialogRef.Result.subscribe(result => {
+            if (result && typeof result === 'object' && 'save' in result && this.EditMode) {
                 // Ensure it's in pending records if modified
                 if (resultCode.Dirty) {
-                    const exists = this.PendingRecords.some(pr => 
+                    const exists = this.PendingRecords.some(pr =>
                         pr.entityObject === resultCode && pr.action === 'save'
                     );
                     if (!exists) {
@@ -855,13 +846,13 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
                         });
                     }
                 }
-                
+
                 this.cdr.detectChanges();
             }
         });
     }
     
-    onResultCodeClick(resultCode: ActionResultCodeEntity, event: Event) {
+    onResultCodeClick(resultCode: MJActionResultCodeEntity, event: Event) {
         // Prevent event bubbling if clicking on edit/delete buttons
         const target = event.target as HTMLElement;
         if (target.closest('.result-edit-btn') || target.closest('.result-delete-btn')) {
@@ -875,7 +866,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     /**
      * Delete a result code (marks for deletion on save)
      */
-    deleteResultCode(resultCode: ActionResultCodeEntity) {
+    deleteResultCode(resultCode: MJActionResultCodeEntity) {
         if (!this.EditMode) return;
         
         // Remove from main array
@@ -910,7 +901,7 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
     /**
      * Delete a parameter (marks for deletion on save)
      */
-    deleteParameter(param: ActionParamEntity) {
+    deleteParameter(param: MJActionParamEntity) {
         if (!this.EditMode) return;
         
         // Remove from main array
@@ -943,9 +934,4 @@ export class ActionFormComponentExtended extends ActionFormComponent implements 
         this.updateParamArrays();
         this.cdr.detectChanges();
     }
-}
-
-// Loader function required for the component to be properly registered
-export function LoadActionFormComponentExtended() {
-    // This function is called to ensure the form is loaded and registered
 }

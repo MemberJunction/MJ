@@ -13,14 +13,18 @@
         <span>{{ modeLabel }}</span>
       </div>
       <div class="stats">
-        <div class="stat-item" *ngIf="entities.length > 0">
-          <span class="stat-value">{{ entities.length }}</span>
-          <span class="stat-label">{{ entities.length === 1 ? 'Entity' : 'Entities' }}</span>
-        </div>
-        <div class="stat-item" *ngIf="queries.length > 0">
-          <span class="stat-value">{{ queries.length }}</span>
-          <span class="stat-label">{{ queries.length === 1 ? 'Query' : 'Queries' }}</span>
-        </div>
+        @if (entities.length > 0) {
+          <div class="stat-item">
+            <span class="stat-value">{{ entities.length }}</span>
+            <span class="stat-label">{{ entities.length === 1 ? 'Entity' : 'Entities' }}</span>
+          </div>
+        }
+        @if (queries.length > 0) {
+          <div class="stat-item">
+            <span class="stat-value">{{ queries.length }}</span>
+            <span class="stat-label">{{ queries.length === 1 ? 'Query' : 'Queries' }}</span>
+          </div>
+        }
         <div class="stat-item">
           <span class="stat-value">{{ totalFieldCount }}</span>
           <span class="stat-label">{{ totalFieldCount === 1 ? 'Field' : 'Fields' }}</span>
@@ -37,10 +41,10 @@
         </h4>
         <div class="description-content">
           <mj-markdown [data]="description"
-                       [enableCollapsibleHeadings]="false"
-                       [enableLineNumbers]="false"
-                       [enableSmartypants]="true"
-                       [enableHtml]="true"></mj-markdown>
+            [enableCollapsibleHeadings]="false"
+            [enableLineNumbers]="false"
+            [enableSmartypants]="true"
+          [enableHtml]="true"></mj-markdown>
         </div>
       </div>
     }
@@ -152,7 +156,15 @@
                     <i class="fas fa-code"></i>
                   </div>
                   <div class="card-title-info">
-                    <h4 class="card-title">{{ query.name }}</h4>
+                    <div class="title-with-badge">
+                      <h4 class="card-title">{{ query.name }}</h4>
+                      @if (query.isNew) {
+                        <span class="new-query-badge" title="This query was newly created for this component">
+                          <i class="fas fa-sparkles"></i>
+                          NEW
+                        </span>
+                      }
+                    </div>
                     <p class="card-path">{{ query.categoryPath }}</p>
                     @if (query.description) {
                       <p class="card-description">{{ query.description }}</p>

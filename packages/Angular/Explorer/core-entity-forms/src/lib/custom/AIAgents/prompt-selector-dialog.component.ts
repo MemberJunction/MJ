@@ -1,9 +1,8 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { WindowRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { Subject, BehaviorSubject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { FormControl } from '@angular/forms';
 import { RunView } from '@memberjunction/core';
-import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export interface PromptSelectorConfig {
@@ -23,7 +22,7 @@ export interface PromptSelectorConfig {
 
 export interface PromptSelectorResult {
   /** Selected prompts */
-  selectedPrompts: AIPromptEntityExtended[];
+  selectedPrompts: MJAIPromptEntityExtended[];
   /** Whether user chose to create new */
   createNew?: boolean;
 }
@@ -35,6 +34,7 @@ export interface PromptSelectorResult {
  * - Any other prompt selection scenario
  */
 @Component({
+  standalone: false,
   selector: 'mj-prompt-selector-dialog',
   templateUrl: './prompt-selector-dialog.component.html',
   styleUrls: ['./prompt-selector-dialog.component.css']
@@ -50,8 +50,8 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
   
   // Data and UI state
   isLoading$ = new BehaviorSubject<boolean>(false);
-  prompts$ = new BehaviorSubject<AIPromptEntityExtended[]>([]);
-  filteredPrompts$ = new BehaviorSubject<AIPromptEntityExtended[]>([]);
+  prompts$ = new BehaviorSubject<MJAIPromptEntityExtended[]>([]);
+  filteredPrompts$ = new BehaviorSubject<MJAIPromptEntityExtended[]>([]);
   
   // Search and selection
   searchControl = new FormControl('');
@@ -61,8 +61,9 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
   // View mode
   viewMode: 'grid' | 'list' = 'list';
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -110,8 +111,8 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
         filter += ` AND ${this.config.extraFilter}`;
       }
       
-      const result = await rv.RunView<AIPromptEntityExtended>({
-        EntityName: 'AI Prompts',
+      const result = await rv.RunView<MJAIPromptEntityExtended>({
+        EntityName: 'MJ: AI Prompts',
         ExtraFilter: filter,
         OrderBy: 'Name ASC',
         ResultType: 'entity_object',
@@ -157,7 +158,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
 
   // === Selection Management ===
 
-  togglePromptSelection(prompt: AIPromptEntityExtended) {
+  togglePromptSelection(prompt: MJAIPromptEntityExtended) {
     // Prevent selection of already linked prompts
     if (this.isPromptLinked(prompt)) {
       MJNotificationService.Instance.CreateSimpleNotification(
@@ -181,15 +182,15 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  isPromptSelected(prompt: AIPromptEntityExtended): boolean {
+  isPromptSelected(prompt: MJAIPromptEntityExtended): boolean {
     return this.selectedPrompts.has(prompt.ID);
   }
 
-  isPromptLinked(prompt: AIPromptEntityExtended): boolean {
+  isPromptLinked(prompt: MJAIPromptEntityExtended): boolean {
     return this.linkedPrompts.has(prompt.ID);
   }
 
-  getSelectedPromptObjects(): AIPromptEntityExtended[] {
+  getSelectedPromptObjects(): MJAIPromptEntityExtended[] {
     const allPrompts = this.prompts$.value;
     return allPrompts.filter(prompt => this.selectedPrompts.has(prompt.ID));
   }
@@ -200,16 +201,16 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     this.viewMode = this.viewMode === 'grid' ? 'list' : 'grid';
   }
 
-  getPromptStatusColor(prompt: AIPromptEntityExtended): string {
+  getPromptStatusColor(prompt: MJAIPromptEntityExtended): string {
     switch (prompt.Status) {
-      case 'Active': return '#28a745';
-      case 'Pending': return '#ffc107';
-      case 'Disabled': return '#6c757d';
-      default: return '#6c757d';
+      case 'Active': return 'var(--mj-status-success)';
+      case 'Pending': return 'var(--mj-status-warning)';
+      case 'Disabled': return 'var(--mj-text-muted)';
+      default: return 'var(--mj-text-muted)';
     }
   }
 
-  getPromptStatusText(prompt: AIPromptEntityExtended): string {
+  getPromptStatusText(prompt: MJAIPromptEntityExtended): string {
     return prompt.Status || 'Unknown';
   }
 
@@ -232,7 +233,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     };
 
     this.result.next(result);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   createNew() {
@@ -242,11 +243,11 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     };
 
     this.result.next(result);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 }

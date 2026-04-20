@@ -1,5 +1,5 @@
 import { Component, Input, OnInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
-import { CollectionEntity, ArtifactEntity, ArtifactVersionEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -7,6 +7,7 @@ type ViewMode = 'grid' | 'list';
 type SortBy = 'name' | 'date' | 'type';
 
 @Component({
+  standalone: false,
   selector: 'mj-collection-view',
   template: `
     <div class="collection-view">
@@ -29,32 +30,38 @@ type SortBy = 'name' | 'date' | 'type';
               <i class="fas fa-list"></i>
             </button>
           </div>
-
-          <kendo-dropdownlist
-            [data]="sortOptions"
-            [textField]="'label'"
-            [valueField]="'value'"
-            [(value)]="sortBy"
-            (valueChange)="onSortChange()"
-            [style.width.px]="150"
-            placeholder="Sort by...">
-          </kendo-dropdownlist>
-
-          <button class="btn-add" (click)="onAddArtifact()" title="Add Artifact" *ngIf="canEdit">
-            <i class="fas fa-plus"></i> Add
-          </button>
+    
+          <select
+            [(ngModel)]="sortBy"
+            (ngModelChange)="onSortChange()"
+            class="mj-select"
+            style="width: 150px;">
+            @for (option of sortOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
+    
+          @if (canEdit) {
+            <button class="btn-add" (click)="onAddArtifact()" title="Add Artifact">
+              <i class="fas fa-plus"></i> Add
+            </button>
+          }
         </div>
       </div>
-
+    
       <div class="view-content" [class.grid-mode]="viewMode === 'grid'" [class.list-mode]="viewMode === 'list'">
-        <div *ngIf="artifactVersions.length === 0" class="empty-state">
-          <i class="fas fa-folder-open"></i>
-          <p>This collection is empty</p>
-          <button class="btn-add-primary" (click)="onAddArtifact()" *ngIf="canEdit">
-            <i class="fas fa-plus"></i> Add Artifact
-          </button>
-        </div>
-
+        @if (artifactVersions.length === 0) {
+          <div class="empty-state">
+            <i class="fas fa-folder-open"></i>
+            <p>This collection is empty</p>
+            @if (canEdit) {
+              <button class="btn-add-primary" (click)="onAddArtifact()">
+                <i class="fas fa-plus"></i> Add Artifact
+              </button>
+            }
+          </div>
+        }
+    
         @for (item of artifactVersions; track item.version.ID) {
           <mj-collection-artifact-card
             [artifact]="item.artifact"
@@ -67,63 +74,65 @@ type SortBy = 'name' | 'date' | 'type';
         }
       </div>
     </div>
-
+    
     <!-- Artifact Viewer Panel -->
-    <div class="artifact-viewer-overlay" *ngIf="showArtifactViewer && selectedArtifactId" (click)="onCloseArtifactViewer()">
-      <div class="artifact-viewer-container" (click)="$event.stopPropagation()">
-        <mj-artifact-viewer-panel
-          [artifactId]="selectedArtifactId"
-          [versionNumber]="selectedVersionNumber"
-          [currentUser]="currentUser"
-          [environmentId]="environmentId"
-          [viewContext]="'collection'"
-          [contextCollectionId]="collection.ID"
-          (closed)="onCloseArtifactViewer()">
-        </mj-artifact-viewer-panel>
+    @if (showArtifactViewer && selectedArtifactId) {
+      <div class="artifact-viewer-overlay" (click)="onCloseArtifactViewer()">
+        <div class="artifact-viewer-container" (click)="$event.stopPropagation()">
+          <mj-artifact-viewer-panel
+            [artifactId]="selectedArtifactId"
+            [versionNumber]="selectedVersionNumber"
+            [currentUser]="currentUser"
+            [environmentId]="environmentId"
+            [viewContext]="'collection'"
+            [contextCollectionId]="collection.ID"
+            (closed)="onCloseArtifactViewer()">
+          </mj-artifact-viewer-panel>
+        </div>
       </div>
-    </div>
-  `,
+    }
+    `,
   styles: [`
-    .collection-view { display: flex; flex-direction: column; height: 100%; background: white; }
+    .collection-view { display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface); }
 
-    .view-header { padding: 20px 24px; border-bottom: 1px solid #D9D9D9; display: flex; justify-content: space-between; align-items: center; }
+    .view-header { padding: 20px 24px; border-bottom: 1px solid var(--mj-border-default); display: flex; justify-content: space-between; align-items: center; }
     .view-header h2 { margin: 0; font-size: 20px; flex: 1; }
 
     .header-actions { display: flex; align-items: center; gap: 12px; }
 
-    .view-mode-toggle { display: flex; border: 1px solid #D9D9D9; border-radius: 4px; overflow: hidden; }
-    .mode-btn { padding: 8px 12px; background: white; border: none; border-right: 1px solid #D9D9D9; cursor: pointer; color: #666; transition: all 150ms ease; }
+    .view-mode-toggle { display: flex; border: 1px solid var(--mj-border-default); border-radius: 4px; overflow: hidden; }
+    .mode-btn { padding: 8px 12px; background: var(--mj-bg-surface); border: none; border-right: 1px solid var(--mj-border-default); cursor: pointer; color: var(--mj-text-muted); transition: all 150ms ease; }
     .mode-btn:last-child { border-right: none; }
-    .mode-btn:hover { background: #F4F4F4; }
-    .mode-btn.active { background: #0076B6; color: white; }
+    .mode-btn:hover { background: var(--mj-bg-surface-sunken); }
+    .mode-btn.active { background: var(--mj-brand-primary); color: var(--mj-text-inverse); }
 
-    .btn-add { padding: 8px 16px; background: #0076B6; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
-    .btn-add:hover { background: #005A8C; }
+    .btn-add { padding: 8px 16px; background: var(--mj-brand-primary); color: var(--mj-text-inverse); border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .btn-add:hover { background: var(--mj-brand-primary-hover); }
 
     .view-content { flex: 1; overflow-y: auto; padding: 24px; }
     .view-content.grid-mode { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
     .view-content.list-mode { display: flex; flex-direction: column; gap: 12px; }
 
-    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; color: #999; }
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; color: var(--mj-text-disabled); }
     .empty-state i { font-size: 64px; margin-bottom: 24px; }
     .empty-state p { margin: 0 0 24px 0; font-size: 16px; }
-    .btn-add-primary { padding: 12px 24px; background: #0076B6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; }
-    .btn-add-primary:hover { background: #005A8C; }
+    .btn-add-primary { padding: 12px 24px; background: var(--mj-brand-primary); color: var(--mj-text-inverse); border: none; border-radius: 4px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+    .btn-add-primary:hover { background: var(--mj-brand-primary-hover); }
 
-    .artifact-viewer-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 10000; }
-    .artifact-viewer-container { width: 90%; max-width: 1200px; height: 90vh; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); }
+    .artifact-viewer-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--mj-bg-overlay); display: flex; align-items: center; justify-content: center; z-index: 10000; }
+    .artifact-viewer-container { width: 90%; max-width: 1200px; height: 90vh; background: var(--mj-bg-surface); border-radius: 12px; overflow: hidden; box-shadow: var(--mj-shadow-lg); }
   `]
 })
 export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
-  @Input() collection!: CollectionEntity;
+  @Input() collection!: MJCollectionEntity;
   @Input() currentUser!: UserInfo;
   @Input() environmentId!: string;
   @Input() canEdit: boolean = true;
 
   // Store versions with parent artifact info for display
   public artifactVersions: Array<{
-    version: ArtifactVersionEntity;
-    artifact: ArtifactEntity;
+    version: MJArtifactVersionEntity;
+    artifact: MJArtifactEntity;
   }> = [];
   public viewMode: ViewMode = 'grid';
   public sortBy: SortBy = 'date';
@@ -164,7 +173,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
       const md = new Metadata();
 
       // Load ALL VERSIONS in this collection (no DISTINCT - each version is separate)
-      const versionResult = await rv.RunView<ArtifactVersionEntity>({
+      const versionResult = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ID IN (
           SELECT ca.ArtifactVersionID
@@ -180,10 +189,10 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
         const artifactIds = [...new Set(versionResult.Results.map(v => v.ArtifactID))];
 
         // Load parent artifact info (just for display metadata - no visibility filtering)
-        const artifactMap = new Map<string, ArtifactEntity>();
+        const artifactMap = new Map<string, MJArtifactEntity>();
         if (artifactIds.length > 0) {
           const artifactFilter = artifactIds.map(id => `ID='${id}'`).join(' OR ');
-          const artifactResult = await rv.RunView<ArtifactEntity>({
+          const artifactResult = await rv.RunView<MJArtifactEntity>({
             EntityName: 'MJ: Artifacts',
             ExtraFilter: artifactFilter,
             ResultType: 'entity_object'
@@ -227,11 +236,11 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
     this.loadArtifacts();
   }
 
-  onArtifactSelected(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
+  onArtifactSelected(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
     // TODO: Emit event or navigate to artifact detail view
   }
 
-  onViewArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
+  onViewArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
     this.selectedArtifactId = item.artifact.ID;
     this.selectedVersionNumber = item.version.VersionNumber;
     // Force change detection to ensure Input bindings propagate before component creation
@@ -245,11 +254,11 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
     this.selectedVersionNumber = undefined;
   }
 
-  onEditArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
+  onEditArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
     // TODO: Open artifact editor
   }
 
-  async onRemoveArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): Promise<void> {
+  async onRemoveArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {
     const versionLabel = `"${item.artifact.Name}" v${item.version.VersionNumber}`;
     if (!confirm(`Remove ${versionLabel} from this collection?`)) return;
 
@@ -268,6 +277,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
           await joinRecord.Delete();
         }
         await this.loadArtifacts();
+        this.cdr.detectChanges();
         MJNotificationService.Instance.CreateSimpleNotification(
           `Removed ${versionLabel} from collection`,
           'success',
@@ -292,7 +302,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
     try {
       // Create new artifact
       const md = new Metadata();
-      const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
+      const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
 
       artifact.Name = name;
       // Type is read-only, set via TypeID instead
@@ -316,7 +326,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
         }
 
         // Add to collection via join table using version ID
-        const joinRecord = await md.GetEntityObject<CollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
+        const joinRecord = await md.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
         joinRecord.CollectionID = this.collection.ID;
         joinRecord.ArtifactVersionID = versionResult.Results[0].ID;
 

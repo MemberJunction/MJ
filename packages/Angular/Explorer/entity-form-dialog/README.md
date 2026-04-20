@@ -1,17 +1,36 @@
 # @memberjunction/ng-entity-form-dialog
 
-Angular component for displaying MemberJunction entity forms in a modal dialog, with support for both complete forms and individual form sections. This component provides a reusable dialog wrapper that dynamically loads the appropriate form component based on the entity type and configuration.
+A reusable Angular dialog component that displays a MemberJunction entity form for viewing and/or editing any record from any entity. Supports showing the complete form or a specific section.
+
+## Overview
+
+The `EntityFormDialogComponent` wraps MemberJunction's dynamic form system inside a Kendo UI dialog window. It dynamically loads the registered form component for the given entity (including custom form overrides) and provides configurable Save/Cancel buttons with automatic record handling.
+
+```mermaid
+graph TD
+    PARENT["Parent Component"] --> EFD["EntityFormDialogComponent"]
+    EFD --> KD["Kendo Dialog Window"]
+    EFD --> CD["ContainerDirective\n(Dynamic Loading)"]
+    CD --> BFC["BaseFormComponent\n(or subclass)"]
+    BFC --> BFSC["BaseFormSectionComponent"]
+
+    style PARENT fill:#7c5295,stroke:#563a6b,color:#fff
+    style EFD fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style KD fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style CD fill:#b8762f,stroke:#8a5722,color:#fff
+    style BFC fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style BFSC fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
 
 ## Features
 
-- Display entity forms in a modal dialog powered by Kendo UI
-- Support for displaying complete forms or specific form sections
-- Automatic save functionality with error handling
-- Configurable cancel behavior with automatic change reversion
-- Dynamic form component loading using MemberJunction's class factory system
-- Customizable dialog dimensions and appearance
-- TypeScript support with full type safety
-- Integration with MemberJunction entity management system
+- **Universal entity support**: Works with any MemberJunction entity
+- **Two display modes**: Complete form or single named section
+- **Configurable buttons**: Show/hide Save and Cancel independently
+- **Automatic save handling**: Optionally saves the record when user clicks Save
+- **Auto-revert on cancel**: Optionally reverts record changes when user cancels
+- **Resizable dialog**: Configurable width and height with user-resizable window
+- **Dynamic form loading**: Uses `@RegisterClass` to load the correct form component
 
 ## Installation
 
@@ -19,242 +38,70 @@ Angular component for displaying MemberJunction entity forms in a modal dialog, 
 npm install @memberjunction/ng-entity-form-dialog
 ```
 
-## Dependencies
+## Key Dependencies
 
-This package requires the following peer dependencies:
-- `@angular/common`: ^18.0.2
-- `@angular/core`: ^18.0.2
-- `@angular/forms`: ^18.0.2
-- `@angular/router`: ^18.0.2
+| Dependency | Purpose |
+|---|---|
+| `@memberjunction/core` | Entity metadata, BaseEntity |
+| `@memberjunction/ng-base-forms` | BaseFormComponent, BaseFormSectionComponent |
+| `@memberjunction/ng-container-directives` | Dynamic component loading |
+| `@memberjunction/ng-shared` | SharedService |
+| `@progress/kendo-angular-dialog` | Kendo UI dialog window |
+| `@progress/kendo-angular-buttons` | Dialog action buttons |
 
-The package also depends on:
-- `@memberjunction/core`: For BaseEntity support
-- `@memberjunction/ng-base-forms`: For form components
-- `@memberjunction/ng-shared`: For shared services
-- `@progress/kendo-angular-dialog`: For dialog UI
-- `@progress/kendo-angular-buttons`: For button UI
-
-## Module Setup
-
-Import the module in your Angular application:
-
-```typescript
-import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
-
-@NgModule({
-  imports: [
-    CommonModule,
-    FormsModule,
-    EntityFormDialogModule
-  ]
-})
-export class YourModule { }
-```
-
-## Usage Examples
-
-### Basic Usage
+## Usage
 
 ```html
 <mj-entity-form-dialog
-  [Record]="myEntityRecord"
-  [Visible]="showDialog"
-  (DialogClosed)="onDialogClosed($event)">
-</mj-entity-form-dialog>
-```
-
-### Complete Form Mode
-
-Display the entire form for an entity:
-
-```html
-<mj-entity-form-dialog
-  Title="Edit User"
-  [Record]="userRecord"
-  Mode="complete"
-  [Visible]="showDialog"
+  [Title]="'Edit Contact'"
+  [Record]="contactRecord"
+  [Visible]="isDialogOpen"
+  [Mode]="'complete'"
+  [ShowSaveButton]="true"
+  [ShowCancelButton]="true"
+  [HandleSave]="true"
+  [AutoRevertOnCancel]="true"
   [Width]="800"
   [Height]="600"
-  [HandleSave]="true"
-  [AutoRevertOnCancel]="true"
   (DialogClosed)="onDialogClosed($event)">
 </mj-entity-form-dialog>
 ```
 
-### Section Mode
+### Inputs
 
-Display only a specific section of a form:
-
-```html
-<mj-entity-form-dialog
-  Title="Edit User Details"
-  [Record]="userRecord"
-  Mode="section"
-  SectionName="details"
-  [Visible]="showDialog"
-  [Width]="500"
-  [Height]="350"
-  [HandleSave]="true"
-  [AutoRevertOnCancel]="true"
-  (DialogClosed)="onDialogClosed($event)">
-</mj-entity-form-dialog>
-```
-
-### Component Implementation
-
-```typescript
-import { Component } from '@angular/core';
-import { BaseEntity, Metadata } from '@memberjunction/core';
-
-@Component({
-  selector: 'app-user-management',
-  template: `
-    <button (click)="editUser()">Edit User</button>
-    
-    <mj-entity-form-dialog
-      Title="Edit User"
-      [Record]="userRecord"
-      [Visible]="showDialog"
-      [HandleSave]="true"
-      [AutoRevertOnCancel]="true"
-      (DialogClosed)="onDialogClosed($event)">
-    </mj-entity-form-dialog>
-  `
-})
-export class UserManagementComponent {
-  userRecord: BaseEntity | null = null;
-  showDialog = false;
-
-  async editUser() {
-    // Load user record using MemberJunction metadata system
-    const md = new Metadata();
-    this.userRecord = await md.GetEntityObject('Users');
-    await this.userRecord.Load(userId);
-    
-    // Show the dialog
-    this.showDialog = true;
-  }
-
-  onDialogClosed(result: 'Save' | 'Cancel') {
-    if (result === 'Save') {
-      // Handle successful save
-      console.log('User saved successfully');
-      // Refresh your UI or perform other actions
-    } else {
-      // Handle cancel - changes are automatically reverted if AutoRevertOnCancel is true
-      console.log('Edit cancelled');
-    }
-    
-    // Hide the dialog
-    this.showDialog = false;
-  }
-}
-```
-
-## API Reference
-
-### Input Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `Title` | `string` | `''` | The title displayed in the dialog header |
-| `ShowSaveButton` | `boolean` | `true` | Whether to display the Save button |
-| `ShowCancelButton` | `boolean` | `true` | Whether to display the Cancel button |
-| `Width` | `number` | `800` | Initial dialog width in pixels |
-| `Height` | `number` | `600` | Initial dialog height in pixels |
-| `Mode` | `'complete' \| 'section'` | `'complete'` | Display mode - entire form or specific section |
-| `SectionName` | `string` | `''` | The section name to display (required when Mode is 'section') |
-| `Record` | `BaseEntity \| null` | `null` | The entity record to edit (required) |
-| `HandleSave` | `boolean` | `true` | Automatically save the record when Save is clicked |
-| `AutoRevertOnCancel` | `boolean` | `true` | Automatically revert changes when Cancel is clicked |
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `Title` | `string` | `''` | Dialog title bar text |
+| `Record` | `BaseEntity` | `null` | The entity record to display |
 | `Visible` | `boolean` | `false` | Controls dialog visibility |
+| `Mode` | `'complete' \| 'section'` | `'complete'` | Show entire form or specific section |
+| `SectionName` | `string` | `''` | Section name (when Mode is `'section'`) |
+| `ShowSaveButton` | `boolean` | `true` | Show the Save button |
+| `ShowCancelButton` | `boolean` | `true` | Show the Cancel button |
+| `HandleSave` | `boolean` | `true` | Auto-save record on Save click |
+| `AutoRevertOnCancel` | `boolean` | `true` | Auto-revert record on Cancel click |
+| `Width` | `number` | `800` | Dialog width in pixels |
+| `Height` | `number` | `600` | Dialog height in pixels |
 
-### Output Events
+### Outputs
 
-| Event | Type | Description |
-|-------|------|-------------|
-| `DialogClosed` | `EventEmitter<'Save' \| 'Cancel'>` | Emitted when the dialog is closed with the action taken |
+| Output | Type | Description |
+|---|---|---|
+| `DialogClosed` | `EventEmitter<'Save' \| 'Cancel'>` | Emitted when dialog closes with action taken |
 
-### Public Methods
+## Exported API
 
-#### `ShowForm()`
-Programmatically shows the form. This is automatically called when the `Visible` property is set to `true`.
+| Export | Type | Description |
+|---|---|---|
+| `EntityFormDialogComponent` | Component | The dialog component |
+| `EntityFormDialogModule` | NgModule | Module declaration |
 
-```typescript
-@ViewChild(EntityFormDialogComponent) formDialog!: EntityFormDialogComponent;
+## Build
 
-showFormProgrammatically() {
-  this.formDialog.ShowForm();
-}
-```
-
-#### `CloseWindow(status: 'Save' | 'Cancel')`
-Programmatically closes the dialog with the specified status.
-
-```typescript
-closeDialogProgrammatically() {
-  this.formDialog.CloseWindow('Cancel');
-}
-```
-
-## Form Component Registration
-
-The dialog dynamically loads form components based on the entity type and mode. These components must be registered with MemberJunction's class factory system:
-
-### For Complete Mode
-Register a subclass of `BaseFormComponent` with the entity name:
-```typescript
-import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-
-@RegisterClass(BaseFormComponent, 'Users')
-export class UserFormComponent extends BaseFormComponent {
-  // Your form implementation
-}
-```
-
-### For Section Mode
-Register a subclass of `BaseFormSectionComponent` with the pattern `EntityName.SectionName`:
-```typescript
-import { RegisterClass } from '@memberjunction/global';
-import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-
-@RegisterClass(BaseFormSectionComponent, 'Users.details')
-export class UserDetailsSectionComponent extends BaseFormSectionComponent {
-  // Your section implementation
-}
-```
-
-## Error Handling
-
-The component includes built-in error handling for save operations:
-
-- If `HandleSave` is `true` and the save operation fails, the component will:
-  1. Display an error notification using `SharedService`
-  2. Automatically revert the changes to prevent data corruption
-  3. Still emit the `DialogClosed` event with 'Save' status
-
-## Best Practices
-
-1. **Always provide a Record**: The `Record` property is required and must be a valid BaseEntity instance
-2. **Handle the DialogClosed event**: Always implement a handler to manage dialog visibility
-3. **Use proper entity loading**: Load entities using MemberJunction's Metadata system
-4. **Register form components**: Ensure your custom form components are properly registered
-5. **Consider dialog dimensions**: Adjust `Width` and `Height` based on your form complexity
-
-## Integration with Other MemberJunction Packages
-
-This package integrates seamlessly with:
-- `@memberjunction/core`: For entity management
-- `@memberjunction/ng-base-forms`: For form component base classes
-- `@memberjunction/ng-shared`: For notification services
-- `@memberjunction/global`: For class factory registration
-
-## Building
-
-To build the package:
 ```bash
-npm run build
+cd packages/Angular/Explorer/entity-form-dialog && npm run build
 ```
 
-The package uses Angular's `ngc` compiler and outputs to the `dist` directory.
+## License
+
+ISC

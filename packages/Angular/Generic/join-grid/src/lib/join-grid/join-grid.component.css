@@ -17,8 +17,8 @@ button.cellButton {
 }
 
 table th {
-    background-color: #f2f2f2; /* Light gray background for headers */
-    color: black; /* Black text color for headers */
+    background-color: var(--mj-bg-surface-sunken); /* Light gray background for headers */
+    color: var(--mj-text-primary); /* Text color for headers */
     font-weight: bold; /* Bold font weight for headers */
 }
 /* 
@@ -28,7 +28,7 @@ table th {
 
 /* Style for all table cells */
 table th, table td {
-    border: 1px solid gray; /* Gray border for cells */
+    border: 1px solid var(--mj-border-default); /* Gray border for cells */
     height: 36px; /* Fixed height for all rows */
     text-align: center;
     padding: 0 8px; /* Add some padding inside cells */
@@ -54,19 +54,19 @@ table th:first-child, table td:first-child {
 
 /* Alternating row background colors */
 table tr:nth-child(odd) {
-    background-color: white; /* Light color for odd rows */
+    background-color: var(--mj-bg-surface); /* Light color for odd rows */
 }
 
 table tr:nth-child(even) {
-    background-color: #e7f4ff; /* Light blue for even rows */
+    background-color: var(--mj-brand-primary-subtle); /* Light blue for even rows */
 }
 
 table tr.dirty-row {
     font-style: italic;
-    background-color: #ffcccc;
+    background-color: var(--mj-status-error-subtle);
 }
 
 table td.dirty-cell {
     font-style: italic;
-    background-color: #ffcccc;
+    background-color: var(--mj-status-error-subtle);
 }

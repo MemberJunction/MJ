@@ -51,6 +51,11 @@
  * - Random IVs for each encryption operation
  * - Cached key material has configurable TTL
  *
+ * ## API Key Management
+ *
+ * API key functionality has been moved to the `@memberjunction/api-keys` package.
+ * Use that package for API key generation, validation, and scope-based authorization.
+ *
  * @module @memberjunction/encryption
  * @packageDocumentation
  */
@@ -60,6 +65,7 @@ export {
     EncryptionKeySourceConfig,
     EncryptedValueParts,
     KeyConfiguration,
+    KeyValidationResult,
     RotateKeyParams,
     RotateKeyResult,
     EnableFieldEncryptionParams,
@@ -71,6 +77,9 @@ export { EncryptionKeySourceBase } from './EncryptionKeySourceBase';
 
 // Core encryption engine
 export { EncryptionEngine } from './EncryptionEngine';
+
+// Startup validation (auto-registered via @RegisterForStartup)
+export { EncryptionStartupValidator } from './EncryptionStartupValidator';
 
 // Built-in key source providers
 export { EnvVarKeySource } from './providers/EnvVarKeySource';

@@ -13,12 +13,13 @@
  */
 
 import { DataContext } from '@memberjunction/data-context';
+import type { EntityInfo } from '@memberjunction/core';
 import type { SkipMessage } from './conversation-types';
-import type { SkipEntityInfo } from './entity-metadata-types';
-import type { SkipQueryInfo } from './query-types';
+import type { SkipQueryInfo, SkipQueryCatalogEntry } from './query-types';
 import type { SkipAPIRequestAPIKey } from './auth-types';
 import type { SkipAPIArtifact } from './artifact-types';
 import type { SkipAPIAgentNote, SkipAPIAgentNoteType } from './agent-types';
+import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
 /**
  * Describes the different request phases that are used to communicate with the Skip API Server
@@ -43,12 +44,15 @@ export type SkipRequestPhase = typeof SkipRequestPhase[keyof typeof SkipRequestP
 /**
  * Describes the different response phases that are used by the Skip API Server to respond back to the caller (usually the MJAPI server but can be anyone)
  * The response phase indicates if the Skip API server is asking for additional data, a clarifying question, or if the analysis is complete and the information has been provided
+ * * queued: The request is waiting in the queue (sent by queue infrastructure, not Skip API) - indicates queue position and estimated wait time
+ * * status_update: The Skip API server is providing a status update during processing
  * * clarifying_question: The Skip API server is asking for a clarifying question to be asked to the user - typecast the response to SkipAPIClarifyingQuestionResponse for all of the additional properties that are available in this response phase
  * * data_request: The Skip API server is asking for additional data to be gathered - typecast the response to SkipAPIDataRequestResponse for all of the additional properties that are available in this response phase
  * * analysis_complete: The Skip API server has completed the analysis and is providing the results - typecast the response to SkipAPIAnalysisCompleteResponse for all of the additional properties that are available in this response phase
  * * chat_with_a_record_complete: The Skip API server has completed the chat with a record and is providing the results - typecast the response to SkipAPIChatWithRecordResponse for all of the additional properties that are available in this response phase
  */
 export const SkipResponsePhase = {
+    queued: "queued",
     status_update: "status_update",
     clarifying_question: "clarifying_question",
     data_request: "data_request",
@@ -135,13 +139,24 @@ export class SkipAPIRequest {
      */
     dataContext?: DataContext;
     /**
-     * Summary entity metadata that is passed into the Skip Server so that Skip has knowledge of the schema of the calling MJAPI environment
+     * Summary entity metadata that is passed into the Skip Server so that Skip has knowledge of the schema of the calling MJAPI environment.
+     * Uses MemberJunction's native EntityInfo type directly — no intermediate conversion needed.
+     * Serialized via EntityInfo.toJSON() and reconstructed via new EntityInfo(data) on the receiving side.
      */
-    entities: SkipEntityInfo[];
+    entities: EntityInfo[];
     /**
      * Stored queries in the MJ metadata that Skip can use and learn from
      */
     queries: SkipQueryInfo[];
+
+    /**
+     * Lightweight catalog of ALL query names and category paths (regardless of status).
+     * Always populated regardless of the includeQueries flag, enabling accurate
+     * collision detection without the overhead of full query metadata.
+     * Includes all statuses because the database enforces name+category uniqueness
+     * across all queries, not just approved ones.
+     */
+    queryCatalog?: SkipQueryCatalogEntry[];
 
     /**
      * The conversation ID
@@ -209,6 +224,20 @@ export class SkipAPIRequest {
      * The payload is separate from artifacts - it represents work-in-progress data that hasn't been finalized yet.
      */
     payload?: Record<string, any>;
+
+    /**
+     * Optional reference ID from the calling system. When the MJ API proxies a request
+     * to Skip, this contains the MJ-side Agent Run ID, enabling correlation between
+     * the caller's execution tracking and Skip's execution tracking.
+     */
+    externalReferenceID?: string;
+
+    /**
+     * The database platform used by the calling MJ environment. This tells Skip which SQL dialect
+     * to use when generating queries (e.g., SQL Server vs PostgreSQL syntax differences).
+     * If not provided, Skip should default to 'sqlserver' for backward compatibility.
+     */
+    databasePlatform?: DatabasePlatform;
 }
 
 /**

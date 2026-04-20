@@ -1,6 +1,6 @@
 import env from 'env-var';
 import dotenv from 'dotenv';
-dotenv.config();
+dotenv.config({ quiet: true });
 
 export const dbHost = env.get('DB_HOST').required().asString();
 export const dbPort = env.get('DB_PORT').default('1433').asPortNumber();

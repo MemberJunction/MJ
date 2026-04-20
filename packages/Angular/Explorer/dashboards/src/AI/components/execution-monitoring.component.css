@@ -4,6 +4,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  color: var(--mj-text-primary);
 }
 .execution-monitoring .header {
   margin-bottom: 20px;
@@ -11,21 +12,21 @@
 }
 .execution-monitoring .header h3 {
   margin: 0 0 8px 0;
-  color: #2c3e50;
+  color: var(--mj-text-primary);
   font-size: 1.4rem;
   font-weight: 600;
 }
 .execution-monitoring .header p {
   margin: 0;
-  color: #7f8c8d;
+  color: var(--mj-text-muted);
   font-size: 0.9rem;
 }
 .execution-monitoring .content {
   flex: 1;
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-card);
   border-radius: 8px;
   padding: 20px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--mj-border-default);
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;

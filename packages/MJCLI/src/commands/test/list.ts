@@ -1,5 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { ListCommand } from '@memberjunction/testing-cli';
 
 export default class TestList extends Command {
   static description = 'List available tests, suites, and types';
@@ -51,6 +50,8 @@ export default class TestList extends Command {
   };
 
   async run(): Promise<void> {
+    const { ListCommand } = await import('@memberjunction/testing-cli');
+
     const { flags } = await this.parse(TestList);
 
     try {

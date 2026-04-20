@@ -1,8 +1,8 @@
 import express from 'express';
-import { 
-    BaseEntity, CompositeKey, EntityDeleteOptions, EntityInfo, 
-    EntityPermissionType, EntitySaveOptions, LogError, Metadata, 
-    RunView, RunViewParams 
+import {
+    BaseEntity, CompositeKey, EntityDeleteOptions, EntityInfo,
+    EntityPermissionType, EntitySaveOptions, LogError, Metadata,
+    RunView, RunViewParams, UserInfo
 } from '@memberjunction/core';
 import { EntityCRUDHandler } from './EntityCRUDHandler.js';
 import { ViewOperationsHandler } from './ViewOperationsHandler.js';
@@ -53,6 +53,17 @@ export class RESTEndpointHandler {
         this.router = express.Router();
         this.options = options;
         this.setupRoutes();
+    }
+
+    /**
+     * Helper to safely extract a string from Express route params
+     * Express 5.x types params as string | string[] | undefined
+     */
+    private getStringParam(param: string | string[] | undefined): string {
+        if (Array.isArray(param)) {
+            return param[0] || '';
+        }
+        return param || '';
     }
     
     /**
@@ -134,8 +145,8 @@ export class RESTEndpointHandler {
      * Set up all the API routes for the REST endpoints
      */
     private setupRoutes() {
-        // Middleware to extract MJ user
-        this.router.use(this.extractMJUser);
+        // Middleware to verify MJ user was set by upstream auth
+        this.router.use(this.extractMJUser.bind(this));
         
         // Middleware to check entity allowlist/blocklist
         this.router.use('/entities/:entityName', this.checkEntityAccess.bind(this));
@@ -183,20 +194,20 @@ export class RESTEndpointHandler {
         this.router.post('/queries/run', this.runQuery.bind(this));
         
         // Error handling
-        this.router.use(this.errorHandler);
+        this.router.use(this.errorHandler.bind(this));
     }
 
     /**
      * Middleware to check entity access based on include/exclude lists
      */
     private checkEntityAccess(req: express.Request, res: express.Response, next: express.NextFunction): void {
-        const entityName = req.params.entityName;
-        
+        const entityName = this.getStringParam(req.params.entityName);
+
         if (!entityName) {
             next();
             return;
         }
-        
+
         if (!this.isEntityAllowed(entityName)) {
             res.status(403).json({
                 error: `Access to entity '${entityName}' is not allowed through the REST API`,
@@ -209,47 +220,30 @@ export class RESTEndpointHandler {
     }
     
     /**
-     * Middleware to extract MJ user from request
+     * Guard middleware: verifies that the unified auth middleware (or a custom
+     * per-route authMiddleware) has already set req['mjUser'] to a UserInfo.
+     * Does NOT overwrite the value — just returns 401 if it is missing.
      */
-    private async extractMJUser(req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> {
-        try {
-            // If authentication middleware has already set req.user with basic info
-            if (req['user']) {
-                // Get the full MemberJunction user
-                const md = new Metadata();
-                const userInfo = req['user'];
-                // Get user info based on email or ID
-                // Note: The actual implementation here would depend on how the MemberJunction core handles user lookup
-                // This is a simplification that would need to be implemented properly
-                req['mjUser'] = userInfo;
-                
-                if (!req['mjUser']) {
-                    res.status(401).json({ error: 'User not found in MemberJunction' });
-                    return;
-                }
-            } else {
-                res.status(401).json({ error: 'Authentication required' });
-                return;
-            }
-            
-            next();
-        } catch (error) {
-            next(error);
+    private extractMJUser(req: express.Request, res: express.Response, next: express.NextFunction): void {
+        if (!req['mjUser']) {
+            res.status(401).json({ error: 'Authentication required' });
+            return;
         }
+        next();
     }
 
     /**
      * Error handling middleware
      */
-    private errorHandler(err: any, req: express.Request, res: express.Response, next: express.NextFunction): void {
+    private errorHandler(err: Error, req: express.Request, res: express.Response, next: express.NextFunction): void {
         LogError(err);
-        
+
         if (err.name === 'UnauthorizedError') {
             res.status(401).json({ error: 'Invalid token' });
             return;
         }
-        
-        res.status(500).json({ error: (err as Error)?.message || 'Internal server error' });
+
+        res.status(500).json({ error: err.message || 'Internal server error' });
     }
 
     /**
@@ -257,8 +251,8 @@ export class RESTEndpointHandler {
      */
     private async getCurrentUser(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const user = req['mjUser'];
-            
+            const user = req['mjUser'] as UserInfo;
+
             // Return user info without sensitive data
             res.json({
                 ID: user.ID,
@@ -266,11 +260,9 @@ export class RESTEndpointHandler {
                 Email: user.Email,
                 FirstName: user.FirstName,
                 LastName: user.LastName,
-                IsAdmin: user.IsAdmin,
                 UserRoles: user.UserRoles.map(role => ({
-                    ID: role.ID,
-                    Name: role.Name,
-                    Description: role.Description
+                    RoleID: role.RoleID,
+                    Role: role.Role
                 }))
             });
         } catch (error) {
@@ -284,7 +276,7 @@ export class RESTEndpointHandler {
      */
     private async getEntityList(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
             const { filter, orderBy, fields, maxRows, startRow } = req.query;
             
             const user = req['mjUser'];
@@ -312,12 +304,13 @@ export class RESTEndpointHandler {
      */
     private async getEntity(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const { include } = req.query; // Optional related entities to include
-            
+
             const user = req['mjUser'];
             const relatedEntities = include ? (include as string).split(',') : null;
-            
+
             const result = await EntityCRUDHandler.getEntity(entityName, id, relatedEntities, user);
             
             if (result.success) {
@@ -336,7 +329,7 @@ export class RESTEndpointHandler {
      */
     private async createEntity(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
             const entityData = req.body;
             
             const user = req['mjUser'];
@@ -362,11 +355,12 @@ export class RESTEndpointHandler {
      */
     private async updateEntity(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const updateData = req.body;
-            
+
             const user = req['mjUser'];
-            
+
             const result = await EntityCRUDHandler.updateEntity(entityName, id, updateData, user);
             
             if (result.success) {
@@ -388,7 +382,8 @@ export class RESTEndpointHandler {
      */
     private async deleteEntity(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const options = req.query.options ? JSON.parse(req.query.options as string) : {};
             
             const user = req['mjUser'];
@@ -417,13 +412,14 @@ export class RESTEndpointHandler {
      */
     private async getRecordChanges(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             
@@ -444,13 +440,14 @@ export class RESTEndpointHandler {
      */
     private async getRecordDependencies(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             
@@ -471,13 +468,14 @@ export class RESTEndpointHandler {
      */
     private async getEntityRecordName(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName, id } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             
@@ -497,7 +495,7 @@ export class RESTEndpointHandler {
      */
     private async runView(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName } = req.params;
+            const entityName = this.getStringParam(req.params.entityName);
             const viewParams = req.body;
             
             const user = req['mjUser'];
@@ -627,8 +625,8 @@ export class RESTEndpointHandler {
      */
     private async getEntityFieldMetadata(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName } = req.params;
-            
+            const entityName = this.getStringParam(req.params.entityName);
+
             const user = req['mjUser'];
             
             const md = new Metadata();
@@ -671,8 +669,8 @@ export class RESTEndpointHandler {
      */
     private async getViewsMetadata(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { entityName } = req.params;
-            
+            const entityName = this.getStringParam(req.params.entityName);
+
             const user = req['mjUser'];
             
             // This would need to be implemented to retrieve available views
@@ -691,13 +689,15 @@ export class RESTEndpointHandler {
      */
     private async getRecordFavoriteStatus(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { userId, entityName, id } = req.params;
+            const userId = this.getStringParam(req.params.userId);
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             
@@ -717,13 +717,15 @@ export class RESTEndpointHandler {
      */
     private async setRecordFavoriteStatus(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { userId, entityName, id } = req.params;
+            const userId = this.getStringParam(req.params.userId);
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             
@@ -743,13 +745,15 @@ export class RESTEndpointHandler {
      */
     private async removeRecordFavoriteStatus(req: express.Request, res: express.Response): Promise<void> {
         try {
-            const { userId, entityName, id } = req.params;
+            const userId = this.getStringParam(req.params.userId);
+            const entityName = this.getStringParam(req.params.entityName);
+            const id = this.getStringParam(req.params.id);
             const user = req['mjUser'];
-            
+
             // Get the entity object
             const md = new Metadata();
             const entity = await md.GetEntityObject(entityName, user);
-            
+
             // Create a composite key
             const compositeKey = this.createCompositeKey(entity.EntityInfo, id);
             

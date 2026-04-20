@@ -1,6 +1,6 @@
 import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
-import { ActionCategoryEntity, ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
-import { ActionEntityExtended } from "./ActionEntity-Extended";
+import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
+import { MJActionEntityExtended } from "./MJActionEntityExtended";
 
 
 export class ActionLibrary {
@@ -35,6 +35,50 @@ export class GeneratedCode {
 }
 
 /**
+ * Represents a directive from an action to an AI agent. Unlike `Message` (which is informational
+ * and meant for display or logging), directives are structured instructions that the agent
+ * framework surfaces as explicit guidance the AI must consider.
+ *
+ * Actions return directives when they need to steer agent behavior — for example, telling the
+ * agent which action to call next, constraining it from taking a particular path, or providing
+ * critical context that should influence its decision.
+ *
+ * @example
+ * ```typescript
+ * return {
+ *     Success: true,
+ *     ResultCode: 'SUCCESS',
+ *     Message: 'Found 10 matching queries.',
+ *     AIDirectives: [
+ *         { message: 'Call "Run Stored Query" with QueryID "abc-123"', type: 'instruction', priority: 'high' },
+ *         { message: 'Do NOT write fresh SQL — use the stored query above', type: 'constraint', priority: 'critical' },
+ *         { message: 'The stored query provides columns: ID, Name, FieldCount', type: 'context', priority: 'medium' }
+ *     ]
+ * };
+ * ```
+ */
+export interface AIDirective {
+    /** The directive message text to surface to the AI agent */
+    Message: string;
+    /**
+     * The kind of directive:
+     * - `instruction`: Direct command to perform a specific action or follow a specific path
+     * - `constraint`: Restriction on what the AI must NOT do
+     * - `context`: Important background information that should influence the AI's decisions
+     * - `suggestion`: Optional recommendation the AI may choose to follow or ignore
+     */
+    Type: 'instruction' | 'constraint' | 'context' | 'suggestion';
+    /**
+     * How strongly the AI should follow this directive:
+     * - `low`: Nice to follow, can be ignored if the AI has a better approach
+     * - `medium`: Should follow unless there's a clear reason not to
+     * - `high`: Must follow in most cases
+     * - `critical`: Must always follow, no exceptions
+     */
+    Priority: 'low' | 'medium' | 'high' | 'critical';
+}
+
+/**
  * Class that has the result of the individual action execution and used by the engine or other caller
  */
 
@@ -58,6 +102,14 @@ export class ActionResultSimple {
     * Optional, additional information about the result of the action
     */
    public Message?: string;
+
+   /**
+    * Optional array of structured directives for the AI agent.
+    * Unlike Message (which is informational), directives are surfaced as
+    * explicit guidance the AI must consider. Each directive has a type
+    * (instruction, constraint, context, suggestion) and priority level.
+    */
+   public AIDirectives?: AIDirective[];
 }
 
 /**
@@ -75,14 +127,14 @@ export class ActionResult {
    public Success: boolean;
 
    /**
-    * A code that indicates the outcome of the action. Will be one of the possible ResultCodes enumerated in the ActionResultCodeEntity
+    * A code that indicates the outcome of the action. Will be one of the possible ResultCodes enumerated in the MJActionResultCodeEntity
     */
-   public Result?: ActionResultCodeEntity;
+   public Result?: MJActionResultCodeEntity;
 
    /**
     * Whenever an action is executed a log entry is created. This log entry is stored in the database and can be used to track the execution of the action. This property contains the log entry object for the action that was run.
     */
-   public LogEntry?: ActionExecutionLogEntity;
+   public LogEntry?: MJActionExecutionLogEntity;
 
    /**
     * Optional, a message an action can include that describes the outcome of the action. This is typically used to display a message to the user.
@@ -93,6 +145,12 @@ export class ActionResult {
     * All parameters including inputs and outputs are provided here for convenience
     */
    public Params?: ActionParam[];
+
+   /**
+    * Optional array of structured directives for the AI agent.
+    * Propagated from ActionResultSimple.AIDirectives returned by the action implementation.
+    */
+   public AIDirectives?: AIDirective[];
 }
 
 /**
@@ -144,20 +202,20 @@ export class RunActionParams<TContext = any> {
    /**
     * The action entity to be run.
     */
-   public Action: ActionEntity;
+   public Action: MJActionEntity;
 
    /**
     * The user context for the action.
     */
    public ContextUser: UserInfo;
    /**
-    * Optional, if true, an ActionExecutionLogEntity will not be created for this action run.
+    * Optional, if true, an MJActionExecutionLogEntity will not be created for this action run.
     */
    public SkipActionLog?: boolean;
    /**
     * Optional, a list of filters that should be run before the action is executed.
     */
-   public Filters: ActionFilterEntity[];
+   public Filters: MJActionFilterEntity[];
    /**
     * Optional, the input and output parameters as defined in the metadata for the action.
     */
@@ -198,12 +256,12 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       return super.getInstance<ActionEngineBase>("ActionEngineBase");
    }
 
-    private _Actions: ActionEntityExtended[];
-    private _ActionCategories: ActionCategoryEntity[];
-    private _Filters: ActionFilterEntity[];
-    private _Params: ActionParamEntity[];
-    private _ActionResultCodes: ActionResultCodeEntity[];
-    private _ActionLibraries: ActionLibraryEntity[];
+    private _Actions: MJActionEntityExtended[];
+    private _ActionCategories: MJActionCategoryEntity[];
+    private _Filters: MJActionFilterEntity[];
+    private _Params: MJActionParamEntity[];
+    private _ActionResultCodes: MJActionResultCodeEntity[];
+    private _ActionLibraries: MJActionLibraryEntity[];
 
    /**
     * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.
@@ -214,32 +272,32 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
       const config: Array<Partial<BaseEnginePropertyConfig>> = [
          {
-               EntityName: 'Actions',
+               EntityName: 'MJ: Actions',
                PropertyName: '_Actions',
                CacheLocal: true
          },
          {
-               EntityName: 'Action Categories',
+               EntityName: 'MJ: Action Categories',
                PropertyName: '_ActionCategories',
                CacheLocal: true
          },
          {
-               EntityName: 'Action Filters',
+               EntityName: 'MJ: Action Filters',
                PropertyName: '_Filters',
                CacheLocal: true
          },
          {
-               EntityName: 'Action Result Codes',
+               EntityName: 'MJ: Action Result Codes',
                PropertyName: '_ActionResultCodes',
                CacheLocal: true
          },
          {
-               EntityName: 'Action Params',
+               EntityName: 'MJ: Action Params',
                PropertyName: '_Params',
                CacheLocal: true
          },
          {
-               EntityName: 'Action Libraries',
+               EntityName: 'MJ: Action Libraries',
                PropertyName: '_ActionLibraries',
                CacheLocal: true
          }];
@@ -272,35 +330,35 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       }
    }
 
-    public get Actions(): ActionEntityExtended[] {
+    public get Actions(): MJActionEntityExtended[] {
       return this._Actions;
     }
-    public get ActionCategories(): ActionCategoryEntity[] {
+    public get ActionCategories(): MJActionCategoryEntity[] {
       return this._ActionCategories;
     }
-    public get ActionParams(): ActionParamEntity[] {
+    public get ActionParams(): MJActionParamEntity[] {
       return this._Params;
     }
-    public get ActionFilters(): ActionFilterEntity[] {
+    public get ActionFilters(): MJActionFilterEntity[] {
       return this._Filters;
     }
-    public get ActionResultCodes(): ActionResultCodeEntity[] {
+    public get ActionResultCodes(): MJActionResultCodeEntity[] {
       return this._ActionResultCodes;
     }
-    public get ActionLibraries(): ActionLibraryEntity[] {
+    public get ActionLibraries(): MJActionLibraryEntity[] {
       return this._ActionLibraries;
     }
 
     /**
      * Returns a list of all core actions.
      */
-    public get CoreActions(): ActionEntityExtended[] {
+    public get CoreActions(): MJActionEntityExtended[] {
       return this._Actions.filter((a) => this.IsCoreAction(a));
     }
     /**
      * Returns a list of all non-core actions.
      */
-    public get NonCoreActions(): ActionEntityExtended[] {
+    public get NonCoreActions(): MJActionEntityExtended[] {
       return this._Actions.filter((a) => !this.IsCoreAction(a));
     }
 
@@ -341,7 +399,7 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
     * @param action - The action entity to check.
     * @returns True if the action is a core action, false otherwise.
     */
-   public IsCoreAction(action: ActionEntityExtended): boolean {
+   public IsCoreAction(action: MJActionEntityExtended): boolean {
       if (!action) {
          return false;
       }
@@ -365,7 +423,7 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
     * @param actionName 
     * @returns 
     */
-   public GetActionByName(actionName: string): ActionEntityExtended | undefined {
+   public GetActionByName(actionName: string): MJActionEntityExtended | undefined {
       if (!actionName || actionName.trim().length === 0) {
          throw new Error("Action name cannot be null or empty.");
       }

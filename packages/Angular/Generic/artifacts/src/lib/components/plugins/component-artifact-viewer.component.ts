@@ -5,6 +5,7 @@ import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-reac
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import { CompositeKey } from '@memberjunction/core';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
+import { ComponentFeedbackPanelComponent } from './component-feedback-panel/component-feedback-panel.component';
 
 /**
  * Viewer component for interactive Component artifacts (React-based UI components)
@@ -15,6 +16,7 @@ import { DataRequirementsViewerComponent } from './data-requirements-viewer/data
  * - Provides tabs for: Code, Functional Requirements, Technical Design, Data Requirements
  */
 @Component({
+  standalone: false,
   selector: 'mj-component-artifact-viewer',
   templateUrl: './component-artifact-viewer.component.html',
   styleUrls: ['./component-artifact-viewer.component.css']
@@ -30,9 +32,21 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   public componentCode: string = "";
   public componentName: string = '';
 
+  /**
+   * Cached resolved spec from the registry, preserved even after the React component
+   * is destroyed (e.g., when a render error removes <mj-react-component> from the DOM).
+   */
+  private _cachedResolvedSpec: ComponentSpec | null = null;
+
   public get resolvedComponentSpec(): ComponentSpec | null {
-    return this.reactComponent?.resolvedComponentSpec || this.component;
+    // Prefer the live React component's resolved spec (most up-to-date),
+    // then fall back to our cached copy (survives DOM destruction),
+    // then fall back to the stripped local spec as last resort.
+    return this.reactComponent?.resolvedComponentSpec || this._cachedResolvedSpec || this.component;
   }
+
+  // Feedback panel
+  public ShowFeedbackPanel = false;
 
   // Error state
   public hasError = false;
@@ -75,6 +89,9 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   private loadComponentSpec(): void {
     try {
+      // Clear cached resolved spec from previous version so stale data doesn't persist
+      this._cachedResolvedSpec = null;
+
       if (this.artifactVersion?.Content) {
         this.component = SafeJSONParse(this.artifactVersion.Content) as ComponentSpec;
         this.extractComponentParts();
@@ -194,8 +211,32 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     }
   }
 
+  /**
+   * Called when MJReactComponent finishes loading the full component spec from the registry.
+   * The full spec may contain Functional, Technical, and Data tabs not in the stripped spec.
+   * Caches the resolved spec so it survives DOM destruction (e.g., if the component fails to
+   * render and <mj-react-component> is removed by the @if/else block).
+   * Emits tabsChanged so the parent panel re-evaluates allTabs and renders the new tab labels.
+   */
+  onReactComponentInitialized(): void {
+    if (this.reactComponent?.resolvedComponentSpec &&
+        this.reactComponent.resolvedComponentSpec !== this.component) {
+      // Cache the resolved spec so it's available even after the React component is destroyed
+      this._cachedResolvedSpec = this.reactComponent.resolvedComponentSpec;
+      this.tabsChanged.emit();
+    }
+  }
+
   onComponentEvent(event: unknown): void {
     console.log('Component event:', event);
+
+    // Handle error events from React component
+    if (event && typeof event === 'object' && 'type' in event && event.type === 'error') {
+      const errorEvent = event as { type: 'error'; payload: { error: string; source: string } };
+      this.hasError = true;
+      this.errorMessage = 'Component Failed to Load';
+      this.errorDetails = errorEvent.payload.error || 'Unknown error occurred while loading the component';
+    }
   }
 
   /**
@@ -208,5 +249,19 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       entityName: event.entityName,
       compositeKey: event.key
     });
+  }
+
+  /**
+   * Component artifacts support feedback when a resolved spec is available.
+   */
+  public override get SupportsFeedback(): boolean {
+    return !!this.resolvedComponentSpec;
+  }
+
+  /**
+   * Toggle the feedback panel open. Called from the artifact viewer header button.
+   */
+  public override AskUserForFeedback(): void {
+    this.ShowFeedbackPanel = !this.ShowFeedbackPanel;
   }
 }

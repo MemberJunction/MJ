@@ -566,7 +566,7 @@ function EntityDetails({
             backgroundColor: styles.colors.surface
           }}>
             <OpenRecordButton
-              entityName="Entities"
+              entityName="MJ: Entities"
               record={entity}
               buttonText="Open Entity Record"
               utilities={utilities}

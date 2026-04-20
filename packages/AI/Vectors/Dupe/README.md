@@ -1,14 +1,66 @@
 # @memberjunction/ai-vector-dupe
 
-A MemberJunction package for identifying and managing duplicate records using AI-powered vector similarity search. This package generates vector representations of records and uses similarity scoring to detect potential duplicates, with options for automatic merging.
+<!-- Badges -->
+<!-- [![npm version](https://img.shields.io/npm/v/@memberjunction/ai-vector-dupe)](https://www.npmjs.com/package/@memberjunction/ai-vector-dupe) -->
+<!-- [![build](https://img.shields.io/github/actions/workflow/status/MemberJunction/MJ/ci.yml?branch=next)](https://github.com/MemberJunction/MJ/actions) -->
 
-## Overview
+**AI-powered duplicate record detection for MemberJunction entities** -- finds, scores, tracks, and optionally auto-merges duplicate records using vector similarity, hybrid search (RRF), and optional reranking.
 
-The AI Vector Dupe package provides sophisticated duplicate detection capabilities by:
-- Converting records into vector embeddings using AI models
-- Performing similarity searches in vector databases
-- Tracking duplicate detection runs and results
-- Optionally merging duplicates based on configurable thresholds
+---
+
+## Architecture
+
+```
+                         +--------------------------+
+                         |   DuplicateRecordDetector |
+                         |   (extends VectorBase)    |
+                         +-----+----------+---------+
+                               |          |
+              +----------------+          +----------------+
+              |                                            |
+    +---------v----------+                     +-----------v---------+
+    | GetDuplicateRecords|                     |  CheckSingleRecord  |
+    | (list-based batch) |                     |  (single record)    |
+    +--------+-----------+                     +-----------+---------+
+             |                                             |
+             +-------------------+-------------------------+
+                                 |
+                    +------------v------------+
+                    |    Detection Pipeline   |
+                    +-------------------------+
+                    | 1. Validate Entity Doc  |
+                    | 2. Vectorize records    |
+                    | 3. Embed via AI model   |
+                    | 4. Query vector DB      |
+                    |    (hybrid if supported)|
+                    | 5. Filter self-matches  |
+                    | 6. Apply thresholds     |
+                    | 7. Persist match results|
+                    | 8. Auto-merge (optional)|
+                    +-------------------------+
+                                 |
+              +------------------+------------------+
+              |                  |                   |
+    +---------v------+  +-------v--------+  +-------v--------+
+    | ai-vector-sync |  | ai-vectordb    |  | ai (Embeddings)|
+    | (vectorizer,   |  | (VectorDBBase, |  | (BaseEmbeddings|
+    |  templates)    |  |  hybrid query) |  |  GetAIAPIKey)  |
+    +----------------+  +----------------+  +----------------+
+```
+
+**Key dependencies:**
+
+| Package | Role |
+|---|---|
+| `@memberjunction/ai` | Embedding model abstraction and API key resolution |
+| `@memberjunction/ai-vectordb` | Vector database abstraction (query, hybrid search) |
+| `@memberjunction/ai-vectors` | `VectorBase` base class with metadata and RunView helpers |
+| `@memberjunction/ai-vector-sync` | `EntityVectorSyncer` for record vectorization, template parsing |
+| `@memberjunction/core` | Core types: `PotentialDuplicateRequest`, `DuplicateDetectionOptions`, etc. |
+| `@memberjunction/core-entities` | Generated entity classes for Duplicate Runs, Lists, Entity Documents |
+| `@memberjunction/global` | `MJGlobal` class factory, `UUIDsEqual` |
+
+---
 
 ## Installation
 
@@ -16,236 +68,276 @@ The AI Vector Dupe package provides sophisticated duplicate detection capabiliti
 npm install @memberjunction/ai-vector-dupe
 ```
 
-## Prerequisites
+---
 
-1. **MemberJunction Framework**: A properly configured MemberJunction database with the core schema
-2. **AI Model Provider**: API key for embedding models (OpenAI, Mistral, or other supported providers)
-3. **Vector Database**: Currently supports Pinecone with appropriate API credentials
-4. **Entity Documents**: Configured entity documents with templates for the entities you want to analyze
+## Quick Start
 
-## Core Components
+### List-Based Batch Detection
 
-### DuplicateRecordDetector
-
-The main class that handles duplicate detection operations.
+Detect duplicates across all records in an MJ List:
 
 ```typescript
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
-import { PotentialDuplicateRequest, UserInfo } from '@memberjunction/core';
+import { PotentialDuplicateRequest } from '@memberjunction/core';
 
 const detector = new DuplicateRecordDetector();
-```
 
-### VectorSyncBase
-
-Abstract base class providing utilities for vector synchronization operations.
-
-```typescript
-import { VectorSyncBase } from '@memberjunction/ai-vector-dupe';
-```
-
-### EntitySyncConfig
-
-Type definition for entity synchronization configuration.
-
-```typescript
-import { EntitySyncConfig } from '@memberjunction/ai-vector-dupe';
-
-const config: EntitySyncConfig = {
-    EntityDocumentID: 'entity-doc-id',
-    Interval: 3600,
-    RunViewParams: { /* RunView parameters */ },
-    IncludeInSync: true,
-    LastRunDate: 'January 1, 2024 00:00:00',
-    VectorIndexID: 1,
-    VectorID: 1
-};
-```
-
-## Usage
-
-### Basic Duplicate Detection
-
-```typescript
-import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
-import { PotentialDuplicateRequest, UserInfo } from '@memberjunction/core';
-
-// Initialize the detector
-const detector = new DuplicateRecordDetector();
-
-// Define the request parameters
 const request: PotentialDuplicateRequest = {
-    ListID: 'your-list-id',           // ID of the list containing records to check
-    EntityID: 'your-entity-id',        // ID of the entity type
-    EntityDocumentID: 'doc-id',        // ID of the entity document with template
+    ListID: 'your-list-uuid',
+    EntityID: 'your-entity-uuid',
+    EntityDocumentID: 'your-entity-document-uuid',
     Options: {
-        DuplicateRunID: 'run-id'       // Optional: existing duplicate run to continue
-    }
+        TopK: 10,
+        OnProgress: (progress) => {
+            console.log(`[${progress.Phase}] ${progress.ProcessedRecords}/${progress.TotalRecords} -- ${progress.MatchesFound} matches`);
+        },
+    },
 };
 
-// Execute duplicate detection
-const response = await detector.getDuplicateRecords(request, currentUser);
+const response = await detector.GetDuplicateRecords(request, contextUser);
 
 if (response.Status === 'Success') {
-    console.log(`Found ${response.PotentialDuplicateResult.length} records with potential duplicates`);
-    
     for (const result of response.PotentialDuplicateResult) {
-        console.log(`Record ${result.RecordCompositeKey.ToString()}:`);
-        for (const duplicate of result.Duplicates) {
-            console.log(`  - Potential duplicate: ${duplicate.ToString()} (${duplicate.ProbabilityScore * 100}% match)`);
+        console.log(`Record: ${result.RecordCompositeKey.ToString()}`);
+        for (const dupe of result.Duplicates) {
+            console.log(`  Match: ${dupe.ToString()} (${(dupe.ProbabilityScore * 100).toFixed(1)}%)`);
         }
     }
 }
 ```
 
-### Advanced Configuration
+### Single-Record Check
+
+Check one record for duplicates without creating a list -- ideal for server hooks (e.g., fire-and-forget after record save):
 
 ```typescript
-// Configure thresholds via Entity Document settings
-// PotentialMatchThreshold: Minimum score to consider as potential duplicate (e.g., 0.8)
-// AbsoluteMatchThreshold: Score at which automatic merging occurs (e.g., 0.95)
+import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
+import { CompositeKey } from '@memberjunction/core';
 
-const entityDocument = await vectorizer.GetEntityDocument(entityDocumentID);
-entityDocument.PotentialMatchThreshold = 0.8;  // 80% similarity
-entityDocument.AbsoluteMatchThreshold = 0.95;   // 95% for auto-merge
-await entityDocument.Save();
-```
+const detector = new DuplicateRecordDetector();
 
-## API Reference
+const recordKey = new CompositeKey([{ FieldName: 'ID', Value: 'record-uuid' }]);
 
-### DuplicateRecordDetector
+const result = await detector.CheckSingleRecord(
+    'your-entity-document-uuid',
+    recordKey,
+    { TopK: 5 },
+    contextUser
+);
 
-#### `getDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>`
-
-Performs duplicate detection on records in a list.
-
-**Parameters:**
-- `params`: Request parameters including:
-  - `ListID`: ID of the list containing records to analyze
-  - `EntityID`: ID of the entity type
-  - `EntityDocumentID`: ID of the entity document configuration
-  - `Options`: Optional configuration including `DuplicateRunID`
-- `contextUser`: Optional user context for permissions
-
-**Returns:** `PotentialDuplicateResponse` containing:
-- `Status`: 'Success' or 'Error'
-- `ErrorMessage`: Error details if failed
-- `PotentialDuplicateResult[]`: Array of results for each analyzed record
-
-### VectorSyncBase
-
-Base class providing utility methods:
-
-- `parseStringTemplate(str: string, obj: any): string` - Parse template strings
-- `timer(ms: number): Promise<unknown>` - Async delay utility
-- `start()` / `end()` / `timeDiff()` - Timing utilities
-- `saveJSONData(data: any, path: string)` - JSON file operations
-
-## Workflow Details
-
-The duplicate detection process follows these steps:
-
-1. **Vectorization**: Records are converted to vector embeddings using the configured AI model
-2. **Similarity Search**: Each vector is compared against others in the vector database
-3. **Threshold Filtering**: Results are filtered based on the potential match threshold
-4. **Result Tracking**: All operations are logged in duplicate run tables
-5. **Optional Merging**: Records exceeding the absolute match threshold are automatically merged
-
-## Database Schema Integration
-
-The package integrates with these MemberJunction entities:
-
-- **Duplicate Runs**: Master record for each duplicate detection execution
-- **Duplicate Run Details**: Individual record analysis results
-- **Duplicate Run Detail Matches**: Specific duplicate matches found
-- **Lists**: Source lists containing records to analyze
-- **List Details**: Individual records within lists
-- **Entity Documents**: Configuration for entity vectorization
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file with:
-
-```env
-# AI Model Configuration
-OPENAI_API_KEY=your-openai-key
-MISTRAL_API_KEY=your-mistral-key
-
-# Vector Database
-PINECONE_API_KEY=your-pinecone-key
-PINECONE_HOST=your-pinecone-host
-PINECONE_DEFAULT_INDEX=your-index-name
-
-# Database Connection
-DB_HOST=your-sql-server
-DB_PORT=1433
-DB_USERNAME=your-username
-DB_PASSWORD=your-password
-DB_DATABASE=your-database
-
-# User Context
-CURRENT_USER_EMAIL=user@example.com
-```
-
-### Entity Document Templates
-
-Entity documents use template syntax to define how records are converted to text for vectorization:
-
-```javascript
-// Example template
-const template = "${FirstName} ${LastName} works at ${Company} as ${Title}";
-```
-
-## Dependencies
-
-- `@memberjunction/ai`: AI model abstractions
-- `@memberjunction/ai-vectordb`: Vector database interfaces
-- `@memberjunction/ai-vectors`: Vector operations
-- `@memberjunction/ai-vectors-pinecone`: Pinecone implementation
-- `@memberjunction/ai-vector-sync`: Entity vectorization
-- `@memberjunction/core`: Core MJ functionality
-- `@memberjunction/core-entities`: Entity definitions
-
-## Best Practices
-
-1. **Batch Processing**: For large datasets, process records in batches to avoid timeouts
-2. **Threshold Tuning**: Start with conservative thresholds and adjust based on results
-3. **Template Design**: Create comprehensive templates that capture all relevant fields
-4. **Regular Sync**: Keep vector databases synchronized with source data
-5. **Monitor Performance**: Track processing times and optimize for large datasets
-
-## Error Handling
-
-The package provides detailed error messages for common issues:
-
-```typescript
-try {
-    const response = await detector.getDuplicateRecords(request, user);
-    if (response.Status === 'Error') {
-        console.error('Duplicate detection failed:', response.ErrorMessage);
-    }
-} catch (error) {
-    console.error('Unexpected error:', error.message);
+for (const dupe of result.Duplicates) {
+    console.log(`Potential duplicate: ${dupe.ToString()} (score: ${dupe.ProbabilityScore})`);
 }
 ```
 
-## Limitations
+---
 
-- Currently supports duplicate detection within a single entity type only
-- Requires pre-configured entity documents with templates
-- Vector database support limited to Pinecone
-- Performance depends on vector database query capabilities
+## DuplicateDetectionOptions Reference
 
-## Future Enhancements
+Options are passed via the `Options` property on `PotentialDuplicateRequest`, or directly to `CheckSingleRecord`.
 
-- Cross-entity duplicate detection
-- Additional vector database providers
-- Batch processing improvements
-- Real-time duplicate prevention
-- Advanced merge strategies
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `TopK` | `number` | `5` | Number of nearest neighbors to retrieve per record |
+| `DuplicateRunID` | `string` | -- | Resume an existing duplicate run (batch mode only) |
+| `KeywordSearchWeight` | `number` | `0.3` | Weight for keyword search in hybrid mode (0.0 = vector only, 1.0 = keyword only). Vector weight is `1.0 - KeywordSearchWeight`. |
+| `FusionMethod` | `string` | `'rrf'` | Fusion method for hybrid search. Currently supports `'rrf'` (Reciprocal Rank Fusion). |
+| `PotentialMatchThreshold` | `number` | -- | Override the EntityDocument's PotentialMatchThreshold for this run |
+| `AbsoluteMatchThreshold` | `number` | -- | Override the EntityDocument's AbsoluteMatchThreshold for this run |
+| `OnProgress` | `(progress: DuplicateDetectionProgress) => void` | -- | Callback for real-time progress reporting |
 
-## Support
+### Thresholds
 
-For issues, questions, or contributions, please refer to the [MemberJunction documentation](https://docs.memberjunction.org) or contact the development team.
+Thresholds can be configured at two levels -- on the `EntityDocument` record (default) or overridden per-run via `DuplicateDetectionOptions`. When threshold overrides are provided in the options, they take precedence over the EntityDocument values.
+
+| Threshold | Purpose |
+|---|---|
+| `PotentialMatchThreshold` | Minimum similarity score to report a candidate as a potential duplicate |
+| `AbsoluteMatchThreshold` | Minimum similarity score to trigger automatic record merge |
+
+A server hook normalizes `1.0` thresholds to sensible defaults (`0.70` for potential, `0.95` for absolute) to prevent degenerate behavior when thresholds are left at the maximum.
+
+---
+
+## Hybrid Search and Reciprocal Rank Fusion (RRF)
+
+When the configured vector database supports hybrid search (`VectorDBBase.SupportsHybridSearch === true`), the detector automatically combines **vector similarity** and **keyword search** for higher-quality results.
+
+### How It Works
+
+1. The record's template text is sent as both a vector embedding and a keyword query.
+2. The vector DB returns results from both retrieval methods.
+3. Results are fused using **Reciprocal Rank Fusion (RRF)**, a rank-based algorithm that is score-scale independent.
+
+### RRF Formula
+
+```
+FusedScore(d) = SUM_i [ 1 / (k + rank_i(d)) ]
+```
+
+Where `rank_i(d)` is the 1-based rank of document `d` in list `i`, and `k` is a smoothing constant (default: 60).
+
+### Using ComputeRRF Directly
+
+The `ComputeRRF` utility is exported for use in custom pipelines:
+
+```typescript
+import { ComputeRRF, ScoredCandidate } from '@memberjunction/ai-vector-dupe';
+
+const vectorResults: ScoredCandidate[] = [
+    { ID: 'rec-1', Score: 0.95 },
+    { ID: 'rec-2', Score: 0.87 },
+    { ID: 'rec-3', Score: 0.82 },
+];
+
+const keywordResults: ScoredCandidate[] = [
+    { ID: 'rec-2', Score: 12.5 },  // Different scale -- RRF handles this
+    { ID: 'rec-4', Score: 10.1 },
+    { ID: 'rec-1', Score: 8.3 },
+];
+
+const fused = ComputeRRF([vectorResults, keywordResults], 60);
+// Results sorted by fused RRF score, score-scale independent
+```
+
+### Tuning Hybrid Search
+
+- **`KeywordSearchWeight = 0.0`**: Pure vector similarity (semantic matching).
+- **`KeywordSearchWeight = 0.3`** (default): Slight keyword boost. Good for entities with distinctive names or codes.
+- **`KeywordSearchWeight = 0.5`**: Equal weight. Useful when both semantic and lexical matches matter.
+- **`KeywordSearchWeight = 1.0`**: Pure keyword search (not recommended for duplicate detection).
+
+---
+
+## Reranking
+
+When MJ's `BaseReranker` / `RerankerService` is configured, the detector can apply a second-stage reranking pass after initial retrieval. Reranking uses a cross-encoder model to re-score candidates with higher precision than embedding-based similarity alone.
+
+Reranking is especially effective when:
+- Initial retrieval returns many borderline candidates
+- Entity records have complex, multi-field structures
+- You need to maximize precision at the cost of slightly higher latency
+
+See the [Duplicate Detection Guide](docs/DUPLICATE_DETECTION_GUIDE.md#reranking-integration) for configuration details.
+
+---
+
+## Progress Reporting
+
+The `OnProgress` callback fires at each phase of the pipeline:
+
+```typescript
+const request: PotentialDuplicateRequest = {
+    // ...
+    Options: {
+        OnProgress: (progress) => {
+            const { Phase, TotalRecords, ProcessedRecords, MatchesFound, ElapsedMs } = progress;
+            const pct = TotalRecords > 0 ? ((ProcessedRecords / TotalRecords) * 100).toFixed(0) : '0';
+            console.log(`[${Phase}] ${pct}% -- ${MatchesFound} matches (${ElapsedMs}ms)`);
+        },
+    },
+};
+```
+
+### Progress Phases
+
+| Phase | Description |
+|---|---|
+| `Vectorizing` | Records are being vectorized via `EntityVectorSyncer` |
+| `Embedding` | Template texts are being embedded via the AI model |
+| `Querying` | Vector DB is being queried for each record |
+| `Matching` | Results are being persisted and match records created |
+| `Merging` | High-confidence matches are being auto-merged |
+
+### DuplicateDetectionProgress Shape
+
+```typescript
+interface DuplicateDetectionProgress {
+    Phase: 'Vectorizing' | 'Embedding' | 'Querying' | 'Matching' | 'Merging';
+    TotalRecords: number;
+    ProcessedRecords: number;
+    MatchesFound: number;
+    CurrentRecordID?: string;
+    ElapsedMs: number;
+}
+```
+
+---
+
+## API Reference Summary
+
+### DuplicateRecordDetector
+
+| Method | Signature | Description |
+|---|---|---|
+| `GetDuplicateRecords` | `(params: PotentialDuplicateRequest, contextUser?: UserInfo) => Promise<PotentialDuplicateResponse>` | Run batch duplicate detection for all records in a list |
+| `CheckSingleRecord` | `(EntityDocumentID: string, RecordID: CompositeKey, Options?: DuplicateDetectionOptions, ContextUser?: UserInfo) => Promise<PotentialDuplicateResult>` | Check a single record for duplicates |
+| `ParseVectorMatches` | `(queryResponse: BaseResponse, sourceKey?: CompositeKey) => PotentialDuplicateResult` | Parse raw vector DB response into typed results |
+
+### ComputeRRF
+
+```typescript
+function ComputeRRF(rankedLists: ScoredCandidate[][], k?: number): ScoredCandidate[]
+```
+
+Compute Reciprocal Rank Fusion across multiple ranked result lists. Returns candidates sorted by descending fused score.
+
+### ScoredCandidate
+
+```typescript
+interface ScoredCandidate {
+    ID: string;
+    Score: number;
+    Metadata?: Record<string, unknown>;
+}
+```
+
+---
+
+## Inverse Match Deduplication
+
+The detector maintains a `_seenPairs` set across the entire run to suppress inverse duplicates. If record A is identified as a duplicate of record B (A->B), the reverse match (B->A) is automatically suppressed. Pair keys use canonical ordering (`smallerID::largerID`) for consistent deduplication regardless of query direction.
+
+## RecordID Format and Metadata
+
+- **RecordID and MatchRecordID** are stored in MJ URL segment format (e.g., `ID|uuid`), making them compatible with `CompositeKey` for entities with composite primary keys.
+- **RecordMetadata** is stored on both `DuplicateRunDetail` and `DuplicateRunDetailMatch` entities, capturing the vector database metadata snapshot at detection time. This preserves the context used for matching even if the source record changes later.
+
+## Database Entities
+
+The package reads from and writes to these MJ entities:
+
+| Entity | Purpose |
+|---|---|
+| `MJ: Entity Documents` | Configuration: template, AI model, vector DB, thresholds |
+| `MJ: Lists` / `MJ: List Details` | Source records to check for duplicates |
+| `MJ: Duplicate Runs` | Tracks each detection run (status, timing) |
+| `MJ: Duplicate Run Details` | Per-record tracking within a run; includes `RecordMetadata` (vector DB metadata snapshot) |
+| `MJ: Duplicate Run Detail Matches` | Individual match results with probability scores; includes `RecordMetadata` for the matched record |
+
+---
+
+## Further Reading
+
+- **[Duplicate Detection Guide](docs/DUPLICATE_DETECTION_GUIDE.md)** -- comprehensive developer guide covering end-to-end workflow, threshold tuning, hybrid search deep dive, performance optimization, and troubleshooting
+- **[MemberJunction AI Vectors](../Core/README.md)** -- base vector infrastructure
+- **[AI Vector Sync](../Sync/README.md)** -- entity vectorization and template parsing
+
+---
+
+## Development
+
+```bash
+# Build
+npm run build
+
+# Run tests
+npm run test
+
+# Watch mode
+npm run test:watch
+```
+
+## License
+
+ISC

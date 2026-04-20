@@ -1,5 +1,4 @@
 import { Command, Flags, Args } from '@oclif/core';
-import { SuiteCommand } from '@memberjunction/testing-cli';
 
 export default class TestSuite extends Command {
   static description = 'Execute a test suite';
@@ -41,6 +40,8 @@ export default class TestSuite extends Command {
   };
 
   async run(): Promise<void> {
+    const { SuiteCommand } = await import('@memberjunction/testing-cli');
+
     const { args, flags } = await this.parse(TestSuite);
 
     try {

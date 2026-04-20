@@ -1,6 +1,6 @@
 
 import { dbDatabase, dbHost, dbPassword, dbPort, dbUsername } from '../config';
-import * as sql from 'mssql';
+import sql from 'mssql';
 
 const config: sql.config = {
   server: dbHost,

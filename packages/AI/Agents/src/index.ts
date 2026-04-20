@@ -11,13 +11,29 @@
 
 export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
+export * from './agent-types/loop-agent-prompt-params';
 export * from './base-agent';
 export * from './agent-types';
 export * from './AgentRunner';
 export * from './PayloadManager';
+export * from './ScratchpadManager';
 export * from './PayloadChangeAnalyzer';
 export * from './PayloadFeedbackManager';
 export * from './types/payload-operations';
 export * from './AgentDataPreloader';
 export * from './agent-context-injector';
 export * from './memory-manager-agent';
+export * from './query-builder-agent';
+export * from './MJAIAgentRequestEntityServer';
+export * from './KnowledgeAgent';
+export * from './ClientToolRequestManager';
+
+// Re-export from ai-reranker for backward compatibility
+export {
+    RerankerService,
+    RerankerConfiguration,
+    parseRerankerConfiguration,
+    RerankServiceResult,
+    RerankObservabilityOptions,
+    LLMReranker
+} from '@memberjunction/ai-reranker';

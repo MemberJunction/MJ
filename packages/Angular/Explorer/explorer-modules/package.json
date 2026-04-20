@@ -1,0 +1,47 @@
+{
+  "name": "@memberjunction/ng-explorer-modules",
+  "version": "5.28.0",
+  "description": "MemberJunction: Consolidated Explorer Modules Bundle",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "echo \"No tests configured yet\"",
+    "build": "ngc"
+  },
+  "keywords": [
+    "memberjunction",
+    "explorer",
+    "angular",
+    "modules"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@angular/compiler": "21.1.3",
+    "@angular/compiler-cli": "21.1.3"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.0.0",
+    "@angular/core": "^21.0.0",
+    "@angular/forms": "^21.0.0",
+    "@angular/router": "^21.0.0"
+  },
+  "dependencies": {
+    "@memberjunction/ng-container-directives": "5.28.0",
+    "@memberjunction/ng-core-entity-forms": "5.28.0",
+    "@memberjunction/ng-explorer-core": "5.28.0",
+    "@memberjunction/ng-explorer-settings": "5.28.0",
+    "@memberjunction/ng-link-directives": "5.28.0",
+    "@memberjunction/ng-shared": "5.28.0",
+    "@memberjunction/ng-workspace-initializer": "5.28.0",
+    "tslib": "^2.8.1"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

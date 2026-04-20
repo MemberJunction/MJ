@@ -1,26 +1,6 @@
 # @memberjunction/ai-vectors
 
-The MemberJunction AI Vectors Core package provides the foundational abstractions and base classes for working with vector embeddings, vector databases, and vector operations within the MemberJunction ecosystem.
-
-## Overview
-
-This package serves as the core foundation for vector-related operations in MemberJunction, providing:
-- Abstract interfaces for vector database and embedding operations
-- Base class implementation with entity integration
-- Type definitions for pagination and data handling
-- Seamless integration with MemberJunction's metadata system and AI engine
-
-## Features
-
-- **Core Interfaces**: Fundamental interface definitions for vector operations
-- **Base Classes**: Base implementation patterns for vector-related functionality
-- **Database Abstraction**: Interface for vector database operations
-- **Embedding Abstraction**: Interface for text embedding generation
-- **Entity Integration**: Seamless integration with MemberJunction entities
-- **Pagination Support**: Efficiently retrieve and process large sets of records
-- **Type Definitions**: Comprehensive TypeScript types for vector operations
-- **AI Model Integration**: Built-in support for accessing embedding models
-- **User Context Management**: Automatic handling of user context for entity operations
+Core foundation package for vector operations in MemberJunction. Provides text processing utilities (chunking, extraction), base classes for vectorization pipelines, and interfaces for embedding providers and vector databases.
 
 ## Installation
 
@@ -28,328 +8,404 @@ This package serves as the core foundation for vector-related operations in Memb
 npm install @memberjunction/ai-vectors
 ```
 
-## Core Components
+## What's Included
 
-### Interfaces
+| Export | Type | Purpose |
+|---|---|---|
+| `TextChunker` | Class | Token-aware text splitting with sentence, paragraph, and fixed strategies |
+| `TextExtractor` | Class | HTML stripping, entity decoding, MIME-type routing, token truncation |
+| `VectorBase` | Class | Base class providing RunView, Metadata, AIEngine integration for subclasses |
+| `IEmbedding` | Interface | Contract for single and batch text embedding generation |
+| `IVectorDatabase` | Interface | Contract for vector database management (create/delete/list indexes) |
+| `IVectorIndex` | Interface | Contract for CRUD operations on vector records within an index |
+| `ChunkTextParams` | Type | Configuration for `TextChunker.ChunkText()` |
+| `TextChunk` | Type | Output chunk with text, offsets, token count, and index |
+| `PageRecordsParams` | Type | Paginated entity record retrieval configuration |
 
-The package defines several key interfaces for vector operations:
+## Architecture
 
-#### IEmbedding
+```mermaid
+graph TD
+    subgraph Core["@memberjunction/ai-vectors"]
+        TC["TextChunker"]
+        TE["TextExtractor"]
+        VB["VectorBase"]
+        IE["IEmbedding"]
+        IVD["IVectorDatabase"]
+        IVI["IVectorIndex"]
+    end
 
-Interface for text embedding generation:
+    subgraph MJCore["MemberJunction Core"]
+        MD["Metadata"]
+        RV["RunView"]
+        BE["BaseEntity"]
+    end
+
+    subgraph AIEngine["AI Engine"]
+        AIM["AIEngine.Instance"]
+        MOD["Embedding Models"]
+        VDB["Vector Databases"]
+    end
+
+    subgraph Consumers["Consumer Packages"]
+        SYNC["ai-vector-sync"]
+        DUPE["ai-vector-dupe"]
+    end
+
+    VB --> MD
+    VB --> RV
+    VB --> BE
+    VB --> AIM
+    AIM --> MOD
+    AIM --> VDB
+    SYNC --> VB
+    SYNC --> TC
+    SYNC --> TE
+    DUPE --> VB
+
+    style Core fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style MJCore fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style AIEngine fill:#b8762f,stroke:#8a5722,color:#fff
+    style Consumers fill:#7c5295,stroke:#563a6b,color:#fff
+```
+
+## TextChunker
+
+Token-aware text splitting that respects natural language boundaries. All methods are static.
+
+### Strategies
+
+| Strategy | Splits On | Best For |
+|---|---|---|
+| `sentence` | Sentence-ending punctuation (`.` `!` `?`) | Prose, articles, descriptions |
+| `paragraph` | Double newlines (`\n\n`) | Structured documents, Markdown, reports |
+| `fixed` | Whitespace boundaries at the character limit | Logs, code, unstructured data |
+
+### Basic Usage
 
 ```typescript
-interface IEmbedding {
-  createEmbedding(text: string, options?: any): any;
-  createBatchEmbedding(text: string[], options?: any): any;
+import { TextChunker, ChunkTextParams, TextChunk } from '@memberjunction/ai-vectors';
+
+const article = `Machine learning models require training data.
+The quality of training data directly impacts model performance.
+Data preprocessing is a critical step in any ML pipeline.
+
+Feature engineering transforms raw data into meaningful representations.
+Good features can dramatically improve model accuracy.`;
+
+// Sentence strategy (default)
+const chunks: TextChunk[] = TextChunker.ChunkText({
+    Text: article,
+    MaxChunkTokens: 128,
+    Strategy: 'sentence'
+});
+
+for (const chunk of chunks) {
+    console.log(`Chunk ${chunk.Index}: ${chunk.TokenCount} tokens, offset ${chunk.StartOffset}-${chunk.EndOffset}`);
+    console.log(chunk.Text);
 }
 ```
 
-#### IVectorDatabase
-
-Interface for vector database management:
+### Paragraph Strategy
 
 ```typescript
-interface IVectorDatabase {
-  listIndexes(options?: any): any;
-  createIndex(options: any): any;
-  deleteIndex(indexID: any, options?: any): any;
-  editIndex(indexID: any, options?: any): any;
+const markdownDoc = `## Introduction
+
+This document covers the architecture of our data pipeline.
+It handles ingestion, transformation, and storage.
+
+## Processing
+
+Records are validated against schema constraints.
+Invalid records are routed to a dead-letter queue.
+
+## Storage
+
+Processed data is stored in both relational and vector databases.
+Vector embeddings enable semantic search across all records.`;
+
+const chunks = TextChunker.ChunkText({
+    Text: markdownDoc,
+    MaxChunkTokens: 256,
+    Strategy: 'paragraph'
+});
+// Each paragraph becomes a chunk (or paragraphs merge if they fit together)
+```
+
+### Fixed Strategy
+
+```typescript
+const logData = `2024-01-15T10:00:00Z INFO Server started on port 4000
+2024-01-15T10:00:01Z INFO Connected to database
+2024-01-15T10:00:02Z WARN High memory usage detected: 85%
+2024-01-15T10:00:03Z ERROR Connection timeout after 30000ms`;
+
+const chunks = TextChunker.ChunkText({
+    Text: logData,
+    MaxChunkTokens: 64,
+    Strategy: 'fixed'
+});
+```
+
+### Configuring Overlap
+
+Overlap repeats trailing content from the previous chunk at the start of the next chunk, preserving context across chunk boundaries. Defaults to 10% of `MaxChunkTokens`.
+
+```typescript
+// Explicit overlap: 50 tokens of shared context between chunks
+const chunks = TextChunker.ChunkText({
+    Text: longDocument,
+    MaxChunkTokens: 512,
+    OverlapTokens: 50,
+    Strategy: 'sentence'
+});
+
+// No overlap
+const chunks = TextChunker.ChunkText({
+    Text: longDocument,
+    MaxChunkTokens: 512,
+    OverlapTokens: 0,
+    Strategy: 'sentence'
+});
+```
+
+### Token Estimation
+
+`EstimateTokenCount` provides a fast approximation using the ~4 characters per token heuristic for English text. This is suitable for chunking where exact counts are not critical.
+
+```typescript
+const tokens = TextChunker.EstimateTokenCount('This is a sample sentence.');
+// Returns: 7 (26 characters / 4)
+
+// For production accuracy with specific models, use tiktoken directly
+// and pass the result to MaxChunkTokens for precise control
+```
+
+### TextChunk Output Shape
+
+Each chunk includes full position metadata for traceability back to the source:
+
+```typescript
+interface TextChunk {
+    Text: string;        // The chunk text content
+    StartOffset: number; // Start character offset in original text
+    EndOffset: number;   // End character offset (exclusive)
+    TokenCount: number;  // Approximate token count
+    Index: number;       // 0-based chunk index
 }
 ```
 
-#### IVectorIndex
+## TextExtractor
 
-Interface for vector index operations:
+Static utilities for extracting clean plain text from various content formats. Dependency-light (regex-based, no DOM parser required).
 
-```typescript
-interface IVectorIndex {
-  createRecord(record: any, options?: any): any;
-  createRecords(records: any[], options?: any): any;
-  getRecord(recordID: any, options?: any): any;
-  getRecords(recordIDs: any[], options?: any): any;
-  updateRecord(record: any, options?: any): any;
-  updateRecords(records: any[], options?: any): any;
-  deleteRecord(recordID: any, options?: any): any;
-  deleteRecords(recordIDs: any[], options?: any): any;
-}
-```
-
-### VectorBase Class
-
-The `VectorBase` class serves as the foundation for vector operations, providing:
-
-- Integration with MemberJunction's metadata system
-- Entity record retrieval and manipulation
-- Pagination support for handling large datasets
-- Helper methods for AI model and vector database access
-- Automatic user context management for entity operations
-- Built-in RunView integration for flexible data querying
-
-#### Key Methods
-
-- `GetRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]>` - Retrieve entity records with optional filtering
-- `PageRecordsByEntityID<T>(params: PageRecordsParams): Promise<T[]>` - Paginated entity record retrieval
-- `GetAIModel(id?: string): AIModelEntityExtended` - Access configured embedding models
-- `GetVectorDatabase(id?: string): VectorDatabaseEntity` - Access configured vector databases
-- `RunViewForSingleValue<T>(entityName: string, extraFilter: string): Promise<T | null>` - Query for single entity records
-- `SaveEntity(entity: BaseEntity): Promise<boolean>` - Save entities with proper user context
-
-### Type Definitions
-
-#### PageRecordsParams
-
-Type definition for paginated record retrieval:
+### HTML Extraction
 
 ```typescript
-type PageRecordsParams = {
-  EntityID: string | number;        // The ID of the entity to get records from
-  PageNumber: number;               // Page number (1-based)
-  PageSize: number;                 // Number of records per page
-  ResultType: "entity_object" | "simple" | "count_only";  // Type of result
-  Filter?: string;                  // Optional SQL filter
-}
+import { TextExtractor } from '@memberjunction/ai-vectors';
+
+const html = `
+<html>
+<head><style>body { color: red; }</style></head>
+<body>
+  <h1>Welcome</h1>
+  <p>This is a <strong>formatted</strong> paragraph with &amp; entities.</p>
+  <script>alert('removed');</script>
+  <ul>
+    <li>Item one</li>
+    <li>Item two</li>
+  </ul>
+</body>
+</html>`;
+
+const text = TextExtractor.ExtractFromHTML(html);
+// "Welcome\nThis is a formatted paragraph with & entities.\nItem one\nItem two"
 ```
 
-## Usage
+What it does:
+- Removes `<script>` and `<style>` elements entirely
+- Converts block-level elements (`<p>`, `<div>`, `<h1>`-`<h6>`, `<li>`, `<br>`, etc.) to newlines
+- Strips all remaining HTML tags
+- Decodes named entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&nbsp;`, `&mdash;`, `&hellip;`, etc.)
+- Decodes numeric entities (decimal `&#169;` and hex `&#xA9;`)
+- Normalizes whitespace (collapses runs of spaces, limits consecutive newlines to 2)
 
-### Extending the Base Class
+### Plain Text Normalization
 
-Create specialized vector operation classes by extending `VectorBase`:
+```typescript
+const raw = "  Some text\x00with\x07control\x1Fcharacters\n\n\n\n\nand  extra   spaces  ";
+const clean = TextExtractor.ExtractFromPlainText(raw);
+// "Some textwithcontrolcharacters\n\nand extra spaces"
+```
+
+Removes control characters (`\x00`-`\x1F` except `\n` and `\t`), normalizes whitespace, trims.
+
+### MIME-Type Routing
+
+```typescript
+// Automatically selects the right extraction method
+const fromHTML = TextExtractor.ExtractByMimeType(htmlContent, 'text/html');
+const fromPlain = TextExtractor.ExtractByMimeType(plainContent, 'text/plain');
+const fromCSV = TextExtractor.ExtractByMimeType(csvContent, 'text/csv');  // Falls back to plain text
+
+// For binary formats (PDF, DOCX), extract text with a dedicated library first,
+// then pass through ExtractFromPlainText for normalization:
+// const pdfText = await pdfParse(buffer);
+// const clean = TextExtractor.ExtractFromPlainText(pdfText);
+```
+
+### Token Truncation
+
+```typescript
+// Truncate text to fit within a model's context window
+const truncated = TextExtractor.TruncateToTokenLimit(veryLongText, 8192);
+// Truncates at the last whitespace boundary before the estimated character limit
+```
+
+## VectorBase
+
+Abstract base class that downstream vector packages extend. Provides integrated access to MemberJunction's Metadata, RunView, and AIEngine systems.
+
+### Class Diagram
+
+```mermaid
+classDiagram
+    class VectorBase {
+        +Metadata : Metadata
+        +RunView : RunView
+        +CurrentUser : UserInfo
+        #GetRecordsByEntityID(entityID, recordIDs?) BaseEntity[]
+        #PageRecordsByEntityID~T~(params) T[]
+        #GetAIModel(id?) MJAIModelEntityExtended
+        #GetVectorDatabase(id?) MJVectorDatabaseEntity
+        #RunViewForSingleValue~T~(entityName, filter) T | null
+        #SaveEntity(entity) boolean
+        #BuildExtraFilter(compositeKeys) string
+    }
+```
+
+### Extending VectorBase
 
 ```typescript
 import { VectorBase, PageRecordsParams } from '@memberjunction/ai-vectors';
 import { BaseEntity } from '@memberjunction/core';
 
 export class MyVectorProcessor extends VectorBase {
-  async processEntityRecords(entityId: string): Promise<void> {
-    // Get all entity records
-    const records = await this.GetRecordsByEntityID(entityId);
-    
-    // Process each record
-    for (const record of records) {
-      // Your vector processing logic here
-      console.log(`Processing ${record.EntityInfo.Name} record ${record.ID}`);
+    async ProcessEntity(entityId: string): Promise<void> {
+        // Load all records for an entity
+        const records = await this.GetRecordsByEntityID(entityId);
+
+        // Access configured AI models and vector databases
+        const model = this.GetAIModel();       // First available embedding model
+        const vectorDb = this.GetVectorDatabase(); // First available vector DB
+
+        for (const record of records) {
+            // Generate embeddings, upsert into vector DB
+        }
     }
-  }
-  
-  async paginatedProcess(entityId: string): Promise<void> {
-    // Process records page by page
-    const params: PageRecordsParams = {
-      EntityID: entityId,
-      PageNumber: 1,
-      PageSize: 100,
-      ResultType: 'entity_object' as const
-    };
-    
-    const records = await this.PageRecordsByEntityID<BaseEntity>(params);
-    // Process paged records
-    console.log(`Retrieved ${records.length} records`);
-  }
-}
-```
 
-### Implementing the Interfaces
+    async ProcessInPages(entityId: string): Promise<void> {
+        let page = 1;
+        let hasMore = true;
 
-Implement the interfaces to create specific provider implementations:
-
-```typescript
-import { IEmbedding } from '@memberjunction/ai-vectors';
-
-export class OpenAIEmbedding implements IEmbedding {
-  constructor(private apiKey: string) {}
-  
-  async createEmbedding(text: string): Promise<number[]> {
-    // Implementation using OpenAI's embedding API
-  }
-  
-  async createBatchEmbedding(texts: string[]): Promise<number[][]> {
-    // Batch implementation
-  }
-}
-```
-
-### Working with Entity Records
-
-The package provides utilities for working with MemberJunction entities:
-
-```typescript
-import { VectorBase, PageRecordsParams } from '@memberjunction/ai-vectors';
-import { BaseEntity } from '@memberjunction/core';
-import { AIModelEntityExtended, VectorDatabaseEntity } from '@memberjunction/core-entities';
-
-class EntityVectorizer extends VectorBase {
-  async vectorizeEntities(entityId: string): Promise<void> {
-    // Get AI model for embeddings (defaults to first embedding model if no ID provided)
-    const embeddingModel: AIModelEntityExtended = this.GetAIModel();
-    console.log(`Using embedding model: ${embeddingModel.Name}`);
-    
-    // Get vector database (defaults to first configured vector DB)
-    const vectorDb: VectorDatabaseEntity = this.GetVectorDatabase();
-    console.log(`Using vector database: ${vectorDb.Name}`);
-    
-    // Process records in pages for memory efficiency
-    let pageNumber = 1;
-    let hasMoreRecords = true;
-    
-    while (hasMoreRecords) {
-      const params: PageRecordsParams = {
-        EntityID: entityId,
-        PageNumber: pageNumber,
-        PageSize: 50,
-        ResultType: 'entity_object' as const,
-        Filter: "IsActive = 1"  // Optional: add custom filtering
-      };
-      
-      const records = await this.PageRecordsByEntityID<BaseEntity>(params);
-      hasMoreRecords = records.length === params.PageSize;
-      pageNumber++;
-      
-      // Process the current page of records
-      for (const record of records) {
-        // Your vectorization logic here
-        // Example: Generate embeddings for record content
-      }
+        while (hasMore) {
+            const records = await this.PageRecordsByEntityID<Record<string, unknown>>({
+                EntityID: entityId,
+                PageNumber: page,
+                PageSize: 100,
+                ResultType: 'simple',
+                Filter: "Status = 'Active'"
+            });
+            hasMore = records.length === 100;
+            page++;
+        }
     }
-  }
-  
-  async saveVectorizedEntity(entity: BaseEntity): Promise<boolean> {
-    // SaveEntity automatically adds user context
-    return await this.SaveEntity(entity);
-  }
 }
 ```
 
-### Advanced Entity Filtering
-
-Use composite keys for complex filtering scenarios:
+### Filtering with Composite Keys
 
 ```typescript
 import { VectorBase } from '@memberjunction/ai-vectors';
 import { CompositeKey } from '@memberjunction/core';
 
-class AdvancedVectorProcessor extends VectorBase {
-  async getSpecificRecords(entityId: string): Promise<void> {
-    // Build composite keys for specific records
-    const compositeKeys: CompositeKey[] = [
-      {
-        KeyValuePairs: [
-          { FieldName: 'Status', Value: 'Active' },
-          { FieldName: 'CategoryID', Value: '123' }
-        ]
-      },
-      {
-        KeyValuePairs: [
-          { FieldName: 'Status', Value: 'Pending' },
-          { FieldName: 'CategoryID', Value: '456' }
-        ]
-      }
-    ];
-    
-    // This will generate: (Status = 'Active' AND CategoryID = '123') OR (Status = 'Pending' AND CategoryID = '456')
-    const records = await this.GetRecordsByEntityID(entityId, compositeKeys);
-    console.log(`Found ${records.length} matching records`);
-  }
+class FilteredProcessor extends VectorBase {
+    async GetSpecificRecords(entityId: string): Promise<void> {
+        const keys: CompositeKey[] = [
+            { KeyValuePairs: [{ FieldName: 'ID', Value: 'abc-123' }] },
+            { KeyValuePairs: [{ FieldName: 'ID', Value: 'def-456' }] }
+        ];
+
+        // Generates: (ID = 'abc-123') OR (ID = 'def-456')
+        const records = await this.GetRecordsByEntityID(entityId, keys);
+    }
 }
 ```
 
-## Integration with MemberJunction
+## API Reference
 
-This package works in harmony with other MemberJunction packages:
+### TextChunker (Static Methods)
 
-```typescript
-import { VectorBase } from '@memberjunction/ai-vectors';
-import { AIEngine } from '@memberjunction/aiengine';
-import { Metadata, RunView } from '@memberjunction/core';
+| Method | Parameters | Returns | Description |
+|---|---|---|---|
+| `ChunkText` | `params: ChunkTextParams` | `TextChunk[]` | Split text into token-bounded chunks using the specified strategy |
+| `EstimateTokenCount` | `text: string` | `number` | Fast token count approximation (~4 chars/token) |
 
-// Your vector processing will have access to:
-// - Entity metadata
-// - AI models configuration
-// - Vector database configuration
-// - User context
-```
+### TextExtractor (Static Methods)
+
+| Method | Parameters | Returns | Description |
+|---|---|---|---|
+| `ExtractFromHTML` | `html: string` | `string` | Strip tags, decode entities, normalize whitespace |
+| `ExtractFromPlainText` | `text: string` | `string` | Remove control characters, normalize whitespace |
+| `ExtractByMimeType` | `content: string, mimeType: string` | `string` | Route to the appropriate extraction method by MIME type |
+| `TruncateToTokenLimit` | `text: string, maxTokens: number` | `string` | Truncate at whitespace boundary within the token budget |
+
+### VectorBase (Protected Methods for Subclasses)
+
+| Method | Returns | Description |
+|---|---|---|
+| `GetRecordsByEntityID(entityID, recordIDs?)` | `Promise<BaseEntity[]>` | Load entity records, optionally filtered by composite keys |
+| `PageRecordsByEntityID<T>(params)` | `Promise<T[]>` | Paginated retrieval with configurable page size and filter |
+| `GetAIModel(id?)` | `MJAIModelEntityExtended` | Locate an embedding model by ID or get the first available |
+| `GetVectorDatabase(id?)` | `MJVectorDatabaseEntity` | Locate a vector database by ID or get the first available |
+| `RunViewForSingleValue<T>(entityName, filter)` | `Promise<T \| null>` | Query for a single entity record matching a filter |
+| `SaveEntity(entity)` | `Promise<boolean>` | Save a BaseEntity with CurrentUser context applied |
+| `BuildExtraFilter(compositeKeys)` | `string` | Convert CompositeKey array to a SQL filter string |
+
+### Interfaces
+
+| Interface | Methods | Purpose |
+|---|---|---|
+| `IEmbedding` | `createEmbedding`, `createBatchEmbedding` | Text embedding generation |
+| `IVectorDatabase` | `listIndexes`, `createIndex`, `deleteIndex`, `editIndex` | Vector database management |
+| `IVectorIndex` | `createRecord(s)`, `getRecord(s)`, `updateRecord(s)`, `deleteRecord(s)` | Vector record CRUD |
 
 ## Package Ecosystem
 
-This core package serves as the foundation for a suite of vector-related packages:
+| Package | Depends On Core | Purpose |
+|---|---|---|
+| `@memberjunction/ai-vectordb` | No (peer) | Abstract vector database interface |
+| `@memberjunction/ai-vector-sync` | Yes | Entity-to-vector synchronization |
+| `@memberjunction/ai-vector-dupe` | Yes | Duplicate detection via vector similarity |
+| `@memberjunction/ai-vectors-memory` | No | In-memory vector search and clustering |
+| `@memberjunction/ai-vectors-pinecone` | No | Pinecone implementation of VectorDBBase |
 
-- `@memberjunction/ai-vectors` - Core abstractions (this package)
-- `@memberjunction/ai-vectordb` - Vector database interface
-- `@memberjunction/ai-vectors-memory` - In-memory vector similarity search
-- `@memberjunction/ai-vectors-sync` - Entity synchronization with vector databases
-- `@memberjunction/ai-vectors-pinecone` - Pinecone vector database implementation
-- `@memberjunction/ai-vectors-dupe` - Duplicate detection using vector similarity
+## Further Reading
 
-## Configuration
-
-The package automatically integrates with MemberJunction's configuration system:
-
-1. **AI Models**: Embedding models are configured in the MemberJunction metadata and accessed via `AIEngine.Instance`
-2. **Vector Databases**: Vector databases are configured similarly and accessed through the AI engine
-3. **User Context**: The current user context is automatically managed and passed to entity operations
-
-## Best Practices
-
-1. **Always extend VectorBase** for custom vector operations to ensure proper integration
-2. **Use pagination** when processing large datasets to avoid memory issues
-3. **Handle errors gracefully** - the base class methods throw exceptions that should be caught
-4. **Set user context** - The base class automatically manages user context for entity operations
-5. **Use type-safe generics** - When using `PageRecordsByEntityID`, specify the expected type
-
-## Error Handling
-
-The package provides clear error messages for common scenarios:
-
-```typescript
-try {
-  const model = this.GetAIModel('specific-model-id');
-} catch (error) {
-  // Will throw if no embedding model is configured
-  console.error('No AI Model Entity found');
-}
-
-try {
-  const records = await this.GetRecordsByEntityID('invalid-id');
-} catch (error) {
-  // Will throw if entity ID doesn't exist
-  console.error(`Entity with ID invalid-id not found.`);
-}
-```
-
-## Dependencies
-
-- `@memberjunction/core`: ^2.43.0 - Core MemberJunction functionality
-- `@memberjunction/global`: ^2.43.0 - Global utilities
-- `@memberjunction/core-entities`: ^2.43.0 - Entity definitions
-- `@memberjunction/aiengine`: ^2.43.0 - AI engine integration
-- `@memberjunction/ai`: ^2.43.0 - AI abstractions
-- `@memberjunction/ai-vectordb`: ^2.43.0 - Vector database interfaces
-- `openai`: ^4.28.4 - OpenAI SDK (for embedding implementations)
-- `dotenv`: ^16.4.1 - Environment configuration
+- [Text Processing Guide](docs/TEXT_PROCESSING_GUIDE.md) -- in-depth guide on chunking strategies, overlap tuning, HTML edge cases, and integration with vectorization/autotagging pipelines
 
 ## Development
 
-### Building
-
 ```bash
+# Build
 npm run build
+
+# Run tests
+npm run test
+
+# Watch mode
+npm run test:watch
 ```
-
-### Development Mode
-
-```bash
-npm run start
-```
-
-## Contributing
-
-When contributing to this package:
-
-1. Follow the MemberJunction coding standards
-2. Ensure all interfaces remain generic and implementation-agnostic
-3. Add comprehensive TypeScript types
-4. Update this README with any new features or changes
-5. Test integration with dependent packages
 
 ## License
 

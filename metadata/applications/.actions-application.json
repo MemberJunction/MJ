@@ -15,50 +15,29 @@
         "isDefault": true
       },
       {
+        "Label": "Explorer",
+        "Icon": "fa-solid fa-folder-tree",
+        "ResourceType": "Custom",
+        "DriverClass": "ActionExplorerResource",
+        "isDefault": false
+      },
+      {
         "Label": "Monitor",
         "Icon": "fa-solid fa-chart-line",
         "ResourceType": "Custom",
         "DriverClass": "ActionsMonitorResource",
         "isDefault": false
-      },
-      {
-        "Label": "Scheduled",
-        "Icon": "fa-solid fa-clock",
-        "ResourceType": "Custom",
-        "DriverClass": "ActionsScheduleResource",
-        "isDefault": false
-      },
-      {
-        "Label": "Code",
-        "Icon": "fa-solid fa-code",
-        "ResourceType": "Custom",
-        "DriverClass": "ActionsCodeResource",
-        "isDefault": false
-      },
-      {
-        "Label": "Entities",
-        "Icon": "fa-solid fa-sitemap",
-        "ResourceType": "Custom",
-        "DriverClass": "ActionsEntitiesResource",
-        "isDefault": false
-      },
-      {
-        "Label": "Security",
-        "Icon": "fa-solid fa-lock",
-        "ResourceType": "Custom",
-        "DriverClass": "ActionsSecurityResource",
-        "isDefault": false
       }
     ]
   },
   "relatedEntities": {
-    "Application Entities": []
+    "MJ: Application Entities": []
   },
   "primaryKey": {
     "ID": "02D5423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:38.032Z",
-    "checksum": "0a7cec3464ecb2e3e5f6d2b65eda483814167098e1c1605842c2b961ced75116"
+    "lastModified": "2026-02-02T17:57:24.751Z",
+    "checksum": "a5c562f6e90ae942f56b1d5099943213ff4614001df31f11f1a7112fbd9ab129"
   }
 }

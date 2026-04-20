@@ -20,6 +20,7 @@ import { MJGlobal, MJEvent } from '@memberjunction/global'
  * When used as a web component, it's registered as <mj-listener-demo>.
  */
 @Component({
+  standalone: false,
   templateUrl: './listener-demo.component.html',
   styleUrls: ['./listener-demo.component.css']
 })

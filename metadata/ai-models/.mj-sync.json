@@ -1,5 +1,5 @@
 {
-  "entity": "AI Models",
+  "entity": "MJ: AI Models",
   "filePattern": "**/.*.json",
   "defaults": {},
   "pull": {
@@ -18,7 +18,7 @@
     "ignoreVirtualFields": true,
     "lookupFields": {
       "AIModelTypeID": {
-        "entity": "AI Model Types",
+        "entity": "MJ: AI Model Types",
         "field": "Name"
       }
     },

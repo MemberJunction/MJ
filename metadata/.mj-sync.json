@@ -4,13 +4,21 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [
+    "countries",
+    "state-provinces",
     "encryption-key-sources",
     "encryption-algorithms",
     "encryption-keys",
+    "api-scopes",
+    "api-applications",
+    "api-application-scopes",
     "audit-log-types",
     "credential-categories",
     "credential-types",
     "resource-types",
+    "search-providers",
+    "content-source-types",
+    "integration-source-types",
     "ai-vendors",
     "ai-models",
     "ai-configurations",
@@ -18,8 +26,14 @@
     "action-categories",
     "actions",
     "prompt-categories",
+    "prompt-types",
     "prompts",
+    "templates",
+    "notifications",
+    "agent-categories",
+    "agent-request-types",
     "agent-types",
+    "client-tool-definitions",
     "agents",
     "scheduled-jobs",
     "query-categories",
@@ -28,17 +42,21 @@
     "component-libraries",
     "components",
     "applications",
+    "dashboard-part-types",
     "dashboards",
     "test-types",
     "tests",
     "test-suites",
-    "entities"
+    "entities",
+    "entity-settings"
   ],
   "sqlLogging": {
     "enabled": true,
     "outputDirectory": "./sql_logging",
     "filterPatterns": ["*spCreateAIPromptRun*", "*spUpdateAIPromptRun*"],
     "filterType": "exclude",
-    "formatAsMigration": true
-  }
+    "formatAsMigration": true,
+    "variableBatchThreshold": 200
+  },
+  "emitSyncNotes": false
 }

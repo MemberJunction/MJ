@@ -49,6 +49,11 @@ export interface RunFlags extends CommonFlags {
     all?: boolean;
     dryRun?: boolean;
     environment?: string;
+    /**
+     * Variable values to pass to the test (format: name=value)
+     * Can be specified multiple times for multiple variables
+     */
+    var?: string[];
 }
 
 /**
@@ -59,6 +64,11 @@ export interface SuiteFlags extends CommonFlags {
     parallel?: boolean;
     failFast?: boolean;
     sequence?: string;
+    /**
+     * Variable values to pass to all tests in the suite (format: name=value)
+     * Can be specified multiple times for multiple variables
+     */
+    var?: string[];
 }
 
 /**
@@ -70,6 +80,10 @@ export interface ListFlags extends CommonFlags {
     types?: boolean;
     tag?: string;
     status?: string;
+    /**
+     * Show available variables for the test/test type
+     */
+    showVariables?: boolean;
 }
 
 /**

@@ -1,14 +1,14 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIVendorEntity, AIModelTypeEntity, ResourceData } from '@memberjunction/core-entities';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { MJAIVendorEntity, MJAIModelTypeEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { BaseEntity, BaseEntityEvent, Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
-import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { RegisterClass, UUIDsEqual, MJGlobal, MJEventType } from '@memberjunction/global';
+import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 
-interface ModelDisplayData extends AIModelEntityExtended {
+interface ModelDisplayData extends MJAIModelEntityExtended {
   VendorName?: string;
   VendorID?: string; // Add this since we're using it for filtering
   ModelTypeName?: string;
@@ -18,10 +18,17 @@ interface ModelDisplayData extends AIModelEntityExtended {
 }
 
 /**
- * Tree-shaking prevention function - ensures component is included in builds
+ * User preferences for the Model Management dashboard
  */
-export function LoadAIModelsResource() {
-  // Force inclusion in production builds
+interface ModelManagementUserPreferences {
+  viewMode: 'grid' | 'list';
+  showFilters: boolean;
+  searchTerm: string;
+  selectedVendor: string;
+  selectedType: string;
+  selectedStatus: string;
+  sortBy: string;
+  sortDirection: 'asc' | 'desc';
 }
 
 /**
@@ -30,11 +37,17 @@ export function LoadAIModelsResource() {
  */
 @RegisterClass(BaseResourceComponent, 'AIModelsResource')
 @Component({
+  standalone: false,
   selector: 'app-model-management',
   templateUrl: './model-management.component.html',
   styleUrls: ['./model-management.component.css']
 })
 export class ModelManagementComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+
+  // Settings persistence
+  private readonly USER_SETTINGS_KEY = 'AI.Models.UserPreferences';
+  private settingsPersistSubject = new Subject<void>();
+  private settingsLoaded = false;
 
   // View state
   public viewMode: 'grid' | 'list' = 'grid';
@@ -42,11 +55,11 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public showFilters = true;
   public expandedModelId: string | null = null;
 
-  // Data - Keep as AIModelEntityExtended to preserve getters
-  public models: AIModelEntityExtended[] = [];
-  public filteredModels: AIModelEntityExtended[] = [];
-  public vendors: AIVendorEntity[] = [];
-  public modelTypes: AIModelTypeEntity[] = [];
+  // Data - Keep as MJAIModelEntityExtended to preserve getters
+  public models: MJAIModelEntityExtended[] = [];
+  public filteredModels: MJAIModelEntityExtended[] = [];
+  public vendors: MJAIVendorEntity[] = [];
+  public modelTypes: MJAIModelTypeEntity[] = [];
 
   // Filtering
   public searchTerm = '';
@@ -92,31 +105,91 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   private loadingMessageIndex = 0;
   private loadingMessageInterval: any;
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   constructor(
     private sharedService: SharedService,
-    private navigationService: NavigationService
+    private cdr: ChangeDetectorRef
   ) {
     super();
+
+    // Set up debounced settings persistence
+    this.settingsPersistSubject.pipe(
+      debounceTime(500),
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.persistUserPreferences();
+    });
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
+    // Load saved user preferences first
+    this.loadUserPreferences();
+
     this.setupSearchListener();
     this.startLoadingMessages();
     this.loadInitialData();
 
+    // Apply initial state from resource configuration if provided (overrides saved prefs)
     if (this.Data?.Configuration) {
       this.applyInitialState(this.Data.Configuration);
     }
+
+    // Subscribe to remote cache invalidation events for real-time updates
+    this.subscribeToCacheInvalidation();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
     if (this.loadingMessageInterval) {
       clearInterval(this.loadingMessageInterval);
     }
+  }
+
+  private subscribeToCacheInvalidation(): void {
+    MJGlobal.Instance.GetEventListener(true)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => {
+        if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) return;
+        const beEvent = event.args as BaseEntityEvent;
+        if (beEvent.type !== 'remote-invalidate') return;
+        const entityName = beEvent.entityName?.toLowerCase().trim();
+        if (entityName === 'mj: ai models' || entityName === 'mj: ai model types') {
+          console.log(`[AI Models Dashboard] Remote invalidation for "${beEvent.entityName}" — refreshing`);
+          // Small delay to let BaseEngine finish its LoadSingleConfig network call
+          setTimeout(() => this.refreshDataFromEngine(), 500);
+        }
+      });
+  }
+
+  private refreshDataFromEngine(): void {
+    const models = AIEngineBase.Instance.Models;
+    this.vendors = AIEngineBase.Instance.Vendors;
+    this.modelTypes = AIEngineBase.Instance.ModelTypes;
+
+    const vendorMap = new Map(this.vendors.map(v => [v.ID, v.Name]));
+    const typeMap = new Map(this.modelTypes.map(t => [t.ID, t.Name]));
+
+    this.models = models.map((model) => {
+      let vendorId: string | undefined;
+      if (model.Vendor) {
+        const vendor = this.vendors.find(v => v.Name === model.Vendor);
+        vendorId = vendor?.ID;
+      }
+      const modelWithDisplay = model as ModelDisplayData;
+      modelWithDisplay.VendorID = vendorId;
+      modelWithDisplay.VendorName = model.Vendor || 'No Vendor';
+      modelWithDisplay.ModelTypeName = model.AIModelTypeID ? typeMap.get(model.AIModelTypeID) || 'Unknown' : 'No Type';
+      return model;
+    });
+
+    this.filteredModels = [...this.models];
+    this.sortModels();
+    this.applyFilters();
+    this.cdr.detectChanges();
   }
 
   private setupSearchListener(): void {
@@ -127,7 +200,95 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     ).subscribe(searchTerm => {
       this.searchTerm = searchTerm;
       this.applyFilters();
+      this.saveUserPreferencesDebounced();
     });
+  }
+
+  // ========================================
+  // User Settings Persistence
+  // ========================================
+
+  /**
+   * Load saved user preferences from the UserInfoEngine
+   */
+  private loadUserPreferences(): void {
+    try {
+      const savedPrefs = UserInfoEngine.Instance.GetSetting(this.USER_SETTINGS_KEY);
+      if (savedPrefs) {
+        const prefs = JSON.parse(savedPrefs) as ModelManagementUserPreferences;
+        this.applyUserPreferencesFromStorage(prefs);
+      }
+    } catch (error) {
+      console.warn('[ModelManagement] Failed to load user preferences:', error);
+    } finally {
+      this.settingsLoaded = true;
+    }
+  }
+
+  /**
+   * Apply loaded preferences to component state
+   */
+  private applyUserPreferencesFromStorage(prefs: ModelManagementUserPreferences): void {
+    if (prefs.viewMode) {
+      this.viewMode = prefs.viewMode;
+    }
+    if (prefs.showFilters !== undefined) {
+      this.showFilters = prefs.showFilters;
+    }
+    if (prefs.searchTerm) {
+      this.searchTerm = prefs.searchTerm;
+    }
+    if (prefs.selectedVendor) {
+      this.selectedVendor = prefs.selectedVendor;
+    }
+    if (prefs.selectedType) {
+      this.selectedType = prefs.selectedType;
+    }
+    if (prefs.selectedStatus) {
+      this.selectedStatus = prefs.selectedStatus;
+    }
+    if (prefs.sortBy) {
+      this.sortBy = prefs.sortBy;
+    }
+    if (prefs.sortDirection) {
+      this.sortDirection = prefs.sortDirection;
+    }
+  }
+
+  /**
+   * Get current preferences as an object for saving
+   */
+  private getCurrentPreferences(): ModelManagementUserPreferences {
+    return {
+      viewMode: this.viewMode,
+      showFilters: this.showFilters,
+      searchTerm: this.searchTerm,
+      selectedVendor: this.selectedVendor,
+      selectedType: this.selectedType,
+      selectedStatus: this.selectedStatus,
+      sortBy: this.sortBy,
+      sortDirection: this.sortDirection
+    };
+  }
+
+  /**
+   * Persist user preferences to storage (debounced)
+   */
+  private saveUserPreferencesDebounced(): void {
+    if (!this.settingsLoaded) return; // Don't save during initial load
+    this.settingsPersistSubject.next();
+  }
+
+  /**
+   * Actually persist user preferences to the UserInfoEngine
+   */
+  private async persistUserPreferences(): Promise<void> {
+    try {
+      const prefs = this.getCurrentPreferences();
+      await UserInfoEngine.Instance.SetSetting(this.USER_SETTINGS_KEY, JSON.stringify(prefs));
+    } catch (error) {
+      console.warn('[ModelManagement] Failed to persist user preferences:', error);
+    }
   }
 
   private startLoadingMessages(): void {
@@ -195,6 +356,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
         clearInterval(this.loadingMessageInterval);
       }
       this.NotifyLoadComplete();
+      this.cdr.detectChanges();
     }
   }
 
@@ -233,15 +395,18 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   public toggleFilters(): void {
     this.showFilters = !this.showFilters;
+    this.saveUserPreferencesDebounced();
   }
 
   public toggleFilterPanel(): void {
     this.showFilters = !this.showFilters;
+    this.saveUserPreferencesDebounced();
   }
 
   public setViewMode(mode: 'grid' | 'list'): void {
     this.viewMode = mode;
     this.expandedModelId = null;
+    this.saveUserPreferencesDebounced();
   }
 
   public toggleModelExpansion(modelId: string): void {
@@ -264,12 +429,12 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
       }
 
       // Vendor filter
-      if (this.selectedVendor !== 'all' && model.VendorID !== this.selectedVendor) {
+      if (this.selectedVendor !== 'all' && !UUIDsEqual(model.VendorID, this.selectedVendor)) {
         return false;
       }
 
       // Type filter
-      if (this.selectedType !== 'all' && model.AIModelTypeID !== this.selectedType) {
+      if (this.selectedType !== 'all' && !UUIDsEqual(model.AIModelTypeID, this.selectedType)) {
         return false;
       }
 
@@ -339,16 +504,19 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public onVendorChange(vendorId: string): void {
     this.selectedVendor = vendorId;
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public onTypeChange(typeId: string): void {
     this.selectedType = typeId;
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public onStatusChange(status: string): void {
     this.selectedStatus = status;
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public onSortChange(sortBy: string): void {
@@ -361,6 +529,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
       this.sortDirection = 'asc';
     }
     this.sortModels();
+    this.saveUserPreferencesDebounced();
   }
 
   public async toggleModelStatus(model: ModelDisplayData, event: Event): Promise<void> {
@@ -387,13 +556,13 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   public openModel(modelId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: modelId }]);
-    this.navigationService.OpenEntityRecord('AI Models', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Models', compositeKey);
   }
 
   /**
    * Show the detail panel for a model
    */
-  public showModelDetails(model: AIModelEntityExtended, event?: Event): void {
+  public showModelDetails(model: MJAIModelEntityExtended, event?: Event): void {
     if (event) {
       event.stopPropagation();
     }
@@ -426,7 +595,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public async createNewModel(): Promise<void> {
     try {
       const md = new Metadata();
-      const newModel = await md.GetEntityObject<AIModelEntityExtended>('AI Models');
+      const newModel = await md.GetEntityObject<MJAIModelEntityExtended>('MJ: AI Models');
       
       if (newModel) {
         newModel.Name = 'New AI Model';
@@ -434,7 +603,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
         
         if (await newModel.Save()) {
           const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: newModel.ID }]);
-          this.navigationService.OpenEntityRecord('AI Models', compositeKey);
+          this.navigationService.OpenEntityRecord('MJ: AI Models', compositeKey);
 
           // Reload the data
           await this.loadInitialData();
@@ -504,6 +673,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     this.costRankRange = { min: 0, max: this.maxCostRank };
     this.searchSubject.next('');
     this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public formatTokenLimit(limit: number): string {

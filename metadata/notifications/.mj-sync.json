@@ -1,0 +1,30 @@
+{
+  "entity": "MJ: User Notification Types",
+  "filePattern": "**/.*.json",
+  "ignoreDirectories": [
+    "templates"
+  ],
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".notification-types.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "EmailTemplateID": {
+        "entity": "MJ: Templates",
+        "field": "Name"
+      },
+      "SMSTemplateID": {
+        "entity": "MJ: Templates",
+        "field": "Name"
+      }
+    }
+  }
+}

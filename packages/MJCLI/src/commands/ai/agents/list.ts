@@ -1,5 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { AgentService, OutputFormatter } from '@memberjunction/ai-cli';
 import ora from 'ora-classic';
 
 export default class AgentsList extends Command {
@@ -21,9 +20,11 @@ export default class AgentsList extends Command {
   };
 
   async run(): Promise<void> {
+    const { AgentService, OutputFormatter } = await import('@memberjunction/ai-cli');
+
     const { flags } = await this.parse(AgentsList);
     const spinner = ora();
-    
+
     try {
       spinner.start('Loading available agents...');
       const service = new AgentService();

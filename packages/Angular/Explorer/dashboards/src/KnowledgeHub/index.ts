@@ -1,0 +1,6 @@
+// Knowledge Hub components
+export * from './components/config/knowledge-config-resource.component';
+export * from './components/results-detail/search-result-detail.component';
+export * from './components/clusters/cluster-visualization-resource.component';
+export * from './components/scheduling/scheduling-resource.component';
+export * from './components/analytics/analytics-resource.component';

@@ -1,0 +1,390 @@
+/* Query Data Grid Component Styles */
+
+:host {
+    display: block;
+    height: 100%;
+    --grid-accent-color: var(--mj-brand-primary);
+    --grid-selection-indicator: var(--mj-status-warning);
+    --grid-selection-bg: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    --grid-sort-indicator-color: var(--mj-brand-primary);
+}
+
+.query-data-grid-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+    background: var(--mj-bg-surface);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/* ========================================
+   Toolbar
+   ======================================== */
+
+.grid-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
+    min-height: 48px;
+    flex-shrink: 0;
+}
+
+.toolbar-left,
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.row-count,
+.selection-count {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+    font-weight: 500;
+}
+
+.row-count i,
+.selection-count i {
+    color: var(--mj-text-muted);
+}
+
+.selection-count {
+    padding: 4px 8px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-text-primary);
+    border-radius: 4px;
+    border-left: 3px solid var(--mj-brand-primary);
+}
+
+.clear-selection-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    margin-left: 4px;
+    border: none;
+    background: transparent;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    border-radius: 50%;
+    transition: all 0.15s ease;
+}
+
+.clear-selection-btn:hover {
+    background: color-mix(in srgb, var(--mj-text-primary) 10%, transparent);
+    color: var(--mj-text-primary);
+}
+
+/* Toolbar buttons - consistent styling */
+.toolbar-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--mj-text-primary);
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+    background: var(--mj-bg-surface-sunken);
+    border-color: var(--mj-border-strong);
+}
+
+.toolbar-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.toolbar-btn i {
+    font-size: 14px;
+}
+
+/* Icon-only button */
+.toolbar-btn.icon-only {
+    padding: 6px 8px;
+}
+
+.toolbar-btn.icon-only i {
+    margin-right: 0;
+}
+
+/* ========================================
+   Grid wrapper
+   ======================================== */
+
+.grid-wrapper {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    transition: opacity 0.2s ease;
+}
+
+.grid-wrapper.loading {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.query-grid {
+    width: 100%;
+    height: 100%;
+}
+
+/* ========================================
+   Loading overlay
+   ======================================== */
+
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--mj-bg-overlay);
+    z-index: 100;
+}
+
+/* ========================================
+   Empty state
+   ======================================== */
+
+.empty-state {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    padding: 40px;
+}
+
+.empty-icon {
+    font-size: 48px;
+    color: var(--mj-border-strong);
+    margin-bottom: 16px;
+}
+
+.empty-message {
+    font-size: 18px;
+    color: var(--mj-text-secondary);
+    margin: 0 0 8px 0;
+}
+
+.empty-hint {
+    font-size: 14px;
+    color: var(--mj-text-muted);
+    margin: 0;
+}
+
+/* ========================================
+   Entity link cell
+   ======================================== */
+
+::ng-deep .entity-link-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+::ng-deep .entity-link {
+    color: var(--grid-accent-color);
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+::ng-deep .entity-link:hover {
+    color: var(--mj-brand-primary-hover);
+    text-decoration: underline;
+}
+
+::ng-deep .entity-link-icon {
+    font-size: 10px;
+    color: var(--mj-text-disabled);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+::ng-deep .entity-link-cell:hover .entity-link-icon {
+    opacity: 1;
+}
+
+/* ========================================
+   AG Grid customizations
+   ======================================== */
+
+/* ========================================
+   Visual Config: Zebra Striping
+   (copied from entity-data-grid pattern)
+   ======================================== */
+
+/* Subtle contrast */
+.alternate-rows-subtle ::ng-deep .ag-row-odd {
+    background-color: color-mix(in srgb, var(--mj-text-primary) 1.5%, transparent);
+}
+
+.alternate-rows-subtle ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+    background-color: var(--mj-bg-surface-hover);
+}
+
+/* Medium contrast (default) */
+.alternate-rows-medium ::ng-deep .ag-row-odd {
+    background-color: color-mix(in srgb, var(--mj-text-primary) 2.5%, transparent);
+}
+
+.alternate-rows-medium ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+    background-color: var(--mj-bg-surface-hover);
+}
+
+/* Strong contrast */
+.alternate-rows-strong ::ng-deep .ag-row-odd {
+    background-color: color-mix(in srgb, var(--mj-text-primary) 4%, transparent);
+}
+
+.alternate-rows-strong ::ng-deep .ag-row-odd:hover:not(.ag-row-selected) {
+    background-color: var(--mj-bg-surface-hover);
+}
+
+::ng-deep .ag-header-cell {
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--mj-text-secondary);
+}
+
+::ng-deep .ag-header-cell:hover {
+    background-color: color-mix(in srgb, var(--mj-text-primary) 4%, transparent);
+}
+
+/* Selected row styling */
+::ng-deep .ag-row-selected {
+    background-color: var(--grid-selection-bg) !important;
+    color: var(--mj-text-primary) !important;
+    box-shadow: inset 4px 0 0 0 var(--grid-selection-indicator);
+}
+
+::ng-deep .ag-row-selected .ag-cell {
+    color: var(--mj-text-primary) !important;
+}
+
+/* Row border */
+::ng-deep .ag-row {
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+/* Header alignment */
+::ng-deep .header-right .ag-header-cell-label {
+    justify-content: flex-end;
+}
+
+::ng-deep .header-center .ag-header-cell-label {
+    justify-content: center;
+}
+
+/* Checkbox styling */
+::ng-deep .ag-checkbox-input-wrapper {
+    border-radius: 4px;
+    width: 18px;
+    height: 18px;
+}
+
+::ng-deep .ag-checkbox-input-wrapper.ag-checked {
+    background-color: var(--grid-accent-color);
+    border-color: var(--grid-accent-color);
+}
+
+::ng-deep .ag-checkbox-input-wrapper.ag-checked::after {
+    color: var(--mj-text-inverse);
+}
+
+/* ========================================
+   Sort Indicators - Arrow Only
+   ======================================== */
+
+/* Sort icons - colored arrows only */
+:host ::ng-deep .ag-sort-ascending-icon {
+    color: var(--mj-brand-primary) !important;
+}
+
+:host ::ng-deep .ag-sort-descending-icon {
+    color: var(--mj-status-error) !important;
+}
+
+:host ::ng-deep .ag-sort-ascending-icon .ag-icon,
+:host ::ng-deep .ag-sort-descending-icon .ag-icon {
+    font-size: 14px !important;
+}
+
+/* Sort order number (for multi-sort) */
+:host ::ng-deep .ag-sort-order {
+    margin-left: 4px;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: var(--mj-text-secondary) !important;
+}
+
+/* Hover state for sortable headers */
+:host ::ng-deep .ag-header-cell-sortable:hover {
+    background: color-mix(in srgb, var(--mj-text-primary) 4%, transparent);
+}
+
+/* ========================================
+   Scrollbar Styling
+   ======================================== */
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-track {
+    background: var(--mj-bg-surface-card);
+    border-radius: 4px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-thumb {
+    background: var(--mj-border-strong);
+    border-radius: 4px;
+}
+
+::ng-deep .ag-body-viewport::-webkit-scrollbar-thumb:hover {
+    background: var(--mj-text-disabled);
+}
+
+/* ========================================
+   Responsive adjustments
+   ======================================== */
+
+@media (max-width: 768px) {
+    .grid-toolbar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+        flex-wrap: wrap;
+    }
+
+    /* Hide button text on mobile */
+    .toolbar-btn .button-text {
+        display: none;
+    }
+}

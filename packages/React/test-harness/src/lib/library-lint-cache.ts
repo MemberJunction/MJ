@@ -3,7 +3,7 @@
  * Ensures we only load and compile library lint rules once
  */
 
-import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import * as t from '@babel/types';
 
@@ -14,7 +14,7 @@ export interface CompiledValidator {
 }
 
 export interface CompiledLibraryRules {
-  library: ComponentLibraryEntity;
+  library: MJComponentLibraryEntity;
   initialization?: any;
   lifecycle?: any;
   validators?: Record<string, CompiledValidator>;
@@ -165,7 +165,7 @@ export class LibraryLintCache {
     try {
       // Compile validators if they exist
       const compiledRules: CompiledLibraryRules = {
-        library: { Name: libraryName } as ComponentLibraryEntity,
+        library: { Name: libraryName } as MJComponentLibraryEntity,
         initialization: lintRules.initialization,
         lifecycle: lintRules.lifecycle,
         options: lintRules.options

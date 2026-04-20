@@ -4,7 +4,7 @@
 
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { UserInfo } from '@memberjunction/core';
-import { ComponentLibraryEntity } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity } from '@memberjunction/core-entities';
 import { ComponentObject } from '../types';
 
 /**
@@ -67,7 +67,7 @@ export interface LoadOptions {
   /**
    * All available component libraries (for browser context where ComponentMetadataEngine isn't available)
    */
-  allLibraries?: ComponentLibraryEntity[];
+  allLibraries?: MJComponentLibraryEntity[];
 }
 
 /**

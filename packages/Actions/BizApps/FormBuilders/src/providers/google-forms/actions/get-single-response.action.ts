@@ -148,10 +148,3 @@ export class GetSingleGoogleFormsResponseAction extends GoogleFormsBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadGetSingleGoogleFormsResponseAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

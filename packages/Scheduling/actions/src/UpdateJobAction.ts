@@ -144,10 +144,3 @@ export class UpdateScheduledJobAction extends BaseJobAction {
         }
     }
 }
-
-/**
- * Loader function to prevent tree shaking
- */
-export function LoadUpdateScheduledJobAction() {
-    // Stub function - ensures class is included in bundle
-}

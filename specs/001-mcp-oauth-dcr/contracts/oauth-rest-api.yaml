@@ -1,0 +1,274 @@
+openapi: 3.1.0
+info:
+  title: MemberJunction MCP OAuth REST API
+  version: 1.0.0
+  description: |
+    REST endpoints for OAuth 2.1 authorization flow handling in MCP connections.
+    These endpoints support the authorization code flow with PKCE for MCP server authentication.
+
+servers:
+  - url: /
+    description: |
+      OAuth endpoints are mounted at the root path (not under /api/v1) because
+      the callback endpoint must be unauthenticated to receive redirects from
+      external authorization servers.
+
+paths:
+  /oauth/callback:
+    get:
+      operationId: handleOAuthCallback
+      summary: OAuth Authorization Callback
+      description: |
+        Handles the OAuth authorization callback from external authorization servers.
+        This endpoint receives the authorization code and state parameter after user consent,
+        exchanges the code for tokens, stores them securely, and redirects to completion page.
+      tags:
+        - OAuth
+      parameters:
+        - name: code
+          in: query
+          required: false
+          description: Authorization code from the authorization server (present on success)
+          schema:
+            type: string
+            example: "SplxlOBeZQQYbYS6WxSbIA"
+        - name: state
+          in: query
+          required: true
+          description: State parameter for CSRF protection (must match stored state)
+          schema:
+            type: string
+            minLength: 32
+            maxLength: 100
+            example: "xyz789state123"
+        - name: error
+          in: query
+          required: false
+          description: OAuth error code (present on failure)
+          schema:
+            type: string
+            enum:
+              - access_denied
+              - invalid_request
+              - unauthorized_client
+              - unsupported_response_type
+              - invalid_scope
+              - server_error
+              - temporarily_unavailable
+        - name: error_description
+          in: query
+          required: false
+          description: Human-readable error description
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to completion page
+          headers:
+            Location:
+              description: Redirect URL (success or error page)
+              schema:
+                type: string
+        '400':
+          description: Invalid request (missing state, invalid state)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth/status/{stateParameter}:
+    get:
+      operationId: getOAuthStatus
+      summary: Get OAuth Authorization Status
+      description: |
+        Polls for the status of an in-progress OAuth authorization flow.
+        Used by clients to determine when authorization is complete.
+      tags:
+        - OAuth
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: stateParameter
+          in: path
+          required: true
+          description: The state parameter from the authorization URL
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Authorization status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Authorization state not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth/initiate:
+    post:
+      operationId: initiateOAuth
+      summary: Initiate OAuth Authorization Flow
+      description: |
+        Initiates a new OAuth authorization flow for an MCP connection.
+        Returns the authorization URL that the user should be redirected to.
+      tags:
+        - OAuth
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitiateOAuthRequest'
+      responses:
+        '200':
+          description: Authorization flow initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitiateOAuthResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Permission denied for this connection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Connection not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: MemberJunction authentication token
+
+  schemas:
+    InitiateOAuthRequest:
+      type: object
+      required:
+        - connectionId
+      properties:
+        connectionId:
+          type: string
+          format: uuid
+          description: MCP Server Connection ID
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        additionalScopes:
+          type: string
+          description: Additional scopes to request (space-delimited)
+          example: "read:messages write:messages"
+
+    InitiateOAuthResponse:
+      type: object
+      required:
+        - success
+        - authorizationUrl
+        - stateParameter
+        - expiresAt
+      properties:
+        success:
+          type: boolean
+          description: Whether initialization succeeded
+        authorizationUrl:
+          type: string
+          format: uri
+          description: URL to redirect user for authorization
+          example: "https://auth.example.com/authorize?response_type=code&client_id=..."
+        stateParameter:
+          type: string
+          description: State parameter for tracking this flow
+        expiresAt:
+          type: string
+          format: date-time
+          description: When this authorization flow expires
+        message:
+          type: string
+          description: Optional message for the user
+
+    OAuthStatusResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - pending
+            - completed
+            - failed
+            - expired
+          description: Current status of the authorization flow
+        connectionId:
+          type: string
+          format: uuid
+          description: Associated MCP Server Connection ID
+        completedAt:
+          type: string
+          format: date-time
+          description: When the flow completed (if status is completed or failed)
+        errorCode:
+          type: string
+          description: Error code (if status is failed)
+        errorMessage:
+          type: string
+          description: User-friendly error message (if status is failed)
+        isRetryable:
+          type: boolean
+          description: Whether the authorization can be retried
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - errorMessage
+      properties:
+        success:
+          type: boolean
+          const: false
+        errorCode:
+          type: string
+          description: Machine-readable error code
+          example: "INVALID_STATE"
+        errorMessage:
+          type: string
+          description: Human-readable error message
+          example: "The authorization state is invalid or has expired."
+
+tags:
+  - name: OAuth
+    description: OAuth 2.1 authorization flow endpoints for MCP connections

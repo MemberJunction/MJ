@@ -1,14 +1,13 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, OnDestroy, Input, Output, EventEmitter } from '@angular/core';
 import { RunView, Metadata } from '@memberjunction/core';
 import {
-  ArtifactEntity,
-  ArtifactVersionEntity,
-  CollectionEntity,
-  CollectionArtifactEntity
+  MJArtifactEntity,
+  MJArtifactVersionEntity,
+  MJCollectionEntity,
+  MJCollectionArtifactEntity
 } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
+import { UUIDsEqual } from '@memberjunction/global';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -21,24 +20,28 @@ export interface ArtifactLoadResult {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-artifact-load-dialog',
   templateUrl: './artifact-load-dialog.component.html',
   styleUrl: './artifact-load-dialog.component.css'
 })
 export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
+  @Input() Visible = false;
+  @Output() Close = new EventEmitter<ArtifactLoadResult | undefined>();
+
   // Tab state
   activeTab = 0; // 0 = Artifacts, 1 = Collections
 
   // Artifacts data
-  artifacts: ArtifactEntity[] = [];
-  artifactVersions: ArtifactVersionEntity[] = [];
-  selectedArtifact: ArtifactEntity | null = null;
-  selectedVersion: ArtifactVersionEntity | null = null;
+  artifacts: MJArtifactEntity[] = [];
+  artifactVersions: MJArtifactVersionEntity[] = [];
+  selectedArtifact: MJArtifactEntity | null = null;
+  selectedVersion: MJArtifactVersionEntity | null = null;
 
   // Collections data
-  collections: CollectionEntity[] = [];
-  selectedCollection: CollectionEntity | null = null;
-  collectionArtifacts: ArtifactEntity[] = [];
+  collections: MJCollectionEntity[] = [];
+  selectedCollection: MJCollectionEntity | null = null;
+  collectionArtifacts: MJArtifactEntity[] = [];
 
   // Search and filter
   searchTerm = '';
@@ -65,8 +68,6 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   private metadata = new Metadata();
   private destroy$ = new Subject<void>();
   private searchSubject = new Subject<string>();
-
-  constructor(public dialog: DialogRef) {}
 
   async ngOnInit() {
     // Setup search debouncing
@@ -95,7 +96,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
       const rv = new RunView();
       const startRow = this.currentPage * this.pageSize;
 
-      const result = await rv.RunView<ArtifactEntity>({
+      const result = await rv.RunView<MJArtifactEntity>({
         EntityName: 'MJ: Artifacts',
         ExtraFilter: this.buildArtifactFilter(),
         OrderBy: '__mj_UpdatedAt DESC',
@@ -127,7 +128,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
       }
 
       const rv = new RunView();
-      const result = await rv.RunView<CollectionEntity>({
+      const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
         ExtraFilter: `UserID = '${currentUserId}' OR ID IN (
           SELECT CollectionID FROM __mj.vwCollectionPermissions
@@ -148,7 +149,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  async selectCollection(collection: CollectionEntity) {
+  async selectCollection(collection: MJCollectionEntity) {
     this.selectedCollection = collection;
     this.selectedArtifact = null;
     this.selectedVersion = null;
@@ -157,7 +158,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
     // Load artifacts in this collection
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactEntity>({
+      const result = await rv.RunView<MJArtifactEntity>({
         EntityName: 'MJ: Artifacts',
         ExtraFilter: `ID IN (
           SELECT DISTINCT av.ArtifactID
@@ -197,14 +198,14 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
     // User email filter
     if (this.userEmail?.trim()) {
       const md = new Metadata();
-      const schemaName = md.EntityByName("Users")?.SchemaName || "__mj";
+      const schemaName = md.EntityByName("MJ: Users")?.SchemaName || "__mj";
       filters.push(`UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.userEmail.trim()}%')`);
     }
 
     return filters.length > 0 ? filters.join(' AND ') : '';
   }
 
-  async selectArtifact(artifact: ArtifactEntity) {
+  async selectArtifact(artifact: MJArtifactEntity) {
     this.selectedArtifact = artifact;
     this.selectedVersion = null;
     this.previewSpec = null;
@@ -217,7 +218,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
     this.isLoadingVersions = true;
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactVersionEntity>({
+      const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID = '${artifactId}'`,
         OrderBy: 'VersionNumber DESC',
@@ -240,12 +241,12 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  async selectVersion(version: ArtifactVersionEntity) {
+  async selectVersion(version: MJArtifactVersionEntity) {
     this.selectedVersion = version;
     await this.loadPreview(version);
   }
 
-  async loadPreview(version: ArtifactVersionEntity) {
+  async loadPreview(version: MJArtifactVersionEntity) {
     try {
       this.previewError = null;
 
@@ -334,7 +335,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   }
 
   cancel() {
-    this.dialog.close(undefined);
+    this.Close.emit(undefined);
   }
 
   load() {
@@ -348,14 +349,14 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
       artifactName: this.selectedArtifact!.Name
     };
 
-    this.dialog.close(result);
+    this.Close.emit(result);
   }
 
   onTabSelect(index: number) {
     this.activeTab = index;
   }
 
-  getArtifactsByTab(): ArtifactEntity[] {
+  getArtifactsByTab(): MJArtifactEntity[] {
     return this.activeTab === 0 ? this.artifacts : this.collectionArtifacts;
   }
 
@@ -365,5 +366,20 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
 
   getPreviewJSON(): string {
     return this.previewSpec ? JSON.stringify(this.previewSpec, null, 2) : '';
+  }
+
+  /** Case-insensitive UUID check whether an artifact is the currently selected artifact. */
+  IsArtifactSelected(artifact: MJArtifactEntity): boolean {
+    return UUIDsEqual(this.selectedArtifact?.ID, artifact.ID);
+  }
+
+  /** Case-insensitive UUID check whether a collection is the currently selected collection. */
+  IsCollectionSelected(collection: MJCollectionEntity): boolean {
+    return UUIDsEqual(this.selectedCollection?.ID, collection.ID);
+  }
+
+  /** Case-insensitive UUID check whether a version is the currently selected version. */
+  IsVersionSelected(version: MJArtifactVersionEntity): boolean {
+    return UUIDsEqual(this.selectedVersion?.ID, version.ID);
   }
 }

@@ -1,0 +1,146 @@
+[
+  {
+    "fields": {
+      "FeatureKey": "Shell.SearchBar.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Show Global Search Bar",
+      "Description": "Display the universal search bar in the Explorer header.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "0DBD6B4F-9B56-4D34-A224-A189EDAE3903"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:11:23.230Z",
+      "checksum": "bca24cd6f1d6c069904af76d3b83af62c520f2ae6633c1f82bc76e8b4e71b367"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.SearchBar.EnablePreview",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Enable Search Preview Dropdown",
+      "Description": "Show typeahead preview results as the user types in the search bar.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "81D4C202-1255-46CD-A049-64EC217B0B50"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:11:23.249Z",
+      "checksum": "03bc675877973185e6151b4011a6906d627009ac439011b52afe1c7dc01cd54b"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.ChatOverlay.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Show Chat Overlay Bubble",
+      "Description": "Display the AI chat overlay bubble in Explorer.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "6855118F-E692-4737-A125-AE267D2DC39C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:11:23.265Z",
+      "checksum": "2de9d86abedc4e1e0ab3892b7a3edb6b5df7a29edb9337a88e10a1bb453fd02d"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.ChatOverlay.AllowOpenInFullApp",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Allow Opening Chat in Full App",
+      "Description": "Show button to open chat in the Conversations app.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "ABB8EF01-17C8-4CF5-9D4E-B5A31B7743EB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:11:23.282Z",
+      "checksum": "67a9da3af85e9a146e658d97ad657d6edacb6b527e30479f1b8365ffc647337e"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "KnowledgeHub.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Applications",
+      "DisplayName": "Enable Knowledge Hub Application",
+      "Description": "Enable the Knowledge Hub application for this instance.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "805FA389-C06B-4D30-97C2-EEAFA6B6A4F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:11:23.298Z",
+      "checksum": "106e8217cd5dfe431c2b3a757e7f2ec49deb306feda2d94f2730b0a9247dc334"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Search.VectorSearch.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Search",
+      "DisplayName": "Enable Vector/Semantic Search",
+      "Description": "Include vector similarity search in universal search results.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "C8CCC652-AD67-4ECB-A5C7-AAF7704ACC06"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:11:23.314Z",
+      "checksum": "9d1c4a776df7def9ce72b16a279a466abf67a50a97d2d931a0eddd1be6acaa16"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Search.FullTextSearch.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Search",
+      "DisplayName": "Enable Full-Text Search",
+      "Description": "Include database full-text search in universal search results.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "AC9FB034-3AFD-430E-A148-85FCFBEC8A9C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:11:23.331Z",
+      "checksum": "43bcd4ed6ba581f81924fc243b9ac9590b1049cb02c83e7fd3e0319fe2836eab"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Search.DefaultMinScore",
+      "Value": "0.35",
+      "ValueType": "number",
+      "Category": "Search",
+      "DisplayName": "Default Minimum Relevance Score",
+      "Description": "Minimum relevance score threshold for search results (0-1). Results below this score are filtered out.",
+      "DefaultValue": "0.35"
+    },
+    "primaryKey": {
+      "ID": "4916E87B-55BF-425D-BE05-FD86F3F91023"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:11:23.345Z",
+      "checksum": "d4eb43de527d6d1f898038a7185bfcdf4b03352351b94f3bc775831b2e489908"
+    }
+  }
+]

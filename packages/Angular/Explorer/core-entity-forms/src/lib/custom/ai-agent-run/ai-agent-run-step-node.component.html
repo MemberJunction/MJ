@@ -1,62 +1,72 @@
-<div class="timeline-item" 
-     [class.selected]="isSelected"
-     [attr.data-status]="item.status"
-     [attr.data-type]="item.type"
-     [style.margin-left.px]="item.level * 24"
-     (click)="handleClick()">
-  
+<div class="timeline-item"
+  [class.selected]="isSelected"
+  [attr.data-status]="item.status"
+  [attr.data-type]="item.type"
+  [style.margin-left.px]="item.level * 24"
+  (click)="handleClick()">
+
   <!-- Expand/Collapse Button for Sub-Agents and Parent Steps -->
-  <button class="expand-toggle"
-          *ngIf="canExpand"
-          (click)="handleExpandToggle($event)"
-          [attr.aria-expanded]="item.isExpanded">
-    <i class="fas"
-       [class.fa-chevron-right]="!item.isExpanded"
-       [class.fa-chevron-down]="item.isExpanded"></i>
-  </button>
-  
+  @if (canExpand) {
+    <button class="expand-toggle"
+      (click)="handleExpandToggle($event)"
+      [attr.aria-expanded]="item.isExpanded">
+      <i class="fas"
+        [class.fa-chevron-right]="!item.isExpanded"
+      [class.fa-chevron-down]="item.isExpanded"></i>
+    </button>
+  }
+
   <!-- Timeline Marker -->
   <div class="timeline-marker" [attr.data-color]="item.color">
-    <img *ngIf="item.logoUrl"
-         [src]="item.logoUrl"
-         [alt]="item.title"
-         class="timeline-marker-logo"
-         (error)="onLogoError($event)" />
-    <i *ngIf="!item.logoUrl" class="fas" [ngClass]="item.icon"></i>
+    @if (item.logoUrl) {
+      <img
+        [src]="item.logoUrl"
+        [alt]="item.title"
+        class="timeline-marker-logo"
+        (error)="onLogoError($event)" />
+    }
+    @if (!item.logoUrl) {
+      <i class="fas" [ngClass]="item.icon"></i>
+    }
   </div>
-  
+
   <!-- Timeline Content -->
   <div class="timeline-content">
     <div class="timeline-header">
       <h4>{{ item.title }}</h4>
       <span class="timeline-time">{{ item.startTime | date:'h:mm:ss.SSS a' }}</span>
     </div>
-    
+
     <div class="timeline-subtitle">{{ item.subtitle }}</div>
-    
-    <div class="timeline-additional-info" *ngIf="getAdditionalInfo()">
-      {{ getAdditionalInfo() }}
-    </div>
-    
+
+    @if (getAdditionalInfo()) {
+      <div class="timeline-additional-info">
+        {{ getAdditionalInfo() }}
+      </div>
+    }
+
     <div class="timeline-meta">
-      <span class="duration" *ngIf="item.duration">
-        <i class="fas fa-clock"></i> {{ item.duration }}
-      </span>
+      @if (item.duration) {
+        <span class="duration">
+          <i class="fas fa-clock"></i> {{ item.duration }}
+        </span>
+      }
       <span class="status" [attr.data-status]="item.status">
         <i class="fas" [ngClass]="getStatusIcon(item.status)"></i>
         {{ item.status }}
       </span>
     </div>
   </div>
-  
+
   <!-- Timeline Actions -->
   <div class="timeline-actions">
-    <button class="btn-link" 
-            *ngIf="canNavigateToEntity"
-            (click)="navigateToRecord($event)"
-            [title]="entityNavigationText">
-      <i class="fas fa-external-link-alt"></i>
-      <span class="action-text">{{ entityNavigationText }}</span>
-    </button>
+    @if (canNavigateToEntity) {
+      <button class="btn-link"
+        (click)="navigateToRecord($event)"
+        [title]="entityNavigationText">
+        <i class="fas fa-external-link-alt"></i>
+        <span class="action-text">{{ entityNavigationText }}</span>
+      </button>
+    }
   </div>
 </div>

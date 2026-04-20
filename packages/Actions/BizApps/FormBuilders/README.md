@@ -1,238 +1,73 @@
-# Form Builder Actions for MemberJunction
+# @memberjunction/actions-bizapps-formbuilders
 
-This package provides integration actions for popular form builder and survey platforms, enabling AI agents, workflows, and applications to programmatically interact with forms, retrieve responses, and analyze submission data.
+Form builder and survey platform integration actions for MemberJunction. This package provides a unified interface across four major form/survey platforms, enabling AI agents, workflows, and applications to programmatically retrieve responses, analyze submissions, and manage forms through the MemberJunction Actions framework.
+
+This package is part of the [BizApps Actions](../README.md) collection within the broader [MemberJunction Actions Framework](../../README.md). For core action architecture, design philosophy, and when to use actions versus direct code, see the [Actions CLAUDE.md](../../CLAUDE.md).
+
+## Architecture
+
+The package follows a three-tier class hierarchy: a shared base class providing common form operations, provider-specific base classes handling API authentication and data normalization, and individual action classes implementing specific operations.
+
+```mermaid
+graph TD
+    subgraph Framework["Actions Framework"]
+        BA["BaseAction<br/>@memberjunction/actions"]
+    end
+
+    subgraph Base["Shared Base Layer"]
+        BFBA["BaseFormBuilderAction<br/>Credential management, CSV export,<br/>statistics helpers, response normalization"]
+    end
+
+    subgraph Providers["Provider Base Classes"]
+        TF["TypeformBaseAction<br/>Bearer token auth<br/>Axios + rate limiting"]
+        JF["JotFormBaseAction<br/>API key (query param)<br/>Regional endpoints"]
+        SM["SurveyMonkeyBaseAction<br/>OAuth 2.0 Bearer<br/>Paginated responses"]
+        GF["GoogleFormsBaseAction<br/>OAuth 2.0 Bearer<br/>Read-only API"]
+    end
+
+    subgraph Actions["Action Classes (34 total)"]
+        TFA["Typeform Actions (10)"]
+        JFA["JotForm Actions (8)"]
+        SMA["SurveyMonkey Actions (8)"]
+        GFA["Google Forms Actions (4)"]
+    end
+
+    subgraph Shared["Shared Utilities"]
+        FCP["FileContentProcessor<br/>PDF, Excel, Word,<br/>image extraction"]
+    end
+
+    BA --> BFBA
+    BFBA --> TF
+    BFBA --> JF
+    BFBA --> SM
+    BFBA --> GF
+    TF --> TFA
+    JF --> JFA
+    SM --> SMA
+    GF --> GFA
+    TFA -.-> FCP
+
+    style Framework fill:#64748b,stroke:#475569,color:#fff
+    style Base fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style TF fill:#7c5295,stroke:#563a6b,color:#fff
+    style JF fill:#7c5295,stroke:#563a6b,color:#fff
+    style SM fill:#7c5295,stroke:#563a6b,color:#fff
+    style GF fill:#7c5295,stroke:#563a6b,color:#fff
+    style TFA fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style JFA fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style SMA fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style GFA fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style FCP fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Supported Platforms
 
-### ✅ Typeform (Implemented)
-Complete integration with Typeform's Responses API and Create API.
-- **8 Actions**: Get responses, get single response, get statistics, export CSV, watch new responses, get form details, create form, update form
-- **Authentication**: Personal access token (Bearer)
-- **Capabilities**: Full CRUD - read responses and manage forms
-
-### ✅ JotForm (Implemented)
-Complete integration with JotForm's Submissions API and Form API.
-- **8 Actions**: Get submissions, get single submission, get statistics, export CSV, watch new submissions, get form details, create form, update form
-- **Authentication**: API key (query parameter)
-- **Regional Support**: US, EU, and HIPAA endpoints
-- **Capabilities**: Full CRUD - read submissions and manage forms
-
-### ✅ SurveyMonkey (Implemented)
-Complete integration with SurveyMonkey's Responses API and Surveys API.
-- **8 Actions**: Get responses, get single response, get statistics, export CSV, watch new responses, get survey details, create survey, update survey
-- **Authentication**: OAuth 2.0 access token
-- **Capabilities**: Full CRUD - read responses and manage surveys
-
-### ✅ Google Forms (Implemented)
-Read-only integration with Google Forms API.
-- **5 Actions**: Get responses, get single response, get statistics, export CSV, get form details
-- **Authentication**: OAuth 2.0 access token with Google Cloud credentials
-- **Capabilities**: Read-only - retrieve responses and form configuration (no create/update API available)
-- **Integration**: Works seamlessly with Google Workspace
-
-### 🔜 Future Platforms
-
-#### Microsoft Forms
-**Why**: Seamless Microsoft 365 integration
-- Forms and quizzes
-- Excel export
-- Teams integration
-- Education features
-- **Note**: No official public API currently available
-
-#### Formstack
-**Why**: Enterprise workflow automation
-- Document generation
-- Salesforce integration
-- HIPAA compliance
-- Advanced routing
-
-#### Wufoo
-**Why**: User-friendly with strong reporting
-- Payment processing
-- Report designer
-- Entry management
-- Custom themes
-
-#### Typeform Alternatives
-- **Tally** - Open-source, free alternative
-- **Fillout** - Modern, flexible forms
-- **Paperform** - Long-form capable
-
----
-
-## Typeform Actions
-
-### Response Actions
-
-#### 1. Get Typeform Responses
-Retrieve responses with comprehensive filtering options.
-
-**Parameters:**
-- `FormID` - Typeform form ID
-- `APIToken` - Personal access token
-- `PageSize` - Results per page (1-1000)
-- `Since` / `Until` - Date range filters
-- `Completed` - Filter by completion status
-- `Sort` - Order results
-- `Query` - Text search
-- `GetAllPages` - Auto-paginate through all responses
-
-**Use Cases:**
-- Data analysis and reporting
-- CRM integration
-- Response monitoring
-- Workflow triggers
-
----
-
-#### 2. Get Single Typeform Response
-Retrieve specific response by token.
-
-**Parameters:**
-- `FormID` - Form ID
-- `ResponseToken` - Unique response identifier
-- `APIToken` - Access token
-
-**Use Cases:**
-- Response lookup
-- Detail verification
-- Follow-up workflows
-
----
-
-#### 3. Get Typeform Response Statistics
-Calculate aggregate analytics from responses.
-
-**Parameters:**
-- `FormID` - Form ID
-- `APIToken` - Access token
-- `Since` / `Until` - Analysis date range
-- `IncludeTopAnswers` - Popular answers analysis
-- `MaxResponses` - Analysis limit
-
-**Output:**
-- Total/completed/partial counts
-- Completion rate
-- Daily/hourly distribution
-- Popular answers by field
-
-**Use Cases:**
-- Dashboard reporting
-- Form performance analysis
-- A/B testing insights
-- Trend identification
-
----
-
-#### 4. Export Typeform Responses to CSV
-Convert responses to CSV format.
-
-**Parameters:**
-- `FormID` - Form ID
-- `APIToken` - Access token
-- `Since` / `Until` - Date range
-- `IncludeMetadata` - Include browser/platform data
-- `Delimiter` - CSV separator
-
-**Use Cases:**
-- Excel/Google Sheets import
-- Data archival
-- Third-party tool integration
-- Backup creation
-
----
-
-#### 5. Watch for New Typeform Responses
-Poll for new submissions since last check.
-
-**Parameters:**
-- `FormID` - Form ID
-- `APIToken` - Access token
-- `LastCheckedTimestamp` - Previous check time
-- `OnlyCompleted` - Filter partial responses
-
-**Use Cases:**
-- Real-time notifications
-- Workflow automation
-- Auto-responders
-- CRM sync triggers
-
----
-
-### Form Management Actions
-
-#### 6. Get Typeform Details
-Retrieve complete form configuration.
-
-**Parameters:**
-- `FormID` - Form ID
-- `APIToken` - Access token
-
-**Output:**
-- Title, fields, settings
-- Logic jumps
-- Theme configuration
-- Hidden fields
-- Workspace info
-
-**Use Cases:**
-- Form backup
-- Configuration inspection
-- Template creation
-- Migration prep
-
----
-
-#### 7. Create Typeform
-Create new forms programmatically.
-
-**Parameters:**
-- `APIToken` - Access token with create permissions
-- `Title` - Form title
-- `Fields` - Array of field definitions
-- `Settings` - Form settings (optional)
-- `Logic` - Conditional logic (optional)
-- `ThemeID` - Visual theme (optional)
-- `WorkspaceID` - Workspace assignment (optional)
-
-**Field Types Supported:**
-- `short_text`, `long_text`, `email`, `number`
-- `dropdown`, `multiple_choice`, `yes_no`
-- `rating`, `opinion_scale`, `date`
-- `phone_number`, `website`, `file_upload`
-- `payment`, `legal`, `matrix`, `ranking`, `picture_choice`
-
-**Use Cases:**
-- Dynamic form generation
-- Template instantiation
-- AI-generated surveys
-- Event registration automation
-
----
-
-#### 8. Update Typeform
-Modify existing forms safely.
-
-**Parameters:**
-- `FormID` - Form to update
-- `APIToken` - Access token
-- `MergeWithExisting` - Safe update mode (default: true)
-- `Title` - New title (optional)
-- `Fields` - Updated fields (optional)
-- `Settings` - Updated settings (optional)
-
-**⚠️ Important:**
-- `MergeWithExisting=true` - Fetches current form and merges changes (SAFE)
-- `MergeWithExisting=false` - Replaces entire form (DANGEROUS - omitted fields are deleted)
-
-**Use Cases:**
-- Form title updates
-- Adding/removing fields
-- Settings adjustments
-- Logic jump modifications
-
----
+| Platform | Auth Method | Actions | Capabilities |
+|----------|------------|---------|-------------|
+| **Typeform** | Bearer token (personal access token) | 10 | Full CRUD: responses, forms, file content |
+| **JotForm** | API key (query parameter) | 8 | Full CRUD: submissions, forms |
+| **SurveyMonkey** | OAuth 2.0 Bearer token | 8 | Full CRUD: responses, surveys, collectors |
+| **Google Forms** | OAuth 2.0 Bearer token | 4 | Read-only: responses, form details |
 
 ## Installation
 
@@ -240,259 +75,323 @@ Modify existing forms safely.
 npm install @memberjunction/actions-bizapps-formbuilders
 ```
 
-## Authentication
+This package is part of the MemberJunction monorepo. When working within the monorepo, add the dependency to your package's `package.json` and run `npm install` at the repository root.
 
-### Typeform API Token
+## Actions Reference
 
-1. Go to https://admin.typeform.com/account#/section/tokens
-2. Create a new personal access token
-3. Grant required scopes:
-   - `forms:read` - Read form responses
-   - `forms:write` - Create/update forms
-   - `responses:read` - Read form responses
+### Typeform Actions (10)
 
-### Environment Variables (Recommended)
+| Action Class | Registration Name | Description |
+|-------------|------------------|-------------|
+| `GetTypeformResponsesAction` | `GetTypeformResponsesAction` | Retrieve responses with filtering, pagination, and auto-paginate support |
+| `GetSingleTypeformResponseAction` | `GetSingleTypeformResponseAction` | Retrieve a specific response by token |
+| `GetTypeformStatisticsAction` | `GetTypeformStatisticsAction` | Calculate aggregate analytics (completion rates, distributions, top answers) |
+| `ExportTypeformCSVAction` | `ExportTypeformCSVAction` | Export responses to CSV format with optional metadata |
+| `WatchNewTypeformResponsesAction` | `WatchNewTypeformResponsesAction` | Poll for new submissions since a given timestamp |
+| `GetTypeformAction` | `GetTypeformAction` | Retrieve complete form configuration and field definitions |
+| `GetTypeformFormsAction` | `GetTypeformFormsAction` | List all forms in a workspace |
+| `TypeformGetFileContentAction` | `TypeformGetFileContentAction` | Download and process file upload answers (PDF, Excel, Word, images) |
+| `CreateTypeformAction` | `CreateTypeformAction` | Create new forms programmatically with fields, settings, and logic |
+| `UpdateTypeformAction` | `UpdateTypeformAction` | Modify existing forms with safe merge mode |
 
-```bash
-export BIZAPPS_TYPEFORM_{COMPANY_ID}_API_TOKEN=tfp_...
+### JotForm Actions (8)
+
+| Action Class | Registration Name | Description |
+|-------------|------------------|-------------|
+| `GetJotFormSubmissionsAction` | `GetJotFormSubmissionsAction` | Retrieve submissions with filtering and pagination |
+| `GetSingleJotFormSubmissionAction` | `GetSingleJotFormSubmissionAction` | Retrieve a specific submission by ID |
+| `GetJotFormStatisticsAction` | `GetJotFormStatisticsAction` | Calculate aggregate analytics from submissions |
+| `ExportJotFormCSVAction` | `ExportJotFormCSVAction` | Export submissions to CSV format |
+| `WatchNewJotFormSubmissionsAction` | `WatchNewJotFormSubmissionsAction` | Poll for new submissions since a given timestamp |
+| `GetJotFormAction` | `GetJotFormAction` | Retrieve form details and questions |
+| `CreateJotFormAction` | `CreateJotFormAction` | Create new forms with questions and properties |
+| `UpdateJotFormAction` | `UpdateJotFormAction` | Modify existing form configuration |
+
+### SurveyMonkey Actions (8)
+
+| Action Class | Registration Name | Description |
+|-------------|------------------|-------------|
+| `GetSurveyMonkeyResponsesAction` | `GetSurveyMonkeyResponsesAction` | Retrieve responses with date range and status filtering |
+| `GetSingleSurveyMonkeyResponseAction` | `GetSingleSurveyMonkeyResponseAction` | Retrieve a specific response by ID |
+| `GetSurveyMonkeyStatisticsAction` | `GetSurveyMonkeyStatisticsAction` | Calculate aggregate analytics from responses |
+| `ExportSurveyMonkeyCSVAction` | `ExportSurveyMonkeyCSVAction` | Export responses to CSV format |
+| `WatchNewSurveyMonkeyResponsesAction` | `WatchNewSurveyMonkeyResponsesAction` | Poll for new responses since a given timestamp |
+| `GetSurveyMonkeyAction` | `GetSurveyMonkeyAction` | Retrieve survey details and configuration |
+| `CreateSurveyMonkeyAction` | `CreateSurveyMonkeyAction` | Create new surveys with pages and questions |
+| `UpdateSurveyMonkeyAction` | `UpdateSurveyMonkeyAction` | Modify existing survey properties |
+
+### Google Forms Actions (4)
+
+| Action Class | Registration Name | Description |
+|-------------|------------------|-------------|
+| `GetSingleGoogleFormsResponseAction` | `GetSingleGoogleFormsResponseAction` | Retrieve a specific response by ID |
+| `GetGoogleFormsStatisticsAction` | `GetGoogleFormsStatisticsAction` | Calculate aggregate analytics from responses |
+| `ExportGoogleFormsCSVAction` | `ExportGoogleFormsCSVAction` | Export responses to CSV format |
+| `GetGoogleFormAction` | `GetGoogleFormAction` | Retrieve form details, questions, and quiz settings |
+
+> **Note**: Google Forms API is read-only. There are no endpoints for creating or updating forms programmatically.
+
+## Common Data Model
+
+All providers normalize their responses into a shared `FormResponse` interface, enabling provider-agnostic processing downstream.
+
+```mermaid
+classDiagram
+    class FormResponse {
+        +string responseId
+        +string formId
+        +Date submittedAt
+        +boolean completed
+        +FormAnswer[] answerDetails
+        +Record answers
+        +metadata
+        +calculatedFields
+        +hiddenFields
+    }
+
+    class FormAnswer {
+        +string fieldId
+        +string fieldType
+        +string question
+        +answer
+        +string[] choices
+    }
+
+    class FormStatistics {
+        +number totalResponses
+        +number completedResponses
+        +number partialResponses
+        +number completionRate
+        +number averageCompletionTime
+        +Record responsesByDate
+        +topAnswers
+    }
+
+    FormResponse --> FormAnswer : answerDetails
+
+    style FormResponse fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style FormAnswer fill:#7c5295,stroke:#563a6b,color:#fff
+    style FormStatistics fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
-### Database Configuration (Alternative)
+## Authentication and Credentials
 
-Store tokens in `Company Integrations` table with Integration Name = "Typeform"
+All form builder actions use a secure credential resolution chain. Credentials are never passed as direct action parameters; instead, they are resolved from environment variables or the MemberJunction `Company Integrations` entity.
 
----
+### Credential Resolution Order
+
+1. **Environment variables** (company-specific): `BIZAPPS_{PROVIDER}_{COMPANY_ID}_{CREDENTIAL_TYPE}`
+2. **Environment variables** (default): `BIZAPPS_{PROVIDER}_{CREDENTIAL_TYPE}`
+3. **Database** (Company Integrations entity): `AccessToken`, `APIKey` fields
+
+### Environment Variable Examples
+
+```bash
+# Typeform - Personal access token
+export BIZAPPS_TYPEFORM_API_TOKEN=tfp_your_token_here
+export BIZAPPS_TYPEFORM_12345_API_TOKEN=tfp_company_specific_token
+
+# JotForm - API key
+export BIZAPPS_JOTFORM_API_KEY=your_jotform_api_key
+export BIZAPPS_JOTFORM_12345_API_KEY=company_specific_key
+
+# SurveyMonkey - OAuth 2.0 access token
+export BIZAPPS_SURVEYMONKEY_ACCESS_TOKEN=your_oauth_token
+
+# Google Forms - OAuth 2.0 access token
+export BIZAPPS_GOOGLE_FORMS_ACCESS_TOKEN=your_google_oauth_token
+
+# OAuth2 client credentials (for token refresh)
+export BIZAPPS_TYPEFORM_CLIENT_ID=your_client_id
+export BIZAPPS_TYPEFORM_CLIENT_SECRET=your_client_secret
+```
+
+### Database Configuration
+
+Store credentials in the `Company Integrations` entity linked to the appropriate Integration record:
+
+```sql
+-- 1. Create Integration record for the platform
+INSERT INTO Integration (Name, Description, NavigationBaseURL, ClassName)
+VALUES ('Typeform', 'Typeform form builder', 'https://api.typeform.com', 'TypeformIntegration');
+
+-- 2. Link to Company with credentials
+INSERT INTO CompanyIntegration (CompanyID, IntegrationID, AccessToken, IsActive)
+VALUES (@CompanyID, @IntegrationID, 'tfp_your_token', 1);
+```
 
 ## Usage Examples
 
-### Example 1: AI Agent Analyzing Survey Responses
+### Retrieving Form Responses
 
 ```typescript
-import { RunView } from '@memberjunction/core';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { ActionEngineServer } from '@memberjunction/actions';
 
-// Get recent responses
-const getResponsesResult = await runAction({
-  ActionName: 'Get Typeform Responses',
-  Params: [
-    { Name: 'FormID', Value: 'abc123' },
-    { Name: 'APIToken', Value: 'tfp_...' },
-    { Name: 'Since', Value: '2024-01-01T00:00:00Z' },
-    { Name: 'GetAllPages', Value: true }
-  ]
-});
+const engine = ActionEngineServer.Instance;
 
-const responses = getResponsesResult.Params.find(p => p.Name === 'Responses').Value;
-
-// AI analyzes sentiment
-const aiResult = await promptRunner.ExecutePrompt({
-  prompt: 'Analyze customer satisfaction from these survey responses',
-  data: { responses }
-});
-```
-
-### Example 2: Automated Form Creation
-
-```typescript
-// AI generates a customer feedback form
-const formData = {
-  title: 'Q1 2024 Customer Feedback Survey',
-  fields: [
-    {
-      type: 'short_text',
-      title: 'What is your name?',
-      ref: 'name'
-    },
-    {
-      type: 'email',
-      title: 'What is your email address?',
-      ref: 'email',
-      validations: { required: true }
-    },
-    {
-      type: 'rating',
-      title: 'How satisfied are you with our product?',
-      ref: 'satisfaction',
-      properties: {
-        steps: 5,
-        shape: 'star'
-      }
-    },
-    {
-      type: 'long_text',
-      title: 'What could we improve?',
-      ref: 'feedback'
-    }
-  ],
-  settings: {
-    is_public: true,
-    show_progress_bar: true,
-    show_typeform_branding: false
-  }
-};
-
-const result = await runAction({
-  ActionName: 'Create Typeform',
-  Params: [
-    { Name: 'APIToken', Value: 'tfp_...' },
-    { Name: 'Title', Value: formData.title },
-    { Name: 'Fields', Value: formData.fields },
-    { Name: 'Settings', Value: formData.settings }
-  ]
-});
-
-const formUrl = result.Params.find(p => p.Name === 'FormURL').Value;
-console.log(`Form created: ${formUrl}`);
-```
-
-### Example 3: Real-Time Response Monitoring
-
-```typescript
-// Check for new responses every 5 minutes
-setInterval(async () => {
-  const result = await runAction({
-    ActionName: 'Watch for New Typeform Responses',
+// Get Typeform responses with date filtering
+const result = await engine.RunAction({
+    Action: engine.Actions.find(a => a.Name === 'Get Typeform Responses'),
     Params: [
-      { Name: 'FormID', Value: 'abc123' },
-      { Name: 'APIToken', Value: 'tfp_...' },
-      { Name: 'LastCheckedTimestamp', Value: lastChecked },
-      { Name: 'OnlyCompleted', Value: true }
-    ]
-  });
+        { Name: 'CompanyID', Type: 'Input', Value: 'company-123' },
+        { Name: 'FormID', Type: 'Input', Value: 'abc123' },
+        { Name: 'Since', Type: 'Input', Value: '2024-01-01T00:00:00Z' },
+        { Name: 'GetAllPages', Type: 'Input', Value: true }
+    ],
+    ContextUser: currentUser
+});
 
-  const newResponses = result.Params.find(p => p.Name === 'NewResponses').Value;
-  const hasNewResponses = result.Params.find(p => p.Name === 'HasNewResponses').Value;
-
-  if (hasNewResponses) {
-    // Send notifications
-    for (const response of newResponses) {
-      await sendNotification({
-        subject: 'New Form Submission',
-        body: `Received response from ${response.responseId}`,
-        data: response
-      });
-    }
-
-    // Update last checked timestamp
-    lastChecked = result.Params.find(p => p.Name === 'LastChecked').Value;
-  }
-}, 5 * 60 * 1000); // Every 5 minutes
+if (result.Success) {
+    const responses = result.Params.find(p => p.Name === 'Responses')?.Value;
+    console.log(`Retrieved ${responses.length} responses`);
+}
 ```
 
-### Example 4: Export and Analyze
+### Exporting Responses to CSV
 
 ```typescript
-// Export responses to CSV
-const exportResult = await runAction({
-  ActionName: 'Export Typeform Responses to CSV',
-  Params: [
-    { Name: 'FormID', Value: 'abc123' },
-    { Name: 'APIToken', Value: 'tfp_...' },
-    { Name: 'Since', Value: '2024-01-01T00:00:00Z' },
-    { Name: 'IncludeMetadata', Value: true }
-  ]
+const exportResult = await engine.RunAction({
+    Action: engine.Actions.find(a => a.Name === 'Export JotForm Responses to CSV'),
+    Params: [
+        { Name: 'CompanyID', Type: 'Input', Value: 'company-123' },
+        { Name: 'FormID', Type: 'Input', Value: '240123456789' },
+        { Name: 'IncludeMetadata', Type: 'Input', Value: true }
+    ],
+    ContextUser: currentUser
 });
 
-const csvData = exportResult.Params.find(p => p.Name === 'CSVData').Value;
-
-// Save to file storage
-await fs.writeFile('responses.csv', csvData);
-
-// Or get statistics
-const statsResult = await runAction({
-  ActionName: 'Get Typeform Response Statistics',
-  Params: [
-    { Name: 'FormID', Value: 'abc123' },
-    { Name: 'APIToken', Value: 'tfp_...' },
-    { Name: 'Since', Value: '2024-01-01T00:00:00Z' },
-    { Name: 'IncludeTopAnswers', Value: true }
-  ]
-});
-
-const stats = statsResult.Params.find(p => p.Name === 'Statistics').Value;
-console.log(`Completion Rate: ${stats.completionRate}%`);
-console.log(`Total Responses: ${stats.totalResponses}`);
+const csvData = exportResult.Params.find(p => p.Name === 'CSVData')?.Value;
 ```
 
----
+### Creating a Form Programmatically
+
+```typescript
+const createResult = await engine.RunAction({
+    Action: engine.Actions.find(a => a.Name === 'Create Typeform'),
+    Params: [
+        { Name: 'CompanyID', Type: 'Input', Value: 'company-123' },
+        { Name: 'Title', Type: 'Input', Value: 'Customer Feedback Survey' },
+        {
+            Name: 'Fields', Type: 'Input', Value: [
+                {
+                    type: 'short_text',
+                    title: 'What is your name?',
+                    ref: 'name'
+                },
+                {
+                    type: 'rating',
+                    title: 'How satisfied are you?',
+                    ref: 'satisfaction',
+                    properties: { steps: 5, shape: 'star' }
+                },
+                {
+                    type: 'long_text',
+                    title: 'Any additional feedback?',
+                    ref: 'feedback'
+                }
+            ]
+        }
+    ],
+    ContextUser: currentUser
+});
+
+const formUrl = createResult.Params.find(p => p.Name === 'FormURL')?.Value;
+```
+
+### Watching for New Responses
+
+```typescript
+// Poll for new SurveyMonkey responses
+const watchResult = await engine.RunAction({
+    Action: engine.Actions.find(a => a.Name === 'Watch for New SurveyMonkey Responses'),
+    Params: [
+        { Name: 'CompanyID', Type: 'Input', Value: 'company-123' },
+        { Name: 'SurveyID', Type: 'Input', Value: 'survey-456' },
+        { Name: 'LastCheckedTimestamp', Type: 'Input', Value: '2024-06-01T00:00:00Z' },
+        { Name: 'OnlyCompleted', Type: 'Input', Value: true }
+    ],
+    ContextUser: currentUser
+});
+
+const hasNew = watchResult.Params.find(p => p.Name === 'HasNewResponses')?.Value;
+const newResponses = watchResult.Params.find(p => p.Name === 'NewResponses')?.Value;
+```
+
+## File Content Processing
+
+The package includes a `FileContentProcessor` utility used by the Typeform `GetFileContentAction` to intelligently extract content from file upload answers. It supports multiple file formats:
+
+| Format | Processing | Output |
+|--------|-----------|--------|
+| PDF | Text extraction via `pdf-parse` | Plain text |
+| Excel (.xlsx, .xls) | Sheet parsing via `exceljs` | Structured JSON |
+| Word (.docx, .doc) | Text extraction via `mammoth` | Plain text |
+| Images | Base64 encoding | Base64 string (for LLM vision) |
+| Text/JSON/XML/CSV | UTF-8 decoding | Plain text |
+| Other binary | Base64 encoding | Base64 string |
 
 ## Error Handling
 
-All actions return consistent error codes:
+All actions return consistent error information through the `ActionResultSimple` interface:
 
-- `SUCCESS` - Operation completed
-- `MISSING_FORM_ID` - FormID parameter required
-- `MISSING_API_TOKEN` - APIToken parameter required
-- `MISSING_CONTEXT_USER` - Context user required
-- `ERROR` - General error (check Message for details)
+| Result Code | Description |
+|------------|-------------|
+| `SUCCESS` | Operation completed successfully |
+| `MISSING_FORM_ID` | Required FormID parameter was not provided |
+| `MISSING_API_TOKEN` | No API credentials could be resolved |
+| `MISSING_CONTEXT_USER` | Context user is required for credential lookup |
+| `ERROR` | General error (check Message for details) |
 
-Typeform-specific errors are automatically handled:
-- 401 - Invalid API token
-- 403 - Insufficient permissions
-- 404 - Form/response not found
-- 429 - Rate limit (automatic retry with backoff)
+Each provider automatically handles platform-specific HTTP errors:
 
----
+- **401** - Invalid or expired API token
+- **403** - Insufficient permissions / scope
+- **404** - Form or response not found
+- **429** - Rate limit exceeded (automatic retry with exponential backoff)
 
 ## Rate Limiting
 
-Typeform API rate limits:
-- Free plan: 100 requests/minute
-- Basic plan: 200 requests/minute
-- Plus/Business: Higher limits
+All providers include built-in rate limit handling with automatic retry:
 
-The package automatically:
-- Retries on 429 errors
-- Respects `Retry-After` headers
-- Implements exponential backoff
+- Respects `Retry-After` headers when provided
+- Falls back to 60-second wait when no header is present
+- Adds 100ms delays between pagination requests to avoid hitting limits
+- JotForm: Regional endpoints (US, EU, HIPAA) for data residency compliance
 
----
+## Dependencies
 
-## Best Practices
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/actions` | Action engine and `BaseAction` class |
+| `@memberjunction/actions-base` | `ActionParam` types and base interfaces |
+| `@memberjunction/core` | `RunView`, `Metadata`, `UserInfo`, logging |
+| `@memberjunction/core-entities` | `CompanyIntegrationEntity` for credential lookup |
+| `@memberjunction/global` | `@RegisterClass` decorator |
+| `axios` | HTTP client for all provider API calls |
+| `exceljs` | Excel file parsing in `FileContentProcessor` |
+| `mammoth` | Word document text extraction |
+| `pdf-parse` | PDF text extraction |
 
-### 1. Use GetAllPages Wisely
-Only use `GetAllPages=true` when you need complete data. For large forms, consider:
-- Date range filtering (`Since`/`Until`)
-- Limiting with `MaxResponses`
-- Pagination with `After`/`Before` tokens
+## Related Packages
 
-### 2. Cache Form Details
-Form structure changes infrequently. Cache the result of `Get Typeform Details` to avoid unnecessary API calls.
+- [@memberjunction/actions](../../Engine/readme.md) - Action execution engine
+- [@memberjunction/actions-base](../../Base/README.md) - Base classes and interfaces
+- [@memberjunction/core-actions](../../CoreActions/readme.md) - Pre-built core actions
+- [@memberjunction/actions-bizapps-accounting](../Accounting/README.md) - Accounting integrations
+- [@memberjunction/actions-bizapps-lms](../LMS/README.md) - LMS integrations
+- [@memberjunction/actions-bizapps-crm](../CRM/README.md) - CRM integrations
 
-### 3. Update Forms Safely
-Always use `MergeWithExisting=true` when updating forms unless you're intentionally replacing the entire form.
+## Adding a New Provider
 
-### 4. Monitor in Batches
-When watching for new responses, use reasonable poll intervals:
-- High-traffic forms: 1-5 minutes
-- Low-traffic forms: 15-60 minutes
-
-### 5. Export in Chunks
-For large datasets, export responses in date ranges rather than all at once.
-
----
-
-## Contributing
-
-To add a new form platform:
+To integrate a new form/survey platform:
 
 1. Create provider directory: `src/providers/{platform}/`
-2. Extend `BaseFormBuilderAction`
-3. Implement platform-specific API client
-4. Create actions for common operations
-5. Add tests
-6. Update this README
-
----
-
-## License
-
-ISC
-
----
-
-## Support
-
-- Documentation: https://docs.memberjunction.com
-- GitHub Issues: https://github.com/MemberJunction/MJ/issues
-- Typeform API Docs: https://developer.typeform.com
+2. Implement a provider base class extending `BaseFormBuilderAction` with:
+   - `formPlatform` and `integrationName` properties
+   - Axios instance with authentication and rate limit interceptors
+   - API client methods for the provider's endpoints
+   - Response normalization to the shared `FormResponse` interface
+   - Provider-specific error handling
+3. Create individual action classes in `src/providers/{platform}/actions/`
+4. Export all classes from `src/providers/{platform}/index.ts`
+5. Add the provider export to `src/index.ts`

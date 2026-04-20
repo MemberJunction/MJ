@@ -1,0 +1,154 @@
+.connection-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.error-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-status-error);
+    border-radius: 6px;
+    color: var(--mj-status-error);
+    font-size: 14px;
+}
+
+.form-section {
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.form-section h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.form-section h3 i {
+    color: var(--mj-brand-primary);
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--mj-text-primary);
+}
+
+.form-group label .required {
+    color: var(--mj-status-error);
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+}
+
+.form-group .hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--mj-text-disabled);
+}
+
+.form-group .error-text {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--mj-status-error);
+}
+
+.server-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.server-name {
+    font-weight: 500;
+}
+
+.server-transport {
+    font-size: 12px;
+    color: var(--mj-text-muted);
+    padding: 2px 8px;
+    background: var(--mj-bg-surface-card);
+    border-radius: 4px;
+}
+
+.loading-credentials {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--mj-bg-surface-card);
+    border-radius: 6px;
+    color: var(--mj-text-muted);
+    font-size: 14px;
+}
+
+.credential-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.credential-row button {
+    white-space: nowrap;
+}
+
+.checkbox-group {
+    margin-bottom: 12px;
+}
+
+.checkbox-group:last-child {
+    margin-bottom: 0;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.checkbox-group .hint {
+    display: block;
+    margin-top: 4px;
+    margin-left: 24px;
+    font-size: 12px;
+    color: var(--mj-text-disabled);
+}
+
+.logging-options {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--mj-bg-surface-card);
+    border-radius: 6px;
+    transition: opacity 0.2s ease;
+}
+
+.logging-options.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+

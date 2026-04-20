@@ -187,10 +187,3 @@ export class ExportJotFormCSVAction extends JotFormBaseAction {
         ];
     }
 }
-
-/**
- * Load function to prevent tree shaking
- */
-export function LoadExportJotFormCSVAction(): void {
-    // Empty function to create static code path and prevent tree shaking
-}

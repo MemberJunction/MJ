@@ -1,0 +1,365 @@
+<mj-slide-panel
+  [Mode]="'slide'"
+  [Title]="'Record Changes History'"
+  [Visible]="IsVisible"
+  [Resizable]="true"
+  [MinWidthPx]="400"
+  [MaxWidthRatio]="0.6"
+  (Closed)="OnClose()">
+
+  @if (IsLoading) {
+    <mj-loading text="Loading history..." size="medium"></mj-loading>
+  }
+
+  @if (!IsLoading) {
+    <div class="rc-container">
+      <!-- Version Labels Section -->
+      <div class="rc-labels-section">
+        <div class="rc-labels-header">
+          <div class="rc-labels-title">
+            <i class="fa-solid fa-tags" aria-hidden="true"></i>
+            <span>Version Labels</span>
+            @if (RecordLabels.length > 0) {
+              <span class="rc-labels-count">{{ RecordLabels.length }}</span>
+            }
+          </div>
+          <button class="rc-create-label-btn" (click)="OpenCreateWizard()" title="Create a version label for this record">
+            <i class="fa-solid fa-plus"></i> Create Label
+          </button>
+        </div>
+        @if (IsLoadingLabels) {
+          <div class="rc-labels-loading">
+            <i class="fa-solid fa-spinner fa-spin"></i> Loading labels...
+          </div>
+        } @else if (RecordLabels.length === 0) {
+          <div class="rc-labels-empty">
+            No version labels for this record yet.
+          </div>
+        } @else {
+          <div class="rc-labels-list">
+            @for (label of RecordLabels; track label.ID) {
+              <div class="rc-label-chip" [title]="label.Description || label.Name">
+                <i class="fa-solid fa-tag rc-label-chip-icon"></i>
+                <span class="rc-label-chip-name">{{ label.Name }}</span>
+                <span class="rc-label-chip-meta">
+                  <span class="rc-label-chip-status" [class]="getLabelStatusClass(label.Status)">{{ label.Status }}</span>
+                  <span class="rc-label-chip-items">{{ label.ItemCount }} item{{ label.ItemCount !== 1 ? 's' : '' }}</span>
+                </span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      @if (viewData.length === 0) {
+        <!-- Empty state -->
+        <div class="rc-empty-state">
+          <div class="rc-empty-state-icon">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+          </div>
+          <h3 class="rc-empty-state-title">No Change History</h3>
+          <p class="rc-empty-state-description">
+            This record doesn't have any tracked changes yet.
+            Changes will appear here automatically as edits are made.
+          </p>
+          <div class="rc-empty-state-hint">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Record change tracking is managed at the entity level</span>
+          </div>
+        </div>
+      } @else {
+        <!-- Page Header -->
+        <div class="rc-page-header">
+          <div>
+            <h2 class="rc-page-title">Change History</h2>
+            <div class="rc-page-subtitle">{{ record.EntityInfo.Name }}</div>
+          </div>
+          <div class="rc-header-meta">
+            <div class="rc-entity-badge">
+              <i class="fa-solid fa-database" aria-hidden="true"></i>
+              {{ record.EntityInfo.Name }}
+            </div>
+            <div class="rc-change-count">{{ viewData.length }} change{{ viewData.length !== 1 ? 's' : '' }} &middot; {{ getUniqueContributorCount() }} contributor{{ getUniqueContributorCount() !== 1 ? 's' : '' }}</div>
+          </div>
+        </div>
+
+        <!-- Filter Bar — chips render only for change types/sources actually present in loaded data.
+             When more than 2 conditional chips would render, they collapse into a "More filters" popover. -->
+        <div class="rc-filter-bar">
+          <div class="rc-search-wrap">
+            <i class="fa-solid fa-search" aria-hidden="true"></i>
+            <input
+              class="rc-search-box"
+              type="text"
+              placeholder="Search changes..."
+              [(ngModel)]="searchTerm"
+              (input)="onSearchChange()"
+              aria-label="Search record changes"
+            />
+          </div>
+
+          <button class="rc-filter-pill" [class.active]="IsAllSelected" (click)="SelectAllPill()" type="button">
+            <i class="fa-solid fa-layer-group" aria-hidden="true"></i> All
+          </button>
+
+          @if (HasConditionalPills) {
+            @if (!UseOverflowPopover) {
+              <!-- 1-2 conditional pills: render inline -->
+              @for (pill of ConditionalPills; track pill.Key) {
+                <button class="rc-filter-pill"
+                  [class.active]="ChipSelections[pill.Key]"
+                  [class.rc-filter-pill-restore]="pill.Variant === 'restore'"
+                  (click)="TogglePill(pill.Key)"
+                  type="button">
+                  <i class="fa-solid {{ pill.Icon }}" aria-hidden="true"></i>
+                  {{ pill.Label }}
+                  <span class="rc-filter-pill-count">{{ pill.Count }}</span>
+                </button>
+              }
+            } @else {
+              <!-- 3+ conditional pills: overflow popover -->
+              <div class="rc-filter-overflow-wrap">
+                <button class="rc-filter-pill rc-filter-pill-overflow"
+                  [class.active]="SelectedConditionalCount > 0"
+                  (click)="ToggleFilterOverflow()"
+                  type="button">
+                  <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                  More filters
+                  @if (SelectedConditionalCount > 0) {
+                    <span class="rc-filter-pill-count">{{ SelectedConditionalCount }}</span>
+                  }
+                  <i class="fa-solid fa-chevron-down rc-filter-overflow-caret" aria-hidden="true"></i>
+                </button>
+
+                @if (ShowFilterOverflow) {
+                  <!-- Backdrop: clicks close the popover -->
+                  <div class="rc-filter-overflow-backdrop" (click)="CloseFilterOverflow()"></div>
+                  <div class="rc-filter-overflow-popover" role="menu">
+                    <div class="rc-filter-overflow-header">Filter by</div>
+                    @for (pill of ConditionalPills; track pill.Key) {
+                      <label class="rc-filter-overflow-row" [class.rc-filter-overflow-row-restore]="pill.Variant === 'restore'">
+                        <input type="checkbox"
+                          [checked]="ChipSelections[pill.Key]"
+                          (change)="TogglePill(pill.Key)" />
+                        <i class="fa-solid {{ pill.Icon }}" aria-hidden="true"></i>
+                        <span class="rc-filter-overflow-label">{{ pill.Label }}</span>
+                        <span class="rc-filter-overflow-count">{{ pill.Count }}</span>
+                      </label>
+                    }
+                    <div class="rc-filter-overflow-actions">
+                      <button class="rc-filter-overflow-clear" (click)="SelectAllPill(); CloseFilterOverflow()" type="button">
+                        Clear all
+                      </button>
+                      <button class="rc-filter-overflow-done" (click)="CloseFilterOverflow()" type="button">
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+
+        @if (filteredData.length !== viewData.length) {
+          <div class="rc-filter-results">
+            Showing {{ filteredData.length }} of {{ viewData.length }} changes
+            <button class="rc-clear-filters-link" (click)="ClearFilters()">Clear filters</button>
+          </div>
+        }
+
+        <!-- Timeline -->
+        <div class="rc-timeline" [attr.aria-label]="'Timeline of changes for ' + record.EntityInfo.Name + ' record'">
+          @if (filteredData.length === 0) {
+            <div class="rc-no-results">
+              <i class="fa-solid fa-filter" aria-hidden="true"></i>
+              <p>No changes match your current filters.</p>
+              <button class="rc-clear-filters-btn" (click)="ClearFilters()">
+                <i class="fa-solid fa-xmark"></i> Clear Filters
+              </button>
+            </div>
+          } @else {
+            @for (group of dateGroups; track group.label) {
+              <div class="rc-date-group">
+                <div class="rc-date-label">{{ group.label }}</div>
+
+                @for (change of group.changes; track change.ID) {
+                  <div
+                    class="rc-card"
+                    [attr.data-change-id]="change.ID"
+                    [class]="getChangeTypeCardClass(change.Type)"
+                    [class.expanded]="expandedItems.has(change.ID)"
+                    [class.rc-card-restore]="isRestoreRow(change)"
+                    [class.rc-card-highlight]="HighlightedChangeID === change.ID"
+                    [attr.tabindex]="0"
+                    [attr.aria-expanded]="expandedItems.has(change.ID)"
+                    [attr.aria-label]="getTimelineItemLabel(change)"
+                    (keydown)="onTimelineItemKeydown($event, change.ID)"
+                  >
+                    <!-- Card Header -->
+                    <div class="rc-card-header" (click)="toggleExpansion(change.ID)">
+                      <div class="rc-card-header-left">
+                        <span class="rc-card-type-badge"
+                              [class.rc-card-type-badge-restore]="isRestoreRow(change)">{{ getEffectiveBadgeText(change) }}</span>
+                        <span class="rc-card-summary">{{ getChangeSummary(change) }}</span>
+
+                        <!-- Lineage chip — visible when this row was produced by a restore -->
+                        @if (isRestoreRow(change)) {
+                          @if (getRestoredFromSourceChange(change); as srcChange) {
+                            <a class="rc-restored-chip"
+                              (click)="JumpToSourceChange(srcChange, $event)"
+                              [title]="'Jump to source version (' + formatFullDateTime(srcChange.ChangedAt) + ')'">
+                              <i class="fa-solid fa-link" aria-hidden="true"></i>
+                              Restored from {{ formatTime(srcChange.ChangedAt) }} {{ srcChange.ChangedAt ? 'on ' + (srcChange.ChangedAt | date:'mediumDate') : '' }}
+                              @if (srcChange.User) {
+                                by {{ getUserDisplayName(srcChange.User) }}
+                              }
+                            </a>
+                          } @else {
+                            <span class="rc-restored-chip rc-restored-chip-orphan"
+                              title="Source version was not loaded into this view">
+                              <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                              Restored from earlier version
+                            </span>
+                          }
+                        }
+                      </div>
+                      <div class="rc-card-meta">
+                        <div class="rc-card-user">
+                          <div class="rc-avatar">{{ getUserInitials(change.User) }}</div>
+                          {{ getUserDisplayName(change.User) }}
+                        </div>
+                        <span class="rc-card-time" [title]="formatFullDateTime(change.ChangedAt)">{{ formatTime(change.ChangedAt) }}</span>
+                        <span class="rc-card-source" [class]="getSourceClass(change.Source)">{{ change.Source }}</span>
+                        <span class="rc-card-status" [class]="getStatusClass(change.Status)">{{ change.Status }}</span>
+                        <i class="fa-solid fa-chevron-down rc-card-chevron" aria-hidden="true"></i>
+                      </div>
+                    </div>
+
+                    <!-- Card Body (expanded) -->
+                    @if (expandedItems.has(change.ID)) {
+                      <div class="rc-card-body">
+                        <!-- Restore reason (when present) — Notion/Linear-style
+                             blockquote: a thin violet left bar + italic text,
+                             with a tiny "Reason" prefix. No box, no header,
+                             no large vertical footprint. Reads as a
+                             justification note rather than a callout. -->
+                        @if (getRestoreReason(change); as reason) {
+                          <blockquote class="rc-restore-reason">
+                            <span class="rc-restore-reason-label">Reason</span>
+                            <span class="rc-restore-reason-text">{{ reason }}</span>
+                          </blockquote>
+                        }
+
+                        @if (change.Type === 'Create') {
+                          @if (change.FullRecordJSON) {
+                            @for (field of getCreatedFields(change); track field.name) {
+                              <div class="rc-field-row">
+                                <div class="rc-field-label">{{ field.displayName }}</div>
+                                <div class="rc-field-values">
+                                  <span class="rc-val-new">{{ field.value }}</span>
+                                </div>
+                              </div>
+                            }
+                          }
+                        } @else if (change.Type === 'Delete') {
+                          <div class="rc-deletion-note">
+                            <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                            This record was permanently removed from the system.
+                          </div>
+                        } @else {
+                          <!-- Update / Snapshot / Restore: type-aware field changes -->
+                          @for (fc of getFieldChanges(change); track fc.field) {
+                            <div class="rc-field-row">
+                              <div class="rc-field-label">{{ fc.displayName }}</div>
+                              <div class="rc-field-values">
+                                @if (fc.fieldType === 'boolean') {
+                                  <div class="rc-bool-change">
+                                    <span class="rc-bool-dot" [class.on]="fc.oldValue === 'true' || fc.oldValue === '1'" [class.off]="fc.oldValue !== 'true' && fc.oldValue !== '1'"></span>
+                                    <span class="rc-bool-label old">{{ fc.oldValue === 'true' || fc.oldValue === '1' ? 'Yes' : 'No' }}</span>
+                                    <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                                    <span class="rc-bool-dot" [class.on]="fc.newValue === 'true' || fc.newValue === '1'" [class.off]="fc.newValue !== 'true' && fc.newValue !== '1'"></span>
+                                    <span class="rc-bool-label new" [class.active]="fc.newValue === 'true' || fc.newValue === '1'" [class.inactive]="fc.newValue !== 'true' && fc.newValue !== '1'">{{ fc.newValue === 'true' || fc.newValue === '1' ? 'Yes' : 'No' }}</span>
+                                  </div>
+                                } @else if (fc.fieldType === 'date' || fc.fieldType === 'number') {
+                                  <div class="rc-atomic-change">
+                                    <span class="rc-val-old">{{ fc.oldValue || '(empty)' }}</span>
+                                    <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                                    <span class="rc-val-new">{{ fc.newValue || '(empty)' }}</span>
+                                  </div>
+                                } @else if (fc.diffHtml) {
+                                  <div class="rc-text-diff" [innerHTML]="fc.diffHtml"></div>
+                                } @else {
+                                  <div class="rc-atomic-change">
+                                    <span class="rc-val-old">{{ fc.oldValue || '(empty)' }}</span>
+                                    <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                                    <span class="rc-val-new">{{ fc.newValue || '(empty)' }}</span>
+                                  </div>
+                                }
+                              </div>
+                            </div>
+                          }
+                        }
+
+                        @if (change.Comments) {
+                          <div class="rc-comments">
+                            <i class="fa-solid fa-comment" aria-hidden="true"></i>
+                            {{ change.Comments }}
+                          </div>
+                        }
+
+                        @if (change.ErrorLog) {
+                          <div class="rc-errors">
+                            <i class="fa-solid fa-exclamation-triangle" aria-hidden="true"></i>
+                            <pre class="rc-error-log">{{ change.ErrorLog }}</pre>
+                          </div>
+                        }
+
+                        <!-- Restore action: shown for Update, Create, and Snapshot rows.
+                             Hidden on Delete rows (handled via the Recycle Bin path)
+                             and on the most recent change (restoring to current state is a no-op). -->
+                        @if (AllowRestore && change.Type !== 'Delete' && !isMostRecentChange(change)) {
+                          <div class="rc-restore-action">
+                            <button class="rc-restore-btn"
+                              (click)="OnRestoreVersion(change, $event)"
+                              title="Restore the entire record to its state at this version">
+                              <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                              Restore record to this version
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Restore preview slide-in (reusable component) -->
+  <mj-restore-preview-panel
+    [Visible]="RestorePreviewVisible"
+    [Mode]="'live'"
+    [RecordChange]="RestorePreviewChange"
+    [LiveRecord]="record"
+    (RestoreConfirmed)="OnRestorePanelConfirmed($event)"
+    (RestoreCancelled)="OnRestorePanelCancelled()">
+  </mj-restore-preview-panel>
+
+  @if (ShowCreateWizard) {
+    <div class="rc-wizard-overlay" (click)="OnLabelCreateCancelled()">
+      <div class="rc-wizard-container" (click)="$event.stopPropagation()">
+        <mj-label-create
+          [PreselectedEntity]="record.EntityInfo"
+          [PreselectedRecordIds]="[record.PrimaryKey.KeyValuePairs[0].Value]"
+          (Created)="OnLabelCreated($event)"
+          (Cancel)="OnLabelCreateCancelled()">
+        </mj-label-create>
+      </div>
+    </div>
+  }
+</mj-slide-panel>

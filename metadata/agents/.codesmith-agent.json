@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Codesmith Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
       "Description": "Expert code generator and executor for data analysis and transformations. Generates JavaScript code, tests it in a secure sandbox, and iteratively refines it until successful. Supports lodash, date-fns, mathjs, papaparse, uuid, and validator libraries. Perfect for data manipulation, calculations, and analysis tasks.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -19,7 +20,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Codesmith Agent Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Codesmith Agent Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -27,53 +28,25 @@
             "ID": "C2854FC4-5A06-4A9A-A6A8-E0DB10175DB7"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.871Z",
-            "checksum": "eee48159a5e01a6573678e03dced15bda27c6ce8e73f6f7d37648038a3bc0070"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.PromptID",
-              "expression": "@lookup:AI Prompts.Name=Codesmith Agent Prompt",
-              "resolved": "A948FDCD-CB38-49EA-8480-6CC8AAFC0BE8"
-            }
-          ]
+            "lastModified": "2026-02-13T21:09:23.184Z",
+            "checksum": "ee6f0817772feab800e6ade74167b8dd2fa6412381db7ea2a33dbc29a2b951cd"
+          }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Execute Code",
+            "ActionID": "@lookup:MJ: Actions.Name=Execute Code",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "A67BA225-1F18-4FBA-976A-67762319074E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.873Z",
-            "checksum": "0cc749ba8ac80e0804109db9bd315c0f0079001dcd341c4386f77b157eb188b0"
-          },
-          "__mj_sync_notes": [
-            {
-              "type": "parent",
-              "field": "fields.AgentID",
-              "expression": "@parent:ID",
-              "resolved": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
-            },
-            {
-              "type": "lookup",
-              "field": "fields.ActionID",
-              "expression": "@lookup:Actions.Name=Execute Code",
-              "resolved": "F3BA81B8-1D89-4B13-A417-B32D8E8A6F88"
-            }
-          ]
+            "lastModified": "2026-02-13T21:09:23.186Z",
+            "checksum": "728665075513a2b2b42c677ccfc9512cd6af3dd5a4b4818ef19b620a19bdd98f"
+          }
         }
       ]
     },
@@ -81,16 +54,8 @@
       "ID": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:34.847Z",
-      "checksum": "2d8fdcb5f5a92ccfbc5f86ab07f185714d6a25dada9155b21e8cd64fad196ba5"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.TypeID",
-        "expression": "@lookup:MJ: AI Agent Types.Name=Loop",
-        "resolved": "F7926101-5099-4FA5-836A-479D9707C818"
-      }
-    ]
+      "lastModified": "2026-03-13T19:10:49.055Z",
+      "checksum": "d556108b87971a2c734cd948927820e1b9b7a793b4cc65fc47d85daa033637e9"
+    }
   }
 ]

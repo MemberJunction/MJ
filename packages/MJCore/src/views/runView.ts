@@ -1,102 +1,138 @@
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
+import { PlatformSQL, IsPlatformSQL } from '../generic/platformSQL';
+import type { CacheChangedEvent } from '../generic/localCacheManager';
 
 /**
- * Parameters for running either a stored or dynamic view. 
- * A stored view is a view that is saved in the database and can be run either by ID or Name. 
- * A dynamic view is one that is not stored in the database and you provide parameters to return data as 
- * desired programatically.
+ * Single aggregate expression to compute alongside the main view query.
+ * Aggregates run in parallel with the row data query and are NOT affected by pagination.
  */
-export type RunViewParams = {
+export interface AggregateExpression {
+    /**
+     * SQL expression for the aggregate.
+     * Examples:
+     *   - "SUM(OrderTotal)"
+     *   - "AVG(Price)"
+     *   - "COUNT(*)"
+     *   - "MAX(CreatedAt)"
+     *   - "SUM(Quantity * Price * (1 - Discount/100))"
+     */
+    expression: string;
+
+    /**
+     * Optional alias for the result (used in error messages and debugging).
+     * If not provided, defaults to the expression itself.
+     */
+    alias?: string;
+}
+
+/**
+ * Parameters for running either a stored or dynamic view.
+ * A stored view is a view that is saved in the database and can be run either by ID or Name.
+ * A dynamic view is one that is not stored in the database and you provide parameters to return data as
+ * desired programatically.
+ *
+ * This class is fully backward compatible with object literal syntax - you can still use:
+ * `{ EntityName: 'Users', ExtraFilter: 'Active=1' }` and it will work as expected.
+ */
+export class RunViewParams {
     /**
      * optional - ID of the UserView record to run, if provided, ViewName is ignored
      */
-    ViewID?: string
+    ViewID?: string;
     /**
-     * optional - Name of the UserView record to run, if you are using this, make sure to use a naming convention 
-     * so that your view names are unique. For example use a prefix like __Entity_View_ etc so that you're 
-     * likely to have a single result. If more than one view is available that matches a provided view name an 
+     * optional - Name of the UserView record to run, if you are using this, make sure to use a naming convention
+     * so that your view names are unique. For example use a prefix like __Entity_View_ etc so that you're
+     * likely to have a single result. If more than one view is available that matches a provided view name an
      * exception will be thrown.
      */
-    ViewName?: string
+    ViewName?: string;
     /**
-     * optional - this is the loaded instance of the BaseEntity (UserViewEntityComplete or a subclass of it). 
-     * This is the preferred parameter to use IF you already have a view entity object loaded up in your code 
+     * optional - this is the loaded instance of the BaseEntity (UserViewEntityComplete or a subclass of it).
+     * This is the preferred parameter to use IF you already have a view entity object loaded up in your code
      * becuase by passing this in, the RunView() method doesn't have to lookup all the metadata for the view and it is faster.
      * If you provide ViewEntity, ViewID/ViewName are ignored.
      */
-    ViewEntity?: BaseEntity
+    ViewEntity?: BaseEntity;
     /**
-     * optional - this is only used if ViewID/ViewName/ViewEntity are not provided, it is used for 
+     * optional - this is only used if ViewID/ViewName/ViewEntity are not provided, it is used for
      * Dynamic Views in combination with the optional ExtraFilter
      */
-    EntityName?: string
+    EntityName?: string;
     /**
-     * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either 
+     * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either
      * run a view without a filter (if the entity definition allows it with AllowAllRowsAPI=1) or filter with any valid SQL WHERE clause.
+     *
+     * Accepts either a plain string (backward compatible) or a PlatformSQL object for multi-platform support.
+     * When a PlatformSQL object is provided, the appropriate platform-specific SQL is resolved automatically
+     * before the query is executed.
      */
-    ExtraFilter?: string
+    ExtraFilter?: string | PlatformSQL;
     /**
      * An optional SQL ORDER BY clause that you can use for dynamic views, as well as to OVERRIDE the stored view's sorting order.
+     *
+     * Accepts either a plain string (backward compatible) or a PlatformSQL object for multi-platform support.
+     * When a PlatformSQL object is provided, the appropriate platform-specific SQL is resolved automatically
+     * before the query is executed.
      */
-    OrderBy?: string
+    OrderBy?: string | PlatformSQL;
     /**
      * An optional array of field names that you want returned. The RunView() function will always return ID so you don't need to ask for that. If you leave this null then
      * for a dynamic view all fields are returned, and for stored views, the fields stored in it view configuration are returned.
       */
-    Fields?: string[]
+    Fields?: string[];
     /**
      * optional - string that represents a user "search" - typically from a text search option in a UI somewhere. This field is then used in the view filtering to search whichever fields are configured to be included in search in the Entity Fields definition.
-     * Search String is combined with the stored view filters as well as ExtraFilter with an AND. 
+     * Search String is combined with the stored view filters as well as ExtraFilter with an AND.
      */
-    UserSearchString?: string
+    UserSearchString?: string;
     /**
-     * optional - if provided, records that were returned in the specified UserViewRunID will NOT be allowed in the result set. 
+     * optional - if provided, records that were returned in the specified UserViewRunID will NOT be allowed in the result set.
      * This is useful if you want to run a particular view over time and exclude a specific prior run's resulting data set. If you
      * want to exclude ALL data returned from ALL prior runs, use the ExcludeDataFromAllPriorViewRuns property instead.
      */
-    ExcludeUserViewRunID?: string
+    ExcludeUserViewRunID?: string;
     /**
      * optional - if set to true, the resulting data will filter out ANY records that were ever returned by this view, when the SaveViewResults property was set to true.
      * This is useful if you want to run a particular view over time and make sure the results returned each time are new to the view.
      */
-    ExcludeDataFromAllPriorViewRuns?: boolean
+    ExcludeDataFromAllPriorViewRuns?: boolean;
     /**
-     * optional - if you are providing the optional ExcludeUserViewRunID property, you can also optionally provide 
+     * optional - if you are providing the optional ExcludeUserViewRunID property, you can also optionally provide
      * this filter which will negate the specific list of record IDs that are excluded by the ExcludeUserViewRunID property.
      * This can be useful if you want to ensure a certain class of data is always allowed into your view and not filtered out
      * by a prior view run.
-     * 
+     *
      */
-    OverrideExcludeFilter?: string
+    OverrideExcludeFilter?: string;
     /**
      * optional - if set to true, the LIST OF ID values from the view run will be stored in the User View Runs entity and the
      * newly created UserViewRun.ID value will be returned in the RunViewResult that the RunView() function sends back to ya.
      */
-    SaveViewResults?: boolean
+    SaveViewResults?: boolean;
     /**
      * optional - if set to true, if there IS any UserViewMaxRows property set for the entity in question, it will be IGNORED. This is useful in scenarios where you
      * want to programmatically run a view and get ALL the data back, regardless of the MaxRows setting on the entity.
      */
-    IgnoreMaxRows?: boolean
+    IgnoreMaxRows?: boolean;
     /**
      * optional - if provided, and if IgnoreMaxRows = false, this value will be used to constrain the total # of rows returned by the view. If this is not provided, either the default settings at the entity-level will be used, or if the entity has no UserViewMaxRows setting, all rows will be returned that match any filter, if provided.
      */
-    MaxRows?: number
+    MaxRows?: number;
     /**
-     * optional - if provided, this value will be used to offset the rows returned. 
+     * optional - if provided, this value will be used to offset the rows returned.
      */
-    StartRow?: number
+    StartRow?: number;
     /**
      * optional - if set to true, the view run will ALWAYS be logged to the Audit Log, regardless of the entity's property settings for logging view runs.
      */
-    ForceAuditLog?: boolean
+    ForceAuditLog?: boolean;
     /**
      * optional - if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.
      */
-    AuditLogDescription?: string
+    AuditLogDescription?: string;
 
     /**
      * Result Type is: 'simple', 'entity_object', or 'count_only' and defaults to 'simple'. If 'entity_object' is specified, the Results[] array will contain
@@ -127,11 +163,163 @@ export type RunViewParams = {
     CacheLocal?: boolean;
 
     /**
+     * When set to true, bypasses ALL server-side caching — both the PreRunView cache
+     * check and the post-query auto-cache storage. The query always hits the database
+     * and the result is NOT stored in the cache.
+     *
+     * Use this for maintenance/audit operations that need to see the true database state,
+     * especially when querying for records that were inserted via direct SQL (bypassing
+     * BaseEntity.Save() and its cache invalidation events).
+     *
+     * @default false
+     */
+    BypassCache?: boolean;
+
+    /**
      * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
      * After this time, cached results will be considered stale and fresh data will be fetched.
      * If not specified, the LocalCacheManager's default TTL will be used (typically 5 minutes).
      */
     CacheLocalTTL?: number;
+
+    /**
+     * Optional aggregate expressions to calculate on the full result set.
+     * These run as a parallel query and are NOT affected by pagination (StartRow/MaxRows).
+     * The WHERE clause (including filters and RLS) IS applied to aggregates.
+     *
+     * Results are returned in AggregateResults in the same order as this array.
+     *
+     * @example
+     * ```typescript
+     * params.Aggregates = [
+     *   { expression: 'SUM(OrderTotal)', alias: 'TotalRevenue' },
+     *   { expression: 'COUNT(*)', alias: 'OrderCount' },
+     *   { expression: 'AVG(OrderTotal)', alias: 'AverageOrder' },
+     *   { expression: 'MAX(OrderDate)', alias: 'LatestOrder' }
+     * ];
+     * ```
+     */
+    Aggregates?: AggregateExpression[];
+
+    /**
+     * Optional callback invoked when the cached result set for this exact query
+     * fingerprint is updated by another server instance (via Redis pub/sub).
+     *
+     * Use this to react to cross-server cache invalidation — for example, to reload
+     * data in an engine's in-memory array, refresh a UI grid, or trigger a re-fetch.
+     *
+     * **Requirements:**
+     * - A `RedisLocalStorageProvider` must be configured as the local storage provider
+     * - `RedisLocalStorageProvider.StartListening()` must have been called to enable pub/sub
+     * - Has no effect with `InMemoryLocalStorageProvider` (single-server, no pub/sub)
+     *
+     * **Lifecycle:** If the caller is short-lived (e.g., an Angular component), call
+     * `result.Unsubscribe()` during cleanup (e.g., `ngOnDestroy`) to avoid memory leaks.
+     * For long-lived callers like engines, the callback persists for the process lifetime.
+     *
+     * @example
+     * ```typescript
+     * const result = await rv.RunView<AIModelEntity>({
+     *     EntityName: 'AI Models',
+     *     ResultType: 'entity_object',
+     *     OnDataChanged: (event) => {
+     *         console.log(`AI Models cache updated by server ${event.SourceServerId}`);
+     *         this.reloadModels();
+     *     }
+     * });
+     *
+     * // Later, to stop listening:
+     * result.Unsubscribe?.();
+     * ```
+     */
+    OnDataChanged?: (event: CacheChangedEvent) => void;
+
+    /**
+     * Compares two RunViewParams objects for equality by comparing their property values.
+     * This is useful for determining if params have actually changed vs just being a new object reference.
+     * Note: ViewEntity comparison uses reference equality since comparing loaded entity objects deeply is expensive.
+     * @param a First RunViewParams object (can be null)
+     * @param b Second RunViewParams object (can be null)
+     * @returns true if the params are equivalent, false otherwise
+     */
+    public static Equals(a: RunViewParams | null | undefined, b: RunViewParams | null | undefined): boolean {
+        // Handle null/undefined cases
+        if (a === b) return true; // Same reference or both null/undefined
+        if (!a || !b) return false; // One is null/undefined, the other isn't
+
+        // Compare simple string/number/boolean properties
+        if (a.ViewID !== b.ViewID) return false;
+        if (a.ViewName !== b.ViewName) return false;
+        if (a.EntityName !== b.EntityName) return false;
+        if (!RunViewParams.platformSQLEqual(a.ExtraFilter, b.ExtraFilter)) return false;
+        if (!RunViewParams.platformSQLEqual(a.OrderBy, b.OrderBy)) return false;
+        if (a.UserSearchString !== b.UserSearchString) return false;
+        if (a.ExcludeUserViewRunID !== b.ExcludeUserViewRunID) return false;
+        if (a.ExcludeDataFromAllPriorViewRuns !== b.ExcludeDataFromAllPriorViewRuns) return false;
+        if (a.OverrideExcludeFilter !== b.OverrideExcludeFilter) return false;
+        if (a.SaveViewResults !== b.SaveViewResults) return false;
+        if (a.IgnoreMaxRows !== b.IgnoreMaxRows) return false;
+        if (a.MaxRows !== b.MaxRows) return false;
+        if (a.StartRow !== b.StartRow) return false;
+        if (a.ForceAuditLog !== b.ForceAuditLog) return false;
+        if (a.AuditLogDescription !== b.AuditLogDescription) return false;
+        if (a.ResultType !== b.ResultType) return false;
+        if (a.CacheLocal !== b.CacheLocal) return false;
+        if (a.CacheLocalTTL !== b.CacheLocalTTL) return false;
+
+        // Compare ViewEntity by reference (deep comparison would be expensive)
+        if (a.ViewEntity !== b.ViewEntity) return false;
+
+        // Compare Fields array
+        if (!RunViewParams.arraysEqual(a.Fields, b.Fields)) return false;
+
+        // Compare Aggregates array
+        if (!RunViewParams.aggregatesEqual(a.Aggregates, b.Aggregates)) return false;
+
+        return true;
+    }
+
+    /**
+     * Helper method to compare two string arrays for equality
+     */
+    private static arraysEqual(a: string[] | undefined, b: string[] | undefined): boolean {
+        if (a === b) return true; // Same reference or both undefined
+        if (!a || !b) return false; // One is undefined, the other isn't
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Helper method to compare two AggregateExpression arrays for equality
+     */
+    private static aggregatesEqual(a: AggregateExpression[] | undefined, b: AggregateExpression[] | undefined): boolean {
+        if (a === b) return true; // Same reference or both undefined
+        if (!a || !b) return false; // One is undefined, the other isn't
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (a[i].expression !== b[i].expression) return false;
+            if (a[i].alias !== b[i].alias) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Helper method to compare two string | PlatformSQL values for equality.
+     * Handles both plain string and PlatformSQL object comparisons.
+     */
+    private static platformSQLEqual(a: string | PlatformSQL | undefined, b: string | PlatformSQL | undefined): boolean {
+        if (a === b) return true; // Same reference, or both undefined, or same string
+        if (a == null || b == null) return false;
+        // Both are strings — already covered by === above (would have returned true)
+        if (typeof a === 'string' || typeof b === 'string') return false;
+        // Both are PlatformSQL objects
+        return a.default === b.default
+            && a.sqlserver === b.sqlserver
+            && a.postgresql === b.postgresql;
+    }
 } 
 
 /**
@@ -149,6 +337,18 @@ export class RunView  {
     constructor(Provider: IRunViewProvider | null = null) {
         if (Provider)
             this._provider = Provider;
+    }
+
+    /**
+     * Creates a RunView instance from an IMetadataProvider. At runtime the provider object
+     * (ProviderBase) implements both IMetadataProvider and IRunViewProvider, but TypeScript
+     * doesn't know that statically. This factory centralizes the cast so callers don't need
+     * their own helper methods.
+     * @param provider An IMetadataProvider instance (typically from Metadata.Provider or a contextUser's provider)
+     * @returns A new RunView wired to the given provider
+     */
+    public static FromMetadataProvider(provider: IMetadataProvider): RunView {
+        return new RunView(provider as unknown as IRunViewProvider);
     }
 
     /**
@@ -215,15 +415,15 @@ export class RunView  {
             return params.EntityName;
         else if (params.ViewEntity) {
             const entityID = params.ViewEntity.Get('EntityID'); // using weak typing because this is MJCore and we don't want to use the sub-classes from core-entities as that would create a circular dependency
-            const entity = p.Entities.find(e => e.ID === entityID);
+            const entity = p.EntityByID(entityID);
             if (entity)
                 return entity.Name
         }
         else if (params.ViewID || params.ViewName) {
             // we don't have a view entity loaded, so load it up now
-            const rv = new RunView(<IRunViewProvider><any>p);
+            const rv = RunView.FromMetadataProvider(p);
             const result = await rv.RunView({
-                EntityName: "User Views",
+                EntityName: "MJ: User Views",
                 ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,
                 ResultType: 'entity_object'
             });

@@ -246,9 +246,3 @@ export class AzureEmbedding extends BaseEmbeddings {
     }
 }
 
-/**
- * Helper function to ensure the class is registered
- */
-export function LoadAzureEmbedding() {
-    // This does nothing but prevents the class from being removed by the tree shaker
-}

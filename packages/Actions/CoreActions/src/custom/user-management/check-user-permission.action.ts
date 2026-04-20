@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { Metadata, RunView } from "@memberjunction/core";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
@@ -52,7 +52,7 @@ export class CheckUserPermissionAction extends BaseAction {
             switch (permissionType) {
                 case 'Role':
                     // Get user's roles from UserCache
-                    const cachedUser = UserCache.Users?.find(u => u.ID === userID);
+                    const cachedUser = UserCache.Users?.find(u => UUIDsEqual(u.ID, userID));
                     if (cachedUser && cachedUser.UserRoles) {
                         cachedUser.UserRoles.forEach(ur => userRoles.push(ur.Role));
                         hasPermission = cachedUser.UserRoles.some(ur => ur.Role === permissionName);
@@ -63,7 +63,7 @@ export class CheckUserPermissionAction extends BaseAction {
                     // Check authorization roles
                     const authRv = new RunView();
                     const authResult = await authRv.RunView({
-                        EntityName: 'Authorization Roles',
+                        EntityName: 'MJ: Authorization Roles',
                         ExtraFilter: `RoleID IN (SELECT RoleID FROM ${Metadata.Provider.ConfigData.MJCoreSchemaName}.vwUserRoles WHERE UserID='${userID}') AND AuthorizationID IN (SELECT ID FROM ${Metadata.Provider.ConfigData.MJCoreSchemaName}.vwAuthorizations WHERE Name='${permissionName}')`,
                         ResultType: 'simple'
                     }, currentUser);
@@ -151,8 +151,4 @@ export class CheckUserPermissionAction extends BaseAction {
             };
         }
     }
-}
-
-export function LoadCheckUserPermissionAction() {
-    // Prevent tree shaking
 }

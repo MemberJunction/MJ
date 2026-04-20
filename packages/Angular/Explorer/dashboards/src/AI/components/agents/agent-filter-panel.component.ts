@@ -1,7 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { CompositeKey } from '@memberjunction/core';
+import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { TreeBranchConfig } from '@memberjunction/ng-trees';
 
 interface AgentFilter {
   searchTerm: string;
@@ -10,23 +12,26 @@ interface AgentFilter {
   status: string;
   executionMode: string;
   exposeAsAction: string;
+  categoryId: string;
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-agent-filter-panel',
   templateUrl: './agent-filter-panel.component.html',
   styleUrls: ['./agent-filter-panel.component.css']
 })
 export class AgentFilterPanelComponent implements OnInit {
-  @Input() agents: AIAgentEntityExtended[] = [];
-  @Input() filteredAgents: AIAgentEntityExtended[] = [];
+  @Input() agents: MJAIAgentEntityExtended[] = [];
+  @Input() filteredAgents: MJAIAgentEntityExtended[] = [];
   @Input() filters: AgentFilter = {
     searchTerm: '',
     agentType: 'all',
     parentAgent: 'all',
     status: 'all',
     executionMode: 'all',
-    exposeAsAction: 'all'
+    exposeAsAction: 'all',
+    categoryId: 'all'
   };
 
   @Output() filtersChange = new EventEmitter<AgentFilter>();
@@ -61,6 +66,19 @@ export class AgentFilterPanelComponent implements OnInit {
     { text: 'Not Exposed', value: 'false' }
   ];
 
+  /** TreeDropdown configuration for agent categories */
+  public CategoryBranchConfig: TreeBranchConfig = {
+    EntityName: 'MJ: AI Agent Categories',
+    DisplayField: 'Name',
+    ParentIDField: 'ParentID',
+    DefaultIcon: 'fa-solid fa-folder',
+    OrderBy: 'Name ASC',
+    DescriptionField: 'Description'
+  };
+
+  /** Current category selection for the tree dropdown */
+  public SelectedCategoryKey: CompositeKey | null = null;
+
   async ngOnInit(): Promise<void> {
     // Load agent types from AIEngineBase
     try {
@@ -71,7 +89,7 @@ export class AgentFilterPanelComponent implements OnInit {
       
       // Add agent types to options
       const agentTypes = aiEngine.AgentTypes;
-      agentTypes.forEach((type: AIAgentTypeEntity) => {
+      agentTypes.forEach((type: MJAIAgentTypeEntity) => {
         this.agentTypeOptions.push({
           text: type.Name,
           value: type.ID
@@ -94,6 +112,17 @@ export class AgentFilterPanelComponent implements OnInit {
   public onFilterChange(): void {
     this.filtersChange.emit(this.filters);
     this.filterChange.emit();
+  }
+
+  public onCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
+    if (value && !Array.isArray(value)) {
+      const idValue = value.KeyValuePairs?.find(kv => kv.FieldName === 'ID')?.Value;
+      this.filters.categoryId = idValue ?? 'all';
+    } else {
+      this.filters.categoryId = 'all';
+    }
+    this.SelectedCategoryKey = Array.isArray(value) ? null : value;
+    this.onFilterChange();
   }
 
   public resetAllFilters(): void {

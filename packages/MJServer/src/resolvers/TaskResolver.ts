@@ -56,6 +56,9 @@ export class TaskOrchestrationResolver extends ResolverBase {
         @Ctx() { userPayload }: AppContext,
         @Arg('createNotifications', { nullable: true }) createNotifications?: boolean
     ): Promise<ExecuteTaskGraphResult> {
+        // Check API key scope authorization for task execution
+        await this.CheckAPIKeyScopeAuthorization('task:execute', '*', userPayload);
+
         try {
             LogStatus(`=== EXECUTING TASK GRAPH FOR CONVERSATION: ${conversationDetailId} ===`);
 

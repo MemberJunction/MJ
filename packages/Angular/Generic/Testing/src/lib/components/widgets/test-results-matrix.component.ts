@@ -1,0 +1,705 @@
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import {
+  MatrixCellData,
+  MatrixColumnData,
+  MatrixRowData,
+  TestResultsMatrixData
+} from '../../models/testing.models';
+
+/**
+ * Event emitted when a cell is clicked
+ */
+export interface MatrixCellClickEvent {
+  testRunId: string;
+  testId: string;
+  testName: string;
+  suiteRunId: string;
+  status: string;
+}
+
+/**
+ * Event emitted when a row header (test name) is clicked
+ */
+export interface MatrixRowClickEvent {
+  testId: string;
+  testName: string;
+}
+
+/**
+ * Event emitted when a column header (suite run) is clicked
+ */
+export interface MatrixColumnClickEvent {
+  suiteRunId: string;
+  date: Date;
+  tags: string[];
+}
+
+/**
+ * Reusable Test Results Matrix Component
+ *
+ * Displays a matrix view of test results across multiple suite runs.
+ * - Rows: Individual tests
+ * - Columns: Suite runs (sorted by date, most recent first)
+ * - Cells: Color-coded status with click navigation
+ *
+ * @example
+ * ```html
+ * <mj-test-results-matrix
+ *   [data]="matrixData"
+ *   [loading]="isLoading"
+ *   [maxColumns]="10"
+ *   [showTags]="true"
+ *   [showPassRate]="true"
+ *   (cellClick)="onCellClick($event)"
+ *   (rowClick)="onTestClick($event)"
+ *   (columnClick)="onSuiteRunClick($event)">
+ * </mj-test-results-matrix>
+ * ```
+ */
+@Component({
+  standalone: false,
+  selector: 'mj-test-results-matrix',
+  template: `
+    <div class="matrix-container" [class.loading]="loading">
+      <!-- Loading state -->
+      @if (loading) {
+        <div class="matrix-loading">
+          <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+          </div>
+          <span>Loading matrix data...</span>
+        </div>
+      }
+    
+      <!-- Empty state -->
+      @if (!loading && (!data || data.columns.length === 0)) {
+        <div class="matrix-empty">
+          <div class="empty-icon">
+            <i class="fas fa-th"></i>
+          </div>
+          <h4>{{ emptyTitle }}</h4>
+          <p>{{ emptyMessage }}</p>
+        </div>
+      }
+    
+      <!-- Matrix table -->
+      @if (!loading && data && data.columns.length > 0) {
+        <div class="matrix-wrapper">
+          <table class="matrix-table">
+            <thead>
+              <tr class="header-row">
+                <th class="test-name-header sticky-col">
+                  <div class="header-content">
+                    <i class="fas fa-flask"></i>
+                    <span>Test</span>
+                  </div>
+                </th>
+                @for (col of data.columns; track trackColumn(i, col); let i = $index) {
+                  <th class="run-header"
+                    [class.highlighted]="highlightedColumn === col.suiteRunId"
+                    (click)="onColumnHeaderClick(col)"
+                    (mouseenter)="highlightedColumn = col.suiteRunId"
+                    (mouseleave)="highlightedColumn = null">
+                    <div class="run-header-content">
+                      @if (showTags && col.tags.length > 0) {
+                        <div class="run-tags">
+                          @for (tag of col.tags.slice(0, 2); track tag) {
+                            <span class="tag-chip">{{ tag }}</span>
+                          }
+                          @if (col.tags.length > 2) {
+                            <span class="tag-more">+{{ col.tags.length - 2 }}</span>
+                          }
+                        </div>
+                      }
+                      <div class="run-date">{{ formatDate(col.date) }}</div>
+                      @if (showPassRate) {
+                        <div class="run-pass-rate">
+                          <span class="pass-rate-value" [class.high]="col.passRate >= 80" [class.medium]="col.passRate >= 50 && col.passRate < 80" [class.low]="col.passRate < 50">
+                            {{ col.passRate.toFixed(0) }}%
+                          </span>
+                        </div>
+                      }
+                    </div>
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of data.rows; track trackRow($index, row)) {
+                <tr class="data-row"
+                  [class.highlighted]="highlightedRow === row.testId"
+                  (mouseenter)="highlightedRow = row.testId"
+                  (mouseleave)="highlightedRow = null">
+                  <td class="test-name-cell sticky-col"
+                    (click)="onRowHeaderClick(row)">
+                    <div class="test-name-content" [title]="row.testName">
+                      <span class="test-name-text">{{ row.testName }}</span>
+                    </div>
+                  </td>
+                  @for (col of data.columns; track trackColumn($index, col)) {
+                    <td class="result-cell"
+                      [class.highlighted]="highlightedColumn === col.suiteRunId"
+                      (click)="onCellClicked(row, col)">
+                      <div class="cell-content"
+                        [ngClass]="getCellClass(getCell(row.testId, col))"
+                        [title]="getCellTooltip(getCell(row.testId, col))">
+                        <i class="cell-icon" [ngClass]="getCellIcon(getCell(row.testId, col))"></i>
+                        @if (showScores && getCell(row.testId, col)?.score != null) {
+                          <span class="cell-score">
+                            {{ ((getCell(row.testId, col)?.score ?? 0) * 100).toFixed(0) }}%
+                          </span>
+                        }
+                      </div>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    
+      <!-- Legend -->
+      @if (!loading && data && data.columns.length > 0 && showLegend) {
+        <div class="matrix-legend">
+          <span class="legend-item passed"><i class="fas fa-check-circle"></i> Passed</span>
+          <span class="legend-item failed"><i class="fas fa-times-circle"></i> Failed</span>
+          <span class="legend-item error"><i class="fas fa-exclamation-circle"></i> Error</span>
+          <span class="legend-item skipped"><i class="fas fa-forward"></i> Skipped</span>
+          <span class="legend-item pending"><i class="fas fa-clock"></i> Pending</span>
+          <span class="legend-item none"><i class="fas fa-minus"></i> Not Run</span>
+        </div>
+      }
+    </div>
+    `,
+  styles: [`
+    :host {
+      display: block;
+    }
+
+    .matrix-container {
+      position: relative;
+      min-height: 200px;
+    }
+
+    .matrix-container.loading {
+      min-height: 300px;
+    }
+
+    /* Loading State */
+    .matrix-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 60px 20px;
+      color: var(--mj-text-muted);
+    }
+
+    .loading-spinner {
+      font-size: 32px;
+      color: var(--mj-brand-primary);
+    }
+
+    /* Empty State */
+    .matrix-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--mj-text-muted);
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .matrix-empty h4 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+    }
+
+    .matrix-empty p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    /* Matrix Wrapper */
+    .matrix-wrapper {
+      overflow-x: auto;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
+      background: var(--mj-bg-surface);
+    }
+
+    /* Matrix Table */
+    .matrix-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13px;
+    }
+
+    /* Sticky Column */
+    .sticky-col {
+      position: sticky;
+      left: 0;
+      z-index: 10;
+      background: var(--mj-bg-surface);
+      border-right: 2px solid var(--mj-border-default);
+    }
+
+    /* Header Row */
+    .header-row {
+      background: var(--mj-bg-surface-card);
+    }
+
+    .test-name-header {
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--mj-text-secondary);
+      min-width: 200px;
+      max-width: 250px;
+      background: var(--mj-bg-surface-card);
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-content i {
+      color: var(--mj-text-disabled);
+    }
+
+    /* Run Header (Column) */
+    .run-header {
+      padding: 10px 12px;
+      min-width: 100px;
+      max-width: 140px;
+      text-align: center;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      border-left: 1px solid var(--mj-border-default);
+      vertical-align: bottom;
+    }
+
+    .run-header:hover,
+    .run-header.highlighted {
+      background: var(--mj-bg-surface-sunken);
+    }
+
+    .run-header-content {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .run-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      justify-content: center;
+      margin-bottom: 2px;
+    }
+
+    .tag-chip {
+      display: inline-block;
+      padding: 2px 6px;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      max-width: 60px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tag-more {
+      font-size: 10px;
+      color: var(--mj-text-muted);
+    }
+
+    .run-date {
+      font-size: 11px;
+      color: var(--mj-text-muted);
+      white-space: nowrap;
+    }
+
+    .run-pass-rate {
+      margin-top: 2px;
+    }
+
+    .pass-rate-value {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .pass-rate-value.high {
+      background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
+    }
+
+    .pass-rate-value.medium {
+      background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
+    }
+
+    .pass-rate-value.low {
+      background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
+    }
+
+    /* Data Rows */
+    .data-row {
+      transition: background-color 0.15s ease;
+    }
+
+    .data-row:hover,
+    .data-row.highlighted {
+      background: var(--mj-bg-surface-card);
+    }
+
+    .data-row:hover .sticky-col,
+    .data-row.highlighted .sticky-col {
+      background: var(--mj-bg-surface-card);
+    }
+
+    /* Test Name Cell */
+    .test-name-cell {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
+      cursor: pointer;
+    }
+
+    .test-name-cell:hover {
+      background: var(--mj-bg-surface-sunken);
+    }
+
+    .test-name-content {
+      max-width: 220px;
+      overflow: hidden;
+    }
+
+    .test-name-text {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--mj-text-secondary);
+      font-weight: 500;
+    }
+
+    /* Result Cells */
+    .result-cell {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
+      border-left: 1px solid var(--mj-bg-surface-sunken);
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .result-cell:hover {
+      transform: scale(1.05);
+      z-index: 5;
+      box-shadow: var(--mj-shadow-md);
+    }
+
+    .result-cell.highlighted {
+      background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+    }
+
+    .cell-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      margin: 0 auto;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .cell-icon {
+      font-size: 14px;
+    }
+
+    .cell-score {
+      font-size: 9px;
+      font-weight: 600;
+      margin-top: 1px;
+    }
+
+    /* Cell Status Colors */
+    .cell-passed {
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
+    }
+
+    .cell-failed {
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
+    }
+
+    .cell-error {
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
+    }
+
+    .cell-skipped {
+      background: color-mix(in srgb, var(--mj-text-muted) 15%, var(--mj-bg-surface));
+      color: var(--mj-text-muted);
+    }
+
+    .cell-pending {
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+    }
+
+    .cell-running {
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+    }
+
+    .cell-none {
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-border-strong);
+    }
+
+    /* Legend */
+    .matrix-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 12px 16px;
+      margin-top: 12px;
+      background: var(--mj-bg-surface-card);
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--mj-text-muted);
+    }
+
+    .legend-item i {
+      font-size: 12px;
+    }
+
+    .legend-item.passed i { color: var(--mj-status-success); }
+    .legend-item.failed i { color: var(--mj-status-error); }
+    .legend-item.error i { color: var(--mj-status-warning); }
+    .legend-item.skipped i { color: var(--mj-text-muted); }
+    .legend-item.pending i { color: var(--mj-brand-primary); }
+    .legend-item.none i { color: var(--mj-border-strong); }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .test-name-header,
+      .test-name-cell {
+        min-width: 150px;
+        max-width: 180px;
+      }
+
+      .run-header {
+        min-width: 80px;
+        max-width: 100px;
+      }
+
+      .cell-content {
+        width: 30px;
+        height: 30px;
+      }
+
+      .cell-icon {
+        font-size: 12px;
+      }
+
+      .cell-score {
+        display: none;
+      }
+    }
+  `],
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class TestResultsMatrixComponent {
+  /** Matrix data to display */
+  @Input() data: TestResultsMatrixData | null = null;
+
+  /** Loading state */
+  @Input() loading = false;
+
+  /** Show tags in column headers */
+  @Input() showTags = true;
+
+  /** Show pass rate in column headers */
+  @Input() showPassRate = true;
+
+  /** Show scores in cells */
+  @Input() showScores = false;
+
+  /** Show legend below matrix */
+  @Input() showLegend = true;
+
+  /** Empty state title */
+  @Input() emptyTitle = 'No Data Available';
+
+  /** Empty state message */
+  @Input() emptyMessage = 'Test results will appear here once suite runs are completed.';
+
+  /** Emitted when a cell is clicked */
+  @Output() cellClick = new EventEmitter<MatrixCellClickEvent>();
+
+  /** Emitted when a row header (test name) is clicked */
+  @Output() rowClick = new EventEmitter<MatrixRowClickEvent>();
+
+  /** Emitted when a column header (suite run) is clicked */
+  @Output() columnClick = new EventEmitter<MatrixColumnClickEvent>();
+
+  // Highlight tracking
+  highlightedRow: string | null = null;
+  highlightedColumn: string | null = null;
+
+  constructor(private cdr: ChangeDetectorRef) {}
+
+  /**
+   * Get the cell data for a specific test and suite run
+   */
+  getCell(testId: string, column: MatrixColumnData): MatrixCellData | null {
+    return column.testResults.get(testId) ?? null;
+  }
+
+  /**
+   * Get CSS class for cell based on status
+   */
+  getCellClass(cell: MatrixCellData | null): string {
+    if (!cell) return 'cell-none';
+    switch (cell.status) {
+      case 'Passed': return 'cell-passed';
+      case 'Failed': return 'cell-failed';
+      case 'Error': return 'cell-error';
+      case 'Skipped': return 'cell-skipped';
+      case 'Running': return 'cell-running';
+      case 'Pending': return 'cell-pending';
+      default: return 'cell-none';
+    }
+  }
+
+  /**
+   * Get icon class for cell based on status
+   */
+  getCellIcon(cell: MatrixCellData | null): string {
+    if (!cell) return 'fas fa-minus';
+    switch (cell.status) {
+      case 'Passed': return 'fas fa-check';
+      case 'Failed': return 'fas fa-times';
+      case 'Error': return 'fas fa-exclamation';
+      case 'Skipped': return 'fas fa-forward';
+      case 'Running': return 'fas fa-spinner fa-spin';
+      case 'Pending': return 'fas fa-clock';
+      default: return 'fas fa-minus';
+    }
+  }
+
+  /**
+   * Get tooltip text for cell
+   */
+  getCellTooltip(cell: MatrixCellData | null): string {
+    if (!cell) return 'Not run in this suite run';
+    let tooltip = `${cell.testName}\nStatus: ${cell.status}`;
+    if (cell.score != null) tooltip += `\nScore: ${(cell.score * 100).toFixed(1)}%`;
+    if (cell.duration != null) tooltip += `\nDuration: ${cell.duration.toFixed(1)}s`;
+    if (cell.cost != null) tooltip += `\nCost: $${cell.cost.toFixed(4)}`;
+    return tooltip;
+  }
+
+  /**
+   * Format date for column header
+   */
+  formatDate(date: Date): string {
+    const now = new Date();
+    const d = new Date(date);
+    const diffMs = now.getTime() - d.getTime();
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffDays === 0) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays}d ago`;
+    } else {
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+  }
+
+  /**
+   * Handle cell click
+   */
+  onCellClicked(row: MatrixRowData, column: MatrixColumnData): void {
+    const cell = this.getCell(row.testId, column);
+    if (cell) {
+      this.cellClick.emit({
+        testRunId: cell.testRunId,
+        testId: cell.testId,
+        testName: cell.testName,
+        suiteRunId: column.suiteRunId,
+        status: cell.status
+      });
+    }
+  }
+
+  /**
+   * Handle row header click
+   */
+  onRowHeaderClick(row: MatrixRowData): void {
+    this.rowClick.emit({
+      testId: row.testId,
+      testName: row.testName
+    });
+  }
+
+  /**
+   * Handle column header click
+   */
+  onColumnHeaderClick(column: MatrixColumnData): void {
+    this.columnClick.emit({
+      suiteRunId: column.suiteRunId,
+      date: column.date,
+      tags: column.tags
+    });
+  }
+
+  /**
+   * TrackBy function for columns
+   */
+  trackColumn(index: number, col: MatrixColumnData): string {
+    return col.suiteRunId;
+  }
+
+  /**
+   * TrackBy function for rows
+   */
+  trackRow(index: number, row: MatrixRowData): string {
+    return row.testId;
+  }
+}

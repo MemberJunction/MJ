@@ -1,0 +1,576 @@
+openapi: 3.1.0
+info:
+  title: MemberJunction MCP Server OAuth Proxy API
+  description: |
+    OAuth 2.1 proxy endpoints for MCP Server authentication with multi-provider support
+    and scope-based authorization. The proxy acts as an OAuth server to MCP clients while
+    delegating authentication to configured upstream identity providers (Auth0, Azure AD,
+    Okta, Cognito, Google).
+  version: 2.0.0
+  contact:
+    name: MemberJunction
+    url: https://memberjunction.org
+
+servers:
+  - url: http://localhost:3100
+    description: Local development
+  - url: https://mcp.example.com
+    description: Production (example)
+
+tags:
+  - name: OAuth
+    description: OAuth 2.1 authorization endpoints
+  - name: Discovery
+    description: OAuth discovery and metadata endpoints
+  - name: Consent
+    description: Scope consent flow endpoints
+
+paths:
+  /.well-known/oauth-authorization-server:
+    get:
+      tags: [Discovery]
+      summary: OAuth Authorization Server Metadata
+      description: |
+        Returns OAuth 2.0 Authorization Server Metadata per RFC 8414.
+        Used by clients to discover OAuth endpoints.
+      operationId: getAuthServerMetadata
+      responses:
+        '200':
+          description: Authorization server metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationServerMetadata'
+
+  /.well-known/oauth-protected-resource:
+    get:
+      tags: [Discovery]
+      summary: Protected Resource Metadata
+      description: |
+        Returns OAuth 2.0 Protected Resource Metadata per RFC 9728.
+        Indicates which authorization servers can issue tokens for this resource.
+      operationId: getProtectedResourceMetadata
+      responses:
+        '200':
+          description: Protected resource metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtectedResourceMetadata'
+
+  /oauth/register:
+    post:
+      tags: [OAuth]
+      summary: Dynamic Client Registration
+      description: |
+        Registers a new OAuth client per RFC 7591. MCP clients use this to
+        register themselves before initiating the authorization flow.
+      operationId: registerClient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientRegistrationRequest'
+      responses:
+        '201':
+          description: Client registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientRegistrationResponse'
+        '400':
+          description: Invalid registration request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+
+  /oauth/authorize:
+    get:
+      tags: [OAuth]
+      summary: Authorization Endpoint
+      description: |
+        Initiates the OAuth 2.1 authorization code flow with PKCE.
+        Redirects to configured upstream provider for authentication.
+      operationId: authorize
+      parameters:
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code]
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [S256]
+        - name: scope
+          in: query
+          schema:
+            type: string
+            description: Space-separated list of requested scopes
+      responses:
+        '302':
+          description: Redirect to upstream provider
+        '400':
+          description: Invalid authorization request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+
+  /oauth/callback:
+    get:
+      tags: [OAuth]
+      summary: OAuth Callback
+      description: |
+        Receives callback from upstream provider after user authentication.
+        Validates upstream tokens, resolves MJ user, and initiates consent flow.
+      operationId: oauthCallback
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+        - name: error_description
+          in: query
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to consent page or client with code
+        '400':
+          description: OAuth error from upstream provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+
+  /oauth/consent:
+    get:
+      tags: [Consent]
+      summary: Display Consent Screen
+      description: |
+        Renders the scope consent screen where users select which
+        permissions to grant to the requesting application.
+      operationId: showConsentScreen
+      parameters:
+        - name: request_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Consent request identifier
+      responses:
+        '200':
+          description: HTML consent page
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: Invalid or expired consent request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+        '404':
+          description: Consent request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+
+    post:
+      tags: [Consent]
+      summary: Submit Consent
+      description: |
+        Processes user's scope selection. Issues proxy-signed JWT with
+        granted scopes and redirects to client with authorization code.
+      operationId: submitConsent
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - request_id
+                - scopes
+              properties:
+                request_id:
+                  type: string
+                  format: uuid
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                  description: Selected scope names
+      responses:
+        '302':
+          description: Redirect to client with authorization code
+        '400':
+          description: Invalid consent submission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+
+  /oauth/token:
+    post:
+      tags: [OAuth]
+      summary: Token Endpoint
+      description: |
+        Exchanges authorization code for proxy-signed JWT access token.
+        Supports authorization_code and refresh_token grant types.
+      operationId: tokenExchange
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/AuthorizationCodeGrant'
+                - $ref: '#/components/schemas/RefreshTokenGrant'
+      responses:
+        '200':
+          description: Token response with proxy-signed JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Invalid token request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+        '401':
+          description: Invalid client credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+
+  /oauth/scopes:
+    get:
+      tags: [Consent]
+      summary: List Available Scopes
+      description: |
+        Returns all active API scopes from the database.
+        Used by admin UIs and documentation.
+      operationId: listScopes
+      responses:
+        '200':
+          description: List of available scopes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scopes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/APIScopeInfo'
+
+components:
+  schemas:
+    AuthorizationServerMetadata:
+      type: object
+      required:
+        - issuer
+        - authorization_endpoint
+        - token_endpoint
+        - registration_endpoint
+        - response_types_supported
+        - grant_types_supported
+        - code_challenge_methods_supported
+      properties:
+        issuer:
+          type: string
+          format: uri
+          description: OAuth proxy issuer (urn:mj:mcp-server)
+        authorization_endpoint:
+          type: string
+          format: uri
+        token_endpoint:
+          type: string
+          format: uri
+        registration_endpoint:
+          type: string
+          format: uri
+        scopes_supported:
+          type: array
+          items:
+            type: string
+        response_types_supported:
+          type: array
+          items:
+            type: string
+        grant_types_supported:
+          type: array
+          items:
+            type: string
+        code_challenge_methods_supported:
+          type: array
+          items:
+            type: string
+            enum: [S256]
+
+    ProtectedResourceMetadata:
+      type: object
+      required:
+        - resource
+        - authorization_servers
+      properties:
+        resource:
+          type: string
+          format: uri
+        authorization_servers:
+          type: array
+          items:
+            type: string
+            format: uri
+        scopes_supported:
+          type: array
+          items:
+            type: string
+        bearer_methods_supported:
+          type: array
+          items:
+            type: string
+            enum: [header]
+        resource_name:
+          type: string
+        resource_documentation:
+          type: string
+          format: uri
+
+    ClientRegistrationRequest:
+      type: object
+      required:
+        - redirect_uris
+      properties:
+        redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+          minItems: 1
+        client_name:
+          type: string
+        token_endpoint_auth_method:
+          type: string
+          enum: [none]
+          default: none
+
+    ClientRegistrationResponse:
+      type: object
+      required:
+        - client_id
+        - redirect_uris
+        - token_endpoint_auth_method
+      properties:
+        client_id:
+          type: string
+        client_id_issued_at:
+          type: integer
+        redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+        client_name:
+          type: string
+        token_endpoint_auth_method:
+          type: string
+
+    AuthorizationCodeGrant:
+      type: object
+      required:
+        - grant_type
+        - code
+        - redirect_uri
+        - client_id
+        - code_verifier
+      properties:
+        grant_type:
+          type: string
+          enum: [authorization_code]
+        code:
+          type: string
+        redirect_uri:
+          type: string
+          format: uri
+        client_id:
+          type: string
+        code_verifier:
+          type: string
+
+    RefreshTokenGrant:
+      type: object
+      required:
+        - grant_type
+        - refresh_token
+        - client_id
+      properties:
+        grant_type:
+          type: string
+          enum: [refresh_token]
+        refresh_token:
+          type: string
+        client_id:
+          type: string
+
+    TokenResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+          description: Proxy-signed JWT containing granted scopes
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Token lifetime in seconds
+        refresh_token:
+          type: string
+          description: Refresh token for obtaining new access tokens
+        scope:
+          type: string
+          description: Space-separated list of granted scopes
+
+    APIScopeInfo:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - category
+        - isActive
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Scope identifier (e.g., "entity:read")
+        description:
+          type: string
+          description: Human-readable description for consent screen
+        category:
+          type: string
+          description: Grouping category (e.g., "Entities", "Actions")
+        isActive:
+          type: boolean
+
+    ProxyJWTClaims:
+      type: object
+      description: Claims structure for proxy-signed JWTs
+      required:
+        - iss
+        - sub
+        - aud
+        - iat
+        - exp
+        - email
+        - mjUserId
+        - scopes
+        - upstreamProvider
+        - upstreamSub
+      properties:
+        iss:
+          type: string
+          const: urn:mj:mcp-server
+        sub:
+          type: string
+          description: User's email address
+        aud:
+          type: string
+          description: Resource identifier
+        iat:
+          type: integer
+          description: Issued at timestamp
+        exp:
+          type: integer
+          description: Expiration timestamp
+        email:
+          type: string
+          format: email
+        mjUserId:
+          type: string
+          format: uuid
+          description: MemberJunction User ID
+        scopes:
+          type: array
+          items:
+            type: string
+          description: Granted scope names
+        upstreamProvider:
+          type: string
+          description: Provider name from configuration (not hardcoded enum)
+        upstreamSub:
+          type: string
+          description: Subject from upstream token
+
+    OAuthError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          enum:
+            - invalid_request
+            - invalid_client
+            - invalid_grant
+            - unauthorized_client
+            - unsupported_grant_type
+            - invalid_scope
+            - access_denied
+            - server_error
+        error_description:
+          type: string
+        error_uri:
+          type: string
+          format: uri

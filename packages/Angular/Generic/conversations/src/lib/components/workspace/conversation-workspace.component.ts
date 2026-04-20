@@ -1,3 +1,24 @@
+/**
+ * ============================================================================
+ * DEPRECATED - DO NOT USE
+ * ============================================================================
+ *
+ * This workspace component was used when conversations, collections, and tasks
+ * were all combined into a single tabbed interface.
+ *
+ * The new architecture uses SEPARATE resource components for each feature:
+ * - ChatConversationsResource for conversations
+ * - CollectionsResource for collections
+ * - TasksResource for tasks
+ *
+ * These resource components are located in @memberjunction/ng-explorer-core
+ * and integrate with MJExplorer's tab/navigation system.
+ *
+ * This file is kept for backwards compatibility only. Any new features or
+ * bug fixes should be made to the individual resource components instead.
+ * ============================================================================
+ */
+
 import {
   Component,
   Input,
@@ -9,10 +30,9 @@ import {
   ChangeDetectorRef,
   HostListener
 } from '@angular/core';
-import { ConversationEntity, ArtifactEntity, TaskEntity, ArtifactMetadataEngine, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { ConversationDataService } from '../../services/conversation-data.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
@@ -25,13 +45,20 @@ import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
+import { NavigationRequest } from '@memberjunction/ng-artifacts';
+import { PendingAttachment } from '../mention/mention-editor.component';
 
 /**
  * Top-level workspace component for conversations
  * Provides 3-column Slack-style layout: Navigation | Sidebar | Chat Area | Artifact Panel
  * Supports context-based navigation (library or task views)
+ *
+ * @deprecated Use ChatConversationsResource from @memberjunction/ng-explorer-core instead.
+ * This component is maintained for backwards compatibility but the resource-wrapper pattern
+ * is the preferred approach for MJExplorer integration.
  */
 @Component({
+  standalone: false,
   selector: 'mj-conversation-workspace',
   templateUrl: './conversation-workspace.component.html',
   styleUrls: ['./conversation-workspace.component.css']
@@ -89,8 +116,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     return this._activeTaskId;
   }
 
-  @Output() conversationChanged = new EventEmitter<ConversationEntity>();
-  @Output() artifactOpened = new EventEmitter<ArtifactEntity>();
+  @Output() conversationChanged = new EventEmitter<MJConversationEntity>();
+  @Output() artifactOpened = new EventEmitter<MJArtifactEntity>();
   @Output() navigationChanged = new EventEmitter<{
     tab: 'conversations' | 'collections' | 'tasks';
     conversationId?: string;
@@ -101,6 +128,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   @Output() newConversationStarted = new EventEmitter<void>();
   @Output() actionableCommandExecuted = new EventEmitter<ActionableCommand>();
   @Output() automaticCommandExecuted = new EventEmitter<AutomaticCommand>();
+  @Output() navigationRequested = new EventEmitter<NavigationRequest>();
 
   public activeTab: NavigationTab = 'conversations';
   public isSidebarVisible: boolean = true;
@@ -120,7 +148,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   // Share modal state
   public isArtifactShareModalOpen: boolean = false;
-  public artifactToShare: ArtifactEntity | null = null;
+  public artifactToShare: MJArtifactEntity | null = null;
 
   // Resize state - Sidebar
   public sidebarWidth: number = 260; // Default width
@@ -145,11 +173,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private previousIsNewConversation: boolean = false; // Track new conversation state changes
   private destroy$ = new Subject<void>();
 
-  // LocalStorage keys (fallback for User Settings)
-  private readonly SIDEBAR_WIDTH_KEY = 'mj-conversations-sidebar-width';
-  private readonly SIDEBAR_COLLAPSED_KEY = 'mj-conversations-sidebar-collapsed';
-  private readonly ARTIFACT_PANEL_WIDTH_KEY = 'mj-artifact-panel-width';
-
   // User Settings key for server-side persistence
   private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -161,15 +184,17 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   // LOCAL CONVERSATION STATE - enables multiple workspace instances
   // Each workspace manages its own selection state independently
   public selectedConversationId: string | null = null;
-  public selectedConversation: ConversationEntity | null = null;
+  public selectedConversation: MJConversationEntity | null = null;
   public selectedThreadId: string | null = null;
   public isNewUnsavedConversation: boolean = false;
   public pendingMessageToSend: string | null = null;
+  public pendingAttachmentsToSend: PendingAttachment[] | null = null;
   public pendingArtifactId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
 
+  private engine = ConversationEngine.Instance;
+
   constructor(
-    public conversationData: ConversationDataService,
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
@@ -194,7 +219,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   setActiveConversation(id: string | null): void {
     console.log('🎯 Setting active conversation:', id);
     this.selectedConversationId = id;
-    this.selectedConversation = id ? this.conversationData.getConversationById(id) : null;
+    this.selectedConversation = id ? (this.engine.GetConversation(id) ?? null) : null;
     // Clear unsaved state when switching to an existing conversation
     if (id) {
       this.isNewUnsavedConversation = false;
@@ -211,6 +236,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.selectedConversation = null;
     this.isNewUnsavedConversation = true;
     this.pendingMessageToSend = null;
+    this.pendingAttachmentsToSend = null;
 
     // Auto-collapse if mobile OR if sidebar is not pinned
     if (this.isMobileView || !this.isSidebarPinned) {
@@ -255,12 +281,34 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   /**
    * Handler for new conversation creation from chat area
+   * Now includes pending message and attachments to ensure atomic state update
    */
-  onConversationCreated(conversation: ConversationEntity): void {
-    this.selectedConversationId = conversation.ID;
-    this.selectedConversation = conversation;
-    this.isNewUnsavedConversation = false;
-    // The conversation is already added to conversationData by the chat area
+  onConversationCreated(event: {
+    conversation: MJConversationEntity;
+    pendingMessage?: string;
+    pendingAttachments?: PendingAttachment[];
+  }): void {
+    try {
+      // Set ALL state atomically before Angular change detection runs
+      // This ensures the new message-input component receives the pending data
+      this.pendingMessageToSend = event.pendingMessage || null;
+      this.pendingAttachmentsToSend = event.pendingAttachments || null;
+      this.selectedConversationId = event.conversation.ID;
+      this.selectedConversation = event.conversation;
+      this.isNewUnsavedConversation = false;
+      // The conversation is already added to ConversationEngine by the chat area
+    } catch (error) {
+      console.error('onConversationCreated ERROR:', error);
+    }
+  }
+
+  /**
+   * Handler for pending message requested from chat area (empty state)
+   * @deprecated Use onConversationCreated with pendingMessage instead
+   */
+  onPendingMessageRequested(event: {text: string; attachments: PendingAttachment[]}): void {
+    this.pendingMessageToSend = event.text;
+    this.pendingAttachmentsToSend = event.attachments;
   }
 
   /**
@@ -299,10 +347,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
     // Check initial mobile state FIRST
     this.checkMobileView();
-
-    // Load saved widths from localStorage
-    this.loadSidebarWidth();
-    this.loadArtifactPanelWidth();
 
     // Load sidebar state - but on mobile, always default to collapsed
     if (this.isMobileView) {
@@ -411,8 +455,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // Filter tasks by conversations the user owns or is a participant in, or tasks owned
     // by the user
     const md = new Metadata();
-    const cd = md.EntityByName('Conversation Details');
-    const c = md.EntityByName('Conversations');
+    const cd = md.EntityByName('MJ: Conversation Details');
+    const c = md.EntityByName('MJ: Conversations');
     if (!cd || !c) {
       console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
       this.tasksFilter = `ParentID IS NULL AND UserID = '${this.currentUser.ID}'`; // Fallback to user-owned tasks only
@@ -580,40 +624,36 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * Save sidebar state to User Settings (server) and localStorage (fallback)
+   * Save sidebar state to User Settings (server)
    * Uses debouncing to avoid excessive database writes
    */
   private saveSidebarState(): void {
-    const stateToSave = {
-      collapsed: this.isSidebarCollapsed,
-      pinned: this.isSidebarPinned
-    };
-
-    // Save to localStorage immediately as backup
-    try {
-      localStorage.setItem(this.SIDEBAR_COLLAPSED_KEY, JSON.stringify(stateToSave));
-    } catch (error) {
-      console.warn('Failed to save sidebar state to localStorage:', error);
-    }
-
     // Debounce the server save to avoid excessive writes
     if (this.saveSettingsTimeout) {
       clearTimeout(this.saveSettingsTimeout);
     }
     this.saveSettingsTimeout = setTimeout(() => {
-      this.saveSidebarStateToServer(stateToSave);
+      this.saveSidebarStateToServer();
     }, 1000); // 1 second debounce
   }
 
   /**
    * Save sidebar state to User Settings entity on server using UserInfoEngine for cached lookup
+   * Includes collapsed, pinned, sidebarWidth, and artifactPanelWidth
    */
-  private async saveSidebarStateToServer(state: { collapsed: boolean; pinned: boolean }): Promise<void> {
+  private async saveSidebarStateToServer(): Promise<void> {
     try {
       const userId = this.currentUser?.ID;
       if (!userId) {
         return;
       }
+
+      const stateToSave = {
+        collapsed: this.isSidebarCollapsed,
+        pinned: this.isSidebarPinned,
+        sidebarWidth: this.sidebarWidth,
+        artifactPanelWidth: this.artifactPanelWidth
+      };
 
       const engine = UserInfoEngine.Instance;
       const md = new Metadata();
@@ -623,12 +663,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       if (!setting) {
         // Create new setting
-        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
         setting.UserID = userId;
         setting.Setting = this.USER_SETTING_SIDEBAR_KEY;
       }
 
-      setting.Value = JSON.stringify(state);
+      setting.Value = JSON.stringify(stateToSave);
       await setting.Save();
     } catch (error) {
       console.warn('Failed to save sidebar state to User Settings:', error);
@@ -636,7 +676,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * Load sidebar state from User Settings (server) using UserInfoEngine, falling back to localStorage
+   * Load sidebar state from User Settings (server) using UserInfoEngine
+   * Includes collapsed, pinned, sidebarWidth, and artifactPanelWidth
    * For new users with no saved state, defaults to collapsed with new conversation
    */
   private async loadSidebarState(): Promise<void> {
@@ -645,7 +686,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     try {
       const userId = this.currentUser?.ID;
       if (userId) {
-        // Try loading from cached User Settings first
+        // Try loading from cached User Settings
         const engine = UserInfoEngine.Instance;
         const setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
 
@@ -653,26 +694,15 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
           const state = JSON.parse(setting.Value);
           this.isSidebarCollapsed = state.collapsed ?? true;
           this.isSidebarPinned = state.pinned ?? false;
-          this.isLoadingSettings = false;
-          return;
-        }
-      }
 
-      // Fall back to localStorage
-      const saved = localStorage.getItem(this.SIDEBAR_COLLAPSED_KEY);
-      if (saved) {
-        try {
-          const state = JSON.parse(saved);
-          if (typeof state === 'object' && state !== null) {
-            this.isSidebarCollapsed = state.collapsed ?? true;
-            this.isSidebarPinned = state.pinned ?? false;
-            this.isLoadingSettings = false;
-            return;
+          // Load width values if present (with validation)
+          if (typeof state.sidebarWidth === 'number' && state.sidebarWidth >= 200 && state.sidebarWidth <= 500) {
+            this.sidebarWidth = state.sidebarWidth;
           }
-        } catch {
-          // Fall back to old boolean format
-          this.isSidebarCollapsed = saved === 'true';
-          this.isSidebarPinned = !this.isSidebarCollapsed;
+          if (typeof state.artifactPanelWidth === 'number' && state.artifactPanelWidth >= 20 && state.artifactPanelWidth <= 70) {
+            this.artifactPanelWidth = state.artifactPanelWidth;
+          }
+
           this.isLoadingSettings = false;
           return;
         }
@@ -891,12 +921,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.isSidebarResizing = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      this.saveSidebarWidth();
+      this.saveSidebarState(); // Save width to User Settings
     } else if (this.isArtifactPanelResizing) {
       this.isArtifactPanelResizing = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      this.saveArtifactPanelWidth();
+      this.saveSidebarState(); // Save width to User Settings
     }
   }
 
@@ -945,57 +975,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private onResizeTouchEnd(event: TouchEvent): void {
     if (this.isSidebarResizing) {
       this.isSidebarResizing = false;
-      this.saveSidebarWidth();
+      this.saveSidebarState(); // Save width to User Settings
     } else if (this.isArtifactPanelResizing) {
       this.isArtifactPanelResizing = false;
-      this.saveArtifactPanelWidth();
-    }
-  }
-
-  /**
-   * LocalStorage persistence methods
-   */
-  private loadSidebarWidth(): void {
-    try {
-      const saved = localStorage.getItem(this.SIDEBAR_WIDTH_KEY);
-      if (saved) {
-        const width = parseInt(saved, 10);
-        if (!isNaN(width) && width >= 200 && width <= 500) {
-          this.sidebarWidth = width;
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to load sidebar width from localStorage:', error);
-    }
-  }
-
-  private saveSidebarWidth(): void {
-    try {
-      localStorage.setItem(this.SIDEBAR_WIDTH_KEY, this.sidebarWidth.toString());
-    } catch (error) {
-      console.warn('Failed to save sidebar width to localStorage:', error);
-    }
-  }
-
-  private loadArtifactPanelWidth(): void {
-    try {
-      const saved = localStorage.getItem(this.ARTIFACT_PANEL_WIDTH_KEY);
-      if (saved) {
-        const width = parseFloat(saved);
-        if (!isNaN(width) && width >= 20 && width <= 70) {
-          this.artifactPanelWidth = width;
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to load artifact panel width from localStorage:', error);
-    }
-  }
-
-  private saveArtifactPanelWidth(): void {
-    try {
-      localStorage.setItem(this.ARTIFACT_PANEL_WIDTH_KEY, this.artifactPanelWidth.toString());
-    } catch (error) {
-      console.warn('Failed to save artifact panel width to localStorage:', error);
+      this.saveSidebarState(); // Save width to User Settings
     }
   }
 
@@ -1040,6 +1023,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.actionableCommandExecuted.emit(command);
   }
 
+  onNavigationRequest(event: NavigationRequest): void {
+    this.navigationRequested.emit(event);
+  }
+
   onOpenEntityRecordFromTasks(event: {entityName: string; recordId: string}): void {
     // Convert to actionable command and emit
     const command: ActionableCommand = {
@@ -1053,7 +1040,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.actionableCommandExecuted.emit(command);
   }
 
-  onTaskClicked(task: TaskEntity): void {
+  onTaskClicked(task: MJTaskEntity): void {
     // Switch to Tasks tab and set active task ID
     this.activeTab = 'tasks';
     this._activeTaskId = task.ID;
@@ -1176,7 +1163,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   async onArtifactShareRequested(artifactId: string): Promise<void> {
     // Load the artifact entity to pass to the modal
     const md = new Metadata();
-    const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts');
+    const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts');
     await artifact.Load(artifactId);
 
     if (artifact) {

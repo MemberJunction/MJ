@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Detection — Option C: Table View</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem; text-decoration: none; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  .layout { max-width: 1300px; margin: 2rem auto 0; }
+
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem;
+  }
+  .page-header h1 {
+    font-size: 1.5rem; font-weight: 700;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .page-header h1 i { color: var(--accent); }
+  .toolbar {
+    display: flex; gap: 0.5rem; align-items: center;
+  }
+  .search-mini {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.45rem 0.85rem 0.45rem 2.25rem;
+    font-size: 0.82rem; color: var(--text-primary);
+    outline: none; width: 220px;
+    position: relative;
+  }
+  .search-mini::placeholder { color: var(--text-muted); }
+  .search-wrap { position: relative; }
+  .search-wrap i {
+    position: absolute; left: 0.75rem; top: 50%;
+    transform: translateY(-50%); color: var(--text-muted); font-size: 0.8rem;
+  }
+  .btn {
+    padding: 0.45rem 0.85rem; border-radius: 8px;
+    font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 0.4rem; border: none;
+  }
+  .btn-outline { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--text-primary); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #2563eb; }
+
+  /* Summary bar */
+  .summary-bar {
+    display: flex; gap: 1rem; margin-bottom: 1.5rem;
+  }
+  .summary-pill {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.6rem 1rem;
+    display: flex; align-items: center; gap: 0.5rem;
+    font-size: 0.82rem; color: var(--text-secondary);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .summary-pill:hover { border-color: var(--accent); }
+  .summary-pill.active { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.08); }
+  .summary-pill .count {
+    font-weight: 700;
+  }
+
+  /* Table */
+  .table-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    text-align: left;
+    padding: 0.7rem 1.25rem;
+    font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted);
+    background: rgba(15,23,42,0.5);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: color 0.2s;
+    user-select: none;
+  }
+  th:hover { color: var(--text-primary); }
+  th.sorted { color: var(--accent); }
+  td {
+    padding: 0.7rem 1.25rem;
+    font-size: 0.85rem;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+    color: var(--text-secondary);
+    vertical-align: middle;
+  }
+  tr { transition: background 0.15s; cursor: pointer; }
+  tr:hover td { background: var(--bg-card-hover); }
+  tr.expanded td { background: rgba(59,130,246,0.04); border-bottom-color: transparent; }
+
+  .pair-names {
+    display: flex; flex-direction: column; gap: 0.15rem;
+  }
+  .pair-a { font-weight: 600; color: var(--text-primary); font-size: 0.88rem; }
+  .pair-b { color: var(--text-muted); font-size: 0.78rem; }
+  .entity-badge {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.7rem; font-weight: 600;
+  }
+  .entity-badge.account { background: rgba(59,130,246,0.12); color: var(--accent); }
+  .entity-badge.contact { background: rgba(168,85,247,0.12); color: var(--purple); }
+  .score-bar {
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .score-track {
+    width: 60px; height: 4px;
+    background: var(--bg-page);
+    border-radius: 2px; overflow: hidden;
+  }
+  .score-fill { height: 100%; border-radius: 2px; }
+  .score-val { font-size: 0.78rem; font-weight: 700; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.15rem 0.55rem; border-radius: 10px;
+    font-size: 0.68rem; font-weight: 600;
+  }
+  .status-pill.new { background: rgba(239,68,68,0.12); color: var(--error); }
+  .status-pill.review { background: rgba(245,158,11,0.12); color: var(--warning); }
+  .status-pill.merged { background: rgba(34,197,94,0.12); color: var(--success); }
+  .status-pill.dismissed { background: rgba(100,116,139,0.12); color: var(--text-muted); }
+
+  .diff-count { font-size: 0.78rem; color: var(--text-muted); }
+  .diff-count strong { color: var(--text-primary); }
+
+  /* Expanded detail */
+  .detail-row td {
+    padding: 0;
+    background: rgba(15,23,42,0.5);
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-content {
+    padding: 1.25rem 1.5rem;
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+  }
+  .detail-col-header {
+    padding: 0.5rem 1rem;
+    font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted);
+    background: rgba(15,23,42,0.8);
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-col-header:first-child { border-right: 1px solid var(--border); }
+  .detail-field {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid rgba(51,65,85,0.4);
+  }
+  .detail-field:last-child { border-bottom: none; }
+  .df-cell {
+    padding: 0.45rem 1rem;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+  }
+  .df-cell:first-child { border-right: 1px solid rgba(51,65,85,0.4); }
+  .df-cell.diff { background: rgba(245,158,11,0.06); color: var(--warning); font-weight: 600; }
+  .df-label {
+    font-size: 0.62rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 0.1rem;
+  }
+  .detail-actions {
+    display: flex; gap: 0.5rem;
+    justify-content: flex-end;
+  }
+
+  .check {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .check.checked { background: var(--accent); border-color: var(--accent); }
+  .check.checked::after { content: '\2713'; color: white; font-size: 0.6rem; }
+
+  @media (max-width: 768px) {
+    body { padding: 1rem; }
+    .summary-bar { flex-wrap: wrap; }
+    table { font-size: 0.8rem; }
+    .detail-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<div class="layout">
+  <div class="page-header">
+    <h1><i class="fa-solid fa-clone"></i> Duplicate Detection</h1>
+    <div class="toolbar">
+      <div class="search-wrap">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" class="search-mini" placeholder="Search duplicates...">
+      </div>
+      <button class="btn btn-outline"><i class="fa-solid fa-filter"></i> Filters</button>
+      <button class="btn btn-primary"><i class="fa-solid fa-play"></i> Run Detection</button>
+    </div>
+  </div>
+
+  <div class="summary-bar">
+    <div class="summary-pill active">
+      <span>All Pairs</span>
+      <span class="count">23</span>
+    </div>
+    <div class="summary-pill">
+      <span style="color: var(--error);">&#9679;</span> New
+      <span class="count">8</span>
+    </div>
+    <div class="summary-pill">
+      <span style="color: var(--warning);">&#9679;</span> Reviewing
+      <span class="count">5</span>
+    </div>
+    <div class="summary-pill">
+      <span style="color: var(--success);">&#9679;</span> Merged
+      <span class="count">2</span>
+    </div>
+    <div class="summary-pill">
+      <span style="color: var(--text-muted);">&#9679;</span> Dismissed
+      <span class="count">8</span>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 30px;"><div class="check"></div></th>
+          <th>Duplicate Pair</th>
+          <th>Entity</th>
+          <th class="sorted">Score <i class="fa-solid fa-arrow-down" style="font-size: 0.55rem;"></i></th>
+          <th>Differences</th>
+          <th>Status</th>
+          <th>Detected</th>
+          <th style="width: 40px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Expanded row -->
+        <tr class="expanded">
+          <td><div class="check checked"></div></td>
+          <td>
+            <div class="pair-names">
+              <span class="pair-a">Acme Corp</span>
+              <span class="pair-b">vs ACME Corporation Inc.</span>
+            </div>
+          </td>
+          <td><span class="entity-badge account"><i class="fa-solid fa-building"></i> Account</span></td>
+          <td>
+            <div class="score-bar">
+              <div class="score-track"><div class="score-fill" style="width: 94%; background: var(--error);"></div></div>
+              <span class="score-val" style="color: var(--error);">94%</span>
+            </div>
+          </td>
+          <td><div class="diff-count"><strong>4</strong> of 11</div></td>
+          <td><span class="status-pill new"><i class="fa-solid fa-circle"></i> New</span></td>
+          <td style="font-size: 0.78rem; color: var(--text-muted);">2h ago</td>
+          <td><i class="fa-solid fa-chevron-up" style="color: var(--accent); font-size: 0.7rem;"></i></td>
+        </tr>
+        <!-- Detail expansion -->
+        <tr class="detail-row">
+          <td colspan="8">
+            <div class="detail-content">
+              <div class="detail-grid">
+                <div class="detail-col-header" style="color: var(--accent);">Record A (Master)</div>
+                <div class="detail-col-header" style="color: var(--purple);">Record B (Duplicate)</div>
+
+                <div class="detail-field">
+                  <div class="df-cell"><div class="df-label">Name</div>Acme Corp</div>
+                  <div class="df-cell"><div class="df-label">Name</div>Acme Corp</div>
+                </div>
+                <div class="detail-field">
+                  <div class="df-cell diff"><div class="df-label">Full Name</div>Acme Corporation</div>
+                  <div class="df-cell diff"><div class="df-label">Full Name</div>ACME Corporation Inc.</div>
+                </div>
+                <div class="detail-field">
+                  <div class="df-cell"><div class="df-label">Industry</div>Technology</div>
+                  <div class="df-cell"><div class="df-label">Industry</div>Technology</div>
+                </div>
+                <div class="detail-field">
+                  <div class="df-cell diff"><div class="df-label">Phone</div>(555) 123-4567</div>
+                  <div class="df-cell diff"><div class="df-label">Phone</div>555-123-4567</div>
+                </div>
+                <div class="detail-field">
+                  <div class="df-cell"><div class="df-label">Website</div>www.acmecorp.com</div>
+                  <div class="df-cell"><div class="df-label">Website</div>www.acmecorp.com</div>
+                </div>
+                <div class="detail-field">
+                  <div class="df-cell diff"><div class="df-label">Revenue</div>$2.4M ARR</div>
+                  <div class="df-cell diff"><div class="df-label">Revenue</div>$2,400,000</div>
+                </div>
+                <div class="detail-field">
+                  <div class="df-cell diff"><div class="df-label">Owner</div>Marcus Johnson</div>
+                  <div class="df-cell diff"><div class="df-label">Owner</div>Lisa Park</div>
+                </div>
+              </div>
+              <div class="detail-actions">
+                <button class="btn btn-outline" style="font-size: 0.75rem;"><i class="fa-solid fa-xmark"></i> Not a Duplicate</button>
+                <button class="btn btn-outline" style="font-size: 0.75rem;"><i class="fa-solid fa-clock"></i> Skip</button>
+                <button class="btn btn-primary" style="font-size: 0.75rem; background: var(--success);"><i class="fa-solid fa-compress-alt"></i> Merge Records</button>
+              </div>
+            </div>
+          </td>
+        </tr>
+
+        <!-- Regular rows -->
+        <tr>
+          <td><div class="check"></div></td>
+          <td>
+            <div class="pair-names">
+              <span class="pair-a">John Smith</span>
+              <span class="pair-b">vs Jon Smith</span>
+            </div>
+          </td>
+          <td><span class="entity-badge contact"><i class="fa-solid fa-user"></i> Contact</span></td>
+          <td>
+            <div class="score-bar">
+              <div class="score-track"><div class="score-fill" style="width: 89%; background: var(--warning);"></div></div>
+              <span class="score-val" style="color: var(--warning);">89%</span>
+            </div>
+          </td>
+          <td><div class="diff-count"><strong>2</strong> of 8</div></td>
+          <td><span class="status-pill new"><i class="fa-solid fa-circle"></i> New</span></td>
+          <td style="font-size: 0.78rem; color: var(--text-muted);">3h ago</td>
+          <td><i class="fa-solid fa-chevron-down" style="color: var(--text-muted); font-size: 0.7rem;"></i></td>
+        </tr>
+        <tr>
+          <td><div class="check"></div></td>
+          <td>
+            <div class="pair-names">
+              <span class="pair-a">TechFlow</span>
+              <span class="pair-b">vs Tech Flow Inc</span>
+            </div>
+          </td>
+          <td><span class="entity-badge account"><i class="fa-solid fa-building"></i> Account</span></td>
+          <td>
+            <div class="score-bar">
+              <div class="score-track"><div class="score-fill" style="width: 87%; background: var(--warning);"></div></div>
+              <span class="score-val" style="color: var(--warning);">87%</span>
+            </div>
+          </td>
+          <td><div class="diff-count"><strong>3</strong> of 11</div></td>
+          <td><span class="status-pill new"><i class="fa-solid fa-circle"></i> New</span></td>
+          <td style="font-size: 0.78rem; color: var(--text-muted);">4h ago</td>
+          <td><i class="fa-solid fa-chevron-down" style="color: var(--text-muted); font-size: 0.7rem;"></i></td>
+        </tr>
+        <tr>
+          <td><div class="check"></div></td>
+          <td>
+            <div class="pair-names">
+              <span class="pair-a">Sarah Chen</span>
+              <span class="pair-b">vs Sara Chen</span>
+            </div>
+          </td>
+          <td><span class="entity-badge contact"><i class="fa-solid fa-user"></i> Contact</span></td>
+          <td>
+            <div class="score-bar">
+              <div class="score-track"><div class="score-fill" style="width: 85%; background: var(--warning);"></div></div>
+              <span class="score-val" style="color: var(--warning);">85%</span>
+            </div>
+          </td>
+          <td><div class="diff-count"><strong>1</strong> of 8</div></td>
+          <td><span class="status-pill review"><i class="fa-solid fa-eye"></i> Review</span></td>
+          <td style="font-size: 0.78rem; color: var(--text-muted);">6h ago</td>
+          <td><i class="fa-solid fa-chevron-down" style="color: var(--text-muted); font-size: 0.7rem;"></i></td>
+        </tr>
+        <tr>
+          <td><div class="check"></div></td>
+          <td>
+            <div class="pair-names">
+              <span class="pair-a">DataSphere</span>
+              <span class="pair-b">vs Data Sphere LLC</span>
+            </div>
+          </td>
+          <td><span class="entity-badge account"><i class="fa-solid fa-building"></i> Account</span></td>
+          <td>
+            <div class="score-bar">
+              <div class="score-track"><div class="score-fill" style="width: 82%; background: var(--accent);"></div></div>
+              <span class="score-val" style="color: var(--accent);">82%</span>
+            </div>
+          </td>
+          <td><div class="diff-count"><strong>5</strong> of 11</div></td>
+          <td><span class="status-pill review"><i class="fa-solid fa-eye"></i> Review</span></td>
+          <td style="font-size: 0.78rem; color: var(--text-muted);">1d ago</td>
+          <td><i class="fa-solid fa-chevron-down" style="color: var(--text-muted); font-size: 0.7rem;"></i></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</body>
+</html>

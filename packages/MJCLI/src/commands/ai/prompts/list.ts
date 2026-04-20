@@ -1,5 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { PromptService } from '@memberjunction/ai-cli';
 import chalk from 'chalk';
 import ora from 'ora-classic';
 
@@ -18,9 +17,11 @@ export default class PromptsList extends Command {
   };
 
   async run(): Promise<void> {
+    const { PromptService } = await import('@memberjunction/ai-cli');
+
     const { flags } = await this.parse(PromptsList);
     const spinner = ora();
-    
+
     try {
       spinner.start('Loading available models...');
       const service = new PromptService();

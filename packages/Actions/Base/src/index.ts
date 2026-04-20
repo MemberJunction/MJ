@@ -1,5 +1,5 @@
 export * from './ActionEngine-Base';
-export * from './ActionEntity-Extended';
+export * from './MJActionEntityExtended';
 
 export * from './EntityActionEngine-Base';
-export * from './EntityActionEntity-Extended';
+export * from './MJEntityActionEntityExtended';

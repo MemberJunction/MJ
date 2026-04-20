@@ -13,12 +13,10 @@ import {
     SkipAPIAnalysisCompleteResponse,
     SkipAPIClarifyingQuestionResponse,
     SkipRequestPhase,
+    SkipResponsePhase,
     SkipAPIRequestAPIKey,
     SkipQueryInfo,
-    SkipEntityInfo,
-    SkipEntityFieldInfo,
-    SkipEntityFieldValueInfo,
-    SkipEntityRelationshipInfo,
+    SkipQueryCatalogEntry,
     SkipAPIAgentNote,
     SkipAPIAgentNoteType,
     SkipAPIArtifact,
@@ -26,12 +24,15 @@ import {
     SkipAPIArtifactType
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityRelationshipInfo } from '@memberjunction/core';
-import { sendPostRequest } from '../util.js';
+import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityFieldValueInfo, DatabaseProviderBase } from '@memberjunction/core';
+import { request as httpRequest } from 'http';
+import { request as httpsRequest } from 'https';
+import { gzip as gzipCompress, createGunzip } from 'zlib';
 import { configInfo, baseUrl, publicUrl, graphqlPort, graphqlRootPath, apiKey as callbackAPIKey } from '../config.js';
+import { getDbType } from '../index.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
-import { CopyScalarsAndArrays } from '@memberjunction/global';
+import { CopyScalarsAndArrays, UUIDsEqual } from '@memberjunction/global';
 import mssql from 'mssql';
 import { registerAccessToken, GetDataAccessToken } from '../resolvers/GetDataResolver.js';
 import { BehaviorSubject } from 'rxjs';
@@ -138,6 +139,13 @@ export interface SkipCallOptions {
      * the client should pass that payload back in the next request.
      */
     payload?: Record<string, any>;
+
+    /**
+     * Optional reference ID from the calling system. When the MJ API proxies a request
+     * to Skip via SkipProxyAgent, this contains the MJ-side Agent Run ID for cross-system
+     * correlation and debugging.
+     */
+    externalReferenceID?: string;
 }
 
 /**
@@ -171,6 +179,20 @@ export interface SkipCallResult {
 }
 
 /**
+ * Shape of a single SSE event received from the Skip API stream.
+ * Skip sends two formats:
+ * - Wrapped: `{type: 'status_update'|'streaming'|'complete', value: SkipAPIResponse}`
+ * - Flat (queue): `{responsePhase: 'queued'|'error', message: '...', error: '...'}`
+ */
+interface SkipStreamMessage {
+    type?: string;
+    value?: SkipAPIResponse;
+    responsePhase?: string;
+    message?: string;
+    error?: string;
+}
+
+/**
  * Skip TypeScript SDK
  * Provides a clean interface for calling the Skip SaaS API
  */
@@ -178,7 +200,7 @@ export class SkipSDK {
     private config: SkipSDKConfig;
 
     // Static cache for Skip entities (shared across all instances)
-    private static __skipEntitiesCache$: BehaviorSubject<Promise<SkipEntityInfo[]> | null> = new BehaviorSubject<Promise<SkipEntityInfo[]> | null>(null);
+    private static __skipEntitiesCache$: BehaviorSubject<Promise<EntityInfo[]> | null> = new BehaviorSubject<Promise<EntityInfo[]> | null>(null);
     private static __lastRefreshTime: number = 0;
 
     constructor(config?: SkipSDKConfig) {
@@ -201,19 +223,34 @@ export class SkipSDK {
             // Build the Skip API request
             const skipRequest = await this.buildSkipRequest(options);
 
-            // Call Skip API with streaming support
-            const responses = await sendPostRequest(
+            // Call Skip API with SSE streaming support
+            const responses = await this.sendSSERequest(
                 this.config.apiUrl,
                 skipRequest,
-                true, // useCompression
                 this.buildHeaders(),
-                (streamMessage: any) => {
+                (streamMessage: SkipStreamMessage) => {
                     // Handle streaming status updates
+                    // Queue messages come as flat objects: {responsePhase: 'queued'|'error', message: '...', error: '...'}
+                    // Skip API messages come wrapped: {type: 'status_update', value: {responsePhase: '...', messages: [...]}}
                     if (streamMessage.type === 'status_update' && options.onStatusUpdate) {
                         const statusContent = streamMessage.value?.messages?.[0]?.content;
                         const responsePhase = streamMessage.value?.responsePhase;
                         if (statusContent) {
                             options.onStatusUpdate(statusContent, responsePhase);
+                        }
+                    } else if (streamMessage.responsePhase === SkipResponsePhase.queued && options.onStatusUpdate) {
+                        // Handle queue progress messages
+                        const statusContent = streamMessage.message;
+                        const responsePhase = streamMessage.responsePhase;
+                        if (statusContent) {
+                            options.onStatusUpdate(statusContent, responsePhase);
+                        }
+                    } else if (streamMessage.responsePhase === 'error') {
+                        // Queue error messages - log but don't throw (final response will handle error)
+                        // Note: 'error' is not in SkipResponsePhase enum - it's a queue-specific error state
+                        LogError(`[SkipSDK] Queue error: ${streamMessage.error || 'Unknown error'}`);
+                        if (options.onStatusUpdate) {
+                            options.onStatusUpdate(`Error: ${streamMessage.error || 'Request failed'}`, 'error');
                         }
                     }
                 }
@@ -222,6 +259,19 @@ export class SkipSDK {
             // The last response is the final one
             if (responses && responses.length > 0) {
                 const finalResponse = responses[responses.length - 1].value as SkipAPIResponse;
+
+                // Check if Skip itself reported an error (success: false in the response body)
+                if (finalResponse.success === false) {
+                    const skipError = finalResponse.error || 'Skip API returned an error response';
+                    LogError(`[SkipSDK] Skip API error: ${skipError}`);
+                    return {
+                        success: false,
+                        response: finalResponse,
+                        responsePhase: finalResponse.responsePhase,
+                        error: skipError,
+                        allResponses: responses
+                    };
+                }
 
                 return {
                     success: true,
@@ -238,9 +288,23 @@ export class SkipSDK {
 
         } catch (error) {
             LogError(`[SkipSDK] Error calling Skip API: ${error}`);
+
+            // Provide user-friendly error messages for common failures
+            const rawError = error instanceof Error ? error.message : String(error);
+            let userFriendlyError = rawError;
+            const errorStr = rawError.toLowerCase();
+
+            if (errorStr.includes('stream error') || errorStr.includes('aborted') || errorStr.includes('econnreset')) {
+                userFriendlyError = 'The Skip analysis service became unavailable during processing. Please try again.';
+            } else if (errorStr.includes('econnrefused') || errorStr.includes('enotfound')) {
+                userFriendlyError = 'Unable to connect to the Skip analysis service. The service may be temporarily unavailable.';
+            } else if (errorStr.includes('timeout')) {
+                userFriendlyError = 'The Skip analysis service took too long to respond. Please try again.';
+            }
+
             return {
                 success: false,
-                error: String(error)
+                error: userFriendlyError
             };
         }
     }
@@ -262,7 +326,8 @@ export class SkipSDK {
             includeRequests = false,
             forceEntityRefresh = false,
             includeCallbackAuth = true,
-            payload
+            payload,
+            externalReferenceID
         } = options;
 
         // Build base request with metadata
@@ -294,6 +359,7 @@ export class SkipSDK {
             payload, // Pass through payload for incremental artifact building (e.g., PRD in progress)
             entities: baseRequest.entities || [],
             queries: baseRequest.queries || [],
+            queryCatalog: baseRequest.queryCatalog,
             notes: baseRequest.notes,
             noteTypes: baseRequest.noteTypes,
             userEmail: baseRequest.userEmail,
@@ -302,7 +368,9 @@ export class SkipSDK {
             apiKeys: baseRequest.apiKeys,
             callingServerURL: baseRequest.callingServerURL,
             callingServerAPIKey: baseRequest.callingServerAPIKey,
-            callingServerAccessToken: baseRequest.callingServerAccessToken
+            callingServerAccessToken: baseRequest.callingServerAccessToken,
+            externalReferenceID,
+            databasePlatform: getDbType()
         };
 
         return request;
@@ -322,8 +390,11 @@ export class SkipSDK {
         includeCallbackAuth: boolean,
         additionalTokenInfo: any = {}
     ): Promise<Partial<SkipAPIRequest>> {
-        const entities = includeEntities ? await this.buildEntities(dataSource, forceEntityRefresh) : [];
+        const entities = includeEntities ? await this.buildEntities(forceEntityRefresh) : [];
         const queries = includeQueries ? this.buildQueries() : [];
+        // Always build the lightweight query catalog for collision detection,
+        // regardless of whether full queries are included
+        const queryCatalog = this.buildQueryCatalog();
         const { notes, noteTypes } = includeNotes ? await this.buildAgentNotes(contextUser) : { notes: [], noteTypes: [] };
         // Note: requests would be built here if includeRequests is true
 
@@ -348,6 +419,7 @@ export class SkipSDK {
         return {
             entities,
             queries,
+            queryCatalog,
             notes,
             noteTypes,
             userEmail: contextUser.Email,
@@ -364,7 +436,7 @@ export class SkipSDK {
      * Build entity metadata for Skip
      * Copied from AskSkipResolver.BuildSkipEntities - uses cached metadata with refresh logic
      */
-    private async buildEntities(dataSource: mssql.ConnectionPool, forceRefresh: boolean, refreshIntervalMinutes: number = 15): Promise<SkipEntityInfo[]> {
+    private async buildEntities(forceRefresh: boolean, refreshIntervalMinutes: number = 15): Promise<EntityInfo[]> {
         try {
             const now = Date.now();
             const cacheExpired = (now - SkipSDK.__lastRefreshTime) > (refreshIntervalMinutes * 60 * 1000);
@@ -372,7 +444,7 @@ export class SkipSDK {
             // If force refresh is requested OR cache expired OR cache is empty, refresh
             if (forceRefresh || cacheExpired || SkipSDK.__skipEntitiesCache$.value === null) {
                 LogStatus(`[SkipSDK] Refreshing Skip entities cache (force: ${forceRefresh}, expired: ${cacheExpired})`);
-                const newData = this.refreshSkipEntities(dataSource);
+                const newData = this.refreshSkipEntities();
                 SkipSDK.__skipEntitiesCache$.next(newData);
             }
 
@@ -401,9 +473,11 @@ export class SkipSDK {
             SQL: q.SQL,
             Status: q.Status,
             QualityRank: q.QualityRank,
+            Reusable: q.Reusable,
             EmbeddingVector: q.EmbeddingVector,
             EmbeddingModelID: q.EmbeddingModelID,
             EmbeddingModelName: q.EmbeddingModel,
+            TechnicalDescription: q.TechnicalDescription,
             Fields: q.Fields.map((f) => ({
                 ID: f.ID,
                 QueryID: f.QueryID,
@@ -439,7 +513,7 @@ export class SkipSDK {
             })),
             CacheEnabled: q.CacheEnabled,
             CacheMaxSize: q.CacheMaxSize,
-            CacheTTLMinutes: q.CacheMaxSize,
+            CacheTTLMinutes: q.CacheTTLMinutes,
             CacheValidationSQL: q.CacheValidationSQL
         }));
     }
@@ -448,11 +522,27 @@ export class SkipSDK {
      * Recursively build category path for a query
      */
     private buildQueryCategoryPath(md: Metadata, categoryID: string): string {
-        const cat = md.QueryCategories.find((c) => c.ID === categoryID);
+        const cat = md.QueryCategories.find((c) => UUIDsEqual(c.ID, categoryID));
         if (!cat) return '';
         if (!cat.ParentID) return cat.Name;
         const parentPath = this.buildQueryCategoryPath(md, cat.ParentID);
         return parentPath ? `${parentPath}/${cat.Name}` : cat.Name;
+    }
+
+    /**
+     * Build a lightweight catalog of ALL query names and category paths (regardless of status).
+     * Always called regardless of includeQueries, so collision detection
+     * has accurate data even when full query metadata is not transmitted.
+     * Includes all statuses because the database enforces name+category uniqueness
+     * across all queries, not just approved ones.
+     */
+    private buildQueryCatalog(): SkipQueryCatalogEntry[] {
+        const md = new Metadata();
+
+        return md.Queries.map((q) => ({
+            Name: q.Name,
+            CategoryPath: this.buildQueryCategoryPath(md, q.CategoryID)
+        }));
     }
 
     /**
@@ -620,11 +710,151 @@ export class SkipSDK {
     }
 
     /**
+     * Send an SSE-aware POST request to the Skip API.
+     * Replaces sendPostRequest for SSE format: parses `data: {json}\n\n` events
+     * instead of NDJSON `{json}\n` lines. This is required because Azure Container
+     * Apps' Envoy proxy buffers NDJSON responses but streams SSE responses.
+     */
+    private async sendSSERequest(
+        url: string,
+        payload: SkipAPIRequest,
+        headers: Record<string, string>,
+        streamCallback?: (event: SkipStreamMessage) => void
+    ): Promise<SkipStreamMessage[]> {
+        // Gzip the request body
+        const compressed = await new Promise<Buffer>((resolve, reject) => {
+            gzipCompress(JSON.stringify(payload), (err, result) => {
+                if (err) reject(err);
+                else resolve(result);
+            });
+        });
+
+        return new Promise((resolve, reject) => {
+            try {
+                const parsedUrl = new URL(url);
+                const options = {
+                    hostname: parsedUrl.hostname,
+                    port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+                    path: parsedUrl.pathname,
+                    method: 'POST' as const,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Encoding': 'gzip',
+                        ...headers
+                    }
+                };
+
+                const requestFn = parsedUrl.protocol === 'https:' ? httpsRequest : httpRequest;
+                const events: SkipStreamMessage[] = [];
+                let buffer = '';
+                let streamEnded = false;
+
+                const parseSSELine = (line: string): void => {
+                    if (line.trim() === '') return;           // Skip empty lines (SSE event delimiters)
+                    if (!line.startsWith('data: ')) return;   // Skip non-data SSE fields
+                    const jsonStr = line.slice(6);
+                    if (!jsonStr.trim()) return;
+
+                    try {
+                        const event = JSON.parse(jsonStr) as SkipStreamMessage;
+                        events.push(event);
+                        streamCallback?.(event);
+                    } catch (e) {
+                        LogError(`[SkipSDK] SSE parse error: ${e}`);
+                    }
+                };
+
+                const handleStreamEnd = (): void => {
+                    if (streamEnded) return;
+                    streamEnded = true;
+                    // Try to parse any remaining data in buffer
+                    if (buffer.trim()) {
+                        parseSSELine(buffer);
+                    }
+                    resolve(events);
+                };
+
+                const req = requestFn(options, (res) => {
+                    // Check for non-2xx HTTP status codes before attempting SSE parsing.
+                    // The Skip API returns JSON error bodies for auth/validation failures (401, 403, etc.)
+                    // which won't contain SSE `data:` lines, resulting in an empty events array
+                    // and the misleading "No response received from Skip API" error.
+                    if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+                        let errorBody = '';
+                        res.on('data', (chunk: Buffer) => { errorBody += chunk.toString(); });
+                        res.on('end', () => {
+                            let errorMessage = `Skip API returned HTTP ${res.statusCode}`;
+                            try {
+                                const parsed = JSON.parse(errorBody);
+                                if (parsed.message) {
+                                    errorMessage = parsed.message;
+                                } else if (parsed.error) {
+                                    errorMessage = parsed.error;
+                                }
+                            } catch {
+                                // Non-JSON body — use raw text if available
+                                if (errorBody.trim()) {
+                                    errorMessage += `: ${errorBody.trim().substring(0, 200)}`;
+                                }
+                            }
+                            LogError(`[SkipSDK] HTTP ${res.statusCode} from ${url}: ${errorMessage}`);
+                            reject(new Error(errorMessage));
+                        });
+                        return;
+                    }
+
+                    const gunzip = createGunzip();
+                    const stream = res.headers['content-encoding'] === 'gzip' ? res.pipe(gunzip) : res;
+
+                    stream.on('data', (chunk: Buffer) => {
+                        buffer += chunk.toString();
+                        let boundary: number;
+                        while ((boundary = buffer.indexOf('\n')) !== -1) {
+                            const line = buffer.substring(0, boundary);
+                            buffer = buffer.substring(boundary + 1);
+                            parseSSELine(line);
+                        }
+                    });
+
+                    stream.on('end', handleStreamEnd);
+
+                    stream.on('close', () => {
+                        if (!streamEnded) {
+                            LogError(`[SkipSDK] SSE stream closed prematurely for ${url}`);
+                            handleStreamEnd();
+                        }
+                    });
+
+                    stream.on('error', (e: Error) => {
+                        if (!streamEnded) {
+                            LogError(`[SkipSDK] SSE stream error for ${url}: ${e.message}`);
+                            reject(new Error(`SSE stream error: ${e.message}`));
+                        }
+                    });
+                });
+
+                req.on('error', (e: Error) => {
+                    LogError(`[SkipSDK] SSE request error for ${url}: ${e.message}`);
+                    reject(new Error(`HTTP request failed to ${url}: ${e.message}`));
+                });
+
+                req.write(compressed);
+                req.end();
+            } catch (e) {
+                LogError(`[SkipSDK] sendSSERequest error: ${e}`);
+                reject(e);
+            }
+        });
+    }
+
+    /**
      * Refreshes the Skip entities cache
      * Rebuilds the entity information that is provided to Skip
-     * Copied from AskSkipResolver.refreshSkipEntities
+     * Refreshes the entity metadata cache. Filters entities by schema/scope config,
+     * filters fields by AI scope, and enriches field values from the database.
+     * Returns EntityInfo objects directly — no intermediate Skip-specific types needed.
      */
-    private async refreshSkipEntities(dataSource: mssql.ConnectionPool): Promise<SkipEntityInfo[]> {
+    private async refreshSkipEntities(): Promise<EntityInfo[]> {
         try {
             const md = new Metadata();
 
@@ -657,12 +887,12 @@ export class SkipSDK {
                 LogError(`[SkipSDK.refreshSkipEntities] WARNING: No entities passed filtering! This will result in empty Skip entities list.`);
             }
 
-            // Now we have our list of entities, pack em up
-            const result = await Promise.all(entities.map((e) => this.packSingleSkipEntityInfo(e, dataSource)));
+            // Build enriched EntityInfo objects with filtered fields and packed values
+            const result = await Promise.all(entities.map((e) => this.buildEntityForSkip(e)));
 
             LogStatus(`[SkipSDK.refreshSkipEntities] Successfully packed ${result.length} entities for Skip`);
 
-            SkipSDK.__lastRefreshTime = Date.now(); // Update last refresh time
+            SkipSDK.__lastRefreshTime = Date.now();
             return result;
         }
         catch (e) {
@@ -672,179 +902,95 @@ export class SkipSDK {
     }
 
     /**
-     * Packs information about a single entity for Skip
-     * Includes fields, relationships, and sample data
-     * Copied from AskSkipResolver.PackSingleSkipEntityInfo
+     * Builds an EntityInfo object for Skip, filtering fields by AI scope and
+     * enriching field values from the database. Returns a new EntityInfo
+     * constructed from a plain object so it serializes cleanly via toJSON().
      */
-    private async packSingleSkipEntityInfo(e: EntityInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityInfo> {
+    private async buildEntityForSkip(e: EntityInfo): Promise<EntityInfo> {
         try {
-            const ret: SkipEntityInfo = {
-                id: e.ID,
-                name: e.Name,
-                schemaName: e.SchemaName,
-                baseView: e.BaseView,
-                description: e.Description,
+            // Filter fields by scope (only include fields visible to AI)
+            const filteredFields = e.Fields.filter(f => {
+                const scopes = f.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase());
+                return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai');
+            });
 
-                fields: await Promise.all(e.Fields.filter(f => {
-                    // we want to check the scopes for the field level and make sure it is either All or AI or has both
-                    const scopes = f.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase());
-                    return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai');
-                }).map(f => {
-                    return this.packSingleSkipEntityField(f, dataSource);
-                })),
+            // Enrich each field with packed possible values
+            const enrichedFields = await Promise.all(filteredFields.map(f => this.enrichFieldValues(f)));
 
-                relatedEntities: e.RelatedEntities.map((r) => {
-                    return this.packSingleSkipEntityRelationship(r);
-                })
-            };
-            return ret;
+            // Clone the entity via toJSON, then swap in filtered+enriched fields and Skip-specific
+            // Active-only organic keys. Any future EntityInfo properties flow through automatically.
+            return new EntityInfo({
+                ...e.toJSON(),
+                Fields: enrichedFields,
+                OrganicKeys: e.OrganicKeys.filter(ok => ok.Status === 'Active'),
+            });
         }
-        catch (e) {
-            LogError(`[SkipSDK] packSingleSkipEntityInfo error: ${e}`);
+        catch (err) {
+            LogError(`[SkipSDK] buildEntityForSkip error: ${err}`);
             return null;
         }
     }
 
     /**
-     * Packs information about a single entity relationship
-     * These relationships help Skip understand the data model
-     * Copied from AskSkipResolver.PackSingleSkipEntityRelationship
+     * Enriches a field's EntityFieldValues with possible values from the database.
+     * Returns a plain object that can be used to construct an EntityFieldInfo.
      */
-    private packSingleSkipEntityRelationship(r: EntityRelationshipInfo): SkipEntityRelationshipInfo {
-        try {
-            return {
-                entityID: r.EntityID,
-                relatedEntityID: r.RelatedEntityID,
-                type: r.Type,
-                entityKeyField: r.EntityKeyField,
-                relatedEntityJoinField: r.RelatedEntityJoinField,
-                joinView: r.JoinView,
-                joinEntityJoinField: r.JoinEntityJoinField,
-                joinEntityInverseJoinField: r.JoinEntityInverseJoinField,
-                entity: r.Entity,
-                entityBaseView: r.EntityBaseView,
-                relatedEntity: r.RelatedEntity,
-                relatedEntityBaseView: r.RelatedEntityBaseView,
-            };
-        }
-        catch (e) {
-            LogError(`[SkipSDK] packSingleSkipEntityRelationship error: ${e}`);
-            return null;
-        }
+    private async enrichFieldValues(f: EntityFieldInfo): Promise<Record<string, unknown>> {
+        return {
+            ...f.toJSON(),
+            EntityFieldValues: await this.packFieldValues(f),
+        };
     }
 
     /**
-     * Packs information about a single entity field
-     * Includes metadata and possible values
-     * Copied from AskSkipResolver.PackSingleSkipEntityField
+     * Packs possible values for an entity field based on the ValuesToPackWithSchema setting.
+     * Returns EntityFieldValueInfo-compatible objects.
      */
-    private async packSingleSkipEntityField(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityFieldInfo> {
-        try {
-            return {
-                entityID: f.EntityID,
-                sequence: f.Sequence,
-                name: f.Name,
-                displayName: f.DisplayName,
-                category: f.Category,
-                type: f.Type,
-                description: f.Description,
-                isPrimaryKey: f.IsPrimaryKey,
-                allowsNull: f.AllowsNull,
-                isUnique: f.IsUnique,
-                length: f.Length,
-                precision: f.Precision,
-                scale: f.Scale,
-                sqlFullType: f.SQLFullType,
-                defaultValue: f.DefaultValue,
-                autoIncrement: f.AutoIncrement,
-                valueListType: f.ValueListType,
-                extendedType: f.ExtendedType,
-                defaultInView: f.DefaultInView,
-                defaultColumnWidth: f.DefaultColumnWidth,
-                isVirtual: f.IsVirtual,
-                isNameField: f.IsNameField,
-                relatedEntityID: f.RelatedEntityID,
-                relatedEntityFieldName: f.RelatedEntityFieldName,
-                relatedEntity: f.RelatedEntity,
-                relatedEntitySchemaName: f.RelatedEntitySchemaName,
-                relatedEntityBaseView: f.RelatedEntityBaseView,
-                possibleValues: await this.packFieldPossibleValues(f, dataSource),
-            };
-        }
-        catch (e) {
-            LogError(`[SkipSDK] packSingleSkipEntityField error: ${e}`);
-            return null;
-        }
-    }
-
-    /**
-     * Packs possible values for an entity field
-     * These values help Skip understand the domain and valid values for fields
-     * Copied from AskSkipResolver.PackFieldPossibleValues
-     */
-    private async packFieldPossibleValues(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityFieldValueInfo[]> {
+    private async packFieldValues(f: EntityFieldInfo): Promise<EntityFieldValueInfo[]> {
         try {
             if (f.ValuesToPackWithSchema === 'None') {
-                return []; // don't pack anything
+                return [];
             }
             else if (f.ValuesToPackWithSchema === 'All') {
-                // wants ALL of the distinct values
-                return await this.getFieldDistinctValues(f, dataSource);
+                return await this.getFieldDistinctValues(f);
             }
             else if (f.ValuesToPackWithSchema === 'Auto') {
-                // default setting - pack based on the ValueListType
                 if (f.ValueListTypeEnum === 'List') {
-                    // simple list of values in the Entity Field Values table
-                    return f.EntityFieldValues.map((v) => {
-                        return { value: v.Value, displayValue: v.Value };
-                    });
+                    return f.EntityFieldValues.map((v) => new EntityFieldValueInfo({ Value: v.Value, Code: v.Value }));
                 }
                 else if (f.ValueListTypeEnum === 'ListOrUserEntry') {
-                    // could be a user provided value, OR the values in the list of possible values.
-                    // get the distinct list of values from the DB and concat that with the f.EntityFieldValues array - deduped and return
-                    const values = await this.getFieldDistinctValues(f, dataSource);
+                    const values = await this.getFieldDistinctValues(f);
                     if (!values || values.length === 0) {
-                        // no result, just return the EntityFieldValues
-                        return f.EntityFieldValues.map((v) => {
-                            return { value: v.Value, displayValue: v.Value };
-                        });
+                        return f.EntityFieldValues.map((v) => new EntityFieldValueInfo({ Value: v.Value, Code: v.Value }));
                     }
                     else {
-                        return [...new Set([...f.EntityFieldValues.map((v) => {
-                            return { value: v.Value, displayValue: v.Value };
-                        }), ...values])];
+                        const fromEntityFieldValues = f.EntityFieldValues.map((v) => new EntityFieldValueInfo({ Value: v.Value, Code: v.Value }));
+                        return [...new Set([...fromEntityFieldValues, ...values])];
                     }
                 }
             }
-            return []; // if we get here, nothing to pack
+            return [];
         }
         catch (e) {
-            LogError(`[SkipSDK] packFieldPossibleValues error: ${e}`);
+            LogError(`[SkipSDK] packFieldValues error: ${e}`);
             return [];
         }
     }
 
     /**
-     * Gets distinct values for a field from the database
-     * Used to provide Skip with information about the possible values
-     * Copied from AskSkipResolver.GetFieldDistinctValues
+     * Gets distinct values for a field from the database.
+     * Returns EntityFieldValueInfo objects.
      */
-    private async getFieldDistinctValues(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityFieldValueInfo[]> {
+    private async getFieldDistinctValues(f: EntityFieldInfo): Promise<EntityFieldValueInfo[]> {
         try {
+            // Uses the provider's ExecuteSQL so this works on both SQL Server and PostgreSQL.
+            const provider = Metadata.Provider as DatabaseProviderBase;
             const sql = `SELECT DISTINCT ${f.Name} FROM ${f.SchemaName}.${f.BaseView}`;
-            const request = new mssql.Request(dataSource);
-            const result = await request.query(sql);
-            if (!result || !result.recordset) {
+            const rows = await provider.ExecuteSQL<Record<string, unknown>>(sql);
+            if (!rows || rows.length === 0) {
                 return [];
             }
-            else {
-                return result.recordset.map((r) => {
-                    return {
-                        value: r[f.Name],
-                        displayValue: r[f.Name]
-                    };
-                });
-            }
+            return rows.map((r) => new EntityFieldValueInfo({ Value: r[f.Name] as string, Code: r[f.Name] as string }));
         }
         catch (e) {
             LogError(`[SkipSDK] getFieldDistinctValues error: ${e}`);

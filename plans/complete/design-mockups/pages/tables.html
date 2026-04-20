@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tables - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .table-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--mj-space-4);
+      flex-wrap: wrap;
+      gap: var(--mj-space-3);
+    }
+    .table-search {
+      display: flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: var(--mj-space-2) var(--mj-space-3);
+    }
+    .table-search input {
+      border: none;
+      background: transparent;
+      outline: none;
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-primary);
+      width: 200px;
+    }
+    .table-search input::placeholder {
+      color: var(--mj-text-muted);
+    }
+    .table-search i {
+      color: var(--mj-text-muted);
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+    .table-actions {
+      display: flex;
+      gap: var(--mj-space-1);
+    }
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--mj-space-3) var(--mj-space-4);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-top: none;
+      border-radius: 0 0 var(--mj-radius-lg) var(--mj-radius-lg);
+    }
+    .pagination-info {
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-secondary);
+    }
+    .pagination-controls {
+      display: flex;
+      gap: var(--mj-space-1);
+    }
+    .pagination-btn {
+      padding: var(--mj-space-1-5) var(--mj-space-3);
+      font-size: var(--mj-text-sm);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      color: var(--mj-text-secondary);
+      cursor: pointer;
+    }
+    .pagination-btn:hover {
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
+    }
+    .pagination-btn.active {
+      background: var(--mj-brand-primary);
+      color: var(--mj-brand-on-primary);
+      border-color: var(--mj-brand-primary);
+    }
+    .pagination-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Tables</h1>
+      <p>Data table styles for displaying tabular information.</p>
+    </header>
+
+    <!-- Basic Table -->
+    <section class="section">
+      <h2 class="section-title">Basic Table</h2>
+      <div class="mj-table-container">
+        <table class="mj-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>John Doe</td>
+              <td>john.doe@example.com</td>
+              <td>Administrator</td>
+              <td><span class="mj-badge mj-badge-success">Active</span></td>
+            </tr>
+            <tr>
+              <td>Jane Smith</td>
+              <td>jane.smith@example.com</td>
+              <td>Editor</td>
+              <td><span class="mj-badge mj-badge-success">Active</span></td>
+            </tr>
+            <tr>
+              <td>Bob Johnson</td>
+              <td>bob.johnson@example.com</td>
+              <td>Viewer</td>
+              <td><span class="mj-badge mj-badge-warning">Pending</span></td>
+            </tr>
+            <tr>
+              <td>Alice Williams</td>
+              <td>alice.williams@example.com</td>
+              <td>Editor</td>
+              <td><span class="mj-badge mj-badge-error">Inactive</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Table with Toolbar -->
+    <section class="section">
+      <h2 class="section-title">Table with Toolbar and Actions</h2>
+      <div class="table-toolbar">
+        <div class="table-search">
+          <i class="fa-solid fa-search"></i>
+          <input type="text" placeholder="Search users...">
+        </div>
+        <div class="mj-flex mj-gap-2">
+          <button class="mj-btn mj-btn-secondary mj-btn-sm">
+            <i class="fa-solid fa-filter"></i> Filter
+          </button>
+          <button class="mj-btn mj-btn-secondary mj-btn-sm">
+            <i class="fa-solid fa-download"></i> Export
+          </button>
+          <button class="mj-btn mj-btn-primary mj-btn-sm">
+            <i class="fa-solid fa-plus"></i> Add User
+          </button>
+        </div>
+      </div>
+      <div class="mj-table-container" style="border-radius: var(--mj-radius-lg) var(--mj-radius-lg) 0 0;">
+        <table class="mj-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;"><input type="checkbox"></th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Department</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th style="width: 100px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>John Doe</td>
+              <td>john.doe@example.com</td>
+              <td>Engineering</td>
+              <td>Administrator</td>
+              <td><span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Active</span></td>
+              <td>
+                <div class="table-actions">
+                  <button class="mj-btn-icon"><i class="fa-solid fa-pen"></i></button>
+                  <button class="mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><input type="checkbox" checked></td>
+              <td>Jane Smith</td>
+              <td>jane.smith@example.com</td>
+              <td>Marketing</td>
+              <td>Editor</td>
+              <td><span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Active</span></td>
+              <td>
+                <div class="table-actions">
+                  <button class="mj-btn-icon"><i class="fa-solid fa-pen"></i></button>
+                  <button class="mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Bob Johnson</td>
+              <td>bob.johnson@example.com</td>
+              <td>Sales</td>
+              <td>Viewer</td>
+              <td><span class="mj-badge mj-badge-warning"><span class="mj-badge-dot"></span> Pending</span></td>
+              <td>
+                <div class="table-actions">
+                  <button class="mj-btn-icon"><i class="fa-solid fa-pen"></i></button>
+                  <button class="mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Alice Williams</td>
+              <td>alice.williams@example.com</td>
+              <td>Support</td>
+              <td>Editor</td>
+              <td><span class="mj-badge mj-badge-error"><span class="mj-badge-dot"></span> Inactive</span></td>
+              <td>
+                <div class="table-actions">
+                  <button class="mj-btn-icon"><i class="fa-solid fa-pen"></i></button>
+                  <button class="mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Charlie Brown</td>
+              <td>charlie.brown@example.com</td>
+              <td>Engineering</td>
+              <td>Viewer</td>
+              <td><span class="mj-badge mj-badge-success"><span class="mj-badge-dot"></span> Active</span></td>
+              <td>
+                <div class="table-actions">
+                  <button class="mj-btn-icon"><i class="fa-solid fa-pen"></i></button>
+                  <button class="mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <div class="pagination-info">
+          Showing 1-5 of 47 results
+        </div>
+        <div class="pagination-controls">
+          <button class="pagination-btn" disabled><i class="fa-solid fa-chevron-left"></i></button>
+          <button class="pagination-btn active">1</button>
+          <button class="pagination-btn">2</button>
+          <button class="pagination-btn">3</button>
+          <button class="pagination-btn">...</button>
+          <button class="pagination-btn">10</button>
+          <button class="pagination-btn"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Compact Table -->
+    <section class="section">
+      <h2 class="section-title">Entity Data Table Example</h2>
+      <p class="mj-text-secondary mj-mb-4">Example of a table showing AI model data with various column types.</p>
+      <div class="mj-table-container">
+        <table class="mj-table">
+          <thead>
+            <tr>
+              <th>Model Name</th>
+              <th>Vendor</th>
+              <th>Max Tokens</th>
+              <th>Cost/1K</th>
+              <th>Streaming</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>GPT-4 Turbo</strong></td>
+              <td>OpenAI</td>
+              <td style="font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm);">128,000</td>
+              <td style="font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm);">$0.01</td>
+              <td><i class="fa-solid fa-check" style="color: var(--mj-status-success);"></i></td>
+              <td><span class="mj-badge mj-badge-success">Active</span></td>
+            </tr>
+            <tr>
+              <td><strong>Claude 3 Opus</strong></td>
+              <td>Anthropic</td>
+              <td style="font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm);">200,000</td>
+              <td style="font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm);">$0.015</td>
+              <td><i class="fa-solid fa-check" style="color: var(--mj-status-success);"></i></td>
+              <td><span class="mj-badge mj-badge-success">Active</span></td>
+            </tr>
+            <tr>
+              <td><strong>Gemini Pro</strong></td>
+              <td>Google</td>
+              <td style="font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm);">32,000</td>
+              <td style="font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm);">$0.005</td>
+              <td><i class="fa-solid fa-check" style="color: var(--mj-status-success);"></i></td>
+              <td><span class="mj-badge mj-badge-success">Active</span></td>
+            </tr>
+            <tr>
+              <td><strong>Mixtral 8x7B</strong></td>
+              <td>Mistral</td>
+              <td style="font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm);">32,000</td>
+              <td style="font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm);">$0.002</td>
+              <td><i class="fa-solid fa-times" style="color: var(--mj-text-muted);"></i></td>
+              <td><span class="mj-badge mj-badge-info">Testing</span></td>
+            </tr>
+            <tr>
+              <td><strong>LLaMA 2 70B</strong></td>
+              <td>Meta</td>
+              <td style="font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm);">4,096</td>
+              <td style="font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm);">$0.001</td>
+              <td><i class="fa-solid fa-times" style="color: var(--mj-text-muted);"></i></td>
+              <td><span class="mj-badge mj-badge-neutral">Deprecated</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+</body>
+</html>

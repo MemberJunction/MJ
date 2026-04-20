@@ -1,0 +1,106 @@
+{
+  "name": "@memberjunction/server-bootstrap-lite",
+  "version": "5.28.0",
+  "description": "MemberJunction Server Bootstrap (Lite) - Class registrations manifest without ESM-incompatible dependencies (communication, storage)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./mj-class-registrations": {
+      "types": "./dist/mj-class-registrations.d.ts",
+      "default": "./dist/mj-class-registrations.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "if [ -d dist ]; then mj codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./src/generated/mj-class-registrations.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'; else touch .needs-manifest-rebuild; fi",
+    "build": "tsc && tsc-alias -f",
+    "postbuild": "if [ -f .needs-manifest-rebuild ]; then rm .needs-manifest-rebuild && (mj codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./src/generated/mj-class-registrations.ts && tsc && tsc-alias -f || echo 'Warning: mj codegen manifest not available, manifest will be generated on next build'); fi",
+    "watch": "tsc --watch",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "memberjunction",
+    "bootstrap",
+    "server",
+    "lite"
+  ],
+  "author": "MemberJunction",
+  "license": "MIT",
+  "dependencies": {
+    "@memberjunction/actions": "5.28.0",
+    "@memberjunction/actions-apollo": "5.28.0",
+    "@memberjunction/actions-base": "5.28.0",
+    "@memberjunction/actions-bizapps-accounting": "5.28.0",
+    "@memberjunction/actions-bizapps-crm": "5.28.0",
+    "@memberjunction/actions-bizapps-formbuilders": "5.28.0",
+    "@memberjunction/actions-bizapps-lms": "5.28.0",
+    "@memberjunction/actions-bizapps-social": "5.28.0",
+    "@memberjunction/ai-agent-manager": "5.28.0",
+    "@memberjunction/ai-agents": "5.28.0",
+    "@memberjunction/ai-anthropic": "5.28.0",
+    "@memberjunction/ai-azure": "5.28.0",
+    "@memberjunction/ai-bedrock": "5.28.0",
+    "@memberjunction/ai-betty-bot": "5.28.0",
+    "@memberjunction/ai-blackforestlabs": "5.28.0",
+    "@memberjunction/ai-cerebras": "5.28.0",
+    "@memberjunction/ai-cohere": "5.28.0",
+    "@memberjunction/ai-core-plus": "5.28.0",
+    "@memberjunction/ai-elevenlabs": "5.28.0",
+    "@memberjunction/ai-engine-base": "5.28.0",
+    "@memberjunction/ai-fireworks": "5.28.0",
+    "@memberjunction/ai-gemini": "5.28.0",
+    "@memberjunction/ai-groq": "5.28.0",
+    "@memberjunction/ai-heygen": "5.28.0",
+    "@memberjunction/ai-lmstudio": "5.28.0",
+    "@memberjunction/ai-local-embeddings": "5.28.0",
+    "@memberjunction/ai-minimax": "5.28.0",
+    "@memberjunction/ai-mistral": "5.28.0",
+    "@memberjunction/ai-ollama": "5.28.0",
+    "@memberjunction/ai-openai": "5.28.0",
+    "@memberjunction/ai-openrouter": "5.28.0",
+    "@memberjunction/ai-provider-bundle": "5.28.0",
+    "@memberjunction/ai-recommendations-rex": "5.28.0",
+    "@memberjunction/ai-reranker": "5.28.0",
+    "@memberjunction/ai-vectors-pgvector": "5.28.0",
+    "@memberjunction/ai-vectors-pinecone": "5.28.0",
+    "@memberjunction/ai-vectors-qdrant": "5.28.0",
+    "@memberjunction/ai-vertex": "5.28.0",
+    "@memberjunction/ai-xai": "5.28.0",
+    "@memberjunction/ai-zhipu": "5.28.0",
+    "@memberjunction/communication-types": "5.28.0",
+    "@memberjunction/content-autotagging": "5.28.0",
+    "@memberjunction/core": "5.28.0",
+    "@memberjunction/core-actions": "5.28.0",
+    "@memberjunction/core-entities": "5.28.0",
+    "@memberjunction/core-entities-server": "5.28.0",
+    "@memberjunction/data-context-server": "5.28.0",
+    "@memberjunction/doc-utils": "5.28.0",
+    "@memberjunction/encryption": "5.28.0",
+    "@memberjunction/queue": "5.28.0",
+    "@memberjunction/scheduling-actions": "5.28.0",
+    "@memberjunction/scheduling-engine": "5.28.0",
+    "@memberjunction/scheduling-engine-base": "5.28.0",
+    "@memberjunction/search-engine": "5.28.0",
+    "@memberjunction/storage": "5.28.0",
+    "@memberjunction/tag-engine-base": "5.28.0",
+    "@memberjunction/templates": "5.28.0",
+    "@memberjunction/testing-engine": "5.28.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.11",
+    "typescript": "^5.9.3"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

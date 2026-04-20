@@ -1,0 +1,15 @@
+{
+  "fields": {
+    "Name": "Computer Use",
+    "Description": "Evaluates browser-based automation through the Computer Use Vision-to-Action engine. Drives a web browser via LLM reasoning over screenshots, then evaluates results using goal-completion, URL matching, and step count oracles.",
+    "DriverClass": "ComputerUseTestDriver",
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "2CB270C8-98B2-48B8-B582-51B49FD97C50"
+  },
+  "sync": {
+    "lastModified": "2026-02-12T19:33:13.991Z",
+    "checksum": "fb4dd57d0fdbdbe8aec7ce969ff3738f2dcba4bb888070ba80dc0ad3d69172b6"
+  }
+}

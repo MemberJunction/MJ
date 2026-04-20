@@ -3,7 +3,7 @@
  * @module @memberjunction/react-runtime/types
  */
 
-import { ComponentLibraryEntity } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
  * Represents a parsed dependency with name and version specification
@@ -36,7 +36,7 @@ export interface ResolvedVersion {
  * Node in the dependency graph
  */
 export interface DependencyNode {
-  library: ComponentLibraryEntity;
+  library: MJComponentLibraryEntity;
   dependencies: Map<string, string>; // dependency name -> version spec
   dependents: Set<string>; // libraries that depend on this one
 }
@@ -54,7 +54,7 @@ export interface DependencyGraph {
  */
 export interface LoadOrderResult {
   success: boolean;
-  order?: ComponentLibraryEntity[];
+  order?: MJComponentLibraryEntity[];
   cycles?: string[][];
   errors?: string[];
   warnings?: string[];

@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>View Management & Selector - MJ Prototype</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    :root {
+      --primary: #5c6bc0;
+      --primary-hover: #4a59b0;
+      --primary-light: #e8eaf6;
+      --primary-lighter: #f3f4fa;
+      --success: #43a047;
+      --success-light: #e8f5e9;
+      --danger: #e53935;
+      --danger-light: #ffebee;
+      --warning: #f57c00;
+      --warning-light: #fff3e0;
+      --text: #333;
+      --text-secondary: #666;
+      --text-muted: #999;
+      --border: #e0e0e0;
+      --border-light: #f0f0f0;
+      --bg: #f5f5f5;
+      --bg-white: #fff;
+      --shadow: 0 4px 24px rgba(0,0,0,0.12);
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
+      --radius: 8px;
+      --radius-sm: 4px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .page-header {
+      background: var(--primary);
+      color: white;
+      padding: 16px 32px;
+    }
+    .page-header h1 { font-size: 18px; font-weight: 600; }
+    .page-header p { opacity: 0.8; font-size: 13px; margin-top: 4px; }
+
+    .scenarios {
+      display: flex;
+      flex-direction: column;
+      gap: 48px;
+      padding: 32px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .scenario {
+      background: var(--bg-white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+    .scenario-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .scenario-header .badge {
+      background: var(--primary);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+    .scenario-header .badge.current { background: var(--danger); }
+    .scenario-header h2 { font-size: 16px; font-weight: 600; }
+    .scenario-header p { font-size: 13px; color: var(--text-secondary); margin-left: auto; }
+    .scenario-body { padding: 24px; }
+
+    .section-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 24px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--primary-light);
+    }
+    .section-label:first-child { margin-top: 0; }
+
+    .annotation {
+      background: #fffde7;
+      border-left: 3px solid var(--warning);
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 13px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+    .annotation strong { color: var(--warning); }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 16px;
+    }
+    .comparison-side {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .comparison-side.before { border-color: var(--danger); }
+    .comparison-side.after { border-color: var(--success); }
+    .comparison-label {
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .comparison-side.before .comparison-label {
+      background: var(--danger-light);
+      color: var(--danger);
+    }
+    .comparison-side.after .comparison-label {
+      background: var(--success-light);
+      color: var(--success);
+    }
+    .comparison-content { padding: 16px; }
+
+    /* ===== CURRENT VIEW DROPDOWN ===== */
+    .current-dropdown {
+      width: 280px;
+      background: var(--bg-white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      font-size: 13px;
+    }
+    .current-dropdown .section-head {
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .current-dropdown .view-item {
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .current-dropdown .view-item:hover { background: var(--bg); }
+    .current-dropdown .view-item.active {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 500;
+    }
+    .current-dropdown .view-item i { font-size: 12px; color: var(--text-muted); }
+    .current-dropdown .view-item.active i { color: var(--primary); }
+    .current-dropdown .actions {
+      border-top: 1px solid var(--border);
+      padding: 6px;
+    }
+    .current-dropdown .action-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      width: 100%;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-secondary);
+      border-radius: var(--radius-sm);
+      text-align: left;
+    }
+    .current-dropdown .action-btn:hover { background: var(--bg); color: var(--text); }
+    .current-dropdown .action-btn i { width: 16px; text-align: center; }
+
+    /* ===== PROPOSED VIEW PANEL ===== */
+    .view-panel {
+      width: 400px;
+      background: var(--bg-white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+    }
+    .view-panel-header {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .view-panel-header h3 {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .view-panel-header .entity-badge {
+      font-size: 11px;
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+    .view-panel-header .close-btn {
+      margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 16px;
+      padding: 4px;
+    }
+
+    .view-panel-search {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .view-panel-search input {
+      width: 100%;
+      padding: 8px 12px 8px 32px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%23999'%3E%3Cpath d='M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208z'/%3E%3C/svg%3E") no-repeat 10px center;
+      background-size: 14px;
+    }
+    .view-panel-search input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .view-panel-body {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .view-section {
+      padding: 8px 0;
+    }
+    .view-section-header {
+      padding: 6px 20px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .view-section-header .count {
+      background: var(--border);
+      padding: 0 6px;
+      border-radius: 8px;
+      font-size: 10px;
+    }
+
+    .view-card {
+      padding: 10px 20px;
+      cursor: pointer;
+      transition: background 0.1s;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .view-card:hover { background: var(--primary-lighter); }
+    .view-card.active {
+      background: var(--primary-light);
+      border-left: 3px solid var(--primary);
+      padding-left: 17px;
+    }
+    .view-card-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 14px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .view-card.active .view-card-icon {
+      background: var(--primary);
+      color: white;
+    }
+    .view-card-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .view-card-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .view-card.active .view-card-name { color: var(--primary); font-weight: 600; }
+    .view-card-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .view-card-meta {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .view-card-meta span {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .view-card-meta i { font-size: 10px; }
+
+    .view-card-actions {
+      display: flex;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .view-card:hover .view-card-actions { opacity: 1; }
+    .view-card-actions button {
+      width: 26px;
+      height: 26px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .view-card-actions button:hover {
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .default-badge {
+      font-size: 9px;
+      background: var(--success-light);
+      color: var(--success);
+      padding: 1px 5px;
+      border-radius: 6px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .shared-badge {
+      font-size: 9px;
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 1px 5px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+
+    .view-panel-footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border-light);
+      display: flex;
+      gap: 8px;
+    }
+    .view-panel-footer button {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-white);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .view-panel-footer button:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    .view-panel-footer button.primary-action {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .view-panel-footer button.primary-action:hover {
+      background: var(--primary-hover);
+    }
+
+    /* Shared View Owner Info */
+    .owner-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .owner-avatar {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--primary-light);
+      color: var(--primary);
+      font-size: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+
+    /* ===== FULL HEADER BAR MOCK ===== */
+    .full-header-mock {
+      background: var(--bg-white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0;
+      overflow: hidden;
+    }
+    .header-toolbar {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .header-toolbar .breadcrumb {
+      font-size: 13px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .header-toolbar .breadcrumb .current {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .header-toolbar .record-count {
+      font-size: 12px;
+      color: var(--text-muted);
+      background: var(--bg);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    .header-view-area {
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      gap: 12px;
+    }
+    .view-picker-button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-white);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .view-picker-button:hover {
+      border-color: var(--primary);
+      background: var(--primary-lighter);
+    }
+    .view-picker-button .view-icon {
+      color: var(--primary);
+    }
+    .view-picker-button .chevron {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .modified-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--warning);
+      background: var(--warning-light);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+
+    .action-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .action-group .divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    .btn {
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: var(--bg); color: var(--text); border-color: var(--border); }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-ghost { background: transparent; color: var(--text-secondary); }
+    .btn-ghost:hover { background: var(--bg); }
+    .btn-icon { padding: 6px 8px; }
+    .btn-success { background: var(--success); color: white; }
+    .btn-success:hover { background: #388e3c; }
+
+    /* ===== VIEW MODE TOGGLES ===== */
+    .view-modes {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .view-mode-btn {
+      padding: 5px 10px;
+      border: none;
+      background: var(--bg-white);
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s;
+    }
+    .view-mode-btn + .view-mode-btn { border-left: 1px solid var(--border); }
+    .view-mode-btn.active {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+    .view-mode-btn:hover:not(.active) { background: var(--bg); }
+
+    /* ===== DUPLICATE VIEW DIALOG ===== */
+    .dialog-overlay {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .dialog {
+      background: var(--bg-white);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      width: 420px;
+      max-width: 100%;
+      overflow: hidden;
+    }
+    .dialog-header {
+      padding: 20px 24px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .dialog-header .icon-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .dialog-header h3 { font-size: 18px; font-weight: 600; }
+    .dialog-header .close-btn {
+      margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 18px;
+    }
+    .dialog-body { padding: 20px 24px; }
+    .dialog-footer {
+      padding: 16px 24px 20px;
+      display: flex;
+      gap: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-family: inherit;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(92, 107, 192, 0.1);
+    }
+
+    /* ===== DELETE CONFIRMATION ===== */
+    .delete-confirm {
+      background: var(--danger-light);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--danger);
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .delete-confirm i { margin-top: 2px; }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+      border-color: var(--danger);
+    }
+    .btn-danger:hover { background: #c62828; }
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>View Selector & Management - UX Prototype</h1>
+  <p>Improved view discovery, organization, and management experience</p>
+</div>
+
+<div class="scenarios">
+
+  <!-- ===== SCENARIO 1: CURRENT vs PROPOSED DROPDOWN ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge">Comparison</span>
+      <h2>View Selector: Current vs Proposed</h2>
+      <p>From cramped dropdown to spacious panel with metadata</p>
+    </div>
+    <div class="scenario-body">
+      <div class="comparison">
+        <div class="comparison-side before">
+          <div class="comparison-label">Current - Cramped Dropdown</div>
+          <div class="comparison-content">
+            <div class="current-dropdown">
+              <div class="section-head">My Views</div>
+              <div class="view-item active">
+                <i class="fa-solid fa-check"></i>
+                Active West Coast
+              </div>
+              <div class="view-item">
+                <i class="fa-regular fa-bookmark"></i>
+                Q4 Pipeline
+              </div>
+              <div class="view-item">
+                <i class="fa-regular fa-bookmark"></i>
+                High Value Accounts
+              </div>
+              <div class="section-head">Shared Views</div>
+              <div class="view-item">
+                <i class="fa-solid fa-share-alt" style="font-size: 11px"></i>
+                Team KPIs
+              </div>
+              <div class="view-item">
+                <i class="fa-solid fa-share-alt" style="font-size: 11px"></i>
+                All Active
+              </div>
+              <div class="actions">
+                <button class="action-btn"><i class="fa-solid fa-floppy-disk"></i> Save View</button>
+                <button class="action-btn"><i class="fa-solid fa-plus"></i> Save As New</button>
+                <button class="action-btn"><i class="fa-solid fa-up-right-from-square"></i> Open in Tab</button>
+                <button class="action-btn"><i class="fa-solid fa-sliders"></i> Configure View</button>
+                <button class="action-btn"><i class="fa-solid fa-plus-circle"></i> Create Record</button>
+                <button class="action-btn"><i class="fa-solid fa-file-excel"></i> Export</button>
+              </div>
+            </div>
+            <div class="annotation" style="margin-top: 12px; margin-bottom: 0;">
+              <strong>Issues:</strong>
+              <ul style="margin: 4px 0 0 16px; font-size: 12px;">
+                <li>No description or metadata for views</li>
+                <li>Can't tell what filters/columns a view has</li>
+                <li>6 action buttons crammed into dropdown</li>
+                <li>Mixed concerns: view selection + data actions + save</li>
+                <li>No search when you have many views</li>
+                <li>No quick duplicate/delete actions</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="comparison-side after">
+          <div class="comparison-label">Proposed - Rich View Panel</div>
+          <div class="comparison-content">
+            <div class="view-panel">
+              <div class="view-panel-header">
+                <i class="fa-solid fa-table-list" style="color: var(--primary)"></i>
+                <h3>Views</h3>
+                <span class="entity-badge">Contacts</span>
+                <button class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+
+              <div class="view-panel-search">
+                <input type="text" placeholder="Search views...">
+              </div>
+
+              <div class="view-panel-body">
+                <!-- Recently Used -->
+                <div class="view-section">
+                  <div class="view-section-header">
+                    <i class="fa-solid fa-clock-rotate-left" style="font-size: 10px"></i>
+                    Recent
+                  </div>
+                  <div class="view-card active">
+                    <div class="view-card-icon">
+                      <i class="fa-solid fa-table-list"></i>
+                    </div>
+                    <div class="view-card-content">
+                      <div class="view-card-name">
+                        Active West Coast
+                        <span class="default-badge">Default</span>
+                      </div>
+                      <div class="view-card-desc">Active contacts in CA, OR, WA with recent activity</div>
+                      <div class="view-card-meta">
+                        <span><i class="fa-solid fa-filter"></i> 3 filters</span>
+                        <span><i class="fa-solid fa-table-columns"></i> 8 cols</span>
+                        <span><i class="fa-solid fa-clock"></i> 2m ago</span>
+                      </div>
+                    </div>
+                    <div class="view-card-actions" style="opacity: 1">
+                      <button title="Duplicate"><i class="fa-regular fa-copy"></i></button>
+                      <button title="Configure"><i class="fa-solid fa-sliders"></i></button>
+                      <button title="Open in Tab"><i class="fa-solid fa-up-right-from-square"></i></button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- My Views -->
+                <div class="view-section">
+                  <div class="view-section-header">
+                    My Views <span class="count">3</span>
+                  </div>
+                  <div class="view-card">
+                    <div class="view-card-icon">
+                      <i class="fa-solid fa-table-list"></i>
+                    </div>
+                    <div class="view-card-content">
+                      <div class="view-card-name">Q4 Pipeline</div>
+                      <div class="view-card-desc">Contacts with open opportunities in Q4</div>
+                      <div class="view-card-meta">
+                        <span><i class="fa-solid fa-filter"></i> 2 filters</span>
+                        <span><i class="fa-solid fa-table-columns"></i> 12 cols</span>
+                        <span><i class="fa-solid fa-clock"></i> 1d ago</span>
+                      </div>
+                    </div>
+                    <div class="view-card-actions">
+                      <button title="Duplicate"><i class="fa-regular fa-copy"></i></button>
+                      <button title="Configure"><i class="fa-solid fa-sliders"></i></button>
+                      <button title="Delete"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                  </div>
+                  <div class="view-card">
+                    <div class="view-card-icon">
+                      <i class="fa-solid fa-table-list"></i>
+                    </div>
+                    <div class="view-card-content">
+                      <div class="view-card-name">High Value Accounts</div>
+                      <div class="view-card-desc">Revenue > $1M, sorted by value</div>
+                      <div class="view-card-meta">
+                        <span><i class="fa-solid fa-filter"></i> 1 filter</span>
+                        <span><i class="fa-solid fa-arrow-down-short-wide"></i> Revenue DESC</span>
+                      </div>
+                    </div>
+                    <div class="view-card-actions">
+                      <button title="Duplicate"><i class="fa-regular fa-copy"></i></button>
+                      <button title="Configure"><i class="fa-solid fa-sliders"></i></button>
+                      <button title="Delete"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Shared Views -->
+                <div class="view-section">
+                  <div class="view-section-header">
+                    <i class="fa-solid fa-share-nodes" style="font-size: 10px"></i>
+                    Shared With Me <span class="count">2</span>
+                  </div>
+                  <div class="view-card">
+                    <div class="view-card-icon">
+                      <i class="fa-solid fa-users"></i>
+                    </div>
+                    <div class="view-card-content">
+                      <div class="view-card-name">
+                        Team KPIs
+                        <span class="shared-badge">View Only</span>
+                      </div>
+                      <div class="view-card-desc">Weekly team performance metrics</div>
+                      <div class="view-card-meta">
+                        <span class="owner-info">
+                          <span class="owner-avatar">JS</span>
+                          Jane Smith
+                        </span>
+                        <span><i class="fa-solid fa-filter"></i> 5 filters</span>
+                      </div>
+                    </div>
+                    <div class="view-card-actions">
+                      <button title="Duplicate as My View"><i class="fa-regular fa-copy"></i></button>
+                    </div>
+                  </div>
+                  <div class="view-card">
+                    <div class="view-card-icon">
+                      <i class="fa-solid fa-users"></i>
+                    </div>
+                    <div class="view-card-content">
+                      <div class="view-card-name">
+                        All Active
+                        <span class="shared-badge">Can Edit</span>
+                      </div>
+                      <div class="view-card-meta">
+                        <span class="owner-info">
+                          <span class="owner-avatar">MB</span>
+                          Mike Brown
+                        </span>
+                      </div>
+                    </div>
+                    <div class="view-card-actions">
+                      <button title="Duplicate"><i class="fa-regular fa-copy"></i></button>
+                      <button title="Configure"><i class="fa-solid fa-sliders"></i></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="view-panel-footer">
+                <button class="primary-action">
+                  <i class="fa-solid fa-plus"></i> New View
+                </button>
+                <button>
+                  <i class="fa-solid fa-arrow-rotate-left"></i> Reset to Default
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENARIO 2: FULL HEADER BAR ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge">Proposed</span>
+      <h2>Complete Header Bar Redesign</h2>
+      <p>Separated concerns: navigation, view selection, view actions, data actions</p>
+    </div>
+    <div class="scenario-body">
+      <div class="full-header-mock">
+        <!-- Top toolbar - Navigation -->
+        <div class="header-toolbar">
+          <div class="breadcrumb">
+            <span>Data Explorer</span>
+            <i class="fa-solid fa-chevron-right" style="font-size: 9px; color: var(--border)"></i>
+            <span class="current">Contacts</span>
+          </div>
+          <span class="record-count">1,247 records (47 filtered)</span>
+        </div>
+
+        <!-- View area - View selection + actions -->
+        <div class="header-view-area">
+          <!-- View Picker -->
+          <button class="view-picker-button">
+            <i class="fa-solid fa-table-list view-icon"></i>
+            <span>Active West Coast</span>
+            <i class="fa-solid fa-chevron-down chevron"></i>
+          </button>
+
+          <!-- Modified indicator -->
+          <span class="modified-badge">
+            <i class="fa-solid fa-circle" style="font-size: 6px"></i>
+            Modified
+          </span>
+
+          <!-- View Save Actions (appear when modified) -->
+          <div class="action-group" style="margin-left: 0">
+            <button class="btn btn-primary" title="Save changes to current view">
+              <i class="fa-solid fa-floppy-disk"></i> Save
+            </button>
+            <button class="btn btn-secondary btn-icon" title="Save as new view">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon" title="Discard changes">
+              <i class="fa-solid fa-rotate-left"></i>
+            </button>
+          </div>
+
+          <!-- Spacer -->
+          <div style="flex: 1"></div>
+
+          <!-- View Mode Toggle -->
+          <div class="view-modes">
+            <button class="view-mode-btn active" title="Grid view">
+              <i class="fa-solid fa-table-cells-large"></i>
+            </button>
+            <button class="view-mode-btn" title="Card view">
+              <i class="fa-solid fa-grip"></i>
+            </button>
+            <button class="view-mode-btn" title="Timeline view">
+              <i class="fa-solid fa-timeline"></i>
+            </button>
+          </div>
+
+          <div class="action-group" style="margin-left: 0">
+            <div class="divider"></div>
+          </div>
+
+          <!-- Data Actions (separate from view management) -->
+          <div class="action-group" style="margin-left: 0">
+            <button class="btn btn-success" title="Create new record">
+              <i class="fa-solid fa-plus"></i> New
+            </button>
+            <button class="btn btn-secondary btn-icon" title="Export to Excel">
+              <i class="fa-solid fa-file-excel"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon" title="Configure view">
+              <i class="fa-solid fa-sliders"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="annotation">
+        <strong>Design principles:</strong>
+        <ul style="margin: 4px 0 0 16px; font-size: 12px;">
+          <li><strong>View management</strong> (save, save-as, revert) grouped together, appear only when changes exist</li>
+          <li><strong>View mode</strong> (grid/cards/timeline) in its own toggle group</li>
+          <li><strong>Data actions</strong> (new record, export) separated from view actions</li>
+          <li><strong>Configure</strong> button clearly positioned as a gear/settings action</li>
+          <li>Clear breadcrumb for navigation context</li>
+          <li>Record count shows total and filtered counts</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENARIO 3: DUPLICATE VIEW ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge">Proposed</span>
+      <h2>Duplicate View</h2>
+      <p>One-click to copy any view (including shared) as a starting point</p>
+    </div>
+    <div class="scenario-body">
+      <div class="dialog-overlay">
+        <div class="dialog">
+          <div class="dialog-header">
+            <div class="icon-circle" style="background: var(--primary-light); color: var(--primary);">
+              <i class="fa-regular fa-copy"></i>
+            </div>
+            <div>
+              <h3>Duplicate View</h3>
+            </div>
+            <button class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="dialog-body">
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+              Creating a copy of <strong>"Team KPIs"</strong> with all its columns, filters, and sorting.
+            </p>
+            <div class="form-group">
+              <label>New View Name</label>
+              <input type="text" value="Team KPIs (Copy)">
+            </div>
+            <div style="background: var(--bg); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 12px; color: var(--text-secondary);">
+              <div style="display: flex; gap: 16px;">
+                <span><i class="fa-solid fa-filter" style="color: var(--primary); margin-right: 4px;"></i> 5 filters</span>
+                <span><i class="fa-solid fa-table-columns" style="color: var(--primary); margin-right: 4px;"></i> 10 columns</span>
+                <span><i class="fa-solid fa-arrow-down-short-wide" style="color: var(--primary); margin-right: 4px;"></i> 2 sorts</span>
+              </div>
+            </div>
+          </div>
+          <div class="dialog-footer">
+            <button class="btn btn-primary" style="padding: 10px 20px; font-size: 14px;">
+              <i class="fa-regular fa-copy"></i> Duplicate
+            </button>
+            <button class="btn btn-secondary" style="padding: 10px 20px; font-size: 14px;">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="annotation">
+        <strong>Use cases:</strong> Copy a shared view to customize it. Clone your own view to experiment with different filters. Start from an existing view instead of building from scratch.
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENARIO 4: DELETE VIEW ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge">Proposed</span>
+      <h2>Delete View Confirmation</h2>
+      <p>Clear warning with context about impact</p>
+    </div>
+    <div class="scenario-body">
+      <div class="dialog-overlay">
+        <div class="dialog">
+          <div class="dialog-header">
+            <div class="icon-circle" style="background: var(--danger-light); color: var(--danger);">
+              <i class="fa-solid fa-trash"></i>
+            </div>
+            <h3>Delete View</h3>
+            <button class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="dialog-body">
+            <p style="font-size: 14px; margin-bottom: 16px;">
+              Are you sure you want to delete <strong>"Q4 Pipeline"</strong>?
+            </p>
+            <div class="delete-confirm">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <div>
+                <strong>This action cannot be undone.</strong>
+                <br>The view's filters, column configuration, and sorting will be permanently removed.
+              </div>
+            </div>
+          </div>
+          <div class="dialog-footer">
+            <button class="btn btn-danger" style="padding: 10px 20px; font-size: 14px;">
+              <i class="fa-solid fa-trash"></i> Delete View
+            </button>
+            <button class="btn btn-secondary" style="padding: 10px 20px; font-size: 14px;">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENARIO 5: EMPTY STATE ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge">Proposed</span>
+      <h2>Empty State - No Saved Views</h2>
+      <p>Helpful onboarding when user has no views for an entity</p>
+    </div>
+    <div class="scenario-body">
+      <div style="max-width: 400px; margin: 0 auto;">
+        <div class="view-panel">
+          <div class="view-panel-header">
+            <i class="fa-solid fa-table-list" style="color: var(--primary)"></i>
+            <h3>Views</h3>
+            <span class="entity-badge">Invoices</span>
+            <button class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div style="padding: 40px 24px; text-align: center;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: var(--primary-light); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 24px; color: var(--primary);">
+              <i class="fa-solid fa-bookmark"></i>
+            </div>
+            <h4 style="font-size: 15px; margin-bottom: 8px;">No saved views yet</h4>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
+              Save your current filters, columns, and sorting as a view for quick access later.
+            </p>
+            <button class="btn btn-primary" style="display: inline-flex; margin: 0 auto; padding: 10px 20px; font-size: 14px;">
+              <i class="fa-solid fa-plus"></i> Create Your First View
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENARIO 6: KEYBOARD SHORTCUTS HINT ===== -->
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="badge">Proposed</span>
+      <h2>Keyboard Shortcuts</h2>
+      <p>Power-user shortcuts for common view operations</p>
+    </div>
+    <div class="scenario-body">
+      <div style="max-width: 440px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <thead>
+            <tr>
+              <th style="text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border); color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Action</th>
+              <th style="text-align: right; padding: 8px 12px; border-bottom: 2px solid var(--border); color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Shortcut</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 10px 12px; border-bottom: 1px solid var(--border-light);">Save current view</td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid var(--border-light); text-align: right;">
+                <kbd style="background: var(--bg); padding: 2px 8px; border-radius: 3px; border: 1px solid var(--border); font-size: 12px; font-family: monospace;">Ctrl+S</kbd>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 12px; border-bottom: 1px solid var(--border-light);">Save as new view</td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid var(--border-light); text-align: right;">
+                <kbd style="background: var(--bg); padding: 2px 8px; border-radius: 3px; border: 1px solid var(--border); font-size: 12px; font-family: monospace;">Ctrl+Shift+S</kbd>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 12px; border-bottom: 1px solid var(--border-light);">Open view selector</td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid var(--border-light); text-align: right;">
+                <kbd style="background: var(--bg); padding: 2px 8px; border-radius: 3px; border: 1px solid var(--border); font-size: 12px; font-family: monospace;">Ctrl+Shift+V</kbd>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 12px; border-bottom: 1px solid var(--border-light);">Revert unsaved changes</td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid var(--border-light); text-align: right;">
+                <kbd style="background: var(--bg); padding: 2px 8px; border-radius: 3px; border: 1px solid var(--border); font-size: 12px; font-family: monospace;">Ctrl+Z</kbd>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 12px; border-bottom: 1px solid var(--border-light);">Toggle config panel</td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid var(--border-light); text-align: right;">
+                <kbd style="background: var(--bg); padding: 2px 8px; border-radius: 3px; border: 1px solid var(--border); font-size: 12px; font-family: monospace;">Ctrl+,</kbd>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

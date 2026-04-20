@@ -1,22 +1,25 @@
-import { DestroyRef, Injectable } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
-import { ChatMessage } from '@memberjunction/ai';
+import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
-import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJConversationDetailEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { AgentClientService } from '@memberjunction/ng-agent-client';
+import { RunAgentFromConversationDetailParams } from '@memberjunction/ai-agent-client';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
+import { MentionParserService } from './mention-parser.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Context for artifact lookups - provides pre-loaded data from conversation
  * to avoid redundant database queries
  */
 export interface ArtifactLookupContext {
-  agentRunsByDetailId: Map<string, AIAgentRunEntityExtended>;
+  agentRunsByDetailId: Map<string, MJAIAgentRunEntityExtended>;
   artifactsByDetailId: Map<string, LazyArtifactInfo[]>;
 }
 
@@ -38,8 +41,9 @@ export interface IntentCheckResult {
   providedIn: 'root'
 })
 export class ConversationAgentService {
+  /** GraphQL AI client - retained for RunAIPrompt (intent checking) which AgentClientService doesn't wrap */
   private _aiClient: GraphQLAIClient | null = null;
-  private _conversationManagerAgent: AIAgentEntityExtended | null = null;
+  private _conversationManagerAgent: MJAIAgentEntityExtended | null = null;
   private _sessionIds: Map<string, string> = new Map(); // conversationId -> sessionId
   private _isProcessing$ = new BehaviorSubject<boolean>(false);
 
@@ -48,12 +52,17 @@ export class ConversationAgentService {
    */
   public readonly isProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
 
-  constructor() {
+  constructor(
+    private mentionParser: MentionParserService,
+    private agentClientService: AgentClientService
+  ) {
     this.initializeAIClient();
   }
 
   /**
-   * Initialize the GraphQL AI Client
+   * Initialize the GraphQL AI Client.
+   * Retained for RunAIPrompt calls (intent checking) which the AgentClientService doesn't wrap.
+   * Agent execution (RunAIAgentFromConversationDetail) now goes through AgentClientService.
    */
   private initializeAIClient(): void {
     try {
@@ -71,7 +80,7 @@ export class ConversationAgentService {
   /**
    * Get or load the Sage Agent (formerly Conversation Manager Agent)
    */
-  public async getConversationManagerAgent(): Promise<AIAgentEntityExtended | null> {
+  public async getConversationManagerAgent(): Promise<MJAIAgentEntityExtended | null> {
     if (this._conversationManagerAgent) {
       return this._conversationManagerAgent;
     }
@@ -83,7 +92,7 @@ export class ConversationAgentService {
       // Find the Sage Agent
       const agents = AIEngineBase.Instance.Agents;
       this._conversationManagerAgent = agents.find(
-        (agent: AIAgentEntityExtended) => agent.Name === 'Sage'
+        (agent: MJAIAgentEntityExtended) => agent.Name === 'Sage'
       ) || null;
 
       if (!this._conversationManagerAgent) {
@@ -106,29 +115,26 @@ export class ConversationAgentService {
    * Process a message through the ambient Sage Agent.
    * This should be called for every message sent in a conversation.
    *
+   * Uses the optimized RunAIAgentFromConversationDetail mutation which loads
+   * conversation history (including attachments) server-side for better performance.
+   *
    * @param conversationId The conversation ID
    * @param message The message that was just sent
-   * @param conversationHistory Recent messages in the conversation for context
+   * @param conversationHistory Recent messages in the conversation for context (kept for backwards compatibility but not used)
    * @param conversationDetailId The ID of the conversation detail record to link to the agent run
    * @param onProgress Optional callback for receiving progress updates during execution
    * @returns The agent's response, or null if the agent chooses not to respond
    */
   async processMessage(
     conversationId: string,
-    message: ConversationDetailEntity,
-    conversationHistory: ConversationDetailEntity[],
+    message: MJConversationDetailEntity,
+    conversationHistory: MJConversationDetailEntity[],
     conversationDetailId: string,
-    onProgress?: AgentExecutionProgressCallback
+    onProgress?: AgentExecutionProgressCallback,
+    appContext?: Record<string, unknown> | null
   ): Promise<ExecuteAgentResult | null> {
     // Don't process if user is tagging someone else (future enhancement)
     // For now, we'll always send to the ambient agent
-
-    if (!this._aiClient) {
-      const errorMsg = 'AI Client not initialized, cannot process message through agent';
-      console.warn(errorMsg);
-      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'warning', 5000);
-      return null;
-    }
 
     const agent = await this.getConversationManagerAgent();
     if (!agent || !agent.ID) {
@@ -142,10 +148,6 @@ export class ConversationAgentService {
       // Indicate agent is processing
       this._isProcessing$.next(true);
 
-      // Build conversation messages for the agent
-      // Note: conversationHistory already includes the current message
-      const conversationMessages = await this.buildAgentMessages(conversationHistory);
-
       // Get current user for permission filtering
       const currentUser = Metadata.Provider.CurrentUser;
       if (!currentUser) {
@@ -154,9 +156,9 @@ export class ConversationAgentService {
 
       // Filter agents by status and hierarchy first
       const candidateAgents = AIEngineBase.Instance.Agents.filter(
-        a => a.ID !== agent.ID && 
-             !a.ParentID && 
-             a.Status === 'Active' && 
+        a => !UUIDsEqual(a.ID, agent.ID) &&
+             !a.ParentID &&
+             a.Status === 'Active' &&
              a.InvocationMode !== 'Sub-Agent' // ensure that the agent is intended to run as top-level
       );
 
@@ -167,29 +169,55 @@ export class ConversationAgentService {
 
       console.log(`📋 Available agents for Sage: ${availAgents.length} (filtered from ${candidateAgents.length} candidates)`);
 
-      // Prepare parameters using the correct ExecuteAgentParams type
-      const params: ExecuteAgentParams = {
-        agent: agent,
-        conversationMessages: conversationMessages,
-        conversationDetailId: conversationDetailId,
-        data: {
-          ALL_AVAILABLE_AGENTS: availAgents.map(a => {
-            return {
-              ID: a.ID,
-              Name: a.Name,
-              Description: a.Description
-            }
-          }),
+      // Use AgentClientService which wraps GraphQLAIClient.RunAIAgentFromConversationDetail
+      // and automatically integrates with client tool request handling
+      const agentParams: RunAgentFromConversationDetailParams = {
+        ConversationDetailId: conversationDetailId,
+        AgentId: agent.ID,
+        MaxHistoryMessages: 20,
+        Data: {
+          ALL_AVAILABLE_AGENTS: availAgents.map(a => ({
+            ID: a.ID,
+            Name: a.Name,
+            Description: a.Description
+          })),
           conversationId: conversationId,
-          latestMessageId: message.ID
+          latestMessageId: message.ID,
+          ...(appContext ? { appContext } : {}),
+          // Include all registered client tools so the LLM sees them in the prompt.
+          // These are ephemeral tools registered by the client app (CopyToClipboard, etc.)
+          // that supplement the metadata-defined tools from the junction table.
+          clientTools: this.agentClientService.GetRegisteredTools().map(t => ({
+            Name: t.Name,
+            Description: t.Description,
+            InputSchema: t.ParameterSchema
+          }))
         },
-        onProgress: onProgress
+        CreateArtifacts: true,
+        CreateNotification: true,
+        OnProgress: onProgress ? (progress) => {
+          onProgress({
+            step: progress.CurrentStep as 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization',
+            percentage: progress.Percentage,
+            message: progress.Message,
+            metadata: progress.Metadata
+          });
+        } : undefined
       };
 
-      // Run the agent
-      const result = await this._aiClient.RunAIAgent(params);
+      const runResult = await this.agentClientService.RunAgentFromConversationDetail(agentParams);
 
-      return result;
+      // Unwrap RunAgentResult to get the original ExecuteAgentResult
+      if (runResult.Success && runResult.Result) {
+        return runResult.Result as ExecuteAgentResult;
+      } else if (!runResult.Success) {
+        const errorMsg = runResult.ErrorMessage || 'Agent execution failed';
+        console.error('Agent execution failed:', errorMsg);
+        MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
+        return null;
+      }
+
+      return null;
     } catch (error) {
       const errorMsg = 'Error processing message through agent: ' + (error instanceof Error ? error.message : String(error));
       console.error('Error processing message through agent:', error);
@@ -202,12 +230,59 @@ export class ConversationAgentService {
   }
 
   /**
-   * Build the message array for the agent from conversation history
-   * Note: conversationHistory already includes the current message, so we don't add it separately
-   * IMPORTANT: This method loads artifacts for each message and appends them to the content
+   * Find the configuration preset ID from a previous @mention of an agent in conversation history.
+   * Searches backwards through User messages to find the most recent @mention of the specified agent
+   * that includes a configId.
+   *
+   * @param agentId The agent ID to search for
+   * @param conversationHistory The conversation history to search through
+   * @returns The configuration preset ID if found, undefined otherwise
+   */
+  public findConfigurationPresetFromHistory(
+    agentId: string,
+    conversationHistory: MJConversationDetailEntity[]
+  ): string | undefined {
+    // Search backwards through history for User messages that @mention this agent with a configId
+    const userMentionWithConfig = conversationHistory
+      .slice()
+      .reverse()
+      .find(msg => {
+        if (msg.Role !== 'User' || !msg.Message) return false;
+        // Parse the message to check for an @mention of this agent with a configId
+        const mentionResult = this.mentionParser.parseMentions(
+          msg.Message,
+          AIEngineBase.Instance.Agents,
+          []
+        );
+        return mentionResult.agentMention?.id === agentId && mentionResult.agentMention?.configurationId;
+      });
+
+    if (userMentionWithConfig) {
+      const mentionResult = this.mentionParser.parseMentions(
+        userMentionWithConfig.Message,
+        AIEngineBase.Instance.Agents,
+        []
+      );
+      if (mentionResult.agentMention?.configurationId) {
+        console.log(`🎯 Found configuration preset from @mention: ${mentionResult.agentMention.configurationId}`);
+        return mentionResult.agentMention.configurationId;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Build the message array for the agent from conversation history.
+   * Note: conversationHistory already includes the current message, so we don't add it separately.
+   * IMPORTANT: This method loads artifacts and attachments for each message.
+   *
+   * @deprecated This method is no longer used by processMessage() which now uses the optimized
+   * RunAIAgentFromConversationDetail mutation that loads history server-side. Kept for backwards
+   * compatibility with other callers that may need client-side message building.
    */
   private async buildAgentMessages(
-    history: ConversationDetailEntity[]
+    history: MJConversationDetailEntity[]
   ): Promise<ChatMessage[]> {
     const messages: ChatMessage[] = [];
 
@@ -218,66 +293,65 @@ export class ConversationAgentService {
     // Get IDs of all messages in history
     const messageIds = recentHistory.map(msg => msg.ID).filter(id => id); // Filter out any undefined IDs
 
-    // Create lookup map for artifacts by conversation detail ID
+    // Create lookup maps
     const artifactsByDetailId = new Map<string, string[]>(); // DetailID -> array of artifact JSON strings
+    const attachmentsByDetailId = new Map<string, AttachmentData[]>(); // DetailID -> array of AttachmentData
 
     if (messageIds.length > 0) {
-      try {
-        // Batch load all artifact junctions for these messages (OUTPUT only)
-        const rv = new RunView();
-        const junctionResult = await rv.RunView<ConversationDetailArtifactEntity>({
-          EntityName: 'MJ: Conversation Detail Artifacts',
-          ExtraFilter: `ConversationDetailID IN ('${messageIds.join("','")}') AND Direction='Output'`,
-          ResultType: 'entity_object'
-        });
+      const rv = new RunView();
 
-        if (junctionResult.Success && junctionResult.Results && junctionResult.Results.length > 0) {
-          // Collect unique version IDs
-          const versionIds = new Set<string>();
-          for (const junction of junctionResult.Results) {
-            versionIds.add(junction.ArtifactVersionID);
-          }
+      // Load artifacts and attachments in parallel
+      const [artifactsLoaded, attachmentsLoaded] = await Promise.all([
+        this.loadArtifactsForMessages(rv, messageIds, artifactsByDetailId),
+        this.loadAttachmentsForMessages(rv, messageIds, attachmentsByDetailId)
+      ]);
 
-          // Batch load all artifact versions
-          const versionResult = await rv.RunView<ArtifactVersionEntity>({
-            EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ID IN ('${Array.from(versionIds).join("','")}')`,
-            ResultType: 'entity_object'
-          });
-
-          if (versionResult.Success && versionResult.Results) {
-            // Create lookup map for O(1) access
-            const versionMap = new Map(versionResult.Results.map(v => [v.ID, v]));
-
-            // Group artifacts by conversation detail ID
-            for (const junction of junctionResult.Results) {
-              const version = versionMap.get(junction.ArtifactVersionID);
-              if (version && version.Content) {
-                const existing = artifactsByDetailId.get(junction.ConversationDetailID) || [];
-                existing.push(version.Content);
-                artifactsByDetailId.set(junction.ConversationDetailID, existing);
-              }
-            }
-
-            console.log(`📦 Loaded ${artifactsByDetailId.size} artifact groups for ${messageIds.length} messages in conversation context`);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading artifacts for conversation context:', error);
-        // Continue without artifacts rather than failing
+      if (artifactsLoaded) {
+        console.log(`📦 Loaded ${artifactsByDetailId.size} artifact groups for ${messageIds.length} messages`);
+      }
+      if (attachmentsLoaded) {
+        console.log(`🖼️ Loaded ${attachmentsByDetailId.size} attachment groups for ${messageIds.length} messages`);
       }
     }
 
-    // Build messages with artifacts appended
+    // Build messages with proper multimodal content
     for (const msg of recentHistory) {
-      let content = msg.Message || '';
-
-      // Check if this message has artifacts
+      const messageText = msg.Message || '';
       const artifacts = artifactsByDetailId.get(msg.ID);
-      if (artifacts && artifacts.length > 0) {
-        // Append artifacts to message content in the expected format
-        for (const artifactJson of artifacts) {
-          content += `\n\n# Artifact\n${artifactJson}\n`;
+      const attachments = attachmentsByDetailId.get(msg.ID);
+
+      // Build content - may be string or ChatMessageContentBlock[]
+      let content: ChatMessageContent;
+
+      if (attachments && attachments.length > 0) {
+        // Use BuildChatMessageContent to create proper content blocks for multimodal
+        content = await ConversationUtility.BuildChatMessageContent(messageText, attachments);
+
+        // Append artifacts to text content if present
+        if (artifacts && artifacts.length > 0) {
+          const artifactText = artifacts.map(json => `\n\n# Artifact\n${json}\n`).join('');
+
+          if (typeof content === 'string') {
+            content = content + artifactText;
+          } else if (Array.isArray(content)) {
+            // Find or create text block and append artifacts
+            const textBlock = content.find(b => b.type === 'text');
+            if (textBlock && textBlock.content) {
+              textBlock.content += artifactText;
+            } else {
+              content.push({ type: 'text', content: artifactText });
+            }
+          }
+        }
+      } else {
+        // No attachments - use simple string content
+        content = messageText;
+
+        // Append artifacts
+        if (artifacts && artifacts.length > 0) {
+          for (const artifactJson of artifacts) {
+            content += `\n\n# Artifact\n${artifactJson}\n`;
+          }
         }
       }
 
@@ -288,6 +362,142 @@ export class ConversationAgentService {
     }
 
     return messages;
+  }
+
+  /**
+   * Load artifacts for messages (OUTPUT direction only)
+   */
+  private async loadArtifactsForMessages(
+    rv: RunView,
+    messageIds: string[],
+    artifactsByDetailId: Map<string, string[]>
+  ): Promise<boolean> {
+    try {
+      const junctionResult = await rv.RunView<MJConversationDetailArtifactEntity>({
+        EntityName: 'MJ: Conversation Detail Artifacts',
+        ExtraFilter: `ConversationDetailID IN ('${messageIds.join("','")}') AND Direction='Output'`,
+        ResultType: 'entity_object'
+      });
+
+      if (junctionResult.Success && junctionResult.Results && junctionResult.Results.length > 0) {
+        // Collect unique version IDs
+        const versionIds = new Set<string>();
+        for (const junction of junctionResult.Results) {
+          versionIds.add(junction.ArtifactVersionID);
+        }
+
+        // Batch load all artifact versions
+        const versionResult = await rv.RunView<MJArtifactVersionEntity>({
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID IN ('${Array.from(versionIds).join("','")}')`,
+          ResultType: 'entity_object'
+        });
+
+        if (versionResult.Success && versionResult.Results) {
+          const versionMap = new Map(versionResult.Results.map(v => [v.ID, v]));
+
+          for (const junction of junctionResult.Results) {
+            const version = versionMap.get(junction.ArtifactVersionID);
+            if (version && version.Content) {
+              const existing = artifactsByDetailId.get(junction.ConversationDetailID) || [];
+              existing.push(version.Content);
+              artifactsByDetailId.set(junction.ConversationDetailID, existing);
+            }
+          }
+          return true;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading artifacts for conversation context:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Load attachments for messages and convert to AttachmentData format
+   */
+  private async loadAttachmentsForMessages(
+    rv: RunView,
+    messageIds: string[],
+    attachmentsByDetailId: Map<string, AttachmentData[]>
+  ): Promise<boolean> {
+    console.log('[AgentService] loadAttachmentsForMessages - querying for messageIds:', messageIds);
+    try {
+      const filter = `ConversationDetailID IN ('${messageIds.join("','")}')`;
+      console.log('[AgentService] loadAttachmentsForMessages - filter:', filter);
+
+      const attachmentResult = await rv.RunView<MJConversationDetailAttachmentEntity>({
+        EntityName: 'MJ: Conversation Detail Attachments',
+        ExtraFilter: filter,
+        OrderBy: 'DisplayOrder ASC, __mj_CreatedAt ASC',
+        ResultType: 'entity_object'
+      });
+
+      console.log('[AgentService] loadAttachmentsForMessages - query result:', {
+        success: attachmentResult.Success,
+        count: attachmentResult.Results?.length || 0,
+        error: attachmentResult.ErrorMessage
+      });
+
+      if (attachmentResult.Success && attachmentResult.Results && attachmentResult.Results.length > 0) {
+        for (const att of attachmentResult.Results) {
+          console.log('[AgentService] loadAttachmentsForMessages - processing attachment:', {
+            id: att.ID,
+            detailId: att.ConversationDetailID,
+            mimeType: att.MimeType,
+            hasInlineData: !!att.InlineData,
+            hasFileID: !!att.FileID
+          });
+          // Convert to AttachmentData format
+          const attachmentData = this.convertToAttachmentData(att);
+          if (attachmentData) {
+            const existing = attachmentsByDetailId.get(att.ConversationDetailID) || [];
+            existing.push(attachmentData);
+            attachmentsByDetailId.set(att.ConversationDetailID, existing);
+          }
+        }
+        return true;
+      }
+    } catch (error) {
+      console.error('Error loading attachments for conversation context:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Convert a MJConversationDetailAttachmentEntity to AttachmentData format
+   */
+  private convertToAttachmentData(att: MJConversationDetailAttachmentEntity): AttachmentData | null {
+    // Get the content - either inline data or file URL
+    let content: string | null = null;
+
+    if (att.InlineData) {
+      // Create data URL from inline base64 data
+      content = `data:${att.MimeType};base64,${att.InlineData}`;
+    } else if (att.FileID) {
+      // TODO: Get pre-authenticated URL from MJStorage
+      // For now, skip attachments stored in external storage
+      console.warn(`Attachment ${att.ID} uses FileID storage - external URLs not yet supported`);
+      return null;
+    }
+
+    if (!content) {
+      return null;
+    }
+
+    // Determine attachment type from modality or MIME type
+    const attachmentType = ConversationUtility.GetAttachmentTypeFromMime(att.MimeType);
+
+    return {
+      type: attachmentType,
+      mimeType: att.MimeType,
+      fileName: att.FileName ?? undefined,
+      sizeBytes: att.FileSizeBytes ?? undefined,
+      width: att.Width ?? undefined,
+      height: att.Height ?? undefined,
+      durationSeconds: att.DurationSeconds ?? undefined,
+      content: content
+    };
   }
 
   /**
@@ -331,23 +541,16 @@ export class ConversationAgentService {
   async invokeSubAgent(
     agentName: string,
     conversationId: string,
-    message: ConversationDetailEntity,
-    conversationHistory: ConversationDetailEntity[],
+    message: MJConversationDetailEntity,
+    conversationHistory: MJConversationDetailEntity[],
     reasoning: string,
     conversationDetailId: string,
-    payload?: any,
+    payload?: unknown,
     onProgress?: AgentExecutionProgressCallback,
     sourceArtifactId?: string,
     sourceArtifactVersionId?: string,
     agentConfigurationPresetId?: string
   ): Promise<ExecuteAgentResult | null> {
-    if (!this._aiClient) {
-      const errorMsg = 'AI Client not initialized, cannot invoke sub-agent';
-      console.warn(errorMsg);
-      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'warning', 5000);
-      return null;
-    }
-
     try {
       // Ensure AIEngineBase is configured
       await AIEngineBase.Instance.Config(false);
@@ -357,12 +560,12 @@ export class ConversationAgentService {
 
       if (!agent || !agent.ID) {
         const errorMsg = `Sub-agent "${agentName}" not found`;
-        console.warn(`❌ ${errorMsg}`);
+        console.warn(`${errorMsg}`);
         MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
         return null;
       }
 
-      console.log(`🎯 Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload, hasConfigPreset: !!agentConfigurationPresetId });
+      console.log(`Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload, hasConfigPreset: !!agentConfigurationPresetId });
 
       // Map AIAgentConfiguration preset ID to actual AIConfiguration ID
       let aiConfigurationId: string | undefined = undefined;
@@ -371,39 +574,56 @@ export class ConversationAgentService {
         const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agent.ID, false);
         // check by preset ID or AIConfigurationID - since sometimes we have the actual
         // configuration ID. Since both UUID no collisions should ever be possible.
-        const preset = presets.find(p => p.ID === agentConfigurationPresetId || p.AIConfigurationID === agentConfigurationPresetId);
+        const preset = presets.find(p => UUIDsEqual(p.ID, agentConfigurationPresetId) || UUIDsEqual(p.AIConfigurationID, agentConfigurationPresetId));
 
         if (preset) {
           aiConfigurationId = preset.AIConfigurationID || undefined;
-          console.log(`🎯 Mapped agent configuration preset "${preset.Name}" to AIConfigurationID: ${aiConfigurationId || 'default'}`);
+          console.log(`Mapped agent configuration preset "${preset.Name}" to AIConfigurationID: ${aiConfigurationId || 'default'}`);
         } else {
-          console.warn(`⚠️ Agent configuration preset ${agentConfigurationPresetId} not found for agent ${agent.ID}`);
+          console.warn(`Agent configuration preset ${agentConfigurationPresetId} not found for agent ${agent.ID}`);
         }
       }
 
-      // Build conversation messages for the sub-agent
-      // Note: conversationHistory already includes the current message
-      const conversationMessages = await this.buildAgentMessages(conversationHistory);
-
-      // Prepare parameters with optional payload and progress callback
-      const params: ExecuteAgentParams = {
-        agent: agent,
-        conversationMessages: conversationMessages,
-        conversationDetailId: conversationDetailId,
-        data: {
+      // Use AgentClientService which wraps GraphQLAIClient.RunAIAgentFromConversationDetail
+      // and integrates with client tool request handling
+      const agentParams: RunAgentFromConversationDetailParams = {
+        ConversationDetailId: conversationDetailId,
+        AgentId: agent.ID,
+        MaxHistoryMessages: 20,
+        Data: {
           conversationId: conversationId,
           latestMessageId: message.ID,
           invocationReason: reasoning
         },
-        ...(payload ? { payload } : {}),
-        ...(aiConfigurationId ? { configurationId: aiConfigurationId } : {}),
-        onProgress: onProgress
+        ...(payload ? { Payload: payload as Record<string, unknown> } : {}),
+        ...(aiConfigurationId ? { ConfigurationId: aiConfigurationId } : {}),
+        CreateArtifacts: true,
+        CreateNotification: true,
+        SourceArtifactId: sourceArtifactId,
+        SourceArtifactVersionId: sourceArtifactVersionId,
+        OnProgress: onProgress ? (progress) => {
+          onProgress({
+            step: progress.CurrentStep as 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization',
+            percentage: progress.Percentage,
+            message: progress.Message,
+            metadata: progress.Metadata
+          });
+        } : undefined
       };
 
-      // Run the sub-agent with optional source artifact info for versioning (GraphQL layer only)
-      const result = await this._aiClient.RunAIAgent(params, sourceArtifactId, sourceArtifactVersionId);
+      const runResult = await this.agentClientService.RunAgentFromConversationDetail(agentParams);
 
-      return result;
+      // Unwrap RunAgentResult to get the original ExecuteAgentResult
+      if (runResult.Success && runResult.Result) {
+        return runResult.Result as ExecuteAgentResult;
+      } else if (!runResult.Success) {
+        const errorMsg = `Sub-agent "${agentName}" failed: ${runResult.ErrorMessage || 'unknown error'}`;
+        console.error(errorMsg);
+        MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
+        return null;
+      }
+
+      return null;
     } catch (error) {
       const errorMsg = `Error invoking sub-agent "${agentName}": ` + (error instanceof Error ? error.message : String(error));
       console.error(`Error invoking sub-agent "${agentName}":`, error);
@@ -425,7 +645,7 @@ export class ConversationAgentService {
   async checkAgentContinuityIntent(
     agentId: string,
     latestMessage: string,
-    conversationHistory: ConversationDetailEntity[],
+    conversationHistory: MJConversationDetailEntity[],
     context: ArtifactLookupContext
   ): Promise<IntentCheckResult> {
     if (!this._aiClient) {
@@ -443,7 +663,7 @@ export class ConversationAgentService {
       }
 
       // Get agent details
-      const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentId);
+      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
       if (!agent) {
         console.warn('⚠️ Previous agent not found, defaulting to UNSURE');
         return { decision: 'UNSURE', reasoning: 'Previous agent not found' };
@@ -559,10 +779,10 @@ ${compactHistory}${artifactContext}
    * @returns Filtered list of agents the user can run
    */
   private async filterAgentsByPermissions(
-    agents: AIAgentEntityExtended[],
+    agents: MJAIAgentEntityExtended[],
     user: any
-  ): Promise<AIAgentEntityExtended[]> {
-    const permittedAgents: AIAgentEntityExtended[] = [];
+  ): Promise<MJAIAgentEntityExtended[]> {
+    const permittedAgents: MJAIAgentEntityExtended[] = [];
 
     for (const agent of agents) {
       try {
@@ -592,7 +812,7 @@ ${compactHistory}${artifactContext}
    */
   private findAllAgentArtifacts(
     agentId: string,
-    conversationDetails: ConversationDetailEntity[],
+    conversationDetails: MJConversationDetailEntity[],
     context: ArtifactLookupContext
   ): Array<{
     artifactId: string;
@@ -632,7 +852,7 @@ ${compactHistory}${artifactContext}
 
       // O(1) lookup for agent run from pre-loaded data
       const agentRun = context.agentRunsByDetailId.get(detail.ID);
-      if (!agentRun || agentRun.AgentID !== agentId || agentRun.Status !== 'Completed') {
+      if (!agentRun || !UUIDsEqual(agentRun.AgentID, agentId) || agentRun.Status !== 'Completed') {
         continue;
       }
 

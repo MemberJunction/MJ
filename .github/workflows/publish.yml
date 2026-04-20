@@ -42,8 +42,13 @@ jobs:
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
       - name: Install MJ CLI globally
-        run: npm install --global @memberjunction/cli@2.100.3
+        run: npm install --global @memberjunction/cli
 
       - name: Run mj migrate locally
         run: mj migrate
@@ -54,7 +59,7 @@ jobs:
           DB_PASSWORD: VeryStr0ngP@ssw0rd
           CODEGEN_DB_USERNAME: sa
           CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
-          DB_TRUST_SERVER_CERTIFICATE: Y
+          DB_TRUST_SERVER_CERTIFICATE: 'true'
 
   build-and-publish:
     name: Build and publish new versions of NPM packages
@@ -91,6 +96,9 @@ jobs:
       - name: Validate all packages exist on npm
         if: ${{ env.BRANCH == 'main' }}
         run: ./.github/scripts/validate-npm-packages.sh
+
+      - name: Validate package repository.url for npm provenance
+        run: ./.github/scripts/validate-package-repository.sh
 
       - name: Set up git credentials
         run: |

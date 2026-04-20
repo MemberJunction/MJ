@@ -11,16 +11,34 @@ import {
   SimpleChanges,
   DoCheck
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, AIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
-import { RatingJSON } from '../../models/conversation-complete-query.model';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
+import { UUIDsEqual } from '@memberjunction/global';
+
+/**
+ * Represents an attachment on a message for display
+ */
+export interface MessageAttachment {
+  id: string;
+  type: 'Image' | 'Video' | 'Audio' | 'Document';
+  mimeType: string;
+  fileName: string | null;
+  sizeBytes: number;
+  width?: number;
+  height?: number;
+  thumbnailUrl?: string;
+  contentUrl?: string;
+  /** Source of the attachment: 'upload' for chat uploads, 'artifact' for artifact picker */
+  source?: 'upload' | 'artifact';
+}
 
 /**
  * Component for displaying a single message in a conversation
@@ -28,6 +46,7 @@ import { UICommandHandlerService } from '../../services/ui-command-handler.servi
  * This component is created dynamically via ViewContainerRef.createComponent()
  */
 @Component({
+  standalone: false,
   selector: 'mj-conversation-message-item',
   templateUrl: './message-item.component.html',
   styleUrls: [
@@ -36,28 +55,31 @@ import { UICommandHandlerService } from '../../services/ui-command-handler.servi
   ]
 })
 export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy, OnChanges, DoCheck {
-  @Input() public message!: ConversationDetailEntity;
-  @Input() public conversation!: ConversationEntity | null;
+  @Input() public message!: MJConversationDetailEntity;
+  @Input() public conversation!: MJConversationEntity | null;
   @Input() public currentUser!: UserInfo;
-  @Input() public allMessages!: ConversationDetailEntity[];
+  @Input() public allMessages!: MJConversationDetailEntity[];
   @Input() public isProcessing: boolean = false;
-  @Input() public artifact?: ArtifactEntity;
-  @Input() public artifactVersion?: ArtifactVersionEntity;
-  @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
+  @Input() public artifact?: MJArtifactEntity;
+  @Input() public artifactVersion?: MJArtifactVersionEntity;
+  @Input() public agentRun: MJAIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
+  @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
 
-  @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
-  @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
-  @Output() public deleteClicked = new EventEmitter<ConversationDetailEntity>();
-  @Output() public retryClicked = new EventEmitter<ConversationDetailEntity>();
-  @Output() public testFeedbackClicked = new EventEmitter<ConversationDetailEntity>();
+  @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public retryClicked = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public testFeedbackClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
   @Output() public artifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
-  @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
+  @Output() public messageEdited = new EventEmitter<MJConversationDetailEntity>();
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
+  @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
+  @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId on Shift+Click
+  @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -70,9 +92,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   // Track previous status for DoCheck comparison
   private _previousMessageStatus: 'Complete' | 'In-Progress' | 'Error' | undefined = undefined;
 
+  /**
+   * Cached CSS class string for the message container. Updated explicitly in
+   * ngDoCheck to avoid ExpressionChangedAfterItHasBeenCheckedError — a getter
+   * would recompute between Angular's check and verify passes when message.Status
+   * changes mid-cycle (e.g., from a WebSocket update).
+   */
+  private _messageClasses: string = 'message-item';
+
   // Agent run details
   public isAgentDetailsExpanded: boolean = false;
-  public detailTasks: TaskEntity[] = [];
+  public detailTasks: MJTaskEntity[] = [];
   private tasksLoaded: boolean = false;
 
   // Memoization for mention parsing to prevent repeated parsing on change detection
@@ -127,6 +157,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Update previous status for next check
     this._previousMessageStatus = currentStatus;
+
+    // Rebuild cached class string so it's stable during Angular's check/verify cycle
+    this._messageClasses = this.buildMessageClasses();
   }
 
   ngAfterViewInit() {
@@ -149,14 +182,27 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * Handles clicks on the message bubble.
+   * Shift+Click on any AI message emits a diagnosticRequested event so the parent
+   * can dump live streaming state to the browser console — useful for debugging
+   * stuck or forever-spinning conversations without any code changes.
+   */
+  public onMessageBubbleClick(event: MouseEvent): void {
+    if (!event.shiftKey || !this.isAIMessage) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.diagnosticRequested.emit(this.message.ID);
+  }
+
+  /**
    * Starts the elapsed time updater interval for temporary messages only
    * For agent runs with IDs, the parent's timer + agentRunDuration getter handles updates
    * Updates every second for temporary messages that use _elapsedTimeFormatted
    */
   private startElapsedTimeUpdater(): void {
-    // Only start timer for temporary messages (no ID yet)
-    // Agent runs with IDs use the parent's timer + agentRunDuration getter
-    if (this.isInProgressAIMessage) {
+    // Start timer for temporary messages (in-progress, no ID) OR active agent runs
+    // Both need periodic updates to _elapsedTimeFormatted / _agentRunDurationFormatted
+    if (this.isInProgressAIMessage || this.isAgentRunActive) {
       // Initial update
       this.updateTimers();
       this.cdRef.markForCheck();
@@ -236,7 +282,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Look up agent from AIEngineBase cache
     if (agentID && AIEngineBase.Instance?.Agents) {
-      const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentID);
+      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentID));
       if (agent) {
         return {
           name: agent.Name || 'AI Assistant',
@@ -382,7 +428,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Look up actual name and icon if ID provided
     if (content.type === 'agent' && agents) {
-      const agent = agents.find(a => a.ID === content.id);
+      const agent = agents.find(a => UUIDsEqual(a.ID, content.id));
       if (agent) {
         name = agent.Name;
         iconClass = agent.IconClass || '';
@@ -403,7 +449,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         }
       }
     } else if (content.type === 'user' && users) {
-      const user = users.find(u => u.ID === content.id);
+      const user = users.find(u => UUIDsEqual(u.ID, content.id));
       if (user) name = user.Name;
     }
 
@@ -425,36 +471,32 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  private renderFormHTML(content: any): string {
+  private renderFormHTML(content: { title?: string; fields?: Array<{ name?: string; value: unknown; label?: string; type?: string; displayValue?: string }> }): string {
     if (!content.fields || content.fields.length === 0) {
-      return this.escapeHtml(JSON.stringify(content));
+      return FormResponseUtils.EscapeHtml(JSON.stringify(content));
     }
 
     // Filter out fields with empty/null/undefined values (optional fields not provided)
-    const nonEmptyFields = content.fields.filter((f: any) => {
+    const nonEmptyFields = content.fields.filter(f => {
       const value = f.value;
       return value != null && value !== '' && !(Array.isArray(value) && value.length === 0);
     });
 
     if (nonEmptyFields.length === 0) {
-      return this.escapeHtml(JSON.stringify(content));
+      return FormResponseUtils.EscapeHtml(JSON.stringify(content));
     }
 
     if (nonEmptyFields.length === 1) {
       // Single field - simple inline pill
       const field = nonEmptyFields[0];
-      // Use displayValue (friendly option label) if available, otherwise fall back to raw value
-      const value = this.escapeHtml(String(field.displayValue || field.value));
-
-      // Just show the value if it's a single simple response
-      // This handles cases like "Choose an option: weather" -> just show "weather"
+      const value = this.formatFieldValueHtml(field);
       return `<span class="form-response-pill single-field"><i class="fa fa-check" aria-hidden="true"></i>${value}</span>`;
     } else {
-      // Multiple fields - vertical question/answer layout for complex forms
-      const title = content.title ? this.escapeHtml(content.title) : 'Form Response';
-      const fieldsHTML = nonEmptyFields.map((f: any) => {
-        const label = this.escapeHtml(f.label || f.name);
-        const value = this.formatFieldValue(f);
+      // Multiple fields - vertical question/answer layout
+      const title = content.title ? FormResponseUtils.EscapeHtml(content.title) : 'Form Response';
+      const fieldsHTML = nonEmptyFields.map(f => {
+        const label = FormResponseUtils.EscapeHtml(f.label || f.name || '');
+        const value = this.formatFieldValueHtml(f);
         return `<div class="pill-field">
           <div class="field-question">${label}</div>
           <div class="field-answer">${value}</div>
@@ -471,123 +513,26 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  private formatFieldValue(field: { name?: string; value: any; label?: string; type?: string; displayValue?: string }): string {
-    // Handle null/undefined
-    if (field.value == null) {
-      return this.escapeHtml('');
-    }
+  /**
+   * Format a field value for HTML display using the shared FormResponseUtils.
+   * This handles the inline-HTML context where values need HTML escaping.
+   */
+  private formatFieldValueHtml(field: { name?: string; value: unknown; label?: string; type?: string; displayValue?: string }): string {
+    if (field.value == null) return '';
 
-    // For choice types (buttongroup, radio, dropdown, checkbox), use displayValue if available
+    // For choice types with displayValue, use it directly
     const choiceTypes = ['buttongroup', 'radio', 'dropdown', 'checkbox'];
     if (field.type && choiceTypes.includes(field.type) && field.displayValue) {
-      return this.escapeHtml(field.displayValue);
+      return FormResponseUtils.EscapeHtml(field.displayValue);
     }
 
-    const stringValue = String(field.value);
-
-    // Format based on field type
-    switch (field.type) {
-      case 'date':
-        // Date-only: "May 1, 2024"
-        return this.formatDate(stringValue, false);
-
-      case 'datetime':
-        // Date and time: "May 1, 2024 at 6:00 AM"
-        return this.formatDate(stringValue, true);
-
-      case 'time':
-        // Time-only: "2:30 PM"
-        return this.formatTime(stringValue);
-
-      case 'daterange':
-        // Parse object: { start: '...', end: '...' }
-        return this.formatDateRange(field.value);
-
-      case 'slider':
-        // Value with optional suffix
-        return this.escapeHtml(stringValue);
-
-      default:
-        // Try auto-detect ISO date (for backward compatibility)
-        if (stringValue.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
-          // Legacy: guess based on time component
-          const date = new Date(stringValue);
-          const hasMidnight = date.getUTCHours() === 0 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0;
-          return this.formatDate(stringValue, !hasMidnight);
-        }
-
-        return this.escapeHtml(stringValue);
-    }
-  }
-
-  private formatDate(value: string, includeTime: boolean): string {
-    try {
-      const date = new Date(value);
-      if (isNaN(date.getTime())) return this.escapeHtml(value);
-
-      if (includeTime) {
-        return this.escapeHtml(date.toLocaleString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        }));
-      } else {
-        return this.escapeHtml(date.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric'
-        }));
-      }
-    } catch (e) {
-      return this.escapeHtml(value);
-    }
-  }
-
-  private formatTime(value: string): string {
-    // Handle "HH:mm" or "HH:mm:ss" format
-    try {
-      const [hours, minutes] = value.split(':').map(Number);
-      const date = new Date();
-      date.setHours(hours, minutes, 0);
-
-      return this.escapeHtml(date.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      }));
-    } catch (e) {
-      return this.escapeHtml(value);
-    }
-  }
-
-  private formatDateRange(value: any): string {
-    if (typeof value === 'object' && value.start && value.end) {
-      const start = this.formatDate(value.start, false);
-      const end = this.formatDate(value.end, false);
-      // Remove HTML encoding temporarily to avoid double encoding
-      const startText = start.replace(/&[^;]+;/g, m => {
-        const map: any = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#039;': "'" };
-        return map[m] || m;
-      });
-      const endText = end.replace(/&[^;]+;/g, m => {
-        const map: any = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#039;': "'" };
-        return map[m] || m;
-      });
-      return this.escapeHtml(`${startText} to ${endText}`);
-    }
-    return this.escapeHtml(JSON.stringify(value));
+    // Delegate type-aware formatting to shared utility (no schema question available here)
+    const formatted = FormResponseUtils.FormatValue(field.value, null, field.type || null);
+    return FormResponseUtils.EscapeHtml(formatted);
   }
 
   private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+    return FormResponseUtils.EscapeHtml(text);
   }
 
   public get isInProgressAIMessage(): boolean {
@@ -646,7 +591,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // Check if current user has already rated this message
     if (this.ratings && this.ratings.length > 0) {
       const currentUserId = this.currentUser?.ID;
-      const userHasRated = this.ratings.some(r => r.UserID === currentUserId);
+      const userHasRated = this.ratings.some(r => UUIDsEqual(r.UserID, currentUserId));
 
       // If user already rated, don't show inline (accessible via gear menu)
       if (userHasRated) return false;
@@ -732,7 +677,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return this.agentRunDuration;
     }
 
-    // For completed or failed messages, show final generation time
+    // For completed/failed messages with an agent run, use agentRun timestamps.
+    // These are set when the run finishes and never change, so pin/edit saves on the
+    // message entity cannot corrupt the displayed duration.
+    if (this.agentRun?.__mj_CreatedAt && this.agentRun?.__mj_UpdatedAt) {
+      return this.agentRunDuration;
+    }
+
+    // No agent run — fall back to message entity timestamps
     return this.formattedGenerationTime;
   }
 
@@ -765,18 +717,26 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  /**
+   * Returns the cached CSS class string. Updated in ngDoCheck so the value
+   * is stable within a single change detection cycle, preventing
+   * ExpressionChangedAfterItHasBeenCheckedError.
+   */
   public get messageClasses(): string {
+    return this._messageClasses;
+  }
+
+  private buildMessageClasses(): string {
     const classes: string[] = ['message-item'];
     if (this.isAIMessage) {
       classes.push('ai-message');
-      // Show in-progress styling for AI messages that are still processing
       if (this.isInProgressAIMessage) {
         classes.push('in-progress');
       }
     } else if (this.isUserMessage) {
       classes.push('user-message');
     }
-    if (this.message.IsPinned) {
+    if (this.message?.IsPinned) {
       classes.push('pinned');
     }
     if (this.isEditing) {
@@ -792,12 +752,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return false;
     }
     return this.message.OriginalMessageChanged === true;
-  }
-
-  public onPinClick(): void {
-    if (!this.isProcessing) {
-      this.pinClicked.emit(this.message);
-    }
   }
 
   public onEditClick(): void {
@@ -875,6 +829,26 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  public async PinMessage(): Promise<void> {
+    // Optimistic update — toggle immediately so the UI responds at once
+    const previousValue = this.message.IsPinned;
+    this.message.IsPinned = !previousValue;
+    this.cdRef.detectChanges();
+
+    const saved = await this.message.Save();
+    if (!saved) {
+      // Revert on failure
+      this.message.IsPinned = previousValue;
+      this.cdRef.detectChanges();
+      console.error('Failed to save pin state for message', this.message.ID);
+    } else {
+      // Notify parent so it can patch the conversation cache in-place.
+      // Without this, navigating away and back rebuilds entities from stale cache data,
+      // causing the pin state to appear lost until the next full page reload.
+      this.messagePinToggled.emit(this.message);
+    }
+  }
+
   public onTestFeedbackClick(): void {
     if (!this.isProcessing) {
       this.testFeedbackClicked.emit(this.message);
@@ -896,7 +870,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  public onArtifactActionPerformed(event: {action: string; artifact: ArtifactEntity; version?: ArtifactVersionEntity}): void {
+  public onArtifactActionPerformed(event: {action: string; artifact: MJArtifactEntity; version?: MJArtifactVersionEntity}): void {
     // Handle artifact actions from inline-artifact component
     if (event.action === 'open') {
       this.artifactClicked.emit({
@@ -933,6 +907,37 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * Handle attachment thumbnail click
+   * Emits the attachment for the parent to display in the image viewer
+   */
+  public onAttachmentClick(attachment: MessageAttachment): void {
+    this.attachmentClicked.emit(attachment);
+  }
+
+  /**
+   * Check if message has any attachments
+   */
+  public get hasAttachments(): boolean {
+    return this.attachments && this.attachments.length > 0;
+  }
+
+  /**
+   * Get only image attachments
+   */
+  public get imageAttachments(): MessageAttachment[] {
+    return this.attachments?.filter(a => a.type === 'Image') || [];
+  }
+
+  /**
+   * Format file size for display
+   */
+  public formatFileSize(bytes: number): string {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  /**
    * Whether this message has an associated agent run
    * Based on whether the message has an AgentID (not whether agentRun object is loaded)
    */
@@ -964,7 +969,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<TaskEntity>(
+      const result = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
           ExtraFilter: `ConversationDetailID='${this.message.ID}'`,
@@ -993,37 +998,25 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return null;
     }
 
-    const createdAt = new Date(this.agentRun.__mj_CreatedAt);
-    let endTime: Date;
-
-    // If agent run is still active, use current time for live updates
+    // For active runs, return the interval-updated field to avoid
+    // ExpressionChangedAfterItHasBeenCheckedError (new Date() changes between CD cycles)
     if (this.isAgentRunActive) {
-      endTime = new Date(); // Uses current UTC time
-    } else {
-      // For completed runs, use the final updated timestamp
-      if (!this.agentRun.__mj_UpdatedAt) {
-        return null;
-      }
-      endTime = new Date(this.agentRun.__mj_UpdatedAt);
+      return this._agentRunDurationFormatted;
     }
 
+    // For completed runs, calculate static duration from timestamps
+    if (!this.agentRun.__mj_UpdatedAt) {
+      return null;
+    }
+    const createdAt = new Date(this.agentRun.__mj_CreatedAt);
+    const endTime = new Date(this.agentRun.__mj_UpdatedAt);
     const diffMs = endTime.getTime() - createdAt.getTime();
 
     if (diffMs <= 0) {
       return null;
     }
 
-    const seconds = diffMs / 1000;
-
-    if (seconds < 1) {
-      return `${Math.round(diffMs)}ms`;
-    } else if (seconds < 60) {
-      return `${seconds.toFixed(1)}s`;
-    } else {
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins}m ${secs}s`;
-    }
+    return this.formatDurationFromMs(diffMs);
   }
 
   /**
@@ -1088,14 +1081,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     ]);
 
     this.openEntityRecord.emit({
-      entityName: 'AI Agents',
+      entityName: 'MJ: AI Agents',
       compositeKey
     });
   }
 
   /**
    * Parse and return suggested responses from message data
-   * Uses strongly-typed SuggestedResponses property from ConversationDetailEntity
+   * Uses strongly-typed SuggestedResponses property from MJConversationDetailEntity
    */
   public get suggestedResponses(): SuggestedResponse[] {
     try {
@@ -1116,7 +1109,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Check if current user is the conversation owner
    */
   public get isConversationOwner(): boolean {
-    return this.conversation?.UserID === this.currentUser.ID;
+    return UUIDsEqual(this.conversation?.UserID, this.currentUser.ID);
   }
 
   /**
@@ -1128,7 +1121,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Get agent response form from message
-   * Uses ResponseForm property from ConversationDetailEntity
+   * Uses ResponseForm property from MJConversationDetailEntity
    */
   public get responseForm(): AgentResponseForm | null {
     try {
@@ -1149,7 +1142,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Get actionable commands from message
-   * Uses ActionableCommands property from ConversationDetailEntity
+   * Uses ActionableCommands property from MJConversationDetailEntity
    */
   public get actionableCommands(): ActionableCommand[] {
     try {

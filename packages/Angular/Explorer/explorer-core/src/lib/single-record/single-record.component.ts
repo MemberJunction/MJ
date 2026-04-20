@@ -1,14 +1,15 @@
-import { AfterViewInit, Component, ComponentRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ComponentRef, EventEmitter, inject, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router'
 import { Metadata, KeyValuePair, CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType } from '@memberjunction/core';
 import { Subscription } from 'rxjs';
 import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { RecentAccessService } from '@memberjunction/ng-shared';
+import { BaseFormComponent, FormNavigationEvent, FormNotificationEvent } from '@memberjunction/ng-base-forms';
+import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
 
 
 @Component({
+  standalone: false,
   selector: 'mj-single-record',
   templateUrl: './single-record.component.html',
   styleUrls: ['./single-record.component.css']
@@ -17,12 +18,15 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild(Container, {static: true}) formContainer!: Container;
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
-  @Input() public newRecordValues: string | null = '';
+  @Input() public newRecordValues: string | Record<string, unknown> | null = '';
 
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
 
   private recentAccessService: RecentAccessService;
+  private navigationService = inject(NavigationService);
+  private sharedService = inject(SharedService);
+  private cdr = inject(ChangeDetectorRef);
 
   constructor (private route: ActivatedRoute) {
     this.recentAccessService = new RecentAccessService();
@@ -33,9 +37,10 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   public loading: boolean = true;
 
   // Track dynamically created components and entities for cleanup
-  private _formComponentRef: ComponentRef<any> | null = null;
+  private _formComponentRef: ComponentRef<BaseFormComponent> | null = null;
   private _currentRecord: BaseEntity | null = null;
   private _eventHandlerSubscription: Subscription | null = null;
+  private _formEventSubscriptions: Subscription[] = [];
 
   ngOnInit(): void {
   }
@@ -101,6 +106,9 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
         componentRef.instance.userPermissions = permissions
         componentRef.instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
 
+        // Subscribe to form @Output events and map them to Explorer services
+        this.subscribeToFormEvents(componentRef.instance);
+
         this.useGenericForm = false;
         this.loadComplete.emit();
       }
@@ -109,11 +117,20 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.loading = false;
+    this.cdr.detectChanges();
   }
 
   protected SetNewRecordValues(record: BaseEntity) {
-    if (this.newRecordValues && this.newRecordValues.length > 0) {
-      // we have some provided new record values to apply
+    if (!this.newRecordValues) {
+      return;
+    }
+
+    // Handle both object and string (URL segment) formats
+    if (typeof this.newRecordValues === 'string') {
+      if (this.newRecordValues.length === 0) {
+        return;
+      }
+      // we have a URL segment string format: "field1|value1||field2|value2"
       const fv = new FieldValueCollection();
       fv.SimpleLoadFromURLSegment(this.newRecordValues);
       // now apply the values to the record
@@ -140,16 +157,98 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
           }
         }
       });
-    }    
+    }
+    else {
+      // we have a plain object format: { field1: value1, field2: value2 }
+      const recordValues = this.newRecordValues as Record<string, unknown>;
+      Object.keys(recordValues)
+        .filter(key => recordValues[key] !== null && recordValues[key] !== undefined)
+        .forEach(key => {
+          const f = record.Fields.find(f => f.Name.trim().toLowerCase() === key.trim().toLowerCase());
+          if (f) {
+            const value = recordValues[key];
+            // Set the value with proper type conversion
+            switch (f.EntityFieldInfo.TSType) {
+              case EntityFieldTSType.String:
+                record.Set(key, value?.toString() || '');
+                break;
+              case EntityFieldTSType.Number:
+                record.Set(key, typeof value === 'number' ? value : parseFloat(value?.toString() || '0'));
+                break;
+              case EntityFieldTSType.Boolean:
+                if (typeof value === 'boolean') {
+                  record.Set(key, value);
+                }
+                else if (typeof value === 'string') {
+                  record.Set(key, value !== 'false' && value !== '0' && value.trim().length > 0);
+                }
+                else {
+                  record.Set(key, !!value);
+                }
+                break;
+              case EntityFieldTSType.Date:
+                record.Set(key, value instanceof Date ? value : new Date(value?.toString() || ''));
+                break;
+              default:
+                record.Set(key, value);
+                break;
+            }
+          }
+        });
+    }
+  }
+
+  /**
+   * Subscribe to BaseFormComponent @Output events and map them to Explorer services.
+   */
+  private subscribeToFormEvents(form: BaseFormComponent): void {
+    this.cleanupFormSubscriptions();
+
+    this._formEventSubscriptions.push(
+      form.Navigate.subscribe((event: FormNavigationEvent) => this.handleNavigation(event)),
+      form.Notification.subscribe((event: FormNotificationEvent) => {
+        this.sharedService.CreateSimpleNotification(event.Message, event.Type, event.Duration);
+      })
+    );
+  }
+
+  private handleNavigation(event: FormNavigationEvent): void {
+    switch (event.Kind) {
+      case 'record':
+        this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey, { forceNewTab: event.OpenInNewTab });
+        break;
+      case 'new-record':
+        this.navigationService.OpenNewEntityRecord(event.EntityName, { newRecordValues: event.DefaultValues });
+        break;
+      case 'entity-hierarchy':
+        this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey);
+        break;
+      case 'external-link':
+        window.open(event.Url, '_blank');
+        break;
+      case 'email':
+        window.open(`mailto:${event.EmailAddress}`, '_self');
+        break;
+    }
+  }
+
+  private cleanupFormSubscriptions(): void {
+    for (const sub of this._formEventSubscriptions) {
+      sub.unsubscribe();
+    }
+    this._formEventSubscriptions = [];
   }
 
   ngOnDestroy(): void {
+    // CRITICAL: Clean up form event subscriptions first
+    this.cleanupFormSubscriptions();
+
     // CRITICAL: Clean up dynamically created form component to prevent zombie components
     if (this._formComponentRef) {
       this._formComponentRef.destroy();
       this._formComponentRef = null;
     }
-    
+
     // CRITICAL: Unsubscribe from event handler to prevent memory leaks
     if (this._eventHandlerSubscription) {
       this._eventHandlerSubscription.unsubscribe();

@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata } from '@memberjunction/core';
-import { AIPromptEntityExtended, AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -156,7 +156,7 @@ export class RunAIPromptResolver extends ResolverBase {
             }
 
             // Load the AI prompt entity
-            const promptEntity = await p.GetEntityObject<AIPromptEntityExtended>('AI Prompts', currentUser);
+            const promptEntity = await p.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts', currentUser);
             await promptEntity.Load(promptId);
             
             if (!promptEntity.IsSaved) {
@@ -305,6 +305,9 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('rerunFromPromptRunID', { nullable: true }) rerunFromPromptRunID?: string,
         @Arg('systemPromptOverride', { nullable: true }) systemPromptOverride?: string
     ): Promise<AIPromptRunResult> {
+        // Check API key scope authorization for prompt execution
+        await this.CheckAPIKeyScopeAuthorization('prompt:execute', promptId, userPayload);
+
         const p = GetReadWriteProvider(providers);
         return this.executeAIPrompt(
             p,
@@ -399,7 +402,7 @@ export class RunAIPromptResolver extends ResolverBase {
         preferredModels: string[] | undefined,
         modelPower: string,
         contextUser: any
-    ): Promise<AIModelEntityExtended> {
+    ): Promise<MJAIModelEntityExtended> {
         // Ensure AI Engine is configured
         await AIEngine.Instance.Config(false, contextUser);
         
@@ -410,7 +413,7 @@ export class RunAIPromptResolver extends ResolverBase {
         );
         
         // Filter to only models with valid API keys
-        const modelsWithKeys: AIModelEntityExtended[] = [];
+        const modelsWithKeys: MJAIModelEntityExtended[] = [];
         for (const model of allModels) {
             const apiKey = GetAIAPIKey(model.DriverClass);
             if (apiKey && apiKey.trim().length > 0) {
@@ -440,7 +443,7 @@ export class RunAIPromptResolver extends ResolverBase {
         // Sort by PowerRank for power-based selection
         modelsWithKeys.sort((a, b) => (b.PowerRank || 0) - (a.PowerRank || 0));
         
-        let selectedModel: AIModelEntityExtended;
+        let selectedModel: MJAIModelEntityExtended;
         switch (modelPower) {
             case 'lowest':
                 selectedModel = modelsWithKeys[modelsWithKeys.length - 1];
@@ -463,7 +466,7 @@ export class RunAIPromptResolver extends ResolverBase {
      * Helper method to select an embedding model by size
      * @private
      */
-    private selectEmbeddingModelBySize(modelSize: string): AIModelEntityExtended {
+    private selectEmbeddingModelBySize(modelSize: string): MJAIModelEntityExtended {
         const localModels = AIEngine.Instance.LocalEmbeddingModels;
         
         if (!localModels || localModels.length === 0) {
@@ -538,7 +541,7 @@ export class RunAIPromptResolver extends ResolverBase {
      * Helper method to format simple prompt result
      * @private
      */
-    private formatSimpleResult(chatResult: any, model: AIModelEntityExtended, executionTime: number): SimplePromptResult {
+    private formatSimpleResult(chatResult: any, model: MJAIModelEntityExtended, executionTime: number): SimplePromptResult {
         if (!chatResult || !chatResult.success) {
             return {
                 success: false,
@@ -589,8 +592,11 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('modelPower', { nullable: true }) modelPower?: string,
         @Arg('responseFormat', { nullable: true }) responseFormat?: string
     ): Promise<SimplePromptResult> {
+        // Check API key scope authorization for simple prompt execution
+        await this.CheckAPIKeyScopeAuthorization('prompt:execute', '*', userPayload);
+
         const startTime = Date.now();
-        
+
         try {
             LogStatus(`=== EXECUTING SIMPLE PROMPT ===`);
             
@@ -699,6 +705,9 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('modelSize') modelSize: string,
         @Ctx() { userPayload }: { userPayload: UserPayload }
     ): Promise<EmbedTextResult> {
+        // Check API key scope authorization for embedding generation
+        await this.CheckAPIKeyScopeAuthorization('embedding:generate', '*', userPayload);
+
         try {
             LogStatus(`=== GENERATING EMBEDDINGS for ${textToEmbed.length} text(s) ===`);
             

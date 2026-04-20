@@ -2,17 +2,6 @@ import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import * as path from 'path';
-import {
-  WatchService,
-  loadMJConfig,
-  loadSyncConfig,
-  initializeProvider,
-  getSyncEngine,
-  getSystemUser,
-  resetSyncEngine,
-  configManager
-} from '@memberjunction/metadata-sync';
-import { BaseEntity } from '@memberjunction/core';
 
 export default class Watch extends Command {
   static description = 'Watch for file changes and sync automatically';
@@ -34,6 +23,12 @@ export default class Watch extends Command {
   private watchController?: any;
   
   async run(): Promise<void> {
+    const {
+      WatchService, loadMJConfig, loadSyncConfig, initializeProvider,
+      getSyncEngine, getSystemUser, resetSyncEngine, configManager,
+    } = await import('@memberjunction/metadata-sync');
+    const { BaseEntity } = await import('@memberjunction/core');
+
     const { flags } = await this.parse(Watch);
     const spinner = ora();
     
@@ -107,7 +102,7 @@ export default class Watch extends Command {
           const relativePath = path.relative(process.cwd(), filePath);
           this.log(chalk.gray(`❌ deleted: ${relativePath}`));
         },
-        onRecordSaved: (entity: BaseEntity, isNew: boolean, entityConfig: any) => {
+        onRecordSaved: (entity: InstanceType<typeof BaseEntity>, isNew: boolean, entityConfig: Record<string, unknown>) => {
           const action = isNew ? 'created' : 'updated';
           this.log(chalk.green(`✅ Record ${action} for ${entityConfig.entity}`));
         },

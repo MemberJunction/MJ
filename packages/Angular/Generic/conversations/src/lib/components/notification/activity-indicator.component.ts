@@ -5,6 +5,7 @@ import { ActivityIndicatorConfig } from '../../models/notification.model';
  * Displays activity indicators for agent processes, typing, etc.
  */
 @Component({
+  standalone: false,
   selector: 'mj-activity-indicator',
   template: `
     @if (config?.show) {

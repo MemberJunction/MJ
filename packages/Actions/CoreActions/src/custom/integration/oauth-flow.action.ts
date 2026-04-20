@@ -634,10 +634,3 @@ export class OAuthFlowAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the OAuthFlowAction class is included in the bundle
- */
-export function LoadOAuthFlowAction() {
-    // Stub function to prevent tree shaking
-}

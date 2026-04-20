@@ -1,7 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { generateCommand } from '@memberjunction/query-gen';
-import { loadMJConfig, initializeProvider, getSystemUser } from '@memberjunction/metadata-sync';
-import { AIEngine } from '@memberjunction/aiengine';
 
 export default class Generate extends Command {
   static description = 'Generate SQL query templates for entities using AI';
@@ -63,6 +60,10 @@ export default class Generate extends Command {
   };
 
   async run(): Promise<void> {
+    const { generateCommand } = await import('@memberjunction/query-gen');
+    const { loadMJConfig, initializeProvider, getSystemUser } = await import('@memberjunction/metadata-sync');
+    const { AIEngine } = await import('@memberjunction/aiengine');
+
     const { flags } = await this.parse(Generate);
 
     try {

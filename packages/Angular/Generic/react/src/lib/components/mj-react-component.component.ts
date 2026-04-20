@@ -65,6 +65,7 @@ export interface UserSettingsChangedEvent {
  * to be used seamlessly within Angular applications.
  */
 @Component({
+  standalone: false,
   selector: 'mj-react-component',
   template: `
     <div class="react-component-wrapper">
@@ -216,6 +217,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Output() refreshData = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; key: CompositeKey }>();
   @Output() userSettingsChanged = new EventEmitter<UserSettingsChangedEvent>();
+  /** Emitted once after the component successfully loads and resolvedComponentSpec is populated. */
+  @Output() initialized = new EventEmitter<void>();
   
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
   
@@ -414,10 +417,14 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       // Initial render
       this.renderComponent();
       this.isInitialized = true;
-      
+
       // Trigger change detection since we're using OnPush
       this.cdr.detectChanges();
-      
+
+      // Notify parent that the component has successfully initialized and
+      // resolvedComponentSpec is now populated with the full spec from the registry
+      this.initialized.emit();
+
     } catch (error) {
       this.hasError = true;
       LogError(`Failed to initialize React component: ${error}`);

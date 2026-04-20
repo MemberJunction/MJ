@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { MJGlobal, MJEventType } from '@memberjunction/global';
+import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager } from '@memberjunction/core';
-import { UserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
 
 /**
@@ -32,6 +32,18 @@ export class ApplicationManager {
   private activeApp$ = new BehaviorSubject<BaseApplication | null>(null);
   private loading$ = new BehaviorSubject<boolean>(false);
   private initialized = false;
+
+  /** Resolves when loadApplications() has completed successfully */
+  private _readyResolve!: () => void;
+  private _readyPromise = new Promise<void>(resolve => { this._readyResolve = resolve; });
+
+  /**
+   * Returns a promise that resolves when applications have been loaded and the manager is ready.
+   * Safe to call multiple times — returns the same promise.
+   */
+  WhenReady(): Promise<void> {
+    return this._readyPromise;
+  }
 
   /**
    * Observable of user's active applications (filtered and ordered by UserApplication)
@@ -80,6 +92,15 @@ export class ApplicationManager {
    */
   GetAllSystemApps(): BaseApplication[] {
     return this.allApplications$.value;
+  }
+
+  /**
+   * Get all applications the current user's roles grant access to.
+   * Filters out apps where ApplicationRole records exist but the user's roles lack CanAccess.
+   */
+  GetAuthorizedSystemApps(): BaseApplication[] {
+    const engine = UserInfoEngine.Instance;
+    return this.allApplications$.value.filter(app => engine.UserHasApplicationAccess(app.ID));
   }
 
   /**
@@ -155,7 +176,7 @@ export class ApplicationManager {
 
     for (const userApp of userApps) {
       const app = appMap.get(userApp.ApplicationID);
-      if (app && userApp.IsActive) {
+      if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,
           userAppId: userApp.ID,
@@ -208,28 +229,39 @@ export class ApplicationManager {
           continue;
         }
 
-        const app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
-          BaseApplication,
-          appInfo.ClassName,
-          {
-            ID: appInfo.ID,
-            Name: appInfo.Name,
-            Description: appInfo.Description || '',
-            Icon: appInfo.Icon || '',
-            Color: appInfo.Color,
-            DefaultNavItems: appInfo.DefaultNavItems,
-            ClassName: appInfo.ClassName,
-            DefaultSequence: appInfo.DefaultSequence,
-            Status: appInfo.Status,
-            NavigationStyle: appInfo.NavigationStyle,
-            TopNavLocation: appInfo.TopNavLocation,
-            HideNavBarIconWhenActive: appInfo.HideNavBarIconWhenActive,
-            Path: appInfo.Path || '',
-            AutoUpdatePath: appInfo.AutoUpdatePath
-          }
-        );
+        const args = {
+          ID: appInfo.ID,
+          Name: appInfo.Name,
+          Description: appInfo.Description || '',
+          Icon: appInfo.Icon || '',
+          Color: appInfo.Color,
+          DefaultNavItems: appInfo.DefaultNavItems,
+          ClassName: appInfo.ClassName,
+          DefaultSequence: appInfo.DefaultSequence,
+          Status: appInfo.Status,
+          NavigationStyle: appInfo.NavigationStyle,
+          TopNavLocation: appInfo.TopNavLocation,
+          HideNavBarIconWhenActive: appInfo.HideNavBarIconWhenActive,
+          Path: appInfo.Path || '',
+          AutoUpdatePath: appInfo.AutoUpdatePath
+        };
+
+        let app: BaseApplication | null;
+        if (appInfo.ClassName && appInfo.ClassName.trim().length > 0) {
+          app = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseApplication>(
+            BaseApplication,
+            appInfo.ClassName,
+            args
+          );
+        }
+        else {
+          // no class provided in app definition.
+          app = new BaseApplication(args)
+        }
 
         if (app) {
+          // should always get here unless failure to load registered sub-class but CreateInstance has
+          // fallback to base class anyway so should always get here 
           allApps.push(app);
         }
       }
@@ -240,8 +272,11 @@ export class ApplicationManager {
       await this.loadUserApplicationConfig();
 
       this.initialized = true;
+      this._readyResolve();
 
     } catch (error) {
+      // Resolve even on failure so waiters don't hang forever — they'll see initialized=false
+      this._readyResolve();
       LogError('Failed to load applications:', undefined, error instanceof Error ? error.message : String(error));
       throw error;
     } finally {
@@ -266,7 +301,7 @@ export class ApplicationManager {
     // Load user's UserApplication records using UserInfoEngine for caching
     const engine = UserInfoEngine.Instance;
 
-    let userApps: UserApplicationEntity[] = engine.UserApplications;
+    let userApps: MJUserApplicationEntity[] = engine.UserApplications;
 
     // Self-healing: If user has no UserApplication records, create from DefaultForNewUser apps
     if (userApps.length === 0) {
@@ -280,7 +315,7 @@ export class ApplicationManager {
 
     for (const userApp of userApps) {
       const app = appMap.get(userApp.ApplicationID);
-      if (app && userApp.IsActive) {
+      if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,
           userAppId: userApp.ID,
@@ -300,7 +335,7 @@ export class ApplicationManager {
    * Called when a user has no existing UserApplication records (self-healing).
    * Delegates to UserInfoEngine for the actual creation.
    */
-  private async createDefaultUserApplications(): Promise<UserApplicationEntity[]> {
+  private async createDefaultUserApplications(): Promise<MJUserApplicationEntity[]> {
     const engine = UserInfoEngine.Instance;
     return await engine.CreateDefaultApplications();
   }
@@ -310,13 +345,13 @@ export class ApplicationManager {
    */
   async SetActiveApp(appId: string): Promise<void> {
     const currentApp = this.activeApp$.value;
-    const newApp = this.applications$.value.find(a => a.ID === appId);
+    const newApp = this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
 
     if (!newApp) {
       return;
     }
 
-    if (currentApp?.ID === appId) {
+    if (UUIDsEqual(currentApp?.ID, appId)) {
       return; // Already active
     }
 
@@ -334,7 +369,7 @@ export class ApplicationManager {
    * Get application by ID
    */
   GetAppById(appId: string): BaseApplication | undefined {
-    return this.applications$.value.find(a => a.ID === appId);
+    return this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
   }
 
   /**
@@ -454,7 +489,7 @@ export class ApplicationManager {
     switch (accessStatus) {
       case 'installed_active': {
         // User has access - find the BaseApplication instance
-        const baseApp = this.applications$.value.find(a => a.ID === appInfo.ID);
+        const baseApp = this.applications$.value.find(a => UUIDsEqual(a.ID, appInfo.ID));
         return {
           status: 'accessible',
           message: 'User has access to this app',
@@ -463,6 +498,15 @@ export class ApplicationManager {
           app: baseApp
         };
       }
+
+      case 'not_authorized':
+        return {
+          status: 'not_authorized',
+          message: `You do not have the required role to access "${appInfo.Name}".`,
+          appName: appInfo.Name,
+          appId: appInfo.ID,
+          canInstall: false
+        };
 
       case 'installed_inactive':
         return {
@@ -490,7 +534,7 @@ export class ApplicationManager {
    * Delegates to UserInfoEngine for the actual installation.
    * Returns the newly created UserApplication entity.
    */
-  async InstallAppForUser(appId: string): Promise<UserApplicationEntity | null> {
+  async InstallAppForUser(appId: string): Promise<MJUserApplicationEntity | null> {
     const engine = UserInfoEngine.Instance;
     // The engine will emit DataChange$ after the entity save triggers a refresh,
     // which our subscribeToEngineChanges() handler will pick up and call syncFromEngine()
@@ -536,7 +580,7 @@ export class ApplicationManager {
  */
 export interface AppAccessResult {
   /** Status of the access check */
-  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled';
+  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled' | 'not_authorized';
   /** Human-readable message describing the access status */
   message: string;
   /** Name of the application (if found) */

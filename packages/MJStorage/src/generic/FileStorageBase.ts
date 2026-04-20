@@ -40,7 +40,7 @@ export type GetObjectMetadataParams = {
 /**
  * Represents metadata information about a stored object or file.
  * This comprehensive type includes common file metadata properties available across different storage providers.
- * 
+ *
  * @property name - The name of the object (typically the filename without path)
  * @property path - The directory path where the object is stored, without the object name
  * @property fullPath - The complete path to the object including both path and name
@@ -68,7 +68,7 @@ export type StorageObjectMetadata = {
 /**
  * Represents the result of a ListObjects operation.
  * Contains both the objects (files) and prefixes (directories) found in the storage provider.
- * 
+ *
  * @property objects - Array of StorageObjectMetadata for all objects/files found in the specified path
  * @property prefixes - Array of directory path strings found in the specified path
  */
@@ -124,7 +124,7 @@ export type FileSearchOptions = {
    * This allows providers to expose advanced features not covered by common options.
    * Example: { 'trashed': false } for Google Drive, { 'scope': 'personal' } for SharePoint
    */
-  providerSpecific?: Record<string, any>;
+  providerSpecific?: Record<string, unknown>;
 };
 
 /**
@@ -194,7 +194,7 @@ export type FileSearchResult = {
    * Provider-specific additional data.
    * Example: Google Drive file ID, SharePoint list item ID, etc.
    */
-  providerData?: Record<string, any>;
+  providerData?: Record<string, unknown>;
 };
 
 /**
@@ -243,8 +243,53 @@ export class UnsupportedOperationError extends Error {
 }
 
 /**
+ * Configuration options for initializing a storage provider.
+ * This interface defines the standard configuration that can be passed to initialize().
+ *
+ * ## Usage Patterns
+ *
+ * ### Simple Deployment (Environment Variables)
+ * - Omit accountId when using environment variables
+ * - Constructor loads credentials automatically
+ * - Call initialize() with no config or empty object
+ *
+ * ### Multi-Tenant Enterprise (Database)
+ * - Provide accountId to link driver to FileStorageAccount
+ * - Include decrypted credentials from database
+ * - Or use initializeDriverWithAccountCredentials() utility
+ */
+export interface StorageProviderConfig {
+  /**
+   * The ID of the FileStorageAccount entity this driver instance is operating for.
+   * This links the driver to a specific organizational storage account.
+   *
+   * **Optional**: Provide for multi-tenant mode to track account association.
+   * Omit for simple deployment using environment variables.
+   */
+  accountId?: string;
+
+  /**
+   * The name of the account (for logging/display purposes).
+   *
+   * **Optional**: Useful for logging and debugging in multi-tenant scenarios.
+   */
+  accountName?: string;
+
+  /**
+   * Provider-specific configuration values (e.g., API keys, bucket names, etc.).
+   *
+   * **Simple Deployment**: Not needed - constructor loads from environment variables.
+   * **Multi-Tenant**: Provide decrypted credentials from Credential entity.
+   *
+   * If provided, these values override the constructor defaults.
+   * If omitted, uses credentials already loaded by constructor.
+   */
+  [key: string]: unknown;
+}
+
+/**
  * Represents an abstract base class for file storage operations.
- * 
+ *
  * This class defines a common interface for interacting with various cloud storage providers,
  * allowing for consistent file operations regardless of the underlying storage system.
  * Each storage provider implementation extends this base class and provides
@@ -262,6 +307,7 @@ export class UnsupportedOperationError extends Error {
  * - Error handling should be implemented in derived classes to provide consistent behavior
  * - Methods return Promises to support asynchronous operations across various providers
  * - When a storage provider doesn't support a particular operation, implementations should throw UnsupportedOperationError
+ * - Each instance operates on behalf of a specific FileStorageAccount (identified by accountId)
  */
 export abstract class FileStorageBase {
   /**
@@ -269,11 +315,38 @@ export abstract class FileStorageBase {
    * Each implementation must define this property with a descriptive name.
    */
   protected abstract readonly providerName: string;
-  
+
+  /**
+   * The ID of the FileStorageAccount this driver instance is operating for.
+   * Set during initialization via the config parameter.
+   */
+  protected _accountId: string | undefined;
+
+  /**
+   * The name of the FileStorageAccount (for logging/display purposes).
+   */
+  protected _accountName: string | undefined;
+
+  /**
+   * Gets the account ID this driver instance is operating for.
+   * Returns undefined if the driver was not initialized with an account.
+   */
+  public get AccountId(): string | undefined {
+    return this._accountId;
+  }
+
+  /**
+   * Gets the account name this driver instance is operating for.
+   * Returns undefined if the driver was not initialized with an account.
+   */
+  public get AccountName(): string | undefined {
+    return this._accountName;
+  }
+
   /**
    * Helper method to throw an UnsupportedOperationError with appropriate context.
    * This method simplifies implementation of methods not supported by specific providers.
-   * 
+   *
    * @param methodName - The name of the method that is not supported
    * @throws UnsupportedOperationError with information about the unsupported method and provider
    */
@@ -283,19 +356,19 @@ export abstract class FileStorageBase {
 
   /**
    * Generates a pre-authenticated URL for uploading files to a storage provider.
-   * 
+   *
    * This method abstracts over different storage providers, allowing for a unified interface
-   * to obtain upload URLs, regardless of the underlying provider's specifics. The method 
-   * takes the name of the file (or object) you wish to upload as input and returns a Promise. 
+   * to obtain upload URLs, regardless of the underlying provider's specifics. The method
+   * takes the name of the file (or object) you wish to upload as input and returns a Promise.
    * This Promise, when resolved, provides a payload containing two key pieces of information:
    *
-   * 1. `UploadUrl`: The URL to which the file should be uploaded. This URL is pre-authenticated, 
-   *    meaning it includes any necessary authentication tokens or signatures. The URL's format 
+   * 1. `UploadUrl`: The URL to which the file should be uploaded. This URL is pre-authenticated,
+   *    meaning it includes any necessary authentication tokens or signatures. The URL's format
    *    and the authentication method depend on the storage provider being used.
    *
-   * 2. `ProviderKey` (optional): Some storage providers assign their own unique key or name to 
-   *    the uploaded object instead of using the name provided by the user. If the provider you 
-   *    are using does this, the `ProviderKey` will be included in the payload. This key can be 
+   * 2. `ProviderKey` (optional): Some storage providers assign their own unique key or name to
+   *    the uploaded object instead of using the name provided by the user. If the provider you
+   *    are using does this, the `ProviderKey` will be included in the payload. This key can be
    *    useful for future reference to the object within the storage provider's system.
    *
    * @example
@@ -308,23 +381,23 @@ export abstract class FileStorageBase {
    * }
    * ```
    *
-   * Note: This method is abstract and must be implemented by a subclass that specifies the logic 
+   * Note: This method is abstract and must be implemented by a subclass that specifies the logic
    * for interacting with a specific storage provider.
    *
-   * @param objectName - The name of the object or file to be uploaded. This name is used by the 
+   * @param objectName - The name of the object or file to be uploaded. This name is used by the
    *                     storage provider and may also be included in the pre-authenticated URL.
-   * @returns A Promise that resolves to a payload containing the upload URL and, optionally, the 
-   *          provider's object key. This payload allows you to proceed with uploading your file 
+   * @returns A Promise that resolves to a payload containing the upload URL and, optionally, the
+   *          provider's object key. This payload allows you to proceed with uploading your file
    *          to the storage provider.
    */
   public abstract CreatePreAuthUploadUrl(objectName: string): Promise<CreatePreAuthUploadUrlPayload>;
 
   /**
    * Generates a pre-authenticated URL for downloading files from a storage provider.
-   * 
+   *
    * This method abstracts the process of generating download URLs across different storage providers,
-   * offering a unified interface for obtaining these URLs. When called with the name of the file 
-   * or object to download, it creates a URL that includes necessary authentication tokens directly 
+   * offering a unified interface for obtaining these URLs. When called with the name of the file
+   * or object to download, it creates a URL that includes necessary authentication tokens directly
    * in the URL, allowing for secure access without requiring additional authentication at download time.
    *
    * @example
@@ -333,7 +406,7 @@ export abstract class FileStorageBase {
    * console.log(downloadUrl); // Use this URL to download your file directly
    * ```
    *
-   * If a `ProviderKey` was previously returned by `CreatePreAuthUploadUrl`, use that as the 
+   * If a `ProviderKey` was previously returned by `CreatePreAuthUploadUrl`, use that as the
    * `objectName` instead of the object's natural name:
    *
    * ```typescript
@@ -350,16 +423,16 @@ export abstract class FileStorageBase {
    *                     This is the name as it is known to the storage provider, and it will be used
    *                     to locate the file and generate the URL.
    * @returns A Promise that resolves to a string, which is the pre-authenticated download URL for the
-   *          specified object or file. This URL can be used immediately for downloading the file 
+   *          specified object or file. This URL can be used immediately for downloading the file
    *          without further authentication.
    */
   public abstract CreatePreAuthDownloadUrl(objectName: string): Promise<string>;
 
   /**
    * Moves an object or file from one location to another within a storage provider's system.
-   * 
+   *
    * This method provides a unified interface for moving objects across different storage providers.
-   * It takes the original object name and the new desired name/location, and handles the 
+   * It takes the original object name and the new desired name/location, and handles the
    * appropriate operations to move the object while preserving its content.
    *
    * Some implementations may perform this as a copy followed by a delete operation,
@@ -379,16 +452,16 @@ export abstract class FileStorageBase {
    *                      used by the storage provider to locate the object for moving.
    * @param newObjectName - The new name/path where you want to move the object. This should match
    *                      exactly as it is expected to be known to the storage provider after moving.
-   * @returns A Promise that resolves to a boolean value. `true` indicates that the object was 
+   * @returns A Promise that resolves to a boolean value. `true` indicates that the object was
    *          successfully moved, while `false` indicates a failure in the move process.
    */
   public abstract MoveObject(oldObjectName: string, newObjectName: string): Promise<boolean>;
 
   /**
    * Deletes an object or file from a storage provider's system.
-   * 
+   *
    * This method provides a unified interface for object deletion across different storage providers.
-   * It takes the name of the object to delete and handles the provider-specific operations to 
+   * It takes the name of the object to delete and handles the provider-specific operations to
    * remove it from storage.
    *
    * @example
@@ -422,43 +495,43 @@ export abstract class FileStorageBase {
 
   /**
    * Lists objects in a storage provider's system with the given prefix path.
-   * 
+   *
    * This method returns a list of objects (files) and prefixes (directories) under the specified path.
    * It supports a hierarchical directory-like structure through the use of prefixes that can represent
    * "folders" within the storage, even for providers that don't natively support directories.
-   * 
+   *
    * @example
    * ```typescript
    * // List all objects in the "documents" directory
    * const result = await storage.ListObjects('documents/');
-   * 
+   *
    * // Access the files
    * for (const file of result.objects) {
    *   console.log(`File: ${file.name}, Size: ${file.size}, Type: ${file.contentType}`);
    * }
-   * 
+   *
    * // Access the subdirectories
    * for (const dir of result.prefixes) {
    *   console.log(`Directory: ${dir}`);
    * }
    * ```
-   * 
-   * @param prefix - The path prefix to list objects from. Use "/" for the root, or paths like 
+   *
+   * @param prefix - The path prefix to list objects from. Use "/" for the root, or paths like
    *                 "documents/" for specific directories.
-   * @param delimiter - The character used to group keys. Typically "/" is used to simulate 
+   * @param delimiter - The character used to group keys. Typically "/" is used to simulate
    *                    directory structure. Defaults to "/".
-   * @returns A Promise that resolves to a StorageListResult containing both objects and 
+   * @returns A Promise that resolves to a StorageListResult containing both objects and
    *          prefixes (directories).
    */
   public abstract ListObjects(prefix: string, delimiter?: string): Promise<StorageListResult>;
 
   /**
    * Creates a directory in the storage system.
-   * 
+   *
    * For storage systems that don't natively support directories (like AWS S3 or Google Cloud Storage),
-   * this may create a zero-byte object with a trailing delimiter to simulate a directory. For systems 
+   * this may create a zero-byte object with a trailing delimiter to simulate a directory. For systems
    * with native directory support, this will create an actual directory.
-   * 
+   *
    * @example
    * ```typescript
    * // Create a "reports" directory inside "documents"
@@ -469,8 +542,8 @@ export abstract class FileStorageBase {
    *   console.log('Failed to create directory');
    * }
    * ```
-   * 
-   * @param directoryPath - The path of the directory to create. Should typically end with a 
+   *
+   * @param directoryPath - The path of the directory to create. Should typically end with a
    *                       delimiter (typically "/").
    * @returns A Promise that resolves to a boolean indicating success of the directory creation.
    */
@@ -478,19 +551,19 @@ export abstract class FileStorageBase {
 
   /**
    * Deletes a directory and optionally all of its contents recursively.
-   * 
+   *
    * This method can be used to remove empty directories or, with the recursive flag set to true,
    * to delete entire directory trees including all contained files and subdirectories.
-   * 
+   *
    * @example
    * ```typescript
    * // Delete an empty directory
    * const deleted = await storage.DeleteDirectory('documents/temp/');
-   * 
+   *
    * // Delete a directory and all its contents
    * const deletedRecursively = await storage.DeleteDirectory('documents/old_project/', true);
    * ```
-   * 
+   *
    * @param directoryPath - The path of the directory to delete.
    * @param recursive - If true, deletes all contents recursively. If false and the directory
    *                   is not empty, the operation will fail. Defaults to false.
@@ -500,11 +573,11 @@ export abstract class FileStorageBase {
 
   /**
    * Retrieves metadata for a specific object without downloading its contents.
-   * 
+   *
    * This method allows for checking properties of an object such as its size, content type,
    * and last modified date without transferring the actual data, which can be efficient
    * for large files.
-   * 
+   *
    * @example
    * ```typescript
    * try {
@@ -516,7 +589,7 @@ export abstract class FileStorageBase {
    *   console.error('File not found or error retrieving metadata', error);
    * }
    * ```
-   * 
+   *
    * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise that resolves to a StorageObjectMetadata object containing the metadata.
    *          If the object does not exist, the promise will be rejected.
@@ -525,10 +598,10 @@ export abstract class FileStorageBase {
 
   /**
    * Downloads an object's content as a Buffer.
-   * 
+   *
    * This method retrieves the full content of an object from the storage provider
    * and returns it as a Buffer for processing in memory.
-   * 
+   *
    * @example
    * ```typescript
    * try {
@@ -540,7 +613,7 @@ export abstract class FileStorageBase {
    *   console.error('Error downloading file', error);
    * }
    * ```
-   * 
+   *
    * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise that resolves to a Buffer containing the object's data.
    *          If the object does not exist, the promise will be rejected.
@@ -549,11 +622,11 @@ export abstract class FileStorageBase {
 
   /**
    * Uploads object data to the storage provider.
-   * 
+   *
    * This is a direct upload method that doesn't use a pre-authorized URL. Instead,
    * it takes the data as a Buffer and handles the upload directly, making it suitable
    * for server-side operations where you already have the data in memory.
-   * 
+   *
    * @example
    * ```typescript
    * // Upload a text file
@@ -564,14 +637,14 @@ export abstract class FileStorageBase {
    *   'text/plain',
    *   { author: 'John Doe', department: 'Engineering' }
    * );
-   * 
+   *
    * if (uploaded) {
    *   console.log('File uploaded successfully');
    * } else {
    *   console.log('Failed to upload file');
    * }
    * ```
-   * 
+   *
    * @param objectName - The name to assign to the uploaded object.
    * @param data - The Buffer containing the data to upload.
    * @param contentType - Optional MIME type of the content. If not provided,
@@ -579,20 +652,15 @@ export abstract class FileStorageBase {
    * @param metadata - Optional custom metadata to associate with the object.
    * @returns A Promise that resolves to a boolean indicating success of the upload.
    */
-  public abstract PutObject(
-    objectName: string, 
-    data: Buffer, 
-    contentType?: string, 
-    metadata?: Record<string, string>
-  ): Promise<boolean>;
+  public abstract PutObject(objectName: string, data: Buffer, contentType?: string, metadata?: Record<string, string>): Promise<boolean>;
 
   /**
    * Copies an object within the storage system.
-   * 
+   *
    * Unlike MoveObject which removes the source object, this creates a copy while
    * leaving the original intact. This is useful for creating backups or versions
    * of files.
-   * 
+   *
    * @example
    * ```typescript
    * // Create a backup copy of a file
@@ -600,14 +668,14 @@ export abstract class FileStorageBase {
    *   'documents/important.docx',
    *   'documents/backups/important_backup.docx'
    * );
-   * 
+   *
    * if (copied) {
    *   console.log('File copied successfully');
    * } else {
    *   console.log('Failed to copy file');
    * }
    * ```
-   * 
+   *
    * @param sourceObjectName - The name of the object to copy.
    * @param destinationObjectName - The name to assign to the copied object.
    * @returns A Promise that resolves to a boolean indicating success of the copy operation.
@@ -616,11 +684,11 @@ export abstract class FileStorageBase {
 
   /**
    * Checks if an object exists in the storage system.
-   * 
+   *
    * This method provides a way to verify the existence of an object without
    * transferring its data or metadata, which can be more efficient when you only
    * need to know if something exists.
-   * 
+   *
    * @example
    * ```typescript
    * const exists = await storage.ObjectExists('documents/may_not_exist.pdf');
@@ -630,7 +698,7 @@ export abstract class FileStorageBase {
    *   console.log('The file does not exist');
    * }
    * ```
-   * 
+   *
    * @param objectName - The name of the object to check.
    * @returns A Promise that resolves to a boolean indicating if the object exists.
    */
@@ -638,11 +706,11 @@ export abstract class FileStorageBase {
 
   /**
    * Checks if a directory exists in the storage system.
-   * 
+   *
    * For storage systems that don't natively support directories, this may check for
    * the existence of a directory placeholder object or for any objects with the given
    * prefix.
-   * 
+   *
    * @example
    * ```typescript
    * const exists = await storage.DirectoryExists('documents/reports/');
@@ -652,41 +720,84 @@ export abstract class FileStorageBase {
    *   console.log('The directory does not exist');
    * }
    * ```
-   * 
+   *
    * @param directoryPath - The path of the directory to check.
    * @returns A Promise that resolves to a boolean indicating if the directory exists.
    */
   public abstract DirectoryExists(directoryPath: string): Promise<boolean>;
 
   /**
-   * Optional initialization method for storage providers that require async setup.
+   * Initialize storage provider with optional configuration.
    *
-   * This method can be overridden by subclasses that need to perform async initialization
-   * after construction, such as setting up access tokens, establishing connections,
-   * or verifying permissions.
+   * ## Standard Usage Pattern
    *
-   * The default implementation does nothing and resolves immediately. Storage provider
-   * implementations should override this method if they need to perform async setup.
+   * **ALWAYS call this method** after creating a provider instance.
    *
-   * @example
+   * ### Simple Deployment (Environment Variables)
+   * Constructor loads credentials from environment variables, then call
+   * initialize() with no config to complete setup:
+   *
    * ```typescript
-   * // In a specific provider implementation:
-   * public async initialize(): Promise<void> {
-   *   // Set up OAuth tokens or other async initialization
-   *   await this.refreshAccessToken();
-   *   await this.verifyBucketAccess();
-   * }
+   * // Set environment variables:
+   * // STORAGE_AWS_ACCESS_KEY_ID=...
+   * // STORAGE_AWS_SECRET_ACCESS_KEY=...
+   * // STORAGE_AWS_BUCKET_NAME=...
+   * // STORAGE_AWS_REGION=...
    *
-   * // Usage:
-   * const storage = new MyStorageProvider();
-   * await storage.initialize();
-   * // Now the provider is ready to use
+   * const storage = new AWSFileStorage(); // Constructor loads env vars
+   * await storage.initialize(); // No config - uses env vars
+   * await storage.ListObjects('/'); // Ready to use
    * ```
    *
-   * @returns A Promise that resolves when initialization is complete.
+   * ### Multi-Tenant Enterprise (Database)
+   * Constructor loads defaults, then call initialize() with configuration
+   * to override with database credentials and track account:
+   *
+   * ```typescript
+   * // Preferred: Use infrastructure utility
+   * const storage = await initializeDriverWithAccountCredentials({
+   *   accountEntity,
+   *   providerEntity,
+   *   contextUser
+   * });
+   *
+   * // Alternative: Manual initialization
+   * const storage = new AWSFileStorage();
+   * await storage.initialize({
+   *   accountId: account.id,
+   *   accountName: account.name,
+   *   accessKeyID: creds.accessKeyID,
+   *   secretAccessKey: creds.secretAccessKey,
+   *   region: creds.region,
+   *   defaultBucket: creds.bucket
+   * });
+   * ```
+   *
+   * ## How It Works
+   *
+   * - **No config**: Uses credentials already loaded by constructor from environment variables
+   * - **With config**: Overrides constructor credentials with provided values
+   * - **accountId**: Optional - provide for multi-tenant tracking
+   *
+   * ## Implementation Notes for Subclasses
+   *
+   * Subclass implementations should:
+   * 1. Call super.initialize(config) first to set accountId and accountName
+   * 2. Check if config is provided before attempting to override credentials
+   * 3. Only override values that are present in config
+   * 4. Reinitialize client/connection if credentials changed
+   *
+   * @param config - Optional configuration object
+   *                 - Omit for simple deployment (uses env vars from constructor)
+   *                 - Provide for multi-tenant (overrides with database credentials)
+   * @returns A Promise that resolves when initialization is complete
    */
-  public async initialize(): Promise<void> {
-    // Default implementation does nothing
+  public async initialize(config?: StorageProviderConfig): Promise<void> {
+    // Extract and store account information from the config if provided
+    if (config) {
+      this._accountId = config.accountId;
+      this._accountName = config.accountName;
+    }
   }
 
   /**
@@ -796,8 +907,5 @@ export abstract class FileStorageBase {
    * @returns A Promise that resolves to a FileSearchResultSet containing matching files.
    * @throws UnsupportedOperationError if the provider doesn't support search operations.
    */
-  public abstract SearchFiles(
-    query: string,
-    options?: FileSearchOptions
-  ): Promise<FileSearchResultSet>;
+  public abstract SearchFiles(query: string, options?: FileSearchOptions): Promise<FileSearchResultSet>;
 }

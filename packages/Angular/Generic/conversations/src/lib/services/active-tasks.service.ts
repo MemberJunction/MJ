@@ -2,8 +2,8 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { RunView, UserInfo } from '@memberjunction/core';
-import { AIAgentRunEntity } from '@memberjunction/core-entities';
-import { ConversationDataService } from './conversation-data.service';
+import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
+import { ConversationEngine } from '@memberjunction/core-entities';
 
 /**
  * Represents an active agent task that is currently running
@@ -31,8 +31,7 @@ export interface ActiveTask {
 export class ActiveTasksService {
   private _tasks$ = new BehaviorSubject<Map<string, ActiveTask>>(new Map());
   private _conversationIdsWithTasks$ = new BehaviorSubject<Set<string>>(new Set());
-
-  constructor(private conversationData: ConversationDataService) {}
+  private engine = ConversationEngine.Instance;
 
   /**
    * Observable of all active tasks as an array
@@ -216,10 +215,11 @@ export class ActiveTasksService {
       // Query for running agent runs owned by this user
       // Only restore parent agents (those with ConversationDetailID) - child agents don't have one
       // This matches normal behavior where we only track parent agents, not child agents
-      const result = await rv.RunView<AIAgentRunEntity>({
+      const result = await rv.RunView<MJAIAgentRunEntity>({
         EntityName: 'MJ: AI Agent Runs',
+        Fields: ["ID", "ConversationID", "AgentID", "Agent", "ConversationDetailID"], // narrow field scope to not pull back JSON blobs - much faster
         ExtraFilter: `Status='Running' AND UserID='${currentUser.ID}' AND ConversationDetailID IS NOT NULL`,
-        ResultType: 'entity_object'
+        ResultType: 'simple' // no need for entity-object here we aren't mutating
       }, currentUser);
 
       if (!result.Success || !result.Results || result.Results.length === 0) {
@@ -227,11 +227,11 @@ export class ActiveTasksService {
         return;
       }
 
-      // Get conversation names from cached ConversationDataService
+      // Get conversation names from cached ConversationEngine
       const conversationNames = new Map<string, string>();
       for (const agentRun of result.Results) {
         if (agentRun.ConversationID) {
-          const conv = this.conversationData.getConversationById(agentRun.ConversationID);
+          const conv = this.engine.GetConversation(agentRun.ConversationID);
           if (conv?.Name) {
             conversationNames.set(agentRun.ConversationID, conv.Name);
           }

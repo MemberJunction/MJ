@@ -1,3 +1,6 @@
+import { EntityInfo } from '@memberjunction/core';
+import { MapRenderMode } from '@memberjunction/ng-map-view';
+
 /**
  * Filter configuration for the Data Explorer
  * Allows constraining which entities are shown in the explorer
@@ -50,7 +53,7 @@ export interface BreadcrumbItem {
 /**
  * View mode options for the Data Explorer
  */
-export type DataExplorerViewMode = 'grid' | 'cards' | 'timeline';
+export type DataExplorerViewMode = 'grid' | 'cards' | 'timeline' | 'map';
 
 /**
  * Timeline orientation options
@@ -66,10 +69,14 @@ export interface DataExplorerDeepLink {
   entity?: string;
   /** Record ID or composite key string to select */
   record?: string;
-  /** Filter text to apply */
+  /** Filter text to apply (omitted when viewId is present — view carries its own filter) */
   filter?: string;
-  /** View mode to use */
+  /** View mode to use (grid/cards/timeline/map) */
   viewMode?: DataExplorerViewMode;
+  /** Saved view ID to load (uses view's filters/sort/grid state) */
+  viewId?: string;
+  /** Map render mode (point/choropleth/heatmap) — only relevant when viewMode is 'map' */
+  mapMode?: string;
 }
 
 /**
@@ -124,6 +131,24 @@ export interface FavoriteRecord {
 }
 
 /**
+ * Represents an application group with its entities for the home view.
+ * Used by Concept D to organize entities by their first Application membership.
+ */
+export interface AppEntityGroup {
+  applicationId: string;
+  applicationName: string;
+  applicationIcon: string;
+  applicationColor: string | null;
+  entities: EntityInfo[];
+  isExpanded: boolean;
+}
+
+/**
+ * Home view mode for the All/Favorites toggle
+ */
+export type HomeViewMode = 'all' | 'favorites';
+
+/**
  * State interface for the Data Explorer dashboard
  */
 export interface DataExplorerState {
@@ -158,6 +183,12 @@ export interface DataExplorerState {
   timelineDateFieldName: string | null;
   timelineSortOrder: 'asc' | 'desc';
 
+  // Map configuration (persisted across page reloads)
+  mapRenderMode: MapRenderMode;
+  mapZoom: number | null;
+  mapCenterLat: number | null;
+  mapCenterLng: number | null;
+
   // Detail panel
   detailPanelOpen: boolean;
   detailPanelWidth: number;
@@ -186,6 +217,16 @@ export interface DataExplorerState {
   favoriteEntities: FavoriteEntity[];
   /** Favorite records for home screen (non-entity favorites) */
   favoriteRecords: FavoriteRecord[];
+
+  // Concept D: Application Groups + Search-First
+  /** Which application group IDs are currently expanded */
+  expandedAppGroups: string[];
+  /** Whether the right-side quick access panel is open */
+  quickAccessPanelOpen: boolean;
+  /** Collapse state per section in the quick access panel (key = section id, value = expanded) */
+  quickAccessSections: Record<string, boolean>;
+  /** Home view mode toggle: show all entities or favorites only */
+  homeViewMode: HomeViewMode;
 }
 
 export interface RecentItem {
@@ -237,7 +278,7 @@ export interface AutoCardTemplate {
  */
 export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   navigationPanelWidth: 280,
-  navigationPanelCollapsed: false,
+  navigationPanelCollapsed: true,
   selectedEntityName: null,
   selectedViewId: null,
   viewModified: false,
@@ -249,6 +290,10 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   timelineOrientation: 'vertical',
   timelineDateFieldName: null,
   timelineSortOrder: 'desc',
+  mapRenderMode: 'point',
+  mapZoom: null,
+  mapCenterLat: null,
+  mapCenterLng: null,
   detailPanelOpen: false,
   detailPanelWidth: 400,
   selectedRecordId: null,
@@ -263,5 +308,10 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   showAllEntities: false,  // Default to showing only common entities
   recentEntityAccesses: [],
   favoriteEntities: [],
-  favoriteRecords: []
+  favoriteRecords: [],
+  // Concept D: Application Groups + Search-First
+  expandedAppGroups: [],
+  quickAccessPanelOpen: false,
+  quickAccessSections: { recentRecords: true, recentEntities: true, favoriteRecords: true },
+  homeViewMode: 'all',
 };

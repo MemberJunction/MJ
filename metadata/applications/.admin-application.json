@@ -3,7 +3,7 @@
     "Name": "Admin",
     "Description": "MemberJunction Administration",
     "Icon": "fa-solid fa-screwdriver-wrench",
-    "DefaultForNewUser": true,
+    "DefaultForNewUser": false,
     "Color": "#4caf50",
     "DefaultSequence": 999,
     "DefaultNavItems": [
@@ -11,7 +11,7 @@
         "Label": "ERD",
         "Icon": "fa-solid fa-database",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=ERD?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=ERD?allowDefer",
         "isDefault": true
       },
       {
@@ -25,47 +25,61 @@
         "Label": "Permissions",
         "Icon": "fa-solid fa-lock",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=Entity Permissions?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=Entity Permissions?allowDefer",
         "isDefault": true
       },
       {
         "Label": "Roles",
         "Icon": "fa-solid fa-shield-halved",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=Role Management?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=Role Management?allowDefer",
         "isDefault": true
       },
       {
         "Label": "Users",
         "Icon": "fa-solid fa-users",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=User Management?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=User Management?allowDefer",
         "isDefault": true
       },
       {
         "Label": "Apps",
         "Icon": "fa-solid fa-th-large",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=Application Management?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=Application Management?allowDefer",
         "isDefault": true
       },
       {
         "Label": "SQL Logging",
         "Icon": "fa-solid fa-file-code",
         "ResourceType": "Dashboards",
-        "RecordID": "@lookup:Dashboards.Name=SQL Logging?allowDefer",
+        "RecordID": "@lookup:MJ: Dashboards.Name=SQL Logging?allowDefer",
         "isDefault": true
+      },
+      {
+        "Label": "API Keys",
+        "Icon": "fa-solid fa-key",
+        "ResourceType": "Custom",
+        "DriverClass": "APIKeysResource",
+        "isDefault": false
+      },
+      {
+        "Label": "App Roles",
+        "Icon": "fa-solid fa-user-shield",
+        "ResourceType": "Custom",
+        "DriverClass": "ApplicationRolesResource",
+        "isDefault": false
       }
     ]
   },
   "relatedEntities": {
-    "Application Entities": []
+    "MJ: Application Entities": []
   },
   "primaryKey": {
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:38.083Z",
-    "checksum": "260dced1183d1d40ea148f55fdea044b3c72772a5a15e84533c2cad457c1b171"
+    "lastModified": "2026-04-10T21:04:01.566Z",
+    "checksum": "e105cdc2029cf1b4fa459be7f9fc7fa77884619d298d8652a319d3c972ba23f7"
   }
 }

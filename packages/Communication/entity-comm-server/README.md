@@ -1,32 +1,56 @@
 # @memberjunction/entity-communications-server
 
-A server-side implementation of the MemberJunction Entity Communications Engine that connects the MJ entities framework to the communication framework, enabling bulk communications to entity records.
+Server-side implementation of the MemberJunction Entity Communications Engine. Connects the entity/view system to the communication framework, enabling bulk messaging to records retrieved from entity views with full template rendering, related-entity data resolution, and multi-provider support.
 
-## Overview
+## Architecture
 
-This package provides a server-side engine for sending communications (emails, SMS, etc.) to records retrieved from entity views. It extends the base entity communications functionality with server-specific capabilities, including:
+```mermaid
+graph TD
+    subgraph server["@memberjunction/entity-comm-server"]
+        ECE["EntityCommunicationsEngine\n(Singleton)"]
+    end
 
-- Bulk message sending to entity record sets
-- Template parameter resolution with related entity data
-- Multi-provider support (email, SMS, etc.)
-- Context data population for personalized messages
-- Scheduled message sending (when supported by provider)
+    subgraph base["@memberjunction/entity-communications-base"]
+        ECB["EntityCommunicationsEngineBase"]
+        PARAMS["EntityCommunicationParams"]
+    end
+
+    subgraph comm["@memberjunction/communication-engine"]
+        CE["CommunicationEngine"]
+    end
+
+    subgraph core["@memberjunction/core"]
+        RV["RunView"]
+        MD["Metadata"]
+    end
+
+    subgraph providers["Registered Providers"]
+        SG["SendGrid"]
+        GM["Gmail"]
+        TW["Twilio"]
+        MSP["MS Graph"]
+    end
+
+    ECB --> ECE
+    ECE -->|queries records| RV
+    ECE -->|sends messages| CE
+    CE --> SG
+    CE --> GM
+    CE --> TW
+    CE --> MSP
+
+    style server fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style base fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style comm fill:#7c5295,stroke:#563a6b,color:#fff
+    style core fill:#b8762f,stroke:#8a5722,color:#fff
+    style providers fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
 
 ## Installation
 
 ```bash
 npm install @memberjunction/entity-communications-server
 ```
-
-## Dependencies
-
-This package depends on the following MemberJunction packages:
-
-- `@memberjunction/global` - Core global utilities
-- `@memberjunction/core` - Core MJ functionality including metadata, entities, and views
-- `@memberjunction/core-entities` - Core entity definitions
-- `@memberjunction/communication-engine` - Base communication engine
-- `@memberjunction/entity-communications-base` - Base entity communications types and interfaces
 
 ## Usage
 
@@ -35,80 +59,57 @@ This package depends on the following MemberJunction packages:
 ```typescript
 import { EntityCommunicationsEngine } from '@memberjunction/entity-communications-server';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
-import { UserInfo } from '@memberjunction/core';
 
-// Get the singleton instance
 const engine = EntityCommunicationsEngine.Instance;
+await engine.Config(false, contextUser);
 
-// Configure the engine with user context
-const currentUser = new UserInfo(); // Your current user
-await engine.Config(false, currentUser);
-
-// Set up communication parameters
 const params: EntityCommunicationParams = {
-    EntityID: 'entity-uuid-here',
+    EntityID: 'entity-uuid',
     RunViewParams: {
         EntityName: 'Contacts',
-        ViewName: 'Active Contacts',
         ExtraFilter: 'Status = "Active"'
     },
     ProviderName: 'SendGrid',
     ProviderMessageTypeName: 'Email',
     Message: {
-        Subject: 'Welcome to our service',
-        Body: 'Hello {{FirstName}}, welcome!',
-        // Optional: Use templates for dynamic content
-        SubjectTemplate: subjectTemplateEntity,
-        BodyTemplate: bodyTemplateEntity,
-        HTMLBodyTemplate: htmlBodyTemplateEntity
+        Subject: 'Welcome',
+        Body: 'Hello {{FirstName}}!',
+        HTMLBodyTemplate: htmlTemplate
     },
-    PreviewOnly: false // Set to true to preview without sending
+    PreviewOnly: false
 };
 
-// Execute the communication
 const result = await engine.RunEntityCommunication(params);
-
 if (result.Success) {
-    console.log(`Successfully sent ${result.Results.length} messages`);
-} else {
-    console.error(`Failed: ${result.ErrorMessage}`);
+    console.log(`Sent ${result.Results.length} messages`);
 }
 ```
 
-### Using Templates with Related Data
+### Template Parameters with Related Entity Data
+
+When templates reference related entities, the engine automatically fetches the related data in batch and populates each recipient's context:
 
 ```typescript
-// Example with templates that include related entity data
 const params: EntityCommunicationParams = {
     EntityID: 'customer-entity-id',
-    RunViewParams: {
-        EntityName: 'Customers',
-        ViewName: 'Premium Customers'
-    },
-    ProviderName: 'Twilio',
-    ProviderMessageTypeName: 'SMS',
+    RunViewParams: { EntityName: 'Customers', ViewName: 'Premium Customers' },
+    ProviderName: 'SendGrid',
+    ProviderMessageTypeName: 'Email',
     Message: {
-        // Templates can reference both record fields and related entity data
-        BodyTemplate: templateWithOrdersParam, // Template with "Orders" parameter
-        // The engine will automatically fetch related orders for each customer
+        BodyTemplate: templateWithRelatedEntities
     }
 };
-
+// Engine auto-fetches related orders for each customer
 const result = await engine.RunEntityCommunication(params);
 ```
 
 ### Checking Entity Communication Support
 
 ```typescript
-// Check if an entity supports communication
-const entityID = 'entity-uuid';
 if (engine.EntitySupportsCommunication(entityID)) {
-    // Get available message types for the entity
     const messageTypes = engine.GetEntityCommunicationMessageTypes(entityID);
-    
     messageTypes.forEach(mt => {
-        console.log(`Message Type: ${mt.BaseMessageType}`);
-        // Each message type has associated fields that can be used for recipient addresses
+        console.log(`Type: ${mt.BaseMessageType}`);
         mt.CommunicationFields.forEach(field => {
             console.log(`  Field: ${field.FieldName} (Priority: ${field.Priority})`);
         });
@@ -116,76 +117,40 @@ if (engine.EntitySupportsCommunication(entityID)) {
 }
 ```
 
-## API Reference
+## Processing Pipeline
 
-### EntityCommunicationsEngine
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant ECE as EntityCommunicationsEngine
+    participant RV as RunView
+    participant CE as CommunicationEngine
+    participant P as Provider
 
-The main engine class that handles entity-based communications.
-
-#### Methods
-
-##### `RunEntityCommunication(params: EntityCommunicationParams): Promise<EntityCommunicationResult>`
-
-Executes a communication request against a view of entity records.
-
-**Parameters:**
-- `params`: Configuration object containing:
-  - `EntityID`: The UUID of the entity to communicate with
-  - `RunViewParams`: Parameters for the view query to retrieve records
-  - `ProviderName`: Name of the communication provider (e.g., "SendGrid", "Twilio")
-  - `ProviderMessageTypeName`: Type of message for the provider (e.g., "Email", "SMS")
-  - `Message`: The message content and optional templates
-  - `PreviewOnly`: (Optional) If true, preview without sending
-  - `IncludeProcessedMessages`: (Optional) Include processed message content in results
-
-**Returns:** `EntityCommunicationResult` with success status and sent messages
-
-##### `Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void>`
-
-Configures the engine with user context and loads metadata.
-
-##### `EntitySupportsCommunication(entityID: string): boolean`
-
-Checks if an entity has communication capabilities configured.
-
-##### `GetEntityCommunicationMessageTypes(entityID: string): EntityCommunicationMessageTypeExtended[]`
-
-Retrieves available message types for an entity.
-
-### Types
-
-#### EntityCommunicationParams
-
-```typescript
-class EntityCommunicationParams {
-    EntityID: string;
-    RunViewParams: RunViewParams;
-    ProviderName: string;
-    ProviderMessageTypeName: string;
-    Message: Message;
-    PreviewOnly?: boolean;
-    IncludeProcessedMessages?: boolean;
-}
+    App->>ECE: RunEntityCommunication(params)
+    ECE->>ECE: Validate entity, provider, message type
+    ECE->>RV: RunView(params.RunViewParams)
+    RV-->>ECE: Entity records[]
+    ECE->>ECE: Load related entity data (batch)
+    loop For each record
+        ECE->>ECE: Build message with record context
+        ECE->>CE: SendSingleMessage(provider, type, message)
+        CE->>P: SendSingleMessage(processedMessage)
+        P-->>CE: MessageResult
+        CE-->>ECE: MessageResult
+    end
+    ECE-->>App: EntityCommunicationResult
 ```
 
-#### EntityCommunicationResult
+## Key Features
 
-```typescript
-class EntityCommunicationResult {
-    Success: boolean;
-    ErrorMessage?: string;
-    Results?: EntityCommunicationResultItem[];
-}
-```
-
-#### EntityCommunicationResultItem
-
-```typescript
-class EntityCommunicationResultItem {
-    RecipientData: any;
-    Message: ProcessedMessage;
-}
-```
+- **Bulk Message Sending**: Send to all records from an entity view in a single call
+- **Template Parameter Resolution**: Automatically fetches related entity data for template parameters
+- **Multi-Provider Support**: Works with any registered communication provider (email, SMS, etc.)
+- **Preview Mode**: Test communications without sending (`PreviewOnly: true`)
+- **Context Data Population**: Per-recipient template context from entity record fields
+- **Scheduled Sending**: Supports provider-level `SendAt` scheduling
+- **Communication Logging**: All sends are tracked through `CommunicationRun` and `CommunicationLog` entities
 
 ## Configuration
 
@@ -211,53 +176,19 @@ When using related entity parameters, the engine automatically:
 3. Filters related data per recipient record
 4. Populates template context with filtered data
 
-### Provider Requirements
+## Dependencies
 
-Communication providers must:
-- Be registered in the CommunicationEngine
-- Support sending (`SupportsSending = true`)
-- Support scheduled sending if `SendAt` is specified
-- Have matching message types configured
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/entity-communications-base` | Shared types and base engine class |
+| `@memberjunction/communication-engine` | CommunicationEngine for message delivery |
+| `@memberjunction/core` | RunView, Metadata, UserInfo, EntityInfo |
+| `@memberjunction/core-entities` | Entity type definitions |
+| `@memberjunction/global` | Class registration |
 
-## Error Handling
-
-The engine validates:
-- Entity existence and communication support
-- Provider availability and capabilities
-- Message type compatibility
-- Template parameter alignment (no conflicting parameter definitions)
-- Field availability for recipient addresses
-
-All errors are returned in the `EntityCommunicationResult.ErrorMessage` field.
-
-## Performance Considerations
-
-- The engine fetches all entity fields to ensure template access
-- Related entity data is batch-loaded for all recipients
-- Large recipient sets should be paginated using view parameters
-- Use `PreviewOnly` mode for testing before bulk sends
-
-## Integration with MemberJunction
-
-This package integrates with:
-- **Metadata System**: For entity and field definitions
-- **View Engine**: For querying recipient records
-- **Template Engine**: For message personalization
-- **Communication Engine**: For actual message delivery
-- **Security**: Respects user context and permissions
-
-## Building
+## Development
 
 ```bash
-npm run build
+npm run build    # Compile TypeScript
+npm start        # Watch mode
 ```
-
-The package is built using TypeScript and outputs to the `dist` directory.
-
-## License
-
-ISC
-
-## Support
-
-For issues and questions, please refer to the main MemberJunction documentation at [MemberJunction.com](https://www.memberjunction.com)

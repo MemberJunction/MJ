@@ -4,6 +4,7 @@ import {
   SingleRecordComponent,
   AuthGuardService as AuthGuard
 } from './public-api';
+import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { LogError, Metadata, StartupManager } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
@@ -58,20 +59,14 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
     return null;
   }
 
-  // Determines if the route should be reused
+  // Determines if the route should be reused.
+  // Query params are intentionally excluded — the shell handles query param
+  // sub-navigation via NotifyQueryParamsChanged. Including them here would
+  // cause the ResourceResolver to re-run on back/forward query param changes,
+  // racing with the shell's syncWorkspaceWithUrl.
   shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean {
-    // we need to compare the params object from future and curr and see if any differences
-    // and do the same for the queryParams object from each
-    // if there are differences, return false, otherwise return true
-    const futureParams = future.params;
-    const currParams = curr.params;
-    const futureQueryParams = future.queryParams;
-    const currQueryParams = curr.queryParams;
-
-    // only reuse (e.g. return true) when all of these comparisons are the same
-    return this.objectContentsEqual(futureParams, currParams) &&  // route params are the same
-           this.objectContentsEqual(futureQueryParams, currQueryParams) &&  // query params are the same
-           future.routeConfig === curr.routeConfig; // route config object is the same
+    return future.routeConfig === curr.routeConfig &&
+           this.objectContentsEqual(future.params, curr.params);
   }
 
   objectContentsEqual(obj1: any, obj2: any): boolean {
@@ -152,6 +147,8 @@ export class ResourceResolver implements Resolve<void> {
     );
 
     await StartupManager.Instance.Startup();
+
+    await this.appManager.WhenReady();
   }
 
   async resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<void> {
@@ -172,8 +169,221 @@ export class ResourceResolver implements Resolve<void> {
 
     this.processedUrls.set(state.url, now);
 
+    // Check if this resolve should be suppressed (URL sync from tab click, not real navigation)
+    if (this.tabService.ShouldSuppressResolve()) {
+      this.tabService.ClearSuppressFlag();
+      return;
+    }
+
     const md = new Metadata();
     const applications = md.Applications;
+
+    // Known resource types for app-scoped resource URLs
+    const KNOWN_RESOURCE_TYPES = ['dashboard', 'record', 'view', 'query', 'report', 'artifact', 'search'];
+
+    // Handle app-scoped resource navigation: /app/:appName/:resourceType/:param1/:param2?
+    // This pattern supports resources opened within an app context (e.g., /app/home/dashboard/abc123)
+    // Only handle if the second path segment is a known resource type
+    if (route.params['appName'] !== undefined &&
+        route.params['resourceType'] !== undefined &&
+        KNOWN_RESOURCE_TYPES.includes(route.params['resourceType'].toLowerCase())) {
+      const appName = decodeURIComponent(route.params['appName']);
+      const resourceType = route.params['resourceType'].toLowerCase();
+      const param1 = route.params['param1'];
+      const param2 = route.params['param2'];
+
+      // Check app access
+      const accessResult = this.appManager.CheckAppAccess(appName);
+      if (accessResult.status !== 'accessible') {
+        return;
+      }
+
+      // Get the app for its ID
+      const app = this.appManager.GetAppByPath(appName) || this.appManager.GetAppByName(appName);
+      if (!app) {
+        LogError(`Application ${appName} not found in metadata`);
+        return;
+      }
+
+      // Handle based on resource type
+      switch (resourceType) {
+        case 'dashboard': {
+          // /app/:appName/dashboard/:dashboardId
+          const dashboardId = param1;
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `Dashboard - ${dashboardId}`,
+            Configuration: {
+              resourceType: 'Dashboards',
+              dashboardId,
+              recordId: dashboardId,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: dashboardId,
+            IsPinned: false
+          });
+          return;
+        }
+
+        case 'record': {
+          // /app/:appName/record/:entityName/:recordId
+          const entityName = decodeURIComponent(param1);
+          const recordId = param2;
+
+          const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
+          if (!entityInfo) {
+            LogError(`Entity ${entityName} not found in metadata`);
+            return;
+          }
+
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `${entityName} - ${recordId}`,
+            Configuration: {
+              resourceType: 'Records',
+              Entity: entityName,
+              recordId: recordId,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: recordId,
+            IsPinned: false
+          });
+          return;
+        }
+
+        case 'view': {
+          // /app/:appName/view/:viewId OR /app/:appName/view/dynamic/:entityName
+          if (param1 === 'dynamic' && param2) {
+            // Dynamic view: /app/:appName/view/dynamic/:entityName
+            const entityName = decodeURIComponent(param2);
+            const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
+            const filterSuffix = extraFilter ? ' (Filtered)' : '';
+
+            this.tabService.OpenTab({
+              ApplicationId: app.ID,
+              Title: `${entityName}${filterSuffix}`,
+              Configuration: {
+                resourceType: 'MJ: User Views',
+                Entity: entityName,
+                ExtraFilter: extraFilter,
+                isDynamic: true,
+                recordId: 'dynamic',
+                appName: appName,
+                appId: app.ID
+              },
+              ResourceRecordId: 'dynamic',
+              IsPinned: false
+            });
+          } else {
+            // Saved view: /app/:appName/view/:viewId
+            const viewId = param1;
+
+            this.tabService.OpenTab({
+              ApplicationId: app.ID,
+              Title: `View - ${viewId}`,
+              Configuration: {
+                resourceType: 'MJ: User Views',
+                viewId,
+                recordId: viewId,
+                appName: appName,
+                appId: app.ID
+              },
+              ResourceRecordId: viewId,
+              IsPinned: false
+            });
+          }
+          return;
+        }
+
+        case 'query': {
+          // /app/:appName/query/:queryId
+          const queryId = param1;
+
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `Query - ${queryId}`,
+            Configuration: {
+              resourceType: 'Queries',
+              queryId,
+              recordId: queryId,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: queryId,
+            IsPinned: false
+          });
+          return;
+        }
+
+        case 'report': {
+          // /app/:appName/report/:reportId
+          const reportId = param1;
+
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `Report - ${reportId}`,
+            Configuration: {
+              resourceType: 'Reports',
+              reportId,
+              recordId: reportId,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: reportId,
+            IsPinned: false
+          });
+          return;
+        }
+
+        case 'artifact': {
+          // /app/:appName/artifact/:artifactId
+          const artifactId = param1;
+
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `Artifact - ${artifactId}`,
+            Configuration: {
+              resourceType: 'Artifacts',
+              artifactId,
+              recordId: artifactId,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: artifactId,
+            IsPinned: false
+          });
+          return;
+        }
+
+        case 'search': {
+          // /app/:appName/search/:searchInput
+          const searchInput = decodeURIComponent(param1);
+          const entityName = route.queryParams['Entity'] || '';
+
+          this.tabService.OpenTab({
+            ApplicationId: app.ID,
+            Title: `Search: ${searchInput}`,
+            Configuration: {
+              resourceType: 'Search Results',
+              Entity: entityName,
+              SearchInput: searchInput,
+              recordId: searchInput,
+              appName: appName,
+              appId: app.ID
+            },
+            ResourceRecordId: searchInput,
+            IsPinned: false
+          });
+          return;
+        }
+
+        default:
+          LogError(`Unknown resource type in app-scoped URL: ${resourceType}`);
+          return;
+      }
+    }
 
     // Handle app-level navigation: /app/:appName (no nav item - app default)
     if (route.params['appName'] !== undefined && route.params['navItemName'] === undefined) {
@@ -186,7 +396,6 @@ export class ResourceResolver implements Resolve<void> {
       if (accessResult.status !== 'accessible') {
         // User doesn't have access - let the shell component handle the error dialog
         // Don't create any tabs here
-        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
         return;
       }
 
@@ -208,7 +417,6 @@ export class ResourceResolver implements Resolve<void> {
       if (accessResult.status !== 'accessible') {
         // User doesn't have access - let the shell component handle the error dialog
         // Don't create any tabs here
-        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
         return;
       }
 
@@ -318,7 +526,7 @@ export class ResourceResolver implements Resolve<void> {
         ApplicationId: SYSTEM_APP_ID,
         Title: `View - ${viewId}`,
         Configuration: {
-          resourceType: 'User Views',
+          resourceType: 'MJ: User Views',
           viewId,
           recordId: viewId
         },
@@ -340,7 +548,7 @@ export class ResourceResolver implements Resolve<void> {
         ApplicationId: SYSTEM_APP_ID,
         Title: `${entityName}${filterSuffix}`,
         Configuration: {
-          resourceType: 'User Views',
+          resourceType: 'MJ: User Views',
           Entity: entityName,
           ExtraFilter: extraFilter,
           isDynamic: true,
@@ -410,21 +618,21 @@ export class ResourceResolver implements Resolve<void> {
     }
 
     if (route.params['searchInput'] !== undefined) {
-      // /resource/search/:searchInput
       const searchInput = decodeURIComponent(route.params['searchInput']);
-      const entityName = route.queryParams['Entity'] || '';
 
-      // Queue tab request via TabService
+      // Unified search route: always use SearchResultsResource
+      // Pass Query for the ng-search service, and legacy SearchInput for backward compat
       this.tabService.OpenTab({
         ApplicationId: SYSTEM_APP_ID,
         Title: `Search: ${searchInput}`,
         Configuration: {
-          resourceType: 'Search Results',
-          Entity: entityName,
+          resourceType: 'Custom',
+          driverClass: 'SearchResultsResource',
+          Query: searchInput,
           SearchInput: searchInput,
-          recordId: searchInput
+          recordId: `search-${searchInput}`
         },
-        ResourceRecordId: searchInput,
+        ResourceRecordId: `search-${searchInput}`,
         IsPinned: false
       });
       return;
@@ -434,7 +642,41 @@ export class ResourceResolver implements Resolve<void> {
   }
 }
 
-const routes: Routes = [ 
+const routes: Routes = [
+  // OAuth callback route - must be FIRST as it handles redirects from OAuth providers
+  // This route does NOT require AuthGuard because it's the callback from external OAuth
+  // The component itself handles authentication when calling the exchange endpoint
+  // NOTE: We use component directly instead of loadChildren because lazy loading
+  // doesn't work correctly when the route is defined in a library (explorer-core)
+  // rather than the main application.
+  {
+    path: 'oauth/callback',
+    component: OAuthCallbackComponent
+  },
+
+  // App-scoped resource routes (new pattern)
+  // These must come BEFORE app/:appName/:navItemName to be matched first
+  {
+    path: 'app/:appName/view/dynamic/:param2',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+    data: { resourceType: 'view' }
+  },
+  {
+    path: 'app/:appName/record/:param1/:param2',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+    data: { resourceType: 'record' }
+  },
+  {
+    path: 'app/:appName/:resourceType/:param1',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
+  },
+  // App navigation routes
   {
     path: 'app/:appName/:navItemName',
     resolve: { data: ResourceResolver },
@@ -447,6 +689,7 @@ const routes: Routes = [
     canActivate: [AuthGuard],
     component: SingleRecordComponent,
   },
+  // Legacy resource routes (kept for backward compatibility, will redirect in future)
   {
     path: 'resource/record/:entityName/:recordId',
     resolve: { data: ResourceResolver },
@@ -488,7 +731,7 @@ const routes: Routes = [
     resolve: { data: ResourceResolver },
     canActivate: [AuthGuard],
     component: SingleRecordComponent,
-  } 
+  }
 ];
 
 interface DetachedRouteHandleExt extends DetachedRouteHandle {

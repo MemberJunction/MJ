@@ -1,21 +1,17 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
-import { ResourceData, CredentialEntity, CredentialTypeEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { ResourceData, MJCredentialEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { CredentialEditPanelComponent } from './credential-edit-panel.component';
-
-export function LoadCredentialsListResource() {
-    // Prevents tree-shaking
-}
-
+import { CredentialEditPanelComponent } from '@memberjunction/ng-credentials';
 type ViewMode = 'grid' | 'list';
 type StatusFilter = '' | 'active' | 'inactive' | 'expired' | 'expiring';
 
 @RegisterClass(BaseResourceComponent, 'CredentialsListResource')
 @Component({
+  standalone: false,
     selector: 'mj-credentials-list-resource',
     templateUrl: './credentials-list-resource.component.html',
     styleUrls: ['./credentials-list-resource.component.css'],
@@ -23,9 +19,9 @@ type StatusFilter = '' | 'active' | 'inactive' | 'expired' | 'expiring';
 })
 export class CredentialsListResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     public isLoading = true;
-    public credentials: CredentialEntity[] = [];
-    public filteredCredentials: CredentialEntity[] = [];
-    public types: CredentialTypeEntity[] = [];
+    public credentials: MJCredentialEntity[] = [];
+    public filteredCredentials: MJCredentialEntity[] = [];
+    public types: MJCredentialTypeEntity[] = [];
 
     // View state
     public viewMode: ViewMode = 'grid';
@@ -42,7 +38,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     private _metadata = new Metadata();
     private _permissionCache = new Map<string, boolean>();
 
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
 
     @ViewChild('editPanel') editPanel!: CredentialEditPanelComponent;
 
@@ -53,10 +49,12 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -135,11 +133,11 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             ]);
 
             if (credResult.Success) {
-                this.credentials = credResult.Results as CredentialEntity[];
+                this.credentials = credResult.Results as MJCredentialEntity[];
             }
 
             if (typeResult.Success) {
-                this.types = typeResult.Results as CredentialTypeEntity[];
+                this.types = typeResult.Results as MJCredentialTypeEntity[];
             }
 
             this.applyFilters();
@@ -199,7 +197,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         }
     }
 
-    public editCredential(credential: CredentialEntity, event?: Event): void {
+    public editCredential(credential: MJCredentialEntity, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
@@ -208,9 +206,9 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         }
     }
 
-    public onCredentialSaved(credential: CredentialEntity): void {
+    public onCredentialSaved(credential: MJCredentialEntity): void {
         // Check if it's a new credential or update
-        const existingIndex = this.credentials.findIndex(c => c.ID === credential.ID);
+        const existingIndex = this.credentials.findIndex(c => UUIDsEqual(c.ID, credential.ID));
         if (existingIndex >= 0) {
             // Update existing
             this.credentials[existingIndex] = credential;
@@ -223,13 +221,13 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     }
 
     public onCredentialDeleted(credentialId: string): void {
-        this.credentials = this.credentials.filter(c => c.ID !== credentialId);
+        this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credentialId));
         this.selectedCredentials.delete(credentialId);
         this.applyFilters();
         this.cdr.markForCheck();
     }
 
-    public async deleteCredential(credential: CredentialEntity, event?: Event): Promise<void> {
+    public async deleteCredential(credential: MJCredentialEntity, event?: Event): Promise<void> {
         if (event) {
             event.stopPropagation();
         }
@@ -246,7 +244,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             const success = await credential.Delete();
             if (success) {
                 MJNotificationService.Instance.CreateSimpleNotification(`Credential "${credential.Name}" deleted successfully`, 'success', 3000);
-                this.credentials = this.credentials.filter(c => c.ID !== credential.ID);
+                this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credential.ID));
                 this.selectedCredentials.delete(credential.ID);
                 this.applyFilters();
             } else {
@@ -258,7 +256,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         }
     }
 
-    public async toggleCredentialActive(credential: CredentialEntity, event?: Event): Promise<void> {
+    public async toggleCredentialActive(credential: MJCredentialEntity, event?: Event): Promise<void> {
         if (event) {
             event.stopPropagation();
         }
@@ -291,7 +289,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
     // === Selection ===
 
-    public toggleSelection(credential: CredentialEntity, event?: Event): void {
+    public toggleSelection(credential: MJCredentialEntity, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
@@ -318,7 +316,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         return this._isAllSelected;
     }
 
-    public isSelected(credential: CredentialEntity): boolean {
+    public isSelected(credential: MJCredentialEntity): boolean {
         return this.selectedCredentials.has(credential.ID);
     }
 
@@ -344,13 +342,13 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         let failCount = 0;
 
         for (const credId of this.selectedCredentials) {
-            const credential = this.credentials.find(c => c.ID === credId);
+            const credential = this.credentials.find(c => UUIDsEqual(c.ID, credId));
             if (credential) {
                 try {
                     const success = await credential.Delete();
                     if (success) {
                         successCount++;
-                        this.credentials = this.credentials.filter(c => c.ID !== credId);
+                        this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credId));
                     } else {
                         failCount++;
                     }
@@ -438,7 +436,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
         // Filter by type
         if (this.selectedTypeFilter) {
-            filtered = filtered.filter(c => c.CredentialTypeID === this.selectedTypeFilter);
+            filtered = filtered.filter(c => UUIDsEqual(c.CredentialTypeID, this.selectedTypeFilter));
         }
 
         // Filter by search text
@@ -465,12 +463,12 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
     // === Helpers ===
 
-    public getTypeById(typeId: string): CredentialTypeEntity | undefined {
-        return this.types.find(t => t.ID === typeId);
+    public getTypeById(typeId: string): MJCredentialTypeEntity | undefined {
+        return this.types.find(t => UUIDsEqual(t.ID, typeId));
     }
 
-    public getTypesByCategory(): Map<string, CredentialTypeEntity[]> {
-        const grouped = new Map<string, CredentialTypeEntity[]>();
+    public getTypesByCategory(): Map<string, MJCredentialTypeEntity[]> {
+        const grouped = new Map<string, MJCredentialTypeEntity[]>();
         for (const type of this.types) {
             const category = type.Category;
             if (!grouped.has(category)) {
@@ -481,7 +479,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         return grouped;
     }
 
-    public getStatusClass(credential: CredentialEntity): string {
+    public getStatusClass(credential: MJCredentialEntity): string {
         if (!credential.IsActive) {
             return 'inactive';
         }
@@ -499,7 +497,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         return 'active';
     }
 
-    public getStatusLabel(credential: CredentialEntity): string {
+    public getStatusLabel(credential: MJCredentialEntity): string {
         const statusClass = this.getStatusClass(credential);
         const labels: Record<string, string> = {
             'active': 'Active',
@@ -510,7 +508,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         return labels[statusClass] || 'Unknown';
     }
 
-    public getStatusIcon(credential: CredentialEntity): string {
+    public getStatusIcon(credential: MJCredentialEntity): string {
         const statusClass = this.getStatusClass(credential);
         const icons: Record<string, string> = {
             'active': 'fa-solid fa-check-circle',
@@ -557,7 +555,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         return this.formatDate(date);
     }
 
-    public getTypeIcon(credential: CredentialEntity): string {
+    public getTypeIcon(credential: MJCredentialEntity): string {
         const type = this.getTypeById(credential.CredentialTypeID);
         if (!type) return 'fa-solid fa-key';
 
@@ -616,12 +614,12 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
     // === Status Helpers ===
 
-    public isExpired(credential: CredentialEntity): boolean {
+    public isExpired(credential: MJCredentialEntity): boolean {
         if (!credential.ExpiresAt) return false;
         return new Date(credential.ExpiresAt) < new Date();
     }
 
-    public isExpiringSoon(credential: CredentialEntity): boolean {
+    public isExpiringSoon(credential: MJCredentialEntity): boolean {
         if (!credential.ExpiresAt) return false;
         const expiresAt = new Date(credential.ExpiresAt);
         const now = new Date();
@@ -639,7 +637,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         let failCount = 0;
 
         for (const credId of this.selectedCredentials) {
-            const credential = this.credentials.find(c => c.ID === credId);
+            const credential = this.credentials.find(c => UUIDsEqual(c.ID, credId));
             if (credential && credential.IsActive !== active) {
                 try {
                     credential.IsActive = active;
@@ -683,13 +681,13 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         let failCount = 0;
 
         for (const credId of this.selectedCredentials) {
-            const credential = this.credentials.find(c => c.ID === credId);
+            const credential = this.credentials.find(c => UUIDsEqual(c.ID, credId));
             if (credential) {
                 try {
                     const success = await credential.Delete();
                     if (success) {
                         successCount++;
-                        this.credentials = this.credentials.filter(c => c.ID !== credId);
+                        this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credId));
                     } else {
                         failCount++;
                     }

@@ -1,5 +1,10 @@
+import { createRequire } from 'module';
 import { BrowserManager } from './browser-context';
 import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
+
+// ESM compatibility: require is not available in ESM, use createRequire
+// See: https://nodejs.org/api/module.html#modulecreaterequirefilename
+const _require = createRequire(import.meta.url);
 import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
 import { ComponentLinter, Violation } from './component-linter';
 import {
@@ -13,10 +18,10 @@ import {
   ComponentObject,
   SimpleEntityInfo
 } from '@memberjunction/interactive-component-types';
-import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
  
 
 /**
@@ -79,6 +84,40 @@ export interface ComponentExecutionOptions {
    *   .map(e => SimpleEntityInfo.FromEntityInfo(e));
    */
   entityMetadata?: SimpleEntityInfo[];
+
+  /**
+   * Optional callback invoked with the live Playwright page after the component
+   * has rendered successfully. The page remains open until this callback resolves,
+   * allowing the caller to perform interactions (clicks, form fills, etc.) and
+   * inspect the post-interaction state.
+   *
+   * The callback receives the Playwright Page object and the execution result
+   * captured so far. Any errors thrown inside the callback are caught and added
+   * to the result's error array — they do not prevent the result from being returned.
+   *
+   * @example
+   * const result = await harness.testComponent({
+   *   ...options,
+   *   onPageReady: async (page, result) => {
+   *     const buttons = await page.locator('button').all();
+   *     for (const btn of buttons) {
+   *       await btn.click();
+   *       await page.waitForTimeout(500);
+   *     }
+   *   }
+   * });
+   */
+  onPageReady?: (page: any, result: ComponentExecutionResult) => Promise<void>;
+
+  /**
+   * When true, the final screenshot captures the entire scrollable page content
+   * (Playwright's `fullPage: true`) instead of only the viewport. Use this when
+   * testing tall components (dashboards, long forms) where viewport-only
+   * screenshots can cut off content below the fold.
+   *
+   * Defaults to false to preserve existing behavior for other harness users.
+   */
+  fullPageScreenshot?: boolean;
 }
 
 export interface ComponentExecutionResult {
@@ -237,7 +276,7 @@ export class ComponentRunner {
 
     // Load component metadata and libraries first (needed for library loading)
     await ComponentMetadataEngine.Instance.Config(false, options.contextUser);
-    const allLibraries = ComponentMetadataEngine.Instance.ComponentLibraries.map(c=>c.GetAll()) as ComponentLibraryEntity[];
+    const allLibraries = ComponentMetadataEngine.Instance.ComponentLibraries.map(c=>c.GetAll()) as MJComponentLibraryEntity[];
 
     try {
       
@@ -424,7 +463,7 @@ export class ComponentRunner {
             }
             
             // Configure the registry with the component libraries
-            // Note: LibraryRegistry.Config expects ComponentLibraryEntity[]
+            // Note: LibraryRegistry.Config expects MJComponentLibraryEntity[]
             await LibraryRegistry.Config(false, componentLibraries || []);
             if (debug) {
               console.log('⚙️ Configured LibraryRegistry with', componentLibraries?.length || 0, 'libraries');
@@ -1030,11 +1069,60 @@ export class ComponentRunner {
         }
       });
 
-      // Get the rendered HTML
-      const html = await page.content();
+      // Get the rendered HTML with size protection
+      // Node.js has a maximum string length of ~536MB (0x1fffffe8 characters)
+      // If content is too large, it will crash the process with ERR_STRING_TOO_LONG
+      let html: string;
+      let screenshot: Buffer;
 
-      // Take screenshot
-      const screenshot = await page.screenshot();
+      try {
+        // Try to get HTML content with a reasonable size limit
+        html = await page.content();
+
+        // Check if HTML is excessively large (>100MB is suspicious)
+        const htmlSizeEstimate = Buffer.byteLength(html, 'utf8');
+        const maxSafeSize = 100 * 1024 * 1024; // 100MB
+
+        if (htmlSizeEstimate > maxSafeSize) {
+          console.warn(`⚠️ HTML content is very large (${Math.round(htmlSizeEstimate / 1024 / 1024)}MB). Truncating to prevent crashes.`);
+          // Truncate to a safe size
+          html = html.substring(0, maxSafeSize) + '\n<!-- TRUNCATED: Content exceeded safe size limit -->';
+          errors.push(`HTML content too large (${Math.round(htmlSizeEstimate / 1024 / 1024)}MB). This may indicate excessive data or a render issue.`);
+        }
+      } catch (error: unknown) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (errorMsg.includes('string longer than') || errorMsg.includes('ERR_STRING_TOO_LONG')) {
+          console.error('❌ HTML content exceeds Node.js maximum string length. Cannot capture page content.');
+          html = '<html><body><!-- ERROR: Content too large to capture (exceeds Node.js string limit) --></body></html>';
+          errors.push('HTML content exceeds maximum size (>536MB). Component may be rendering too much data.');
+        } else {
+          console.error('❌ Failed to capture HTML content:', errorMsg);
+          html = '<html><body><!-- ERROR: Failed to capture content --></body></html>';
+          errors.push(`Failed to capture HTML: ${errorMsg}`);
+        }
+      }
+
+      // Take screenshot with size protection. fullPage:true captures the entire
+      // scrollable content instead of just the viewport — required for tall
+      // components (dashboards, long forms) where the viewport cuts off content.
+      try {
+        screenshot = await page.screenshot({ fullPage: options.fullPageScreenshot === true });
+
+        // Check screenshot size (should be reasonable)
+        const screenshotSize = screenshot.length;
+        const maxScreenshotSize = 50 * 1024 * 1024; // 50MB
+
+        if (screenshotSize > maxScreenshotSize) {
+          console.warn(`⚠️ Screenshot is very large (${Math.round(screenshotSize / 1024 / 1024)}MB). This is unusual.`);
+          // Keep the screenshot but add a warning
+          warnings.push(`Screenshot size is unusually large (${Math.round(screenshotSize / 1024 / 1024)}MB).`);
+        }
+      } catch (error: unknown) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error('❌ Failed to capture screenshot:', errorMsg);
+        screenshot = Buffer.from('');
+        // Don't add to errors - screenshot is not critical for functionality
+      }
 
       // Check for excessive render count first
       const hasRenderLoop = renderCount > ComponentRunner.MAX_RENDER_COUNT;
@@ -1168,6 +1256,25 @@ export class ComponentRunner {
         this.dumpDebugInfo(result);
       }
 
+      // Call onPageReady callback if provided, giving the caller access to the live page
+      if (options.onPageReady) {
+        try {
+          await options.onPageReady(page, result);
+        } catch (callbackError) {
+          const callbackMessage = callbackError instanceof Error ? callbackError.message : String(callbackError);
+          if (debug) {
+            console.log(`\n⚠️ onPageReady callback error: ${callbackMessage}`);
+          }
+          result.errors.push({
+            message: `onPageReady callback error: ${callbackMessage}`,
+            severity: 'medium' as const,
+            rule: 'page-ready-callback',
+            line: 0,
+            column: 0
+          });
+        }
+      }
+
       return result;
 
     } catch (error) {
@@ -1290,7 +1397,7 @@ export class ComponentRunner {
     const fs = await import('fs');
     
     // Resolve the path to the UMD bundle
-    const runtimePath = require.resolve('@memberjunction/react-runtime/dist/runtime.umd.js');
+    const runtimePath = _require.resolve('@memberjunction/react-runtime/dist/runtime.umd.js');
     const runtimeBundle = fs.readFileSync(runtimePath, 'utf-8');
     
     // Inject the UMD bundle into the page
@@ -1335,7 +1442,7 @@ export class ComponentRunner {
   private async loadComponentLibraries(
     page: any, 
     specLibraries: any[], 
-    allLibraries: ComponentLibraryEntity[],
+    allLibraries: MJComponentLibraryEntity[],
     debug: boolean = false
   ): Promise<void> {
     
@@ -1350,7 +1457,7 @@ export class ComponentRunner {
     }
 
     // Create a map of library definitions from allLibraries
-    const libraryMap = new Map<string, ComponentLibraryEntity>();
+    const libraryMap = new Map<string, MJComponentLibraryEntity>();
     for (const lib of allLibraries) {
       libraryMap.set(lib.Name.toLowerCase(), lib);
     }
@@ -1453,7 +1560,7 @@ export class ComponentRunner {
    * Set up error tracking in the page
    * @deprecated Moved inline to page.evaluate after library loading to avoid false positives
    */
-  private async setupErrorTracking_DEPRECATED(page: any, componentSpec: ComponentSpec, allLibraries?: ComponentLibraryEntity[]) {
+  private async setupErrorTracking_DEPRECATED(page: any, componentSpec: ComponentSpec, allLibraries?: MJComponentLibraryEntity[]) {
     await page.evaluate(({ spec, availableLibraries }: { spec: any; availableLibraries: any[] }) => {
       // Initialize error tracking
       (window as any).__testHarnessRuntimeErrors = [];
@@ -1903,14 +2010,14 @@ export class ComponentRunner {
       ExecutePrompt: async (params: SimpleExecutePromptParams): Promise<SimpleExecutePromptResult> => {
         try {
           // Get the appropriate model based on power level or preferences
-          let model: AIModelEntityExtended | undefined;
+          let model: MJAIModelEntityExtended | undefined;
           
           if (params.preferredModels && params.preferredModels.length > 0) {
             // Try to find one of the preferred models
             await aiEngine.Config(false, params.contextUser);
             const models = aiEngine.Models;
             for (const preferredModel of params.preferredModels) {
-              model = models.find((m: AIModelEntityExtended) => 
+              model = models.find((m: MJAIModelEntityExtended) => 
                 m.Name === preferredModel && 
                 m.IsActive === true
               );
@@ -1923,21 +2030,21 @@ export class ComponentRunner {
             if (params.modelPower === 'lowest') {
               // Get lowest power model by sorting in reverse
               await aiEngine.Config(false, params.contextUser);
-              const llmModels = aiEngine.Models.filter((m: AIModelEntityExtended) => 
+              const llmModels = aiEngine.Models.filter((m: MJAIModelEntityExtended) => 
                 m.AIModelType === 'LLM' && 
                 m.IsActive === true
               );
-              model = llmModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (a.PowerRank || 0) - (b.PowerRank || 0))[0];
+              model = llmModels.sort((a: MJAIModelEntityExtended, b: MJAIModelEntityExtended) => (a.PowerRank || 0) - (b.PowerRank || 0))[0];
             } else if (params.modelPower === 'highest') {
               model = await aiEngine.GetHighestPowerLLM(undefined, params.contextUser);
             } else {
               // Default to medium - get a model in the middle range
               await aiEngine.Config(false, params.contextUser);
-              const llmModels = aiEngine.Models.filter((m: AIModelEntityExtended) => 
+              const llmModels = aiEngine.Models.filter((m: MJAIModelEntityExtended) => 
                 m.AIModelType === 'LLM' && 
                 m.IsActive === true
               );
-              const sortedModels = llmModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (b.PowerRank || 0) - (a.PowerRank || 0));
+              const sortedModels = llmModels.sort((a: MJAIModelEntityExtended, b: MJAIModelEntityExtended) => (b.PowerRank || 0) - (a.PowerRank || 0));
               const midIndex = Math.floor(sortedModels.length / 2);
               model = sortedModels[midIndex] || sortedModels[0];
             }
@@ -1998,20 +2105,20 @@ export class ComponentRunner {
           await aiEngine.Config(false, params.contextUser);
           
           // Get embedding models and filter by size preference
-          const embeddingModels = aiEngine.Models.filter((m: AIModelEntityExtended) => 
+          const embeddingModels = aiEngine.Models.filter((m: MJAIModelEntityExtended) => 
             m.AIModelType === 'Embeddings' && 
             m.IsActive === true
           );
           
           // Select model based on size preference
-          let model: AIModelEntityExtended;
+          let model: MJAIModelEntityExtended;
           if (params.modelSize === 'small') {
             // Prefer local/smaller models for 'small'
-            model = embeddingModels.find((m: AIModelEntityExtended) => m.Vendor === 'LocalEmbeddings') ||
-                    embeddingModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (a.PowerRank || 0) - (b.PowerRank || 0))[0];
+            model = embeddingModels.find((m: MJAIModelEntityExtended) => m.Vendor === 'LocalEmbeddings') ||
+                    embeddingModels.sort((a: MJAIModelEntityExtended, b: MJAIModelEntityExtended) => (a.PowerRank || 0) - (b.PowerRank || 0))[0];
           } else {
             // Use more powerful models for 'medium'
-            model = embeddingModels.sort((a: AIModelEntityExtended, b: AIModelEntityExtended) => (b.PowerRank || 0) - (a.PowerRank || 0))[0];
+            model = embeddingModels.sort((a: MJAIModelEntityExtended, b: MJAIModelEntityExtended) => (b.PowerRank || 0) - (a.PowerRank || 0))[0];
           }
           
           if (!model) {

@@ -113,7 +113,30 @@ if (this.IsActive === 1) {
 - User-friendly, not technical
 - Explain what's wrong and what's expected
 
-**4. Code Formatting**
+**4. NEVER Use Template Literal Syntax `${}`**
+```typescript
+// ✅ CORRECT - String concatenation
+const allowed = ["While", "ForEach", "Chat"];
+const allowedValues = allowed.join(", ");
+result.Errors.push(new ValidationErrorInfo(
+    "FieldName",
+    "Value must be one of: " + allowedValues + ".",
+    this.FieldName,
+    ValidationErrorType.Failure
+));
+
+// ❌ WRONG - Template literal with ${} - breaks Flyway migrations
+result.Errors.push(new ValidationErrorInfo(
+    "FieldName",
+    `Value must be one of: ${allowed.join(", ")}.`,
+    this.FieldName,
+    ValidationErrorType.Failure
+));
+```
+
+**Why?** Generated code is stored in SQL migration files processed by Flyway, which interprets `${}` as placeholder syntax. Use string concatenation (`+`) or build strings with `.join()` assigned to a variable first.
+
+**5. Code Formatting**
 - Single tab indent for each line
 - Include comments for complex logic
 

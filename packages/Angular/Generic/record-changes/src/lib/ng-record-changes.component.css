@@ -1,0 +1,1411 @@
+/* ══════════════════════════════════════════════════════════════════
+   Record Changes — Option A "Clean Timeline"
+   Linear / Notion-inspired minimal timeline design
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ─── Container ────────────────────────────────────────────────── */
+.rc-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 20px 24px;
+  background: var(--mj-bg-surface-card);
+}
+
+/* ─── Version Labels Section ───────────────────────────────────── */
+.rc-labels-section {
+  background: var(--mj-bg-surface-card);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--mj-border-default);
+}
+
+.rc-labels-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.rc-labels-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+}
+
+.rc-labels-title i { color: var(--mj-brand-primary); }
+
+.rc-labels-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.rc-create-label-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid var(--mj-brand-primary);
+  border-radius: 6px;
+  background: var(--mj-bg-surface);
+  color: var(--mj-brand-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rc-create-label-btn:hover {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+}
+
+.rc-labels-loading {
+  font-size: 12px;
+  color: var(--mj-text-muted);
+  padding: 4px 0;
+}
+
+.rc-labels-loading i { margin-right: 4px; }
+
+.rc-labels-empty {
+  font-size: 12px;
+  color: var(--mj-text-disabled);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.rc-labels-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rc-label-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 16px;
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+  transition: all 0.15s ease;
+  cursor: default;
+}
+
+.rc-label-chip:hover {
+  border-color: var(--mj-brand-primary);
+  box-shadow: var(--mj-shadow-sm);
+}
+
+.rc-label-chip-icon { color: var(--mj-brand-primary); font-size: 10px; }
+
+.rc-label-chip-name {
+  font-weight: 600;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-label-chip-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--mj-text-muted);
+}
+
+.rc-label-chip-status {
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+}
+
+.label-status-active { background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface)); color: var(--mj-status-success); }
+.label-status-archived { background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); }
+.label-status-restored { background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+
+.rc-label-chip-items { white-space: nowrap; }
+
+/* ─── Empty State ──────────────────────────────────────────────── */
+.rc-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 32px;
+  text-align: center;
+  min-height: 400px;
+}
+
+.rc-empty-state-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--mj-bg-surface-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.rc-empty-state-icon i { font-size: 32px; color: var(--mj-text-disabled); }
+
+.rc-empty-state-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+  margin: 0 0 12px 0;
+}
+
+.rc-empty-state-description {
+  font-size: 14px;
+  color: var(--mj-text-muted);
+  line-height: 1.6;
+  max-width: 320px;
+  margin: 0 0 24px 0;
+}
+
+.rc-empty-state-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--mj-bg-surface-sunken);
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--mj-text-muted);
+}
+
+.rc-empty-state-hint i { color: var(--mj-text-disabled); }
+
+/* ─── Page Header ──────────────────────────────────────────────── */
+.rc-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.rc-page-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  margin: 0;
+}
+
+.rc-page-subtitle {
+  font-size: 13px;
+  color: var(--mj-text-muted);
+  margin-top: 4px;
+}
+
+.rc-header-meta { text-align: right; }
+
+.rc-entity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface));
+}
+
+.rc-change-count {
+  font-size: 12px;
+  color: var(--mj-text-disabled);
+  margin-top: 6px;
+}
+
+/* ─── Filter Bar ───────────────────────────────────────────────── */
+.rc-filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.rc-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 180px;
+}
+
+.rc-search-wrap i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--mj-text-disabled);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.rc-search-box {
+  width: 100%;
+  padding: 8px 12px 8px 36px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--mj-bg-surface);
+  outline: none;
+  color: var(--mj-text-primary);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.rc-search-box:focus {
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+.rc-search-box::placeholder { color: var(--mj-text-disabled); }
+
+.rc-filter-pill {
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  cursor: pointer;
+  color: var(--mj-text-secondary);
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rc-filter-pill:hover {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+
+.rc-filter-pill.active {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  border-color: var(--mj-brand-primary);
+}
+
+.rc-filter-results {
+  font-size: 12px;
+  color: var(--mj-text-muted);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rc-clear-filters-link {
+  background: none;
+  border: none;
+  color: var(--mj-brand-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.rc-clear-filters-link:hover { color: var(--mj-brand-primary-hover); }
+
+/* ─── No Results ───────────────────────────────────────────────── */
+.rc-no-results {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--mj-text-muted);
+}
+
+.rc-no-results i {
+  display: block;
+  font-size: 32px;
+  margin-bottom: 16px;
+  color: var(--mj-text-disabled);
+}
+
+.rc-no-results p { font-size: 14px; margin: 0 0 16px 0; }
+
+.rc-clear-filters-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rc-clear-filters-btn:hover {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+
+/* ─── Timeline ─────────────────────────────────────────────────── */
+.rc-timeline {
+  position: relative;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Vertical line running through the timeline */
+.rc-timeline::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 24px;
+  bottom: 0;
+  width: 2px;
+  background: var(--mj-border-default);
+}
+
+/* ─── Date Group ───────────────────────────────────────────────── */
+.rc-date-group { margin-bottom: 8px; }
+
+.rc-date-label {
+  position: relative;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--mj-text-disabled);
+  padding: 16px 0 12px 44px;
+}
+
+/* Date dot on the timeline line */
+.rc-date-label::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--mj-border-default);
+  border: 2px solid var(--mj-bg-surface-card);
+}
+
+/* ─── Change Card ──────────────────────────────────────────────── */
+.rc-card {
+  position: relative;
+  margin-left: 44px;
+  margin-bottom: 12px;
+  background: var(--mj-bg-surface);
+  border-radius: 12px;
+  border: 1px solid var(--mj-border-default);
+  transition: all 0.2s;
+  overflow: hidden;
+}
+
+.rc-card:hover {
+  border-color: var(--mj-border-strong);
+  box-shadow: var(--mj-shadow-sm);
+}
+
+.rc-card:focus {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: 2px;
+}
+
+/* Colored dot on the timeline line for each card */
+.rc-card::before {
+  content: '';
+  position: absolute;
+  left: -23px;
+  top: 20px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  z-index: 1;
+}
+
+.rc-card.type-update::before {
+  background: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+.rc-card.type-create::before {
+  background: var(--mj-status-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-success) 15%, transparent);
+}
+
+.rc-card.type-delete::before {
+  background: var(--mj-status-error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-error) 15%, transparent);
+}
+
+/* ─── Card Header ──────────────────────────────────────────────── */
+.rc-card-header {
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  gap: 12px;
+}
+
+.rc-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  /* Allow the lineage chip to wrap to a second line on narrow panel widths
+     instead of squeezing the title text into a "Name and Description c..."
+     truncation. The badge stays on the first line; chip wraps gracefully. */
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.rc-card-type-badge {
+  padding: 3px 10px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.type-update .rc-card-type-badge { background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+.type-create .rc-card-type-badge { background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface)); color: var(--mj-status-success); }
+.type-delete .rc-card-type-badge { background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface)); color: var(--mj-status-error); }
+
+.rc-card-summary {
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--mj-text-disabled);
+  flex-shrink: 0;
+}
+
+.rc-card-user {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.rc-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--mj-brand-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--mj-text-inverse);
+  flex-shrink: 0;
+}
+
+.rc-card-time { white-space: nowrap; }
+
+.rc-card-source {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.source-internal { background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+.source-external { background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface)); color: var(--mj-status-warning); }
+
+.rc-card-status {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.status-complete { background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface)); color: var(--mj-status-success); }
+.status-pending { background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface)); color: var(--mj-status-warning); }
+.status-error { background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface)); color: var(--mj-status-error); }
+.status-unknown { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
+
+.rc-card-chevron {
+  color: var(--mj-text-disabled);
+  transition: transform 0.2s;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.rc-card.expanded .rc-card-chevron { transform: rotate(180deg); }
+
+/* ─── Card Body ────────────────────────────────────────────────── */
+.rc-card-body {
+  border-top: 1px solid var(--mj-border-default);
+}
+
+/* ─── Field Row ────────────────────────────────────────────────── */
+.rc-field-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.rc-field-row:last-child { border-bottom: none; }
+
+.rc-field-label {
+  width: 140px;
+  min-width: 140px;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mj-text-muted);
+  background: var(--mj-bg-surface-card);
+  display: flex;
+  align-items: center;
+  border-right: 1px solid var(--mj-border-default);
+}
+
+.rc-field-values {
+  flex: 1;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* ─── Atomic Change (numbers, dates) ──────────────────────────── */
+.rc-atomic-change {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rc-val-old {
+  font-size: 13px;
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  color: var(--mj-text-disabled);
+  text-decoration: line-through;
+  font-weight: 400;
+}
+
+.rc-val-arrow {
+  color: var(--mj-border-strong);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.rc-val-new {
+  font-size: 13px;
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  color: var(--mj-text-primary);
+  font-weight: 500;
+}
+
+/* ─── Boolean Change ──────────────────────────────────────────── */
+.rc-bool-change {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rc-bool-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rc-bool-dot.on { background: var(--mj-status-success); }
+.rc-bool-dot.off { background: var(--mj-border-strong); }
+
+.rc-bool-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.rc-bool-label.old {
+  color: var(--mj-text-disabled);
+  text-decoration: line-through;
+}
+
+.rc-bool-label.new.active { color: var(--mj-status-success); }
+.rc-bool-label.new.inactive { color: var(--mj-text-disabled); }
+
+/* ─── Text Diff (strings only) ────────────────────────────────── */
+.rc-text-diff {
+  font-size: 13px;
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  line-height: 1.6;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.rc-diff-added {
+  background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-success);
+  padding: 1px 3px;
+  border-radius: 3px;
+}
+
+.rc-diff-removed {
+  background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-error);
+  padding: 1px 3px;
+  border-radius: 3px;
+  text-decoration: line-through;
+}
+
+.rc-diff-unchanged {
+  color: var(--mj-text-secondary);
+}
+
+/* ─── Deletion Note ────────────────────────────────────────────── */
+.rc-deletion-note {
+  padding: 16px 18px;
+  color: var(--mj-text-muted);
+  font-size: 13px;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rc-deletion-note i {
+  color: var(--mj-status-error);
+  font-size: 14px;
+}
+
+/* ─── Comments & Errors ────────────────────────────────────────── */
+.rc-comments {
+  padding: 12px 18px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  font-size: 13px;
+  color: var(--mj-brand-primary);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-top: 1px solid var(--mj-border-default);
+}
+
+.rc-comments i {
+  color: var(--mj-brand-primary);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.rc-errors {
+  padding: 12px 18px;
+  background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+  font-size: 13px;
+  color: var(--mj-status-error);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-top: 1px solid var(--mj-border-default);
+}
+
+.rc-errors i {
+  color: var(--mj-status-error);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.rc-error-log {
+  background: var(--mj-bg-surface);
+  padding: 8px;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  font-size: 12px;
+  color: var(--mj-status-error);
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  flex: 1;
+}
+
+/* ─── Create Wizard Overlay ────────────────────────────────────── */
+.rc-wizard-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--mj-bg-overlay);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: rc-fadeIn 0.15s ease;
+}
+
+.rc-wizard-container {
+  background: var(--mj-bg-surface);
+  border-radius: 12px;
+  box-shadow: var(--mj-shadow-lg);
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 24px;
+  animation: rc-slideUp 0.2s ease;
+}
+
+@keyframes rc-fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes rc-slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Responsive ───────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .rc-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .rc-card-meta {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .rc-field-row {
+    flex-direction: column;
+  }
+
+  .rc-field-label {
+    width: 100%;
+    min-width: unset;
+    border-right: none;
+    border-bottom: 1px solid var(--mj-border-default);
+    padding: 8px 16px;
+  }
+
+  .rc-field-values {
+    padding: 8px 16px;
+  }
+
+  .rc-atomic-change {
+    flex-wrap: wrap;
+  }
+
+  .rc-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rc-search-wrap { min-width: unset; }
+
+  .rc-filter-pill { justify-content: center; }
+
+  .rc-page-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .rc-header-meta { text-align: left; }
+}
+
+@media (max-width: 480px) {
+  .rc-container { padding: 12px 16px; }
+
+  .rc-card { margin-left: 36px; }
+
+  .rc-date-label { padding-left: 36px; }
+
+  .rc-card::before { left: -19px; }
+
+  .rc-timeline::before { left: 12px; }
+
+  .rc-date-label::before { left: 7px; }
+}
+
+/* ─── Restore Action ──────────────────────────────────────────── */
+.rc-restore-action {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+  margin-top: 10px;
+  /* Breathing room from the card's bottom and right edges so the button
+     doesn't sit flush against the border. */
+  padding-right: 10px;
+  padding-bottom: 10px;
+  border-top: 1px solid var(--mj-border-subtle);
+}
+
+.rc-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  font-family: inherit;
+  line-height: 1;
+}
+
+.rc-restore-btn:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+.rc-restore-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.rc-restore-btn i {
+  font-size: 13px;
+}
+
+/* ─── Restore Preview Panel ──────────────────────────────────── */
+.rc-restore-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--mj-bg-overlay);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: rc-fadeIn 0.15s ease;
+}
+
+.rc-restore-preview-panel {
+  background: var(--mj-bg-surface);
+  border-radius: 12px;
+  box-shadow: var(--mj-shadow-lg);
+  width: 90%;
+  max-width: 700px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 0;
+  animation: rc-slideUp 0.2s ease;
+}
+
+.rc-restore-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.rc-restore-preview-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.rc-restore-preview-title i {
+  color: var(--mj-brand-primary);
+}
+
+.rc-restore-preview-close {
+  background: none;
+  border: none;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.rc-restore-preview-close:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+
+.rc-restore-preview-meta {
+  display: flex;
+  gap: 20px;
+  padding: 12px 20px;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-card);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.rc-restore-preview-empty {
+  padding: 24px 20px;
+  text-align: center;
+  color: var(--mj-text-muted);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.rc-restore-preview-empty i {
+  color: var(--mj-text-disabled);
+}
+
+/* Restore Preview Table */
+.rc-restore-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rc-restore-preview-table th {
+  text-align: left;
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--mj-text-muted);
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.rc-restore-preview-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--mj-border-default);
+  vertical-align: top;
+}
+
+.rc-restore-preview-table tr:last-child td {
+  border-bottom: none;
+}
+
+.rc-restore-preview-table tr.rc-diff-changed {
+  background: color-mix(in srgb, var(--mj-status-warning) 5%, var(--mj-bg-surface));
+}
+
+.rc-restore-preview-table tr.rc-diff-unchanged {
+  opacity: 0.6;
+}
+
+.rc-restore-field-name {
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+}
+
+.rc-restore-current {
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  color: var(--mj-text-secondary);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-restore-version {
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  color: var(--mj-text-primary);
+  font-weight: 500;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-restore-indicator {
+  text-align: center;
+  width: 30px;
+}
+
+.rc-diff-changed .rc-restore-indicator i {
+  color: var(--mj-status-warning);
+}
+
+.rc-diff-unchanged .rc-restore-indicator i {
+  color: var(--mj-status-success);
+  font-size: 12px;
+}
+
+/* Restore Preview Actions */
+.rc-restore-preview-actions {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--mj-border-default);
+}
+
+.rc-restore-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-inverse);
+  background: var(--mj-brand-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+}
+
+.rc-restore-confirm-btn:hover:not(:disabled) {
+  background: var(--mj-brand-primary-hover);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+}
+
+.rc-restore-confirm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rc-restore-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.rc-restore-cancel-btn:hover:not(:disabled) {
+  border-color: var(--mj-border-strong);
+  color: var(--mj-text-primary);
+}
+
+.rc-restore-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ *  Restore lineage + conditional filter chips + overflow popover
+ *  (added with the Restore Prior Version feature)
+ * ────────────────────────────────────────────────────────────────── */
+
+/* ─── Filter pill enhancements ─── */
+
+.rc-filter-pill-count {
+  margin-left: 4px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.rc-filter-pill.active .rc-filter-pill-count {
+  background: color-mix(in srgb, var(--mj-text-inverse, #fff) 22%, transparent);
+}
+
+/* Restore-variant pill: violet treatment to set it apart from type pills */
+.rc-filter-pill-restore {
+  background: color-mix(in srgb, var(--mj-status-info) 8%, var(--mj-bg-surface));
+  color: color-mix(in srgb, var(--mj-status-info) 80%, var(--mj-text-secondary));
+  border-color: color-mix(in srgb, var(--mj-status-info) 30%, var(--mj-border-default));
+}
+.rc-filter-pill-restore:hover {
+  border-color: var(--mj-status-info);
+  color: var(--mj-status-info);
+}
+.rc-filter-pill-restore.active {
+  background: var(--mj-status-info);
+  color: var(--mj-text-inverse, #fff);
+  border-color: var(--mj-status-info);
+}
+
+/* ─── Overflow filter popover ─── */
+
+.rc-filter-overflow-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.rc-filter-pill-overflow {
+  /* Overflow trigger inherits the standard filter pill look */
+}
+
+.rc-filter-overflow-caret {
+  font-size: 9px;
+  margin-left: 2px;
+}
+
+.rc-filter-overflow-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.rc-filter-overflow-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 11;
+  min-width: 240px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
+  padding: 8px;
+}
+
+.rc-filter-overflow-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mj-text-muted);
+  font-weight: 600;
+  padding: 6px 8px 8px;
+}
+
+.rc-filter-overflow-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--mj-text-primary);
+  cursor: pointer;
+}
+
+.rc-filter-overflow-row:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.rc-filter-overflow-row input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--mj-brand-primary);
+}
+
+.rc-filter-overflow-row i {
+  color: var(--mj-text-muted);
+  font-size: 12px;
+  width: 14px;
+  text-align: center;
+}
+
+.rc-filter-overflow-row-restore i {
+  color: var(--mj-status-info);
+}
+
+.rc-filter-overflow-label {
+  flex: 1;
+}
+
+.rc-filter-overflow-count {
+  color: var(--mj-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.rc-filter-overflow-actions {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--mj-border-subtle);
+  padding-top: 8px;
+  margin-top: 6px;
+}
+
+.rc-filter-overflow-clear,
+.rc-filter-overflow-done {
+  background: none;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 5px;
+}
+
+.rc-filter-overflow-clear {
+  color: var(--mj-text-muted);
+}
+.rc-filter-overflow-clear:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.rc-filter-overflow-done {
+  color: var(--mj-brand-primary);
+}
+.rc-filter-overflow-done:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+
+/* ─── Snapshot type badge + card accent ─── */
+
+.type-snapshot .rc-card-type-badge {
+  background: color-mix(in srgb, var(--mj-text-muted) 15%, var(--mj-bg-surface));
+  color: var(--mj-text-secondary);
+}
+
+/* ─── Restore Source pill (in card meta) ─── */
+
+.source-restore {
+  background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
+  color: var(--mj-status-info);
+}
+
+/* ─── Restore card variant: violet left accent ─── */
+
+.rc-card.rc-card-restore {
+  border-left: 3px solid var(--mj-status-info);
+}
+
+/* ─── Lineage chip ─── */
+
+/* Lineage chip — outline-only "interactive link" treatment so it reads as
+   distinct from the filled RESTORE badge sitting next to it. The badge says
+   "this row IS a restore" (filled, static); the chip says "click here to
+   see the source version" (outline, hoverable). */
+.rc-restored-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 500;
+  background: transparent;
+  color: color-mix(in srgb, var(--mj-status-info) 90%, var(--mj-text-primary));
+  border: 1px solid color-mix(in srgb, var(--mj-status-info) 40%, var(--mj-border-default));
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.rc-restored-chip:hover {
+  background: color-mix(in srgb, var(--mj-status-info) 12%, transparent);
+  border-color: var(--mj-status-info);
+  color: var(--mj-status-info);
+}
+
+.rc-restored-chip i {
+  font-size: 10px;
+}
+
+.rc-restored-chip-orphan {
+  cursor: default;
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-muted);
+  border-color: var(--mj-border-default);
+}
+
+.rc-restored-chip-orphan:hover {
+  background: var(--mj-bg-surface-card);
+  border-color: var(--mj-border-default);
+}
+
+/* ─── Card highlight (when jumped-to via lineage chip) ─── */
+
+.rc-card.rc-card-highlight {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: 2px;
+  animation: rc-card-pulse 1.4s ease-in-out;
+}
+
+@keyframes rc-card-pulse {
+  0%, 100% { background: var(--mj-bg-surface); }
+  50% { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ *  Restore-row badge override + Restore Reason block
+ *  (mockup-aligned treatment for restore rows in the timeline)
+ * ────────────────────────────────────────────────────────────────── */
+
+/* The base type-update badge styling would otherwise paint a restore row's
+   badge blue with "Update" text. Override to violet + "Restore" text so it
+   matches the source pill, lineage chip, and card border. */
+.rc-card-type-badge.rc-card-type-badge-restore {
+  background: color-mix(in srgb, var(--mj-status-info) 14%, var(--mj-bg-surface));
+  color: var(--mj-status-info);
+}
+
+/* Restore reason — minimal blockquote treatment.
+   A thin violet left bar + italic text reads like a margin note rather than
+   a heavy callout. Visually connected to the restore family (left bar uses
+   the same violet as the badge / source pill / card border) without
+   competing with the field-diff rows that follow. */
+.rc-restore-reason {
+  /* Indented in from the card body edge so it visually nests one level
+     deeper than the field-diff rows that follow, and given generous
+     vertical breathing room so it doesn't crowd the lineage chip above
+     or the first field row below. */
+  margin: 14px 8px 18px 18px;
+  padding: 0 0 0 12px;
+  border-left: 2px solid color-mix(in srgb, var(--mj-status-info) 55%, var(--mj-border-default));
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rc-restore-reason-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--mj-status-info) 75%, var(--mj-text-muted));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rc-restore-reason-text {
+  color: var(--mj-text-secondary);
+  font-style: italic;
+}

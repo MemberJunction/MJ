@@ -268,11 +268,3 @@ export class GetWeatherAction extends BaseAction {
         }
     }
 }
-
-/**
- * Loader function to ensure the GetWeatherAction class is included in the bundle.
- * This prevents tree-shaking from removing the class during the build process.
- */
-export function LoadGetWeatherAction() {
-    // this function is a stub that is used to force the bundler to include the above class in the final bundle and not tree shake them out
-}

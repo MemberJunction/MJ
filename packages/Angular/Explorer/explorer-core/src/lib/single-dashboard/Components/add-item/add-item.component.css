@@ -27,7 +27,7 @@
     gap: 20px;
 }
 ::ng-deep .resource-wrap .k-label {
-  color: #424242;
+  color: var(--mj-text-secondary);
   font-size: 14px;
   font-style: normal;
   font-weight: 400;
@@ -46,13 +46,20 @@
   line-height: 34px;
 }
 
+.optional-hint {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  font-weight: 400;
+  margin-left: 4px;
+}
+
 .no-items-message, .no-views-message {
   padding: 12px;
-  background-color: #f8f9fa;
+  background-color: var(--mj-bg-surface-card);
   border-radius: 4px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   text-align: center;
   font-size: 14px;
   margin-top: 5px;
-  border: 1px dashed #dee2e6;
+  border: 1px dashed var(--mj-border-default);
 }

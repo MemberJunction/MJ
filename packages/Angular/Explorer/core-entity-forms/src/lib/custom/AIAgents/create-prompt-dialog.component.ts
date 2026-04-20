@@ -1,10 +1,9 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, Output, EventEmitter } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { TemplateEntity, AIPromptTypeEntity, TemplateContentEntity } from '@memberjunction/core-entities';
-import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJTemplateEntity, MJAIPromptTypeEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
+import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEditorConfig } from '../../shared/components/template-editor.component';
 import { AIPromptManagementService } from '../AIPrompts/ai-prompt-management.service';
@@ -21,11 +20,11 @@ export interface CreatePromptConfig {
 
 export interface CreatePromptResult {
   /** Created prompt entity (not saved to database) */
-  prompt: AIPromptEntityExtended;
+  prompt: MJAIPromptEntityExtended;
   /** Created template entity (not saved to database) */
-  template?: TemplateEntity;
+  template?: MJTemplateEntity;
   /** Template content entities (not saved to database) */
-  templateContents?: TemplateContentEntity[];
+  templateContents?: MJTemplateContentEntity[];
 }
 
 /**
@@ -34,6 +33,7 @@ export interface CreatePromptResult {
  * This ensures atomicity with the parent form's save operation.
  */
 @Component({
+  standalone: false,
   selector: 'mj-create-prompt-dialog',
   templateUrl: './create-prompt-dialog.component.html',
   styleUrls: ['./create-prompt-dialog.component.css']
@@ -53,12 +53,12 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
   isSaving$ = new BehaviorSubject<boolean>(false);
   
   // Data
-  availablePromptTypes$ = new BehaviorSubject<AIPromptTypeEntity[]>([]);
+  availablePromptTypes$ = new BehaviorSubject<MJAIPromptTypeEntity[]>([]);
   
   // Entities (not saved to database)
-  promptEntity: AIPromptEntityExtended | null = null;
-  templateEntity: TemplateEntity | null = null;
-  templateContents: TemplateContentEntity[] = [];
+  promptEntity: MJAIPromptEntityExtended | null = null;
+  templateEntity: MJTemplateEntity | null = null;
+  templateContents: MJTemplateContentEntity[] = [];
   
   // Template editor
   @ViewChild('templateEditor') templateEditor: any; // Template editor component reference
@@ -72,8 +72,9 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
   // Template state
   templateMode: 'new' | 'existing' = 'new';
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef,
     private aiPromptManagementService: AIPromptManagementService
   ) {
@@ -117,8 +118,8 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
     try {
       // Load prompt types
       const rv = new RunView();
-      const typesResult = await rv.RunView<AIPromptTypeEntity>({
-        EntityName: 'AI Prompt Types',
+      const typesResult = await rv.RunView<MJAIPromptTypeEntity>({
+        EntityName: 'MJ: AI Prompt Types',
         OrderBy: 'Name ASC',
         ResultType: 'entity_object'
       });
@@ -134,7 +135,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
 
       // Create the prompt entity
       const md = new Metadata();
-      this.promptEntity = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
+      this.promptEntity = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
       this.promptEntity.NewRecord();
       
       // Set default values
@@ -177,7 +178,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       const md = new Metadata();
       
       // Create template entity
-      this.templateEntity = await md.GetEntityObject<TemplateEntity>('Templates');
+      this.templateEntity = await md.GetEntityObject<MJTemplateEntity>('MJ: Templates');
       this.templateEntity.NewRecord();
       
       const promptName = this.promptForm.get('name')?.value || 'New Prompt';
@@ -199,7 +200,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  public onTemplateContentChange(contents: TemplateContentEntity[]) {
+  public onTemplateContentChange(contents: MJTemplateContentEntity[]) {
     this.templateContents = contents || [];
   }
 
@@ -246,7 +247,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       };
 
       this.result.next(result);
-      this.dialogRef.close();
+      this.DialogClose.emit();
 
     } catch (error) {
       console.error('Error preparing prompt for creation:', error);
@@ -262,7 +263,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
 
   public cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   /**
@@ -314,7 +315,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
   }
 
   // Getter for template debugging
-  public get currentTemplate(): TemplateEntity | null {
+  public get currentTemplate(): MJTemplateEntity | null {
     return this.templateEntity;
   }
 }

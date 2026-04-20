@@ -1,10 +1,4 @@
-<div>
-  <kendo-dialog-titlebar (close)="cancel()">
-    <div style="font-size: 18px;">
-      <i class="fa-solid fa-database"></i> Load Component from Artifact
-    </div>
-  </kendo-dialog-titlebar>
-
+<mj-dialog [Visible]="true" Title="Load Component from Artifact" (Close)="cancel()" [Width]="1200" [MinWidth]="600">
   <div class="artifact-load-content">
     <!-- Left Filter Panel -->
     <div class="filter-panel" [style.width]="isFilterPanelCollapsed ? '40px' : '280px'">
@@ -12,10 +6,9 @@
         @if (!isFilterPanelCollapsed) {
           <span>Filters</span>
         }
-        <button kendoButton (click)="toggleFilterPanel()"
-                [fillMode]="'flat'"
-                [class.filter-active]="getActiveFilterCount() > 0"
-                [themeColor]="getActiveFilterCount() > 0 ? 'primary' : 'base'">
+        <button mjButton (click)="toggleFilterPanel()"
+                variant="flat"
+                [class.filter-active]="getActiveFilterCount() > 0">
           <i class="fa-solid fa-filter"></i>
           @if (isFilterPanelCollapsed && getActiveFilterCount() > 0) {
             <span class="filter-count">{{ getActiveFilterCount() }}</span>
@@ -84,20 +77,18 @@
           <div class="artifacts-view">
             <!-- Paging Controls -->
             <div class="paging-controls">
-              <button kendoButton
+              <button mjButton
                       (click)="previousPage()"
-                      [disabled]="!canGoPrevious()"
-                      [themeColor]="'base'">
+                      [disabled]="!canGoPrevious()">
                 <i class="fa-solid fa-chevron-left"></i> Previous
               </button>
               <span class="page-info">
                 Page {{ currentPage + 1 }} of {{ getTotalPages() }}
                 ({{ totalArtifacts }} total)
               </span>
-              <button kendoButton
+              <button mjButton
                       (click)="nextPage()"
-                      [disabled]="!canGoNext()"
-                      [themeColor]="'base'">
+                      [disabled]="!canGoNext()">
                 Next <i class="fa-solid fa-chevron-right"></i>
               </button>
             </div>
@@ -118,7 +109,7 @@
               @else {
                 @for (artifact of artifacts; track artifact.ID) {
                   <div class="artifact-item"
-                       [class.selected]="selectedArtifact?.ID === artifact.ID"
+                       [class.selected]="IsArtifactSelected(artifact)"
                        (click)="selectArtifact(artifact)">
                     <div class="artifact-content">
                       <div class="artifact-main">
@@ -162,7 +153,7 @@
               @else {
                 @for (collection of collections; track collection.ID) {
                   <div class="collection-item"
-                       [class.selected]="selectedCollection?.ID === collection.ID"
+                       [class.selected]="IsCollectionSelected(collection)"
                        (click)="selectCollection(collection)">
                     <div class="collection-icon">
                       <i class="fa-solid fa-folder"></i>
@@ -193,7 +184,7 @@
                 @else {
                   @for (artifact of collectionArtifacts; track artifact.ID) {
                     <div class="artifact-item"
-                         [class.selected]="selectedArtifact?.ID === artifact.ID"
+                         [class.selected]="IsArtifactSelected(artifact)"
                          (click)="selectArtifact(artifact)">
                       <div class="artifact-content">
                         <div class="artifact-main">
@@ -241,7 +232,7 @@
             <div class="version-list">
               @for (version of artifactVersions; track version.ID) {
                 <div class="version-item"
-                     [class.selected]="selectedVersion?.ID === version.ID"
+                     [class.selected]="IsVersionSelected(version)"
                      (click)="selectVersion(version)">
                   <div class="version-number">
                     <i class="fa-solid fa-code-branch"></i>
@@ -327,14 +318,14 @@
     }
   </div>
 
-  <kendo-dialog-actions>
-    <button kendoButton
-            [themeColor]="'primary'"
+  <mj-dialog-actions>
+    <button mjButton
+            variant="primary"
             (click)="load()"
             [disabled]="!canLoad()">
       <i class="fa-solid fa-download"></i>
       Load Component
     </button>
-    <button kendoButton (click)="cancel()">Cancel</button>
-  </kendo-dialog-actions>
-</div>
+    <button mjButton (click)="cancel()">Cancel</button>
+  </mj-dialog-actions>
+</mj-dialog>

@@ -1,24 +1,39 @@
 # @memberjunction/ng-ai-test-harness
 
-A beautiful, reusable Angular component for testing AI agents, prompts, and actions in MemberJunction applications.
+A comprehensive Angular component for testing AI agents, prompts, and actions in MemberJunction applications. Supports embedded, dialog, and floating window presentation modes with real-time streaming, execution monitoring, and window management.
 
 ## Overview
 
-The AI Test Harness provides a comprehensive testing interface supporting three modes:
-- **Agent Mode**: Test AI agents with conversational inputs
-- **Prompt Mode**: Test AI prompts with user messages
-- **Action Mode**: Test actions with parameter inputs
+The AI Test Harness provides a multi-mode testing interface for MemberJunction's AI capabilities. It supports three testing modes (Agent, Prompt, Action), multiple presentation contexts (embedded component, dialog, floating window), and includes specialized components for monitoring agent execution trees and viewing JSON results.
 
-## Features
+```mermaid
+graph TD
+    A[AITestHarnessModule] --> B[Core Components]
+    A --> C[Window Components]
+    A --> D[Services]
 
-- 🎨 Beautiful, modern UI with smooth animations
-- 🔄 Three testing modes with easy switching
-- ⚙️ Advanced settings (temperature, max tokens, streaming)
-- 📊 Execution history tracking
-- 💬 Real-time streaming responses
-- 💰 Token usage and cost tracking
-- 🔌 Dialog service for programmatic access
-- 🎯 TypeScript support with full type safety
+    B --> B1[AITestHarnessComponent]
+    B --> B2[AITestHarnessDialogComponent]
+    B --> B3[AgentExecutionMonitorComponent]
+    B --> B4[AgentExecutionNodeComponent]
+    B --> B5[JsonViewerWindowComponent]
+
+    C --> C1[AITestHarnessWindowComponent]
+    C --> C2[TestHarnessCustomWindowComponent]
+
+    D --> D1[AITestHarnessDialogService]
+    D --> D2[TestHarnessWindowService]
+    D --> D3[TestHarnessWindowManagerService]
+    D --> D4[WindowDockService]
+
+    B1 --> E["Testing Modes:
+    Agent | Prompt | Action"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Installation
 
@@ -34,20 +49,15 @@ npm install @memberjunction/ng-ai-test-harness
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 
 @NgModule({
-  imports: [
-    AITestHarnessModule,
-    // ... other imports
-  ]
+  imports: [AITestHarnessModule]
 })
 export class YourModule { }
 ```
 
-### Component Usage
-
-#### Embedded Mode
+### Embedded Mode
 
 ```html
-<mj-ai-test-harness 
+<mj-ai-test-harness
   [config]="testConfig"
   [embedded]="true"
   (executionComplete)="onTestComplete($event)"
@@ -64,13 +74,9 @@ testConfig: TestHarnessConfig = {
   theme: 'light',
   maxHistoryItems: 10
 };
-
-onTestComplete(result: TestExecutionResult) {
-  console.log('Test completed:', result);
-}
 ```
 
-#### Dialog Mode
+### Dialog Mode
 
 ```typescript
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
@@ -101,47 +107,61 @@ testAction() {
 }
 ```
 
+### Floating Window Mode
+
+```typescript
+import { TestHarnessWindowService } from '@memberjunction/ng-ai-test-harness';
+
+constructor(private windowService: TestHarnessWindowService) {}
+
+openInWindow() {
+  this.windowService.open({
+    mode: 'agent',
+    entityId: 'agent-id'
+  });
+}
+```
+
+### Agent Execution Monitor
+
+Visualize agent execution as a tree of steps:
+
+```html
+<mj-agent-execution-monitor
+  [agentRunId]="runId"
+  [autoRefresh]="true">
+</mj-agent-execution-monitor>
+```
+
+### JSON Viewer Window
+
+Display JSON data in a formatted, scrollable window:
+
+```html
+<mj-json-viewer-window
+  [data]="jsonData"
+  [title]="'Execution Result'">
+</mj-json-viewer-window>
+```
+
 ## Configuration
 
 ### TestHarnessConfig
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| mode | `'agent' \| 'prompt' \| 'action'` | `'agent'` | Testing mode |
-| entityId | `string` | - | Pre-selected entity ID |
-| showHistory | `boolean` | `true` | Show execution history |
-| showAdvancedOptions | `boolean` | `false` | Show advanced settings |
-| theme | `'light' \| 'dark'` | `'light'` | Visual theme |
-| maxHistoryItems | `number` | `10` | Max history items to display |
-
-### TestExecutionResult
-
-```typescript
-interface TestExecutionResult {
-  success: boolean;
-  result?: any;
-  error?: string;
-  executionTime?: number;
-  tokensUsed?: number;
-  cost?: number;
-}
-```
+| `mode` | `'agent' \| 'prompt' \| 'action'` | `'agent'` | Testing mode |
+| `entityId` | `string` | - | Pre-selected entity ID |
+| `showHistory` | `boolean` | `true` | Show execution history |
+| `showAdvancedOptions` | `boolean` | `false` | Show advanced settings |
+| `theme` | `'light' \| 'dark'` | `'light'` | Visual theme |
+| `maxHistoryItems` | `number` | `10` | Max history items to display |
 
 ## Advanced Features
 
-### Custom Entity Filtering
-
-```typescript
-this.testHarness.open({
-  mode: 'agent',
-  entityFilter: "Status='Active' AND Category='Customer Service'",
-  defaultInput: 'Hello, how can you help me?'
-});
-```
-
 ### Streaming Responses
 
-The test harness supports real-time streaming for compatible AI models. Enable streaming in the advanced options panel or programmatically:
+The test harness supports real-time streaming for compatible AI models:
 
 ```typescript
 this.testHarness.open({
@@ -152,9 +172,11 @@ this.testHarness.open({
 });
 ```
 
-## Styling
+### Window Management
 
-The component uses CSS custom properties for theming:
+The `TestHarnessWindowManagerService` coordinates multiple floating test windows with docking support via `WindowDockService`.
+
+## CSS Customization
 
 ```scss
 :root {
@@ -168,20 +190,36 @@ The component uses CSS custom properties for theming:
 
 ## Dependencies
 
-- Angular 18.0.2+
-- @memberjunction/core
-- @memberjunction/core-entities
-- @memberjunction/graphql-dataprovider
-- Kendo UI for Angular
+| Package | Description |
+|---------|-------------|
+| `@memberjunction/ai` | AI abstraction layer |
+| `@memberjunction/ai-core-plus` | AI core plus functionality |
+| `@memberjunction/ai-engine-base` | AI engine base classes |
+| `@memberjunction/core` | Core framework |
+| `@memberjunction/core-entities` | Entity type definitions |
+| `@memberjunction/global` | Global utilities |
+| `@memberjunction/graphql-dataprovider` | GraphQL data access |
+| `@memberjunction/ng-code-editor` | Code editor component |
+| `@memberjunction/ng-container-directives` | Layout directives |
+| `@memberjunction/ng-notifications` | Notification system |
+| `@memberjunction/ng-shared` | Shared Angular utilities |
+| `@memberjunction/ng-shared-generic` | Shared generic components |
+| `@progress/kendo-angular-*` | Kendo UI components |
+
+### Peer Dependencies
+
+- `@angular/common` ^21.x
+- `@angular/core` ^21.x
+- `@angular/forms` ^21.x
+- `@angular/animations` ^21.x
+
+## Build
+
+```bash
+cd packages/Angular/Generic/ai-test-harness
+npm run build
+```
 
 ## License
 
 ISC
-
-## Contributing
-
-Contributions are welcome! Please submit pull requests to the MemberJunction repository.
-
-## Support
-
-For issues and questions, please use the MemberJunction GitHub repository.

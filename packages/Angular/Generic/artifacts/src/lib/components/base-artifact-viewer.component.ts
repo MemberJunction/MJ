@@ -1,6 +1,27 @@
-import { Component, Input, Type } from '@angular/core';
-import { ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { Component, EventEmitter, Input, Type } from '@angular/core';
+import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
+
+/**
+ * General-purpose navigation request emitted by artifact viewer plugins.
+ * Allows plugins to request app-level navigation (e.g., switch to a specific
+ * application, open a nav item, and set query parameters) without depending
+ * on NavigationService directly.
+ *
+ * The event bubbles through ArtifactTypePluginViewer → ArtifactViewerPanel →
+ * consumer (conversations, dashboards, etc.) → ultimately the Explorer wrapper
+ * where NavigationService lives.
+ */
+export interface NavigationRequest {
+  /** Target application name (e.g., 'Data Explorer'). If omitted, stays in current app. */
+  appName?: string;
+
+  /** Target navigation item label within the app (e.g., 'Queries') */
+  navItemName: string;
+
+  /** Query parameters to pass to the navigation target (e.g., { queryId: 'xxx' }) */
+  queryParams?: Record<string, string>;
+}
 
 /**
  * Represents an additional tab that a plugin can provide to the artifact viewer.
@@ -52,13 +73,14 @@ export interface ArtifactViewerTab {
  * Note: This is an abstract class and should not be declared in Angular module.
  */
 @Component({
+  standalone: false,
   template: ''
 })
 export abstract class BaseArtifactViewerPluginComponent implements IArtifactViewerComponent {
   /**
    * The artifact version to display
    */
-  @Input() artifactVersion!: ArtifactVersionEntity;
+  @Input() artifactVersion!: MJArtifactVersionEntity;
 
   /**
    * Optional: Custom height for the viewer (defaults to auto)
@@ -163,6 +185,45 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
   }
 
   /**
+   * Optional: Emitted when the plugin's additional tabs change after async loading.
+   * Plugins that load data asynchronously (e.g., from a component registry) should
+   * emit this when loading completes and new tabs become available. The parent panel
+   * listens for this to re-run change detection and render the updated tab list.
+   */
+  public tabsChanged?: EventEmitter<void>;
+
+  /**
+   * Optional: Emitted when the plugin wants to navigate to a different app/nav item.
+   * Plugins that need app-level navigation (e.g., "Open Query" navigating to the
+   * Data Explorer's Queries nav item) should instantiate this emitter and emit a
+   * NavigationRequest. The event bubbles up through the artifact viewer chain to the
+   * host application where NavigationService handles the actual navigation.
+   */
+  public navigationRequest?: EventEmitter<NavigationRequest>;
+
+  /**
+   * Whether this plugin supports user feedback.
+   * Plugins that return true will get a feedback button in the artifact viewer header.
+   * Override this getter to return true when feedback is available.
+   *
+   * Default: false
+   */
+  public get SupportsFeedback(): boolean {
+    return false;
+  }
+
+  /**
+   * Ask the user for feedback on the current artifact.
+   * Called by the artifact viewer panel when the user clicks the feedback button in the header.
+   * Each plugin implements its own feedback UX (dialog, panel, inline form, etc.).
+   *
+   * Default: no-op. Subclasses should override to implement artifact-type-specific feedback.
+   */
+  public AskUserForFeedback(): void {
+    // Subclasses override to implement feedback UX
+  }
+
+  /**
    * Get additional tabs that this plugin wants to provide to the artifact viewer.
    * Override this method to provide custom tabs for viewing metadata, code, etc.
    *
@@ -181,4 +242,20 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
    *          Note: 'Display' cannot be removed (it's the main view)
    */
   public GetStandardTabRemovals?(): string[];
+
+  /**
+   * Trigger a browser file download from a URL.
+   * Shared by all file-backed viewer plugins (PDF, XLSX, DOCX) so the fetch →
+   * blob → object-URL → anchor pattern lives in exactly one place.
+   */
+  protected async triggerBrowserDownload(url: string, fileName: string): Promise<void> {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(objectUrl);
+  }
 }

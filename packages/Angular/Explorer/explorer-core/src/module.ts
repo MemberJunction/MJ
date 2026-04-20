@@ -7,46 +7,33 @@ import { RouterModule, RouteReuseStrategy } from '@angular/router';
 import { SystemValidationService } from './lib/services/system-validation.service';
 import { StartupValidationService } from './lib/services/startup-validation.service';
 
-// Kendo UI Angular imports
-import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
-import { DialogsModule } from '@progress/kendo-angular-dialog';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { ExcelModule, GridModule, PDFModule } from '@progress/kendo-angular-grid';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { LabelModule } from '@progress/kendo-angular-label';
-import { LayoutModule, TabStripModule, CardModule, AvatarModule } from '@progress/kendo-angular-layout';
-import { ListViewModule } from '@progress/kendo-angular-listview';
-import { TreeViewModule } from '@progress/kendo-angular-treeview';
-import { ProgressBarModule } from "@progress/kendo-angular-progressbar";
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
+import { ExportServiceModule } from '@memberjunction/ng-export-service';
+import { MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
-import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
+import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FileStorageModule } from '@memberjunction/ng-file-storage';
-import { QueryGridModule } from '@memberjunction/ng-query-grid';
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
-import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
+// RecordTagsModule removed — now imported by @memberjunction/ng-base-forms
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
-import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
 import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
+import { ListDetailGridModule } from '@memberjunction/ng-list-detail-grid';
 
 // Local Components
 import { ConversationsModule } from '@memberjunction/ng-conversations';
-import { DashboardsModule } from '@memberjunction/ng-dashboards';
+import { CoreDashboardsModule } from '@memberjunction/ng-dashboards/core-dashboards.module';
+import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { FormToolbarComponent } from './lib/generic/form-toolbar';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
 import { DashboardPreferencesDialogComponent } from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
 import { DashboardResource } from './lib/resource-wrappers/dashboard-resource.component';
@@ -72,10 +59,13 @@ import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collection
 import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
+import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
+import { SearchModule } from '@memberjunction/ng-search';
+import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 
 @NgModule({
   declarations: [
-    FormToolbarComponent,
+    OAuthCallbackComponent,
     ResourceContainerComponent,
     DashboardResource,
     EntityRecordResource,
@@ -106,49 +96,39 @@ import { NotificationsResource } from './lib/resource-wrappers/notifications-res
     FormsModule,
     ReactiveFormsModule,
     RouterModule,
-    GridModule,
-    DialogsModule,
-    ExcelExportModule,
-    CompareRecordsModule, // [3.0] TO DO To-Do Need to implement this again
-    IndicatorsModule,
-    ButtonsModule,
-    TabStripModule,
-    ExcelModule,
-    PDFModule,
-    InputsModule,
-    LabelModule,
+    ExportServiceModule,
     RecordChangesModule,
     ContainerDirectivesModule,
     BaseFormsModule,
-    ListViewModule,
-    TreeViewModule,
-    UserViewGridModule,
-    QueryGridModule,
-    LayoutModule,
-    DropDownsModule,
+    QueryViewerModule,
     MemberJunctionSharedModule,
     ConversationsModule,
-    DashboardsModule,
+    CoreDashboardsModule,
+    DashboardViewerModule,
     ExplorerSettingsModule,
     FileStorageModule,
-    UserViewPropertiesDialogModule,
-    MJTabStripModule,
     EntityFormDialogModule,
     RecordSelectorModule,
     ResourcePermissionsModule,
     GenericDialogModule,
-    ProgressBarModule,
-    DateInputsModule,
+    MJProgressBarComponent,
     DragDropModule,
-    CardModule,
-    AvatarModule,
     AITestHarnessModule, // [3.0] TO DO TO-DO Need to verify this works correctly!
     ArtifactsModule,
     SharedGenericModule,
-    EntityViewerModule
+    EntityViewerModule,
+    ListDetailGridModule,
+    SearchModule,
+    MJWordCloudComponent,
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogTitlebarComponent,
+    MJDialogActionsComponent,
+    MJDropdownComponent,
+    MJWindowComponent,
+    MJWindowTitlebarComponent
   ],
   exports: [
-    FormToolbarComponent,
     ResourceContainerComponent,
     DashboardResource,
     EntityRecordResource,

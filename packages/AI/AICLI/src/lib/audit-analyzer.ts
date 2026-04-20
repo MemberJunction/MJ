@@ -1,4 +1,4 @@
-import { AIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 
 export interface TruncationRules {
   inputMaxChars: number;
@@ -30,7 +30,7 @@ export class AuditAnalyzer {
   /**
    * Calculate step duration from entity timestamps
    */
-  calculateStepDuration(step: AIAgentRunStepEntity): number {
+  calculateStepDuration(step: MJAIAgentRunStepEntity): number {
     if (!step.StartedAt || !step.CompletedAt) return 0;
     return new Date(step.CompletedAt).getTime() - new Date(step.StartedAt).getTime();
   }

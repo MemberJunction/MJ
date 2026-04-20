@@ -144,9 +144,3 @@ export class GetTypeformFormsAction extends TypeformBaseAction {
         ];
     }
 }
-
-export function LoadGetTypeformFormsAction(): void {
-    // This function exists to prevent tree-shaking
-    // Call it from consuming packages to ensure the action is included
-    return;
-}

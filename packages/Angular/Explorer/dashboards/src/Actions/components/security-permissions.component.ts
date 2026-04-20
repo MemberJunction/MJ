@@ -2,19 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionsSecurityResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * Security Permissions Resource - displays action security management
  */
 @RegisterClass(BaseResourceComponent, 'ActionsSecurityResource')
 @Component({
+  standalone: false,
   selector: 'mj-security-permissions',
   template: `
     <div class="security-permissions-placeholder" >
@@ -34,7 +27,7 @@ export function LoadActionsSecurityResource() {
 
       .placeholder-content {
         text-align: center;
-        color: var(--kendo-color-subtle);
+        color: var(--mj-text-muted);
 
         i {
           font-size: 3rem;
@@ -57,11 +50,12 @@ export function LoadActionsSecurityResource() {
   `]
 })
 export class SecurityPermissionsComponent extends BaseResourceComponent implements OnInit {
-  constructor(private navigationService: NavigationService) {
+  constructor() {
     super();
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.NotifyLoadComplete();
   }
 

@@ -2,19 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionsCodeResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * Code Management Resource - displays AI code generation workflow
  */
 @RegisterClass(BaseResourceComponent, 'ActionsCodeResource')
 @Component({
+  standalone: false,
   selector: 'mj-code-management',
   template: `
     <div class="code-management-placeholder" >
@@ -34,7 +27,7 @@ export function LoadActionsCodeResource() {
 
       .placeholder-content {
         text-align: center;
-        color: var(--kendo-color-subtle);
+        color: var(--mj-text-muted);
 
         i {
           font-size: 3rem;
@@ -57,11 +50,12 @@ export function LoadActionsCodeResource() {
   `]
 })
 export class CodeManagementComponent extends BaseResourceComponent implements OnInit {
-  constructor(private navigationService: NavigationService) {
+  constructor() {
     super();
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.NotifyLoadComplete();
   }
 

@@ -9,6 +9,7 @@ import * as fs from 'fs/promises';
 import { loadConfig } from '../config.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
+import { SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memberjunction/generic-database-provider';
 
 /**
  * Configuration options for SQL logging sessions.
@@ -47,6 +48,22 @@ export class SqlLoggingOptions {
   /** Email address to filter SQL statements by user (when filtering is enabled) */
   @Field(() => String, { nullable: true })
   filterByUserId?: string;
+
+  /** Array of regex/wildcard patterns to filter SQL statements */
+  @Field(() => [String], { nullable: true })
+  filterPatterns?: string[];
+
+  /** How to apply patterns: 'include' or 'exclude' (default: exclude) */
+  @Field(() => String, { nullable: true })
+  filterType?: 'include' | 'exclude';
+
+  /** Whether to output verbose debug information to console */
+  @Field(() => Boolean, { nullable: true })
+  verboseOutput?: boolean;
+
+  /** Default schema name for Flyway migration placeholder replacement */
+  @Field(() => String, { nullable: true })
+  defaultSchemaName?: string;
 
   /** Human-readable name for the logging session */
   @Field(() => String, { nullable: true })
@@ -117,6 +134,22 @@ export class SqlLoggingOptionsInput {
   /** Email address to filter SQL statements by user (when filtering is enabled) */
   @Field(() => String, { nullable: true })
   filterByUserId?: string;
+
+  /** Array of regex/wildcard patterns to filter SQL statements */
+  @Field(() => [String], { nullable: true })
+  filterPatterns?: string[];
+
+  /** How to apply patterns: 'include' or 'exclude' (default: exclude) */
+  @Field(() => String, { nullable: true })
+  filterType?: 'include' | 'exclude';
+
+  /** Whether to output verbose debug information to console */
+  @Field(() => Boolean, { nullable: true })
+  verboseOutput?: boolean;
+
+  /** Default schema name for Flyway migration placeholder replacement */
+  @Field(() => String, { nullable: true })
+  defaultSchemaName?: string;
 
   /** Human-readable name for the logging session */
   @Field(() => String, { nullable: true })
@@ -201,6 +234,9 @@ export class SqlLoggingConfig {
 export class SqlLoggingConfigResolver extends ResolverBase {
   /** Default prefix for auto-generated SQL log filenames */
   private static readonly LOG_FILE_PREFIX = 'sql-log-';
+
+  /** Track active session timeouts for proper cleanup when sessions are manually stopped */
+  private static sessionTimeouts = new Map<string, NodeJS.Timeout>();
   
   /**
    * Validates that the current user has Owner-level privileges required for SQL logging operations.
@@ -280,7 +316,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   async sqlLoggingConfig(@Ctx() context: AppContext): Promise<SqlLoggingConfig> {
     await this.checkOwnerAccess(context);
     const config = await loadConfig();
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as unknown as SQLServerDataProvider;
     const activeSessions = provider.GetActiveSqlLoggingSessions();
 
     return {
@@ -335,7 +371,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   @Query(() => [SqlLoggingSession])
   async activeSqlLoggingSessions(@Ctx() context: AppContext): Promise<SqlLoggingSession[]> {
     await this.checkOwnerAccess(context);
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as unknown as SQLServerDataProvider;
     const sessions = provider.GetActiveSqlLoggingSessions();
 
     return sessions.map(session => ({
@@ -343,7 +379,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
       filePath: session.filePath,
       startTime: session.startTime,
       statementCount: session.statementCount,
-      options: session.options,
+      options: this.convertOptionsToGraphQL(session.options),
       sessionName: session.options.sessionName,
       filterByUserId: session.options.filterByUserId
     }));
@@ -400,7 +436,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     }
 
     // Check max active sessions
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as unknown as SQLServerDataProvider;
     const activeSessions = provider.GetActiveSqlLoggingSessions();
     if (activeSessions.length >= (config.sqlLogging.maxActiveSessions ?? 5)) {
       throw new Error(`Maximum number of active SQL logging sessions (${config.sqlLogging.maxActiveSessions}) reached`);
@@ -409,7 +445,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     // Prepare file path
     const allowedDir = path.resolve(config.sqlLogging.allowedLogDirectory ?? './logs/sql');
     await this.ensureDirectoryExists(allowedDir);
-    
+
     const fileName = input.fileName || `${SqlLoggingConfigResolver.LOG_FILE_PREFIX}${new Date().toISOString().replace(/[:.]/g, '-')}.sql`;
     const filePath = path.join(allowedDir, fileName);
 
@@ -432,15 +468,20 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     // Create the logging session
     const session = await provider.CreateSqlLogger(filePath, sessionOptions);
 
-    // Set up auto-cleanup after timeout
+    // Set up auto-cleanup after timeout with proper tracking
     if (config.sqlLogging.sessionTimeout > 0) {
-      setTimeout(async () => {
+      const timeoutId = setTimeout(async () => {
         try {
           await session.dispose();
+          SqlLoggingConfigResolver.sessionTimeouts.delete(session.id);
         } catch (e) {
-          // Session might already be disposed
+          // Session might already be disposed - log for debugging
+          console.warn(`Auto-cleanup failed for SQL logging session ${session.id}:`, e);
         }
       }, config.sqlLogging.sessionTimeout);
+
+      // Track the timeout so we can cancel it if session is manually stopped
+      SqlLoggingConfigResolver.sessionTimeouts.set(session.id, timeoutId);
     }
 
     return {
@@ -448,9 +489,9 @@ export class SqlLoggingConfigResolver extends ResolverBase {
       filePath: session.filePath,
       startTime: session.startTime,
       statementCount: session.statementCount,
-      options: session.options,
+      options: this.convertOptionsToGraphQL(session.options),
       sessionName: session.options.sessionName,
-      filterByUserId: session.options.filterByUserId
+      filterByUserId: session.options.filterByUserId,
     };
   }
 
@@ -481,14 +522,20 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     @Ctx() context: AppContext
   ): Promise<boolean> {
     await this.checkOwnerAccess(context);
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
-    
-    // Get the actual session from the private map to call dispose
-    const sessionMap = (provider as any)._sqlLoggingSessions as Map<string, any>;
-    const session = sessionMap.get(sessionId);
-    
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as unknown as SQLServerDataProvider;
+
+    // Use the public method to get and dispose the session
+    const session = provider.GetSqlLoggingSessionById(sessionId);
+
     if (!session) {
       throw new Error(`SQL logging session ${sessionId} not found`);
+    }
+
+    // Clear any scheduled timeout for this session
+    const timeoutId = SqlLoggingConfigResolver.sessionTimeouts.get(sessionId);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      SqlLoggingConfigResolver.sessionTimeouts.delete(sessionId);
     }
 
     await session.dispose();
@@ -518,7 +565,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
   @Mutation(() => Boolean)
   async stopAllSqlLogging(@Ctx() context: AppContext): Promise<boolean> {
     await this.checkOwnerAccess(context);
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as unknown as SQLServerDataProvider;
     await provider.DisposeAllSqlLoggingSessions();
     return true;
   }
@@ -608,9 +655,9 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     }
 
     // Find the session
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as SQLServerDataProvider;
+    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as unknown as SQLServerDataProvider;
     const sessions = provider.GetActiveSqlLoggingSessions();
-    const session = sessions.find(s => s.id === sessionId);
+    const session = sessions.find((s) => s.id === sessionId);
     
     if (!session) {
       throw new Error(`SQL logging session ${sessionId} not found`);
@@ -688,5 +735,32 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     } catch {
       await fs.mkdir(dir, { recursive: true });
     }
+  }
+
+  /**
+   * Converts SqlLoggingOptions from the provider to the GraphQL-compatible type.
+   * The provider's filterPatterns can contain RegExp objects, but GraphQL only supports strings.
+   *
+   * @param options - Options from SQLServerDataProvider
+   * @returns GraphQL-compatible SqlLoggingOptions
+   * @private
+   */
+  private convertOptionsToGraphQL(options: ProviderSqlLoggingOptions): SqlLoggingOptions {
+    return {
+      formatAsMigration: options.formatAsMigration,
+      description: options.description,
+      statementTypes: options.statementTypes,
+      batchSeparator: options.batchSeparator,
+      prettyPrint: options.prettyPrint,
+      logRecordChangeMetadata: options.logRecordChangeMetadata,
+      retainEmptyLogFiles: options.retainEmptyLogFiles,
+      filterByUserId: options.filterByUserId,
+      sessionName: options.sessionName,
+      verboseOutput: options.verboseOutput,
+      defaultSchemaName: options.defaultSchemaName,
+      // Convert RegExp objects to their string representation
+      filterPatterns: options.filterPatterns?.map((p) => (p instanceof RegExp ? p.toString() : String(p))),
+      filterType: options.filterType,
+    };
   }
 }

@@ -150,6 +150,13 @@ export class ErrorAnalyzer {
             return 'NoCredit';
         }
 
+        // Check for missing credentials/API keys (no valid credentials configured)
+        if (errorString.includes('no suitable model found') ||
+            errorString.includes('no credentials found') ||
+            errorString.includes('no api keys found')) {
+            return 'NoCredentials';
+        }
+
         // Check for clear authentication/authorization errors (must be specific)
         if (errorString.includes('unauthorized') ||
             errorString.includes('authentication failed') ||
@@ -273,6 +280,7 @@ export class ErrorAnalyzer {
                 return 'Transient';
 
             case 'Authentication':
+            case 'NoCredentials':         // No credentials configured - cannot resolve by retrying
             case 'InvalidRequest':        // Structural errors (malformed JSON, etc.)
                 return 'Fatal';
 
@@ -310,8 +318,9 @@ export class ErrorAnalyzer {
             case 'VendorValidationError':  // Vendor-specific validation, different vendor may accept
                 return true;
 
-            // Clear client-side structural errors - DO NOT failover (won't help)
+            // Clear client-side structural/configuration errors - DO NOT failover (won't help)
             case 'InvalidRequest':         // Malformed JSON/syntax won't work anywhere
+            case 'NoCredentials':          // No credentials configured for ANY provider - failover won't help
                 return false;
 
             // Unknown errors - DEFAULT to allowing failover (permissive approach)

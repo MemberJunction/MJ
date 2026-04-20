@@ -1,0 +1,134 @@
+{
+  "name": "SingleRecordView",
+  "title": "Single Record View",
+  "description": "@file:../../descriptions/generic/single-record-view.md",
+  "type": "form",
+  "location": "embedded",
+  "functionalRequirements": "@file:../../functional-requirements/generic/single-record-view.md",
+  "technicalDesign": "@file:../../technical-design/generic/single-record-view.md",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives record data through props"
+  },
+  "properties": [
+    {
+      "name": "record",
+      "type": "Record<string, any>",
+      "description": "The entity record to display",
+      "required": true
+    },
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Name of the entity for metadata lookup",
+      "required": true
+    },
+    {
+      "name": "fields",
+      "type": "Array<string>",
+      "description": "Fields to display in order. If not provided, shows all non-system fields",
+      "required": false
+    },
+    {
+      "name": "layout",
+      "type": "'list' | 'table' | 'inline' | 'card'",
+      "description": "Display layout style",
+      "required": false,
+      "defaultValue": "list",
+      "possibleValues": [
+        "list",
+        "table",
+        "inline",
+        "card"
+      ]
+    },
+    {
+      "name": "showLabels",
+      "type": "boolean",
+      "description": "Whether to show field labels",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "labelWidth",
+      "type": "number",
+      "description": "Width of label column in pixels (table layout)",
+      "required": false,
+      "defaultValue": 150
+    },
+    {
+      "name": "dateFormat",
+      "type": "'short' | 'long' | 'relative'",
+      "description": "Date formatting style",
+      "required": false,
+      "defaultValue": "short",
+      "possibleValues": [
+        "short",
+        "long",
+        "relative"
+      ]
+    },
+    {
+      "name": "showEmptyFields",
+      "type": "boolean",
+      "description": "Whether to show fields with no value",
+      "required": false,
+      "defaultValue": false
+    },
+    {
+      "name": "maxTextLength",
+      "type": "number",
+      "description": "Maximum characters for text fields before truncation",
+      "required": false,
+      "defaultValue": 200
+    },
+    {
+      "name": "highlightFields",
+      "type": "Array<string>",
+      "description": "Fields to highlight visually",
+      "required": false
+    },
+    {
+      "name": "allowOpenRecord",
+      "type": "boolean",
+      "description": "Whether to show an Open Record button for the record",
+      "required": false,
+      "defaultValue": false
+    }
+  ],
+  "events": [
+    {
+      "name": "fieldClicked",
+      "description": "Fired when a field value is clicked",
+      "parameters": [
+        {
+          "name": "eventData",
+          "type": "{ fieldName: string; value: any; fieldType?: string; record: Record<string, any> }",
+          "description": "Object containing field name, value, optional field type, and the full record"
+        }
+      ]
+    },
+    {
+      "name": "openRecord",
+      "description": "Cancelable event fired before opening a record. Set eventData.cancel = true to prevent default behavior",
+      "cancelable": true,
+      "parameters": [
+        {
+          "name": "eventData",
+          "type": "{ record: Record<string, any>; entityName: string; cancel: boolean; primaryKeys: Array<{ FieldName: string; Value: any }> }",
+          "description": "Cancelable event object. Set cancel to true to prevent the record from opening"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "OpenRecordButton",
+      "namespace": "Generic/Navigation",
+      "location": "registry",
+      "description": "Button to open entity records"
+    }
+  ],
+  "code": "@file:../../code/generic/single-record-view.js",
+  "exampleUsage": "<SingleRecordView\n  record={selectedDeal}\n  entityName=\"Deals\"\n  fields={['DealName', 'Stage', 'Amount', 'CloseDate', 'OwnerID']}\n  layout=\"card\"\n  highlightFields={['Amount', 'Stage']}\n  allowOpenRecord={true}\n  onOpenRecord={(eventData) => {\n    // Example: Cancel if deal is in certain stage\n    if (selectedDeal.Stage === 'Lost') {\n      eventData.cancel = true;\n      alert('Cannot open lost deals');\n    }\n  }}\n/>"
+}

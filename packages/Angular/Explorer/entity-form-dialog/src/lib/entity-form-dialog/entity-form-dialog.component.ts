@@ -12,6 +12,7 @@ import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-
  * of the Save and Cancel buttons.
  */
 @Component({
+  standalone: false,
   selector: 'mj-entity-form-dialog',
   templateUrl: './entity-form-dialog.component.html',
   styleUrls: ['./entity-form-dialog.component.css']
@@ -105,7 +106,7 @@ export class EntityFormDialogComponent {
 
     // here we want to grab the right type of object to instantiate based on the settings either mode of complete or section
     // if section, we grab a sub-class of BaseFormSectionComponent, if complete, we grab a sub-class of the BaseForComponent class
-    let reg: ClassRegistration;
+    let reg: ClassRegistration | null;
     if (this.Mode === 'complete') {
       reg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, this.Record?.EntityInfo.Name);
     } else {

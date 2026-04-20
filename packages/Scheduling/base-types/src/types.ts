@@ -58,6 +58,17 @@ export interface ActionJobConfiguration extends ScheduledJobConfiguration {
 }
 
 /**
+ * Configuration for Integration Sync scheduled jobs
+ */
+export interface IntegrationSyncJobConfiguration extends ScheduledJobConfiguration {
+    CompanyIntegrationID: string;
+    EntityMapIDs?: string[];
+    FullSync?: boolean;
+    /** Override sync direction for all entity maps in this scheduled run. */
+    SyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
+}
+
+/**
  * Notification content structure
  */
 export interface NotificationContent {

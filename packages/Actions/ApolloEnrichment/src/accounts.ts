@@ -1103,11 +1103,3 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         return new Promise(resolve => setTimeout(resolve, ms));
     }  
 }
-
-/**
- * Loader function to ensure the ApolloEnrichmentAccountsAction class is included in the bundle
- * Prevents tree shaking from removing this action class
- */
-export function LoadApolloAccountsEnrichmentAction() {
-    // Stub function to prevent tree shaking
-}

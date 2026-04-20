@@ -1,6 +1,5 @@
-#!/usr/bin/env node_modules/.bin/ts-node
-require('dotenv').config()
-;(async () => {
-  const oclif = await import('@oclif/core')
-  await oclif.execute({ development: true, dir: __dirname })
-})()
+#!/usr/bin/env tsx
+import 'dotenv/config';
+import { execute } from '@oclif/core';
+
+await execute({ development: true, dir: import.meta.url });

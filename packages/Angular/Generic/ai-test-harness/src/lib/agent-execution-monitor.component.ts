@@ -2,7 +2,8 @@ import { Component, Input, OnChanges, SimpleChanges, OnDestroy, ViewChild, Eleme
 import { Subject, interval, Subscription } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ExecutionNodeComponent } from './agent-execution-node.component';
-import { AIAgentRunEntityExtended, AIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Progress message with display mode
@@ -51,6 +52,7 @@ export interface ExecutionStats {
  * - Input/output preview
  */
 @Component({
+  standalone: false,
     selector: 'mj-agent-execution-monitor',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
@@ -153,8 +155,8 @@ export interface ExecutionStats {
             display: flex;
             flex-direction: column;
             flex: 1;
-            background: #fff;
-            border: 1px solid #e0e0e0;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
             border-radius: 8px;
             overflow: hidden;
         }
@@ -162,8 +164,8 @@ export interface ExecutionStats {
         /* Header */
         .monitor-header {
             padding: 16px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
+            background: var(--mj-bg-surface-card);
+            border-bottom: 1px solid var(--mj-border-default);
         }
 
         .header-title {
@@ -172,12 +174,12 @@ export interface ExecutionStats {
             gap: 8px;
             font-size: 16px;
             font-weight: 600;
-            color: #1a1a1a;
+            color: var(--mj-text-primary);
             margin-bottom: 8px;
         }
 
         .header-title i {
-            color: #2196f3;
+            color: var(--mj-brand-primary);
         }
 
         .live-indicator {
@@ -185,8 +187,8 @@ export interface ExecutionStats {
             align-items: center;
             gap: 6px;
             padding: 4px 8px;
-            background: #ff4444;
-            color: white;
+            background: var(--mj-status-error);
+            color: var(--mj-text-inverse);
             border-radius: 4px;
             font-size: 11px;
             font-weight: 600;
@@ -213,7 +215,7 @@ export interface ExecutionStats {
             align-items: center;
             gap: 8px;
             font-size: 13px;
-            color: #666;
+            color: var(--mj-text-secondary);
         }
 
         .status-label {
@@ -221,11 +223,11 @@ export interface ExecutionStats {
         }
 
         .agent-path {
-            color: #999;
+            color: var(--mj-text-muted);
         }
 
         .step-name {
-            color: #1a1a1a;
+            color: var(--mj-text-primary);
             font-weight: 500;
         }
 
@@ -248,7 +250,7 @@ export interface ExecutionStats {
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: #999;
+            color: var(--mj-text-muted);
             text-align: center;
         }
 
@@ -271,8 +273,8 @@ export interface ExecutionStats {
         /* Footer */
         .monitor-footer {
             padding: 16px;
-            background: #f8f9fa;
-            border-top: 1px solid #e0e0e0;
+            background: var(--mj-bg-surface-card);
+            border-top: 1px solid var(--mj-border-default);
         }
 
         .stats-grid {
@@ -289,7 +291,7 @@ export interface ExecutionStats {
         .stat-label {
             display: block;
             font-size: 11px;
-            color: #666;
+            color: var(--mj-text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 4px;
@@ -299,11 +301,11 @@ export interface ExecutionStats {
             display: block;
             font-size: 16px;
             font-weight: 600;
-            color: #1a1a1a;
+            color: var(--mj-text-primary);
         }
 
         .failed-count {
-            color: #f44336;
+            color: var(--mj-status-error);
             font-size: 12px;
             font-weight: normal;
         }
@@ -318,17 +320,17 @@ export interface ExecutionStats {
         .type-badge {
             display: inline-block;
             padding: 4px 8px;
-            background: #e3f2fd;
-            color: #1976d2;
+            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+            color: var(--mj-brand-primary);
             border-radius: 4px;
             font-size: 12px;
             font-weight: 500;
         }
-        
+
         /* View Run Button */
         .view-run-btn {
-            background: #2196f3;
-            color: white;
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
             border: none;
             padding: 6px 12px;
             border-radius: 4px;
@@ -341,9 +343,9 @@ export interface ExecutionStats {
             transition: all 0.2s ease;
             margin-left: auto;
         }
-        
+
         .view-run-btn:hover {
-            background: #1976d2;
+            background: var(--mj-brand-primary-hover);
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
@@ -366,8 +368,8 @@ export interface ExecutionStats {
 })
 export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, AfterViewInit {
     @Input() mode: ExecutionMonitorMode = 'historical';
-    @Input() agentRun: AIAgentRunEntityExtended | null = null; // For historical mode
-    @Input() liveSteps: AIAgentRunStepEntityExtended[] = []; // For live mode streaming
+    @Input() agentRun: MJAIAgentRunEntityExtended | null = null; // For historical mode
+    @Input() liveSteps: MJAIAgentRunStepEntityExtended[] = []; // For live mode streaming
     @Input() autoExpand: boolean = true; // Auto-expand nodes in live mode
     @Input() runId: string | null = null; // ID of the run (agent or prompt)
     @Input() runType: 'agent' | 'prompt' = 'agent'; // Type of run
@@ -378,7 +380,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     @ViewChild('executionNodesContainer', { read: ViewContainerRef }) executionNodesContainer!: ViewContainerRef;
     
     // Store the currently rendered steps for UI state management
-    currentStep: AIAgentRunStepEntityExtended | null = null;
+    currentStep: MJAIAgentRunStepEntityExtended | null = null;
     
     // Track component references for dynamic components
     private nodeComponentMap = new Map<string, ComponentRef<ExecutionNodeComponent>>();
@@ -445,7 +447,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             
             // Only clear if it's actually a different execution (different ID)
             const isDifferentExecution = (!oldRun && newRun) || 
-                                       (oldRun && newRun && oldRun.ID !== newRun.ID) ||
+                                       (oldRun && newRun && !UUIDsEqual(oldRun.ID, newRun.ID)) ||
                                        (oldRun && !newRun);
             
             if (isDifferentExecution) {
@@ -621,7 +623,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Render steps recursively with proper hierarchy
      */
-    private renderSteps(steps: AIAgentRunStepEntityExtended[], depth: number, agentPath: string[]): void {
+    private renderSteps(steps: MJAIAgentRunStepEntityExtended[], depth: number, agentPath: string[]): void {
         console.log('🎨 Rendering steps:', {
             count: steps.length,
             depth,
@@ -655,7 +657,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Create a component for a step
      */
     private createStepComponent(
-        step: AIAgentRunStepEntityExtended, 
+        step: MJAIAgentRunStepEntityExtended, 
         depth: number, 
         agentPath: string[]
     ): ComponentRef<ExecutionNodeComponent> {
@@ -704,7 +706,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Toggle step expansion
      */
-    private toggleStepExpansion(step: AIAgentRunStepEntityExtended): void {
+    private toggleStepExpansion(step: MJAIAgentRunStepEntityExtended): void {
         const currentState = this.expandedStates.get(step.ID) || false;
         this.expandedStates.set(step.ID, !currentState);
         this.userHasInteracted = true;
@@ -722,7 +724,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Toggle step details expansion
      */
-    private toggleStepDetails(step: AIAgentRunStepEntityExtended): void {
+    private toggleStepDetails(step: MJAIAgentRunStepEntityExtended): void {
         const currentState = this.detailsExpandedStates.get(step.ID) || false;
         this.detailsExpandedStates.set(step.ID, !currentState);
         
@@ -922,7 +924,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      */
     private updateCurrentStep(): void {
         // Find the first running step from all rendered components
-        let runningStep: AIAgentRunStepEntityExtended | null = null;
+        let runningStep: MJAIAgentRunStepEntityExtended | null = null;
         
         this.nodeComponentMap.forEach((componentRef, stepId) => {
             const step = componentRef.instance.step;
@@ -1027,7 +1029,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Count steps recursively
      */
-    private countSteps(steps: AIAgentRunStepEntityExtended[]): void {
+    private countSteps(steps: MJAIAgentRunStepEntityExtended[]): void {
         for (const step of steps) {
             this.stats.totalSteps++;
             
@@ -1224,7 +1226,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Append new live steps without re-rendering entire tree
      */
-    private appendNewLiveSteps(newSteps: AIAgentRunStepEntityExtended[]): void {
+    private appendNewLiveSteps(newSteps: MJAIAgentRunStepEntityExtended[]): void {
         if (!newSteps || newSteps.length === 0 || !this.viewInitialized || !this.executionNodesContainer) {
             return;
         }
@@ -1293,7 +1295,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Calculate step depth based on parent hierarchy
      */
-    private calculateStepDepth(step: AIAgentRunStepEntityExtended): number {
+    private calculateStepDepth(step: MJAIAgentRunStepEntityExtended): number {
         // For now, return 0 for top-level steps
         // In live mode, depth information should come from the streaming data
         return 0;
@@ -1302,7 +1304,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Build agent path for a step
      */
-    private buildAgentPath(step: AIAgentRunStepEntityExtended): string[] {
+    private buildAgentPath(step: MJAIAgentRunStepEntityExtended): string[] {
         // In live mode, agent path should come from streaming data
         // For now, return empty array
         return [];

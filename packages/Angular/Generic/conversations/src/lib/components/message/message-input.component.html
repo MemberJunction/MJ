@@ -1,9 +1,11 @@
 <div class="message-input-wrapper">
   <!-- Processing Indicator Overlay -->
-  <div class="processing-indicator" *ngIf="isProcessing">
-    <i class="fas fa-circle-notch fa-spin"></i>
-    <span>{{ processingMessage }}</span>
-  </div>
+  @if (isProcessing) {
+    <div class="processing-indicator">
+      <i class="fas fa-circle-notch fa-spin"></i>
+      <span>{{ processingMessage }}</span>
+    </div>
+  }
 
   <!-- Message Input Box -->
   <mj-message-input-box
@@ -12,9 +14,16 @@
     [disabled]="disabled || isProcessing"
     [showCharacterCount]="false"
     [enableMentions]="true"
+    [enableAttachments]="enableAttachments"
+    [maxAttachments]="maxAttachments"
+    [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+    [acceptedFileTypes]="acceptedFileTypes"
     [currentUser]="currentUser"
     [rows]="3"
     [(value)]="messageText"
-    (textSubmitted)="onTextSubmitted($event)">
+    (textSubmitted)="onTextSubmitted($event)"
+    (attachmentsChanged)="onAttachmentsChanged($event)"
+    (attachmentError)="onAttachmentError($event)"
+    (artifactPickerRequested)="onArtifactPickerRequested()">
   </mj-message-input-box>
 </div>

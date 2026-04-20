@@ -1,38 +1,44 @@
-<div class="dialog-overlay" *ngIf="visible" (click)="onDismiss()">
-  <div class="dialog-container" (click)="$event.stopPropagation()">
-    <!-- Icon -->
-    <div class="dialog-icon" [style.color]="iconColor">
-      <i class="fa-solid" [ngClass]="icon"></i>
-    </div>
-
-    <!-- Title -->
-    <h2 class="dialog-title">{{ title }}</h2>
-
-    <!-- Message -->
-    <p class="dialog-message">{{ message }}</p>
-
-    <!-- Help message -->
-    <p class="dialog-help" *ngIf="helpMessage">{{ helpMessage }}</p>
-
-    <!-- Actions -->
-    <div class="dialog-actions">
-      <button
-        *ngIf="showPrimaryAction"
-        class="dialog-btn primary"
-        [disabled]="isProcessing"
-        (click)="onPrimaryAction()">
-        <i class="fa-solid fa-spinner fa-spin" *ngIf="isProcessing"></i>
-        <span *ngIf="!isProcessing">{{ primaryActionText }}</span>
-        <span *ngIf="isProcessing">Processing...</span>
-      </button>
-
-      <button
-        class="dialog-btn"
-        [class.secondary]="showPrimaryAction"
-        [disabled]="isProcessing"
-        (click)="onDismiss()">
-        {{ dismissButtonText }}
-      </button>
+@if (visible) {
+  <div class="dialog-overlay" (click)="onDismiss()">
+    <div class="dialog-container" (click)="$event.stopPropagation()">
+      <!-- Icon -->
+      <div class="dialog-icon" [style.color]="iconColor">
+        <i class="fa-solid" [ngClass]="icon"></i>
+      </div>
+      <!-- Title -->
+      <h2 class="dialog-title">{{ title }}</h2>
+      <!-- Message -->
+      <p class="dialog-message">{{ message }}</p>
+      <!-- Help message -->
+      @if (helpMessage) {
+        <p class="dialog-help">{{ helpMessage }}</p>
+      }
+      <!-- Actions -->
+      <div class="dialog-actions">
+        @if (showPrimaryAction) {
+          <button
+            class="dialog-btn primary"
+            [disabled]="isProcessing"
+            (click)="onPrimaryAction()">
+            @if (isProcessing) {
+              <i class="fa-solid fa-spinner fa-spin"></i>
+            }
+            @if (!isProcessing) {
+              <span>{{ primaryActionText }}</span>
+            }
+            @if (isProcessing) {
+              <span>Processing...</span>
+            }
+          </button>
+        }
+        <button
+          class="dialog-btn"
+          [class.secondary]="showPrimaryAction"
+          [disabled]="isProcessing"
+          (click)="onDismiss()">
+          {{ dismissButtonText }}
+        </button>
+      </div>
     </div>
   </div>
-</div>
+}

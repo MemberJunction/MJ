@@ -407,10 +407,3 @@ export class LoopAction extends BaseAction {
         return param?.Value;
     }
 }
-
-/**
- * Loader function to ensure the LoopAction class is included in the bundle
- */
-export function LoadLoopAction() {
-    // Stub function to prevent tree shaking
-}

@@ -5,15 +5,17 @@
 
 import {
     BaseEngine,
+    BaseEntity,
     IMetadataProvider,
     UserInfo
 } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
-    TestTypeEntity,
-    TestEntity,
-    TestSuiteEntity,
-    TestRubricEntity,
-    TestSuiteTestEntity
+    MJTestTypeEntity,
+    MJTestEntity,
+    MJTestSuiteEntity,
+    MJTestRubricEntity,
+    MJTestSuiteTestEntity
 } from '@memberjunction/core-entities';
 
 /**
@@ -34,11 +36,12 @@ import {
  * ```
  */
 export class TestEngineBase extends BaseEngine<TestEngineBase> {
-    private _testTypes: TestTypeEntity[] = [];
-    private _tests: TestEntity[] = [];
-    private _testSuites: TestSuiteEntity[] = [];
-    private _testSuiteTests: TestSuiteTestEntity[] = [];
-    private _testRubrics: TestRubricEntity[] = [];
+    private _testTypes: MJTestTypeEntity[] = [];
+    private _tests: MJTestEntity[] = [];
+    private _testSuites: MJTestSuiteEntity[] = [];
+    private _testSuiteTests: MJTestSuiteTestEntity[] = [];
+    private _testRubrics: MJTestRubricEntity[] = [];
+    private _testOutputTypes: BaseEntity[] = [];
 
     /**
      * Singleton instance accessor
@@ -50,36 +53,43 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
     /**
      * All loaded test types
      */
-    public get TestTypes(): TestTypeEntity[] {
+    public get TestTypes(): MJTestTypeEntity[] {
         return this._testTypes;
     }
 
     /**
      * All loaded tests
      */
-    public get Tests(): TestEntity[] {
+    public get Tests(): MJTestEntity[] {
         return this._tests;
     }
 
     /**
      * All loaded test suites
      */
-    public get TestSuites(): TestSuiteEntity[] {
+    public get TestSuites(): MJTestSuiteEntity[] {
         return this._testSuites;
     }
 
     /**
      * All loaded test suite tests
      */
-    public get TestSuiteTests(): TestSuiteTestEntity[] {
+    public get TestSuiteTests(): MJTestSuiteTestEntity[] {
         return this._testSuiteTests;
     }
 
     /**
      * All loaded test rubrics
      */
-    public get TestRubrics(): TestRubricEntity[] {
+    public get TestRubrics(): MJTestRubricEntity[] {
         return this._testRubrics;
+    }
+
+    /**
+     * All loaded test run output types
+     */
+    public get TestOutputTypes(): BaseEntity[] {
+        return this._testOutputTypes;
     }
 
     /**
@@ -115,78 +125,83 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
                 PropertyName: '_testSuiteTests',
                 EntityName: 'MJ: Test Suite Tests',
                 CacheLocal: true
+            },
+            {
+                PropertyName: '_testOutputTypes',
+                EntityName: 'MJ: Test Run Output Types',
+                CacheLocal: true
             }
         ];
-        return await this.Load(params, provider, forceRefresh, contextUser);
+        return await this.Load(params, provider!, forceRefresh, contextUser);
     }
 
     /**
      * Get test type by ID
      */
-    public GetTestTypeByID(id: string): TestTypeEntity | undefined {
-        return this._testTypes.find(t => t.ID === id);
+    public GetTestTypeByID(id: string): MJTestTypeEntity | undefined {
+        return this._testTypes.find(t => UUIDsEqual(t.ID, id));
     }
 
     /**
      * Get test type by name
      */
-    public GetTestTypeByName(name: string): TestTypeEntity | undefined {
+    public GetTestTypeByName(name: string): MJTestTypeEntity | undefined {
         return this._testTypes.find(t => t.Name === name);
     }
 
     /**
      * Get test by ID
      */
-    public GetTestByID(id: string): TestEntity | undefined {
-        return this._tests.find(t => t.ID === id);
+    public GetTestByID(id: string): MJTestEntity | undefined {
+        return this._tests.find(t => UUIDsEqual(t.ID, id));
     }
 
     /**
      * Get test by name
      */
-    public GetTestByName(name: string): TestEntity | undefined {
+    public GetTestByName(name: string): MJTestEntity | undefined {
         return this._tests.find(t => t.Name === name);
     }
 
     /**
      * Get test suite by ID
      */
-    public GetTestSuiteByID(id: string): TestSuiteEntity | undefined {
-        return this._testSuites.find(s => s.ID === id);
+    public GetTestSuiteByID(id: string): MJTestSuiteEntity | undefined {
+        return this._testSuites.find(s => UUIDsEqual(s.ID, id));
     }
 
     /**
      * Get test suite by name
      */
-    public GetTestSuiteByName(name: string): TestSuiteEntity | undefined {
+    public GetTestSuiteByName(name: string): MJTestSuiteEntity | undefined {
         return this._testSuites.find(s => s.Name === name);
     }
 
     /**
      * Get test rubric by ID
      */
-    public GetTestRubricByID(id: string): TestRubricEntity | undefined {
-        return this._testRubrics.find(r => r.ID === id);
+    public GetTestRubricByID(id: string): MJTestRubricEntity | undefined {
+        return this._testRubrics.find(r => UUIDsEqual(r.ID, id));
     }
 
     /**
      * Get test rubric by name
      */
-    public GetTestRubricByName(name: string): TestRubricEntity | undefined {
+    public GetTestRubricByName(name: string): MJTestRubricEntity | undefined {
         return this._testRubrics.find(r => r.Name === name);
     }
 
     /**
      * Get tests by type
      */
-    public GetTestsByType(typeId: string): TestEntity[] {
-        return this._tests.filter(t => t.TypeID === typeId);
+    public GetTestsByType(typeId: string): MJTestEntity[] {
+        return this._tests.filter(t => UUIDsEqual(t.TypeID, typeId));
     }
 
     /**
      * Get tests by tag
      */
-    public GetTestsByTag(tag: string): TestEntity[] {
+    public GetTestsByTag(tag: string): MJTestEntity[] {
         return this._tests.filter(t => {
             if (!t.Tags) return false;
             try {
@@ -203,9 +218,9 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
      * @param suiteId 
      * @returns 
      */
-    public GetTestsForSuite(suiteId: string): TestEntity[] {
-        const suiteTests = this._testSuiteTests.filter(t => t.SuiteID === suiteId);
-        const tests: TestEntity[] = [];
+    public GetTestsForSuite(suiteId: string): MJTestEntity[] {
+        const suiteTests = this._testSuiteTests.filter(t => UUIDsEqual(t.SuiteID, suiteId));
+        const tests: MJTestEntity[] = [];
         for (const st of suiteTests) {
             const test = this.GetTestByID(st.TestID);
             if (test) {
@@ -213,8 +228,8 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
             }
         }
         return tests.sort((a, b) => {
-            const aSuiteTest = suiteTests.find(st => st.TestID === a.ID);
-            const bSuiteTest = suiteTests.find(st => st.TestID === b.ID);
+            const aSuiteTest = suiteTests.find(st => UUIDsEqual(st.TestID, a.ID));
+            const bSuiteTest = suiteTests.find(st => UUIDsEqual(st.TestID, b.ID));
             if (aSuiteTest && bSuiteTest) {
                 return aSuiteTest.Sequence - bSuiteTest.Sequence;
             }
@@ -225,14 +240,14 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
     /**
      * Get active tests (Status = 'Active')
      */
-    public GetActiveTests(): TestEntity[] {
+    public GetActiveTests(): MJTestEntity[] {
         return this._tests.filter(t => t.Status === 'Active');
     }
 
     /**
      * Get active test suites (Status = 'Active')
      */
-    public GetActiveTestSuites(): TestSuiteEntity[] {
+    public GetActiveTestSuites(): MJTestSuiteEntity[] {
         return this._testSuites.filter(s => s.Status === 'Active');
     }
 }

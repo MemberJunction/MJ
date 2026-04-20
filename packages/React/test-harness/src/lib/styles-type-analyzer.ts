@@ -6,8 +6,13 @@
 import * as ts from 'typescript';
 import * as path from 'path';
 import * as fs from 'fs';
+import { createRequire } from 'module';
 import { SetupStyles } from '@memberjunction/react-runtime';
-import { ComponentStyles } from '@memberjunction/interactive-component-types';
+import type { ComponentStyles } from '@memberjunction/interactive-component-types';
+
+// ESM compatibility: require.resolve is not available in ESM, use createRequire
+// See: https://nodejs.org/api/module.html#modulecreaterequirefilename
+const _require = createRequire(import.meta.url);
 
 /**
  * Analyzes the ComponentStyles interface from @memberjunction/interactive-component-types
@@ -34,7 +39,7 @@ export class StylesTypeAnalyzer {
   private analyzeComponentStylesInterface(): void {
     try {
       // Find the type definition file
-      const typePackagePath = require.resolve('@memberjunction/interactive-component-types');
+      const typePackagePath = _require.resolve('@memberjunction/interactive-component-types');
       const packageDir = path.dirname(typePackagePath);
       const typeFile = path.join(packageDir, 'src', 'runtime-types.ts');
       

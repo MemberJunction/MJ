@@ -9,7 +9,7 @@
     "description": "Receives filter options derived from Entities metadata",
     "entities": [
       {
-        "name": "Entities",
+        "name": "MJ: Entities",
         "description": "Source of schema and table filter options",
         "displayFields": ["SchemaName", "BaseTable"],
         "filterFields": [],

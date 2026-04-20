@@ -81,7 +81,7 @@
         }
       </div>
 
-      <!-- Entities Section -->
+      <!-- Entities Section (ng-tree) -->
       <div class="section entities-section">
         <div class="section-header" (click)="onSectionToggle('entities')">
           <i class="fa-solid fa-database section-icon"></i>
@@ -91,7 +91,7 @@
         </div>
 
         @if (entitiesSectionExpanded) {
-          <div class="section-content">
+          <div class="section-content entity-tree-container">
             <!-- Entity Search -->
             <div class="entity-search">
               <i class="fa-solid fa-search search-icon"></i>
@@ -100,36 +100,30 @@
                 class="search-input"
                 placeholder="Search entities..."
                 [(ngModel)]="entitySearchTerm"
+                (ngModelChange)="onEntitySearchChanged()"
               />
               @if (entitySearchTerm) {
-                <button class="clear-search" (click)="entitySearchTerm = ''">
+                <button class="clear-search" (click)="clearEntitySearch()">
                   <i class="fa-solid fa-times"></i>
                 </button>
               }
             </div>
 
-            <!-- Entity List (scrollable container) -->
-            <div class="entity-list">
-              <!-- Inner content that grows naturally -->
-              <div class="entity-list-inner">
-                @for (entity of filteredEntities; track entity.ID) {
-                  <div
-                    class="nav-item entity-item"
-                    [class.selected]="isEntitySelected(entity)"
-                    (click)="onEntityClick(entity)"
-                    [title]="entity.Description || entity.Name">
-                    <i [class]="getEntityIcon(entity)"></i>
-                    <span class="nav-item-label">{{ entity.Name }}</span>
-                  </div>
-                }
-
-                @if (filteredEntities.length === 0 && entitySearchTerm) {
-                  <div class="empty-section">
-                    <span>No entities match "{{ entitySearchTerm }}"</span>
-                  </div>
-                }
-              </div>
-            </div>
+            <!-- Entity Tree -->
+            <mj-tree
+              #entityTree
+              [BranchConfig]="treeBranchConfig"
+              [LeafConfig]="treeLeafConfig"
+              [SelectionMode]="'single'"
+              [SelectableTypes]="'leaf'"
+              [SelectedIDs]="selectedEntityIds"
+              [ShowIcons]="true"
+              [ShowExpandCollapseAll]="false"
+              [AnimateExpandCollapse]="true"
+              [EmptyMessage]="entitySearchTerm ? 'No matches for: ' + entitySearchTerm : 'No entities available'"
+              [EmptyIcon]="'fa-solid fa-database'"
+              (SelectionChange)="onTreeEntitySelected($event)">
+            </mj-tree>
           </div>
         }
       </div>

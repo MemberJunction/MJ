@@ -1,0 +1,265 @@
+<div class="action-test-harness">
+    <div class="harness-header">
+        <h3>
+            <i class="fa-solid fa-flask"></i>
+            Test Harness for {{ Action.Name }}
+        </h3>
+        <div class="header-actions">
+            <label class="toggle-label">
+                <input type="checkbox"
+                    [(ngModel)]="SkipActionLog"
+                    class="toggle-checkbox">
+                <span class="toggle-slider"></span>
+                Skip Action Log
+            </label>
+        </div>
+    </div>
+
+    <!-- Input Parameters Section -->
+    <div class="parameters-section" [class.collapsed]="InputsCollapsed">
+        <h4 class="section-header clickable" (click)="ToggleInputsCollapsed()">
+            <i class="fa-solid fa-sliders"></i>
+            Input Parameters
+            @if (ParamValues.length > 0) {
+                <span class="param-count">({{ ParamValues.length }})</span>
+            }
+            <i class="collapse-icon fa-solid" [class.fa-chevron-down]="InputsCollapsed" [class.fa-chevron-up]="!InputsCollapsed"></i>
+        </h4>
+
+        @if (!InputsCollapsed) {
+            @if (ParamValues.length === 0) {
+                <div class="no-params">
+                    <i class="fa-solid fa-inbox"></i>
+                    <p>This action has no input parameters</p>
+                </div>
+            } @else {
+                <div class="params-grid">
+                    @for (paramValue of ParamValues; track paramValue.Param.ID) {
+                        <div class="param-field" [class.required]="paramValue.Param.IsRequired" [class.error]="paramValue.Error">
+                            <label>
+                                {{ paramValue.Param.Name }}
+                                @if (paramValue.Param.IsRequired) {
+                                    <span class="required-indicator">*</span>
+                                }
+                                @if (paramValue.Param.IsArray) {
+                                    <span class="array-badge">Array</span>
+                                }
+                                <span class="value-type">{{ paramValue.Param.ValueType }}</span>
+                            </label>
+
+                            @if (paramValue.Param.Description) {
+                                <div class="param-description">{{ paramValue.Param.Description }}</div>
+                            }
+
+                            @switch (GetInputType(paramValue.Param)) {
+                                @case ('textarea') {
+                                    <textarea
+                                        [value]="GetParamDisplayValue(paramValue)"
+                                        (change)="OnParamValueChange(paramValue, $event)"
+                                        [placeholder]="paramValue.Param.IsArray ? 'Enter JSON array' : paramValue.Param.ValueType === 'Simple Object' ? 'Enter JSON object' : 'Enter value'"
+                                        rows="4"
+                                        class="param-input"></textarea>
+                                }
+                                @case ('checkbox') {
+                                    <div class="checkbox-wrapper">
+                                        <input
+                                            type="checkbox"
+                                            [checked]="paramValue.Value"
+                                            (change)="OnParamValueChange(paramValue, $event)"
+                                            class="param-checkbox">
+                                    </div>
+                                }
+                                @case ('number') {
+                                    <input
+                                        type="number"
+                                        [value]="paramValue.Value"
+                                        (change)="OnParamValueChange(paramValue, $event)"
+                                        placeholder="Enter number"
+                                        class="param-input">
+                                }
+                                @case ('datetime-local') {
+                                    <input
+                                        type="datetime-local"
+                                        [value]="paramValue.Value"
+                                        (change)="OnParamValueChange(paramValue, $event)"
+                                        class="param-input">
+                                }
+                                @default {
+                                    <input
+                                        type="text"
+                                        [value]="paramValue.Value || ''"
+                                        (change)="OnParamValueChange(paramValue, $event)"
+                                        placeholder="Enter value"
+                                        class="param-input">
+                                }
+                            }
+
+                            @if (paramValue.Error) {
+                                <div class="field-error">
+                                    <i class="fa-solid fa-exclamation-circle"></i>
+                                    {{ paramValue.Error }}
+                                </div>
+                            }
+
+                            @if (paramValue.Param.DefaultValue && !paramValue.Value) {
+                                <div class="default-hint">
+                                    Default: {{ paramValue.Param.DefaultValue }}
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+        <button
+            class="btn btn-primary btn-large"
+            (click)="ExecuteAction()"
+            [disabled]="IsExecuting || Action.Status !== 'Active'">
+            @if (IsExecuting) {
+                <i class="fa-solid fa-spinner fa-spin"></i> Executing...
+            } @else {
+                <i class="fa-solid fa-play"></i> Execute Action
+            }
+        </button>
+
+        <button
+            class="btn btn-outline"
+            (click)="ResetParams()">
+            <i class="fa-solid fa-undo"></i> Reset
+        </button>
+
+        @if (ExecutionResult || ExecutionError) {
+            <button
+                class="btn btn-outline"
+                (click)="ClearResults()">
+                <i class="fa-solid fa-trash"></i> Clear Results
+            </button>
+        }
+    </div>
+
+    <!-- Results Section -->
+    @if (ExecutionResult || ExecutionError) {
+        <div class="results-section" #resultsSection>
+            <div class="results-header">
+                <h4>
+                    <i class="fa-solid fa-poll"></i>
+                    Execution Results
+                </h4>
+                <div class="execution-meta">
+                    <span class="execution-time">
+                        <i class="fa-solid fa-clock"></i>
+                        {{ ExecutionTime }}ms
+                    </span>
+                    @if (ExecutionResult) {
+                        <button
+                            class="btn btn-flat btn-small"
+                            (click)="CopyResultToClipboard()">
+                            <i class="fa-solid fa-copy"></i> Copy
+                        </button>
+                        <button
+                            class="btn btn-flat btn-small"
+                            (click)="ShowRawResult = !ShowRawResult">
+                            <i class="fa-solid fa-code"></i>
+                            {{ ShowRawResult ? 'Hide' : 'Show' }} Raw
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (ExecutionError) {
+                <div class="error-result">
+                    <i class="fa-solid fa-exclamation-triangle"></i>
+                    <div class="error-content">
+                        <h5>Execution Error</h5>
+                        <p>{{ ExecutionError }}</p>
+                    </div>
+                </div>
+            }
+
+            @if (ExecutionResult) {
+                <div class="success-result" [class.failure]="!ExecutionResult.Success">
+                    <!-- Status Banner -->
+                    <div class="status-banner" [style.background-color]="GetResultColor()">
+                        <i [class]="'fa-solid ' + GetResultIcon()"></i>
+                        <span>{{ ExecutionResult.Success ? 'Success' : 'Failed' }}</span>
+                        @if (ExecutionResult.ResultCode) {
+                            <span class="result-code">{{ ExecutionResult.ResultCode }}</span>
+                        }
+                    </div>
+
+                    <!-- Message -->
+                    @if (ExecutionResult.Message) {
+                        <div class="result-message">
+                            <h5>
+                                <i class="fa-solid fa-message"></i> Message
+                            </h5>
+                            <div class="code-editor-container">
+                                <pre class="code-editor">{{ ExecutionResult.Message }}</pre>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Result Data -->
+                    @if (ExecutionResult.ResultData !== null && ExecutionResult.ResultData !== undefined) {
+                        <div class="result-data">
+                            <h5>
+                                <i class="fa-solid fa-database"></i> Result Data
+                                <button
+                                    class="btn btn-flat btn-small toggle-view-btn"
+                                    (click)="ShowRawResult = !ShowRawResult">
+                                    <i class="fa-solid" [class.fa-code]="!ShowRawResult" [class.fa-list]="ShowRawResult"></i>
+                                    {{ ShowRawResult ? 'Formatted View' : 'Raw JSON' }}
+                                </button>
+                            </h5>
+                            @if (ShowRawResult) {
+                                <div class="code-editor-container">
+                                    <div class="code-editor-header">
+                                        <span class="language-badge">JSON</span>
+                                        <button
+                                            class="btn btn-flat btn-small copy-btn"
+                                            (click)="CopyResultDataToClipboard()">
+                                            <i class="fa-solid fa-copy"></i>
+                                        </button>
+                                    </div>
+                                    <pre class="code-editor json">{{ FormatResultData(ExecutionResult.ResultData) }}</pre>
+                                </div>
+                            } @else {
+                                <!-- Output Parameters Mapping -->
+                                @if (GetOutputParams().length > 0) {
+                                    <div class="output-params">
+                                        @for (outputParam of GetOutputParams(); track outputParam.ID) {
+                                            <div class="output-param">
+                                                <label>
+                                                    <i class="fa-solid fa-tag"></i> {{ outputParam.Name }}
+                                                </label>
+                                                <div class="code-editor-container compact">
+                                                    <pre class="code-editor">{{ GetOutputParamValue(outputParam.Name) }}</pre>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                } @else {
+                                    <div class="code-editor-container">
+                                        <div class="code-editor-header">
+                                            <span class="language-badge">JSON</span>
+                                            <button
+                                                class="btn btn-flat btn-small copy-btn"
+                                                (click)="CopyResultDataToClipboard()">
+                                                <i class="fa-solid fa-copy"></i>
+                                            </button>
+                                        </div>
+                                        <pre class="code-editor json">{{ FormatResultData(ExecutionResult.ResultData) }}</pre>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>

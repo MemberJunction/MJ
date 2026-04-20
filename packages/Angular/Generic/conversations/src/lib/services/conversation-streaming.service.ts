@@ -1,10 +1,23 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { BehaviorSubject, Subscription, firstValueFrom } from 'rxjs';
+import { BehaviorSubject, Subject, Subscription, firstValueFrom } from 'rxjs';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { ActiveTasksService } from './active-tasks.service';
 import { DataCacheService } from './data-cache.service';
-import { ConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
+
+/**
+ * Completion event structure broadcast when an agent finishes.
+ * Includes enriched result data from the server's fire-and-forget completion event.
+ */
+export interface CompletionEvent {
+  conversationDetailId: string;
+  agentRunId: string;
+  /** Whether the agent execution succeeded */
+  success?: boolean;
+  /** Error message if the agent execution failed */
+  errorMessage?: string;
+}
 
 /**
  * Metadata structure for message progress updates
@@ -70,6 +83,17 @@ export class ConversationStreamingService implements OnDestroy {
   // Registry of callbacks per conversation detail ID
   // Multiple callbacks can be registered for the same message (e.g., different components)
   private callbackRegistry = new Map<string, MessageProgressCallback[]>();
+
+  // Track recent completions for late-arriving components (e.g., after navigation)
+  // Key: conversationDetailId, Value: completion info with timestamp
+  private recentCompletions = new Map<string, {
+    conversationDetailId: string;
+    agentRunId: string;
+    timestamp: Date;
+  }>();
+
+  // Observable for components to subscribe to completion events in real-time
+  public completionEvents$ = new Subject<CompletionEvent>();
 
   // Subject to emit connection status changes
   private connectionStatus$ = new BehaviorSubject<StreamingConnectionStatus>('disconnected');
@@ -264,9 +288,8 @@ export class ConversationStreamingService implements OnDestroy {
       const callbacks = this.callbackRegistry.get(conversationDetailId) || [];
 
       if (callbacks.length === 0) {
-        // No callbacks registered - message might be in a hidden conversation
-        // This is fine, callbacks will be registered when conversation becomes visible
-        console.warn(`[ConversationStreamingService] ⚠️  No callbacks registered for message ${conversationDetailId}. Registered: [${Array.from(this.callbackRegistry.keys()).join(', ')}]`);
+        // No callbacks registered - expected when progress is handled directly by graphQLAIClient's
+        // fire-and-forget subscription, or when the message is in a hidden conversation.
         return;
       }
 
@@ -307,16 +330,48 @@ export class ConversationStreamingService implements OnDestroy {
       // Extract progress information from RunAIAgentResolver message
       const { agentRun, progress, type } = statusObj.data || {};
 
-      // Handle completion messages - these don't have progress.message
-      // Backend sends type: 'complete' when agent finishes
+      // Handle completion messages - backend sends type: 'complete' when agent finishes.
+      // Now includes conversationDetailId and enriched result data (success, errorMessage, result)
+      // from the server's fire-and-forget execution.
       if (type === 'complete') {
         const agentRunId = statusObj.data?.agentRunId;
+        const conversationDetailId = statusObj.data?.conversationDetailId;
+        const success = statusObj.data?.success;
+        const errorMessage = statusObj.data?.errorMessage;
+
+        // Remove from active tasks (clears spinner in conversation list)
         if (agentRunId) {
           const removed = this.activeTasks.removeByAgentRunId(agentRunId);
           if (removed) {
             console.log(`[ConversationStreamingService] ✅ Agent run ${agentRunId} completed, removed from active tasks`);
           }
         }
+
+        // Broadcast completion event if we have the conversationDetailId
+        if (conversationDetailId) {
+          // Store for late-arriving components (navigation scenario)
+          this.recentCompletions.set(conversationDetailId, {
+            conversationDetailId,
+            agentRunId: agentRunId || '',
+            timestamp: new Date()
+          });
+
+          // Broadcast enriched completion to all subscribers
+          this.completionEvents$.next({
+            conversationDetailId,
+            agentRunId: agentRunId || '',
+            success,
+            errorMessage
+          });
+
+          // Cleanup old completions to prevent memory leak
+          this.cleanupOldCompletions();
+
+          console.log(`[ConversationStreamingService] 📢 Completion broadcast for message ${conversationDetailId} (success: ${success})`);
+        } else {
+          console.warn(`[ConversationStreamingService] ⚠️ Completion received without conversationDetailId for agentRunId: ${agentRunId}`);
+        }
+
         return;
       }
 
@@ -339,7 +394,8 @@ export class ConversationStreamingService implements OnDestroy {
       const callbacks = this.callbackRegistry.get(conversationDetailId) || [];
 
       if (callbacks.length === 0) {
-        console.warn(`[ConversationStreamingService] ⚠️  No callbacks registered for message ${conversationDetailId}. Registered: [${Array.from(this.callbackRegistry.keys()).join(', ')}]`);
+        // No callbacks registered - expected when progress is handled directly by graphQLAIClient's
+        // fire-and-forget subscription, or when the message is in a hidden conversation.
         return;
       }
 
@@ -387,6 +443,57 @@ export class ConversationStreamingService implements OnDestroy {
   }
 
   /**
+   * Get a recent completion event for a message (used when component initializes after completion)
+   * This handles the navigation scenario: user navigates away, agent completes, user returns.
+   * @param conversationDetailId - The message ID to check
+   * @returns Completion info if found within the last 5 minutes, undefined otherwise
+   */
+  public getRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
+    const completion = this.recentCompletions.get(conversationDetailId);
+    return completion ? { agentRunId: completion.agentRunId } : undefined;
+  }
+
+  /**
+   * Clear a recent completion after it has been handled
+   * @param conversationDetailId - The message ID to clear
+   */
+  public clearRecentCompletion(conversationDetailId: string): void {
+    this.recentCompletions.delete(conversationDetailId);
+  }
+
+  /**
+   * Get a diagnostic snapshot of streaming state for a specific message.
+   * Used by the Shift+Click debug tool to dump live in-memory state to the console.
+   * @param messageId - The ConversationDetailID to inspect
+   */
+  public getDiagnosticSnapshot(messageId: string): {
+    hasCallbacks: boolean;
+    callbackCount: number;
+    recentCompletion: { conversationDetailId: string; agentRunId: string; timestamp: Date } | undefined;
+    connectionStatus: StreamingConnectionStatus;
+  } {
+    const callbacks = this.callbackRegistry.get(messageId);
+    return {
+      hasCallbacks: !!callbacks && callbacks.length > 0,
+      callbackCount: callbacks?.length ?? 0,
+      recentCompletion: this.recentCompletions.get(messageId),
+      connectionStatus: this.connectionStatus$.getValue(),
+    };
+  }
+
+  /**
+   * Cleanup completions older than 5 minutes to prevent memory leak
+   */
+  private cleanupOldCompletions(): void {
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    for (const [id, data] of this.recentCompletions) {
+      if (data.timestamp.getTime() < fiveMinutesAgo) {
+        this.recentCompletions.delete(id);
+      }
+    }
+  }
+
+  /**
    * Cleanup when service is destroyed
    */
   ngOnDestroy(): void {
@@ -400,6 +507,8 @@ export class ConversationStreamingService implements OnDestroy {
     }
 
     this.callbackRegistry.clear();
+    this.recentCompletions.clear();
+    this.completionEvents$.complete();
     this.connectionStatus$.complete();
     this.initialized = false;
   }

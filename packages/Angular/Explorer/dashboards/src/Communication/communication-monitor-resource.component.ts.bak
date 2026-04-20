@@ -1,0 +1,744 @@
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { ResourceData, CommunicationLogEntity, CommunicationProviderEntity } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { RunView } from '@memberjunction/core';
+
+interface ProviderHealth {
+    Name: string;
+    Sent: number;
+    Failed: number;
+    Rate: number;
+    IconClass: string;
+    LogoClass: string;
+}
+
+interface ChannelBreakdown {
+    Channel: string;
+    Count: number;
+    Percentage: number;
+    IconClass: string;
+}
+
+/**
+ * Tree-shaking prevention function
+ */
+export function LoadCommunicationMonitorResource() {
+    // Force inclusion in production builds
+}
+
+@RegisterClass(BaseResourceComponent, 'CommunicationMonitorResource')
+@Component({
+    selector: 'mj-communication-monitor-resource',
+    template: `
+    <div class="monitor-wrapper">
+        <div class="monitor-container">
+            <!-- HEADER -->
+            <header class="monitor-header">
+                <div class="title-area">
+                    <h1>Communication Command Center</h1>
+                    <p>Real-time monitoring and delivery analytics</p>
+                </div>
+                <div class="header-actions">
+                    <button class="refresh-btn" (click)="loadData()" [class.loading]="isLoading">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- KPI STRIP -->
+            <div class="stats-grid">
+                <div class="stat-card primary">
+                    <div class="stat-accent"></div>
+                    <div class="stat-icon"><i class="fa-solid fa-paper-plane"></i></div>
+                    <div class="stat-content">
+                        <span class="label">Total Sent (24h)</span>
+                        <span class="value">{{stats.totalSent | number}}</span>
+                    </div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-accent"></div>
+                    <div class="stat-icon"><i class="fa-solid fa-check-double"></i></div>
+                    <div class="stat-content">
+                        <span class="label">Delivery Rate</span>
+                        <span class="value">{{stats.deliveryRate}}%</span>
+                        <div class="progress-bar"><div class="progress" [style.width.%]="stats.deliveryRate"></div></div>
+                    </div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-accent"></div>
+                    <div class="stat-icon"><i class="fa-solid fa-clock"></i></div>
+                    <div class="stat-content">
+                        <span class="label">Pending</span>
+                        <span class="value">{{stats.pending | number}}</span>
+                        <span class="sub-label">Awaiting provider</span>
+                    </div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-accent"></div>
+                    <div class="stat-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+                    <div class="stat-content">
+                        <span class="label">Failed</span>
+                        <span class="value">{{stats.failed | number}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TWO COLUMN GRID -->
+            <div class="dashboard-grid">
+                <!-- PROVIDER HEALTH -->
+                <div class="section-card">
+                    <div class="section-header">
+                        <h3><i class="fa-solid fa-heart-pulse"></i> Provider Health</h3>
+                    </div>
+                    <div class="provider-health-list">
+                        <div *ngFor="let p of providerHealth" class="provider-health-row">
+                            <div class="provider-health-logo" [ngClass]="p.LogoClass">
+                                <i [class]="p.IconClass"></i>
+                            </div>
+                            <div class="provider-health-info">
+                                <div class="provider-health-name">{{p.Name}}</div>
+                                <div class="provider-health-bar-wrapper">
+                                    <div class="provider-health-bar">
+                                        <div class="provider-health-fill" [style.width.%]="p.Rate"
+                                            [class.good]="p.Rate >= 95"
+                                            [class.warn]="p.Rate >= 80 && p.Rate < 95"
+                                            [class.bad]="p.Rate < 80"></div>
+                                    </div>
+                                    <span class="provider-health-rate">{{p.Rate}}%</span>
+                                </div>
+                            </div>
+                            <div class="provider-health-stats">
+                                <span class="sent">{{p.Sent}} sent</span>
+                                <span *ngIf="p.Failed > 0" class="failed">{{p.Failed}} failed</span>
+                            </div>
+                        </div>
+                        <div *ngIf="providerHealth.length === 0 && !isLoading" class="empty-state">
+                            <i class="fa-solid fa-server"></i>
+                            <p>No provider activity in the last 24 hours</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CHANNEL BREAKDOWN -->
+                <div class="section-card">
+                    <div class="section-header">
+                        <h3><i class="fa-solid fa-chart-pie"></i> Channel Breakdown</h3>
+                    </div>
+                    <div class="channel-breakdown-list">
+                        <div *ngFor="let ch of channelBreakdown" class="channel-row">
+                            <div class="channel-icon">
+                                <i [class]="ch.IconClass"></i>
+                            </div>
+                            <div class="channel-info">
+                                <div class="channel-name">{{ch.Channel}}</div>
+                                <div class="channel-bar-wrapper">
+                                    <div class="channel-bar">
+                                        <div class="channel-fill" [style.width.%]="ch.Percentage"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="channel-stats">
+                                <span class="channel-count">{{ch.Count | number}}</span>
+                                <span class="channel-pct">{{ch.Percentage}}%</span>
+                            </div>
+                        </div>
+                        <div *ngIf="channelBreakdown.length === 0 && !isLoading" class="empty-state">
+                            <i class="fa-solid fa-chart-pie"></i>
+                            <p>No channel data available</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RECENT ACTIVITY -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h3><i class="fa-solid fa-clock-rotate-left"></i> Recent Activity</h3>
+                </div>
+                <div class="activity-list">
+                    <div *ngFor="let log of recentLogs" class="activity-item">
+                        <div class="activity-icon" [ngClass]="getStatusClass(log.Status)">
+                            <i [class]="log.Direction === 'Sending' ? 'fa-solid fa-arrow-up' : 'fa-solid fa-arrow-down'"></i>
+                        </div>
+                        <div class="activity-info">
+                            <span class="activity-title">{{log.CommunicationProviderMessageType || 'Message'}}</span>
+                            <span class="activity-meta">{{log.CommunicationProvider}} &middot; {{log.MessageDate | date:'shortTime'}}</span>
+                        </div>
+                        <div class="activity-status" [ngClass]="getStatusClass(log.Status)">
+                            {{log.Status}}
+                        </div>
+                    </div>
+                    <div *ngIf="recentLogs.length === 0 && !isLoading" class="empty-state">
+                        <i class="fa-solid fa-inbox"></i>
+                        <p>No recent activity found</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+  `,
+    styles: [`
+    .monitor-wrapper {
+        height: 100%;
+        overflow-y: auto;
+        background: var(--mat-sys-surface-container);
+    }
+    .monitor-container {
+        padding: 24px;
+        min-height: 100%;
+        max-width: 1600px;
+        margin: 0 auto;
+    }
+
+    /* HEADER */
+    .monitor-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 24px;
+    }
+    .title-area h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--mat-sys-on-surface);
+        letter-spacing: -0.01em;
+    }
+    .title-area p {
+        margin: 4px 0 0;
+        color: var(--mat-sys-on-surface-variant);
+        font-size: 13px;
+    }
+    .refresh-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        background: var(--mat-sys-surface-container-lowest);
+        border: 1px solid var(--mat-sys-outline-variant);
+        border-radius: var(--mat-sys-corner-extra-small, 4px);
+        color: var(--mat-sys-on-surface-variant);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+        font-family: inherit;
+    }
+    .refresh-btn:hover {
+        background: var(--mat-sys-surface-container-high);
+        border-color: var(--mat-sys-outline);
+        color: var(--mat-sys-on-surface);
+    }
+    .refresh-btn.loading i {
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    /* KPI STRIP */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .stat-card {
+        background: var(--mat-sys-surface-container-lowest);
+        border: 1px solid var(--mat-sys-outline-variant);
+        border-radius: var(--mat-sys-corner-medium, 12px);
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        padding: 20px;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.15s;
+    }
+    .stat-card:hover {
+        box-shadow: 0 2px 6px 2px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.03);
+        border-color: var(--mat-sys-outline);
+    }
+    .stat-accent {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+    }
+    .stat-card.primary .stat-accent { background: #0969da; }
+    .stat-card.success .stat-accent { background: #1b873f; }
+    .stat-card.warning .stat-accent { background: #9a6700; }
+    .stat-card.danger .stat-accent { background: #cf222e; }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--mat-sys-corner-medium, 12px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        flex-shrink: 0;
+    }
+    .stat-card.primary .stat-icon { background: #ddf4ff; color: #0969da; }
+    .stat-card.success .stat-icon { background: #d4f8e0; color: #1b873f; }
+    .stat-card.warning .stat-icon { background: #fff0c7; color: #9a6700; }
+    .stat-card.danger .stat-icon { background: #ffdce0; color: #cf222e; }
+
+    .stat-content {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+    }
+    .stat-content .label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--mat-sys-on-surface-variant);
+        margin-bottom: 2px;
+    }
+    .stat-content .value {
+        font-size: 24px;
+        font-weight: 800;
+        color: var(--mat-sys-on-surface);
+    }
+    .stat-content .sub-label {
+        font-size: 11px;
+        color: var(--mat-sys-on-surface-variant);
+        margin-top: 2px;
+    }
+
+    .progress-bar {
+        height: 4px;
+        background: var(--mat-sys-surface-container);
+        border-radius: 2px;
+        margin-top: 8px;
+        overflow: hidden;
+    }
+    .progress {
+        height: 100%;
+        background: #1b873f;
+        border-radius: 2px;
+        transition: width 0.3s ease;
+    }
+
+    /* DASHBOARD GRID */
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    /* SECTION CARDS */
+    .section-card {
+        background: var(--mat-sys-surface-container-lowest);
+        border: 1px solid var(--mat-sys-outline-variant);
+        border-radius: var(--mat-sys-corner-medium, 12px);
+        overflow: hidden;
+    }
+    .section-header {
+        padding: 16px 20px 12px;
+        border-bottom: 1px solid var(--mat-sys-outline-variant);
+    }
+    .section-header h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--mat-sys-on-surface);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .section-header h3 i {
+        color: var(--mat-sys-on-surface-variant);
+        font-size: 12px;
+    }
+
+    /* PROVIDER HEALTH */
+    .provider-health-list { padding: 12px 20px; }
+    .provider-health-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--mat-sys-surface-container);
+    }
+    .provider-health-row:last-child { border-bottom: none; }
+
+    .provider-health-logo {
+        width: 36px; height: 36px;
+        border-radius: var(--mat-sys-corner-small, 8px);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 16px; flex-shrink: 0;
+        background: var(--mat-sys-surface-container);
+        color: var(--mat-sys-on-surface-variant);
+    }
+    .provider-health-logo.sendgrid { background: #E8F4FD; color: #1A82E2; }
+    .provider-health-logo.twilio { background: #FEECEE; color: #F22F46; }
+    .provider-health-logo.gmail { background: #FEECED; color: #EA4335; }
+    .provider-health-logo.msgraph { background: #E6F0FA; color: #0078D4; }
+
+    .provider-health-info { flex: 1; }
+    .provider-health-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--mat-sys-on-surface);
+        margin-bottom: 6px;
+    }
+    .provider-health-bar-wrapper {
+        display: flex; align-items: center; gap: 8px;
+    }
+    .provider-health-bar {
+        flex: 1;
+        height: 6px;
+        background: var(--mat-sys-surface-container);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .provider-health-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.3s ease;
+    }
+    .provider-health-fill.good { background: #1b873f; }
+    .provider-health-fill.warn { background: #9a6700; }
+    .provider-health-fill.bad { background: #cf222e; }
+
+    .provider-health-rate {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--mat-sys-on-surface);
+        min-width: 36px;
+        text-align: right;
+    }
+    .provider-health-stats {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        font-size: 11px;
+    }
+    .provider-health-stats .sent { color: var(--mat-sys-on-surface-variant); }
+    .provider-health-stats .failed { color: #cf222e; font-weight: 600; }
+
+    /* CHANNEL BREAKDOWN */
+    .channel-breakdown-list { padding: 12px 20px; }
+    .channel-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--mat-sys-surface-container);
+    }
+    .channel-row:last-child { border-bottom: none; }
+
+    .channel-icon {
+        width: 36px; height: 36px;
+        border-radius: var(--mat-sys-corner-small, 8px);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 16px; flex-shrink: 0;
+        background: var(--mat-sys-surface-container);
+        color: var(--mat-sys-on-surface-variant);
+    }
+    .channel-info { flex: 1; }
+    .channel-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--mat-sys-on-surface);
+        margin-bottom: 6px;
+    }
+    .channel-bar-wrapper { }
+    .channel-bar {
+        height: 6px;
+        background: var(--mat-sys-surface-container);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .channel-fill {
+        height: 100%;
+        background: var(--mat-sys-primary);
+        border-radius: 3px;
+        transition: width 0.3s ease;
+    }
+    .channel-stats {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        font-size: 11px;
+    }
+    .channel-count {
+        font-weight: 700;
+        color: var(--mat-sys-on-surface);
+    }
+    .channel-pct {
+        color: var(--mat-sys-on-surface-variant);
+    }
+
+    /* RECENT ACTIVITY */
+    .activity-list { padding: 8px 20px 16px; }
+    .activity-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--mat-sys-surface-container);
+    }
+    .activity-item:last-child { border-bottom: none; }
+
+    .activity-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--mat-sys-corner-small, 8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+    }
+    .activity-icon.complete { background: #d4f8e0; color: #1b873f; }
+    .activity-icon.failed { background: #ffdce0; color: #cf222e; }
+    .activity-icon.pending { background: #fff0c7; color: #9a6700; }
+    .activity-icon.in-progress { background: #ddf4ff; color: #0969da; }
+
+    .activity-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    .activity-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--mat-sys-on-surface);
+    }
+    .activity-meta {
+        font-size: 11px;
+        color: var(--mat-sys-on-surface-variant);
+        margin-top: 2px;
+    }
+    .activity-status {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        padding: 3px 10px;
+        border-radius: var(--mat-sys-corner-extra-small, 4px);
+    }
+    .activity-status.complete { background: #d4f8e0; color: #1b873f; }
+    .activity-status.failed { background: #ffdce0; color: #cf222e; }
+    .activity-status.pending { background: #fff0c7; color: #9a6700; }
+    .activity-status.in-progress { background: #ddf4ff; color: #0969da; }
+
+    /* EMPTY STATE */
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 0;
+        color: var(--mat-sys-on-surface-variant);
+    }
+    .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
+    .empty-state p { margin: 0; font-size: 13px; }
+
+    @media (max-width: 1024px) {
+        .dashboard-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+  `]
+})
+export class CommunicationMonitorResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+    public isLoading = false;
+    public stats = {
+        totalSent: 0,
+        deliveryRate: 0,
+        pending: 0,
+        failed: 0
+    };
+    public recentLogs: CommunicationLogEntity[] = [];
+    public providerHealth: ProviderHealth[] = [];
+    public channelBreakdown: ChannelBreakdown[] = [];
+
+    constructor(private cdr: ChangeDetectorRef) {
+        super();
+    }
+
+    async ngOnInit(): Promise<void> {
+        await this.loadData();
+        this.NotifyLoadComplete();
+    }
+
+    ngOnDestroy(): void { }
+
+    public async loadData(): Promise<void> {
+        try {
+            this.isLoading = true;
+            this.cdr.detectChanges();
+
+            const rv = new RunView();
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayIso = yesterday.toISOString();
+
+            const [totalResult, failedResult, pendingResult, recentResult, logsResult, providersResult] = await Promise.all([
+                rv.RunView({
+                    EntityName: 'Communication Logs',
+                    ExtraFilter: `MessageDate >= '${yesterdayIso}'`,
+                    ResultType: 'count_only'
+                }),
+                rv.RunView({
+                    EntityName: 'Communication Logs',
+                    ExtraFilter: `MessageDate >= '${yesterdayIso}' AND Status = 'Failed'`,
+                    ResultType: 'count_only'
+                }),
+                rv.RunView({
+                    EntityName: 'Communication Logs',
+                    ExtraFilter: `Status = 'Pending'`,
+                    ResultType: 'count_only'
+                }),
+                rv.RunView<CommunicationLogEntity>({
+                    EntityName: 'Communication Logs',
+                    OrderBy: 'MessageDate DESC',
+                    MaxRows: 8,
+                    ResultType: 'entity_object'
+                }),
+                rv.RunView<CommunicationLogEntity>({
+                    EntityName: 'Communication Logs',
+                    ExtraFilter: `MessageDate >= '${yesterdayIso}'`,
+                    ResultType: 'entity_object'
+                }),
+                rv.RunView<CommunicationProviderEntity>({
+                    EntityName: 'Communication Providers',
+                    ResultType: 'entity_object'
+                })
+            ]);
+
+            this.computeStats(totalResult, failedResult, pendingResult);
+
+            if (recentResult.Success) {
+                this.recentLogs = recentResult.Results;
+            }
+
+            const logs = logsResult.Success ? logsResult.Results : [];
+            const providers = providersResult.Success ? providersResult.Results : [];
+            this.computeProviderHealth(providers, logs);
+            this.computeChannelBreakdown(logs);
+
+        } catch (error) {
+            console.error('Error loading monitor data:', error);
+        } finally {
+            this.isLoading = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    private computeStats(
+        totalResult: { Success: boolean; TotalRowCount: number },
+        failedResult: { Success: boolean; TotalRowCount: number },
+        pendingResult: { Success: boolean; TotalRowCount: number }
+    ): void {
+        if (totalResult.Success) this.stats.totalSent = totalResult.TotalRowCount;
+        if (failedResult.Success) this.stats.failed = failedResult.TotalRowCount;
+        if (pendingResult.Success) this.stats.pending = pendingResult.TotalRowCount;
+
+        this.stats.deliveryRate = this.stats.totalSent > 0
+            ? parseFloat(((this.stats.totalSent - this.stats.failed) / this.stats.totalSent * 100).toFixed(1))
+            : 100;
+    }
+
+    private computeProviderHealth(providers: CommunicationProviderEntity[], logs: CommunicationLogEntity[]): void {
+        this.providerHealth = providers
+            .map(p => {
+                const providerLogs = logs.filter(l => l.CommunicationProvider === p.Name);
+                const sent = providerLogs.length;
+                const failed = providerLogs.filter(l => l.Status === 'Failed').length;
+                const rate = sent > 0 ? parseFloat(((sent - failed) / sent * 100).toFixed(1)) : 100;
+                return {
+                    Name: p.Name,
+                    Sent: sent,
+                    Failed: failed,
+                    Rate: rate,
+                    IconClass: this.getProviderIcon(p.Name),
+                    LogoClass: this.getProviderLogoClass(p.Name)
+                };
+            })
+            .filter(p => p.Sent > 0)
+            .sort((a, b) => b.Sent - a.Sent);
+    }
+
+    private computeChannelBreakdown(logs: CommunicationLogEntity[]): void {
+        const channelMap = new Map<string, number>();
+        for (const log of logs) {
+            const type = log.CommunicationProviderMessageType || 'Other';
+            const channel = this.normalizeChannel(type);
+            channelMap.set(channel, (channelMap.get(channel) || 0) + 1);
+        }
+
+        const total = logs.length;
+        this.channelBreakdown = Array.from(channelMap.entries())
+            .map(([channel, count]) => ({
+                Channel: channel,
+                Count: count,
+                Percentage: total > 0 ? parseFloat((count / total * 100).toFixed(1)) : 0,
+                IconClass: this.getChannelIcon(channel)
+            }))
+            .sort((a, b) => b.Count - a.Count);
+    }
+
+    private normalizeChannel(messageType: string): string {
+        const t = messageType.toLowerCase();
+        if (t.includes('email') || t.includes('mail')) return 'Email';
+        if (t.includes('sms') || t.includes('text')) return 'SMS';
+        if (t.includes('push')) return 'Push';
+        if (t.includes('slack') || t.includes('teams')) return 'Chat';
+        return messageType;
+    }
+
+    private getChannelIcon(channel: string): string {
+        switch (channel.toLowerCase()) {
+            case 'email': return 'fa-solid fa-envelope';
+            case 'sms': return 'fa-solid fa-comment-sms';
+            case 'push': return 'fa-solid fa-bell';
+            case 'chat': return 'fa-solid fa-comments';
+            default: return 'fa-solid fa-message';
+        }
+    }
+
+    private getProviderIcon(name: string): string {
+        const n = name.toLowerCase();
+        if (n.includes('sendgrid')) return 'fa-solid fa-envelope';
+        if (n.includes('twilio')) return 'fa-solid fa-comment-sms';
+        if (n.includes('gmail') || n.includes('google')) return 'fa-brands fa-google';
+        if (n.includes('microsoft') || n.includes('graph') || n.includes('outlook')) return 'fa-brands fa-microsoft';
+        if (n.includes('aws') || n.includes('ses')) return 'fa-brands fa-aws';
+        if (n.includes('slack')) return 'fa-brands fa-slack';
+        return 'fa-solid fa-server';
+    }
+
+    private getProviderLogoClass(name: string): string {
+        const n = name.toLowerCase();
+        if (n.includes('sendgrid')) return 'sendgrid';
+        if (n.includes('twilio')) return 'twilio';
+        if (n.includes('gmail') || n.includes('google')) return 'gmail';
+        if (n.includes('microsoft') || n.includes('graph') || n.includes('outlook')) return 'msgraph';
+        return '';
+    }
+
+    public getStatusClass(status: string): string {
+        const s = (status || '').toLowerCase();
+        if (s === 'complete') return 'complete';
+        if (s === 'failed') return 'failed';
+        if (s === 'in-progress') return 'in-progress';
+        return 'pending';
+    }
+
+    async GetResourceDisplayName(data: ResourceData): Promise<string> {
+        return 'Monitor';
+    }
+
+    async GetResourceIconClass(data: ResourceData): Promise<string> {
+        return 'fa-solid fa-chart-line';
+    }
+}

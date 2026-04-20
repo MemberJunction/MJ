@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Akele Guzai [Akalä Guzay]",
+      "Code": "AG",
+      "ISO3166_2": "ER-AG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Akele Guzai [Akalä Guzay]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ER"
+    },
+    "primaryKey": {
+      "ID": "B89F82E8-0297-46D9-8FC0-BC30AEAEDAAF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.123Z",
+      "checksum": "66eeaf727f1be4c2bf2926b8ec2d06e023e15e5201ddf05beda73cab7e0b215b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Asmara [Asmära]",
+      "Code": "AS",
+      "ISO3166_2": "ER-AS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Asmara [Asmära]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ER"
+    },
+    "primaryKey": {
+      "ID": "E2AC9A3A-72B4-458E-9161-FED80B4A60CD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.143Z",
+      "checksum": "b0d5bbc3e87e5194ab5aacbb8f7f100cdb05716524594e505b4783e9e8ace822"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Barka",
+      "Code": "BA",
+      "ISO3166_2": "ER-BA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Barka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ER"
+    },
+    "primaryKey": {
+      "ID": "D33EC412-C85D-41FA-900A-0644DA49D3DF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.161Z",
+      "checksum": "2dcdfbdbfb07baf4a569b19d0d5ee1fb676c3921b4b33758003765aedbaad81d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Denkalia [Dänkali]",
+      "Code": "DE",
+      "ISO3166_2": "ER-DE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Denkalia [Dänkali]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ER"
+    },
+    "primaryKey": {
+      "ID": "3B694763-41BA-41A8-99AD-2FFC7491C8EF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.182Z",
+      "checksum": "b44bb57fbaaf37857a1f15aff8c55b7116a58cbc63949526c544503c83c052a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gash-Setit [Gaš enna Sätit]",
+      "Code": "GS",
+      "ISO3166_2": "ER-GS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gash-Setit [Gaš enna Sätit]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ER"
+    },
+    "primaryKey": {
+      "ID": "572F300C-7239-4B1C-90D4-B2FA86ED204D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.200Z",
+      "checksum": "66d6be1b1dd7c47b1d2df909e0b6ec43dcd14dbe70788f04ac2650f2df93f91c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hamasien [Hamasén]",
+      "Code": "HA",
+      "ISO3166_2": "ER-HA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Hamasien [Hamasén]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ER"
+    },
+    "primaryKey": {
+      "ID": "C04BBA53-583E-4061-BEBD-F0D3E95CF09D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.216Z",
+      "checksum": "56cef752212fbad17dbc2bcb226aafae1861624080f3694ec43efbaaa3c5292a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sahel",
+      "Code": "SA",
+      "ISO3166_2": "ER-SA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sahel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ER"
+    },
+    "primaryKey": {
+      "ID": "7C143C38-5BDF-45B0-8AFB-1870C690CB1D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.235Z",
+      "checksum": "04a2ee01145a29d083836e476bcf75c66cf3bc93134638f910e35bf7bc18bd07"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Semhar [Sämhar]",
+      "Code": "SM",
+      "ISO3166_2": "ER-SM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Semhar [Sämhar]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ER"
+    },
+    "primaryKey": {
+      "ID": "FBB1BEF9-4170-4074-AA9D-FACE193D4F3F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.253Z",
+      "checksum": "56f45704b4c5fe8b5b59538a5e62caf91605bc397ed02a29e7c9a9fd69c1e9ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Senhit [Sänhet]",
+      "Code": "SN",
+      "ISO3166_2": "ER-SN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Senhit [Sänhet]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ER"
+    },
+    "primaryKey": {
+      "ID": "302056B4-1EEC-4C93-81BC-BBB83B9FD8C2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.271Z",
+      "checksum": "a38ad0940e13e5e6454586b06f96f6ffe94060929a9c32a65d27a1fc1a360e61"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Seraye [Särayé]",
+      "Code": "SR",
+      "ISO3166_2": "ER-SR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Seraye [Särayé]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ER"
+    },
+    "primaryKey": {
+      "ID": "D9D99B24-E58C-4909-B2C1-4573D56CA35A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.285Z",
+      "checksum": "48398fcdaaab34d8c015b8f3b6e525aee20d1aecaf96217687de28dafd13d64b"
+    }
+  }
+]

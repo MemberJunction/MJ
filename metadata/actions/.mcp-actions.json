@@ -1,0 +1,732 @@
+[
+  {
+    "fields": {
+      "Name": "Test MCP Connection",
+      "Description": "Tests connectivity to an MCP server and retrieves server information including name, version, capabilities, and connection latency. Use this action to verify an MCP server is reachable and responding correctly before attempting to execute tools.",
+      "DriverClass": "Test MCP Connection",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-plug-circle-check",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=MCP&Parent=System"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConnectionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MCP Server Connection to test. This should be a valid connection ID from the MCP Server Connections entity.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "C2BA8F1A-F0C3-4F0E-9DB2-AEE4CB9CD246"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:27.976Z",
+            "checksum": "e1fdc3e4251b4c9dfb75e9e5ffc02b3bb70f485db1fccf532091e373ad89a752"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ServerName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the MCP server as reported by the server itself.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B0E91109-D377-40B4-AB4C-0476A4A662FB"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:27.988Z",
+            "checksum": "bc2f21922ca6161e3fc4988e04d21eba80e14ad7ce15208563883442cce4c18f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ServerVersion",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version of the MCP server.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0BEEE717-40EC-4866-97FA-2F125407E904"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.001Z",
+            "checksum": "fe200f843c33aaa451a756195f673a7402f0c67275314de90103bb3a6ed362b9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LatencyMs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Connection latency in milliseconds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "57CAE672-302B-4B22-B17D-8D35463EFA53"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.013Z",
+            "checksum": "d0a1347f068ac49d10f244135d889410fa4c34b6b3575e4f6a2fa4859fa02f26"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Capabilities",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Server capabilities object indicating supported features (tools, resources, prompts, etc.).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AE3A2C21-B326-4D2B-A2E9-B919240617FD"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.024Z",
+            "checksum": "a9f29a7200ab169e20d02d499c4e78de94c5930f045803f5cf2222eb1f7f8f8c"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Connection test succeeded. Server is reachable and responding."
+          },
+          "primaryKey": {
+            "ID": "078F36E5-60C5-4C02-8656-0E138E3A4EAA"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.045Z",
+            "checksum": "3e1581b0f450c67d31aa9449068b9e27a7fd9499c3d434b8f8d2d99b6cd52760"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required ConnectionID parameter was not provided."
+          },
+          "primaryKey": {
+            "ID": "25B956DF-00EC-45E7-A7C7-EFC50D297327"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.055Z",
+            "checksum": "8f5ae35c6696cfa7191cd61c12071e1e661e5f296b6d1311fd276350fbb73434"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONNECTION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to connect to the MCP server. Check server URL and network connectivity."
+          },
+          "primaryKey": {
+            "ID": "A6526DFE-9B2B-498B-80DC-228070571BA5"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.066Z",
+            "checksum": "80093d8305038ab4e555b814570a89ad3a847e154caf422c40533ee99bec9f51"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during the connection test."
+          },
+          "primaryKey": {
+            "ID": "B9B8AF5A-F710-498F-88A7-E63BDA5E9AAF"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.079Z",
+            "checksum": "954a8d0a60854aaecf79446f71237a05db215f04028dc0d624c905f62082d0cf"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "19641143-90A9-48F7-9A9F-05FB94014161"
+    },
+    "sync": {
+      "lastModified": "2026-02-13T21:09:11.718Z",
+      "checksum": "0ce1b02c613d09939c01c05906f4b12c838913737ea0f2315a76fd77b93078bc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List MCP Tools",
+      "Description": "Retrieves the list of available tools from an MCP server connection. Returns tool names, descriptions, and input schemas for each tool. Use this action for discovery to understand what tools are available on a server before executing them.",
+      "DriverClass": "List MCP Tools",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list-check",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=MCP&Parent=System"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConnectionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MCP Server Connection to query for available tools.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "1954CB59-66F7-4965-B33B-4DA3774D5744"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.090Z",
+            "checksum": "8f24568b0407fbcff98e8d33d53268f719906c79f89596e299320dc754b76f49"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tools",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of tool definitions. Each tool includes: name, description, and inputSchema (JSON Schema for parameters).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7FDAB14-6D7D-4599-8290-3F6DC64F30DE"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.155Z",
+            "checksum": "15b513fb28503cb68f8877f3ce8213676346b44bb2256993829dd1e54f15d115"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ToolCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of tools available on the server.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0221EA87-DA7A-4F91-B093-B408AC1E53DA"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.167Z",
+            "checksum": "845b52a30382512091aba0ded84fc609fcc934f18b86a4dae125e5010ab06499"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Successfully retrieved the list of tools from the MCP server."
+          },
+          "primaryKey": {
+            "ID": "74EA1421-6BCC-40EE-A047-DE98F79DBFCA"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.178Z",
+            "checksum": "c69590ec69f15da83bff8120ed1e25f78a29a168b08a9a992dfbc57693ab3ad0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required ConnectionID parameter was not provided."
+          },
+          "primaryKey": {
+            "ID": "B87ED977-0518-4E7D-8B96-ECA0E050CBA8"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.187Z",
+            "checksum": "8f5ae35c6696cfa7191cd61c12071e1e661e5f296b6d1311fd276350fbb73434"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LIST_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to retrieve tools from the server. Connection may be unavailable."
+          },
+          "primaryKey": {
+            "ID": "A85A7CE9-2BF4-4D76-8B21-96E4657D7CA9"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.196Z",
+            "checksum": "72ddeba7478143c9d73ede341e46c2cf4ed575feac48c8c06cd0f1799693f85a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred while listing tools."
+          },
+          "primaryKey": {
+            "ID": "49DE3674-0DCA-4ECA-B8EE-6CDC4CF2368D"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.207Z",
+            "checksum": "d16cbea20346573489466b324d2731c5263d0ceda7c32c4cbc153591e955b05f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "17F31736-218E-4996-BF9C-E0A43DA5165F"
+    },
+    "sync": {
+      "lastModified": "2026-02-13T21:09:11.720Z",
+      "checksum": "ac109470d60f70142d103459c3e238a11e76cdbb6d91e3ce9e93dc92f1cbf40f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sync MCP Tools",
+      "Description": "Synchronizes tools from an MCP server to the local database. Discovers all available tools, adds new ones, updates existing tool definitions, and marks tools that are no longer available as deprecated. Use this action to keep the local tool catalog up to date with the server.",
+      "DriverClass": "Sync MCP Tools",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-arrows-rotate",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=MCP&Parent=System"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConnectionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MCP Server Connection to synchronize tools from.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B03DBF90-0263-45A6-8EB7-A7AEA6F3DA3A"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.219Z",
+            "checksum": "2074dd9e8895a3d489d5b30ae44cd5b52c84cd016d254a2cb53084315a57e11e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Added",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of new tools added to the database.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E46E67F5-D2F3-485D-B62B-500E39BC9F10"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.231Z",
+            "checksum": "5c0eb5c9bb785fe0ed72c6523382b4f82c3635c1bc2d903ad668e1ec69ddf3fb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Updated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of existing tools that were updated.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BA18284F-F8DA-4267-8651-24F5711F2ABA"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.243Z",
+            "checksum": "76a72155432456f9d55def05b1d04691984e0046e9953c496df79895a9927b32"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Deprecated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of tools marked as deprecated (no longer available on server).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "364403F4-BBC3-4244-AF2C-ED7C2B3ECEE5"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.252Z",
+            "checksum": "8afb0e8c0c79d323f6b447a23cf406ba581997c083227ca723f0ad987b981705"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Total",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of active tools after synchronization.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2BF2943E-9675-4837-B26F-E5EA95B2988F"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.313Z",
+            "checksum": "89154075337ccf5ac0ef3b833e45e613c955d99858f82460c56a2fa2ca0d8db3"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Tool synchronization completed successfully."
+          },
+          "primaryKey": {
+            "ID": "B6A9175B-E4E9-4989-9C9D-12203A4AEC13"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.322Z",
+            "checksum": "954be9556b18555351fc2955fb8add2b5754fd951d27f75c83cecb3852302a92"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required ConnectionID parameter was not provided."
+          },
+          "primaryKey": {
+            "ID": "C3344969-063E-4EF6-8155-3E8E66F11D25"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.334Z",
+            "checksum": "8f5ae35c6696cfa7191cd61c12071e1e661e5f296b6d1311fd276350fbb73434"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SYNC_FAILED",
+            "IsSuccess": false,
+            "Description": "Tool synchronization failed. Check connection and server availability."
+          },
+          "primaryKey": {
+            "ID": "A3D9CADE-2DCB-40DD-A395-6524F428BC28"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.346Z",
+            "checksum": "06e6f296a655a760d4ceb445f2d8a563124f0dab1f5e7bdd2bf2cc79c4392cc4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during tool synchronization."
+          },
+          "primaryKey": {
+            "ID": "4DB7068C-9410-4B8A-B0B2-48AE1B98F08A"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.357Z",
+            "checksum": "3c37f941543af0a77a2286d1583c0c6664fe99d4842e5c3c4c76ff7b5e93c397"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D384E4A4-F20D-4CA3-97A6-6B6E901B65E2"
+    },
+    "sync": {
+      "lastModified": "2026-02-13T21:09:11.721Z",
+      "checksum": "c2b47887507e63b80e93e4f2f7df2bf9b80266d806aaff82ab705728d4bdb26f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Execute MCP Tool",
+      "Description": "Executes a tool on an MCP server. Connects to the server if not already connected, calls the specified tool with provided arguments, and returns the result. This is the primary action for invoking external tool capabilities through MCP.",
+      "DriverClass": "Execute MCP Tool",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-play",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=MCP&Parent=System"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConnectionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MCP Server Connection to use for tool execution.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "54F8ACE9-E1ED-4893-881E-245CA512A7E5"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.367Z",
+            "checksum": "f81d2e7f700e6b20fef7abb43e858a3efee4908a015fb2f259c99dfc661476ca"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ToolName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the tool to execute. Must match a tool name available on the server.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0E5BFB47-D9A2-40C5-84AE-4654232608FA"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.378Z",
+            "checksum": "a7aeff9b0e74ed5d5ca42b05d32aaebb1c38b1e2c4f367b2075d278f0f1090ea"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Arguments",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Input arguments for the tool as a JSON object. The structure should match the tool's input schema.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "015DA384-7022-4D3A-AE63-2B1C7417113C"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.389Z",
+            "checksum": "d1197a9d4223eccea1cbeb41662b5dc067f40574311a2208b002bb1daa845af4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Timeout",
+            "DefaultValue": "60000",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Request timeout in milliseconds. Default: 60000 (60 seconds).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "85FFED7D-561A-4D93-9EB1-0FC0457AAB0F"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.401Z",
+            "checksum": "6982a7f9c186affb6bba54f583a0035d53a3fd1a00e1aedd369b805a14d2e06d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ToolOutput",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of content blocks returned by the tool. Each block has a type (text, image, etc.) and content.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A5A8BC22-A37C-414A-BF4E-43966BBA099F"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.412Z",
+            "checksum": "7dd6191c565d25edad7ba80badf0404a3ff86e09f46c3dc74f746018d049712b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StructuredOutput",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Structured content returned by the tool, if available. This is the parsed/processed result.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "66C86F03-3607-49A9-B548-CE34ADF4230F"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.463Z",
+            "checksum": "4f550bb7aabc0692e8b62785f8ec5b6b8b1cf4bd419b73cc354cce130062937e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DurationMs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Execution duration in milliseconds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "04C4A47E-1921-4869-A4FA-553582B63A98"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.475Z",
+            "checksum": "8bb46ac2c94645afb15aa6a1c8b8f4948a3b842128fd64bfbfa0581137446914"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsToolError",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating whether the tool returned an error response (as opposed to a connection/protocol error).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6EEDC497-2CBA-4236-906B-EEDF985179F1"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.485Z",
+            "checksum": "cf253c6278c93591266005aaaaaab192e2e3bb0ef4331ea8f6c7611d87eb4298"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Tool executed successfully and returned a result."
+          },
+          "primaryKey": {
+            "ID": "998588D1-AB51-4B80-ADE0-146A46553638"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.496Z",
+            "checksum": "adcf5a32f3e2239898d6016a5ae240fdbcb1b1aea944e0a6b771691b9de1b950"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required parameter (ConnectionID or ToolName) was not provided."
+          },
+          "primaryKey": {
+            "ID": "197FBB84-54E2-4049-8E8E-4E907524B8A7"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.507Z",
+            "checksum": "e06328353699b33a7f64184b569c08482a68110e933eef45b06787aa78e0b596"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "TOOL_ERROR",
+            "IsSuccess": false,
+            "Description": "The tool executed but returned an error. Check the error message for details."
+          },
+          "primaryKey": {
+            "ID": "E4052428-A32C-4436-858A-DC737898523E"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.518Z",
+            "checksum": "ee1eafc4c8ce0e910b6a0f352be58f87e0e76bac597eb7390fa353edff01712b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTION_FAILED",
+            "IsSuccess": false,
+            "Description": "Tool execution failed due to connection or protocol error."
+          },
+          "primaryKey": {
+            "ID": "14817D64-98C8-4B0D-8DDC-371A038E2562"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.531Z",
+            "checksum": "cebbf8c9608524fb92b4350b40f9b2b9b79ff9ac89e2d2a909a5705342fa20a5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during tool execution."
+          },
+          "primaryKey": {
+            "ID": "1F1200CD-3665-4DF4-B239-1A7DEA900D6D"
+          },
+          "sync": {
+            "lastModified": "2026-02-01T00:27:28.543Z",
+            "checksum": "4656dbf7d1e7281ce9bc3484903b6ef3360fe09fd5339a7727f097be4f87748f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4D2046D4-9CE1-44D2-B360-68F6D0048F88"
+    },
+    "sync": {
+      "lastModified": "2026-02-13T21:09:11.723Z",
+      "checksum": "f2cb2e3645b641a46bc78afaf63bd1cad5c644816ce3f46518261d7626cd3079"
+    }
+  }
+]

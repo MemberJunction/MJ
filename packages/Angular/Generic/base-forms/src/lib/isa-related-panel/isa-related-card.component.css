@@ -1,0 +1,210 @@
+/* ============================================
+   ISA RELATED CARD
+   Compact summary card for one sibling/child entity
+   ============================================ */
+
+.mj-isa-card {
+  background: var(--mj-bg-surface-card);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-sm);
+  overflow: hidden;
+  border-left: 3px solid var(--mj-brand-primary);
+}
+
+/* ---- Header ---- */
+.mj-isa-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--mj-bg-surface-elevated);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.mj-isa-card__header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mj-isa-card__icon {
+  font-size: 14px;
+  color: var(--mj-brand-primary);
+  flex-shrink: 0;
+}
+
+.mj-isa-card__entity-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+}
+
+.mj-isa-card__record-name {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-isa-card__open-link {
+  font-size: 11px;
+  color: var(--mj-brand-primary);
+  text-decoration: none;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mj-isa-card__open-link:hover {
+  text-decoration: underline;
+}
+
+/* ---- Body / Fields ---- */
+.mj-isa-card__body {
+  padding: 8px 14px 10px;
+}
+
+.mj-isa-card__field {
+  display: flex;
+  align-items: baseline;
+  padding: 3px 0;
+  gap: 8px;
+}
+
+.mj-isa-card__field-label {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.mj-isa-card__field-value {
+  font-size: 12px;
+  color: var(--mj-text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mj-isa-card__field-value--bool-yes {
+  color: var(--mj-status-success);
+}
+
+.mj-isa-card__field-value--bool-no {
+  color: var(--mj-status-error);
+}
+
+/* ---- Expand/Collapse ---- */
+.mj-isa-card__expand-row {
+  padding: 0 14px 8px;
+}
+
+.mj-isa-card__expand-btn {
+  font-size: 11px;
+  color: var(--mj-brand-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mj-isa-card__expand-btn:hover {
+  text-decoration: underline;
+}
+
+.mj-isa-card__expand-chevron {
+  font-size: 9px;
+}
+
+.mj-isa-card__extra-fields {
+  padding: 0 14px 10px;
+  border-top: 1px dashed var(--mj-border-default);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+/* ---- Loading State ---- */
+.mj-isa-card__body--loading {
+  padding: 12px 14px;
+}
+
+.mj-isa-card__loading-bar {
+  height: 10px;
+  background: linear-gradient(90deg,
+    var(--mj-bg-surface-sunken) 25%,
+    var(--mj-border-default) 50%,
+    var(--mj-bg-surface-sunken) 75%);
+  background-size: 200% 100%;
+  animation: mj-isa-shimmer 1.5s infinite;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  width: 80%;
+}
+
+.mj-isa-card__loading-bar--short {
+  width: 50%;
+}
+
+@keyframes mj-isa-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ---- Nested Sub-Cards (grandchild+ rendered inside parent card) ---- */
+.mj-isa-card__children {
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--mj-border-default);
+}
+
+.mj-isa-card--nested {
+  box-shadow: none;
+  border: 1px solid var(--mj-border-default);
+  border-left: 2px solid color-mix(in srgb, var(--mj-brand-primary) 60%, var(--mj-color-neutral-400));
+  border-radius: var(--mj-radius-md);
+}
+
+.mj-isa-card--nested .mj-isa-card__header {
+  padding: 6px 10px;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom-color: var(--mj-border-default);
+}
+
+.mj-isa-card--nested .mj-isa-card__entity-name {
+  font-size: 12px;
+}
+
+.mj-isa-card--nested .mj-isa-card__icon {
+  font-size: 12px;
+}
+
+.mj-isa-card--nested .mj-isa-card__body {
+  padding: 6px 10px 8px;
+}
+
+.mj-isa-card--nested .mj-isa-card__field-label {
+  width: 95px;
+  font-size: 10px;
+}
+
+.mj-isa-card--nested .mj-isa-card__field-value {
+  font-size: 11px;
+}
+
+/* ---- Error State ---- */
+.mj-isa-card__body--error {
+  padding: 10px 14px;
+}
+
+.mj-isa-card__error-text {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  font-style: italic;
+}

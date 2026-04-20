@@ -1,6 +1,12 @@
 # GENERAL RULE
 Don't say "You're absolutely right" each time I correct you. Mix it up, that's so boring!
 
+## Claude Code Fast Mode
+To enable fast mode (2.5x faster Opus 4.6 responses), add `"fastMode": true` to `~/.claude/settings.json`. This is the reliable way to enable it in the **VSCode IDE extension** — the `/fast` slash command only works consistently in CLI mode. The setting persists across sessions. Note: fast mode bills to extra usage at a higher per-token rate.
+
+## Full Autonomy Development (Sandboxed Environments Only)
+See **[claude-full-auto.md](claude-full-auto.md)** for the full-autonomy development guide — used when Claude operates as an independent developer on sandboxed/air-gapped machines with full database, build, and testing access. **Not for regular development machines.**
+
 # MemberJunction Development Guide
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
@@ -23,21 +29,159 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
   - No `unknown` as a lazy alternative
 - **Why**: MemberJunction has strong typing throughout - there's always a proper type available
 
-### 3. NO MODIFICATIONS TO MERGED PRs
+### 2b. NO WEAK TYPING — NEVER USE BaseEntity `.Get()` / `.Set()` AS A SUBSTITUTE FOR GENERATED TYPES
+- **NEVER use `record.Get('FieldName')` or `record.Set('FieldName', value)`** to access entity fields that should have strongly-typed properties
+- **NEVER write code that depends on fields not yet in generated types** — if a migration hasn't run and CodeGen hasn't generated the types, **wait for CodeGen** before writing code that references those fields
+- `.Get()` and `.Set()` are dynamic, stringly-typed accessors with zero compile-time safety — they bypass the entire point of MJ's generated entity classes
+- The correct workflow when adding new database columns:
+  1. Write the migration
+  2. Run the migration + CodeGen to generate types
+  3. **Then** write TypeScript code using the strongly-typed properties
+- If you find yourself reaching for `.Get()` or `.Set()`, STOP — it means either:
+  - The types exist and you should use the typed property instead
+  - The types don't exist yet because CodeGen hasn't run — wait for it before writing dependent code
+- **Why**: `.Get()`/`.Set()` fail silently on typos, have no IntelliSense, no refactoring support, and no compile-time checking. They are the `any` of the entity world.
+
+### 3. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
+- **NEVER run `git checkout -- <file>` or `git restore <file>`** to discard changes without the user explicitly approving — even in bypass/auto-approve permission mode
+- **NEVER run `git reset --hard`** without explicit approval
+- These commands destroy uncommitted work (staged and unstaged) and cannot be undone
+- If you need to undo YOUR changes to a file, use `git diff` to identify only your changes and reverse them with targeted `Edit` tool calls — this preserves the user's other in-progress work
 - **NEVER update title/description of merged PRs** without explicit approval each time
 - Always ask before modifying any historical git data
 
-### 4. NO STANDALONE COMPONENTS - EVER
-- **NEVER create standalone Angular components** - ALL components MUST be part of NgModules
-- **ALWAYS** use `@NgModule` with `declarations`, `imports`, and `exports`
-- **Why**: Standalone components cause style encapsulation issues, ::ng-deep doesn't work properly, and they bypass Angular's module system
-- When creating new components:
-  - Create or add to an NgModule
-  - Declare component in the module's `declarations` array
-  - Import `CommonModule` and other required modules in the module's `imports` array
-  - Export the component in the module's `exports` array if it needs to be used outside the module
-- **Remove** `standalone: true` and `imports: [...]` from ALL `@Component` decorators
-- This is **non-negotiable** - standalone components are strictly forbidden
+### 4. ANGULAR COMPONENT & MODULE STRATEGY
+MemberJunction supports both standalone and NgModule-declared components. Choose the right approach for each situation:
+
+#### When to Use Standalone Components (Preferred for New Components)
+- **New leaf components** (dialogs, panels, small widgets) that don't need to share a module
+- **Lazy-loaded route components** — standalone enables direct `loadComponent()` without wrapper modules
+- **Simple, self-contained components** with clear dependency lists
+- Benefits: better tree-shaking with ESBuild, less boilerplate, explicit dependency graph
+
+#### When to Use NgModules
+- **Feature modules** grouping many related components (e.g., dashboards, explorer modules)
+- **Shared modules** providing common functionality to multiple consumers
+- **Existing module-declared components** — don't migrate just for the sake of it
+- When a group of components share the same set of imports
+
+#### Rules for Both Approaches
+- **Standalone components**: declare all dependencies in the component's `imports` array
+- **NgModule components**: must use `standalone: false` explicitly (Angular 21 defaults to standalone)
+- **Never mix within a single component** — a component is either standalone or module-declared
+- When adding to an existing package, **follow the pattern already used in that package**
+
+#### Modern Template Syntax (Required for New Code)
+- **Use `@if`/`@for`/`@switch`** block syntax instead of `*ngIf`/`*ngFor`/`*ngSwitch`
+  - `@for` has 90% better runtime performance than `*ngFor`
+  - `*ngIf`/`*ngFor` are heading toward deprecation
+  - Works identically with both standalone and NgModule components
+  - After migrating templates, `CommonModule` import can be removed if no other directives are used
+- **Use `inject()` function** instead of constructor injection for new components
+  - Angular officially recommends `inject()` over constructor DI
+  - Better inheritance (no `super()` chains), better types, works with standard decorators
+  - Existing constructor injection doesn't need to be migrated unless refactoring
+
+### 5. NO RE-EXPORTS BETWEEN PACKAGES
+- **NEVER re-export types, classes, or interfaces from other packages**
+- **ALWAYS** import directly from the source package that defines them
+- **Why**: Re-exports create confusing dependency chains, obscure the true source of types, and can cause issues with tree-shaking and bundle sizes
+- Each package's `public-api.ts` or `index.ts` should only export:
+  - Code defined within that package
+  - Angular module, services, and components it provides
+- Example:
+  ```typescript
+  // ❌ BAD - Re-exporting from another package
+  export { ExportFormat, ExportOptions } from '@memberjunction/export-engine';
+
+  // ✅ GOOD - Only export what this package defines
+  export * from './lib/module';
+  export * from './lib/export.service';
+  export * from './lib/export-dialog.component';
+  // NOTE: For export types, import directly from @memberjunction/export-engine
+  ```
+- Consumers should import types from their original source package
+- Add comments directing users to the correct import location when helpful
+
+### 6. ALWAYS RUN AND UPDATE UNIT TESTS
+- **When modifying ANY package's source code, you MUST run that package's unit tests** before considering the work complete
+- Run tests with: `cd packages/PackageName && npm run test`
+- **If tests fail due to your changes, UPDATE the tests** to match the new behavior
+- **If tests fail for other reasons, FIX them** — never leave broken tests behind
+- **Report test results to the user**: pass count, failure count, skip count, and any issues found
+- **This is as important as compilation** — broken tests are as bad as broken builds
+- **Never assume tests still pass** after changing function signatures, renaming methods, changing return values, or modifying behavior
+- Common causes of test drift (all of which YOU must fix):
+  - Renamed functions/methods that tests still reference by old name
+  - Changed return values or formats that test assertions still expect
+  - New required parameters that test mocks don't provide
+  - Removed exports that tests still import
+
+### 7. USE BaseSingleton FOR ALL SINGLETONS
+- **NEVER use manual `static _instance` singleton patterns** — always extend `BaseSingleton<T>` from `@memberjunction/global`
+- **Why**: `BaseSingleton` uses a Global Object Store (`GetGlobalObjectStore()`) that guarantees a single instance across the entire process — even when bundlers duplicate code across multiple execution paths. A plain `static _instance` field lives on the class constructor, so if a module gets loaded twice (common with ESBuild/Vite code splitting), you silently get two "singletons" with divergent state.
+- **How to use it**:
+  ```typescript
+  import { BaseSingleton } from '@memberjunction/global';
+
+  export class MySingleton extends BaseSingleton<MySingleton> {
+      // Constructor MUST be protected (BaseSingleton enforces this)
+      protected constructor() {
+          super();
+      }
+
+      // Expose a static accessor that calls the inherited getInstance()
+      public static get Instance(): MySingleton {
+          return MySingleton.getInstance<MySingleton>();
+      }
+
+      // ... your singleton methods and properties
+  }
+
+  // Usage
+  const instance = MySingleton.Instance;
+  ```
+- **Anti-pattern to avoid**:
+  ```typescript
+  // ❌ BAD — weak singleton, breaks under code duplication
+  export class MySingleton {
+      private static _instance: MySingleton;
+      public static get Instance(): MySingleton {
+          if (!MySingleton._instance)
+              MySingleton._instance = new MySingleton();
+          return MySingleton._instance;
+      }
+  }
+  ```
+- **Known weak singletons** that need migration: ~26 classes across the codebase including `GraphQLDataProvider`, `UserCache`, `StartupManager`, `RunQuerySQLFilterManager`, `QueueManager`, `SQLExpressionValidator`, `WarningManager`, `AuthProviderFactory`, `MCPClientManager`, `AgentDataPreloader`, and Angular/React services. See GitHub issue tracking this migration.
+
+---
+
+## 📚 Development Guides
+
+The `/guides/` folder contains comprehensive best practices guides for specific development tasks. **Always consult these guides when working on related features:**
+
+- **[UUID Comparison Guide](guides/UUID_COMPARISON_GUIDE.md)**: Critical patterns for comparing UUIDs across SQL Server (uppercase) and PostgreSQL (lowercase):
+  - Always use `UUIDsEqual()` instead of `===` for UUID comparisons
+  - Use `NormalizeUUID()` for Set/Map key operations
+  - Angular template binding patterns
+  - Automated enforcement tests
+
+- **[Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md)**: Comprehensive patterns for building MJ dashboards including:
+  - Architecture and naming conventions
+  - State management with getter/setters
+  - Engine class patterns (no Angular services for data)
+  - User preferences and local caching
+  - Layout patterns, permission checking, and more
+
+- **[Lazy Loading Guide](guides/LAZY_LOADING_GUIDE.md)**: How MJExplorer's code-split lazy loading works:
+  - Adding new dashboard components (zero config — just `@RegisterClass` + feature module)
+  - Making a package lazy-loadable (add subpath exports to `package.json`)
+  - Adding new feature modules with subpath exports
+  - How the auto-generated lazy config is produced by `mj codegen manifest --lazy-config`
+  - Troubleshooting lazy loading issues
+
+When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
 
@@ -45,6 +189,122 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 
 ## IMPORTANT
 - Before starting a new line of work always check the local branch we're on and see if it is (a) separate from the default branch in the remote repo - we always want to work in local feature branches and (b) if we aren't in such a feature branch that is named for the work being requested and empty, cut a new one but ask first and then switch to it
+
+## 🚨 CRITICAL: Git Branch Tracking Rules 🚨
+
+### Feature Branches MUST Track Same-Named Remote Branches
+When creating or working with feature branches, **ALWAYS** ensure the local branch tracks a remote branch **with the same name**. Never track `next`, `main`, or other permanent branches.
+
+**Why this matters**: If a feature branch tracks `origin/next` instead of `origin/feature-branch`, pushes will accidentally go to `next` directly, bypassing PR review and potentially breaking the main branch.
+
+### Creating New Feature Branches
+```bash
+# ✅ CORRECT - Create branch and push with upstream tracking to same-named remote
+git checkout -b my-feature-branch
+git push -u origin my-feature-branch
+
+# ❌ WRONG - Branch created from next will track origin/next by default!
+git checkout next
+git checkout -b my-feature-branch
+# Now my-feature-branch tracks origin/next - DANGEROUS!
+```
+
+### Verify Branch Tracking
+**ALWAYS check tracking before pushing:**
+```bash
+# Check what remote branch your local branch tracks
+git branch -vv
+
+# Example output:
+# * my-feature [origin/my-feature] Good - tracks same name  ✅
+# * my-feature [origin/next] BAD - tracks next!            ❌
+```
+
+### Fix Incorrect Tracking
+If a branch is tracking the wrong remote:
+```bash
+# Fix tracking to point to same-named remote branch
+git branch --set-upstream-to=origin/my-feature-branch my-feature-branch
+
+# Verify the fix
+git branch -vv
+```
+
+### Before Every Push
+1. Run `git branch -vv` to verify tracking
+2. Ensure your branch tracks `origin/<same-branch-name>`
+3. If tracking is wrong, fix it before pushing
+
+### The Danger of Wrong Tracking
+If `my-feature` tracks `origin/next`:
+- `git push` sends commits directly to `next`
+- Bypasses pull request review process
+- Can break the main branch for everyone
+- Requires reverts and cleanup to fix
+
+**This is a non-negotiable safety requirement.**
+
+## Unit Testing
+
+MemberJunction uses **Vitest** as the standard unit testing framework across all packages. Jest has been deprecated and all packages are migrated to Vitest.
+
+### Running Tests
+- Run all tests: `npm test` (from repo root, uses Turborepo)
+- Run tests for a specific package: `cd packages/PackageName && npm run test`
+- Watch mode for a package: `cd packages/PackageName && npm run test:watch`
+- Run tests for changed packages: `npx turbo run test --filter=...[HEAD~1]`
+- Run with coverage: `npm run test:coverage`
+
+### Writing Tests
+- Test files live in `src/__tests__/` with `.test.ts` extension
+- One test file per source file (e.g., `ClassFactory.test.ts` tests `ClassFactory.ts`)
+- Use descriptive test names that read as specifications
+- Import from `vitest`: `import { describe, it, expect, vi, beforeEach } from 'vitest'`
+- Use `@memberjunction/test-utils` for shared mocking utilities (singleton reset, mock entities, mock RunView)
+- No database connections in unit tests — mock all external dependencies
+- Tests must be deterministic and fast (< 5s per file)
+
+### Adding Tests to a New Package
+Use the scaffold script:
+```bash
+node scripts/scaffold-tests.mjs packages/YourPackage
+```
+
+This creates the vitest config, test directory, starter test, and updates package.json scripts.
+
+### Test Structure
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+describe('ClassName', () => {
+  beforeEach(() => {
+    // Reset state between tests
+  });
+
+  describe('MethodName', () => {
+    it('should handle the normal case', () => { ... });
+    it('should handle edge case: empty input', () => { ... });
+    it('should throw on invalid input', () => { ... });
+  });
+});
+```
+
+### CI/CD Integration
+- **Every PR** must pass unit tests before merging (GitHub Actions gate)
+- **Every release** runs the full-stack regression suite via Docker Compose
+- Tests are cached by Turborepo — unchanged packages skip test execution
+
+## Switching Database Platforms (SQL Server ↔ PostgreSQL)
+
+When developing against both SQL Server and PostgreSQL on the same URL/port (e.g., `localhost:4000`), **you must clear your browser cache** after switching backends. The `GraphQLDataProvider` client caches entity metadata and query results in the browser. Since SQL Server returns UUIDs uppercase and PostgreSQL returns them lowercase, stale cached data from one platform will cause subtle mismatches on the other. Clear browser cache (or use an incognito window) whenever you switch the backend database platform behind the same endpoint.
+
+## Docker Environments
+
+See **[docker/CLAUDE.md](docker/CLAUDE.md)** for full details on Docker configurations.
+
+- **`docker/MJAPI/`** — Production MJAPI container, published with each release
+- **`docker/workbench/`** — Claude Code workbench with dedicated SQL Server for autonomous dev/testing
+- Use `/docker-workbench` slash command to start, stop, rebuild, or exec into the workbench
 
 ## Build Commands
 - Build all packages: `npm run build` - from repo root
@@ -54,13 +314,95 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 - Start API server: `npm run start:api`
 - Start Explorer UI: `npm run start:explorer`
 
+### Build Pipeline
+- MJExplorer uses the Angular `application` builder powered by ESBuild and Vite
+- Dev server (`npm run start:explorer`) uses Vite with HMR for fast iteration
+- ESBuild provides significantly faster builds compared to the legacy Webpack pipeline
+- Vite prebundling excludes `@memberjunction/*` packages (they're symlinked workspace packages)
+- Source maps are configured for full debugging support including symlinked packages
+
+### Class Registration Manifests (Tree-Shaking Prevention)
+MemberJunction uses `@RegisterClass` decorators with a dynamic class factory (`MJGlobal.ClassFactory`). Modern bundlers (ESBuild, Vite) cannot detect dynamic instantiation and tree-shake these classes out. The **manifest system** prevents this.
+
+**How it works:**
+- `mj codegen manifest` walks the dependency tree, finds all `@RegisterClass`-decorated classes via TypeScript AST, and emits a manifest with named imports + an exported `CLASS_REGISTRATIONS` array that creates a static code path the bundler cannot eliminate.
+
+**Dual-manifest architecture for distribution:**
+- **Pre-built manifests** ship inside bootstrap packages (`@memberjunction/server-bootstrap`, `@memberjunction/ng-bootstrap`). These are generated at MJ build time and cover all `@memberjunction/*` classes.
+- **Supplemental manifests** are generated by MJAPI/MJExplorer's `prestart`/`prebuild` scripts with `--exclude-packages @memberjunction` to capture only user-defined classes.
+- This solves the npm distribution gap: published packages only have `dist/` (no `src/`), so the manifest generator can't scan them externally.
+
+**Key scripts:**
+- `npm run mj:manifest` -- regenerates all 4 manifests (server-bootstrap, ng-bootstrap, MJAPI, MJExplorer)
+- `npm run mj:manifest:server-bootstrap` / `mj:manifest:ng-bootstrap` -- regenerate bootstrap pre-built manifests
+- `npm run mj:manifest:api` / `mj:manifest:explorer` -- regenerate app supplemental manifests
+
+**See:** [packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md](packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md) for comprehensive documentation on the manifest system, including how external consumers and MJ distribution users should configure their projects.
+
 ## Database Migrations
 - See `/migrations/CLAUDE.md` for comprehensive migration guidelines
+- **Migration folder**: Always use the highest-numbered `migrations/v*/` folder (currently `migrations/v5/`). Check `ls migrations/v*/` if unsure.
 - Key points:
   - Use format `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql`
   - Always use hardcoded UUIDs (not NEWID())
   - Never insert __mj timestamp columns
   - Use `${flyway:defaultSchema}` placeholder
+  - **Consolidate ALTER TABLE statements**: When adding multiple columns to the same table, use a SINGLE `ALTER TABLE` with multiple `ADD` clauses separated by commas — never multiple separate `ALTER TABLE` statements for the same table. This is more efficient and cleaner.
+    ```sql
+    -- ✅ CORRECT - Single ALTER TABLE with multiple columns
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD
+        UserSearchPredicateAPI NVARCHAR(20) NOT NULL DEFAULT 'Contains',
+        AutoUpdateUserSearchPredicate BIT NOT NULL DEFAULT 1,
+        AutoUpdateFullTextSearch BIT NOT NULL DEFAULT 1;
+
+    -- ❌ WRONG - Separate ALTER TABLEs for the same table
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD UserSearchPredicateAPI NVARCHAR(20) NOT NULL DEFAULT 'Contains';
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD AutoUpdateUserSearchPredicate BIT NOT NULL DEFAULT 1;
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD AutoUpdateFullTextSearch BIT NOT NULL DEFAULT 1;
+    ```
+  - **Always add `sp_addextendedproperty`** for every new column (except primary keys and foreign keys which CodeGen handles). This provides descriptions that CodeGen uses:
+    ```sql
+    EXEC sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'Description of what this column does',
+        @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+        @level1type = N'TABLE',  @level1name = N'TableName',
+        @level2type = N'COLUMN', @level2name = N'ColumnName';
+    ```
+
+### 🚨 CRITICAL: CodeGen Handles These Automatically
+**NEVER include the following in migration CREATE TABLE statements - CodeGen generates them:**
+
+1. **Timestamp Columns**: Do NOT add `__mj_CreatedAt` or `__mj_UpdatedAt` columns
+   - CodeGen automatically adds these with proper defaults and triggers
+   - Including them manually will cause conflicts
+
+2. **Foreign Key Indexes**: Do NOT create indexes for foreign key columns
+   - CodeGen creates these with the naming pattern `IDX_AUTO_MJ_FKEY_<table>_<column>`
+   - Manual FK indexes will duplicate CodeGen's work
+
+**Example - What to include vs exclude:**
+```sql
+-- ✅ CORRECT - Only include business columns and constraints
+CREATE TABLE ${flyway:defaultSchema}.DashboardPermission (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    DashboardID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL,
+    CanRead BIT NOT NULL DEFAULT 1,
+    CanEdit BIT NOT NULL DEFAULT 0,
+    SharedByUserID UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT PK_DashboardPermission PRIMARY KEY (ID),
+    CONSTRAINT FK_DashboardPermission_Dashboard FOREIGN KEY (DashboardID) REFERENCES ${flyway:defaultSchema}.Dashboard(ID),
+    CONSTRAINT FK_DashboardPermission_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.User(ID),
+    CONSTRAINT UQ_DashboardPermission UNIQUE (DashboardID, UserID)
+);
+
+-- ❌ WRONG - Don't include these (CodeGen handles them)
+-- __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- CREATE INDEX IDX_DashboardPermission_DashboardID ON DashboardPermission(DashboardID);
+-- CREATE INDEX IDX_DashboardPermission_UserID ON DashboardPermission(UserID);
+```
 
 ## Entity Version Control
 - MemberJunction includes built-in version control called "Record Changes" for all entities
@@ -201,7 +543,9 @@ Look for packages that depend on each other:
 - Prefer object shorthand syntax
 - Follow existing naming conventions:
   - PascalCase for classes and interfaces
-  - camelCase for variables, functions, methods
+  - **PascalCase for public class members** (properties, methods, `@Input()`, `@Output()`)
+  - **camelCase for private/protected class members**
+  - camelCase for local variables and function parameters
   - Use descriptive names and avoid abbreviations
 - Imports: group imports by type (external, internal, relative)
 - Error handling: use try/catch blocks and provide meaningful error messages
@@ -211,6 +555,50 @@ Look for packages that depend on each other:
   - Functions should have a clear, single purpose
   - Break complex operations into smaller, well-named helper functions
   - Aim for functions that fit on a single screen when possible
+
+### Class Member Naming Convention (IMPORTANT)
+
+MemberJunction uses **PascalCase for all public class members** and **camelCase for private/protected members**. This applies to:
+
+```typescript
+// ✅ CORRECT - MemberJunction naming convention
+export class MyComponent {
+    // Public properties - PascalCase
+    @Input() QueryId: string | null = null;
+    @Input() AutoRun: boolean = false;
+    @Output() EntityLinkClick = new EventEmitter<EntityLinkEvent>();
+
+    public IsLoading: boolean = false;
+    public SelectedRows: Record<string, unknown>[] = [];
+
+    // Private/protected properties - camelCase
+    private destroy$ = new Subject<void>();
+    private _internalState: string = '';
+    protected cdr: ChangeDetectorRef;
+
+    // Public methods - PascalCase
+    public LoadData(): void { }
+    public OnGridReady(event: GridReadyEvent): void { }
+    public GetSelectedRows(): Record<string, unknown>[] { }
+
+    // Private/protected methods - camelCase
+    private buildColumnDefs(): void { }
+    protected applyVisualConfig(): void { }
+}
+
+// ❌ WRONG - Standard TypeScript convention (not used in MJ)
+export class MyComponent {
+    @Input() queryId: string | null = null;  // Should be PascalCase
+    public isLoading: boolean = false;        // Should be PascalCase
+    public loadData(): void { }               // Should be PascalCase
+}
+```
+
+**Why this matters:**
+- Consistency across the entire MemberJunction codebase
+- Clear visual distinction between public API and internal implementation
+- Matches the naming style used in MJ's generated entity classes
+- HTML template bindings must match the PascalCase property names
 
 ## 🚨 IMPORTANT: FUNCTIONAL DECOMPOSITION IS MANDATORY 🚨
 
@@ -324,6 +712,18 @@ const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent 
 
 ## Performance Best Practices
 
+### Server-Side Caching (Critical Architecture)
+
+MemberJunction's multi-tier caching system is a cornerstone of server performance. **Always consult [guides/CACHING_AND_PUBSUB_GUIDE.md](guides/CACHING_AND_PUBSUB_GUIDE.md)** when working on caching, RunView optimization, or data loading patterns.
+
+Key principles:
+- **Server trusts its cache completely** (`TrustLocalCacheCompletely = true`) — BaseEntity event-driven invalidation guarantees freshness
+- **All RunView/RunViews calls check the server cache first** — even without explicit `CacheLocal`, if data is in cache it's returned with zero DB queries
+- **Auto-cache**: Small (≤250 rows), unfiltered, unsorted results are automatically cached on the server because they can be safely maintained in-place via upsert/remove
+- **Filtered/sorted caches are invalidated (not updated)** on entity changes — we can't evaluate SQL predicates in JS, so the safe approach is to blow away the cache entry and let it repopulate on next request
+- **ResultType is excluded from cache fingerprints** — cache stores plain JSON regardless; transformation to BaseEntity objects happens post-cache
+- **`BypassCache: true`** — per-query escape hatch that skips all server-side caching (both read and write). Use for maintenance actions, scheduled jobs, or any query that needs true DB state after direct SQL operations that bypassed `BaseEntity.Save()`
+
 ### Batch Database Operations
 - Use `RunViews` (plural) instead of multiple `RunView` calls
 - Group related queries together in a single batch operation
@@ -338,6 +738,80 @@ const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent 
 - Use shareReplay(1) for caching data streams
 - Implement proper loading states with BehaviorSubject
 - Ensure streams are reactive to parameter changes
+
+### RunView ResultType and Fields Optimization
+
+Understanding when to use `ResultType: 'entity_object'` vs `ResultType: 'simple'` is critical for performance:
+
+#### When to Use `entity_object` (Full BaseEntity Objects)
+- When you need to **mutate and save** the records
+- When you need access to BaseEntity methods (`Save()`, `Delete()`, `Validate()`, etc.)
+- When the records will be stored and used across multiple operations
+- **DO NOT** use `Fields` parameter with `entity_object` - it is **automatically ignored**
+  - `ProviderBase.PreRunView()` ([providerBase.ts:470-477](packages/MJCore/src/generic/providerBase.ts#L470-L477)) overrides `Fields` with ALL entity fields
+  - This is by design: entity objects need all fields to be valid for mutation/validation
+
+```typescript
+// ✅ GOOD - Need to modify and save records
+const rv = new RunView();
+const result = await rv.RunView<UserEntity>({
+    EntityName: 'Users',
+    ExtraFilter: `Status='Active'`,
+    ResultType: 'entity_object'  // Full BaseEntity objects for mutation
+});
+for (const user of result.Results) {
+    user.LastLoginAt = new Date();
+    await user.Save();  // Can save because it's a real entity object
+}
+```
+
+#### When to Use `simple` (Plain JavaScript Objects)
+- When you only need to **read/display** data (no mutation)
+- When doing lookups or validation checks
+- When the results are temporary and won't be stored
+- **USE `Fields` parameter** to narrow the query scope and improve performance
+
+```typescript
+// ✅ GOOD - Read-only lookup, narrow field scope
+const rv = new RunView();
+const result = await rv.RunView<{ID: string; Name: string; Status: string}>({
+    EntityName: 'MJ: AI Agent Runs',
+    Fields: ['ID', 'Name', 'Status', 'ConversationID'],  // Only fields we need
+    ExtraFilter: `Status='Running' AND UserID='${userId}'`,
+    ResultType: 'simple'  // Plain objects, no BaseEntity overhead
+});
+// result.Results is plain objects, cannot call .Save()
+```
+
+#### Performance Impact
+- **`entity_object`**: Creates full BaseEntity subclass instances with getters/setters, validation, dirty tracking
+- **`simple`**: Returns plain JavaScript objects with just the data - much faster for read-only operations
+- **`Fields` parameter**: Reduces data transfer by excluding large columns (JSON blobs, text fields)
+
+#### Anti-Patterns
+```typescript
+// ❌ BAD - Using entity_object when only reading
+const result = await rv.RunView<SomeEntity>({
+    EntityName: 'Some Entity',
+    ResultType: 'entity_object'  // Unnecessary overhead
+});
+const ids = result.Results.map(r => r.ID);  // Only needed IDs!
+
+// ❌ BAD - Using Fields with entity_object (Fields IS IGNORED - ProviderBase overrides it)
+const result = await rv.RunView<SomeEntity>({
+    EntityName: 'Some Entity',
+    Fields: ['ID', 'Name'],  // IGNORED! ProviderBase.PreRunView() overrides with ALL fields
+    ResultType: 'entity_object'
+});
+
+// ✅ GOOD - Simple type for read-only with narrow fields
+const result = await rv.RunView<{ID: string}>({
+    EntityName: 'Some Entity',
+    Fields: ['ID'],
+    ResultType: 'simple'
+});
+const ids = result.Results.map(r => r.ID);
+```
 
 ### Efficient Data Loading with RunViews
 
@@ -413,6 +887,140 @@ const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent 
     });
   }
   ```
+
+## 🚨 CRITICAL: Design Token System — NO HARDCODED COLORS 🚨
+
+MemberJunction uses a comprehensive CSS custom property (design token) system defined in `packages/Angular/Generic/shared/src/lib/_tokens.scss`. **Every color in component CSS MUST use design tokens.** Hardcoded hex values (`#264FAF`, `#333`, `#f5f5f5`, etc.) break dark mode, prevent white-labeling, and create maintenance debt.
+
+### The Rule
+
+**NEVER write hardcoded hex/rgb colors in component CSS.** Always use the appropriate semantic token. This applies to ALL properties: `color`, `background`, `border`, `fill`, `box-shadow`, `outline`, etc.
+
+```css
+/* ❌ WRONG — hardcoded hex values */
+.my-component {
+    color: #333;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+}
+
+/* ✅ CORRECT — semantic design tokens */
+.my-component {
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+}
+```
+
+### Token Categories (Use ONLY Semantic Tokens)
+
+**NEVER use primitive tokens (`--mj-color-neutral-*`, `--mj-color-brand-*`) in component CSS.** Primitives don't adapt to dark mode. Always use semantic tokens:
+
+#### Text Colors
+| Token | Purpose |
+|---|---|
+| `--mj-text-primary` | Main body text, headings |
+| `--mj-text-secondary` | Supporting text, labels |
+| `--mj-text-muted` | De-emphasized text, captions |
+| `--mj-text-disabled` | Disabled/placeholder text |
+| `--mj-text-inverse` | Text on dark/colored backgrounds |
+| `--mj-text-link` | Clickable links |
+
+#### Background Colors
+| Token | Purpose |
+|---|---|
+| `--mj-bg-page` | Full-page background |
+| `--mj-bg-surface` | Cards, panels, modals |
+| `--mj-bg-surface-card` | Slightly tinted cards, secondary surfaces |
+| `--mj-bg-surface-sunken` | Inset areas, code backgrounds |
+| `--mj-bg-surface-elevated` | Elevated surfaces, dropdowns |
+| `--mj-bg-surface-hover` | Hover states on surfaces |
+| `--mj-bg-surface-active` | Active/pressed states |
+| `--mj-bg-overlay` | Modal/drawer backdrops |
+
+#### Border Colors
+| Token | Purpose |
+|---|---|
+| `--mj-border-default` | Standard borders |
+| `--mj-border-subtle` | Very light borders |
+| `--mj-border-strong` | Emphasized borders, scrollbar thumbs |
+| `--mj-border-focus` | Focus rings |
+
+#### Brand Colors
+| Token | Purpose |
+|---|---|
+| `--mj-brand-primary` | Primary buttons, active states, accents |
+| `--mj-brand-primary-hover` | Primary hover state |
+| `--mj-brand-primary-active` | Primary pressed state |
+
+#### Status Colors
+| Token | Purpose |
+|---|---|
+| `--mj-status-success` / `-bg` / `-text` / `-border` | Success states |
+| `--mj-status-warning` / `-bg` / `-text` / `-border` | Warning states (orange) |
+| `--mj-status-error` / `-bg` / `-text` / `-border` | Error states (red) |
+| `--mj-status-info` / `-bg` / `-text` / `-border` | Informational states |
+
+#### Logo Tokens
+| Token | Purpose |
+|---|---|
+| `--mj-logo-mark` | Logo icon (auto-switches light/dark) |
+| `--mj-logo-mark-inverse` | Logo icon for dark backgrounds |
+| `--mj-logo-wordmark` | Full logo with text |
+| `--mj-logo-color` | Loading spinner fill color |
+
+### Common Hex → Token Mappings
+
+When migrating or reviewing code, use these mappings:
+
+| Hex | Token |
+|---|---|
+| `#333`, `#334155` | `--mj-text-primary` |
+| `#555`, `#475569`, `#666` | `--mj-text-secondary` |
+| `#757575`, `#888`, `#64748b` | `--mj-text-muted` |
+| `#999`, `#94a3b8`, `#aaa` | `--mj-text-disabled` |
+| `#fff` (on colored bg) | `--mj-text-inverse` |
+| `white` (background) | `--mj-bg-surface` |
+| `#f5f5f5`, `#f8f9fa`, `#f9f9f9`, `#fafafa` | `--mj-bg-surface-card` |
+| `#f0f0f0`, `#f1f1f1`, `#f1f5f9` | `--mj-bg-surface-sunken` |
+| `#e0e0e0`, `#e2e8f0`, `#d1d5db`, `#e5e7eb` | `--mj-border-default` |
+| `#ccc`, `#cbd5e1` | `--mj-border-strong` |
+| `#ef6c00`, `#ff6600` (warning/orange) | `--mj-status-warning` |
+| `#e65100` (dark orange) | `--mj-status-warning-text` |
+| `#e53e3e`, `#dc2626` (error/red) | `--mj-status-error` |
+| `#c53030`, `#b91c1c` (dark red) | `--mj-status-error-text` |
+| `#264FAF`, `#0076b6` (MJ blue) | `--mj-brand-primary` |
+
+### Translucent Colors with `color-mix()`
+
+For translucent variants of token colors (tinted backgrounds, focus rings), use `color-mix()`:
+
+```css
+/* ✅ Tinted background from a token */
+background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+
+/* ✅ Focus ring from a token */
+box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+
+/* ✅ Subtle warning background */
+background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
+```
+
+### When Hardcoded Colors ARE Acceptable
+
+1. **SVG data URIs** — CSS variables cannot be used inside `url("data:image/svg+xml,...")`. Use `%23` encoded hex.
+2. **Code editor backgrounds** — Dark-on-dark code editors (e.g., `#1e1e1e` for CodeMirror) are intentionally static.
+3. **Categorical/chart colors** — Data visualization colors that must remain distinct regardless of theme.
+4. **`rgba()` alpha on white** — `rgba(255, 255, 255, 0.15)` for overlays on colored backgrounds is fine since it's relative to the surface it sits on.
+5. **CSS variable fallbacks** — `var(--mj-text-inverse, white)` fallback values are acceptable.
+
+### Before Submitting Any CSS
+
+Run this mental checklist:
+1. Does every `color:`, `background:`, `border-color:`, `fill:` use a token? If not, fix it.
+2. Did I use a **semantic** token (not a primitive like `--mj-color-neutral-300`)? Primitives don't adapt to dark mode.
+3. Will this look correct in dark mode? Semantic tokens auto-adapt; hardcoded values don't.
+4. For `white`/`#fff` — is it text on a colored background (`--mj-text-inverse`) or a surface background (`--mj-bg-surface`)?
 
 ## Icon Libraries
 - **Primary**: Font Awesome (already included) - Use for all icons throughout the application
@@ -639,6 +1247,43 @@ try {
 }
 ```
 
+### BaseEntity Save/Delete Error Handling
+**Critical**: `BaseEntity.Save()` and `BaseEntity.Delete()` do NOT throw exceptions on failure. They return `boolean` — `true` on success, `false` on failure. Error details are available via `entity.LatestResult.CompleteMessage` which combines all error info into a single string.
+
+```typescript
+// ✅ CORRECT — Always check the return value
+const saved = await entity.Save();
+if (!saved) {
+    LogError(`Save failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    return; // Handle the failure
+}
+
+// ✅ CORRECT — Same pattern for Delete
+const deleted = await entity.Delete();
+if (!deleted) {
+    LogError(`Delete failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+}
+
+// ❌ WRONG — Don't ignore the return value
+await entity.Save(); // Silent failure — you'll never know it failed
+
+// ❌ WRONG — Don't use try/catch for Save/Delete failures
+try {
+    await entity.Save();
+} catch (error) {
+    // This won't catch Save failures! Save returns false, it doesn't throw.
+}
+
+// ❌ WRONG — Don't use LatestResult.Message, use CompleteMessage
+LogError(`Error: ${entity.LatestResult?.Message}`); // Incomplete info
+```
+
+**Rules:**
+- **Always** check the boolean return value of `Save()` and `Delete()`
+- **Always** use `LatestResult?.CompleteMessage` (not `.Message`) for error details — `CompleteMessage` combines all error info
+- **Never** wrap `Save()`/`Delete()` in try/catch expecting them to throw on business logic failures
+- Save/Delete CAN still throw for infrastructure errors (network, connection), but logical failures (validation, permissions, FK violations) return `false`
+
 ### Key Benefits of This Pattern
 - **Type Safety**: Generic method provides full TypeScript typing
 - **Performance**: `ResultType: 'entity_object'` eliminates manual conversion loops
@@ -703,7 +1348,7 @@ MemberJunction includes a powerful code generation system that automatically cre
    - Foreign key relationships and computed fields
    - Value list enums from database constraints
 
-2. **Database Objects** (`migrations/v2/CodeGen_Run_*.sql`)
+2. **Database Objects** (`migrations/v5/CodeGen_Run_*.sql`)
    - Stored procedures (spCreate, spUpdate, spDelete) 
    - Database views with proper joins and computed fields
    - Foreign key indexes for performance
@@ -765,7 +1410,7 @@ When you add fields like `PromptRole` and `PromptPosition`:
 - **Entity Classes**: `packages/MJCoreEntities/src/generated/entity_subclasses.ts`
 - **Server APIs**: `packages/MJServer/src/generated/generated.ts` 
 - **Angular Forms**: `packages/Angular/Explorer/core-entity-forms/src/lib/generated/`
-- **Migration SQL**: `migrations/v2/CodeGen_Run_YYYY-MM-DD_HH-MM-SS.sql`
+- **Migration SQL**: `migrations/v5/CodeGen_Run_YYYY-MM-DD_HH-MM-SS.sql`
 
 ## AI Model and Vendor Configuration
 
@@ -815,12 +1460,14 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Replace `setTimeout` with `Promise.resolve().then()` for microtask timing
 - Common scenarios: clearing inputs, focus management, dynamic content updates
 
-### Kendo UI Component Usage
-- **Deprecated Syntax**: Replace `<kendo-button>` with `<button kendoButton>`
-- **Window/Dialog Positioning**: 
-  - Use `kendoWindowContainer` directive on parent containers
-  - For dynamic windows, inject `ViewContainerRef` in WindowService.open()
-  - Set explicit `top` and `left` values for center positioning
+### MJ UI Components (`@memberjunction/ng-ui-components`)
+- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material
+- Available components: `mjButton`, `mj-dialog`, `MJDialogService`, `mj-window`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `mj-progress-bar`, `mj-accordion-panel` (with `mjAccordionTitle` for rich HTML titles)
+- Splitters: Use `angular-split` (`as-split` + `as-split-area`)
+- Grids: Use AG Grid (`ag-grid-angular`)
+- CSS classes: `.mj-input`, `.mj-textarea`, `.mj-checkbox` for styled native form elements
+- All components are standalone with `inject()` DI, PascalCase inputs/outputs, and `--mj-*` design tokens
+- Import from: `import { MJButtonDirective, MJDialogComponent, ... } from '@memberjunction/ng-ui-components'`
 
 ### GraphQL Parameter Types
 - **Numeric Types**: Pay attention to GraphQL scalar types
@@ -837,6 +1484,43 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Group related components in dedicated directories
 - Export shared components (like dialogs) for reuse
 - Maintain clear separation between container and presentational components
+
+### Dialog Button Placement
+- **Confirm/Submit buttons go on the LEFT**, Cancel buttons on the RIGHT
+- This is the opposite of Windows convention but matches MemberJunction's design system
+- Example: `[Save] [Update] [Cancel]` or `[Submit] [Cancel]`
+- Apply this to all dialogs, modals, and action button groups
+
+### Input Properties - Use Getter/Setters
+- **ALWAYS** use getter/setter pattern for `@Input()` properties that need reactive behavior
+- **NEVER** rely solely on `ngOnChanges` - it's less precise and harder to debug
+- Getter/setters provide exact control over when values change and enable immediate reactions
+- Example:
+  ```typescript
+  // ✅ GOOD - Precise control with getter/setter
+  private _myInput: string | null = null;
+
+  @Input()
+  set myInput(value: string | null) {
+    const previousValue = this._myInput;
+    this._myInput = value;
+    if (value && value !== previousValue) {
+      this.onMyInputChanged(value);
+    }
+  }
+  get myInput(): string | null {
+    return this._myInput;
+  }
+
+  // ❌ BAD - Direct property with ngOnChanges
+  @Input() myInput: string | null = null;
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['myInput']) {
+      // Less precise, timing issues possible
+    }
+  }
+  ```
 
 ### Loading Indicators
 - **ALWAYS** use the `<mj-loading>` component from `@memberjunction/ng-shared-generic` for all loading states
@@ -858,6 +1542,33 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
   ```
 - Size presets: `'small'` (40x22px), `'medium'` (80x45px), `'large'` (120x67px), `'auto'` (fills container)
 - The component displays the animated MJ logo with optional text below
+
+### 🚨 CRITICAL: BaseResourceComponent Subclasses MUST Call NotifyLoadComplete() 🚨
+
+Every class that extends `BaseResourceComponent` (including `BaseDashboard` subclasses) **MUST** call `this.NotifyLoadComplete()` when its initial load is finished. Without this call, the app loading screen will hang indefinitely when navigating directly to a URL that targets that resource.
+
+- **`BaseDashboard` subclasses**: Handled automatically — `BaseDashboard.ngOnInit()` calls `NotifyLoadComplete()` after `loadData()` completes
+- **Direct `BaseResourceComponent` subclasses**: You MUST call `this.NotifyLoadComplete()` yourself, typically at the end of `ngOnInit()` or `ngAfterViewInit()`
+
+```typescript
+// ✅ CORRECT — NotifyLoadComplete called after initialization
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        this.NotifyLoadComplete(); // REQUIRED — signals the loading screen to clear
+    }
+}
+
+// ❌ WRONG — missing NotifyLoadComplete causes permanent loading screen
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        // Loading screen will hang forever on direct URL navigation!
+    }
+}
+```
+
+**Why this matters**: The shell's loading screen waits for the first resource component to signal completion via `LoadCompleteEvent`, which is wired to `NotifyLoadComplete()`. If the component never calls it, the loading animation plays indefinitely.
 
 ### Creating Custom Entity Forms
 
@@ -915,6 +1626,45 @@ When metadata records contain JSON blobs (schemas, templates, etc.):
 2. Name files descriptively with appropriate extension (e.g., `api-key.schema.json`)
 3. Use the `@file:relative/path.json` syntax in the main metadata file
 
+### Seeding New Lookup/Reference Tables
+When a migration creates a new lookup or reference table (e.g., `AIAgentRequestType`, `ResourceType`), **never seed it with SQL INSERT statements in the migration**. Instead, use the metadata file system:
+
+1. Create a new directory under `/metadata/` named for the entity (e.g., `agent-request-types/`)
+2. Create `.mj-sync.json` with the entity configuration:
+   ```json
+   {
+     "entity": "MJ: AI Agent Request Types",
+     "filePattern": "**/.*.json",
+     "defaults": {},
+     "pull": {
+       "createNewFileIfNotFound": true,
+       "newFileName": ".agent-request-types.json",
+       "appendRecordsToExistingFile": true,
+       "updateExistingRecords": true,
+       "preserveFields": [],
+       "excludeFields": [],
+       "mergeStrategy": "merge",
+       "backupBeforeUpdate": true,
+       "backupDirectory": ".backups",
+       "filter": "",
+       "externalizeFields": [],
+       "ignoreNullFields": true,
+       "ignoreVirtualFields": true,
+       "lookupFields": {},
+       "relatedEntities": {}
+     }
+   }
+   ```
+3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — these are auto-populated by mj-sync on first push.
+4. Push with: `npx mj sync push --dir=metadata --include="agent-request-types"`
+
+**Why metadata files over SQL INSERTs:**
+- Version-controlled, declarative, and human-readable
+- `@lookup:` references resolve entity names to IDs automatically
+- `mj sync push` handles upsert semantics — safe to re-run
+- Consistent with how all other MJ reference data is managed
+- See `/metadata/resource-types/` for a clean example of a seeded lookup table
+
 ### Application Metadata
 When creating new applications with custom dashboards:
 1. Create `.{app-name}-application.json` in `/metadata/applications/`
@@ -935,3 +1685,94 @@ Each nav item with `ResourceType: "Custom"` requires a corresponding component:
 3. Add a tree-shaking prevention function: `export function LoadYourResource() {}`
 4. Call the load function from the module's `public-api.ts`
 5. Register the component in the module's declarations and exports
+
+## Browser Testing with Playwright CLI
+
+### Overview
+MemberJunction uses `@playwright/cli` (Playwright CLI) for browser-based testing and UI interaction during development. The CLI uses an accessibility-snapshot approach that is token-efficient for AI agents.
+
+### Managing Dev Servers
+Claude Code should start and stop MJAPI and MJExplorer as background processes itself. This allows restarting them after code changes without relying on the user to manage them externally.
+
+```bash
+# Start MJAPI (port 4001, configured via GRAPHQL_PORT in .env)
+# Run as a background task from: packages/MJAPI/
+npm run start
+
+# Start MJExplorer (port 4201, configured in package.json start script)
+# Run as a background task from: packages/MJExplorer/
+npm run start
+```
+
+**Key points:**
+- MJAPI runs on port **4001** (set by `GRAPHQL_PORT=4001` in `.env`)
+- MJExplorer runs on port **4201** (set by `--port 4201` in its start script)
+- Run both as background tasks so you can monitor output and restart as needed
+- After rebuilding a server-side package, restart MJAPI to pick up changes
+- After rebuilding an Angular library, MJExplorer's Vite dev server auto-detects changes and triggers a browser reload — no restart needed
+- Always check that servers are healthy before launching the browser (wait for "listening on" / compilation success messages)
+
+### Persistent Browser Profile (Auth Caching)
+To avoid re-authenticating every time you launch a browser session, use the `--profile` flag to store session data (MSAL tokens, cookies, localStorage) persistently:
+
+```bash
+# First-time launch (requires manual login in the headed browser):
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+
+# Subsequent launches reuse cached auth automatically:
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+```
+
+**Key points:**
+- The `.playwright-cli/` directory is gitignored — profile data stays local
+- After authenticating once, MSAL tokens are cached in the profile directory
+- Sessions typically persist for 30+ days (same as the VSCode debug browser)
+- If auth expires, just log in once in the headed browser to refresh the cache
+
+### Common Commands
+```bash
+# Open browser with persistent auth
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+
+# Take a snapshot (get element refs for interaction)
+npx playwright-cli snapshot
+
+# Click an element by ref
+npx playwright-cli click <ref>
+
+# Type text
+npx playwright-cli type "some text"
+
+# Press a key
+npx playwright-cli press Enter
+
+# Run arbitrary Playwright code
+npx playwright-cli run-code "async (page) => { return await page.title(); }"
+
+# Check console logs
+npx playwright-cli console info
+
+# Close browser
+npx playwright-cli close
+```
+
+### Workflow for UI Bug Investigation
+1. Start MJAPI and MJExplorer as background processes (if not already running)
+2. Wait for both servers to be ready (MJAPI listening, MJExplorer compiled)
+3. Launch browser with persistent profile: `npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201`
+4. Authenticate once if needed (cached for future sessions)
+5. Use `snapshot` to inspect the page, `click`/`type` to interact
+6. Use `console info` / `console error` to check for issues
+7. Make code fixes, rebuild affected packages
+   - Server-side changes: restart MJAPI background process
+   - Angular library changes: Vite auto-reloads the browser
+8. Re-test to verify the fix
+
+## Active Technologies
+- TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk` (601-mcp-oauth)
+- N/A (token validation only, no new persistent state) (601-mcp-oauth)
+- TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `@modelcontextprotocol/sdk`, `express`, `jsonwebtoken`, `jwks-rsa` (601-mcp-oauth)
+- SQL Server (MemberJunction database) for `APIScope`, `APIKeyScope` entities; In-memory for OAuth proxy state (601-mcp-oauth)
+
+## Recent Changes
+- 601-mcp-oauth: Added TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk`

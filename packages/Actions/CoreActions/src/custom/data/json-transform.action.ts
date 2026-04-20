@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { JSONPath } from "jsonpath-plus";
-import * as jmespath from "jmespath";
+import jmespath from "jmespath";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
@@ -86,9 +86,9 @@ export class JSONTransformAction extends BaseAction {
 
             const expression = expressionParam.Value.toString();
             const transformType = (transformTypeParam?.Value?.toString() || 'JSONPath').toUpperCase();
-            const multiple = multipleParam?.Value?.toString()?.toLowerCase() === 'true' ?? true;
-            const flatten = flattenParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
-            const wrapScalar = wrapScalarParam?.Value?.toString()?.toLowerCase() === 'true' ?? false;
+            const multiple = multipleParam?.Value?.toString()?.toLowerCase() === 'true';
+            const flatten = flattenParam?.Value?.toString()?.toLowerCase() === 'true';
+            const wrapScalar = wrapScalarParam?.Value?.toString()?.toLowerCase() === 'true';
 
             let result: any;
 
@@ -168,11 +168,4 @@ export class JSONTransformAction extends BaseAction {
             };
         }
     }
-}
-
-/**
- * Loader function to ensure the JSONTransformAction class is included in the bundle
- */
-export function LoadJSONTransformAction() {
-    // Stub function to prevent tree shaking
 }

@@ -1,7 +1,0 @@
-/* Style your component and the button as needed */
-.open-chat-btn {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 1001; /* Ensure it stays on top of other floating elements */
-}

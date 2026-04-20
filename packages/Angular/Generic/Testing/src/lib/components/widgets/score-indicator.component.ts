@@ -1,18 +1,23 @@
 import { Component, Input } from '@angular/core';
 
 @Component({
+  standalone: false,
   selector: 'app-score-indicator',
   template: `
     <div class="score-indicator" [class]="getColorClass()">
-      <div class="score-bar-container" *ngIf="showBar">
-        <div class="score-bar" [style.width.%]="score * 100"></div>
-      </div>
+      @if (showBar) {
+        <div class="score-bar-container">
+          <div class="score-bar" [style.width.%]="score * 100"></div>
+        </div>
+      }
       <div class="score-value">
-        <i [class]="getIcon()" *ngIf="showIcon"></i>
+        @if (showIcon) {
+          <i [class]="getIcon()"></i>
+        }
         <span class="score-text">{{ formatScore(score) }}</span>
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .score-indicator {
       display: inline-flex;
@@ -23,7 +28,7 @@ import { Component, Input } from '@angular/core';
     .score-bar-container {
       width: 60px;
       height: 6px;
-      background: #e0e0e0;
+      background: var(--mj-border-default);
       border-radius: 3px;
       overflow: hidden;
     }
@@ -35,23 +40,23 @@ import { Component, Input } from '@angular/core';
     }
 
     .score-indicator--excellent .score-bar {
-      background: linear-gradient(90deg, #4caf50, #66bb6a);
+      background: var(--mj-status-success);
     }
 
     .score-indicator--good .score-bar {
-      background: linear-gradient(90deg, #8bc34a, #9ccc65);
+      background: var(--mj-status-success);
     }
 
     .score-indicator--fair .score-bar {
-      background: linear-gradient(90deg, #ffc107, #ffca28);
+      background: var(--mj-status-warning);
     }
 
     .score-indicator--poor .score-bar {
-      background: linear-gradient(90deg, #ff9800, #ffa726);
+      background: var(--mj-status-warning);
     }
 
     .score-indicator--fail .score-bar {
-      background: linear-gradient(90deg, #f44336, #e57373);
+      background: var(--mj-status-error);
     }
 
     .score-value {
@@ -63,23 +68,23 @@ import { Component, Input } from '@angular/core';
     }
 
     .score-indicator--excellent .score-value {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .score-indicator--good .score-value {
-      color: #8bc34a;
+      color: var(--mj-status-success);
     }
 
     .score-indicator--fair .score-value {
-      color: #ffc107;
+      color: var(--mj-status-warning);
     }
 
     .score-indicator--poor .score-value {
-      color: #ff9800;
+      color: var(--mj-status-warning);
     }
 
     .score-indicator--fail .score-value {
-      color: #f44336;
+      color: var(--mj-status-error);
     }
 
     .score-value i {

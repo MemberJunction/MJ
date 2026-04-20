@@ -29,10 +29,10 @@
 
 @keyframes dotSpin {
     from {
-        box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.8);
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-status-warning) 80%, transparent);
     }
     to {
-        box-shadow: 0 0 0 6px rgba(217, 119, 6, 0);
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--mj-status-warning) 0%, transparent);
     }
 }
 

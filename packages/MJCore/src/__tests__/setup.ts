@@ -1,18 +1,19 @@
+/// <reference types="vitest/globals" />
 /**
- * Jest setup file for MJCore tests
+ * Vitest setup file for MJCore tests
  * Runs before each test file
  */
 
 // Increase timeout for async operations
-jest.setTimeout(30000);
+vi.setConfig({ testTimeout: 30000 });
 
 // Mock console methods to reduce noise (can be enabled per test)
 global.console = {
   ...console,
   // Uncomment to silence logs during tests
-  // log: jest.fn(),
-  // debug: jest.fn(),
-  // info: jest.fn(),
-  // warn: jest.fn(),
-  // error: jest.fn(),
+  // log: vi.fn(),
+  // debug: vi.fn(),
+  // info: vi.fn(),
+  // warn: vi.fn(),
+  // error: vi.fn(),
 };

@@ -3,13 +3,22 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: white;
+  background: var(--mj-bg-surface);
 }
 
 .component-preview {
   flex: 1;
   padding: 15px;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Ensure React component takes full height */
+.component-preview mj-react-component {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -21,7 +30,9 @@
   justify-content: center;
   padding: 40px;
   text-align: center;
-  color: #dc3545;
+  color: var(--mj-status-error);
+  flex: 1;
+  min-height: 300px;
 }
 .error-state i {
   font-size: 48px;
@@ -33,7 +44,7 @@
 }
 .error-state p {
   margin: 0 0 12px 0;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 .error-state details {
   margin-top: 16px;
@@ -42,20 +53,20 @@
 }
 .error-state details summary {
   cursor: pointer;
-  color: #495057;
+  color: var(--mj-text-secondary);
   font-weight: 500;
   margin-bottom: 8px;
 }
 .error-state details summary:hover {
-  color: #212529;
+  color: var(--mj-text-primary);
 }
 .error-state details pre {
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-sunken);
   padding: 12px;
   border-radius: 4px;
   overflow-x: auto;
   font-size: 12px;
-  color: #495057;
+  color: var(--mj-text-secondary);
   margin: 0;
 }
 
@@ -67,20 +78,21 @@
   justify-content: center;
   padding: 40px;
   text-align: center;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   flex: 1;
 }
 .no-code-state i {
   font-size: 48px;
   margin-bottom: 16px;
-  color: #5B4FE9;
+  color: var(--mj-brand-primary);
 }
 .no-code-state h3 {
   margin: 0 0 8px 0;
   font-size: 20px;
-  color: #495057;
+  color: var(--mj-text-secondary);
 }
 .no-code-state p {
   margin: 0 0 8px 0;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
+

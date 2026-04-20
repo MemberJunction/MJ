@@ -9,6 +9,7 @@ export interface DeepDiffItem extends DiffChange {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-deep-diff',
   templateUrl: './deep-diff.component.html',
   styleUrls: ['./deep-diff.component.css'],

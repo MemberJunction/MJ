@@ -6,18 +6,22 @@
 import {
     UserInfo,
     Metadata,
+    IMetadataProvider,
     LogError,
     LogStatusEx,
-    IsVerboseLoggingEnabled
+    IsVerboseLoggingEnabled,
+    BaseEntity
 } from '@memberjunction/core';
 import {
-    TestEntity,
-    TestRunEntity,
-    TestSuiteEntity,
-    TestSuiteRunEntity,
-    TestTypeEntity
+    MJTestEntity,
+    MJTestRunEntity,
+    MJTestSuiteEntity,
+    MJTestSuiteRunEntity,
+    MJTestSuiteTestEntity,
+    MJTestTypeEntity,
+    MJTestRubricEntity
 } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 import { BaseTestDriver } from '../drivers/BaseTestDriver';
 import { IOracle } from '../oracles/IOracle';
@@ -28,16 +32,27 @@ import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
 import {
     TestRunOptions,
+    SuiteRunOptions,
     DriverExecutionResult,
     TestRunResult,
-    TestSuiteRunResult
+    TestSuiteRunResult,
+    TestLogMessage,
+    ResolvedTestVariables,
+    TestRunOutputItem
 } from '../types';
+import {
+    gatherExecutionContext,
+    getMachineName,
+    getMachineIdentifier
+} from '../utils/execution-context';
+import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
 
 /**
  * Main testing engine that orchestrates test execution.
  *
- * Extends TestEngineBase (UI-safe metadata cache) with execution capabilities.
- * Follows singleton pattern like SchedulingEngine.
+ * Uses composition to delegate metadata operations to TestEngineBase while
+ * adding execution capabilities. This avoids duplicate entity registration
+ * that occurs with inheritance.
  *
  * Responsibilities:
  * - Load and instantiate test drivers via ClassFactory
@@ -56,9 +71,11 @@ import {
  * console.log(`Test ${result.status}: Score ${result.score}`);
  * ```
  */
-export class TestEngine extends TestEngineBase {
+export class TestEngine extends BaseSingleton<TestEngine> {
     private _driverCache = new Map<string, BaseTestDriver>();
     private _oracleRegistry = new Map<string, IOracle>();
+    private _variableResolver = new VariableResolver();
+    private _oraclesRegistered = false;
 
     /**
      * Get singleton instance
@@ -68,24 +85,141 @@ export class TestEngine extends TestEngineBase {
     }
 
     /**
-     * Private constructor for singleton
+     * Access the contained TestEngineBase instance for metadata operations.
      */
-    private constructor() {
-        super();
+    protected get Base(): TestEngineBase {
+        return TestEngineBase.Instance;
     }
 
-    protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        try {
-            await super.AdditionalLoading(contextUser);
+    // ========================================================================
+    // DELEGATED METADATA PROPERTIES AND METHODS
+    // ========================================================================
 
-            // Register built-in oracles
+    /** Whether the base engine has been loaded/configured. */
+    public get Loaded(): boolean {
+        return this.Base.Loaded;
+    }
+
+    /** All loaded test types. */
+    public get TestTypes(): MJTestTypeEntity[] {
+        return this.Base.TestTypes;
+    }
+
+    /** All loaded tests. */
+    public get Tests(): MJTestEntity[] {
+        return this.Base.Tests;
+    }
+
+    /** All loaded test suites. */
+    public get TestSuites(): MJTestSuiteEntity[] {
+        return this.Base.TestSuites;
+    }
+
+    /** All loaded test suite tests. */
+    public get TestSuiteTests(): MJTestSuiteTestEntity[] {
+        return this.Base.TestSuiteTests;
+    }
+
+    /** All loaded test rubrics. */
+    public get TestRubrics(): MJTestRubricEntity[] {
+        return this.Base.TestRubrics;
+    }
+
+    /** All loaded test run output types. */
+    public get TestOutputTypes(): BaseEntity[] {
+        return this.Base.TestOutputTypes;
+    }
+
+    /** Get test type by ID. */
+    public GetTestTypeByID(id: string): MJTestTypeEntity | undefined {
+        return this.Base.GetTestTypeByID(id);
+    }
+
+    /** Get test type by name. */
+    public GetTestTypeByName(name: string): MJTestTypeEntity | undefined {
+        return this.Base.GetTestTypeByName(name);
+    }
+
+    /** Get test by ID. */
+    public GetTestByID(id: string): MJTestEntity | undefined {
+        return this.Base.GetTestByID(id);
+    }
+
+    /** Get test by name. */
+    public GetTestByName(name: string): MJTestEntity | undefined {
+        return this.Base.GetTestByName(name);
+    }
+
+    /** Get test suite by ID. */
+    public GetTestSuiteByID(id: string): MJTestSuiteEntity | undefined {
+        return this.Base.GetTestSuiteByID(id);
+    }
+
+    /** Get test suite by name. */
+    public GetTestSuiteByName(name: string): MJTestSuiteEntity | undefined {
+        return this.Base.GetTestSuiteByName(name);
+    }
+
+    /** Get test rubric by ID. */
+    public GetTestRubricByID(id: string): MJTestRubricEntity | undefined {
+        return this.Base.GetTestRubricByID(id);
+    }
+
+    /** Get test rubric by name. */
+    public GetTestRubricByName(name: string): MJTestRubricEntity | undefined {
+        return this.Base.GetTestRubricByName(name);
+    }
+
+    /** Get tests by type. */
+    public GetTestsByType(typeId: string): MJTestEntity[] {
+        return this.Base.GetTestsByType(typeId);
+    }
+
+    /** Get tests by tag. */
+    public GetTestsByTag(tag: string): MJTestEntity[] {
+        return this.Base.GetTestsByTag(tag);
+    }
+
+    /** Returns all tests associated with a given test suite, sorted by sequence. */
+    public GetTestsForSuite(suiteId: string): MJTestEntity[] {
+        return this.Base.GetTestsForSuite(suiteId);
+    }
+
+    /** Get active tests (Status = 'Active'). */
+    public GetActiveTests(): MJTestEntity[] {
+        return this.Base.GetActiveTests();
+    }
+
+    /** Get active test suites (Status = 'Active'). */
+    public GetActiveTestSuites(): MJTestSuiteEntity[] {
+        return this.Base.GetActiveTestSuites();
+    }
+
+    // ========================================================================
+    // CONFIG
+    // ========================================================================
+
+    /**
+     * Configure and load metadata, then register built-in oracles.
+     *
+     * @param forceRefresh - Force reload even if already loaded
+     * @param contextUser - User context for data access
+     * @param provider - Optional metadata provider
+     */
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        await this.Base.Config(forceRefresh, contextUser, provider);
+
+        // Register built-in oracles once after first config
+        if (!this._oraclesRegistered) {
             await this.registerBuiltInOracles();
-
+            this._oraclesRegistered = true;
             this.log('TestEngine configured successfully');
-        } catch (error) {
-            this.logError('Failed to configure TestEngine', error as Error);
         }
     }
+
+    // ========================================================================
+    // EXECUTION METHODS
+    // ========================================================================
 
     /**
      * Run a single test.
@@ -121,13 +255,16 @@ export class TestEngine extends TestEngineBase {
                 throw new Error(`Test not found: ${testId}`);
             }
 
+            // Get tags from options
+            const tags = options.tags;
+
             // Check RepeatCount and branch to repeated execution if needed
             if (test.RepeatCount && test.RepeatCount > 1) {
-                return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime);
+                return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags);
             }
 
             // Single execution - delegate to helper method
-            return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime);
+            return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence ?? null, options, contextUser, startTime, tags);
 
         } catch (error) {
             this.logError(`Test execution failed: ${testId}`, error as Error);
@@ -139,13 +276,13 @@ export class TestEngine extends TestEngineBase {
      * Run a test suite.
      *
      * @param suiteId - ID of the test suite to run
-     * @param options - Test execution options
+     * @param options - Suite execution options (extends TestRunOptions with suite-specific options)
      * @param contextUser - User context
      * @returns Test suite run result
      */
     public async RunSuite(
         suiteId: string,
-        options: TestRunOptions,
+        options: SuiteRunOptions,
         contextUser: UserInfo
     ): Promise<TestSuiteRunResult> {
         const startTime = Date.now();
@@ -159,20 +296,43 @@ export class TestEngine extends TestEngineBase {
             }
 
             // Load suite tests from cache
-            const tests = await this.loadSuiteTests(suiteId);
+            let tests = await this.loadSuiteTests(suiteId);
             if (tests.length === 0) {
                 throw new Error(`No tests found in suite: ${suiteId}`);
             }
 
+            // Apply test selection filters
+            tests = this.filterTestsForExecution(suiteId, tests, options);
+            if (tests.length === 0) {
+                throw new Error(`No tests match the selection criteria for suite: ${suiteId}`);
+            }
+
+            this.log(`Running ${tests.length} tests (after filtering)`, options.verbose);
+
             // Create TestSuiteRun entity
-            const suiteRun = await this.createSuiteRun(suite, contextUser);
+            const suiteRun = await this.createSuiteRun(suite, contextUser, options);
+
+            // Store resolved variables on suite run if provided
+            if (options.variables && Object.keys(options.variables).length > 0) {
+                suiteRun.ResolvedVariables = JSON.stringify({
+                    values: options.variables,
+                    sources: Object.keys(options.variables).reduce((acc, key) => {
+                        acc[key] = 'run';
+                        return acc;
+                    }, {} as Record<string, string>)
+                });
+                await suiteRun.Save();
+            }
+
+            // Get suite variables for passing to tests
+            const suiteVariablesJson = suite.Variables;
 
             // Execute tests
             const testResults: TestRunResult[] = [];
             let testSequence = 1; // Track suite execution order (1-based)
             for (const test of tests) {
                 try {
-                    const result = await this.RunTest(test.ID, options, contextUser, suiteRun.ID, testSequence);
+                    const result = await this.runTestWithSuiteVariables(test.ID, options, contextUser, suiteRun.ID, testSequence, suiteVariablesJson);
 
                     // Handle both single result and array of results (if RepeatCount > 1)
                     if (Array.isArray(result)) {
@@ -185,7 +345,6 @@ export class TestEngine extends TestEngineBase {
                     // Continue with remaining tests
                 } finally {
                     // Always increment sequence, even if test throws exception
-                    // This ensures each test gets a unique sequence number in conversation names
                     testSequence++;
                 }
             }
@@ -228,6 +387,38 @@ export class TestEngine extends TestEngineBase {
     }
 
     /**
+     * Run a test with suite variables context (used by RunSuite).
+     * @private
+     */
+    private async runTestWithSuiteVariables(
+        testId: string,
+        options: TestRunOptions,
+        contextUser: UserInfo,
+        suiteRunId: string,
+        suiteTestSequence: number,
+        suiteVariablesJson: string | null
+    ): Promise<TestRunResult | TestRunResult[]> {
+        const startTime = Date.now();
+
+        // Load test entity from cache
+        const test = await this.loadTest(testId);
+        if (!test) {
+            throw new Error(`Test not found: ${testId}`);
+        }
+
+        // Get tags from options
+        const tags = options.tags;
+
+        // Check RepeatCount and branch to repeated execution if needed
+        if (test.RepeatCount && test.RepeatCount > 1) {
+            return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags, suiteVariablesJson);
+        }
+
+        // Single execution
+        return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags, suiteVariablesJson);
+    }
+
+    /**
      * Register a custom oracle.
      *
      * @param oracle - Oracle implementation
@@ -257,6 +448,14 @@ export class TestEngine extends TestEngineBase {
     }
 
     /**
+     * Get the variable resolver instance.
+     * Useful for CLI to parse and validate variables.
+     */
+    public get VariableResolver(): VariableResolver {
+        return this._variableResolver;
+    }
+
+    /**
      * Register built-in oracles.
      * @private
      */
@@ -272,7 +471,7 @@ export class TestEngine extends TestEngineBase {
      * Get or create test driver instance.
      * @private
      */
-    private async getDriver(testType: TestTypeEntity, contextUser: UserInfo): Promise<BaseTestDriver> {
+    private async getDriver(testType: MJTestTypeEntity, contextUser: UserInfo): Promise<BaseTestDriver> {
         // Check cache
         const cached = this._driverCache.get(testType.ID);
         if (cached) {
@@ -298,7 +497,7 @@ export class TestEngine extends TestEngineBase {
      * Get test entity from cache.
      * @private
      */
-    private async loadTest(testId: string): Promise<TestEntity> {
+    private async loadTest(testId: string): Promise<MJTestEntity> {
         // Use cached test instead of loading from DB
         const test = this.GetTestByID(testId);
         if (!test) {
@@ -311,7 +510,7 @@ export class TestEngine extends TestEngineBase {
      * Get suite entity from cache.
      * @private
      */
-    private async loadSuite(suiteId: string): Promise<TestSuiteEntity> {
+    private async loadSuite(suiteId: string): Promise<MJTestSuiteEntity> {
         // Use cached suite instead of loading from DB
         const suite = this.GetTestSuiteByID(suiteId);
         if (!suite) {
@@ -324,9 +523,63 @@ export class TestEngine extends TestEngineBase {
      * Get tests for a suite from cache (sorted by sequence).
      * @private
      */
-    private async loadSuiteTests(suiteId: string): Promise<TestEntity[]> {
+    private async loadSuiteTests(suiteId: string): Promise<MJTestEntity[]> {
         // Use cached test suite tests and tests instead of querying DB
         return this.GetTestsForSuite(suiteId);
+    }
+
+    /**
+     * Filter tests based on suite run options.
+     * @private
+     */
+    private filterTestsForExecution(
+        suiteId: string,
+        tests: MJTestEntity[],
+        options: SuiteRunOptions
+    ): MJTestEntity[] {
+        // Get suite test mappings to access sequence numbers
+        const suiteTests = this.TestSuiteTests.filter(st => UUIDsEqual(st.SuiteID, suiteId));
+
+        // Create a map of testId -> sequence for efficient lookup
+        const testSequenceMap = new Map<string, number>();
+        for (const st of suiteTests) {
+            testSequenceMap.set(st.TestID, st.Sequence);
+        }
+
+        let filteredTests = [...tests];
+
+        // Filter by selectedTestIds if provided
+        if (options.selectedTestIds && options.selectedTestIds.length > 0) {
+            const selectedIds = new Set(options.selectedTestIds);
+            filteredTests = filteredTests.filter(t => selectedIds.has(t.ID));
+            this.log(`Filtered to ${filteredTests.length} tests by selectedTestIds`, options.verbose);
+        }
+
+        // Filter by sequence range if provided
+        if (options.sequenceStart != null || options.sequenceEnd != null) {
+            const start = options.sequenceStart ?? 1;
+            const end = options.sequenceEnd ?? Number.MAX_SAFE_INTEGER;
+
+            filteredTests = filteredTests.filter(test => {
+                const seq = testSequenceMap.get(test.ID);
+                if (seq == null) return false;
+                return seq >= start && seq <= end;
+            });
+            this.log(`Filtered to ${filteredTests.length} tests by sequence range [${start}-${end}]`, options.verbose);
+        }
+
+        // Filter by specific sequence numbers if provided
+        if (options.sequence && options.sequence.length > 0) {
+            const sequenceSet = new Set(options.sequence);
+            filteredTests = filteredTests.filter(test => {
+                const seq = testSequenceMap.get(test.ID);
+                if (seq == null) return false;
+                return sequenceSet.has(seq);
+            });
+            this.log(`Filtered to ${filteredTests.length} tests by sequence numbers [${options.sequence.join(', ')}]`, options.verbose);
+        }
+
+        return filteredTests;
     }
 
     /**
@@ -334,13 +587,14 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async createTestRun(
-        test: TestEntity,
+        test: MJTestEntity,
         contextUser: UserInfo,
         suiteRunId?: string | null,
-        sequence?: number | null
-    ): Promise<TestRunEntity> {
+        sequence?: number | null,
+        tags?: string | null
+    ): Promise<MJTestRunEntity> {
         const md = new Metadata();
-        const testRun = await md.GetEntityObject<TestRunEntity>('MJ: Test Runs', contextUser);
+        const testRun = await md.GetEntityObject<MJTestRunEntity>('MJ: Test Runs', contextUser);
         testRun.NewRecord();
         testRun.TestID = test.ID;
         testRun.RunByUserID = contextUser.ID;
@@ -352,14 +606,22 @@ export class TestEngine extends TestEngineBase {
             testRun.TestSuiteRunID = suiteRunId;
         }
 
-        // Set sequence if provided (for suite test order or repeat iterations)
-        // sequence will be:
-        // - Suite test position (1, 2, 3...) for tests in a suite
-        // - Iteration number (1, 2, 3...) for repeated tests
-        // - null for standalone, non-repeated tests
+        // Set sequence if provided
         if (sequence != null) {
             testRun.Sequence = sequence;
         }
+
+        // Set tags if provided
+        if (tags) {
+            testRun.Tags = tags;
+        }
+
+        // Set execution context fields for cross-server aggregation
+        testRun.MachineName = getMachineName();
+        testRun.MachineID = getMachineIdentifier() || null;
+        testRun.RunByUserName = contextUser.Name;
+        testRun.RunByUserEmail = contextUser.Email;
+        testRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
 
         const saved = await testRun.Save();
         if (!saved) {
@@ -375,11 +637,12 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async createSuiteRun(
-        suite: TestSuiteEntity,
-        contextUser: UserInfo
-    ): Promise<TestSuiteRunEntity> {
+        suite: MJTestSuiteEntity,
+        contextUser: UserInfo,
+        options?: SuiteRunOptions
+    ): Promise<MJTestSuiteRunEntity> {
         const md = new Metadata();
-        const suiteRun = await md.GetEntityObject<TestSuiteRunEntity>(
+        const suiteRun = await md.GetEntityObject<MJTestSuiteRunEntity>(
             'MJ: Test Suite Runs',
             contextUser
         );
@@ -388,6 +651,18 @@ export class TestEngine extends TestEngineBase {
         suiteRun.RunByUserID = contextUser.ID;
         suiteRun.Status = 'Running';
         suiteRun.StartedAt = new Date();
+
+        // Set tags if provided
+        if (options?.tags) {
+            suiteRun.Tags = options.tags;
+        }
+
+        // Set execution context fields for cross-server aggregation
+        suiteRun.MachineName = getMachineName();
+        suiteRun.MachineID = getMachineIdentifier() || null;
+        suiteRun.RunByUserName = contextUser.Name;
+        suiteRun.RunByUserEmail = contextUser.Email;
+        suiteRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
 
         const saved = await suiteRun.Save();
         if (!saved) {
@@ -403,9 +678,11 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async updateTestRun(
-        testRun: TestRunEntity,
+        testRun: MJTestRunEntity,
         result: DriverExecutionResult,
-        startTime: number
+        startTime: number,
+        contextUser: UserInfo,
+        logMessages?: TestLogMessage[]
     ): Promise<void> {
         testRun.Status = result.status;
         testRun.Score = result.score;
@@ -414,6 +691,10 @@ export class TestEngine extends TestEngineBase {
         testRun.TotalChecks = result.totalChecks;
         testRun.TargetType = result.targetType;
         testRun.TargetLogID = result.targetLogId;
+        // Set the proper Entity FK for target linkage
+        if (result.targetLogEntityId) {
+            testRun.TargetLogEntityID = result.targetLogEntityId;
+        }
         testRun.InputData = result.inputData ? JSON.stringify(result.inputData) : null;
         testRun.ExpectedOutputData = result.expectedOutput ? JSON.stringify(result.expectedOutput) : null;
         testRun.ActualOutputData = result.actualOutput ? JSON.stringify(result.actualOutput) : null;
@@ -422,9 +703,108 @@ export class TestEngine extends TestEngineBase {
         testRun.DurationSeconds = (Date.now() - startTime) / 1000;
         testRun.CompletedAt = new Date();
 
+        // Save accumulated log messages
+        if (logMessages && logMessages.length > 0) {
+            testRun.Log = this.formatLogMessages(logMessages);
+        }
+
+        // Ensure ErrorMessage is populated for timeout and error statuses
+        if ((result.status === 'Timeout' || result.status === 'Error') && result.errorMessage) {
+            testRun.ErrorMessage = result.errorMessage;
+        }
+
         const saved = await testRun.Save();
         if (!saved) {
             this.logError('Failed to update TestRun entity', new Error(testRun.LatestResult?.Message));
+        }
+
+        // Persist structured outputs if the driver emitted any
+        if (result.outputs && result.outputs.length > 0) {
+            await this.persistOutputs(testRun, result.outputs, contextUser);
+        }
+    }
+
+    /**
+     * Format log messages into a single string for storage.
+     * @private
+     */
+    private formatLogMessages(messages: TestLogMessage[]): string {
+        return messages
+            .map(m => `[${m.timestamp.toISOString()}] [${m.level.toUpperCase()}] ${m.message}`)
+            .join('\n');
+    }
+
+    /**
+     * Persist structured outputs emitted by a test driver as TestRunOutput entity records.
+     * @private
+     */
+    private async persistOutputs(
+        testRun: MJTestRunEntity,
+        outputs: TestRunOutputItem[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        try {
+            this.log(`Persisting ${outputs.length} test run output(s) for TestRun ${testRun.ID}`);
+
+            const outputTypes = this.TestOutputTypes;
+            if (outputTypes.length === 0) {
+                this.logError('TestOutputTypes cache is empty — no Test Run Output Type rows found. Cannot persist outputs.');
+                return;
+            }
+
+            const md = new Metadata();
+            let persisted = 0;
+            for (const output of outputs) {
+                const outputType = outputTypes.find(t => t.Get('Name') === output.outputTypeName);
+                if (!outputType) {
+                    const availableTypes = outputTypes.map(t => t.Get('Name') as string).join(', ');
+                    this.logError(`Unknown output type: "${output.outputTypeName}". Available types: ${availableTypes}. Skipping output.`);
+                    continue;
+                }
+
+                await this.persistSingleOutput(md, testRun, output, outputType.Get('ID') as string, contextUser);
+                persisted++;
+            }
+
+            this.log(`Persisted ${persisted}/${outputs.length} test run outputs`);
+        } catch (error) {
+            this.logError('Failed to persist test run outputs', error as Error);
+        }
+    }
+
+    /**
+     * Persist a single output record.
+     * @private
+     */
+    private async persistSingleOutput(
+        md: Metadata,
+        testRun: MJTestRunEntity,
+        output: TestRunOutputItem,
+        outputTypeId: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        // Use BaseEntity since TestRunOutputEntity won't exist until CodeGen runs
+        const entity = await md.GetEntityObject('MJ: Test Run Outputs', contextUser);
+        entity.NewRecord();
+        entity.Set('TestRunID', testRun.ID);
+        entity.Set('OutputTypeID', outputTypeId);
+        entity.Set('Sequence', output.sequence);
+
+        if (output.stepNumber != null) entity.Set('StepNumber', output.stepNumber);
+        if (output.name) entity.Set('Name', output.name);
+        if (output.description) entity.Set('Description', output.description);
+        if (output.mimeType) entity.Set('MimeType', output.mimeType);
+        if (output.inlineData) entity.Set('InlineData', output.inlineData);
+        if (output.fileSizeBytes != null) entity.Set('FileSizeBytes', output.fileSizeBytes);
+        if (output.width != null) entity.Set('Width', output.width);
+        if (output.height != null) entity.Set('Height', output.height);
+        if (output.durationSeconds != null) entity.Set('DurationSeconds', output.durationSeconds);
+        if (output.metadata) entity.Set('Metadata', JSON.stringify(output.metadata));
+
+        const saved = await entity.Save();
+        if (!saved) {
+            const reason = entity.LatestResult?.Message || 'unknown error';
+            this.logError(`Failed to save test run output "${output.name || output.outputTypeName}": ${reason}`);
         }
     }
 
@@ -433,7 +813,7 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async updateSuiteRun(
-        suiteRun: TestSuiteRunEntity,
+        suiteRun: MJTestSuiteRunEntity,
         testResults: TestRunResult[],
         startTime: number
     ): Promise<void> {
@@ -459,13 +839,15 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async runRepeatedTest(
-        test: TestEntity,
+        test: MJTestEntity,
         repeatCount: number,
         options: TestRunOptions,
         contextUser: UserInfo,
         suiteRunId: string | null | undefined,
         suiteTestSequence: number | null | undefined,
-        startTime: number
+        startTime: number,
+        tags?: string,
+        suiteVariablesJson?: string | null
     ): Promise<TestRunResult[]> {
         const results: TestRunResult[] = [];
 
@@ -480,7 +862,9 @@ export class TestEngine extends TestEngineBase {
                 iteration,
                 options,
                 contextUser,
-                Date.now() // Each iteration gets its own start time
+                Date.now(), // Each iteration gets its own start time
+                tags,
+                suiteVariablesJson
             );
 
             results.push(result);
@@ -500,17 +884,43 @@ export class TestEngine extends TestEngineBase {
      * @private
      */
     private async runSingleTestIteration(
-        test: TestEntity,
+        test: MJTestEntity,
         suiteRunId: string | null | undefined,
         sequence: number | null,
         options: TestRunOptions,
         contextUser: UserInfo,
-        startTime: number
+        startTime: number,
+        tags?: string,
+        suiteVariablesJson?: string | null
     ): Promise<TestRunResult> {
         // Get test type
         const testType = this.GetTestTypeByID(test.TypeID);
         if (!testType) {
             throw new Error(`Test type not found: ${test.TypeID}`);
+        }
+
+        // Resolve variables through the hierarchy
+        let resolvedVariables: ResolvedTestVariables | undefined;
+        try {
+            resolvedVariables = this._variableResolver.resolveVariables(
+                testType.VariablesSchema,  // TestType.VariablesSchema JSON
+                test.Variables,             // Test.Variables JSON
+                suiteVariablesJson || null, // TestSuite.Variables JSON (if running in suite)
+                options                      // Runtime options with variables
+            );
+
+            // Log resolved variables if any
+            if (resolvedVariables && Object.keys(resolvedVariables.values).length > 0) {
+                this.log(
+                    `Resolved variables: ${JSON.stringify(resolvedVariables.values)}`,
+                    options.verbose
+                );
+            }
+        } catch (error) {
+            if (error instanceof VariableResolutionError) {
+                throw new Error(`Variable resolution failed: ${error.message}`);
+            }
+            throw error;
         }
 
         // Progress: Initializing driver
@@ -527,8 +937,33 @@ export class TestEngine extends TestEngineBase {
         // Get or create driver
         const driver = await this.getDriver(testType, contextUser);
 
+        // Check if driver supports cancellation and log warning if not
+        const supportsCancellation = driver.supportsCancellation();
+        if (!supportsCancellation) {
+            this.log(
+                `Warning: Test type '${testType.Name}' (driver: ${testType.DriverClass}) does not support cancellation. ` +
+                `Timeout will mark test as failed but execution may continue in background.`,
+                options.verbose
+            );
+        }
+
         // Create TestRun entity
-        const testRun = await this.createTestRun(test, contextUser, suiteRunId, sequence);
+        const testRun = await this.createTestRun(test, contextUser, suiteRunId, sequence, tags);
+
+        // Set up log accumulation
+        const logMessages: TestLogMessage[] = [];
+        const originalLogCallback = options.logCallback;
+
+        // Create enhanced options with log accumulation
+        const enhancedOptions: TestRunOptions = {
+            ...options,
+            logCallback: (message: TestLogMessage) => {
+                // Accumulate log messages
+                logMessages.push(message);
+                // Also call original callback if provided
+                originalLogCallback?.(message);
+            }
+        };
 
         // Progress: Executing test
         options.progressCallback?.({
@@ -548,9 +983,25 @@ export class TestEngine extends TestEngineBase {
             test,
             testRun,
             contextUser,
-            options,
-            oracleRegistry: this._oracleRegistry
+            options: enhancedOptions,
+            oracleRegistry: this._oracleRegistry,
+            resolvedVariables
         });
+
+        // If timeout occurred and driver doesn't support cancellation, add warning to error message
+        if (driverResult.status === 'Timeout' && !supportsCancellation) {
+            const warningMessage = `Test type '${testType.Name}' does not support cancellation - execution may continue in background.`;
+            driverResult.errorMessage = driverResult.errorMessage
+                ? `${driverResult.errorMessage}\n${warningMessage}`
+                : warningMessage;
+
+            // Also add to log
+            logMessages.push({
+                timestamp: new Date(),
+                level: 'warn',
+                message: warningMessage
+            });
+        }
 
         // Progress: Evaluating oracles
         const oracleCount = driverResult.oracleResults?.length || 0;
@@ -564,8 +1015,13 @@ export class TestEngine extends TestEngineBase {
             }
         });
 
-        // Update TestRun entity with results
-        await this.updateTestRun(testRun, driverResult, startTime);
+        // Store resolved variables on TestRun for reproducibility
+        if (resolvedVariables && Object.keys(resolvedVariables.values).length > 0) {
+            testRun.ResolvedVariables = JSON.stringify(resolvedVariables);
+        }
+
+        // Update TestRun entity with results and logs
+        await this.updateTestRun(testRun, driverResult, startTime, contextUser, logMessages);
 
         // Convert to TestRunResult
         const result: TestRunResult = {
@@ -579,11 +1035,14 @@ export class TestEngine extends TestEngineBase {
             totalChecks: driverResult.totalChecks,
             oracleResults: driverResult.oracleResults,
             targetType: driverResult.targetType,
+            targetLogEntityId: driverResult.targetLogEntityId,
             targetLogId: driverResult.targetLogId,
             durationMs: Date.now() - startTime,
             totalCost: driverResult.totalCost || 0,
             startedAt: testRun.StartedAt!,
-            completedAt: testRun.CompletedAt!
+            completedAt: testRun.CompletedAt!,
+            errorMessage: driverResult.errorMessage,
+            resolvedVariables
         };
 
         // Add sequence if this is a repeated test iteration

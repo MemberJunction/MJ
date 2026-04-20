@@ -1,7 +1,7 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
-import { DialogService, DialogRef, WindowService, WindowRef, WindowSettings } from '@progress/kendo-angular-dialog';
+import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { Observable } from 'rxjs';
-import { ActionEntity, AIAgentPromptEntity,  } from '@memberjunction/core-entities';
+import { MJActionEntity, MJAIAgentPromptEntity,  } from '@memberjunction/core-entities';
 import { AddActionDialogComponent } from './add-action-dialog.component';
 import { PromptSelectorDialogComponent, PromptSelectorConfig, PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AgentPromptAdvancedSettingsDialogComponent, AgentPromptAdvancedSettingsFormData } from './agent-prompt-advanced-settings-dialog.component';
@@ -9,7 +9,7 @@ import { SubAgentAdvancedSettingsDialogComponent, SubAgentAdvancedSettingsFormDa
 import { SubAgentSelectorDialogComponent, SubAgentSelectorConfig, SubAgentSelectorResult } from './sub-agent-selector-dialog.component';
 import { CreatePromptDialogComponent, CreatePromptConfig, CreatePromptResult } from './create-prompt-dialog.component';
 import { CreateSubAgentDialogComponent, CreateSubAgentConfig, CreateSubAgentResult } from './create-sub-agent-dialog.component';
-import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Consolidated service for managing AI Agent operations including:
@@ -27,8 +27,7 @@ import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/a
 export class AIAgentManagementService {
 
   constructor(
-    private dialogService: DialogService,
-    private windowService: WindowService
+    private dialogService: MJDialogService
   ) {}
 
   // === Action Management ===
@@ -44,30 +43,22 @@ export class AIAgentManagementService {
     agentName: string;
     existingActionIds: string[];
     viewContainerRef?: ViewContainerRef;
-  }): Observable<ActionEntity[]> {
-    const windowSettings: WindowSettings = {
+  }): Observable<MJActionEntity[]> {
+    const dialogRef = this.dialogService.open({
       title: `Add Actions to ${config.agentName}`,
       content: AddActionDialogComponent,
       width: 1000,
       height: 700,
       minWidth: 800,
-      minHeight: 600,
-      draggable: true,
-      resizable: true,
-      state: 'default'
-    };
-
-    if (config.viewContainerRef) {
-      windowSettings.appendTo = config.viewContainerRef;
-    }
-
-    const windowRef: WindowRef = this.windowService.open(windowSettings);
+      appendTo: config.viewContainerRef
+    });
 
     // Pass configuration to the dialog component
-    const componentInstance = windowRef.content.instance as AddActionDialogComponent;
+    const componentInstance = dialogRef.Content!.instance as unknown as AddActionDialogComponent;
     componentInstance.agentId = config.agentId;
     componentInstance.agentName = config.agentName;
     componentInstance.existingActionIds = [...config.existingActionIds];
+    componentInstance.DialogClose?.subscribe(() => dialogRef.Close());
 
     return componentInstance.result.asObservable();
   }
@@ -99,27 +90,19 @@ export class AIAgentManagementService {
       linkedPromptIds: config.linkedPromptIds || []
     };
 
-    const windowSettings: WindowSettings = {
+    const dialogRef = this.dialogService.open({
       title: selectorConfig.title,
       content: PromptSelectorDialogComponent,
       width: 900,
       height: 600,
       minWidth: 600,
-      minHeight: 400,
-      draggable: true,
-      resizable: true,
-      state: 'default'
-    };
-
-    if (config.viewContainerRef) {
-      windowSettings.appendTo = config.viewContainerRef;
-    }
-
-    const windowRef: WindowRef = this.windowService.open(windowSettings);
+      appendTo: config.viewContainerRef
+    });
 
     // Pass configuration to the dialog component
-    const componentInstance = windowRef.content.instance as PromptSelectorDialogComponent;
+    const componentInstance = dialogRef.Content!.instance as unknown as PromptSelectorDialogComponent;
     componentInstance.config = selectorConfig;
+    componentInstance.DialogClose?.subscribe(() => dialogRef.Close());
 
     return componentInstance.result.asObservable();
   }
@@ -133,7 +116,7 @@ export class AIAgentManagementService {
   openContextCompressionPromptSelector(config: {
     currentPromptId?: string;
     viewContainerRef?: ViewContainerRef;
-  }): Observable<AIPromptEntityExtended | null> {
+  }): Observable<MJAIPromptEntityExtended | null> {
     return new Observable(observer => {
       this.openPromptSelectorDialog({
         title: 'Select Context Compression Prompt',
@@ -177,27 +160,19 @@ export class AIAgentManagementService {
       parentAgentId: config.parentAgentId
     };
 
-    const windowSettings: WindowSettings = {
+    const dialogRef = this.dialogService.open({
       title: selectorConfig.title,
       content: SubAgentSelectorDialogComponent,
       width: 1000,
       height: 700,
       minWidth: 800,
-      minHeight: 600,
-      draggable: true,
-      resizable: true,
-      state: 'default'
-    };
-
-    if (config.viewContainerRef) {
-      windowSettings.appendTo = config.viewContainerRef;
-    }
-
-    const windowRef: WindowRef = this.windowService.open(windowSettings);
+      appendTo: config.viewContainerRef
+    });
 
     // Pass configuration to the dialog component
-    const componentInstance = windowRef.content.instance as SubAgentSelectorDialogComponent;
+    const componentInstance = dialogRef.Content!.instance as unknown as SubAgentSelectorDialogComponent;
     componentInstance.config = selectorConfig;
+    componentInstance.DialogClose?.subscribe(() => dialogRef.Close());
 
     return componentInstance.result.asObservable();
   }
@@ -211,32 +186,24 @@ export class AIAgentManagementService {
    * @returns Observable that emits the form data when dialog is closed, or null if cancelled
    */
   openAgentPromptAdvancedSettingsDialog(config: {
-    agentPrompt: AIAgentPromptEntity;
-    allAgentPrompts: AIAgentPromptEntity[];
+    agentPrompt: MJAIAgentPromptEntity;
+    allAgentPrompts: MJAIAgentPromptEntity[];
     viewContainerRef?: ViewContainerRef;
   }): Observable<AgentPromptAdvancedSettingsFormData | null> {
-    const windowSettings: WindowSettings = {
+    const dialogRef = this.dialogService.open({
       title: `Advanced Settings - Prompt Configuration`,
       content: AgentPromptAdvancedSettingsDialogComponent,
       width: 700,
       height: 600,
       minWidth: 500,
-      minHeight: 400,
-      draggable: true,
-      resizable: true,
-      state: 'default'
-    };
-
-    if (config.viewContainerRef) {
-      windowSettings.appendTo = config.viewContainerRef;
-    }
-
-    const windowRef: WindowRef = this.windowService.open(windowSettings);
+      appendTo: config.viewContainerRef
+    });
 
     // Pass configuration to the dialog component
-    const componentInstance = windowRef.content.instance as AgentPromptAdvancedSettingsDialogComponent;
+    const componentInstance = dialogRef.Content!.instance as unknown as AgentPromptAdvancedSettingsDialogComponent;
     componentInstance.agentPrompt = config.agentPrompt;
     componentInstance.allAgentPrompts = config.allAgentPrompts;
+    componentInstance.DialogClose?.subscribe(() => dialogRef.Close());
 
     return componentInstance.result.asObservable();
   }
@@ -248,32 +215,24 @@ export class AIAgentManagementService {
    * @returns Observable that emits the form data when dialog is closed, or null if cancelled
    */
   openSubAgentAdvancedSettingsDialog(config: {
-    subAgent: AIAgentEntityExtended;
-    allSubAgents: AIAgentEntityExtended[];
+    subAgent: MJAIAgentEntityExtended;
+    allSubAgents: MJAIAgentEntityExtended[];
     viewContainerRef?: ViewContainerRef;
   }): Observable<SubAgentAdvancedSettingsFormData | null> {
-    const windowSettings: WindowSettings = {
+    const dialogRef = this.dialogService.open({
       title: `Advanced Settings - ${config.subAgent.Name || 'Sub-Agent'}`,
       content: SubAgentAdvancedSettingsDialogComponent,
       width: 700,
       height: 600,
       minWidth: 500,
-      minHeight: 400,
-      draggable: true,
-      resizable: true,
-      state: 'default'
-    };
-
-    if (config.viewContainerRef) {
-      windowSettings.appendTo = config.viewContainerRef;
-    }
-
-    const windowRef: WindowRef = this.windowService.open(windowSettings);
+      appendTo: config.viewContainerRef
+    });
 
     // Pass configuration to the dialog component
-    const componentInstance = windowRef.content.instance as SubAgentAdvancedSettingsDialogComponent;
+    const componentInstance = dialogRef.Content!.instance as unknown as SubAgentAdvancedSettingsDialogComponent;
     componentInstance.subAgent = config.subAgent;
     componentInstance.allSubAgents = config.allSubAgents;
+    componentInstance.DialogClose?.subscribe(() => dialogRef.Close());
 
     return componentInstance.result.asObservable();
   }
@@ -299,27 +258,19 @@ export class AIAgentManagementService {
       initialTypeID: config.initialTypeID
     };
 
-    const windowSettings: WindowSettings = {
+    const dialogRef = this.dialogService.open({
       title: createConfig.title,
       content: CreatePromptDialogComponent,
       width: 900,
       height: 700,
       minWidth: 700,
-      minHeight: 500,
-      draggable: true,
-      resizable: true,
-      state: 'default'
-    };
-
-    if (config.viewContainerRef) {
-      windowSettings.appendTo = config.viewContainerRef;
-    }
-
-    const windowRef: WindowRef = this.windowService.open(windowSettings);
+      appendTo: config.viewContainerRef
+    });
 
     // Pass configuration to the dialog component
-    const componentInstance = windowRef.content.instance as CreatePromptDialogComponent;
+    const componentInstance = dialogRef.Content!.instance as unknown as CreatePromptDialogComponent;
     componentInstance.config = createConfig;
+    componentInstance.DialogClose?.subscribe(() => dialogRef.Close());
 
     return componentInstance.result.asObservable();
   }
@@ -349,27 +300,19 @@ export class AIAgentManagementService {
       parentAgentName: config.parentAgentName
     };
 
-    const windowSettings: WindowSettings = {
+    const dialogRef = this.dialogService.open({
       title: createConfig.title,
       content: CreateSubAgentDialogComponent,
       width: 1000,
       height: 800,
       minWidth: 800,
-      minHeight: 600,
-      draggable: true,
-      resizable: true,
-      state: 'default'
-    };
-
-    if (config.viewContainerRef) {
-      windowSettings.appendTo = config.viewContainerRef;
-    }
-
-    const windowRef: WindowRef = this.windowService.open(windowSettings);
+      appendTo: config.viewContainerRef
+    });
 
     // Pass configuration to the dialog component
-    const componentInstance = windowRef.content.instance as CreateSubAgentDialogComponent;
+    const componentInstance = dialogRef.Content!.instance as unknown as CreateSubAgentDialogComponent;
     componentInstance.config = createConfig;
+    componentInstance.DialogClose?.subscribe(() => dialogRef.Close());
 
     return componentInstance.result.asObservable();
   }
@@ -385,9 +328,9 @@ export class AIAgentManagementService {
    */
   openCreateAgentDialog(config: {
     parentAgentId?: string;
-    initialData?: Partial<AIAgentEntityExtended>;
+    initialData?: Partial<MJAIAgentEntityExtended>;
     viewContainerRef?: ViewContainerRef;
-  }): Observable<AIAgentEntityExtended | null> {
+  }): Observable<MJAIAgentEntityExtended | null> {
     // TODO: Implement agent creation dialog
     // This will reuse the same form components and advanced settings
     // but in a creation context rather than editing context
@@ -400,7 +343,7 @@ export class AIAgentManagementService {
    * Validates agent configuration and relationships
    * Used by both creation and editing workflows
    */
-  validateAgentConfiguration(agent: AIAgentEntityExtended): { isValid: boolean; errors: string[] } {
+  validateAgentConfiguration(agent: MJAIAgentEntityExtended): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
     // ParentID vs ExposeAsAction validation
@@ -435,8 +378,8 @@ export class AIAgentManagementService {
    * in the context of the parent agent's sub-agents section
    */
   openSubAgentManagementDialog(config: {
-    parentAgent: AIAgentEntityExtended;
-    subAgent?: AIAgentEntityExtended; // For editing existing sub-agent relationship
+    parentAgent: MJAIAgentEntityExtended;
+    subAgent?: MJAIAgentEntityExtended; // For editing existing sub-agent relationship
     viewContainerRef?: ViewContainerRef;
   }): Observable<any> {
     // TODO: Implement sub-agent management dialog

@@ -1,16 +1,23 @@
-import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled, PlatformSQL, IsPlatformSQL } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { gql, GraphQLClient } from 'graphql-request'
 import { ActionItemInput, RolesAndUsersInput, SyncDataResult, SyncRolesAndUsersResult } from './rolesAndUsersType';
-import { 
-    RunAIPromptParams, 
-    RunAIPromptResult, 
+import {
+    RunAIPromptParams,
+    RunAIPromptResult,
     ExecuteSimplePromptParams,
     SimplePromptResult,
     EmbedTextParams,
     EmbedTextResult
 } from './graphQLAIClient';
 import { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import {
+    SearchClientResponse,
+    SearchClientResultItem,
+    SearchScoreBreakdown,
+    SearchSourceCounts,
+    SearchClientProviderInfo
+} from './graphQLSearchClient';
 
 /**
  * Specialized client that is designed to be used exclusively on the server side
@@ -62,6 +69,20 @@ export class GraphQLSystemUserClient {
         this._client = new GraphQLClient(url, {
             headers
         });
+    }
+
+    /**
+     * Resolves a PlatformSQL union value to a plain string for GraphQL transport.
+     * GraphQL only supports scalar String types, so PlatformSQL objects must be
+     * resolved before serialization. Uses the `default` variant since the system
+     * user client does not know the remote server's database platform.
+     */
+    private resolvePlatformSQL(value: string | PlatformSQL | undefined): string | undefined {
+        if (value == null) return undefined;
+        if (IsPlatformSQL(value)) {
+            return value.default;
+        }
+        return value;
     }
 
     /**
@@ -302,7 +323,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { RunViewByNameSystemUser: RunViewSystemUserResult };
+            // Resolve PlatformSQL to plain strings before GraphQL transport
+            const resolvedInput = { ...input, ExtraFilter: this.resolvePlatformSQL(input.ExtraFilter), OrderBy: this.resolvePlatformSQL(input.OrderBy) };
+            const result = await this.Client.request(query, { input: resolvedInput }) as { RunViewByNameSystemUser: RunViewSystemUserResult };
             if (result && result.RunViewByNameSystemUser) {
                 return result.RunViewByNameSystemUser;
             } else {
@@ -349,7 +372,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { RunViewByIDSystemUser: RunViewSystemUserResult };
+            // Resolve PlatformSQL to plain strings before GraphQL transport
+            const resolvedInput = { ...input, ExtraFilter: this.resolvePlatformSQL(input.ExtraFilter), OrderBy: this.resolvePlatformSQL(input.OrderBy) };
+            const result = await this.Client.request(query, { input: resolvedInput }) as { RunViewByIDSystemUser: RunViewSystemUserResult };
             if (result && result.RunViewByIDSystemUser) {
                 return result.RunViewByIDSystemUser;
             } else {
@@ -396,7 +421,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { RunDynamicViewSystemUser: RunViewSystemUserResult };
+            // Resolve PlatformSQL to plain strings before GraphQL transport
+            const resolvedInput = { ...input, ExtraFilter: this.resolvePlatformSQL(input.ExtraFilter), OrderBy: this.resolvePlatformSQL(input.OrderBy) };
+            const result = await this.Client.request(query, { input: resolvedInput }) as { RunDynamicViewSystemUser: RunViewSystemUserResult };
             if (result && result.RunDynamicViewSystemUser) {
                 return result.RunDynamicViewSystemUser;
             } else {
@@ -444,7 +471,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { RunViewsSystemUser: RunViewSystemUserResult[] };
+            // Resolve PlatformSQL to plain strings before GraphQL transport
+            const resolvedInput = input.map(item => ({ ...item, ExtraFilter: this.resolvePlatformSQL(item.ExtraFilter), OrderBy: this.resolvePlatformSQL(item.OrderBy) }));
+            const result = await this.Client.request(query, { input: resolvedInput }) as { RunViewsSystemUser: RunViewSystemUserResult[] };
             if (result && result.RunViewsSystemUser) {
                 return result.RunViewsSystemUser;
             } else {
@@ -606,55 +635,59 @@ export class GraphQLSystemUserClient {
                 CreateQuerySystemUser(input: $input) {
                     Success
                     ErrorMessage
-                    ID
-                    Name
-                    Description
-                    CategoryID
-                    Category
-                    SQL
-                    Status
-                    QualityRank
-                    EmbeddingVector
-                    EmbeddingModelID
-                    EmbeddingModelName
-                    Fields {
+                    Query {
                         ID
-                        QueryID
                         Name
                         Description
-                        Sequence
-                        SQLBaseType
-                        SQLFullType
-                        SourceEntityID
-                        SourceEntity
-                        SourceFieldName
-                        IsComputed
-                        ComputationDescription
-                        IsSummary
-                        SummaryDescription
-                    }
-                    Parameters {
-                        ID
-                        QueryID
-                        Name
-                        Description
-                        Type
-                        IsRequired
-                        DefaultValue
-                        SampleValue
-                        ValidationFilters
-                    }
-                    Entities {
-                        ID
-                        QueryID
-                        EntityID
-                        Entity
-                    }
-                    Permissions {
-                        ID
-                        QueryID
-                        RoleID
-                        Role
+                        CategoryID
+                        Category
+                        SQL
+                        Status
+                        QualityRank
+                        EmbeddingVector
+                        EmbeddingModelID
+                        EmbeddingModel
+                        TechnicalDescription
+                        Reusable
+                        MJQueryFields_QueryIDArray {
+                            ID
+                            QueryID
+                            Name
+                            Description
+                            Sequence
+                            SQLBaseType
+                            SQLFullType
+                            SourceEntityID
+                            SourceEntity
+                            SourceFieldName
+                            IsComputed
+                            ComputationDescription
+                            IsSummary
+                            SummaryDescription
+                        }
+                        MJQueryParameters_QueryIDArray {
+                            ID
+                            QueryID
+                            Name
+                            Description
+                            Type
+                            IsRequired
+                            DefaultValue
+                            SampleValue
+                            ValidationFilters
+                        }
+                        MJQueryEntities_QueryIDArray {
+                            ID
+                            QueryID
+                            EntityID
+                            Entity
+                        }
+                        MJQueryPermissions_QueryIDArray {
+                            ID
+                            QueryID
+                            RoleID
+                            Role
+                        }
                     }
                 }
             }`
@@ -689,55 +722,59 @@ export class GraphQLSystemUserClient {
                 UpdateQuerySystemUser(input: $input) {
                     Success
                     ErrorMessage
-                    ID
-                    Name
-                    Description
-                    CategoryID
-                    Category
-                    SQL
-                    Status
-                    QualityRank
-                    EmbeddingVector
-                    EmbeddingModelID
-                    EmbeddingModelName
-                    Fields {
+                    Query {
                         ID
-                        QueryID
                         Name
                         Description
-                        Sequence
-                        SQLBaseType
-                        SQLFullType
-                        SourceEntityID
-                        SourceEntity
-                        SourceFieldName
-                        IsComputed
-                        ComputationDescription
-                        IsSummary
-                        SummaryDescription
-                    }
-                    Parameters {
-                        ID
-                        QueryID
-                        Name
-                        Description
-                        Type
-                        IsRequired
-                        DefaultValue
-                        SampleValue
-                        ValidationFilters
-                    }
-                    Entities {
-                        ID
-                        QueryID
-                        EntityID
-                        Entity
-                    }
-                    Permissions {
-                        ID
-                        QueryID
-                        RoleID
-                        Role
+                        CategoryID
+                        Category
+                        SQL
+                        Status
+                        QualityRank
+                        EmbeddingVector
+                        EmbeddingModelID
+                        EmbeddingModel
+                        TechnicalDescription
+                        Reusable
+                        MJQueryFields_QueryIDArray {
+                            ID
+                            QueryID
+                            Name
+                            Description
+                            Sequence
+                            SQLBaseType
+                            SQLFullType
+                            SourceEntityID
+                            SourceEntity
+                            SourceFieldName
+                            IsComputed
+                            ComputationDescription
+                            IsSummary
+                            SummaryDescription
+                        }
+                        MJQueryParameters_QueryIDArray {
+                            ID
+                            QueryID
+                            Name
+                            Description
+                            Type
+                            IsRequired
+                            DefaultValue
+                            SampleValue
+                            ValidationFilters
+                        }
+                        MJQueryEntities_QueryIDArray {
+                            ID
+                            QueryID
+                            EntityID
+                            Entity
+                        }
+                        MJQueryPermissions_QueryIDArray {
+                            ID
+                            QueryID
+                            RoleID
+                            Role
+                        }
                     }
                 }
             }`
@@ -787,9 +824,16 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const variables: any = { ID: ID };
+            const variables: Record<string, unknown> = { ID: ID };
             if (options !== undefined) {
-                variables.options = options;
+                // Apply defaults for all required fields in DeleteOptionsInput
+                // The server requires all fields to be present
+                variables.options = {
+                    SkipEntityAIActions: options.SkipEntityAIActions ?? false,
+                    SkipEntityActions: options.SkipEntityActions ?? false,
+                    ReplayOnly: options.ReplayOnly ?? false,
+                    IsParentEntityDelete: options.IsParentEntityDelete ?? false
+                };
             }
 
             const result = await this.Client.request(query, variables) as { DeleteQuerySystemResolver: DeleteQueryResult };
@@ -803,11 +847,41 @@ export class GraphQLSystemUserClient {
                 };
             }
         }
-        catch (e) {
-            LogError(`GraphQLSystemUserClient::DeleteQuery - Error deleting query - ${e}`);
+        catch (e: unknown) {
+            // Extract detailed error information for debugging
+            let errorDetails = '';
+            if (e instanceof Error) {
+                errorDetails = e.message;
+                // Check for cause (common in fetch errors)
+                if ('cause' in e && e.cause) {
+                    const cause = e.cause as Error;
+                    errorDetails += ` | Cause: ${cause.message || cause}`;
+                    if ('code' in cause) {
+                        errorDetails += ` | Code: ${(cause as NodeJS.ErrnoException).code}`;
+                    }
+                }
+                // Check for response details (GraphQL client errors)
+                if ('response' in e) {
+                    const response = (e as { response?: { status?: number; errors?: unknown[] } }).response;
+                    if (response?.status) {
+                        errorDetails += ` | HTTP Status: ${response.status}`;
+                    }
+                    if (response?.errors) {
+                        errorDetails += ` | GraphQL Errors: ${JSON.stringify(response.errors)}`;
+                    }
+                }
+                // Include stack trace for debugging
+                if (e.stack) {
+                    console.error('DeleteQuery stack trace:', e.stack);
+                }
+            } else {
+                errorDetails = String(e);
+            }
+
+            LogError(`GraphQLSystemUserClient::DeleteQuery - Error deleting query - ${errorDetails}`);
             return {
                 Success: false,
-                ErrorMessage: e.toString()
+                ErrorMessage: errorDetails
             };
         }
     }
@@ -1111,6 +1185,63 @@ export class GraphQLSystemUserClient {
     }
 
     /**
+     * Tests transient (unsaved) SQL with full composition + Nunjucks template processing.
+     * Calls the TestQuerySQL resolver which uses a read-only connection and enforces MaxRows limits.
+     *
+     * This enables external systems to test query SQL before saving to the database,
+     * including inline dependency resolution and parameter substitution.
+     *
+     * @param input - The transient query spec including SQL, parameters, dependencies, and MaxRows
+     * @returns Promise containing execution results with parsed data rows
+     */
+    public async TestQuerySQL(input: TestQuerySQLClientInput): Promise<TestQuerySQLClientResult> {
+        try {
+            const query = `query TestQuerySQL($input: TestQuerySQLInput!) {
+                TestQuerySQL(input: $input) {
+                    Success
+                    Results
+                    RowCount
+                    ExecutionTime
+                    ErrorMessage
+                    AppliedParameters
+                }
+            }`;
+
+            const result = await this.Client.request(query, { input }) as { TestQuerySQL: TestQuerySQLRawResult };
+
+            if (result && result.TestQuerySQL) {
+                return {
+                    Success: result.TestQuerySQL.Success,
+                    Results: result.TestQuerySQL.Results ? SafeJSONParse(result.TestQuerySQL.Results) : null,
+                    RowCount: result.TestQuerySQL.RowCount,
+                    ExecutionTime: result.TestQuerySQL.ExecutionTime,
+                    ErrorMessage: result.TestQuerySQL.ErrorMessage,
+                    AppliedParameters: result.TestQuerySQL.AppliedParameters
+                        ? SafeJSONParse(result.TestQuerySQL.AppliedParameters) as Record<string, string>
+                        : undefined,
+                };
+            } else {
+                return {
+                    Success: false,
+                    Results: null,
+                    RowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: 'TestQuerySQL execution failed',
+                };
+            }
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::TestQuerySQL - Error testing query SQL - ${e}`);
+            return {
+                Success: false,
+                Results: null,
+                RowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: e instanceof Error ? e.message : String(e),
+            };
+        }
+    }
+
+    /**
      * Execute a simple prompt without requiring a stored AI Prompt entity.
      * This method allows system-level execution of simple prompts.
      * 
@@ -1297,6 +1428,231 @@ export class GraphQLSystemUserClient {
         }
     }
 
+    /**
+     * Execute a full knowledge search as the system user. Invokes the
+     * `SearchKnowledgeAsSystemUser` mutation which delegates to `SearchEngine.Instance`.
+     *
+     * @param input - Search parameters (query, optional filters, max results, min score)
+     * @returns A SearchClientResponse with ranked, fused results from all active search providers
+     */
+    public async SearchKnowledge(input: SearchKnowledgeSystemUserInput): Promise<SearchClientResponse> {
+        try {
+            const mutation = gql`
+                mutation SearchKnowledgeAsSystemUser($query: String!, $maxResults: Float, $filters: SearchFiltersInput, $minScore: Float) {
+                    SearchKnowledgeAsSystemUser(query: $query, maxResults: $maxResults, filters: $filters, minScore: $minScore) {
+                        Success
+                        Results {
+                            ID
+                            EntityName
+                            RecordID
+                            SourceType
+                            ResultType
+                            Title
+                            Snippet
+                            Score
+                            ScoreBreakdown {
+                                Vector
+                                FullText
+                                Entity
+                                Storage
+                            }
+                            Tags
+                            EntityIcon
+                            RecordName
+                            MatchedAt
+                            RawMetadata
+                            ProviderId
+                            ProviderLabel
+                            ProviderIcon
+                        }
+                        TotalCount
+                        ElapsedMs
+                        SourceCounts {
+                            Vector
+                            FullText
+                            Entity
+                            Storage
+                        }
+                        Providers {
+                            ID
+                            Name
+                            DisplayName
+                            Icon
+                            SourceType
+                            Priority
+                        }
+                        ErrorMessage
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = { query: input.Query };
+            if (input.MaxResults !== undefined) variables.maxResults = input.MaxResults;
+            if (input.MinScore !== undefined) variables.minScore = input.MinScore;
+            if (input.Filters !== undefined) {
+                const filters: Record<string, unknown> = {};
+                if (input.Filters.EntityNames?.length) filters.EntityNames = input.Filters.EntityNames;
+                if (input.Filters.SourceTypes?.length) filters.SourceTypes = input.Filters.SourceTypes;
+                if (input.Filters.Tags?.length) filters.Tags = input.Filters.Tags;
+                variables.filters = filters;
+            }
+
+            const result = await this.Client.request(mutation, variables) as { SearchKnowledgeAsSystemUser: SearchKnowledgeGQLResponse };
+            if (result?.SearchKnowledgeAsSystemUser) {
+                return this.mapSearchResponse(result.SearchKnowledgeAsSystemUser);
+            }
+            return this.searchErrorResponse('Invalid response from server');
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::SearchKnowledge - Error executing search - ${e}`);
+            return this.searchErrorResponse(e instanceof Error ? e.message : String(e));
+        }
+    }
+
+    /**
+     * Execute a lightweight preview search as the system user. Suitable for
+     * autocomplete / type-ahead scenarios with smaller payloads.
+     *
+     * @param input - Preview search parameters (query, optional max results)
+     * @returns A SearchClientResponse with preview results
+     */
+    public async PreviewSearch(input: PreviewSearchSystemUserInput): Promise<SearchClientResponse> {
+        try {
+            const mutation = gql`
+                mutation PreviewSearchAsSystemUser($query: String!, $maxResults: Float) {
+                    PreviewSearchAsSystemUser(query: $query, maxResults: $maxResults) {
+                        Success
+                        Results {
+                            ID
+                            EntityName
+                            RecordID
+                            SourceType
+                            ResultType
+                            Title
+                            Snippet
+                            Score
+                            ScoreBreakdown {
+                                Vector
+                                FullText
+                                Entity
+                                Storage
+                            }
+                            Tags
+                            EntityIcon
+                            RecordName
+                            MatchedAt
+                            RawMetadata
+                            ProviderId
+                            ProviderLabel
+                            ProviderIcon
+                        }
+                        TotalCount
+                        ElapsedMs
+                        SourceCounts {
+                            Vector
+                            FullText
+                            Entity
+                            Storage
+                        }
+                        Providers {
+                            ID
+                            Name
+                            DisplayName
+                            Icon
+                            SourceType
+                            Priority
+                        }
+                        ErrorMessage
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = { query: input.Query };
+            if (input.MaxResults !== undefined) variables.maxResults = input.MaxResults;
+
+            const result = await this.Client.request(mutation, variables) as { PreviewSearchAsSystemUser: SearchKnowledgeGQLResponse };
+            if (result?.PreviewSearchAsSystemUser) {
+                return this.mapSearchResponse(result.PreviewSearchAsSystemUser);
+            }
+            return this.searchErrorResponse('Invalid response from server');
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::PreviewSearch - Error executing preview search - ${e}`);
+            return this.searchErrorResponse(e instanceof Error ? e.message : String(e));
+        }
+    }
+
+    /**
+     * Maps a raw GraphQL search response to the public SearchClientResponse type.
+     * Shared between SearchKnowledge and PreviewSearch to avoid duplication.
+     */
+    private mapSearchResponse(data: SearchKnowledgeGQLResponse): SearchClientResponse {
+        return {
+            Success: data.Success,
+            Results: (data.Results || []).map((item): SearchClientResultItem => ({
+                ID: item.ID,
+                EntityName: item.EntityName,
+                RecordID: item.RecordID,
+                SourceType: item.SourceType,
+                ResultType: item.ResultType,
+                Title: item.Title,
+                Snippet: item.Snippet,
+                Score: item.Score,
+                ScoreBreakdown: this.mapScoreBreakdown(item.ScoreBreakdown),
+                Tags: item.Tags || [],
+                EntityIcon: item.EntityIcon,
+                RecordName: item.RecordName,
+                MatchedAt: item.MatchedAt,
+                RawMetadata: item.RawMetadata,
+                ProviderId: item.ProviderId,
+                ProviderLabel: item.ProviderLabel,
+                ProviderIcon: item.ProviderIcon,
+            })),
+            TotalCount: data.TotalCount,
+            ElapsedMs: data.ElapsedMs,
+            SourceCounts: this.mapSourceCounts(data.SourceCounts),
+            Providers: (data.Providers || []).map((p): SearchClientProviderInfo => ({
+                ID: p.ID,
+                Name: p.Name,
+                DisplayName: p.DisplayName,
+                Icon: p.Icon,
+                SourceType: p.SourceType,
+                Priority: p.Priority,
+            })),
+            ErrorMessage: data.ErrorMessage,
+        };
+    }
+
+    private mapScoreBreakdown(breakdown: SearchScoreBreakdownGQLResponse | undefined): SearchScoreBreakdown {
+        if (!breakdown) return {};
+        const result: SearchScoreBreakdown = {};
+        if (breakdown.Vector !== undefined) result.Vector = breakdown.Vector;
+        if (breakdown.FullText !== undefined) result.FullText = breakdown.FullText;
+        if (breakdown.Entity !== undefined) result.Entity = breakdown.Entity;
+        if (breakdown.Storage !== undefined) result.Storage = breakdown.Storage;
+        return result;
+    }
+
+    private mapSourceCounts(counts: SearchSourceCountsGQLResponse | undefined): SearchSourceCounts {
+        if (!counts) return { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
+        return {
+            Vector: counts.Vector ?? 0,
+            FullText: counts.FullText ?? 0,
+            Entity: counts.Entity ?? 0,
+            Storage: counts.Storage ?? 0,
+        };
+    }
+
+    private searchErrorResponse(message: string): SearchClientResponse {
+        return {
+            Success: false,
+            Results: [],
+            TotalCount: 0,
+            ElapsedMs: 0,
+            SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+            Providers: [],
+            ErrorMessage: `Error: ${message}`,
+        };
+    }
+
 }
 
 /**
@@ -1420,13 +1776,17 @@ export interface RunViewByNameSystemUserInput {
      */
     ViewName: string;
     /**
-     * Additional WHERE clause conditions to apply (optional)
+     * Additional WHERE clause conditions to apply (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    ExtraFilter?: string;
+    ExtraFilter?: string | PlatformSQL;
     /**
-     * ORDER BY clause for sorting results (optional)
+     * ORDER BY clause for sorting results (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    OrderBy?: string;
+    OrderBy?: string | PlatformSQL;
     /**
      * Specific fields to return, if not specified returns all fields (optional)
      */
@@ -1486,13 +1846,17 @@ export interface RunViewByIDSystemUserInput {
      */
     ViewID: string;
     /**
-     * Additional WHERE clause conditions to apply (optional)
+     * Additional WHERE clause conditions to apply (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    ExtraFilter?: string;
+    ExtraFilter?: string | PlatformSQL;
     /**
-     * ORDER BY clause for sorting results (optional)
+     * ORDER BY clause for sorting results (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    OrderBy?: string;
+    OrderBy?: string | PlatformSQL;
     /**
      * Specific fields to return, if not specified returns all fields (optional)
      */
@@ -1552,13 +1916,17 @@ export interface RunDynamicViewSystemUserInput {
      */
     EntityName: string;
     /**
-     * Additional WHERE clause conditions to apply (optional)
+     * Additional WHERE clause conditions to apply (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    ExtraFilter?: string;
+    ExtraFilter?: string | PlatformSQL;
     /**
-     * ORDER BY clause for sorting results (optional)
+     * ORDER BY clause for sorting results (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    OrderBy?: string;
+    OrderBy?: string | PlatformSQL;
     /**
      * Specific fields to return, if not specified returns all fields (optional)
      */
@@ -1610,13 +1978,17 @@ export interface RunViewSystemUserInput {
      */
     EntityName: string;
     /**
-     * Additional WHERE clause conditions to apply (optional)
+     * Additional WHERE clause conditions to apply (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    ExtraFilter?: string;
+    ExtraFilter?: string | PlatformSQL;
     /**
-     * ORDER BY clause for sorting results (optional)
+     * ORDER BY clause for sorting results (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    OrderBy?: string;
+    OrderBy?: string | PlatformSQL;
     /**
      * Specific fields to return, if not specified returns all fields (optional)
      */
@@ -1887,7 +2259,8 @@ export interface CreateQueryInput {
 }
 
 /**
- * Type for query field information
+ * Type for query field information.
+ * Includes optional AI detection fields from CodeGen-generated types.
  */
 export interface QueryField {
     ID: string;
@@ -1904,10 +2277,13 @@ export interface QueryField {
     ComputationDescription?: string;
     IsSummary?: boolean;
     SummaryDescription?: string;
+    DetectionMethod?: string;
+    AutoDetectConfidenceScore?: number;
 }
 
 /**
- * Type for query parameter information
+ * Type for query parameter information.
+ * Includes optional AI detection fields from CodeGen-generated types.
  */
 export interface QueryParameter {
     ID: string;
@@ -1919,16 +2295,21 @@ export interface QueryParameter {
     DefaultValue?: string;
     SampleValue?: string;
     ValidationFilters?: string;
+    DetectionMethod?: string;
+    AutoDetectConfidenceScore?: number;
 }
 
 /**
- * Type for query entity information
+ * Type for query entity information.
+ * Includes optional AI detection fields from CodeGen-generated types.
  */
-export interface QueryEntity {
+export interface MJQueryEntity {
     ID: string;
     QueryID: string;
     EntityID: string;
     Entity?: string;
+    DetectionMethod?: string;
+    AutoDetectConfidenceScore?: number;
 }
 
 /**
@@ -1942,78 +2323,49 @@ export interface QueryPermission {
 }
 
 /**
- * Result type for CreateQuery mutation calls - contains creation success status and query data
+ * Query data returned inside a mutation result.
+ * Mirrors the CodeGen-generated MJQuery_ type using CodeGen array naming conventions.
+ * New entity fields are automatically available without manual sync.
  */
-export interface CreateQueryResult {
-    /**
-     * Whether the query creation was successful
-     */
-    Success: boolean;
-    /**
-     * Error message if the creation failed (optional)
-     */
-    ErrorMessage?: string;
-    /**
-     * Unique identifier of the created query (optional)
-     */
-    ID?: string;
-    /**
-     * Display name of the created query (optional)
-     */
-    Name?: string;
-    /**
-     * Description of the created query (optional)
-     */
+export interface QueryMutationQueryData {
+    ID: string;
+    Name: string;
     Description?: string;
-    /**
-     * Category ID the query belongs to (optional)
-     */
     CategoryID?: string;
-    /**
-     * Category name the query belongs to (optional)
-     */
     Category?: string;
-    /**
-     * SQL query text (optional)
-     */
     SQL?: string;
-    /**
-     * Query status: Pending, Approved, Rejected, or Expired (optional)
-     */
-    Status?: string;
-    /**
-     * Quality rank indicator (optional)
-     */
+    TechnicalDescription?: string;
+    Status: string;
     QualityRank?: number;
-    /**
-     * Embedding vector for semantic search (optional)
-     */
     EmbeddingVector?: string;
-    /**
-     * ID of the embedding model used (optional)
-     */
     EmbeddingModelID?: string;
-    /**
-     * Name of the embedding model used (optional)
-     */
-    EmbeddingModelName?: string;
-    /**
-     * Array of fields discovered in the query (optional)
-     */
-    Fields?: QueryField[];
-    /**
-     * Array of parameters found in the query template (optional)
-     */
-    Parameters?: QueryParameter[];
-    /**
-     * Array of entities referenced by the query (optional)
-     */
-    Entities?: QueryEntity[];
-    /**
-     * Array of permissions created for the query (optional)
-     */
-    Permissions?: QueryPermission[];
+    EmbeddingModel?: string;
+    Reusable?: boolean;
+    /** Related fields — uses CodeGen array naming convention */
+    MJQueryFields_QueryIDArray?: QueryField[];
+    /** Related parameters — uses CodeGen array naming convention */
+    MJQueryParameters_QueryIDArray?: QueryParameter[];
+    /** Related entities — uses CodeGen array naming convention */
+    MJQueryEntities_QueryIDArray?: MJQueryEntity[];
+    /** Related permissions — uses CodeGen array naming convention */
+    MJQueryPermissions_QueryIDArray?: QueryPermission[];
+    /** Catch-all for new fields added by CodeGen */
+    [key: string]: unknown;
 }
+
+/**
+ * Result type for Create and Update query mutation calls.
+ * On success, Query contains the full query data. On failure, Query is null.
+ */
+export interface QueryMutationResult {
+    Success: boolean;
+    ErrorMessage?: string;
+    Query?: QueryMutationQueryData;
+}
+
+/** @deprecated Use QueryMutationResult instead */
+export type CreateQueryResult = QueryMutationResult;
+
 
 /**
  * Input type for UpdateQuery mutation calls - updates an existing query
@@ -2081,92 +2433,37 @@ export interface UpdateQueryInput {
     Permissions?: QueryPermissionInput[];
 }
 
-/**
- * Result type for UpdateQuery mutation calls - contains update success status and query data
- */
-export interface UpdateQueryResult {
-    /**
-     * Whether the query update was successful
-     */
-    Success: boolean;
-    /**
-     * Error message if the update failed (optional)
-     */
-    ErrorMessage?: string;
-    /**
-     * Unique identifier of the updated query (optional)
-     */
-    ID?: string;
-    /**
-     * Display name of the updated query (optional)
-     */
-    Name?: string;
-    /**
-     * Description of the updated query (optional)
-     */
-    Description?: string;
-    /**
-     * Category ID the query belongs to (optional)
-     */
-    CategoryID?: string;
-    /**
-     * Category name the query belongs to (optional)
-     */
-    Category?: string;
-    /**
-     * SQL query text (optional)
-     */
-    SQL?: string;
-    /**
-     * Query status: Pending, Approved, Rejected, or Expired (optional)
-     */
-    Status?: string;
-    /**
-     * Quality rank indicator (optional)
-     */
-    QualityRank?: number;
-    /**
-     * Embedding vector for semantic search (optional)
-     */
-    EmbeddingVector?: string;
-    /**
-     * ID of the embedding model used (optional)
-     */
-    EmbeddingModelID?: string;
-    /**
-     * Name of the embedding model used (optional)
-     */
-    EmbeddingModelName?: string;
-    /**
-     * Array of fields discovered in the query (optional)
-     */
-    Fields?: QueryField[];
-    /**
-     * Array of parameters found in the query template (optional)
-     */
-    Parameters?: QueryParameter[];
-    /**
-     * Array of entities referenced by the query (optional)
-     */
-    Entities?: QueryEntity[];
-    /**
-     * Array of permissions for the query (optional)
-     */
-    Permissions?: QueryPermission[];
-}
+/** @deprecated Use QueryMutationResult instead */
+export type UpdateQueryResult = QueryMutationResult;
 
 /**
- * Delete options input type for controlling delete behavior
+ * Delete options input type for controlling delete behavior.
+ * All fields are optional - defaults will be applied if not provided.
  */
 export interface DeleteQueryOptionsInput {
     /**
-     * Whether to skip AI actions during deletion
+     * Whether to skip AI actions during deletion.
+     * @default false
      */
-    SkipEntityAIActions: boolean;
+    SkipEntityAIActions?: boolean;
     /**
-     * Whether to skip regular entity actions during deletion
+     * Whether to skip regular entity actions during deletion.
+     * @default false
      */
-    SkipEntityActions: boolean;
+    SkipEntityActions?: boolean;
+    /**
+     * When true, bypasses Validate() and actual database deletion but still
+     * invokes associated actions (AI Actions, Entity Actions, etc.).
+     * Used for replaying/simulating delete operations.
+     * @default false
+     */
+    ReplayOnly?: boolean;
+    /**
+     * When true, indicates this entity is being deleted as part of an IS-A parent chain
+     * initiated by a child entity.
+     * @default false
+     */
+    IsParentEntityDelete?: boolean;
 }
 
 /**
@@ -2191,4 +2488,180 @@ export interface DeleteQueryResult {
     Name?: string;
 }
 
- 
+/**
+ * Input type for inline dependency queries used in TestQuerySQL.
+ * Self-referencing to support recursive dependency trees.
+ */
+export interface QueryDependencySpecClientInput {
+    /** Query name as referenced in the composition token */
+    Name: string;
+    /** Category path as referenced in the composition token (e.g., "/Analytics/Sales/") */
+    CategoryPath: string;
+    /** The raw SQL for this dependency */
+    SQL: string;
+    /** Whether this dependency uses Nunjucks template syntax */
+    UsesTemplate?: boolean;
+    /** Parameters for this dependency's Nunjucks templates */
+    Parameters?: Record<string, string>;
+    /** Nested dependencies (recursive) */
+    Dependencies?: QueryDependencySpecClientInput[];
+}
+
+/**
+ * Input type for TestQuerySQL method calls — tests transient SQL with full
+ * composition + Nunjucks template processing without requiring a saved query.
+ */
+export interface TestQuerySQLClientInput {
+    /** The raw SQL — may contain {{query:"..."}} and {{ param }} tokens */
+    SQL: string;
+    /** Parameter values for Nunjucks template substitution */
+    Parameters?: Record<string, string>;
+    /** Whether this query uses Nunjucks template syntax */
+    UsesTemplate?: boolean;
+    /** Inline dependency queries for composition resolution */
+    Dependencies?: QueryDependencySpecClientInput[];
+    /** Max rows to return (default: 100) */
+    MaxRows?: number;
+}
+
+/**
+ * Raw result type from the GraphQL TestQuerySQL resolver (before JSON parsing).
+ * Results and AppliedParameters are JSON strings on the wire.
+ */
+interface TestQuerySQLRawResult {
+    Success: boolean;
+    Results?: string;
+    RowCount: number;
+    ExecutionTime: number;
+    ErrorMessage?: string;
+    AppliedParameters?: string;
+}
+
+/**
+ * Parsed result type for TestQuerySQL method calls — Results and AppliedParameters
+ * are deserialized from JSON strings into their native types.
+ */
+export interface TestQuerySQLClientResult {
+    /** Whether the query executed successfully */
+    Success: boolean;
+    /** Parsed result rows, or null if execution failed */
+    Results: unknown[] | null;
+    /** Number of rows returned */
+    RowCount: number;
+    /** Execution time in milliseconds */
+    ExecutionTime: number;
+    /** Error message if execution failed */
+    ErrorMessage?: string;
+    /** Parsed applied parameters including defaults */
+    AppliedParameters?: Record<string, string>;
+}
+
+// =========================================================================
+// Search — System User Types
+// =========================================================================
+
+/**
+ * Input for `SearchKnowledge` on the system-user client.
+ * Mirrors `SearchClientParams` from `graphQLSearchClient` but is used
+ * exclusively through the system-user transport.
+ */
+export interface SearchKnowledgeSystemUserInput {
+    /** The search query text */
+    Query: string;
+    /** Maximum number of results to return */
+    MaxResults?: number;
+    /** Minimum relevance score threshold (0-1) */
+    MinScore?: number;
+    /** Optional filters to narrow search results */
+    Filters?: {
+        /** Filter to specific entity names */
+        EntityNames?: string[];
+        /** Filter to specific source types (e.g., 'Vector', 'FullText', 'Entity', 'Storage') */
+        SourceTypes?: string[];
+        /** Filter to results matching specific tags */
+        Tags?: string[];
+    };
+}
+
+/**
+ * Input for `PreviewSearch` on the system-user client.
+ */
+export interface PreviewSearchSystemUserInput {
+    /** The search query text */
+    Query: string;
+    /** Maximum number of preview results (server default: 8) */
+    MaxResults?: number;
+}
+
+/**
+ * Internal GraphQL response shape for search score breakdown.
+ * @internal
+ */
+interface SearchScoreBreakdownGQLResponse {
+    Vector?: number;
+    FullText?: number;
+    Entity?: number;
+    Storage?: number;
+}
+
+/**
+ * Internal GraphQL response shape for source counts.
+ * @internal
+ */
+interface SearchSourceCountsGQLResponse {
+    Vector: number;
+    FullText: number;
+    Entity: number;
+    Storage: number;
+}
+
+/**
+ * Internal GraphQL response shape for provider info.
+ * @internal
+ */
+interface SearchProviderInfoGQLResponse {
+    ID: string;
+    Name: string;
+    DisplayName: string;
+    Icon: string;
+    SourceType: string;
+    Priority: number;
+}
+
+/**
+ * Internal GraphQL response shape for a single search result item.
+ * @internal
+ */
+interface SearchResultItemGQLResponse {
+    ID: string;
+    EntityName: string;
+    RecordID: string;
+    SourceType: string;
+    ResultType: string;
+    Title: string;
+    Snippet: string;
+    Score: number;
+    ScoreBreakdown: SearchScoreBreakdownGQLResponse;
+    Tags: string[];
+    EntityIcon?: string;
+    RecordName?: string;
+    MatchedAt: string;
+    RawMetadata?: string;
+    ProviderId?: string;
+    ProviderLabel?: string;
+    ProviderIcon?: string;
+}
+
+/**
+ * Internal GraphQL response shape for the full search mutation response.
+ * @internal
+ */
+interface SearchKnowledgeGQLResponse {
+    Success: boolean;
+    Results: SearchResultItemGQLResponse[];
+    TotalCount: number;
+    ElapsedMs: number;
+    SourceCounts: SearchSourceCountsGQLResponse;
+    Providers: SearchProviderInfoGQLResponse[];
+    ErrorMessage?: string;
+}

@@ -1,13 +1,13 @@
 import fs from 'fs-extra';
 import path from 'path';
-import chokidar from 'chokidar';
+import chokidar, { type FSWatcher } from 'chokidar';
 import { BaseEntity, Metadata } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { loadEntityConfig, loadSyncConfig } from '../config';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { configManager } from '../lib/config-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
-import type { SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
+import type { SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 export interface WatchOptions {
   dir?: string;
@@ -28,7 +28,7 @@ export interface WatchCallbacks {
 }
 
 export interface WatchResult {
-  watchers: chokidar.FSWatcher[];
+  watchers: FSWatcher[];
   stop: () => Promise<void>;
 }
 
@@ -54,7 +54,7 @@ export class WatchService {
     await this.setupSqlLogging(callbacks);
     
     // Set up watchers
-    const watchers: chokidar.FSWatcher[] = [];
+    const watchers: FSWatcher[] = [];
     
     for (const entityDir of entityDirs) {
       const entityConfig = await loadEntityConfig(entityDir);
@@ -368,7 +368,10 @@ export class WatchService {
           this.sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
             formatAsMigration: syncConfig.sqlLogging?.formatAsMigration || false,
             description: 'MetadataSync watch operation',
-            logRecordChangeMetadata: true
+            logRecordChangeMetadata: true,
+            // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
+            // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
+            variableBatchThreshold: syncConfig.sqlLogging?.variableBatchThreshold ?? 200,
           });
           
           callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);

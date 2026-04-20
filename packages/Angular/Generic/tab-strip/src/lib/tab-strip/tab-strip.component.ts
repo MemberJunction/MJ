@@ -26,6 +26,7 @@ export class TabContextMenuEvent extends TabEvent {
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-tabstrip',
   templateUrl: './tab-strip.component.html',
   styleUrls: ['./tab-strip.component.css']

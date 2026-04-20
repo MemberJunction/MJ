@@ -99,7 +99,7 @@ export interface TimelineEventArgs<T = any> {
  *
  * @example
  * ```typescript
- * onBeforeClick(args: BeforeEventClickArgs<TaskEntity>) {
+ * onBeforeClick(args: BeforeEventClickArgs<MJTaskEntity>) {
  *   // Prevent click on archived items
  *   if (args.event.entity.Status === 'Archived') {
  *     args.cancel = true;
@@ -132,7 +132,7 @@ export interface AfterEventClickArgs<T = any>
  *
  * @example
  * ```typescript
- * onBeforeExpand(args: BeforeEventExpandArgs<TaskEntity>) {
+ * onBeforeExpand(args: BeforeEventExpandArgs<MJTaskEntity>) {
  *   // Require permission to view details
  *   if (!this.canViewDetails(args.event.entity)) {
  *     args.cancel = true;
@@ -187,7 +187,7 @@ export interface AfterEventCollapseArgs<T = any>
  *
  * @example
  * ```typescript
- * onBeforeHover(args: BeforeEventHoverArgs<TaskEntity>) {
+ * onBeforeHover(args: BeforeEventHoverArgs<MJTaskEntity>) {
  *   if (args.hoverState === 'enter') {
  *     // Could cancel hover effects
  *     // args.cancel = true;
@@ -231,7 +231,7 @@ export interface AfterEventHoverArgs<T = any>
  *
  * @example
  * ```typescript
- * onBeforeAction(args: BeforeActionClickArgs<TaskEntity>) {
+ * onBeforeAction(args: BeforeActionClickArgs<MJTaskEntity>) {
  *   if (args.action.id === 'delete') {
  *     // Show confirmation before allowing delete
  *     if (!this.confirmDelete(args.event.entity)) {
@@ -257,7 +257,7 @@ export interface BeforeActionClickArgs<T = any>
  *
  * @example
  * ```typescript
- * onAfterAction(args: AfterActionClickArgs<TaskEntity>) {
+ * onAfterAction(args: AfterActionClickArgs<MJTaskEntity>) {
  *   switch (args.action.id) {
  *     case 'view':
  *       this.router.navigate(['/tasks', args.event.entity.ID]);

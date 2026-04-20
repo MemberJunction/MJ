@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forms - MJ Design System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../components.css">
+  <style>
+    .page-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: var(--mj-space-8);
+    }
+    .page-header {
+      margin-bottom: var(--mj-space-8);
+    }
+    .page-header h1 {
+      font-size: var(--mj-text-3xl);
+      margin-bottom: var(--mj-space-2);
+    }
+    .page-header p {
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-lg);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      margin-bottom: var(--mj-space-6);
+      color: var(--mj-text-secondary);
+      font-size: var(--mj-text-sm);
+    }
+    .back-link:hover {
+      color: var(--mj-text-primary);
+    }
+    .section {
+      margin-bottom: var(--mj-space-10);
+    }
+    .section-title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      margin-bottom: var(--mj-space-4);
+      color: var(--mj-text-primary);
+    }
+    .demo-area {
+      padding: var(--mj-space-6);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      margin-bottom: var(--mj-space-4);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--mj-space-4);
+    }
+    @media (max-width: 600px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .theme-toggle-bar {
+      position: fixed;
+      top: var(--mj-space-4);
+      right: var(--mj-space-4);
+      display: flex;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      box-shadow: var(--mj-shadow-lg);
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-toggle-bar">
+    <button data-theme-toggle="light" class="mj-btn mj-btn-sm mj-btn-ghost active">
+      <i class="fa-solid fa-sun"></i>
+    </button>
+    <button data-theme-toggle="dark" class="mj-btn mj-btn-sm mj-btn-ghost">
+      <i class="fa-solid fa-moon"></i>
+    </button>
+  </div>
+
+  <div class="page-container">
+    <a href="../index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Design System
+    </a>
+
+    <header class="page-header">
+      <h1>Forms</h1>
+      <p>Input fields, selects, checkboxes, and form layouts.</p>
+    </header>
+
+    <!-- Text Inputs -->
+    <section class="section">
+      <h2 class="section-title">Text Inputs</h2>
+      <div class="demo-area">
+        <div class="mj-form-group">
+          <label class="mj-label">Default Input</label>
+          <input type="text" class="mj-input" placeholder="Enter text...">
+        </div>
+        <div class="mj-form-group">
+          <label class="mj-label mj-label-required">Required Field</label>
+          <input type="text" class="mj-input" placeholder="This field is required">
+          <span class="mj-help-text">This is helper text below the input.</span>
+        </div>
+        <div class="mj-form-group">
+          <label class="mj-label">Disabled Input</label>
+          <input type="text" class="mj-input" value="Cannot edit this" disabled>
+        </div>
+        <div class="mj-form-group">
+          <label class="mj-label">Input with Error</label>
+          <input type="text" class="mj-input mj-input-error" value="Invalid value">
+          <span class="mj-error-text">Please enter a valid value.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Input Types -->
+    <section class="section">
+      <h2 class="section-title">Input Types</h2>
+      <div class="demo-area">
+        <div class="form-grid">
+          <div class="mj-form-group">
+            <label class="mj-label">Email</label>
+            <input type="email" class="mj-input" placeholder="you@example.com">
+          </div>
+          <div class="mj-form-group">
+            <label class="mj-label">Password</label>
+            <input type="password" class="mj-input" placeholder="Enter password">
+          </div>
+          <div class="mj-form-group">
+            <label class="mj-label">Number</label>
+            <input type="number" class="mj-input" placeholder="0">
+          </div>
+          <div class="mj-form-group">
+            <label class="mj-label">Date</label>
+            <input type="date" class="mj-input">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Select -->
+    <section class="section">
+      <h2 class="section-title">Select Dropdown</h2>
+      <div class="demo-area">
+        <div class="form-grid">
+          <div class="mj-form-group">
+            <label class="mj-label">Default Select</label>
+            <select class="mj-input mj-select">
+              <option value="">Select an option...</option>
+              <option value="1">Option 1</option>
+              <option value="2">Option 2</option>
+              <option value="3">Option 3</option>
+            </select>
+          </div>
+          <div class="mj-form-group">
+            <label class="mj-label">Disabled Select</label>
+            <select class="mj-input mj-select" disabled>
+              <option value="">Cannot change</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Textarea -->
+    <section class="section">
+      <h2 class="section-title">Textarea</h2>
+      <div class="demo-area">
+        <div class="mj-form-group">
+          <label class="mj-label">Description</label>
+          <textarea class="mj-input mj-textarea" placeholder="Enter a longer description..."></textarea>
+          <span class="mj-help-text">Maximum 500 characters.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Checkboxes -->
+    <section class="section">
+      <h2 class="section-title">Checkboxes</h2>
+      <div class="demo-area">
+        <div class="mj-form-group">
+          <label class="mj-label">Permissions</label>
+          <div class="mj-checkbox-group">
+            <label class="mj-checkbox-label">
+              <input type="checkbox" checked> Can view records
+            </label>
+            <label class="mj-checkbox-label">
+              <input type="checkbox" checked> Can edit records
+            </label>
+            <label class="mj-checkbox-label">
+              <input type="checkbox"> Can delete records
+            </label>
+            <label class="mj-checkbox-label">
+              <input type="checkbox" disabled> Admin access (disabled)
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Radio Buttons -->
+    <section class="section">
+      <h2 class="section-title">Radio Buttons</h2>
+      <div class="demo-area">
+        <div class="mj-form-group">
+          <label class="mj-label">Notification Preference</label>
+          <div class="mj-radio-group">
+            <label class="mj-radio-label">
+              <input type="radio" name="notification" value="all" checked> All notifications
+            </label>
+            <label class="mj-radio-label">
+              <input type="radio" name="notification" value="important"> Important only
+            </label>
+            <label class="mj-radio-label">
+              <input type="radio" name="notification" value="none"> None
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Complete Form Example -->
+    <section class="section">
+      <h2 class="section-title">Complete Form Example</h2>
+      <div class="demo-area">
+        <form>
+          <div class="form-grid">
+            <div class="mj-form-group">
+              <label class="mj-label mj-label-required">First Name</label>
+              <input type="text" class="mj-input" placeholder="John">
+            </div>
+            <div class="mj-form-group">
+              <label class="mj-label mj-label-required">Last Name</label>
+              <input type="text" class="mj-input" placeholder="Doe">
+            </div>
+          </div>
+          <div class="mj-form-group">
+            <label class="mj-label mj-label-required">Email</label>
+            <input type="email" class="mj-input" placeholder="john.doe@example.com">
+          </div>
+          <div class="mj-form-group">
+            <label class="mj-label">Department</label>
+            <select class="mj-input mj-select">
+              <option value="">Select department...</option>
+              <option value="engineering">Engineering</option>
+              <option value="sales">Sales</option>
+              <option value="marketing">Marketing</option>
+              <option value="support">Support</option>
+            </select>
+          </div>
+          <div class="mj-form-group">
+            <label class="mj-label">Bio</label>
+            <textarea class="mj-input mj-textarea" placeholder="Tell us about yourself..."></textarea>
+          </div>
+          <div class="mj-form-group">
+            <div class="mj-checkbox-group">
+              <label class="mj-checkbox-label">
+                <input type="checkbox"> Subscribe to newsletter
+              </label>
+              <label class="mj-checkbox-label">
+                <input type="checkbox" checked> I agree to the terms of service
+              </label>
+            </div>
+          </div>
+          <div class="mj-flex mj-gap-2 mj-mt-4">
+            <button type="submit" class="mj-btn mj-btn-primary">Save Profile</button>
+            <button type="button" class="mj-btn mj-btn-secondary">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <script src="../theme-toggle.js"></script>
+</body>
+</html>

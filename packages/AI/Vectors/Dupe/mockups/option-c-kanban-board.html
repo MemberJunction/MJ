@@ -1,0 +1,344 @@
+<!--
+  Option C: Kanban Board
+  Design Philosophy: Visual, spatial workflow inspired by project management tools.
+  Three columns represent the review lifecycle: Pending, Approved, Rejected.
+  Cards can be mentally "dragged" between columns, making the review status of
+  every duplicate group visible at a glance. The board metaphor encourages batch
+  processing and gives managers a real-time view of review progress. Click-to-expand
+  cards reveal full field-by-field comparisons without navigating away.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Detection - Kanban Board</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-brand-primary: #264FAF;
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: #ffffff;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #475569;
+    --mj-border-default: #e2e8f0;
+    --mj-status-success: #22c55e;
+    --mj-status-warning: #f59e0b;
+    --mj-status-error: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); min-height: 100vh; }
+
+  /* Header */
+  .header { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .header h1 i { color: var(--mj-brand-primary); }
+
+  /* Stats Bar */
+  .stats-bar { display: flex; gap: 16px; padding: 16px 24px; background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); }
+  .stat-chip { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+  .stat-chip .num { font-size: 20px; font-weight: 700; }
+  .stat-chip.total { background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); color: var(--mj-brand-primary); }
+  .stat-chip.pending { background: color-mix(in srgb, var(--mj-status-warning) 10%, transparent); color: var(--mj-status-warning); }
+  .stat-chip.approved { background: color-mix(in srgb, var(--mj-status-success) 10%, transparent); color: var(--mj-status-success); }
+  .stat-chip.rejected { background: color-mix(in srgb, var(--mj-status-error) 10%, transparent); color: var(--mj-status-error); }
+
+  /* Filter Bar */
+  .filter-bar { display: flex; align-items: center; gap: 12px; padding: 12px 24px; }
+  .filter-bar select, .filter-bar input { padding: 8px 12px; border: 1px solid var(--mj-border-default); border-radius: 8px; font-size: 13px; color: var(--mj-text-primary); background: var(--mj-bg-surface); }
+  .filter-bar input[type=range] { width: 160px; accent-color: var(--mj-brand-primary); }
+  .filter-label { font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); }
+  .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s; }
+  .btn-primary { background: var(--mj-brand-primary); color: white; }
+  .btn-outline { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); color: var(--mj-text-primary); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-success { background: var(--mj-status-success); color: white; }
+  .btn-danger { background: var(--mj-status-error); color: white; }
+
+  /* Board Layout */
+  .board { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; padding: 20px 24px; height: calc(100vh - 200px); }
+
+  /* Columns */
+  .column { background: var(--mj-bg-page); border: 2px dashed var(--mj-border-default); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+  .column.drop-active { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 3%, var(--mj-bg-page)); }
+  .col-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); border-radius: 10px 10px 0 0; }
+  .col-title { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .col-title .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .col-title .dot.pending { background: var(--mj-status-warning); }
+  .col-title .dot.approved { background: var(--mj-status-success); }
+  .col-title .dot.rejected { background: var(--mj-status-error); }
+  .col-count { font-size: 12px; color: var(--mj-text-secondary); background: var(--mj-bg-page); padding: 2px 10px; border-radius: 10px; font-weight: 600; }
+  .col-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* Cards */
+  .kanban-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 14px; cursor: grab; transition: box-shadow 0.15s, transform 0.15s; }
+  .kanban-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-1px); }
+  .kanban-card:active { cursor: grabbing; }
+  .card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .card-name { font-weight: 600; font-size: 14px; }
+  .card-score { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 12px; }
+  .card-score.high { background: color-mix(in srgb, var(--mj-status-success) 15%, transparent); color: var(--mj-status-success); }
+  .card-score.mid { background: color-mix(in srgb, var(--mj-status-warning) 15%, transparent); color: var(--mj-status-warning); }
+  .card-score.low { background: color-mix(in srgb, var(--mj-status-error) 15%, transparent); color: var(--mj-status-error); }
+  .card-meta { font-size: 12px; color: var(--mj-text-secondary); margin-bottom: 6px; }
+  .card-meta i { margin-right: 4px; width: 14px; text-align: center; }
+  .card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--mj-border-default); }
+  .match-count { font-size: 12px; color: var(--mj-text-secondary); }
+  .match-count strong { color: var(--mj-text-primary); }
+  .card-actions { display: flex; gap: 4px; }
+  .card-entity { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); color: var(--mj-brand-primary); margin-bottom: 8px; }
+
+  /* Expanded Card Detail */
+  .card-detail { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--mj-border-default); }
+  .detail-match { background: var(--mj-bg-page); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+  .detail-match-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .detail-match-name { font-size: 13px; font-weight: 600; }
+  .detail-grid { display: grid; grid-template-columns: 80px 1fr 1fr; gap: 4px; font-size: 11px; }
+  .detail-grid .dlabel { color: var(--mj-text-secondary); font-weight: 500; }
+  .detail-grid .diff { color: var(--mj-status-error); font-weight: 500; }
+  .drag-hint { text-align: center; padding: 16px; color: var(--mj-text-secondary); font-size: 12px; font-style: italic; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><i class="fa-solid fa-clone"></i> Duplicate Detection Board</h1>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-outline"><i class="fa-solid fa-download"></i> Export</button>
+    <button class="btn btn-primary"><i class="fa-solid fa-play"></i> New Run</button>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat-chip total"><i class="fa-solid fa-layer-group"></i><div><div class="num">156</div><div>Total Groups</div></div></div>
+  <div class="stat-chip pending"><i class="fa-solid fa-clock"></i><div><div class="num">98</div><div>Pending</div></div></div>
+  <div class="stat-chip approved"><i class="fa-solid fa-circle-check"></i><div><div class="num">42</div><div>Approved</div></div></div>
+  <div class="stat-chip rejected"><i class="fa-solid fa-circle-xmark"></i><div><div class="num">16</div><div>Rejected</div></div></div>
+</div>
+
+<div class="filter-bar">
+  <span class="filter-label">Entity</span>
+  <select><option>All Entities</option><option>Contacts</option><option>Companies</option><option>Leads</option></select>
+  <span class="filter-label">Score Range</span>
+  <input type="range" min="0" max="100" value="50">
+  <span style="font-size:12px; color:var(--mj-text-secondary);">50% - 100%</span>
+  <span class="filter-label">Date</span>
+  <select><option>Last 7 days</option><option>Last 30 days</option><option>All time</option></select>
+</div>
+
+<div class="board">
+  <!-- Pending Column -->
+  <div class="column">
+    <div class="col-header">
+      <div class="col-title"><span class="dot pending"></span> Pending Review</div>
+      <span class="col-count">98</span>
+    </div>
+    <div class="col-body">
+      <!-- Card 1 - Expanded -->
+      <div class="kanban-card">
+        <div class="card-entity"><i class="fa-solid fa-user" style="margin-right:4px;"></i> Contacts</div>
+        <div class="card-top">
+          <span class="card-name">John Davidson</span>
+          <span class="card-score high">96%</span>
+        </div>
+        <div class="card-meta"><i class="fa-solid fa-envelope"></i> john.d@acmecorp.com</div>
+        <div class="card-meta"><i class="fa-solid fa-building"></i> Acme Corp</div>
+        <div class="card-footer">
+          <span class="match-count"><strong>4</strong> matches</span>
+          <div class="card-actions">
+            <button class="btn btn-sm btn-success"><i class="fa-solid fa-check"></i></button>
+            <button class="btn btn-sm btn-danger"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+        <!-- Expanded detail -->
+        <div class="card-detail">
+          <div class="detail-match">
+            <div class="detail-match-header">
+              <span class="detail-match-name">Jon Davidson</span>
+              <span class="card-score high" style="font-size:11px;">96%</span>
+            </div>
+            <div class="detail-grid">
+              <span class="dlabel">Name</span><span>John Davidson</span><span class="diff">Jon Davidson</span>
+              <span class="dlabel">Email</span><span>john.d@acmecorp.com</span><span class="diff">jon.davidson@acmecorp.com</span>
+              <span class="dlabel">Phone</span><span>(555) 123-4567</span><span>(555) 123-4567</span>
+              <span class="dlabel">Company</span><span>Acme Corp</span><span class="diff">Acme Corporation</span>
+            </div>
+          </div>
+          <div class="detail-match">
+            <div class="detail-match-header">
+              <span class="detail-match-name">J. Davidson</span>
+              <span class="card-score mid" style="font-size:11px;">82%</span>
+            </div>
+            <div class="detail-grid">
+              <span class="dlabel">Name</span><span>John Davidson</span><span class="diff">J. Davidson</span>
+              <span class="dlabel">Email</span><span>john.d@acmecorp.com</span><span class="diff">jdavidson@acme.com</span>
+              <span class="dlabel">Phone</span><span>(555) 123-4567</span><span class="diff">(555) 123-4568</span>
+              <span class="dlabel">Company</span><span>Acme Corp</span><span>Acme Corp</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="kanban-card">
+        <div class="card-entity"><i class="fa-solid fa-user" style="margin-right:4px;"></i> Contacts</div>
+        <div class="card-top">
+          <span class="card-name">Sarah Mitchell</span>
+          <span class="card-score high">93%</span>
+        </div>
+        <div class="card-meta"><i class="fa-solid fa-envelope"></i> s.mitchell@globex.io</div>
+        <div class="card-meta"><i class="fa-solid fa-building"></i> Globex Corp</div>
+        <div class="card-footer">
+          <span class="match-count"><strong>3</strong> matches</span>
+          <div class="card-actions">
+            <button class="btn btn-sm btn-success"><i class="fa-solid fa-check"></i></button>
+            <button class="btn btn-sm btn-danger"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="kanban-card">
+        <div class="card-entity"><i class="fa-solid fa-building" style="margin-right:4px;"></i> Companies</div>
+        <div class="card-top">
+          <span class="card-name">Initech LLC</span>
+          <span class="card-score mid">78%</span>
+        </div>
+        <div class="card-meta"><i class="fa-solid fa-globe"></i> initech.com</div>
+        <div class="card-meta"><i class="fa-solid fa-location-dot"></i> Austin, TX</div>
+        <div class="card-footer">
+          <span class="match-count"><strong>2</strong> matches</span>
+          <div class="card-actions">
+            <button class="btn btn-sm btn-success"><i class="fa-solid fa-check"></i></button>
+            <button class="btn btn-sm btn-danger"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="kanban-card">
+        <div class="card-entity"><i class="fa-solid fa-user" style="margin-right:4px;"></i> Contacts</div>
+        <div class="card-top">
+          <span class="card-name">Emily Watson</span>
+          <span class="card-score mid">79%</span>
+        </div>
+        <div class="card-meta"><i class="fa-solid fa-envelope"></i> ewatson@umbrella.co</div>
+        <div class="card-meta"><i class="fa-solid fa-building"></i> Umbrella Corp</div>
+        <div class="card-footer">
+          <span class="match-count"><strong>5</strong> matches</span>
+          <div class="card-actions">
+            <button class="btn btn-sm btn-success"><i class="fa-solid fa-check"></i></button>
+            <button class="btn btn-sm btn-danger"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="drag-hint"><i class="fa-solid fa-arrows-up-down"></i> Drag cards to Approved or Rejected</div>
+    </div>
+  </div>
+
+  <!-- Approved Column -->
+  <div class="column">
+    <div class="col-header">
+      <div class="col-title"><span class="dot approved"></span> Approved</div>
+      <span class="col-count">42</span>
+    </div>
+    <div class="col-body">
+      <div class="kanban-card" style="border-left: 3px solid var(--mj-status-success);">
+        <div class="card-entity"><i class="fa-solid fa-user" style="margin-right:4px;"></i> Contacts</div>
+        <div class="card-top">
+          <span class="card-name">Robert Johnson</span>
+          <span class="card-score mid">88%</span>
+        </div>
+        <div class="card-meta"><i class="fa-solid fa-envelope"></i> rjohnson@initech.com</div>
+        <div class="card-meta"><i class="fa-solid fa-code-merge" style="color:var(--mj-status-success);"></i> Merging with: Bob Johnson</div>
+        <div class="card-footer">
+          <span class="match-count"><strong>2</strong> matches</span>
+          <div class="card-actions">
+            <button class="btn btn-sm btn-outline"><i class="fa-solid fa-undo"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="kanban-card" style="border-left: 3px solid var(--mj-status-success);">
+        <div class="card-entity"><i class="fa-solid fa-user" style="margin-right:4px;"></i> Contacts</div>
+        <div class="card-top">
+          <span class="card-name">Michael Chen</span>
+          <span class="card-score high">91%</span>
+        </div>
+        <div class="card-meta"><i class="fa-solid fa-envelope"></i> m.chen@soylent.org</div>
+        <div class="card-meta"><i class="fa-solid fa-code-merge" style="color:var(--mj-status-success);"></i> Merging with: Mike Chen</div>
+        <div class="card-footer">
+          <span class="match-count"><strong>2</strong> matches</span>
+          <div class="card-actions">
+            <button class="btn btn-sm btn-outline"><i class="fa-solid fa-undo"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="kanban-card" style="border-left: 3px solid var(--mj-status-success);">
+        <div class="card-entity"><i class="fa-solid fa-building" style="margin-right:4px;"></i> Companies</div>
+        <div class="card-top">
+          <span class="card-name">Globex International</span>
+          <span class="card-score high">94%</span>
+        </div>
+        <div class="card-meta"><i class="fa-solid fa-globe"></i> globex.io</div>
+        <div class="card-meta"><i class="fa-solid fa-code-merge" style="color:var(--mj-status-success);"></i> Merging with: Globex Corp</div>
+        <div class="card-footer">
+          <span class="match-count"><strong>1</strong> match</span>
+          <div class="card-actions">
+            <button class="btn btn-sm btn-outline"><i class="fa-solid fa-undo"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="drag-hint"><i class="fa-solid fa-circle-check"></i> Drop here to approve merge</div>
+    </div>
+  </div>
+
+  <!-- Rejected Column -->
+  <div class="column">
+    <div class="col-header">
+      <div class="col-title"><span class="dot rejected"></span> Rejected</div>
+      <span class="col-count">16</span>
+    </div>
+    <div class="col-body">
+      <div class="kanban-card" style="border-left: 3px solid var(--mj-status-error); opacity: 0.75;">
+        <div class="card-entity"><i class="fa-solid fa-user" style="margin-right:4px;"></i> Contacts</div>
+        <div class="card-top">
+          <span class="card-name">Laura Perez</span>
+          <span class="card-score low">67%</span>
+        </div>
+        <div class="card-meta"><i class="fa-solid fa-envelope"></i> laura.p@hooli.com</div>
+        <div class="card-meta"><i class="fa-solid fa-circle-xmark" style="color:var(--mj-status-error);"></i> Not a duplicate</div>
+        <div class="card-footer">
+          <span class="match-count"><strong>1</strong> match</span>
+          <div class="card-actions">
+            <button class="btn btn-sm btn-outline"><i class="fa-solid fa-undo"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="kanban-card" style="border-left: 3px solid var(--mj-status-error); opacity: 0.75;">
+        <div class="card-entity"><i class="fa-solid fa-user" style="margin-right:4px;"></i> Contacts</div>
+        <div class="card-top">
+          <span class="card-name">David Kim</span>
+          <span class="card-score low">58%</span>
+        </div>
+        <div class="card-meta"><i class="fa-solid fa-envelope"></i> dkim@wayneent.com</div>
+        <div class="card-meta"><i class="fa-solid fa-circle-xmark" style="color:var(--mj-status-error);"></i> Different person</div>
+        <div class="card-footer">
+          <span class="match-count"><strong>3</strong> matches</span>
+          <div class="card-actions">
+            <button class="btn btn-sm btn-outline"><i class="fa-solid fa-undo"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="drag-hint"><i class="fa-solid fa-circle-xmark"></i> Drop here to reject</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

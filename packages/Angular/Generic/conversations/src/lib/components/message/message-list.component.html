@@ -1,25 +1,29 @@
 <div class="message-list-container" #scrollContainer>
   <!-- Sticky Date Header (only show for long conversations spanning multiple days) -->
-  <div class="sticky-date-header" *ngIf="shouldShowDateFilter && messages.length > 0">
-    <div class="sticky-date-wrapper">
-      <button class="sticky-date-button" (click)="toggleDateNav()">
-        <span>{{ currentDateDisplay }}</span>
-        <i class="fas fa-chevron-down"></i>
-      </button>
-      <div class="date-nav-dropdown" [class.show]="showDateNav">
-        <div class="date-nav-option jump-to">Jump to...</div>
-        <div class="date-nav-option" (click)="jumpToDate('today')">Today</div>
-        <div class="date-nav-option" (click)="jumpToDate('yesterday')">Yesterday</div>
-        <div class="date-nav-option" (click)="jumpToDate('last-week')">Last week</div>
-        <div class="date-nav-option" (click)="jumpToDate('last-month')">Last month</div>
+  @if (shouldShowDateFilter && messages.length > 0) {
+    <div class="sticky-date-header">
+      <div class="sticky-date-wrapper">
+        <button class="sticky-date-button" (click)="toggleDateNav()">
+          <span>{{ currentDateDisplay }}</span>
+          <i class="fas fa-chevron-down"></i>
+        </button>
+        <div class="date-nav-dropdown" [class.show]="showDateNav">
+          <div class="date-nav-option jump-to">Jump to...</div>
+          <div class="date-nav-option" (click)="jumpToDate('today')">Today</div>
+          <div class="date-nav-option" (click)="jumpToDate('yesterday')">Yesterday</div>
+          <div class="date-nav-option" (click)="jumpToDate('last-week')">Last week</div>
+          <div class="date-nav-option" (click)="jumpToDate('last-month')">Last month</div>
+        </div>
       </div>
     </div>
-  </div>
+  }
 
   <ng-container #messageContainer></ng-container>
 
-  <div *ngIf="messages.length === 0" class="empty-state">
-    <i class="fas fa-comments"></i>
-    <p>No messages yet. Start a conversation!</p>
-  </div>
+  @if (messages.length === 0) {
+    <div class="empty-state">
+      <i class="fas fa-comments"></i>
+      <p>No messages yet. Start a conversation!</p>
+    </div>
+  }
 </div>

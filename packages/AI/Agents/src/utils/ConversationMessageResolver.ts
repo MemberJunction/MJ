@@ -220,9 +220,3 @@ export class ConversationMessageResolver {
     }
 }
 
-/**
- * Export a load function to ensure the class isn't tree-shaken
- */
-export function LoadConversationMessageResolver() {
-    // This function ensures the class isn't tree-shaken
-}

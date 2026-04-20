@@ -1,59 +1,60 @@
 {
   "name": "@memberjunction/ng-explorer-settings",
-  "version": "2.129.0",
+  "version": "5.28.0",
   "description": "MemberJunction: Reusable Angular components for the settings section of the MJ Explorer App",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/public-api.d.ts",
+      "default": "./dist/public-api.js"
+    },
+    "./settings.module": {
+      "types": "./dist/lib/module.d.ts",
+      "default": "./dist/lib/module.js"
+    }
+  },
   "files": [
     "/dist"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo \"No tests configured yet\"",
     "build": "ngc"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2"
+    "@angular/compiler": "21.1.3",
+    "@angular/compiler-cli": "21.1.3"
   },
   "peerDependencies": {
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2",
-    "@angular/router": "18.0.2"
+    "@angular/common": "21.1.3",
+    "@angular/core": "21.1.3",
+    "@angular/forms": "21.1.3",
+    "@angular/router": "21.1.3"
   },
   "dependencies": {
-    "@memberjunction/core": "2.129.0",
-    "@memberjunction/core-entities": "2.129.0",
-    "@memberjunction/global": "2.129.0",
-    "@memberjunction/graphql-dataprovider": "2.129.0",
-    "@memberjunction/ng-base-application": "2.129.0",
-    "@memberjunction/ng-base-forms": "2.129.0",
-    "@memberjunction/ng-code-editor": "2.129.0",
-    "@memberjunction/ng-compare-records": "2.129.0",
-    "@memberjunction/ng-container-directives": "2.129.0",
-    "@memberjunction/ng-entity-form-dialog": "2.129.0",
-    "@memberjunction/ng-entity-permissions": "2.129.0",
-    "@memberjunction/ng-join-grid": "2.129.0",
-    "@memberjunction/ng-notifications": "2.129.0",
-    "@memberjunction/ng-shared": "2.129.0",
-    "@memberjunction/ng-shared-generic": "2.129.0",
-    "@memberjunction/ng-simple-record-list": "2.129.0",
-    "@memberjunction/ng-tabstrip": "2.129.0",
-    "@memberjunction/ng-user-avatar": "2.129.0",
-    "@memberjunction/ng-user-view-grid": "2.129.0",
-    "@progress/kendo-angular-buttons": "16.2.0",
-    "@progress/kendo-angular-dialog": "16.2.0",
-    "@progress/kendo-angular-dropdowns": "16.2.0",
-    "@progress/kendo-angular-excel-export": "16.2.0",
-    "@progress/kendo-angular-grid": "16.2.0",
-    "@progress/kendo-angular-indicators": "16.2.0",
-    "@progress/kendo-angular-layout": "16.2.0",
-    "@progress/kendo-angular-sortable": "16.2.0",
-    "rxjs": "~7.8.0",
-    "tslib": "^2.3.0"
+    "@memberjunction/core": "5.28.0",
+    "@memberjunction/core-entities": "5.28.0",
+    "@memberjunction/global": "5.28.0",
+    "@memberjunction/graphql-dataprovider": "5.28.0",
+    "@memberjunction/ng-base-application": "5.28.0",
+    "@memberjunction/ng-base-forms": "5.28.0",
+    "@memberjunction/ng-code-editor": "5.28.0",
+    "@memberjunction/ng-entity-form-dialog": "5.28.0",
+    "@memberjunction/ng-entity-permissions": "5.28.0",
+    "@memberjunction/ng-join-grid": "5.28.0",
+    "@memberjunction/ng-notifications": "5.28.0",
+    "@memberjunction/ng-shared": "5.28.0",
+    "@memberjunction/ng-shared-generic": "5.28.0",
+    "@memberjunction/ng-simple-record-list": "5.28.0",
+    "@memberjunction/ng-tabstrip": "5.28.0",
+    "@memberjunction/ng-ui-components": "5.28.0",
+    "@memberjunction/ng-user-avatar": "5.28.0",
+    "@angular/cdk": "21.1.3",
+    "rxjs": "~7.8.2",
+    "tslib": "^2.8.1"
   },
   "sideEffects": false,
   "repository": {

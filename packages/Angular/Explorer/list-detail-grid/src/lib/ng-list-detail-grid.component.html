@@ -1,58 +1,32 @@
-<div class="list-detail-grid-wrap" >
-    <kendo-grid #kendoGrid
-        
-        [resizable]="true"
-        [data]="gridView" 
-        [skip]="skip"
-        [pageSize]="pageSize"
-        scrollable="virtual"
-        [rowHeight]="36"
-        (pageChange)="pageChange($event)"
-        [loading]="isLoading"
-        [height]="gridHeight"
-        [sortable]="true"
-        [sort]="sortSettings" 
-        [resizable]="true"
-        [reorderable]="true"
-        [selectable]="true"
-        kendoGridSelectBy
-        [(selectedKeys)]="selectedKeys"
-        (cellClick)="cellClickHandler($event)"
-        (cellClose)="cellCloseHandler($event)"
-        (columnReorder)="columnReorder($event)"
-        (columnResize)="columnResize($event)"
-        (selectionChange)="selectionChange($event)"
-        (sortChange)="sortChanged($event)"
-    >
-        <ng-template kendoGridToolbarTemplate>
-            <button kendoButton (click)="doExcelExport()" >
-                <span class="fa-regular fa-file-excel"></span>
-                Export to Excel
-            </button>
-        </ng-template>
-        <kendo-grid-checkbox-column 
-            *ngIf="compareMode || mergeMode || duplicateMode" 
-            [width]="50" 
-            [headerStyle]="{ 'font-weight' : 'bold', 'background-color': 'white' }" 
-            [style]="{'text-align': 'center', 'vertical-align': 'center'}">
-        </kendo-grid-checkbox-column>
-        <kendo-grid-column 
-            *ngFor="let item of visibleColumns" 
-            [field]="item.Name" 
-            [title]="GetColumnTitle(item)"
-            [width]="item.width ? item.width : 100"
-            [editable]="item.EntityField.AllowUpdateAPI"
-            [editor]="getEditor(item.EntityField)"
-            [headerStyle]="{ 'font-weight' : 'bold', 'background-color': 'white' }"
-            [style]="this.GetColumnCellStyle(item)"
-        >
-            <ng-template *ngIf="item===visibleColumns[0]" kendoGridFooterTemplate >
-                {{this.viewData.length | number}}{{this.totalRowCount > this.viewData.length ? ' of ' + (this.totalRowCount | number) : ' rows'}}<br/><span style="font-size: smaller; font-weight: normal;">{{viewExecutionTime | number:'1.2-2'}} seconds</span>
-            </ng-template>
-        </kendo-grid-column>
-        <kendo-excelexport #excelExport [data]="exportData" [fileName]="(_viewEntity ? _viewEntity.Get('Name') : _entityInfo?.Name) + '.xlsx'">
-            <kendo-excelexport-column *ngFor="let exportCol of exportColumns" [field]="exportCol.Name" [title]="exportCol.Name">
-            </kendo-excelexport-column>
-        </kendo-excelexport>
-    </kendo-grid>
-</div>  
+<div class="list-detail-grid-container">
+  <!-- Loading state while list is being loaded -->
+  @if (isLoading) {
+    <div class="loading-container">
+      <mj-loading text="Loading list..."></mj-loading>
+    </div>
+  }
+
+  <!-- Empty state when no list is selected -->
+  @if (!isLoading && !listLoaded && !listId && !listEntity) {
+    <div class="empty-state">
+      <span class="fa-solid fa-rectangle-list empty-icon"></span>
+      <p>Select a list to view its records</p>
+    </div>
+  }
+
+  <!-- Grid display when list is loaded -->
+  @if (listLoaded && gridParams) {
+    <mj-entity-data-grid
+      #entityDataGrid
+      [Params]="gridParams"
+      [Height]="height"
+      [ShowToolbar]="showToolbar"
+      [ToolbarConfig]="effectiveToolbarConfig"
+      [SelectionMode]="selectionMode"
+      (AfterRowClick)="onRowClick($event)"
+      (AfterRowDoubleClick)="onRowDoubleClick($event)"
+      (AfterDataLoad)="onDataLoaded($event)"
+      (SelectionChange)="onSelectionChange($event)">
+    </mj-entity-data-grid>
+  }
+</div>

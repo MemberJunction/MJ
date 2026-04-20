@@ -1,8 +1,9 @@
 import { AIEngine } from "@memberjunction/aiengine";
 import { BaseEntity, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult, LogError } from "@memberjunction/core";
-import { VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { MJVectorDatabaseEntity } from "@memberjunction/core-entities";
+import { UUIDsEqual } from "@memberjunction/global";
 import { PageRecordsParams } from "../generic/VectorCore.types";
-import { AIModelEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIModelEntityExtended } from "@memberjunction/ai-core-plus";
 
 export class VectorBase {
     _runView: RunView;
@@ -22,7 +23,7 @@ export class VectorBase {
 
     protected async GetRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
         const md = new Metadata();
-        const entity = md.Entities.find(e => e.ID === entityID);
+        const entity = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
         if (!entity){
             throw new Error(`Entity with ID ${entityID} not found.`);
         }
@@ -42,7 +43,7 @@ export class VectorBase {
     }
 
     protected async PageRecordsByEntityID<T>(params: PageRecordsParams): Promise<T[]> {
-        const entity: EntityInfo | undefined = this.Metadata.Entities.find((e) => e.ID === params.EntityID);
+        const entity: EntityInfo | undefined = this.Metadata.Entities.find((e) => UUIDsEqual(e.ID, params.EntityID as string));
         if (!entity) {
           throw new Error(`Entity with ID ${params.EntityID} not found.`);
         }
@@ -62,18 +63,22 @@ export class VectorBase {
         return rvResult.Results;
     }
 
-    protected BuildExtraFilter(CompositeKey: CompositeKey[]): string {
-        return CompositeKey.map((keyValue) => {
+    /**
+     * Builds a SQL filter from composite keys. Values are sanitized to prevent SQL injection.
+     */
+    protected BuildExtraFilter(compositeKeys: CompositeKey[]): string {
+        return compositeKeys.map((keyValue) => {
             return keyValue.KeyValuePairs.map((keys) => {
-                return `${keys.FieldName} = '${keys.Value}'`;
+                const sanitizedValue = String(keys.Value).replace(/'/g, "''");
+                return `${keys.FieldName} = '${sanitizedValue}'`;
             }).join(" AND ");
         }).join("\n OR ");
     }
 
-    protected GetAIModel(id?: string): AIModelEntityExtended {
-        let model: AIModelEntityExtended;
+    protected GetAIModel(id?: string): MJAIModelEntityExtended {
+        let model: MJAIModelEntityExtended;
         if(id){
-            model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings" && m.ID === id);
+            model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings" && UUIDsEqual(m.ID, id));
         }
         else{
             model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings");
@@ -85,10 +90,10 @@ export class VectorBase {
         return model;
     }
 
-    protected GetVectorDatabase(id?: string): VectorDatabaseEntity {
+    protected GetVectorDatabase(id?: string): MJVectorDatabaseEntity {
         if(AIEngine.Instance.VectorDatabases.length > 0){
             if(id){
-                let vectorDB = AIEngine.Instance.VectorDatabases.find(vd => vd.ID === id);
+                let vectorDB = AIEngine.Instance.VectorDatabases.find(vd => UUIDsEqual(vd.ID, id));
                 if(vectorDB){
                     return vectorDB;
                 }

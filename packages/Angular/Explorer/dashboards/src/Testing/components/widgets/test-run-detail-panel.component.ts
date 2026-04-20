@@ -3,136 +3,145 @@ import { TestRunSummary } from '../../services/testing-instrumentation.service';
 import { OracleResult } from './oracle-breakdown-table.component';
 
 @Component({
+  standalone: false,
   selector: 'app-test-run-detail-panel',
   template: `
-    <div class="test-run-detail-panel" *ngIf="testRun">
-      <div class="detail-header">
-        <div class="header-left">
-          <h3>{{ testRun.testName }}</h3>
-          <div class="header-meta">
-            <span class="test-type">
-              <i class="fa-solid fa-tag"></i>
-              {{ testRun.testType }}
-            </span>
-            <span class="run-time">
-              <i class="fa-solid fa-clock"></i>
-              {{ testRun.runDateTime | date:'medium' }}
-            </span>
-          </div>
-        </div>
-        <div class="header-right">
-          <app-test-status-badge [status]="testRun.status"></app-test-status-badge>
-          <button class="close-btn" (click)="onClose()" *ngIf="closeable">
-            <i class="fa-solid fa-times"></i>
-          </button>
-        </div>
-      </div>
-
-      <div class="detail-content">
-        <!-- Main Metrics -->
-        <div class="metrics-section">
-          <div class="metric-card">
-            <div class="metric-label">Score</div>
-            <app-score-indicator [score]="testRun.score" [showBar]="true" [showIcon]="true"></app-score-indicator>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Cost</div>
-            <app-cost-display [cost]="testRun.cost" [showIcon]="true"></app-cost-display>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Duration</div>
-            <div class="metric-value">{{ formatDuration(testRun.duration) }}</div>
-          </div>
-          <div class="metric-card" *ngIf="testRun.targetType">
-            <div class="metric-label">Target</div>
-            <div class="metric-value target-link" (click)="onViewTarget()">
-              <i class="fa-solid fa-external-link-alt"></i>
-              {{ testRun.targetType }}
+    @if (testRun) {
+      <div class="test-run-detail-panel">
+        <div class="detail-header">
+          <div class="header-left">
+            <h3>{{ testRun.testName }}</h3>
+            <div class="header-meta">
+              <span class="test-type">
+                <i class="fa-solid fa-tag"></i>
+                {{ testRun.testType }}
+              </span>
+              <span class="run-time">
+                <i class="fa-solid fa-clock"></i>
+                {{ testRun.runDateTime | date:'medium' }}
+              </span>
             </div>
           </div>
-        </div>
-
-        <!-- Oracle Breakdown -->
-        <div class="oracle-section" *ngIf="oracleResults && oracleResults.length > 0">
-          <app-oracle-breakdown-table [results]="oracleResults"></app-oracle-breakdown-table>
-        </div>
-
-        <!-- Result Details -->
-        <div class="details-section" *ngIf="resultDetails">
-          <div class="section-header">
-            <h4>
-              <i class="fa-solid fa-file-alt"></i>
-              Result Details
-            </h4>
-            <button class="toggle-btn" (click)="toggleResultDetails()">
-              <i class="fa-solid" [class.fa-chevron-down]="!showResultDetails" [class.fa-chevron-up]="showResultDetails"></i>
-            </button>
-          </div>
-          <div class="details-content" *ngIf="showResultDetails">
-            <pre class="json-viewer">{{ formatJSON(resultDetails) }}</pre>
+          <div class="header-right">
+            <app-test-status-badge [status]="testRun.status"></app-test-status-badge>
+            @if (closeable) {
+              <button class="close-btn" (click)="onClose()">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            }
           </div>
         </div>
-
-        <!-- Feedback Section -->
-        <div class="feedback-section">
-          <div class="section-header">
-            <h4>
-              <i class="fa-solid fa-comment-dots"></i>
-              Human Feedback
-            </h4>
-          </div>
-          <div class="feedback-form">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Rating (1-10)</label>
-                <input
-                  type="number"
-                  [(ngModel)]="feedbackRating"
-                  min="1"
-                  max="10"
-                  class="rating-input"
-                />
-              </div>
-              <div class="form-group">
-                <label>Is Correct?</label>
-                <div class="checkbox-group">
-                  <label class="checkbox-label">
-                    <input type="checkbox" [(ngModel)]="feedbackIsCorrect" />
-                    <span>Yes, the automated result is correct</span>
-                  </label>
+        <div class="detail-content">
+          <!-- Main Metrics -->
+          <div class="metrics-section">
+            <div class="metric-card">
+              <div class="metric-label">Score</div>
+              <app-score-indicator [score]="testRun.score" [showBar]="true" [showIcon]="true"></app-score-indicator>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Cost</div>
+              <app-cost-display [cost]="testRun.cost" [showIcon]="true"></app-cost-display>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Duration</div>
+              <div class="metric-value">{{ formatDuration(testRun.duration) }}</div>
+            </div>
+            @if (testRun.targetType) {
+              <div class="metric-card">
+                <div class="metric-label">Target</div>
+                <div class="metric-value target-link" (click)="onViewTarget()">
+                  <i class="fa-solid fa-external-link-alt"></i>
+                  {{ testRun.targetType }}
                 </div>
               </div>
+            }
+          </div>
+          <!-- Oracle Breakdown -->
+          @if (oracleResults && oracleResults.length > 0) {
+            <div class="oracle-section">
+              <app-oracle-breakdown-table [results]="oracleResults"></app-oracle-breakdown-table>
             </div>
-            <div class="form-group">
-              <label>Comments</label>
-              <textarea
-                [(ngModel)]="feedbackComments"
-                rows="3"
-                class="comments-textarea"
-                placeholder="Enter your feedback comments..."
-              ></textarea>
+          }
+          <!-- Result Details -->
+          @if (resultDetails) {
+            <div class="details-section">
+              <div class="section-header">
+                <h4>
+                  <i class="fa-solid fa-file-alt"></i>
+                  Result Details
+                </h4>
+                <button class="toggle-btn" (click)="toggleResultDetails()">
+                  <i class="fa-solid" [class.fa-chevron-down]="!showResultDetails" [class.fa-chevron-up]="showResultDetails"></i>
+                </button>
+              </div>
+              @if (showResultDetails) {
+                <div class="details-content">
+                  <pre class="json-viewer">{{ formatJSON(resultDetails) }}</pre>
+                </div>
+              }
             </div>
-            <button class="submit-btn" (click)="onSubmitFeedback()" [disabled]="submittingFeedback">
-              <i class="fa-solid fa-paper-plane"></i>
-              {{ submittingFeedback ? 'Submitting...' : 'Submit Feedback' }}
-            </button>
+          }
+          <!-- Feedback Section -->
+          <div class="feedback-section">
+            <div class="section-header">
+              <h4>
+                <i class="fa-solid fa-comment-dots"></i>
+                Human Feedback
+              </h4>
+            </div>
+            <div class="feedback-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Rating (1-10)</label>
+                  <input
+                    type="number"
+                    [(ngModel)]="feedbackRating"
+                    min="1"
+                    max="10"
+                    class="rating-input"
+                    />
+                </div>
+                <div class="form-group">
+                  <label>Is Correct?</label>
+                  <div class="checkbox-group">
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="feedbackIsCorrect" />
+                      <span>Yes, the automated result is correct</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Comments</label>
+                <textarea
+                  [(ngModel)]="feedbackComments"
+                  rows="3"
+                  class="comments-textarea"
+                  placeholder="Enter your feedback comments..."
+                ></textarea>
+              </div>
+              <button class="submit-btn" (click)="onSubmitFeedback()" [disabled]="submittingFeedback">
+                <i class="fa-solid fa-paper-plane"></i>
+                {{ submittingFeedback ? 'Submitting...' : 'Submit Feedback' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  `,
+    }
+    `,
   styles: [`
     .test-run-detail-panel {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--mj-shadow-md);
     }
 
     .detail-header {
       padding: 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
@@ -166,7 +175,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
     .close-btn {
       background: rgba(255, 255, 255, 0.2);
       border: none;
-      color: white;
+      color: var(--mj-text-inverse);
       padding: 8px 12px;
       border-radius: 4px;
       cursor: pointer;
@@ -189,15 +198,15 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .metric-card {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       padding: 16px;
       border-radius: 8px;
-      border-left: 4px solid #2196f3;
+      border-left: 4px solid var(--mj-brand-primary);
     }
 
     .metric-label {
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -207,14 +216,14 @@ import { OracleResult } from './oracle-breakdown-table.component';
     .metric-value {
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .target-link {
       display: flex;
       align-items: center;
       gap: 6px;
-      color: #2196f3;
+      color: var(--mj-brand-primary);
       cursor: pointer;
       font-size: 14px;
     }
@@ -235,27 +244,27 @@ import { OracleResult } from './oracle-breakdown-table.component';
       align-items: center;
       margin-bottom: 12px;
       padding-bottom: 8px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .section-header h4 {
       margin: 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     .section-header h4 i {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .toggle-btn {
       background: none;
       border: none;
-      color: #666;
+      color: var(--mj-text-secondary);
       cursor: pointer;
       padding: 4px 8px;
       border-radius: 4px;
@@ -263,7 +272,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .toggle-btn:hover {
-      background: #f0f0f0;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .details-content {
@@ -271,8 +280,8 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .json-viewer {
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface-card);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       padding: 16px;
       font-size: 11px;
@@ -284,7 +293,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .feedback-form {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       padding: 16px;
       border-radius: 8px;
     }
@@ -305,12 +314,12 @@ import { OracleResult } from './oracle-breakdown-table.component';
     .form-group label {
       font-size: 12px;
       font-weight: 600;
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .rating-input {
       padding: 8px 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 14px;
     }
@@ -325,7 +334,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
       align-items: center;
       gap: 8px;
       font-size: 13px;
-      color: #333;
+      color: var(--mj-text-primary);
       cursor: pointer;
     }
 
@@ -337,7 +346,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
 
     .comments-textarea {
       padding: 10px 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 13px;
       font-family: inherit;
@@ -345,8 +354,8 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .submit-btn {
-      background: #2196f3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       padding: 10px 20px;
       border-radius: 4px;
@@ -360,7 +369,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .submit-btn:hover:not(:disabled) {
-      background: #1976d2;
+      background: var(--mj-brand-primary-hover);
     }
 
     .submit-btn:disabled {

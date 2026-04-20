@@ -2,8 +2,8 @@ import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, UserInfo, RunView } from '@memberjunction/core';
-import { ScheduledJobEntity } from '@memberjunction/core-entities';
-import * as cronParser from 'cron-parser';
+import { MJScheduledJobEntity } from '@memberjunction/core-entities';
+import cronParser from 'cron-parser';
 
 /**
  * Base class for all Scheduled Job-related actions.
@@ -47,7 +47,7 @@ export abstract class BaseJobAction extends BaseAction {
     protected async loadJob(
         jobId: string,
         contextUser: UserInfo
-    ): Promise<{ job?: ScheduledJobEntity; error?: ActionResultSimple }> {
+    ): Promise<{ job?: MJScheduledJobEntity; error?: ActionResultSimple }> {
         if (!jobId) {
             return {
                 error: {
@@ -59,7 +59,7 @@ export abstract class BaseJobAction extends BaseAction {
         }
 
         const md = new Metadata();
-        const job = await md.GetEntityObject<ScheduledJobEntity>('MJ: Scheduled Jobs', contextUser);
+        const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', contextUser);
 
         const loadResult = await job.Load(jobId);
 
@@ -200,11 +200,4 @@ export abstract class BaseJobAction extends BaseAction {
             Type: 'Output'
         });
     }
-}
-
-/**
- * Loader function to prevent tree shaking
- */
-export function LoadBaseJobAction() {
-    // Stub function - ensures class is included in bundle
 }

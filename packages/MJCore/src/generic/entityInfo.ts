@@ -6,7 +6,17 @@ import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityIn
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
+
+/**
+ * Valid values for EntityField.ExtendedType.
+ * Defines semantic meaning beyond the SQL data type (e.g., a string field that holds an email, URL, or geo address).
+ */
+export type EntityFieldExtendedType =
+    | 'Code' | 'Email' | 'FaceTime' | 'Geo'
+    | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
+    | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
+    | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
 
 /**
  * The possible status values for a record change
@@ -114,6 +124,141 @@ export class EntityRelationshipInfo extends BaseInfo  {
     }
 }
 
+/**
+ * Metadata about an organic key defined on an entity — a set of fields that constitute
+ * a natural identifier for cross-system matching (e.g., email, phone, SSN).
+ * Maps to the MJ: Entity Organic Keys metadata entity.
+ */
+export class EntityOrganicKeyInfo extends BaseInfo {
+    ID: string = null
+    EntityID: string = null
+    Name: string = null
+    Description: string | null = null
+    MatchFieldNames: string = null
+    NormalizationStrategy: 'LowerCaseTrim' | 'Trim' | 'ExactMatch' | 'Custom' = 'LowerCaseTrim'
+    CustomNormalizationExpression: string | null = null
+    AutoCreateRelatedViewOnForm: boolean = false
+    Sequence: number = 0
+    Status: 'Active' | 'Disabled' = 'Active'
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields from the database view
+    Entity: string = null
+
+    private _RelatedEntities: EntityOrganicKeyRelatedEntityInfo[] = []
+
+    /**
+     * Gets the related entities configured for this organic key.
+     */
+    get RelatedEntities(): EntityOrganicKeyRelatedEntityInfo[] {
+        return this._RelatedEntities;
+    }
+
+    /**
+     * Returns the match field names as a parsed array, trimmed.
+     */
+    get MatchFieldNamesArray(): string[] {
+        return this.MatchFieldNames ? this.MatchFieldNames.split(',').map(f => f.trim()) : [];
+    }
+
+    constructor(initData: {EntityOrganicKeyRelatedEntities?: unknown[]; _RelatedEntities?: unknown[]; RelatedEntities?: unknown[]} & Record<string, unknown> = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+
+            this._RelatedEntities = [];
+            const re = initData.EntityOrganicKeyRelatedEntities || initData._RelatedEntities || initData.RelatedEntities;
+            if (re && Array.isArray(re)) {
+                // sort by sequence
+                const sorted = [...re] as Record<string, unknown>[];
+                sorted.sort((a, b) => {
+                    const aSeq = (a.Sequence as number) ?? 999999;
+                    const bSeq = (b.Sequence as number) ?? 999999;
+                    return aSeq - bSeq;
+                });
+                for (const item of sorted) {
+                    this._RelatedEntities.push(new EntityOrganicKeyRelatedEntityInfo(item));
+                }
+            }
+        }
+    }
+
+}
+
+/**
+ * Metadata about a related entity that should appear on a form when viewing a record,
+ * matched via a parent organic key. Supports both direct field matching and transitive
+ * matching via a SQL view/table.
+ * Maps to the MJ: Entity Organic Key Related Entities metadata entity.
+ */
+export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
+    ID: string = null
+    EntityOrganicKeyID: string = null
+    RelatedEntityID: string = null
+
+    // Direct match
+    RelatedEntityFieldNames: string | null = null
+
+    // Transitive match
+    TransitiveObjectName: string | null = null
+    TransitiveObjectMatchFieldNames: string | null = null
+    TransitiveObjectOutputFieldName: string | null = null
+    RelatedEntityJoinFieldName: string | null = null
+
+    // Display
+    DisplayName: string | null = null
+    DisplayLocation: 'After Field Tabs' | 'Before Field Tabs' = 'After Field Tabs'
+    DisplayComponentID: string | null = null
+    DisplayComponentConfiguration: string | null = null
+    Sequence: number = 0
+
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields from the database view
+    EntityOrganicKey: string = null
+    RelatedEntity: string = null
+
+    /**
+     * Whether this is a direct match (vs transitive).
+     */
+    get IsDirectMatch(): boolean {
+        return this.RelatedEntityFieldNames != null;
+    }
+
+    /**
+     * Whether this is a transitive match via a SQL view/table.
+     */
+    get IsTransitiveMatch(): boolean {
+        return this.TransitiveObjectName != null;
+    }
+
+    /**
+     * Returns the related entity field names as a parsed array, trimmed.
+     * Only meaningful for direct matches.
+     */
+    get RelatedEntityFieldNamesArray(): string[] {
+        return this.RelatedEntityFieldNames ? this.RelatedEntityFieldNames.split(',').map(f => f.trim()) : [];
+    }
+
+    /**
+     * Returns the transitive object match field names as a parsed array, trimmed.
+     * Only meaningful for transitive matches.
+     */
+    get TransitiveObjectMatchFieldNamesArray(): string[] {
+        return this.TransitiveObjectMatchFieldNames ? this.TransitiveObjectMatchFieldNames.split(',').map(f => f.trim()) : [];
+    }
+
+    constructor(initData: Record<string, unknown> = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+
+}
+
 export const EntityPermissionType = {
     Read: 'Read',
     Create: 'Create',
@@ -195,7 +340,7 @@ export class EntityPermissionInfo extends BaseInfo{
                 break;
         }
         if (fID && fID.length > 0) 
-            return Metadata.Provider.RowLevelSecurityFilters.find(f => f.ID === fID);
+            return Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, fID));
     }
 
     constructor (initData: any) {
@@ -234,6 +379,42 @@ export type EntityFieldValueListType = typeof EntityFieldValueListType[keyof typ
 
 
 /**
+ * Configuration for joining additional fields from a related entity into the base view.
+ */
+export interface RelatedEntityJoinFieldConfig {
+    /**
+     * Controls how this config interacts with default NameField behavior.
+     * - "extend": Include the default NameField PLUS the specified fields (default)
+     * - "override": ONLY include the specified fields, ignore NameField
+     * - "disable": Don't join ANY fields from this related entity
+     */
+    mode?: 'extend' | 'override' | 'disable';
+
+    /**
+     * Fields to join from the related entity.
+     * Ignored when mode is 'disable'.
+     */
+    fields?: RelatedEntityJoinField[];
+}
+
+/**
+ * Individual field configuration for a related entity join.
+ */
+export interface RelatedEntityJoinField {
+    /**
+     * Name of the field on the related entity to join.
+     */
+    field: string;
+
+    /**
+     * Optional custom alias for the column in the view.
+     * If not provided, auto-generated by the code generation process.
+     */
+    alias?: string;
+}
+
+
+/**
  * Defines allowed values for entity fields with value lists.
  * Supports dropdowns, validations, and data integrity constraints.
  */
@@ -251,6 +432,17 @@ export class EntityFieldValueInfo extends BaseInfo {
     constructor (initData: any) {
         super();
         this.copyInitData(initData);
+    }
+
+    /**
+     * Returns a plain object suitable for JSON serialization.
+     * Called automatically by JSON.stringify().
+     */
+    toJSON(): { Value: string; Code: string } {
+        return {
+            Value: this.Value,
+            Code: this.Code,
+        };
     }
 }
 
@@ -293,6 +485,16 @@ export class EntityFieldInfo extends BaseInfo {
      */
     IsPrimaryKey: boolean = null
     /**
+     * Indicates this field is a soft primary key (metadata-defined, not a database constraint).
+     * The view ORs this with IsPrimaryKey, so existing code checking IsPrimaryKey works automatically.
+     */
+    IsSoftPrimaryKey: boolean = null
+    /**
+     * Indicates this field is a soft foreign key (metadata-defined, not a database constraint).
+     * When set to 1, RelatedEntityID and RelatedEntityFieldName are preserved and not overwritten by CodeGen schema sync.
+     */
+    IsSoftForeignKey: boolean = null
+    /**
      * If true, the field is a unique key for the entity. There can be zero to many unique key fields per entity.
      */
     IsUnique: boolean = null
@@ -305,7 +507,7 @@ export class EntityFieldInfo extends BaseInfo {
     DefaultValue: string = null
     AutoIncrement: boolean = null
     ValueListType: string = null
-    ExtendedType: string = null
+    ExtendedType: EntityFieldExtendedType | null = null
     DefaultInView: boolean = null 
     ViewCellTemplate: string = null
     DefaultColumnWidth: number = null 
@@ -322,6 +524,29 @@ export class EntityFieldInfo extends BaseInfo {
     RelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
     RelatedEntityNameFieldMap: string = null
+    /**
+     * JSON configuration for additional fields to join from the related entity.
+     * Parsed from the RelatedEntityJoinFields column.
+     */
+    RelatedEntityJoinFields: string = null
+    /**
+     * The name of the TypeScript interface/type for this JSON field.
+     * When set, CodeGen will emit a strongly-typed getter/setter using this type
+     * instead of the default string getter/setter.
+     */
+    JSONType: string = null;
+    /**
+     * If true, the field holds a JSON array of JSONType items.
+     * The getter returns JSONType[] | null and the setter accepts JSONType[] | null.
+     */
+    JSONTypeIsArray: boolean = false;
+    /**
+     * Raw TypeScript code emitted by CodeGen above the entity class definition.
+     * Typically contains the interface/type definition referenced by JSONType.
+     * Can include imports, multiple types, or any valid TypeScript.
+     */
+    JSONTypeDefinition: string = null;
+
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
     EntityIDFieldName: string = null
     __mj_CreatedAt: Date = null
@@ -448,6 +673,15 @@ export class EntityFieldInfo extends BaseInfo {
     AutoUpdateCategory: boolean = true;
 
     /**
+    * * Field Name: AutoUpdateExtendedType
+    * * Display Name: Auto Update Extended Type
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows CodeGen to auto-suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, etc.); when 0, user has locked this field
+    */
+    AutoUpdateExtendedType: boolean = true;
+
+    /**
     * * Field Name: AutoUpdateDisplayName
     * * Display Name: Auto Update Display Name
     * * SQL Data Type: bit
@@ -540,10 +774,70 @@ export class EntityFieldInfo extends BaseInfo {
     IsFloat: boolean
     _RelatedEntityTableAlias: string
     _RelatedEntityNameFieldIsVirtual: boolean
+    private _rawEntityFieldValues: Record<string, unknown>[] | null = null;
+    private _entityFieldValuesConstructed = false;
     _EntityFieldValues: EntityFieldValueInfo[];
     _RelatedEntityNameFieldMap: string
+    /**
+     * Collection of all joined field mappings from the related entity.
+     */
+    _RelatedEntityJoinFieldMappings: Array<{
+        sourceField: string;
+        alias: string;
+        isVirtual: boolean;
+    }>;
+
+    /**
+     * Cached parsed RelatedEntityJoinFieldsConfig to avoid repeated JSON.parse calls.
+     * Lazy-initialized on first access.
+     */
+    private _relatedEntityJoinFieldsParsed: RelatedEntityJoinFieldConfig | null = undefined;
+
+    /**
+     * Flag to track if RelatedEntityJoinFieldsConfig parsing failed to avoid repeated parse attempts on bad JSON.
+     */
+    private _relatedEntityJoinFieldsFailedParsing: boolean = false;
+
+    /**
+     * JSON configuration for additional fields to join from the related entity.
+     * Parsed from the RelatedEntityJoinFields column. Uses lazy initialization and caching
+     * to avoid repeated JSON.parse calls. If parsing fails, it won't be attempted again.
+     */
+    get RelatedEntityJoinFieldsConfig(): RelatedEntityJoinFieldConfig | null {
+        // If parsing already failed, don't try again
+        if (this._relatedEntityJoinFieldsFailedParsing) {
+            return null;
+        }
+
+        // If no RelatedEntityJoinFields data, return null
+        if (!this.RelatedEntityJoinFields) {
+            return null;
+        }
+
+        // If already parsed and cached, return cached value
+        if (this._relatedEntityJoinFieldsParsed !== undefined) {
+            return this._relatedEntityJoinFieldsParsed;
+        }
+
+        // Parse and cache the configuration
+        const parsed = SafeJSONParse<RelatedEntityJoinFieldConfig>(this.RelatedEntityJoinFields, false);
+        if (parsed === null) {
+            // Parsing failed - mark as failed so we don't try again
+            this._relatedEntityJoinFieldsFailedParsing = true;
+            return null;
+        }
+
+        // Successfully parsed - cache and return
+        this._relatedEntityJoinFieldsParsed = parsed;
+        return parsed;
+    }
 
     get EntityFieldValues(): EntityFieldValueInfo[] {
+        if (!this._entityFieldValuesConstructed && this._rawEntityFieldValues) {
+            this._EntityFieldValues = this._rawEntityFieldValues.map(v => new EntityFieldValueInfo(v));
+            this._rawEntityFieldValues = null; // free raw data
+            this._entityFieldValuesConstructed = true;
+        }
         return this._EntityFieldValues;
     }
 
@@ -682,9 +976,13 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     get ReadOnly(): boolean {
-        return this.IsVirtual || 
-               !this.AllowUpdateAPI || 
-               this.IsPrimaryKey || 
+        // Note: IsVirtual is intentionally NOT checked here. For IS-A (table-per-type) inheritance,
+        // parent entity fields on child entities are marked IsVirtual=1 (they don't exist in the
+        // child's base table) but ARE editable via the parent save chain. The AllowUpdateAPI flag
+        // already correctly distinguishes editable IS-A parent fields (AllowUpdateAPI=1) from
+        // truly read-only virtual fields like joined display names (AllowUpdateAPI=0).
+        return !this.AllowUpdateAPI ||
+               this.IsPrimaryKey ||
                this.IsSpecialDateField;
     }
 
@@ -780,17 +1078,21 @@ export class EntityFieldInfo extends BaseInfo {
         if (initData) {
             this.copyInitData(initData);
 
-            // do some special handling to create class instances instead of just data objects
-            // copy the Entity Field Values
-            this._EntityFieldValues = [];
+            // Lazy-construct EntityFieldValueInfo objects — stash raw data now,
+            // construct typed instances on first access via the getter.
+            // This eliminates ~36,000 object constructions during startup deserialization.
             const efv = initData.EntityFieldValues || initData._EntityFieldValues;
-            if (efv) {
-                for (let j = 0; j < efv.length; j++) {
-                    this._EntityFieldValues.push(new EntityFieldValueInfo(efv[j]));
-                }
+            if (efv && efv.length > 0) {
+                this._rawEntityFieldValues = efv;
+                this._entityFieldValuesConstructed = false;
+                this._EntityFieldValues = []; // placeholder until getter is called
+            } else {
+                this._EntityFieldValues = [];
+                this._entityFieldValuesConstructed = true;
             }
         }
     }
+
 
 
     /**
@@ -825,15 +1127,20 @@ export class EntityFieldInfo extends BaseInfo {
     }    
 
     /**
-     * Readonly array of SQL Server date/time functions that return the current date/time
+     * Readonly array of SQL date/time functions that return the current date/time.
+     * Includes both SQL Server and PostgreSQL variants.
      */
     private static readonly SQL_CURRENT_DATE_FUNCTIONS: readonly string[] = [
         'getdate()',
-        'getutcdate()', 
+        'getutcdate()',
         'sysdatetimeoffset()',
         'current_timestamp',
         'sysdatetime()',
-        'sysutcdatetime()'
+        'sysutcdatetime()',
+        'now()',
+        'clock_timestamp()',
+        'statement_timestamp()',
+        'transaction_timestamp()'
     ] as const;
 
     /**
@@ -880,6 +1187,21 @@ export class EntityDocumentTypeInfo extends BaseInfo {
     }
 }
  
+
+/**
+ * Metadata about a single field category: its icon and description.
+ * Optionally indicates that the category contains fields inherited from an IS-A parent entity.
+ */
+export type FieldCategoryInfo = {
+    /** Font Awesome icon class (e.g. "fa-solid fa-chart-line") */
+    icon: string;
+    /** Human-readable description of what this category contains */
+    description: string;
+    /** If set, this category contains fields inherited from an IS-A parent entity */
+    inheritedFromEntityID?: string;
+    /** Display name of the parent entity (for UI badges like "Inherited from Products") */
+    inheritedFromEntityName?: string;
+}
 
 /**
  * Settings allow you to store key/value pairs of information that can be used to configure the behavior of the entity.
@@ -968,6 +1290,13 @@ export class EntityInfo extends BaseInfo {
      */
     TrackRecordChanges: boolean = null
     /**
+     * When false (default), child types are disjoint — a record can only be one child type at a time.
+     * When true, a record can simultaneously exist as multiple child types
+     * (e.g., a Person can be both a Member and a Volunteer).
+     * This flag is set on the **parent** entity and controls whether its children are exclusive.
+     */
+    AllowMultipleSubtypes: boolean = false
+    /**
      * Whether to audit when users access records from this entity
      */
     AuditRecordAccess: boolean = null
@@ -975,6 +1304,22 @@ export class EntityInfo extends BaseInfo {
      * Whether to audit when views are run against this entity
      */
     AuditViewRuns: boolean = null
+    /**
+     * When true (default), the server-side RunView cache will store and return cached results
+     * for this entity, trusting that all mutations flow through BaseEntity.Save() which fires
+     * cache invalidation events. Set to false for entities whose rows are created as side-effects
+     * of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal),
+     * since those inserts bypass BaseEntity and never trigger cache invalidation.
+     */
+    TrustServerCacheCompletely: boolean = true
+    /**
+     * Controls whether this entity participates in server-side and client-side
+     * caching at all. When false (default for non-__mj entities), the entire
+     * cache code path is short-circuited: no PreRunView cache check, no
+     * auto-cache storage, no HandleBaseEntityEvent fingerprint scan, no
+     * client-side IndexedDB cache. Zero overhead on hot save/query paths.
+     */
+    AllowCaching: boolean = false
     /**
      * Whether this entity is available through the GraphQL API
      */
@@ -1031,6 +1376,17 @@ export class EntityInfo extends BaseInfo {
      * Whether the full-text search function is generated by CodeGen
      */
     FullTextSearchFunctionGenerated: boolean = true
+    /**
+     * When true, this entity supports geocoding — CodeGen generates geo-aware subclass code,
+     * adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows
+     * a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields.
+     */
+    SupportsGeoCoding: boolean = false
+    /**
+     * When true (default), CodeGen can automatically set SupportsGeoCoding based on
+     * LLM analysis of entity fields. Set to false to lock the value.
+     */
+    AutoUpdateSupportsGeoCoding: boolean = true
     /**
      * Maximum number of rows to return in user views to prevent performance issues
      */
@@ -1209,18 +1565,20 @@ export class EntityInfo extends BaseInfo {
     ParentBaseView: string = null 
 
     // These are not in the database view and are added in code
-    private _Fields: EntityFieldInfo[] 
+    private _Fields: EntityFieldInfo[]
     private _RelatedEntities: EntityRelationshipInfo[]
     private _Permissions: EntityPermissionInfo[]
     private _Settings: EntitySettingInfo[]
+    private _FieldCategories: Record<string, FieldCategoryInfo> | null = null
+    private _OrganicKeys: EntityOrganicKeyInfo[] = []
     _hasIdField: boolean = false
-    _virtualCount: number = 0 
-    _manyToManyCount: number = 0 
+    _virtualCount: number = 0
+    _manyToManyCount: number = 0
     _oneToManyCount: number = 0
     _floatCount: number = 0
 
     /**
-     * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all. 
+     * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all.
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
      */
     get FirstPrimaryKey(): EntityFieldInfo {
@@ -1288,6 +1646,24 @@ export class EntityInfo extends BaseInfo {
         return this._Settings;
     }
 
+    /**
+     * Gets the parsed FieldCategoryInfo map for this entity, keyed by category name.
+     * Auto-populated from the 'FieldCategoryInfo' EntitySetting (with legacy 'FieldCategoryIcons' fallback)
+     * during EntityInfo construction. Returns null if no category info is configured.
+     */
+    get FieldCategories(): Record<string, FieldCategoryInfo> | null {
+        return this._FieldCategories;
+    }
+
+    /**
+     * Gets the organic keys defined on this entity. Organic keys enable cross-entity
+     * relationships based on shared business data (email, phone, SSN, etc.) rather than
+     * foreign key references. Only active organic keys are included.
+     * @returns {EntityOrganicKeyInfo[]} Array of organic key definitions with their related entities
+     */
+    get OrganicKeys(): EntityOrganicKeyInfo[] {
+        return this._OrganicKeys;
+    }
 
     private static __createdAtFieldName = '__mj_CreatedAt';
     private static __updatedAtFieldName = '__mj_UpdatedAt';
@@ -1356,19 +1732,149 @@ export class EntityInfo extends BaseInfo {
      * If no fields match, if there is a field called "Name", that is returned. If there is no field called "Name", null is returned.
      */
     get NameField(): EntityFieldInfo | null {
-        for (let j: number = 0; j < this.Fields.length; j++) {
-            const ef: EntityFieldInfo = this.Fields[j];
-            if (ef.IsNameField) 
-                return ef;
+      const f = this.Fields.find((f) => f.IsNameField);
+
+      if (!f)
+        return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name');
+      else
+        return f;
+    }
+
+    /**************************************************************************
+     * IS-A Type Relationship Computed Properties
+     *
+     * These properties support the IS-A (parent/child type) inheritance model
+     * where child entities share their parent's primary key and inherit all
+     * parent fields. Example: Meeting IS-A Product, Webinar IS-A Meeting.
+     **************************************************************************/
+
+    /**
+     * Returns the parent EntityInfo for IS-A type inheritance, or null if this entity
+     * has no parent type. Uses the existing ParentID column on the Entity table.
+     * Example: For "Meetings" entity with ParentID pointing to "Products", returns the Products EntityInfo.
+     */
+    get ParentEntityInfo(): EntityInfo | null {
+        if (!this.ParentID) return null;
+        const p = Metadata.Provider;
+        if (p?.EntityByID) {
+            return p.EntityByID(this.ParentID) ?? null;
         }
-        // at this point, we return the first field called "Name" if it exists, and the below line will return NULL if we can't find a field called "Name"
-        return this.Fields.find((f) => f.Name.toLowerCase() === 'name');
+        return p?.Entities?.find(e => UUIDsEqual(e.ID, this.ParentID)) ?? null;
+    }
+
+    /**
+     * Returns all child entities that have their ParentID set to this entity's ID.
+     * These represent IS-A type specializations of this entity.
+     * Example: For "Products" entity, might return [Meetings, Publications].
+     *
+     * When `AllowMultipleSubtypes` is true on this entity, multiple children can
+     * coexist for the same parent record (overlapping subtypes). When false (default),
+     * only one child type is allowed per parent record (disjoint subtypes).
+     */
+    get ChildEntities(): EntityInfo[] {
+        return Metadata.Provider?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];
+    }
+
+    /**
+     * Convenience alias: returns true when this entity is a parent type that allows
+     * overlapping (non-disjoint) subtypes. Equivalent to checking both
+     * `IsParentType` and `AllowMultipleSubtypes`.
+     */
+    get HasOverlappingSubtypes(): boolean {
+        return this.IsParentType && this.AllowMultipleSubtypes;
+    }
+
+    // Cache for ParentChain to avoid repeated walks
+    private _parentChainCache: EntityInfo[] | null = null;
+
+    /**
+     * Walks the IS-A chain upward from this entity to the root, returning all parent entities.
+     * Does NOT include this entity itself.
+     * Example: For Webinars (IS-A Meetings IS-A Products), returns [Meetings, Products].
+     * Results are cached after first computation for performance.
+     */
+    get ParentChain(): EntityInfo[] {
+        if (this._parentChainCache !== null) return this._parentChainCache;
+
+        const chain: EntityInfo[] = [];
+        let current = this.ParentEntityInfo;
+        const visited = new Set<string>(); // circular reference protection
+        while (current) {
+            if (visited.has(current.ID)) break; // prevent infinite loop
+            visited.add(current.ID);
+            chain.push(current);
+            current = current.ParentEntityInfo;
+        }
+        this._parentChainCache = chain;
+        return chain;
+    }
+
+    /**
+     * Returns true if this entity is a child type in an IS-A relationship (has a parent entity).
+     */
+    get IsChildType(): boolean {
+        return this.ParentID != null;
+    }
+
+    /**
+     * Returns true if this entity is a parent type in an IS-A relationship (has child entities).
+     */
+    get IsParentType(): boolean {
+        return this.ChildEntities.length > 0;
+    }
+
+    /**
+     * Returns all fields from all parent entities in the IS-A chain, excluding primary keys,
+     * virtual fields, and timestamp fields (__mj_ prefixed). These represent the inherited
+     * fields that should be available on child entities.
+     */
+    get AllParentFields(): EntityFieldInfo[] {
+        const fields: EntityFieldInfo[] = [];
+        for (const parent of this.ParentChain) {
+            fields.push(...parent.Fields.filter(
+                f => !f.IsPrimaryKey && !f.Name.startsWith('__mj_') && !f.IsVirtual
+            ));
+        }
+        return fields;
+    }
+
+    // Cache for ParentEntityFieldNames
+    private _parentEntityFieldNamesCache: Set<string> | null = null;
+
+    /**
+     * Returns a cached Set of field names that belong to parent entities in the IS-A chain,
+     * including the shared primary key(s). Used for efficient field routing in
+     * BaseEntity.Set/Get/SetMany/Hydrate operations.
+     * The Set enables O(1) lookup to determine if a field should be routed to the parent entity.
+     *
+     * Note: AllParentFields excludes PKs (they aren't "inherited data" fields), but the
+     * routing set must include them so that SetMany and Hydrate can forward the shared
+     * IS-A primary key to parent entities.
+     */
+    get ParentEntityFieldNames(): Set<string> {
+        if (this._parentEntityFieldNamesCache !== null) return this._parentEntityFieldNamesCache;
+
+        const names = this.AllParentFields.map(f => f.Name);
+
+        // Add shared PK names from the immediate parent — these are excluded from
+        // AllParentFields but must be routed so parent entities receive their identity.
+        const parentEntity = this.ParentEntityInfo;
+        if (parentEntity) {
+            for (const pk of parentEntity.PrimaryKeys) {
+                if (!names.includes(pk.Name)) {
+                    names.push(pk.Name);
+                }
+            }
+        }
+
+        this._parentEntityFieldNamesCache = new Set(names);
+        return this._parentEntityFieldNamesCache;
     }
 
     /**
      * Returns the Permissions for this entity for a given user, based on the roles the user is part of
-     * @param user 
-     * @returns 
+     * @param user
+     * @returns
      */
     public GetUserPermisions(user: UserInfo ): EntityUserPermissionInfo {
         try {
@@ -1376,7 +1882,7 @@ export class EntityInfo extends BaseInfo {
 
             for (let j: number = 0; j < this.Permissions.length; j++) {
                 const ep: EntityPermissionInfo = this.Permissions[j];
-                const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
+                const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
                 if (roleMatch) // user has this role
                     permissionList.push(ep)
             }
@@ -1410,7 +1916,7 @@ export class EntityInfo extends BaseInfo {
     public UserExemptFromRowLevelSecurity(user: UserInfo, type: EntityPermissionType): boolean {
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
+            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
             if (roleMatch) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
@@ -1446,7 +1952,7 @@ export class EntityInfo extends BaseInfo {
         const rlsList: RowLevelSecurityFilterInfo[] = [];
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
-            const roleMatch: UserRoleInfo = user.UserRoles.find((r) => r.RoleID === ep.RoleID)
+            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
             if (roleMatch) { // user has this role
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {
@@ -1469,7 +1975,7 @@ export class EntityInfo extends BaseInfo {
                 }
                 if (matchObject) {
                     // we have a match, so add it to the list if it isn't already there
-                    const existingMatch: RowLevelSecurityFilterInfo = rlsList.find((r) => r.ID === matchObject.ID);
+                    const existingMatch: RowLevelSecurityFilterInfo = rlsList.find((r) => UUIDsEqual(r.ID, matchObject.ID));
                     if (!existingMatch)
                         rlsList.push(matchObject);
                 }
@@ -1566,6 +2072,134 @@ export class EntityInfo extends BaseInfo {
         return obj;
     }
 
+    /**
+     * Returns a RunViewParams object configured to query the related entity matched via an organic key.
+     * Supports both direct field matching and transitive matching via SQL views/tables.
+     * @param record - The current record whose organic key values will be used for matching
+     * @param organicKeyRelatedEntity - The organic key related entity configuration
+     * @param organicKey - The parent organic key definition
+     * @param filter - Optional additional SQL filter to AND with the organic key filter
+     * @param maxRecords - Optional max rows to return
+     * @returns RunViewParams ready to pass to RunView
+     */
+    public static BuildOrganicKeyViewParams(
+        record: BaseEntity,
+        organicKeyRelatedEntity: EntityOrganicKeyRelatedEntityInfo,
+        organicKey: EntityOrganicKeyInfo,
+        filter?: string,
+        maxRecords?: number
+    ): RunViewParams {
+        const params: RunViewParams = {};
+        const matchFields = organicKey.MatchFieldNamesArray;
+
+        if (organicKeyRelatedEntity.IsTransitiveMatch) {
+            params.ExtraFilter = EntityInfo.BuildTransitiveOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
+        } else {
+            params.ExtraFilter = EntityInfo.BuildDirectOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
+        }
+
+        if (filter && filter.length > 0) {
+            params.ExtraFilter = `(${params.ExtraFilter}) AND (${filter})`;
+        }
+
+        params.EntityName = organicKeyRelatedEntity.RelatedEntity;
+
+        if (maxRecords && maxRecords > 0) {
+            params.MaxRows = maxRecords;
+        }
+
+        return params;
+    }
+
+    /**
+     * Builds an ExtraFilter for direct organic key matching (field-to-field comparison).
+     */
+    private static BuildDirectOrganicKeyFilter(
+        record: BaseEntity,
+        relatedEntity: EntityOrganicKeyRelatedEntityInfo,
+        organicKey: EntityOrganicKeyInfo,
+        matchFields: string[]
+    ): string {
+        const relatedFields = relatedEntity.RelatedEntityFieldNamesArray;
+        const conditions: string[] = [];
+
+        for (let i = 0; i < matchFields.length; i++) {
+            const value = record.Get(matchFields[i]);
+            if (value == null) {
+                // NULL values can't match — return a filter that yields no results
+                return '1=0';
+            }
+            const relatedField = relatedFields[i] || matchFields[i];
+            const escapedValue = String(value).replace(/'/g, "''");
+            conditions.push(EntityInfo.WrapWithNormalization(
+                `[${relatedField}]`, organicKey, escapedValue
+            ));
+        }
+
+        return conditions.join(' AND ');
+    }
+
+    /**
+     * Builds an ExtraFilter for transitive organic key matching (via SQL view/table subquery).
+     */
+    private static BuildTransitiveOrganicKeyFilter(
+        record: BaseEntity,
+        relatedEntity: EntityOrganicKeyRelatedEntityInfo,
+        organicKey: EntityOrganicKeyInfo,
+        matchFields: string[]
+    ): string {
+        const transitiveMatchFields = relatedEntity.TransitiveObjectMatchFieldNamesArray;
+        const conditions: string[] = [];
+
+        for (let i = 0; i < matchFields.length; i++) {
+            const value = record.Get(matchFields[i]);
+            if (value == null) {
+                return '1=0';
+            }
+            const transitiveField = transitiveMatchFields[i] || matchFields[i];
+            const escapedValue = String(value).replace(/'/g, "''");
+            conditions.push(EntityInfo.WrapWithNormalization(
+                `[${transitiveField}]`, organicKey, escapedValue
+            ));
+        }
+
+        // TransitiveObjectName is schema-qualified (e.g. "mailchimp.vwBridge") — bracket each part separately
+        const transitiveObject = relatedEntity.TransitiveObjectName!.split('.').map(p => `[${p}]`).join('.');
+        return `[${relatedEntity.RelatedEntityJoinFieldName}] IN (SELECT [${relatedEntity.TransitiveObjectOutputFieldName}] FROM ${transitiveObject} WHERE ${conditions.join(' AND ')})`;
+    }
+
+    /**
+     * Wraps a field expression and a literal value with the appropriate normalization
+     * based on the organic key's NormalizationStrategy.
+     * Returns a SQL comparison expression like: LOWER(LTRIM(RTRIM([Field]))) = LOWER(LTRIM(RTRIM('value')))
+     */
+    private static WrapWithNormalization(
+        fieldExpression: string,
+        organicKey: EntityOrganicKeyInfo,
+        escapedValue: string
+    ): string {
+        switch (organicKey.NormalizationStrategy) {
+            case 'LowerCaseTrim':
+                return `LOWER(LTRIM(RTRIM(${fieldExpression}))) = LOWER(LTRIM(RTRIM('${escapedValue}')))`;
+            case 'Trim':
+                return `LTRIM(RTRIM(${fieldExpression})) = LTRIM(RTRIM('${escapedValue}'))`;
+            case 'ExactMatch':
+                return `${fieldExpression} = '${escapedValue}'`;
+            case 'Custom': {
+                const expr = organicKey.CustomNormalizationExpression;
+                if (!expr) {
+                    // Fall back to exact match if no custom expression defined
+                    return `${fieldExpression} = '${escapedValue}'`;
+                }
+                const normalizedField = expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
+                const normalizedValue = expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+                return `${normalizedField} = ${normalizedValue}`;
+            }
+            default:
+                return `${fieldExpression} = '${escapedValue}'`;
+        }
+    }
+
 
     constructor(initData: any = null) {
         super();
@@ -1573,9 +2207,9 @@ export class EntityInfo extends BaseInfo {
             this.copyInitData(initData);
 
             // do some special handling to create class instances instead of just data objects
-            // copy the Entity Fields
+            // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
             this._Fields = [];
-            const ef = initData.EntityFields || initData._Fields;
+            const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
                     this._Fields.push(new EntityFieldInfo(ef[j]));
@@ -1584,7 +2218,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Entity Permissions
             this._Permissions = [];
-            const ep = initData.EntityPermissions || initData._Permissions;
+            const ep = initData.EntityPermissions || initData._Permissions || initData.Permissions;
             if (ep) {
                 for (let j = 0; j < ep.length; j++) {
                     this._Permissions.push(new EntityPermissionInfo(ep[j]));
@@ -1593,14 +2227,17 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Entity settings
             this._Settings = [];
-            const es = initData.EntitySettings || initData._Settings;
+            const es = initData.EntitySettings || initData._Settings || initData.Settings;
             if (es) {
                 es.map((s) => this._Settings.push(new EntitySettingInfo(s)));
             }
 
-            // copy the Related Entities
+            // auto-populate FieldCategories from the FieldCategoryInfo setting
+            this._FieldCategories = this.parseFieldCategoriesFromSettings();
+
+            // copy the Related Entities (accept EntityRelationships, _RelatedEntities, or RelatedEntities as input names)
             this._RelatedEntities = [];
-            const er = initData.EntityRelationships || initData._RelatedEntities;
+            const er = initData.EntityRelationships || initData._RelatedEntities || initData.RelatedEntities;
             if (er) {
                 // check to see if ANY of the records in the er array have a non-null or non-zero sequence value. The reason is 
                 // if we have any sequence values populated we want to sort by that sequence, and we want to consider null to be a high number
@@ -1624,6 +2261,15 @@ export class EntityInfo extends BaseInfo {
                 // now that we have prepared the er array by sorting it, if needed, let's load up the related entities
                 for (let j = 0; j < er.length; j++) {
                     this._RelatedEntities.push(new EntityRelationshipInfo(er[j]));
+                }
+            }
+
+            // copy the Organic Keys (sorted by sequence inside EntityOrganicKeyInfo constructor)
+            this._OrganicKeys = [];
+            const ok = initData.EntityOrganicKeys || initData._OrganicKeys || initData.OrganicKeys;
+            if (ok && Array.isArray(ok)) {
+                for (const item of ok) {
+                    this._OrganicKeys.push(new EntityOrganicKeyInfo(item));
                 }
             }
 
@@ -1667,6 +2313,40 @@ export class EntityInfo extends BaseInfo {
         catch (e) {
             LogError(e);
         }
+    }
+
+    /**
+     * Parses FieldCategoryInfo from EntitySettings, with legacy FieldCategoryIcons fallback.
+     * Called once during construction so the result is cached on _FieldCategories.
+     */
+    private parseFieldCategoriesFromSettings(): Record<string, FieldCategoryInfo> | null {
+        if (!this._Settings || this._Settings.length === 0) {
+            return null;
+        }
+
+        // Try new format first
+        const infoSetting = this._Settings.find(s => s.Name === 'FieldCategoryInfo');
+        if (infoSetting?.Value) {
+            const parsed = SafeJSONParse<Record<string, FieldCategoryInfo>>(infoSetting.Value, false);
+            if (parsed) {
+                return parsed;
+            }
+        }
+
+        // Fallback to legacy FieldCategoryIcons format (icon-only map)
+        const iconSetting = this._Settings.find(s => s.Name === 'FieldCategoryIcons');
+        if (iconSetting?.Value) {
+            const icons = SafeJSONParse<Record<string, string>>(iconSetting.Value, false);
+            if (icons) {
+                const result: Record<string, FieldCategoryInfo> = {};
+                for (const [category, icon] of Object.entries(icons)) {
+                    result[category] = { icon, description: '' };
+                }
+                return result;
+            }
+        }
+
+        return null;
     }
 }
 

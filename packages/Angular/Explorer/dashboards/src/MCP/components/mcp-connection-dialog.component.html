@@ -1,0 +1,203 @@
+@if (visible) {
+  <mj-dialog
+    [Visible]="true"
+    [Title]="DialogTitle"
+    (Close)="cancel()"
+    [Width]="600">
+    <form [formGroup]="connectionForm" class="connection-form">
+      <!-- Error Message -->
+      @if (ErrorMessage) {
+        <div class="error-banner">
+          <i class="fa-solid fa-exclamation-triangle"></i>
+          {{ ErrorMessage }}
+        </div>
+      }
+      <!-- Basic Info Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-info-circle"></i> Basic Information</h3>
+        <div class="form-group">
+          <label for="server">MCP Server <span class="required">*</span></label>
+          <mj-dropdown
+            [Data]="ActiveServers"
+            TextField="Name"
+            ValueField="ID"
+            [ValuePrimitive]="true"
+            [DefaultItem]="{ Name: 'Select a server...', ID: '' }"
+            [ngModelOptions]="{standalone: true}" [ngModel]="connectionForm.get('MCPServerID')?.value"
+            (ValueChange)="connectionForm.get('MCPServerID')?.setValue($any($event)); onServerChange()">
+            <ng-template #mjDropdownItem let-dataItem>
+              <div class="server-option">
+                <span class="server-name">{{ dataItem.Name }}</span>
+                @if (dataItem.TransportType) {
+                  <span class="server-transport">{{ dataItem.TransportType }}</span>
+                }
+              </div>
+            </ng-template>
+          </mj-dropdown>
+          @if (hasError('MCPServerID', 'required')) {
+            <span class="error-text">Server selection is required</span>
+          }
+        </div>
+        <div class="form-group">
+          <label for="name">Connection Name <span class="required">*</span></label>
+          <input class="mj-input"
+            id="name"
+            formControlName="Name"
+            placeholder="e.g., Production GitHub Connection" />
+          @if (hasError('Name', 'required')) {
+            <span class="error-text">Name is required</span>
+          }
+        </div>
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea class="mj-textarea"
+            id="description"
+            formControlName="Description"
+            placeholder="Optional description of this connection"
+          [rows]="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="status">Status</label>
+          <mj-dropdown
+            [Data]="['Active', 'Inactive']"
+            [ngModelOptions]="{standalone: true}" [ngModel]="connectionForm.get('Status')?.value"
+            (ValueChange)="connectionForm.get('Status')?.setValue($any($event))">
+          </mj-dropdown>
+        </div>
+        <div class="form-group">
+          <label for="company">Company</label>
+          <mj-dropdown
+            [Data]="companies"
+            TextField="Name"
+            ValueField="ID"
+            [ValuePrimitive]="true"
+            [DefaultItem]="{ Name: 'Global (all companies)', ID: '' }"
+            [ngModelOptions]="{standalone: true}" [ngModel]="connectionForm.get('CompanyID')?.value"
+            (ValueChange)="connectionForm.get('CompanyID')?.setValue($any($event))">
+          </mj-dropdown>
+          <span class="hint">Leave as Global to make this connection available to all companies</span>
+        </div>
+      </div>
+      <!-- Authentication Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-key"></i> Authentication</h3>
+        <div class="form-group">
+          <label for="credential">Credential</label>
+          @if (IsLoadingDropdowns) {
+            <div class="loading-credentials">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              Loading credentials...
+            </div>
+          } @else {
+            <div class="credential-row">
+              <mj-dropdown
+                [Data]="credentials"
+                TextField="Name"
+                ValueField="ID"
+                [ValuePrimitive]="true"
+                [DefaultItem]="{ Name: 'No credential (anonymous)', ID: '' }"
+                [ngModelOptions]="{standalone: true}" [ngModel]="connectionForm.get('CredentialID')?.value"
+                (ValueChange)="connectionForm.get('CredentialID')?.setValue($any($event))">
+              </mj-dropdown>
+              <button mjButton
+                type="button"
+                variant="outline"
+                (click)="openCredentialDialog()"
+                title="Create New Credential">
+                <i class="fa-solid fa-plus"></i>
+                New
+              </button>
+            </div>
+            <span class="hint">Select an existing credential or create a new one</span>
+          }
+        </div>
+        <div class="form-group">
+          <label for="customHeader">Custom Header Name</label>
+          <input class="mj-input"
+            id="customHeader"
+            formControlName="CustomHeaderName"
+            placeholder="e.g., X-Custom-API-Key" />
+          <span class="hint">Override the default header name for API key authentication</span>
+        </div>
+      </div>
+      <!-- Behavior Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-sliders"></i> Behavior</h3>
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" class="mj-checkbox" formControlName="AutoSyncTools" />
+            <span>Auto-sync tools on connect</span>
+          </label>
+          <span class="hint">Automatically discover and sync available tools when connecting</span>
+        </div>
+      </div>
+      <!-- Logging Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-file-lines"></i> Logging</h3>
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" class="mj-checkbox" formControlName="LogToolCalls" />
+            <span>Enable tool call logging</span>
+          </label>
+          <span class="hint">Log all tool executions to the database</span>
+        </div>
+        <div class="logging-options" [class.disabled]="!connectionForm.get('LogToolCalls')?.value">
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" class="mj-checkbox" formControlName="LogInputParameters" />
+              <span>Log input parameters</span>
+            </label>
+          </div>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" class="mj-checkbox" formControlName="LogOutputContent" />
+              <span>Log output content</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label for="maxOutputSize">Max Output Log Size (bytes)</label>
+            <mj-numeric-input
+              [Min]="0"
+              [Max]="10485760"
+              [Step]="10240"
+              [ngModelOptions]="{standalone: true}" [ngModel]="connectionForm.get('MaxOutputLogSize')?.value"
+              (ngModelChange)="connectionForm.get('MaxOutputLogSize')?.setValue($event)">
+            </mj-numeric-input>
+            <span class="hint">Maximum size of output content to log (0 = unlimited, max 10MB)</span>
+          </div>
+        </div>
+      </div>
+      <!-- Advanced Section -->
+      <div class="form-section">
+        <h3><i class="fa-solid fa-gear"></i> Advanced</h3>
+        <div class="form-group">
+          <label for="envVars">Environment Variables (JSON)</label>
+          <textarea class="mj-textarea"
+            id="envVars"
+            formControlName="EnvironmentVars"
+            placeholder='{"VAR_NAME": "value"}'
+          [rows]="3"></textarea>
+          <span class="hint">Additional environment variables for Stdio transport (JSON object)</span>
+        </div>
+      </div>
+    </form>
+    <mj-dialog-actions>
+      <button mjButton variant="primary" (click)="save()" [disabled]="IsSaving">
+        @if (IsSaving) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+        }
+        {{ IsEditMode ? 'Update' : 'Create' }}
+      </button>
+      <button mjButton (click)="cancel()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}
+
+<!-- Credential Creation Dialog -->
+@if (ShowCredentialDialog) {
+  <mj-credential-dialog
+    #credentialDialog
+    [Visible]="ShowCredentialDialog"
+    (close)="onCredentialDialogClose($event)">
+  </mj-credential-dialog>
+}

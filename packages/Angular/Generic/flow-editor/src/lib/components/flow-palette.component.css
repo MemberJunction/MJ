@@ -1,0 +1,100 @@
+/* ============================================================
+   Flow Palette — Draggable node type sidebar
+   ============================================================ */
+
+.mj-flow-palette {
+  width: 180px;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-default);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex-shrink: 0;
+  transition: width 0.2s ease;
+}
+
+.mj-flow-palette--collapsed {
+  width: 44px;
+}
+
+.mj-flow-palette--collapsed .mj-flow-palette-header {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.mj-flow-palette-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  color: var(--mj-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--mj-bg-surface-sunken);
+}
+
+.mj-flow-palette-header i {
+  font-size: var(--mj-text-sm);
+}
+
+.mj-flow-palette-content {
+  padding: 8px;
+  flex: 1;
+}
+
+.mj-flow-palette-category {
+  margin-bottom: 12px;
+}
+
+.mj-flow-palette-category-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--mj-text-disabled);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 6px;
+  margin-bottom: 4px;
+}
+
+.mj-flow-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--mj-radius-md);
+  cursor: grab;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+
+.mj-flow-palette-item:hover {
+  background: var(--mj-bg-page);
+  box-shadow: var(--mj-shadow-sm);
+}
+
+.mj-flow-palette-item:active {
+  cursor: grabbing;
+  background: var(--mj-bg-surface-sunken);
+}
+
+.mj-flow-palette-item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--mj-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--mj-text-sm);
+  flex-shrink: 0;
+}
+
+.mj-flow-palette-item-label {
+  font-size: var(--mj-text-sm);
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

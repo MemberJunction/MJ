@@ -1,4 +1,7 @@
+import type { BaseEntity } from "./baseEntity";
+import type { IMetadataProvider } from "./interfaces";
 import { LogError } from "./logging";
+import type { UserInfo } from "./securityInfo";
 
 /**
  * Returns the TypeScript type that corresponds to the SQL type passed in
@@ -12,14 +15,22 @@ export function TypeScriptTypeFromSQLType(sqlType: string): 'string' | 'number' 
         case 'nchar':
         case 'nvarchar':
         case 'uniqueidentifier': //treat this as a string
+        case 'uuid': // PostgreSQL UUID type
+        case 'bytea': // PostgreSQL binary data, treat as string (base64)
             return 'string';
         case 'datetime':
         case 'datetime2':
         case 'datetimeoffset':
         case 'date':
         case 'time':
+        case 'timestamp': // PostgreSQL timestamp
+        case 'timestamptz': // PostgreSQL timestamp with time zone
+        case 'timestamp with time zone': // PostgreSQL full type name
+        case 'timestamp without time zone': // PostgreSQL full type name
             return 'Date';
         case 'bit':
+        case 'bool': // PostgreSQL boolean type (internal name)
+        case 'boolean': // PostgreSQL boolean type (full name)
             return 'boolean';
         default:
             return 'number';      
@@ -79,30 +90,55 @@ function FormatValueInternal(sqlType: string,
 
     switch (sqlType.trim().toLowerCase()) {
         case 'money':
+        case 'numeric': // PostgreSQL equivalent of money when used for currency
             if (isNaN(value))
                 return value;
             else
-                return new Intl.NumberFormat(undefined, { style: 'currency', 
-                                                    currency: currency, 
-                                                    minimumFractionDigits: decimals, 
+                return new Intl.NumberFormat(undefined, { style: 'currency',
+                                                    currency: currency,
+                                                    minimumFractionDigits: decimals,
                                                     maximumFractionDigits: decimals}).format(value);
         case 'date':
         case 'time':
         case 'datetime':
         case 'datetime2':
         case 'datetimeoffset':
+        case 'timestamp': // PostgreSQL timestamp without time zone
+        case 'timestamptz': // PostgreSQL timestamp with time zone
+        case 'timestamp with time zone': // PostgreSQL full type name
+        case 'timestamp without time zone': // PostgreSQL full type name
+        case 'interval': // PostgreSQL interval type — format as string
           let date = new Date(value);
           return new Intl.DateTimeFormat().format(date);
         case 'decimal':
         case 'real':
         case 'float':
+        case 'double precision': // PostgreSQL double precision
           return new Intl.NumberFormat(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
         case 'int':
+        case 'integer': // PostgreSQL integer
+        case 'bigint': // PostgreSQL / SQL Server large integer
+        case 'smallint': // PostgreSQL / SQL Server small integer
+        case 'serial': // PostgreSQL auto-increment integer
+        case 'bigserial': // PostgreSQL auto-increment big integer
           return new Intl.NumberFormat(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
         case 'percent':
-          return new Intl.NumberFormat(undefined, { style: 'percent', 
-                                                    minimumFractionDigits: decimals, 
+          return new Intl.NumberFormat(undefined, { style: 'percent',
+                                                    minimumFractionDigits: decimals,
                                                     maximumFractionDigits: decimals}).format(value);
+        case 'boolean': // PostgreSQL boolean
+        case 'bool': // PostgreSQL boolean short form
+        case 'bit': // SQL Server boolean
+          return value ? 'true' : 'false';
+        case 'uuid': // PostgreSQL UUID
+        case 'uniqueidentifier': // SQL Server UUID
+        case 'text': // PostgreSQL unlimited text
+        case 'json': // PostgreSQL JSON
+        case 'jsonb': // PostgreSQL binary JSON
+        case 'bytea': // PostgreSQL binary data
+        case 'inet': // PostgreSQL network address
+        case 'cidr': // PostgreSQL network address range
+          return String(value);
         default:
           return value;
     }    
@@ -132,6 +168,8 @@ export function SQLFullType(baseType: string, length: number, precision: number,
         sOutput += `(${precision}, ${scale})`;
     else if (type === 'float')
         sOutput += `(${precision})`;
+    // PostgreSQL types that don't take length/precision parameters — return as-is:
+    // text, boolean, uuid, json, jsonb, bytea, timestamptz, timestamp, inet, cidr, interval, serial, bigserial
 
     return sOutput;
 }
@@ -147,12 +185,16 @@ export function SQLMaxLength(sqlBaseType: string, sqlLength: number): number {
     switch (sqlBaseType.trim().toLowerCase()) {
         case 'varchar':
         case 'char':
-        case 'text':
-            return sqlLength;
+            return sqlLength > 0 ? sqlLength : 0; // -1 or 0 means MAX/unlimited
+        case 'text': // SQL Server text (2GB) or PostgreSQL text (unlimited)
+            return sqlLength > 0 ? sqlLength : 0; // PostgreSQL text has no explicit length — 0 means unlimited
         case 'nvarchar':
         case 'nchar':
         case 'ntext':
-            return sqlLength / 2; // length in the schema is the # of bytes and on unicode fields we divide by 2 to get the # of characters a user is allowed to put in.
+            return sqlLength > 0 ? sqlLength / 2 : 0; // length in the schema is the # of bytes and on unicode fields we divide by 2 to get the # of characters a user is allowed to put in.
+        case 'uniqueidentifier': // SQL Server UUID type
+        case 'uuid': // PostgreSQL UUID type
+            return 36; // UUID string representation: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
         default:
             return 0;
     }
@@ -318,4 +360,68 @@ export function StripContainingParens(value: string): string {
         return StripContainingParens(value.substring(1, value.length - 1));
     }
     return value;
+}
+
+
+
+/**
+ * Converts an array of plain JavaScript objects into fully-hydrated `BaseEntity`
+ * subclass instances, using `Promise.all` for parallel creation.
+ *
+ * This is the canonical way to batch-convert raw data (e.g. from a custom stored
+ * procedure, RunQuery result, or any non-RunView data source) into typed entity
+ * objects that support `.Save()`, `.Load()`, dirty-tracking, and all other
+ * `BaseEntity` capabilities.
+ *
+ * Items that are already `BaseEntity` instances (detected via `instanceof` or
+ * duck-typing the `.Save()` method) are returned as-is, making this function
+ * safe to call on mixed arrays.
+ *
+ * **Performance note:** All entity creations run in parallel via `Promise.all`.
+ * For large arrays (500+ items), consider chunking to avoid memory pressure.
+ *
+ * @param md - The metadata provider used to create entity instances. On the client
+ *   side this is typically `new Metadata()`; on the server side it is the active
+ *   `IMetadataProvider` (e.g. `Metadata.Provider`).
+ * @param entityName - The MemberJunction entity name, e.g. `'MJ: Conversation Details'`.
+ *   Must match a registered entity exactly (case-insensitive, trimmed).
+ * @param items - Plain objects whose keys map to entity field names. Each object is
+ *   passed to `entity.LoadFromData()` which populates the entity without marking
+ *   fields as dirty (i.e. the entity starts in a "clean" / not-new state).
+ * @param contextUser - Optional user context for server-side operations. Required on
+ *   the server where multiple users are served concurrently; can be omitted on the
+ *   client where user context is already established.
+ * @returns A parallel-resolved array of typed entity objects in the same order as
+ *   the input `items` array.
+ *
+ * @example
+ * ```typescript
+ * import { Metadata, TransformSimpleObjectToEntityObject } from '@memberjunction/core';
+ *
+ * const md = new Metadata();
+ * const rawRows = queryResult.Results as SomeRawType[];
+ * const entities = await TransformSimpleObjectToEntityObject<MyEntity>(
+ *   md, 'My Entity Name', rawRows, contextUser
+ * );
+ * // entities is MyEntity[] — fully usable with .Save(), .Load(), etc.
+ * ```
+ */
+export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(md: IMetadataProvider, entityName: string, items: Array<Record<string, unknown>>, contextUser?: UserInfo): Promise<Array<T>> {
+    // we need to transform each of the items in the result set into a BaseEntity-derived object
+    // Create entities and load data in parallel for better performance
+    const entityPromises = items.map(async (item) => {
+        if (typeof item.Save === 'function') {
+            // duck-typing check — detects BaseEntity instances (and subclasses loaded
+            // from different runtime sources where instanceof would fail)
+            return item as T;
+        }
+        else {
+            // not a base entity sub-class already so convert
+            const entity = await md.GetEntityObject<T>(entityName, contextUser);
+            await entity.LoadFromData(item);
+            return entity;
+        } 
+    });
+    
+    return await Promise.all(entityPromises);
 }

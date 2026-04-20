@@ -26,6 +26,7 @@ import {
  * Supports filtering, date ranges, and result navigation
  */
 @Component({
+  standalone: false,
   selector: 'mj-search-panel',
   templateUrl: './search-panel.component.html',
   styleUrls: ['./search-panel.component.css']

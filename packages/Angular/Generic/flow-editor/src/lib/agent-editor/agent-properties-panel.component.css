@@ -1,0 +1,380 @@
+/* ============================================================
+   Agent Properties Panel — Step/Connection configuration
+   ============================================================ */
+
+.mj-agent-props {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--mj-bg-surface);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.mj-agent-props *,
+.mj-agent-props *::before,
+.mj-agent-props *::after {
+  box-sizing: border-box;
+}
+
+/* ── Header ───────────────────────────────────────────────── */
+
+.mj-agent-props-header {
+  flex-shrink: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--mj-bg-surface-sunken);
+  border-left: 3px solid transparent;
+}
+
+.mj-agent-props-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.mj-agent-props-header-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--mj-text-disabled);
+}
+
+.mj-agent-props-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--mj-radius-md);
+  background: transparent;
+  color: var(--mj-text-disabled);
+  cursor: pointer;
+  font-size: var(--mj-text-xs);
+  transition: all 0.15s ease;
+}
+
+.mj-agent-props-close:hover { background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); }
+
+/* ── Identity Card ────────────────────────────────────────── */
+
+.mj-agent-props-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.mj-agent-props-identity-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: var(--mj-radius-md);
+  color: white;
+  font-size: var(--mj-text-sm);
+  flex-shrink: 0;
+}
+
+.mj-agent-props-identity-icon--path {
+  border-radius: var(--mj-radius-full);
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  font-size: 11px;
+}
+
+.mj-agent-props-identity-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mj-agent-props-identity-name {
+  font-size: var(--mj-text-sm);
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.mj-agent-props-identity-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mj-agent-props-type-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: var(--mj-radius-sm);
+  line-height: 1.6;
+}
+
+.mj-agent-props-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--mj-radius-full);
+  flex-shrink: 0;
+}
+
+.mj-agent-props-status-label {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+
+.mj-agent-props-start-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: #059669;
+  background: #ecfdf5;
+  padding: 1px 6px;
+  border-radius: var(--mj-radius-sm);
+  letter-spacing: 0.2px;
+}
+
+.mj-agent-props-priority-badge {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  font-weight: 500;
+}
+
+/* ── Path Route Display ───────────────────────────────────── */
+
+.mj-agent-props-path-route {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--mj-text-sm);
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  line-height: 1.3;
+  flex-wrap: wrap;
+}
+
+.mj-agent-props-path-step-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-agent-props-path-arrow {
+  font-size: 10px;
+  color: var(--mj-text-disabled);
+  flex-shrink: 0;
+}
+
+/* ── Empty State ──────────────────────────────────────────── */
+
+.mj-agent-props-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  flex: 1;
+}
+
+.mj-agent-props-empty i { font-size: 28px; color: var(--mj-border-strong); margin-bottom: 12px; }
+.mj-agent-props-empty p { font-size: var(--mj-text-sm); color: var(--mj-text-disabled); margin: 0; }
+
+/* ── Scrollable Content ───────────────────────────────────── */
+
+.mj-agent-props-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+/* ── Sections ─────────────────────────────────────────────── */
+
+.mj-agent-props-section {
+  border-bottom: 1px solid var(--mj-bg-surface-sunken);
+}
+
+.mj-agent-props-section:last-child { border-bottom: none; }
+
+.mj-agent-props-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.mj-agent-props-section-header:hover {
+  background: var(--mj-bg-page);
+}
+
+.mj-agent-props-section-header i {
+  font-size: 10px;
+  color: var(--mj-text-disabled);
+  transition: transform 0.15s ease;
+}
+
+.mj-agent-props-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mj-text-disabled);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mj-agent-props-section-body {
+  padding: 0 14px 12px;
+}
+
+/* ── Fields ───────────────────────────────────────────────── */
+
+.mj-agent-props-field {
+  margin-bottom: 12px;
+}
+
+.mj-agent-props-field label {
+  display: block;
+  font-size: var(--mj-text-xs);
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  margin-bottom: 4px;
+}
+
+.mj-agent-props-field--row {
+  display: flex;
+  align-items: center;
+}
+
+.mj-agent-props-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
+  transition: border-color 0.15s ease;
+  outline: none;
+  font-family: inherit;
+}
+
+.mj-agent-props-input:focus { border-color: var(--mj-brand-primary); }
+.mj-agent-props-input:focus-visible { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15); }
+
+/* Select dropdown with consistent cross-browser styling */
+select.mj-agent-props-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
+  cursor: pointer;
+}
+
+.mj-agent-props-textarea {
+  resize: vertical;
+  min-height: 48px;
+}
+
+.mj-agent-props-checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+
+.mj-agent-props-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--mj-brand-primary);
+  cursor: pointer;
+}
+
+/* ── Read-only Values ─────────────────────────────────────── */
+
+.mj-agent-props-readonly-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-page);
+  border: 1px solid var(--mj-bg-surface-sunken);
+  border-radius: var(--mj-radius-md);
+  padding: 6px 10px;
+  min-height: 34px;
+  word-break: break-word;
+}
+
+.mj-agent-props-readonly-value--muted {
+  color: var(--mj-text-muted);
+  font-style: italic;
+}
+
+/* ── Code Editor in Panel ─────────────────────────────────── */
+
+.mj-agent-props-field mj-code-editor {
+  display: block;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  overflow: hidden;
+  min-height: 60px;
+  max-height: 200px;
+}
+
+.mj-agent-props-field mj-code-editor .cm-editor {
+  font-size: var(--mj-text-xs);
+}
+
+/* ── Hints ────────────────────────────────────────────────── */
+
+.mj-agent-props-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--mj-text-disabled);
+  margin-top: 3px;
+}
+
+/* ── Danger Zone ──────────────────────────────────────────── */
+
+.mj-agent-props-danger {
+  padding: 12px 14px;
+}
+
+.mj-agent-props-delete-btn {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #fecaca;
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-status-error-subtle);
+  color: var(--mj-status-error);
+  font-size: var(--mj-text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.mj-agent-props-delete-btn:hover { background: var(--mj-status-error-subtle); border-color: #fca5a5; }
+
+.mj-agent-props-delete-btn i { font-size: var(--mj-text-xs); }

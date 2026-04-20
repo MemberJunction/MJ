@@ -1,0 +1,194 @@
+# @memberjunction/sql-converter
+
+## 5.28.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.28.0
+- @memberjunction/sqlglot-ts@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.27.1
+- @memberjunction/sqlglot-ts@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.27.0
+- @memberjunction/sqlglot-ts@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.26.0
+- @memberjunction/sqlglot-ts@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.25.0
+- @memberjunction/sqlglot-ts@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.24.0
+- @memberjunction/sqlglot-ts@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.23.0
+- @memberjunction/sqlglot-ts@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.22.0
+- @memberjunction/sqlglot-ts@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.21.0
+- @memberjunction/sqlglot-ts@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.20.0
+- @memberjunction/sqlglot-ts@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.19.0
+- @memberjunction/sqlglot-ts@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.18.0
+- @memberjunction/sqlglot-ts@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.17.0
+- @memberjunction/sqlglot-ts@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.16.0
+- @memberjunction/sqlglot-ts@5.16.0
+
+## 5.15.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.15.0
+- @memberjunction/sqlglot-ts@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.14.0
+- @memberjunction/sqlglot-ts@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.13.0
+- @memberjunction/sqlglot-ts@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.12.0
+- @memberjunction/sqlglot-ts@5.12.0
+
+## 5.11.0
+
+### Minor Changes
+
+- a4c3c81: migration/metadata
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.11.0
+- @memberjunction/sqlglot-ts@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.10.1
+- @memberjunction/sqlglot-ts@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.10.0
+- @memberjunction/sqlglot-ts@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.9.0
+- @memberjunction/sqlglot-ts@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.8.0
+- @memberjunction/sqlglot-ts@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.7.0
+- @memberjunction/sqlglot-ts@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.6.0
+- @memberjunction/sqlglot-ts@5.6.0
+
+## 5.5.0
+
+### Minor Changes
+
+- ee9f788: migrations - postgres sql support!
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/sql-dialect@5.5.0
+  - @memberjunction/sqlglot-ts@5.5.0

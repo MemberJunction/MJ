@@ -6,6 +6,7 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
  * Viewer component for code artifacts (Python, C#, Java, TypeScript, JavaScript, SQL, CSS, XML)
  */
 @Component({
+  standalone: false,
   selector: 'mj-code-artifact-viewer',
   template: `
     <div class="code-artifact-viewer" [ngClass]="cssClass">

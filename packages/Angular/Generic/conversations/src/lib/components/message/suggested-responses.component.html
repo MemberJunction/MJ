@@ -1,44 +1,51 @@
-<div class="suggested-responses" *ngIf="isVisible">
-  <div class="suggested-responses-header">
-    <i class="fa fa-lightbulb"></i>
-    <span>Quick replies</span>
-  </div>
-
-  <div class="suggested-responses-buttons">
-    <!-- TEST: Native onclick
-    <button type="button" onclick="alert('Native onclick works!');" style="background: red; color: white;">TEST</button>
- -->
-    <!-- Regular button responses (allowInput: false) -->
-    <button
-      *ngFor="let response of regularResponses; trackBy: trackByIndex"
-      type="button"
-      class="suggested-response-btn"
-      [disabled]="disabled"
-      (click)="onResponseClick(response)"
-      [title]="response.text">
-      <i *ngIf="response.iconClass" [class]="'fas ' + response.iconClass"></i>
-      <span>{{ response.text }}</span>
-    </button>
-
-    <!-- Input option (allowInput: true) -->
-    <div *ngIf="inputResponse" class="suggested-response-input-container">
-      <i *ngIf="inputResponse.iconClass" [class]="'fas ' + inputResponse.iconClass" class="input-icon"></i>
-      <input
-        type="text"
-        class="suggested-response-input"
-        [placeholder]="inputResponse.text"
-        [(ngModel)]="customInputValue"
-        [disabled]="disabled"
-        (keydown)="onInputKeydown($event)"
-        #inputField
-        autocomplete="off">
-      <button
-        class="suggested-response-submit"
-        [disabled]="disabled || !customInputValue || !customInputValue.trim()"
-        (click)="onInputSubmit()"
-        title="Submit">
-        <i class="fa fa-paper-plane"></i>
-      </button>
+@if (isVisible) {
+  <div class="suggested-responses">
+    <div class="suggested-responses-header">
+      <i class="fa fa-lightbulb"></i>
+      <span>Quick replies</span>
+    </div>
+    <div class="suggested-responses-buttons">
+      <!-- TEST: Native onclick
+      <button type="button" onclick="alert('Native onclick works!');" style="background: red; color: white;">TEST</button>
+      -->
+      <!-- Regular button responses (allowInput: false) -->
+      @for (response of regularResponses; track $index) {
+        <button
+          type="button"
+          class="suggested-response-btn"
+          [disabled]="disabled"
+          (click)="onResponseClick(response)"
+          [title]="response.text">
+          @if (response.iconClass) {
+            <i [class]="'fas ' + response.iconClass"></i>
+          }
+          <span>{{ response.text }}</span>
+        </button>
+      }
+      <!-- Input option (allowInput: true) -->
+      @if (inputResponse) {
+        <div class="suggested-response-input-container">
+          @if (inputResponse.iconClass) {
+            <i [class]="'fas ' + inputResponse.iconClass" class="input-icon"></i>
+          }
+          <input
+            type="text"
+            class="suggested-response-input"
+            [placeholder]="inputResponse.text"
+            [(ngModel)]="customInputValue"
+            [disabled]="disabled"
+            (keydown)="onInputKeydown($event)"
+            #inputField
+            autocomplete="off">
+          <button
+            class="suggested-response-submit"
+            [disabled]="disabled || !customInputValue || !customInputValue.trim()"
+            (click)="onInputSubmit()"
+            title="Submit">
+            <i class="fa fa-paper-plane"></i>
+          </button>
+        </div>
+      }
     </div>
   </div>
-</div>
+}

@@ -77,10 +77,6 @@ const codegenConfig = {
     }
   ],
   customSQLScripts: [
-    {
-      scriptFile: './SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
-      when: 'before-all',
-    },
   ],
   dbSchemaJSONOutput: {
     excludeEntities: [],
@@ -209,7 +205,7 @@ const codegenConfig = {
   ],
   SQLOutput: {
     enabled: true,
-    folderPath: './migrations/v2/',
+    folderPath: './migrations/v3/',
     appendToFile: true,
     convertCoreSchemaToFlywayMigrationFile: true,
     omitRecurringScriptsFromLog: true,

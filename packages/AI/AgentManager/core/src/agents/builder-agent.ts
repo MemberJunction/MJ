@@ -2,7 +2,7 @@ import { BaseAgent } from '@memberjunction/ai-agents';
 import { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AgentSpec } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
-import { AIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentSpecSync } from '../agent-spec-sync';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -84,7 +84,7 @@ export class AgentBuilderAgent extends BaseAgent {
 
             // Create AI Agent Run Step record directly
             const agentRunId = params.parentRun?.ID || 'unknown';
-            const stepEntity = await md.GetEntityObject<AIAgentRunStepEntityExtended>(
+            const stepEntity = await md.GetEntityObject<MJAIAgentRunStepEntityExtended>(
                 'MJ: AI Agent Run Steps',
                 params.contextUser
             );
@@ -127,7 +127,7 @@ export class AgentBuilderAgent extends BaseAgent {
             // Create failed AI Agent Run Step
             const agentRunId = params.parentRun?.ID || 'unknown';
             const md = new Metadata();
-            const stepEntity = await md.GetEntityObject<AIAgentRunStepEntityExtended>(
+            const stepEntity = await md.GetEntityObject<MJAIAgentRunStepEntityExtended>(
                 'MJ: AI Agent Run Steps',
                 params.contextUser
             );

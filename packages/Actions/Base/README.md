@@ -1,15 +1,8 @@
 # @memberjunction/actions-base
 
-Base classes and interfaces for the MemberJunction Actions framework. This library provides the foundational components for implementing and executing actions across both server and client environments.
+Base classes, interfaces, and metadata engines for the MemberJunction Actions framework. This package provides the foundational layer that both server-side (`@memberjunction/actions`) and client-side action implementations build upon. It handles action metadata loading, parameter modeling, result types, and extended entity classes with lazy-loaded relationships.
 
-## Overview
-
-The Actions framework in MemberJunction provides a flexible, metadata-driven system for executing business logic and operations. This base package contains the core classes and interfaces that enable:
-
-- **Action Engine**: Core engine for loading, configuring, and executing actions
-- **Entity Actions**: Actions that operate on specific entities with various invocation contexts
-- **Code Generation**: Support for dynamically generated action code with library management
-- **Execution Logging**: Built-in logging and result tracking for all action executions
+For the broader Actions design philosophy -- including when to use Actions vs. direct class imports, and the "thin wrapper" principle -- see the [parent Actions CLAUDE.md](../CLAUDE.md).
 
 ## Installation
 
@@ -17,347 +10,308 @@ The Actions framework in MemberJunction provides a flexible, metadata-driven sys
 npm install @memberjunction/actions-base
 ```
 
-## Core Components
+## Architecture
 
-### ActionEngineBase
+The package is organized into two parallel engine hierarchies: one for general-purpose **Actions** and one for **Entity Actions** (actions bound to a specific entity). Both engines are singletons that extend `BaseEngine` from `@memberjunction/core` and load their metadata via `Config()`.
 
-The singleton base class that manages all action metadata and provides the foundation for action execution.
+```mermaid
+graph TD
+    subgraph BasePackage["@memberjunction/actions-base"]
+        AEB["ActionEngineBase\n(singleton)"]
+        EAEB["EntityActionEngineBase\n(singleton)"]
+        AEX["MJActionEntityExtended"]
+        EAEX["MJEntityActionEntityExtended"]
+        RAP["RunActionParams&lt;TContext&gt;"]
+        AR["ActionResult / ActionResultSimple"]
+        AP["ActionParam"]
+        GC["GeneratedCode"]
+        EAIP["EntityActionInvocationParams"]
+        EAR["EntityActionResult"]
+    end
 
-```typescript
-import { ActionEngineBase } from '@memberjunction/actions-base';
+    subgraph CoreDeps["Dependencies"]
+        BE["BaseEngine\n(@memberjunction/core)"]
+        CE["Entity classes\n(@memberjunction/core-entities)"]
+        RC["@RegisterClass\n(@memberjunction/global)"]
+    end
 
-// Get the singleton instance
-const actionEngine = ActionEngineBase.Instance;
+    AEB -->|extends| BE
+    EAEB -->|extends| BE
+    AEX -->|extends| CE
+    EAEX -->|extends| CE
+    AEX -->|registered via| RC
+    EAEX -->|registered via| RC
+    AEB -->|manages| AEX
+    EAEB -->|manages| EAEX
 
-// Configure the engine (required before use)
-await actionEngine.Config(false, userInfo);
-
-// Access action metadata
-const allActions = actionEngine.Actions;
-const coreActions = actionEngine.CoreActions;
-const actionParams = actionEngine.ActionParams;
-const actionFilters = actionEngine.ActionFilters;
+    style BasePackage fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style CoreDeps fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style AEB fill:#7c5295,stroke:#563a6b,color:#fff
+    style EAEB fill:#7c5295,stroke:#563a6b,color:#fff
+    style AEX fill:#b8762f,stroke:#8a5722,color:#fff
+    style EAEX fill:#b8762f,stroke:#8a5722,color:#fff
 ```
 
-### EntityActionEngineBase
+### Data Flow: Config and Execution
 
-Manages entity-specific actions and their various invocation contexts (single record, view-based, list-based).
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant AEB as ActionEngineBase
+    participant DB as Database (via RunView)
+    participant AEX as MJActionEntityExtended
 
-```typescript
-import { EntityActionEngineBase } from '@memberjunction/actions-base';
+    Caller->>AEB: Config(forceRefresh, contextUser)
+    AEB->>DB: RunViews (batch load 6 entity types)
+    DB-->>AEB: Actions, Categories, Filters, Params, ResultCodes, Libraries
+    AEB-->>Caller: Metadata ready
 
-// Get the singleton instance
-const entityActionEngine = EntityActionEngineBase.Instance;
+    Caller->>AEB: Actions (getter)
+    AEB-->>Caller: MJActionEntityExtended[]
 
-// Configure the engine
-await entityActionEngine.Config(false, userInfo);
-
-// Get actions for a specific entity
-const customerActions = entityActionEngine.GetActionsByEntityName('Customers', 'Active');
-
-// Get actions by invocation type
-const viewActions = entityActionEngine.GetActionsByEntityNameAndInvocationType(
-    'Orders', 
-    'View', 
-    'Active'
-);
+    Caller->>AEX: ResultCodes (getter, lazy)
+    AEX->>AEB: ActionResultCodes (filtered by ActionID)
+    AEB-->>AEX: ActionResultCodeEntity[]
+    AEX-->>Caller: Cached result codes
 ```
 
-## Action Types and Models
+## Exports
 
-### ActionParam
+### Engine Classes
 
-Represents input/output parameters for actions:
+| Export | Description |
+|--------|-------------|
+| `ActionEngineBase` | Singleton engine that loads and caches all action metadata (actions, categories, filters, params, result codes, libraries). Subclassed by server/client implementations. |
+| `EntityActionEngineBase` | Singleton engine for entity-bound actions. Loads entity actions, invocation types, filters, invocations, and params. |
 
-```typescript
-import { ActionParam } from '@memberjunction/actions-base';
+### Extended Entity Classes
 
-const param: ActionParam = {
-    Name: 'CustomerID',
-    Value: '12345',
-    Type: 'Input' // 'Input' | 'Output' | 'Both'
-};
-```
+| Export | Description |
+|--------|-------------|
+| `MJActionEntityExtended` | Extends `ActionEntity` with lazy-loaded `ResultCodes`, `Params`, `Libraries`, plus computed `IsCoreAction` and `ProgrammaticName` properties. Registered as `'Actions'` in the MJ class factory. |
+| `MJEntityActionEntityExtended` | Extends `EntityActionEntity` with lazy-loaded `Filters`, `Invocations`, and `Params`. Registered as `'Entity Actions'` in the MJ class factory. |
 
-### RunActionParams
+### Parameter and Result Types
 
-Configuration for running an action:
+| Export | Description |
+|--------|-------------|
+| `RunActionParams<TContext>` | Configuration object for running an action. Includes the action entity, context user, filters, parameters, and an optional generic-typed `Context` for runtime-specific data. |
+| `ActionParam` | Key-value parameter with `Name`, `Value`, and `Type` (`'Input'` / `'Output'` / `'Both'`). |
+| `ActionResult` | Full result from engine execution, including `Success`, `Result` (result code entity), `LogEntry`, `Message`, and output `Params`. |
+| `ActionResultSimple` | Lightweight result returned by individual action implementations: `Success`, `ResultCode` (string), optional `Message` and `Params`. |
+| `EntityActionInvocationParams` | Parameters for invoking an entity action, including invocation type and one of `EntityObject`, `ViewID`, or `ListID`. |
+| `EntityActionResult` | Result from entity action execution with same structure as `ActionResult`. |
 
-```typescript
-import { RunActionParams } from '@memberjunction/actions-base';
+### Code Generation Support
 
-const runParams: RunActionParams = {
-    Action: actionEntity,
-    ContextUser: userInfo,
-    SkipActionLog: false, // Optional
-    Filters: [], // Optional filters to run before action
-    Params: [
-        { Name: 'Input1', Value: 'test', Type: 'Input' }
-    ]
-};
-```
+| Export | Description |
+|--------|-------------|
+| `GeneratedCode` | Container for AI-generated action code, including `Success`, `Code`, `LibrariesUsed`, `Comments`, and `ErrorMessage`. |
+| `ActionLibrary` | Library reference used in generated code: `LibraryName` and `ItemsUsed` (array of imported items). |
 
-#### Type-Safe Context Support (New in v2.51.0)
+## Usage
 
-RunActionParams now supports type-safe context propagation:
+### Configuring the Action Engine
 
-```typescript
-import { RunActionParams } from '@memberjunction/actions-base';
-
-// Define your context type
-interface MyActionContext {
-    apiEndpoint: string;
-    apiKey: string;
-    environment: 'dev' | 'staging' | 'prod';
-    featureFlags: Record<string, boolean>;
-}
-
-// Create typed parameters
-const runParams = new RunActionParams<MyActionContext>();
-runParams.Action = actionEntity;
-runParams.ContextUser = userInfo;
-runParams.Params = [
-    { Name: 'customerID', Value: 'CUST123', Type: 'Input' },
-    { Name: 'orderAmount', Value: 150.00, Type: 'Input' }
-];
-
-// Set typed context
-runParams.Context = {
-    apiEndpoint: 'https://api.example.com',
-    apiKey: process.env.API_KEY,
-    environment: 'prod',
-    featureFlags: {
-        newFeature: true,
-        betaAccess: false
-    }
-};
-```
-
-The context object is:
-- **Separate from parameters**: Not stored in the database or included in logs
-- **Runtime-specific**: For environment configuration, credentials, and session data
-- **Type-safe**: Full TypeScript support when using generics
-- **Propagated automatically**: Flows from agents to actions in the execution hierarchy
-
-### ActionResult
-
-The result object returned from action execution:
-
-```typescript
-import { ActionResult } from '@memberjunction/actions-base';
-
-// ActionResult contains:
-// - Success: boolean indicating if action succeeded
-// - Result: ActionResultCodeEntity with the specific result code
-// - LogEntry: ActionExecutionLogEntity for tracking
-// - Message: Optional message about the outcome
-// - Params: All parameters including outputs
-```
-
-### EntityActionInvocationParams
-
-Parameters for invoking entity-specific actions:
-
-```typescript
-import { EntityActionInvocationParams } from '@memberjunction/actions-base';
-
-const invocationParams: EntityActionInvocationParams = {
-    EntityAction: entityActionExtended,
-    InvocationType: invocationTypeEntity,
-    ContextUser: userInfo,
-    // One of these based on invocation type:
-    EntityObject: customerEntity, // For single record
-    ViewID: 'view-123', // For view-based
-    ListID: 'list-456' // For list-based
-};
-```
-
-## Extended Entity Classes
-
-### ActionEntityExtended
-
-Enhanced action entity with additional functionality:
-
-```typescript
-import { ActionEntityExtended } from '@memberjunction/actions-base';
-
-// Provides additional properties:
-const action = actionEngine.Actions[0] as ActionEntityExtended;
-console.log(action.IsCoreAction); // true if core MJ action
-console.log(action.ProgrammaticName); // Code-friendly name
-console.log(action.ResultCodes); // Possible result codes
-console.log(action.Params); // Action parameters
-console.log(action.Libraries); // Required libraries
-```
-
-### EntityActionEntityExtended
-
-Enhanced entity action with related data:
-
-```typescript
-import { EntityActionEntityExtended } from '@memberjunction/actions-base';
-
-// Provides lazy-loaded related data:
-const entityAction = entityActionEngine.EntityActions[0] as EntityActionEntityExtended;
-console.log(entityAction.Filters); // Associated filters
-console.log(entityAction.Invocations); // Invocation configurations
-console.log(entityAction.Params); // Action parameters
-```
-
-## Code Generation Support
-
-The framework includes support for generated code with library tracking:
-
-```typescript
-import { GeneratedCode, ActionLibrary } from '@memberjunction/actions-base';
-
-// GeneratedCode structure
-const generatedCode: GeneratedCode = {
-    Success: true,
-    Code: 'function execute() { ... }',
-    LibrariesUsed: [
-        {
-            LibraryName: 'lodash',
-            ItemsUsed: ['map', 'filter']
-        }
-    ],
-    Comments: 'Processes customer data',
-    ErrorMessage: undefined
-};
-```
-
-## Usage Examples
-
-### Basic Action Engine Configuration
+Both engines must be configured before use. `Config()` loads metadata from the database and caches it. Pass `forceRefresh: true` to reload after metadata changes.
 
 ```typescript
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { UserInfo } from '@memberjunction/core';
 
-async function initializeActionEngine(user: UserInfo) {
+async function initialize(contextUser: UserInfo) {
     const engine = ActionEngineBase.Instance;
-    
-    // Initial configuration
-    await engine.Config(false, user);
-    
-    // Force refresh if needed
-    await engine.Config(true, user);
-    
+
+    // Initial load -- metadata cached in GlobalObjectStore
+    await engine.Config(false, contextUser);
+
     // Access loaded metadata
-    console.log(`Loaded ${engine.Actions.length} actions`);
-    console.log(`Core actions: ${engine.CoreActions.length}`);
+    const allActions = engine.Actions;          // MJActionEntityExtended[]
+    const coreActions = engine.CoreActions;     // Only core MJ actions
+    const categories = engine.ActionCategories; // ActionCategoryEntity[]
+    const params = engine.ActionParams;         // ActionParamEntity[]
+    const filters = engine.ActionFilters;       // ActionFilterEntity[]
+    const resultCodes = engine.ActionResultCodes;
+    const libraries = engine.ActionLibraries;
 }
 ```
 
-### Working with Entity Actions
+### Configuring the Entity Action Engine
 
 ```typescript
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 
-async function getEntityActions(entityName: string, user: UserInfo) {
+async function initEntityActions(contextUser: UserInfo) {
     const engine = EntityActionEngineBase.Instance;
-    await engine.Config(false, user);
-    
-    // Get all active actions for an entity
-    const actions = engine.GetActionsByEntityName(entityName, 'Active');
-    
-    // Filter by invocation type
-    const singleRecordActions = actions.filter(a => 
-        a.Invocations.some(i => i.InvocationType === 'Single Record')
+    await engine.Config(false, contextUser);
+
+    // All entity actions
+    const entityActions = engine.EntityActions; // MJEntityActionEntityExtended[]
+
+    // Filter by entity name and status
+    const customerActions = engine.GetActionsByEntityName('Customers', 'Active');
+
+    // Filter by entity name and invocation type
+    const viewActions = engine.GetActionsByEntityNameAndInvocationType(
+        'Orders',
+        'View',
+        'Active'
     );
-    
-    return singleRecordActions;
+
+    // Filter by entity ID
+    const byId = engine.GetActionsByEntityID('some-entity-uuid');
 }
 ```
 
-### Action Parameter Handling
+### Working with MJActionEntityExtended
+
+The extended entity class provides lazy-loaded related data and computed properties.
 
 ```typescript
-import { ActionParam } from '@memberjunction/actions-base';
+import { ActionEngineBase, MJActionEntityExtended } from '@memberjunction/actions-base';
 
-function prepareActionParams(inputs: Record<string, any>): ActionParam[] {
-    return Object.entries(inputs).map(([name, value]) => ({
-        Name: name,
-        Value: value,
-        Type: 'Input'
-    }));
-}
+const engine = ActionEngineBase.Instance;
+await engine.Config(false, contextUser);
 
-// Example usage
-const params = prepareActionParams({
-    CustomerID: '123',
-    OrderDate: new Date(),
-    TotalAmount: 150.00
-});
+const action: MJActionEntityExtended = engine.Actions[0];
+
+// Computed properties
+console.log(action.IsCoreAction);     // boolean -- is this a core MJ action?
+console.log(action.ProgrammaticName); // Code-safe version of action name
+
+// Lazy-loaded relationships (cached after first access)
+const resultCodes = action.ResultCodes; // ActionResultCodeEntity[]
+const params = action.Params;           // ActionParamEntity[]
+const libraries = action.Libraries;     // ActionLibraryEntity[]
 ```
 
-### Using Context in Actions
+### Building RunActionParams with Type-Safe Context
 
-Context provides runtime-specific information separate from business parameters:
+`RunActionParams` supports a generic `TContext` parameter for propagating runtime-specific data (API keys, environment config, feature flags) that is separate from action parameters and not persisted to logs.
 
 ```typescript
-import { RunActionParams } from '@memberjunction/actions-base';
+import { RunActionParams, ActionParam } from '@memberjunction/actions-base';
+import { ActionEntity } from '@memberjunction/core-entities';
+import { UserInfo } from '@memberjunction/core';
 
+// Define a context type for your environment
 interface ServiceContext {
     apiEndpoint: string;
     apiKey: string;
-    timeout: number;
+    environment: 'dev' | 'staging' | 'prod';
     retryPolicy: {
         maxRetries: number;
         backoffMs: number;
     };
 }
 
-async function executeActionWithContext(
+function buildRunParams(
     action: ActionEntity,
-    businessParams: ActionParam[],
-    context: ServiceContext,
-    user: UserInfo
-) {
-    const runParams = new RunActionParams<ServiceContext>();
-    runParams.Action = action;
-    runParams.ContextUser = user;
-    runParams.Params = businessParams;
-    runParams.Context = context;
-    
-    // The action implementation can access context via this.ContextObject
-    // This is useful for:
-    // - API configurations that vary by environment
-    // - Runtime credentials not stored in metadata
-    // - Session-specific settings
-    // - Feature flags and toggles
-    
-    const result = await actionEngine.RunAction(runParams);
-    return result;
+    user: UserInfo,
+    context: ServiceContext
+): RunActionParams<ServiceContext> {
+    const params = new RunActionParams<ServiceContext>();
+    params.Action = action;
+    params.ContextUser = user;
+    params.Params = [
+        { Name: 'CustomerID', Value: 'CUST-123', Type: 'Input' },
+        { Name: 'OrderTotal', Value: 250.00, Type: 'Input' }
+    ];
+    params.Context = context; // Type-checked against ServiceContext
+    return params;
 }
 ```
 
+### Entity Action Invocation
+
+Entity actions support three invocation modes depending on the context.
+
+```typescript
+import {
+    EntityActionInvocationParams,
+    EntityActionEngineBase
+} from '@memberjunction/actions-base';
+
+const engine = EntityActionEngineBase.Instance;
+await engine.Config(false, contextUser);
+
+const entityActions = engine.GetActionsByEntityNameAndInvocationType(
+    'Customers',
+    'Single Record',
+    'Active'
+);
+
+if (entityActions.length > 0) {
+    const invocationParams: EntityActionInvocationParams = {
+        EntityAction: entityActions[0],
+        InvocationType: engine.InvocationTypes.find(
+            t => t.Name === 'Single Record'
+        )!,
+        ContextUser: contextUser,
+        EntityObject: customerRecord // BaseEntity instance
+    };
+    // Pass to your engine's run method
+}
+```
+
+### Category Hierarchy Utilities
+
+`ActionEngineBase` provides methods for navigating the action category tree.
+
+```typescript
+const engine = ActionEngineBase.Instance;
+
+// Check if a category is under the core actions root
+const isCoreCategory = engine.IsCoreActionCategory(someCategoryId);
+
+// Check if one category is a descendant of another (recursive)
+const isChild = engine.IsChildCategoryOf(childCategoryId, parentCategoryId);
+
+// Look up an action by name
+const action = engine.GetActionByName('Send Email');
+```
+
+### Code Generation Types
+
+The `GeneratedCode` and `ActionLibrary` types support the AI-powered action generation system.
+
+```typescript
+import { GeneratedCode, ActionLibrary } from '@memberjunction/actions-base';
+
+const generated: GeneratedCode = {
+    Success: true,
+    Code: 'async function execute(params) { /* ... */ }',
+    LibrariesUsed: [
+        { LibraryName: 'lodash', ItemsUsed: ['map', 'filter', 'groupBy'] },
+        { LibraryName: '@memberjunction/core', ItemsUsed: ['RunView'] }
+    ],
+    Comments: 'Aggregates customer orders by region and calculates totals'
+};
+```
+
+## Key Design Decisions
+
+**Singleton engines** -- Both `ActionEngineBase` and `EntityActionEngineBase` use the MJ `BaseEngine` singleton pattern. Always access them via the static `Instance` getter; never construct them directly.
+
+**Lazy-loaded relationships** -- `MJActionEntityExtended` and `MJEntityActionEntityExtended` fetch their related data (params, result codes, filters, invocations, libraries) lazily on first property access and cache the result. This avoids loading relationship data for actions that are never inspected.
+
+**IgnoreMaxRows on Config** -- The engine overrides `LoadMultipleEntityConfigs` to set `IgnoreMaxRows: true`, ensuring all action metadata records are loaded regardless of entity-level `UserViewMaxRows` settings. Action Params in particular can exceed 1000 records.
+
+**Generic context on RunActionParams** -- The `TContext` generic preserves type safety for runtime context data flowing from agents through to action implementations, without polluting the persisted parameter system.
+
 ## Dependencies
 
-- `@memberjunction/global`: Global utilities and registration system
-- `@memberjunction/core`: Core MemberJunction interfaces and base classes
-- `@memberjunction/core-entities`: Entity definitions for MemberJunction metadata
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/global` | `@RegisterClass` decorator and MJ class factory |
+| `@memberjunction/core` | `BaseEngine`, `BaseEntity`, `UserInfo`, `RunView`, `CodeNameFromString` |
+| `@memberjunction/core-entities` | Generated entity classes (`ActionEntity`, `EntityActionEntity`, and all related entities) |
 
-## Integration with Other MemberJunction Packages
+## Related Packages
 
-This package serves as the foundation for:
+| Package | Relationship |
+|---------|-------------|
+| [`@memberjunction/actions`](../Engine) | Server-side engine that extends `ActionEngineBase` with execution, logging, and AI code generation |
+| [`@memberjunction/core-actions`](../CoreActions) | 40+ pre-built action implementations using `BaseAction` from the Engine package |
+| [`@memberjunction/scheduled-actions`](../ScheduledActions) | Cron-based scheduling engine for recurring action execution |
 
-- `@memberjunction/actions-server`: Server-side action execution implementation
-- `@memberjunction/actions-client`: Client-side action execution
-- Custom action implementations in your applications
-
-## Best Practices
-
-1. **Always Configure Before Use**: Call `Config()` on the engine instances before accessing any metadata
-2. **Use Singleton Instances**: Always use the `.Instance` property to get engine instances
-3. **Handle Async Operations**: All configuration and many operations are asynchronous
-4. **Check Action Status**: Filter actions by status ('Active', 'Pending', 'Disabled') when appropriate
-5. **Validate Parameters**: Ensure all required input parameters are provided before execution
-
-## TypeScript Support
-
-This package is written in TypeScript and provides full type definitions. All classes and interfaces are properly typed for optimal development experience.
-
-## License
-
-ISC License - see LICENSE file in the root of the repository.

@@ -4,6 +4,7 @@ import { MJTabBase } from '../tab.base';
 import { MJTabStripComponent } from '../tab-strip/tab-strip.component';
 
 @Component({
+  standalone: false,
   selector: 'mj-tab-body',
   templateUrl: './tab-body.component.html',
   styleUrl: './tab-body.component.css'

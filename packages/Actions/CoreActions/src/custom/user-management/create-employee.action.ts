@@ -36,7 +36,7 @@ export class CreateEmployeeAction extends CreateRecordAction {
 
             // Check if email already exists for another employee
             const existingEmployee = await rv.RunView({
-                EntityName: 'Employees',
+                EntityName: 'MJ: Employees',
                 ExtraFilter: `Email='${email.replace(/'/g, "''")}'`,
                 ResultType: 'simple'
             }, params.ContextUser);
@@ -51,7 +51,7 @@ export class CreateEmployeeAction extends CreateRecordAction {
 
             // Validate company exists
             const companyCheck = await rv.RunView({
-                EntityName: 'Companies',
+                EntityName: 'MJ: Companies',
                 ExtraFilter: `ID='${companyID}'`,
                 ResultType: 'simple'
             }, params.ContextUser);
@@ -67,7 +67,7 @@ export class CreateEmployeeAction extends CreateRecordAction {
             // Validate supervisor if provided
             if (supervisorID) {
                 const supervisorCheck = await rv.RunView({
-                    EntityName: 'Employees',
+                    EntityName: 'MJ: Employees',
                     ExtraFilter: `ID='${supervisorID}'`,
                     ResultType: 'simple'
                 }, params.ContextUser);
@@ -133,8 +133,4 @@ export class CreateEmployeeAction extends CreateRecordAction {
             };
         }
     }
-}
-
-export function LoadCreateEmployeeAction() {
-    // Prevent tree shaking
 }

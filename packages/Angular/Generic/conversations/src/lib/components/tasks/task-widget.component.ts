@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { TaskEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity } from '@memberjunction/core-entities';
 
 /**
  * Reusable task widget component that displays task information
@@ -11,6 +11,7 @@ import { TaskEntity } from '@memberjunction/core-entities';
  * - Tasks tab (full task list with filters)
  */
 @Component({
+  standalone: false,
   selector: 'mj-task-widget',
   template: `
     <div
@@ -18,10 +19,10 @@ import { TaskEntity } from '@memberjunction/core-entities';
       [class.clickable]="clickable"
       [class.compact]="compact"
       (click)="onTaskClick()">
-
+    
       <!-- Status Indicator -->
       <div class="task-status-indicator" [attr.data-status]="task.Status"></div>
-
+    
       <!-- Task Content -->
       <div class="task-main">
         <!-- Header Row -->
@@ -29,9 +30,11 @@ import { TaskEntity } from '@memberjunction/core-entities';
           <div class="task-title">{{ task.Name }}</div>
           <div class="task-badges">
             <!-- Type Badge -->
-            <span class="badge badge-type" *ngIf="task.Type">
-              {{ task.Type }}
-            </span>
+            @if (task.Type) {
+              <span class="badge badge-type">
+                {{ task.Type }}
+              </span>
+            }
             <!-- Status Badge -->
             <span
               class="badge badge-status"
@@ -40,81 +43,99 @@ import { TaskEntity } from '@memberjunction/core-entities';
             </span>
           </div>
         </div>
-
+    
         <!-- Description -->
-        <div class="task-description" *ngIf="!compact && task.Description">
-          {{ task.Description }}
-        </div>
-
-        <!-- Progress Bar (if in progress or has completion %) -->
-        <div class="task-progress-container" *ngIf="showProgress && task.PercentComplete != null">
-          <div class="progress-bar">
-            <div
-              class="progress-fill"
-              [style.width.%]="task.PercentComplete"
-              [attr.data-status]="task.Status">
-            </div>
+        @if (!compact && task.Description) {
+          <div class="task-description">
+            {{ task.Description }}
           </div>
-          <span class="progress-text">{{ task.PercentComplete }}%</span>
-        </div>
-
+        }
+    
+        <!-- Progress Bar (if in progress or has completion %) -->
+        @if (showProgress && task.PercentComplete != null) {
+          <div class="task-progress-container">
+            <div class="progress-bar">
+              <div
+                class="progress-fill"
+                [style.width.%]="task.PercentComplete"
+                [attr.data-status]="task.Status">
+              </div>
+            </div>
+            <span class="progress-text">{{ task.PercentComplete }}%</span>
+          </div>
+        }
+    
         <!-- Meta Information -->
         <div class="task-meta">
           <!-- Assignment -->
-          <span class="meta-item" *ngIf="task.User">
-            <i class="fas fa-user"></i>
-            <span class="meta-label">User:</span>
-            <span class="meta-value">{{ task.User }}</span>
-          </span>
-          <span class="meta-item" *ngIf="task.Agent">
-            <i class="fas fa-robot"></i>
-            <span class="meta-label">Agent:</span>
-            <span class="meta-value">{{ task.Agent }}</span>
-          </span>
-
-          <!-- Timestamps -->
-          <span class="meta-item" *ngIf="task.StartedAt">
-            <i class="fas fa-play-circle"></i>
-            <span class="meta-label">Started:</span>
-            <span class="meta-value">{{ formatDate(task.StartedAt) }}</span>
-          </span>
-          <span class="meta-item" *ngIf="task.CompletedAt">
-            <i class="fas fa-check-circle"></i>
-            <span class="meta-label">Completed:</span>
-            <span class="meta-value">{{ formatDate(task.CompletedAt) }}</span>
-          </span>
-          <span class="meta-item" *ngIf="task.DueAt && !task.CompletedAt">
-            <i class="fas fa-calendar-alt"></i>
-            <span class="meta-label">Due:</span>
-            <span class="meta-value" [class.overdue]="isOverdue(task.DueAt)">
-              {{ formatDate(task.DueAt) }}
+          @if (task.User) {
+            <span class="meta-item">
+              <i class="fas fa-user"></i>
+              <span class="meta-label">User:</span>
+              <span class="meta-value">{{ task.User }}</span>
             </span>
-          </span>
-
+          }
+          @if (task.Agent) {
+            <span class="meta-item">
+              <i class="fas fa-robot"></i>
+              <span class="meta-label">Agent:</span>
+              <span class="meta-value">{{ task.Agent }}</span>
+            </span>
+          }
+    
+          <!-- Timestamps -->
+          @if (task.StartedAt) {
+            <span class="meta-item">
+              <i class="fas fa-play-circle"></i>
+              <span class="meta-label">Started:</span>
+              <span class="meta-value">{{ formatDate(task.StartedAt) }}</span>
+            </span>
+          }
+          @if (task.CompletedAt) {
+            <span class="meta-item">
+              <i class="fas fa-check-circle"></i>
+              <span class="meta-label">Completed:</span>
+              <span class="meta-value">{{ formatDate(task.CompletedAt) }}</span>
+            </span>
+          }
+          @if (task.DueAt && !task.CompletedAt) {
+            <span class="meta-item">
+              <i class="fas fa-calendar-alt"></i>
+              <span class="meta-label">Due:</span>
+              <span class="meta-value" [class.overdue]="isOverdue(task.DueAt)">
+                {{ formatDate(task.DueAt) }}
+              </span>
+            </span>
+          }
+    
           <!-- Duration (for completed tasks) -->
-          <span class="meta-item" *ngIf="showDuration && task.StartedAt && task.CompletedAt">
-            <i class="fas fa-clock"></i>
-            <span class="meta-label">Duration:</span>
-            <span class="meta-value">{{ getDuration(task.StartedAt, task.CompletedAt) }}</span>
-          </span>
-
+          @if (showDuration && task.StartedAt && task.CompletedAt) {
+            <span class="meta-item">
+              <i class="fas fa-clock"></i>
+              <span class="meta-label">Duration:</span>
+              <span class="meta-value">{{ getDuration(task.StartedAt, task.CompletedAt) }}</span>
+            </span>
+          }
+    
           <!-- Elapsed time (for active tasks) -->
-          <span class="meta-item meta-elapsed" *ngIf="isActive && task.StartedAt && !task.CompletedAt">
-            <i class="fas fa-hourglass-half"></i>
-            <span class="meta-value">{{ getElapsedTime(task.StartedAt) }}</span>
-          </span>
+          @if (isActive && task.StartedAt && !task.CompletedAt) {
+            <span class="meta-item meta-elapsed">
+              <i class="fas fa-hourglass-half"></i>
+              <span class="meta-value">{{ getElapsedTime(task.StartedAt) }}</span>
+            </span>
+          }
         </div>
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .task-widget {
       display: flex;
       gap: 12px;
       padding: 12px;
       border-radius: 6px;
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       transition: all 150ms ease;
     }
 
@@ -123,9 +144,9 @@ import { TaskEntity } from '@memberjunction/core-entities';
     }
 
     .task-widget.clickable:hover {
-      background: #F9FAFB;
-      border-color: #D1D5DB;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-border-strong);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .task-widget.compact {
@@ -139,28 +160,28 @@ import { TaskEntity } from '@memberjunction/core-entities';
     }
 
     .task-status-indicator[data-status="Pending"] {
-      background: #9CA3AF;
+      background: var(--mj-text-disabled);
     }
 
     .task-status-indicator[data-status="In Progress"] {
-      background: #3B82F6;
+      background: var(--mj-brand-primary);
     }
 
     .task-status-indicator[data-status="Complete"] {
-      background: #10B981;
+      background: var(--mj-status-success);
     }
 
     .task-status-indicator[data-status="Blocked"] {
-      background: #EF4444;
+      background: var(--mj-status-error);
     }
 
     .task-status-indicator[data-status="Failed"] {
-      background: #DC2626;
+      background: var(--mj-status-error);
     }
 
     .task-status-indicator[data-status="Cancelled"],
     .task-status-indicator[data-status="Deferred"] {
-      background: #6B7280;
+      background: var(--mj-text-muted);
     }
 
     .task-main {
@@ -181,7 +202,7 @@ import { TaskEntity } from '@memberjunction/core-entities';
     .task-title {
       font-size: 14px;
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
       line-height: 1.4;
       flex: 1;
     }
@@ -203,44 +224,44 @@ import { TaskEntity } from '@memberjunction/core-entities';
     }
 
     .badge-type {
-      background: #F3F4F6;
-      color: #6B7280;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
     }
 
     .badge-status[data-status="Pending"] {
-      background: #F3F4F6;
-      color: #6B7280;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
     }
 
     .badge-status[data-status="In Progress"] {
-      background: #DBEAFE;
-      color: #1E40AF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .badge-status[data-status="Complete"] {
-      background: #D1FAE5;
-      color: #065F46;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .badge-status[data-status="Blocked"] {
-      background: #FEE2E2;
-      color: #991B1B;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     .badge-status[data-status="Failed"] {
-      background: #FEE2E2;
-      color: #7F1D1D;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     .badge-status[data-status="Cancelled"],
     .badge-status[data-status="Deferred"] {
-      background: #F3F4F6;
-      color: #4B5563;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-secondary);
     }
 
     .task-description {
       font-size: 13px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       line-height: 1.5;
       display: -webkit-box;
       -webkit-line-clamp: 2;
@@ -257,7 +278,7 @@ import { TaskEntity } from '@memberjunction/core-entities';
     .progress-bar {
       flex: 1;
       height: 6px;
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 3px;
       overflow: hidden;
     }
@@ -269,22 +290,22 @@ import { TaskEntity } from '@memberjunction/core-entities';
     }
 
     .progress-fill[data-status="In Progress"] {
-      background: #3B82F6;
+      background: var(--mj-brand-primary);
     }
 
     .progress-fill[data-status="Complete"] {
-      background: #10B981;
+      background: var(--mj-status-success);
     }
 
     .progress-fill[data-status="Blocked"],
     .progress-fill[data-status="Failed"] {
-      background: #EF4444;
+      background: var(--mj-status-error);
     }
 
     .progress-text {
       font-size: 11px;
       font-weight: 600;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       min-width: 35px;
       text-align: right;
     }
@@ -294,7 +315,7 @@ import { TaskEntity } from '@memberjunction/core-entities';
       flex-wrap: wrap;
       gap: 12px;
       font-size: 12px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .meta-item {
@@ -313,27 +334,27 @@ import { TaskEntity } from '@memberjunction/core-entities';
     }
 
     .meta-value {
-      color: #111827;
+      color: var(--mj-text-primary);
     }
 
     .meta-value.overdue {
-      color: #DC2626;
+      color: var(--mj-status-error);
       font-weight: 600;
     }
 
     .meta-elapsed {
-      color: #3B82F6;
+      color: var(--mj-brand-primary);
       font-weight: 600;
     }
   `]
 })
 export class TaskWidgetComponent {
-  @Input() task!: TaskEntity;
+  @Input() task!: MJTaskEntity;
   @Input() clickable: boolean = false;
   @Input() compact: boolean = false;
   @Input() showProgress: boolean = true;
   @Input() showDuration: boolean = true;
-  @Output() taskClick = new EventEmitter<TaskEntity>();
+  @Output() taskClick = new EventEmitter<MJTaskEntity>();
 
   get isActive(): boolean {
     return this.task.Status === 'In Progress';

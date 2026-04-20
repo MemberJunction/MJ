@@ -236,7 +236,7 @@ export class SkipQueryInfo implements IQueryInfoBase {
     /**
      * Current status of the query in the approval workflow
      */
-    Status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete';
+    Status: 'Pending' | 'Approved' | 'Rejected' | 'Expired';
     /**
      * Value indicating the quality of the query, higher values mean better quality
      */
@@ -254,6 +254,11 @@ export class SkipQueryInfo implements IQueryInfoBase {
      */
     EmbeddingModelName?: string;
     /**
+     * Technical documentation of the query logic, performance considerations,
+     * and parameter usage. Supports markdown content including mermaid diagrams.
+     */
+    TechnicalDescription: string | null = null;
+    /**
      * Field metadata for this query
      */
     Fields: SkipQueryFieldInfo[];
@@ -266,10 +271,35 @@ export class SkipQueryInfo implements IQueryInfoBase {
      */
     Entities?: SkipQueryEntityInfo[];
 
+    /**
+     * When true, this query can be referenced by other queries via the composition syntax
+     * `{{query:"CategoryPath/QueryName"}}`. Only queries with Reusable=true AND Status='Approved'
+     * are eligible for composition.
+     */
+    Reusable: boolean = false;
+
     CacheEnabled: boolean = false;
     CacheMaxSize: number;
     CacheTTLMinutes: number;
     CacheValidationSQL: string;
+}
+
+/**
+ * Lightweight catalog entry for query name/path collision detection.
+ * Unlike SkipQueryInfo which carries full SQL, fields, parameters, and embeddings,
+ * this type only contains the fields needed to uniquely identify a query:
+ * its Name and CategoryPath. This keeps the payload small so it can always
+ * be included in every SkipAPIRequest regardless of the includeQueries flag.
+ */
+export class SkipQueryCatalogEntry {
+    /**
+     * Name of the query
+     */
+    Name: string;
+    /**
+     * Full hierarchical category path (e.g., "Skip/Sales/Reports")
+     */
+    CategoryPath: string;
 }
 
 /**

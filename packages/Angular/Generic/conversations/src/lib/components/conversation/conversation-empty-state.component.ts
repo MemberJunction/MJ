@@ -1,7 +1,10 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
+import { PendingAttachment } from '../mention/mention-editor.component';
+import { MessageInputComponent } from '../message/message-input.component';
 
 @Component({
+  standalone: false,
   selector: 'mj-conversation-empty-state',
   templateUrl: './conversation-empty-state.component.html',
   styleUrls: ['./conversation-empty-state.component.css']
@@ -9,8 +12,32 @@ import { UserInfo } from '@memberjunction/core';
 export class ConversationEmptyStateComponent {
   @Input() currentUser!: UserInfo;
   @Input() disabled: boolean = false;
+  @Input() showSidebarToggle: boolean = false;
+  @Input() enableAttachments: boolean = false;
+  @Input() maxAttachments: number = 10;
+  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024;
+  @Input() acceptedFileTypes: string = 'image/*';
 
-  @Output() messageSent = new EventEmitter<string>();
+  /** Greeting text shown in the empty state. Set by host app via overlay/chat-area chain. */
+  @Input() greeting: string = 'How can I help you?';
+
+  /** When true (overlay context), suggested prompts are hidden to save space */
+  private _overlayMode = false;
+  @Input()
+  set overlayMode(value: boolean) {
+      this._overlayMode = value;
+      if (value) {
+          this.suggestedPrompts = [];
+      }
+  }
+  get overlayMode(): boolean {
+      return this._overlayMode;
+  }
+
+  @ViewChild(MessageInputComponent) private messageInput?: MessageInputComponent;
+
+  @Output() messageSent = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
+  @Output() sidebarToggleClicked = new EventEmitter<void>();
 
   public messageText: string = '';
 
@@ -139,13 +166,25 @@ export class ConversationEmptyStateComponent {
     return shuffled.slice(0, count);
   }
 
-  onTextSubmitted(text: string): void {
-    this.messageSent.emit(text);
+  /**
+   * Focus the message input programmatically.
+   * Called by parent when the user clicks "New Conversation" while already on the empty state.
+   */
+  public FocusInput(): void {
+    setTimeout(() => {
+      if (this.messageInput) {
+        this.messageInput.inputBox?.focus();
+      }
+    }, 100);
+  }
+
+  onEmptyStateSubmit(event: {text: string; attachments: PendingAttachment[]}): void {
+    this.messageSent.emit(event);
   }
 
   onSuggestedPromptClicked(prompt: string): void {
     if (!this.disabled) {
-      this.messageSent.emit(prompt);
+      this.messageSent.emit({ text: prompt, attachments: [] });
     }
   }
 }

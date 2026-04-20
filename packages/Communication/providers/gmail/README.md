@@ -1,18 +1,40 @@
 # @memberjunction/communication-gmail
 
-Gmail/Google Suite provider implementation for the MemberJunction Communication framework. This package enables sending and receiving emails through Gmail's API using OAuth2 authentication.
+Gmail / Google Workspace provider for the MemberJunction Communication Framework. This provider enables full mailbox operations -- sending, receiving, searching, managing labels, attachments, drafts, and more -- through the Gmail API with OAuth2 authentication.
 
-## Overview
+## Architecture
 
-The Gmail Communication Provider integrates Gmail's API with MemberJunction's communication infrastructure, providing:
+```mermaid
+graph TD
+    subgraph gmail["@memberjunction/communication-gmail"]
+        GP["GmailProvider"]
+        AUTH["Auth Module\n(OAuth2 Client)"]
+        CFG["Config Module\n(Environment Variables)"]
+        CRED["GmailCredentials"]
+    end
 
-- Email sending capabilities with full HTML and plain text support
-- **Draft message creation** for composing emails to be sent later
-- Email retrieval with flexible query options
-- Reply-to-message functionality maintaining thread context
-- Message forwarding capabilities
-- OAuth2-based authentication using refresh tokens
-- Automatic token refresh for uninterrupted service
+    subgraph google["Google APIs"]
+        OAUTH["Google OAuth2"]
+        GAPI["Gmail API v1\n(/users/me/...)"]
+        MAILBOX["Gmail Mailbox"]
+    end
+
+    subgraph base["@memberjunction/communication-types"]
+        BCP["BaseCommunicationProvider"]
+    end
+
+    BCP --> GP
+    GP --> AUTH
+    GP --> CFG
+    GP --> CRED
+    AUTH --> OAUTH
+    GP --> GAPI
+    GAPI --> MAILBOX
+
+    style gmail fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style google fill:#7c5295,stroke:#563a6b,color:#fff
+    style base fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
 
 ## Installation
 
@@ -22,260 +44,193 @@ npm install @memberjunction/communication-gmail
 
 ## Configuration
 
-The Gmail provider requires OAuth2 credentials and a refresh token. Set the following environment variables:
+Set the following environment variables:
 
 ```env
-# Required: OAuth2 Client Credentials
-GMAIL_CLIENT_ID=your_client_id_here
-GMAIL_CLIENT_SECRET=your_client_secret_here
-GMAIL_REDIRECT_URI=your_redirect_uri_here
-GMAIL_REFRESH_TOKEN=your_refresh_token_here
-
-# Optional: Default sender email
-GMAIL_SERVICE_ACCOUNT_EMAIL=noreply@yourdomain.com
+GMAIL_CLIENT_ID=your-oauth2-client-id
+GMAIL_CLIENT_SECRET=your-oauth2-client-secret
+GMAIL_REDIRECT_URI=your-redirect-uri
+GMAIL_REFRESH_TOKEN=your-refresh-token
+GMAIL_SERVICE_ACCOUNT_EMAIL=noreply@yourdomain.com   # optional default sender
 ```
-
-### Obtaining OAuth2 Credentials
-
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the Gmail API for your project
-4. Create OAuth2 credentials (OAuth 2.0 Client ID)
-5. Set up the OAuth consent screen
-6. Use the OAuth2 flow to obtain a refresh token with the required scopes
 
 ### Required OAuth2 Scopes
 
-The provider requires the following Gmail API scopes:
 - `https://www.googleapis.com/auth/gmail.send`
 - `https://www.googleapis.com/auth/gmail.readonly`
 - `https://www.googleapis.com/auth/gmail.modify`
 - `https://www.googleapis.com/auth/gmail.compose`
 
+### Obtaining OAuth2 Credentials
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create or select a project and enable the Gmail API
+3. Create OAuth 2.0 Client ID credentials
+4. Configure the OAuth consent screen
+5. Use the OAuth2 flow to obtain a refresh token with the required scopes
+
+## Supported Operations
+
+This provider supports all 14 operations defined in `BaseCommunicationProvider`:
+
+| Operation | Gmail Implementation |
+|-----------|---------------------|
+| `SendSingleMessage` | Send via `users.messages.send` |
+| `GetMessages` | List and fetch with Gmail search query support |
+| `GetSingleMessage` | Fetch single message by ID |
+| `ForwardMessage` | Reconstruct and send as RFC 822 attachment |
+| `ReplyToMessage` | Send in same thread via `threadId` |
+| `CreateDraft` | Create via `users.drafts.create` |
+| `DeleteMessage` | Trash or permanently delete |
+| `MoveMessage` | Add/remove labels via `users.messages.modify` |
+| `ListFolders` | List labels with optional message/unread counts |
+| `MarkAsRead` | Add/remove UNREAD label (batch) |
+| `ArchiveMessage` | Remove INBOX label |
+| `SearchMessages` | Gmail query syntax with date filters |
+| `ListAttachments` | Parse message parts recursively for attachments |
+| `DownloadAttachment` | Download via `users.messages.attachments.get` |
+
 ## Usage
 
-### Basic Setup
+### Sending Email
 
 ```typescript
-import { GmailProvider } from '@memberjunction/communication-gmail';
+import { CommunicationEngine } from '@memberjunction/communication-engine';
+import { Message } from '@memberjunction/communication-types';
 
-// The provider is automatically registered with MemberJunction's class factory
-// using the @RegisterClass decorator
+const engine = CommunicationEngine.Instance;
+await engine.Config(false, contextUser);
+
+const message = new Message();
+message.From = 'sender@gmail.com';
+message.To = 'recipient@example.com';
+message.Subject = 'Hello from Gmail';
+message.HTMLBody = '<h1>Hello</h1>';
+message.CCRecipients = ['cc@example.com'];
+
+const result = await engine.SendSingleMessage('Gmail', 'Email', message);
 ```
 
-### Sending Emails
+### Per-Request Credentials
+
+Override credentials for multi-user scenarios:
 
 ```typescript
-import { ProcessedMessage, MessageResult } from '@memberjunction/communication-types';
-import { GmailProvider } from '@memberjunction/communication-gmail';
+import { GmailCredentials } from '@memberjunction/communication-gmail';
 
-const provider = new GmailProvider();
-
-const message: ProcessedMessage = {
-  To: 'recipient@example.com',
-  From: 'sender@example.com', // Optional, uses authenticated account if not specified
-  FromName: 'Sender Name',
-  ProcessedSubject: 'Test Email',
-  ProcessedBody: 'This is a plain text email body',
-  ProcessedHTMLBody: '<html><body><h1>This is an HTML email</h1></body></html>',
-  CCRecipients: ['cc@example.com'],
-  BCCRecipients: ['bcc@example.com']
-};
-
-const result: MessageResult = await provider.SendSingleMessage(message);
-
-if (result.Success) {
-  console.log('Email sent successfully');
-} else {
-  console.error('Failed to send email:', result.Error);
-}
+const result = await provider.SendSingleMessage(processedMessage, {
+    clientId: 'other-client-id',
+    clientSecret: 'other-secret',
+    redirectUri: 'other-redirect',
+    refreshToken: 'user-specific-refresh-token'
+} as GmailCredentials);
 ```
 
 ### Retrieving Messages
 
 ```typescript
-import { GetMessagesParams, GetMessagesResult } from '@memberjunction/communication-types';
+const provider = engine.GetProvider('Gmail');
 
-const params: GetMessagesParams = {
-  NumMessages: 10,
-  UnreadOnly: true,
-  ContextData: {
-    query: 'from:important@example.com', // Gmail search query
-    MarkAsRead: true // Mark retrieved messages as read
-  }
-};
+const result = await provider.GetMessages({
+    NumMessages: 10,
+    UnreadOnly: true,
+    ContextData: {
+        query: 'from:important@example.com',  // Gmail search syntax
+        MarkAsRead: true
+    }
+});
 
-const result: GetMessagesResult = await provider.GetMessages(params);
-
-if (result.Success) {
-  result.Messages.forEach(message => {
-    console.log(`From: ${message.From}`);
-    console.log(`Subject: ${message.Subject}`);
-    console.log(`Body: ${message.Body}`);
-  });
-} else {
-  console.error('Failed to get messages:', result.ErrorMessage);
-}
+result.Messages.forEach(msg => {
+    console.log(`${msg.From}: ${msg.Subject}`);
+    console.log(`Thread: ${msg.ThreadID}`);
+});
 ```
 
-### Creating Draft Messages
+### Creating Drafts
 
 ```typescript
-import { CreateDraftParams, CreateDraftResult } from '@memberjunction/communication-types';
-
-const draftMessage: ProcessedMessage = {
-  To: 'recipient@example.com',
-  From: 'sender@example.com',
-  ProcessedSubject: 'Draft Email Subject',
-  ProcessedBody: 'This is a draft email that can be edited later',
-  ProcessedHTMLBody: '<p>This is a draft email that can be edited later</p>',
-  CCRecipients: ['cc@example.com']
-};
-
-const params: CreateDraftParams = {
-  Message: draftMessage
-};
-
-const result: CreateDraftResult = await provider.CreateDraft(params);
-
+const result = await provider.CreateDraft({ Message: processedMessage });
 if (result.Success) {
-  console.log(`Draft created with ID: ${result.DraftID}`);
-  // The draft can now be edited or sent through Gmail's interface
-} else {
-  console.error('Failed to create draft:', result.ErrorMessage);
+    console.log(`Draft ID: ${result.DraftID}`);
+    // Draft appears in Gmail drafts folder
 }
 ```
 
-**Note**: Drafts created through this provider will appear in the authenticated user's Gmail drafts folder and can be edited or sent through Gmail's web interface or mobile app.
-
-### Replying to Messages
+### Searching with Gmail Query Syntax
 
 ```typescript
-import { ReplyToMessageParams, ProcessedMessage } from '@memberjunction/communication-types';
-
-const replyMessage: ProcessedMessage = {
-  To: 'original-sender@example.com',
-  ProcessedSubject: 'Re: Original Subject',
-  ProcessedBody: 'This is my reply'
-};
-
-const params: ReplyToMessageParams = {
-  MessageID: 'original-message-id', // Gmail message ID
-  Message: replyMessage
-};
-
-const result = await provider.ReplyToMessage(params);
-
-if (result.Success) {
-  console.log('Reply sent successfully');
-}
+const result = await provider.SearchMessages({
+    Query: 'has:attachment',
+    FromDate: new Date('2025-01-01'),
+    ToDate: new Date('2025-06-01'),
+    FolderID: 'INBOX',    // Gmail label ID
+    MaxResults: 50
+});
 ```
 
-### Forwarding Messages
+### Managing Labels (Folders)
 
 ```typescript
-import { ForwardMessageParams } from '@memberjunction/communication-types';
+const folders = await provider.ListFolders({ IncludeCounts: true });
+folders.Folders.forEach(f => {
+    console.log(`${f.Name} (${f.ID}): ${f.MessageCount} messages`);
+    console.log(`  System: ${f.IsSystemFolder}, Type: ${f.SystemFolderType}`);
+});
+```
 
-const params: ForwardMessageParams = {
-  MessageID: 'message-to-forward-id',
-  ToRecipients: ['forward-to@example.com'],
-  CCRecipients: ['cc@example.com'],
-  BCCRecipients: ['bcc@example.com'],
-  Message: 'FYI - forwarding this message' // Optional forward comment
-};
+### Downloading Attachments
 
-const result = await provider.ForwardMessage(params);
-
-if (result.Success) {
-  console.log('Message forwarded successfully');
+```typescript
+const attachments = await provider.ListAttachments({ MessageID: 'msg-id' });
+for (const att of attachments.Attachments) {
+    const download = await provider.DownloadAttachment({
+        MessageID: 'msg-id',
+        AttachmentID: att.ID
+    });
+    // download.Content is a Buffer
+    // download.ContentBase64 is base64 string
+    // download.Filename, download.ContentType available
 }
 ```
 
-## API Reference
+## Gmail Label Mapping
 
-### GmailProvider Class
+Gmail uses labels instead of traditional folders. The provider maps system labels to standard folder types:
 
-The main provider class that extends `BaseCommunicationProvider` from `@memberjunction/communication-types`.
+| Gmail Label | SystemFolderType |
+|-------------|-----------------|
+| `INBOX` | `inbox` |
+| `SENT` | `sent` |
+| `DRAFT` | `drafts` |
+| `TRASH` | `trash` |
+| `SPAM` | `spam` |
+| User labels | `undefined` |
 
-#### Methods
+## Client Caching
 
-##### `SendSingleMessage(message: ProcessedMessage): Promise<MessageResult>`
-Sends a single email message through Gmail.
-
-##### `GetMessages(params: GetMessagesParams): Promise<GetMessagesResult>`
-Retrieves messages from Gmail based on the provided parameters.
-
-##### `ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult>`
-Replies to an existing Gmail message, maintaining the thread context.
-
-##### `ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult>`
-Forwards an existing Gmail message to new recipients.
-
-### Configuration Module
-
-#### Environment Variables
-- `GMAIL_CLIENT_ID` (required): OAuth2 client ID
-- `GMAIL_CLIENT_SECRET` (required): OAuth2 client secret
-- `GMAIL_REDIRECT_URI` (required): OAuth2 redirect URI
-- `GMAIL_REFRESH_TOKEN` (required): OAuth2 refresh token
-- `GMAIL_SERVICE_ACCOUNT_EMAIL` (optional): Default sender email address
-
-### Authentication Module
-
-The `auth.ts` module exports:
-- `GmailClient`: Pre-configured Gmail API client
-- `getAuthenticatedUser()`: Helper function to verify authentication
-
-## Integration with MemberJunction
-
-This provider integrates seamlessly with MemberJunction's communication framework:
-
-1. **Automatic Registration**: The provider is automatically registered using the `@RegisterClass` decorator
-2. **Type Safety**: Full TypeScript support with types from `@memberjunction/communication-types`
-3. **Logging**: Integrated with MemberJunction's logging system via `@memberjunction/core`
-4. **Global Registry**: Utilizes `@memberjunction/global` for class registration
-
-## Dependencies
-
-- `@memberjunction/communication-types`: Communication framework interfaces and types
-- `@memberjunction/core`: Core MemberJunction utilities and logging
-- `@memberjunction/global`: Global class registry system
-- `googleapis`: Google APIs Node.js client library
-- `dotenv`: Environment variable management
-- `env-var`: Environment variable validation
-
-## Error Handling
-
-The provider includes comprehensive error handling:
-- OAuth2 authentication failures
-- API rate limiting
-- Network errors
-- Invalid message formats
-- Missing required fields
-
-All errors are logged using MemberJunction's logging system and returned with descriptive error messages.
+The provider caches Gmail API client instances for performance. Environment credential clients are shared across all calls; per-request credential clients are cached by a key derived from `clientId` and `refreshToken`.
 
 ## Security Considerations
 
-1. **Refresh Token Security**: Store refresh tokens securely and never commit them to version control
-2. **Scope Limitations**: Request only the minimum required OAuth2 scopes
-3. **Environment Variables**: Use secure methods to manage environment variables in production
-4. **API Credentials**: Regularly rotate client secrets and monitor API usage
+1. Store refresh tokens securely and never commit them to version control
+2. Request only the minimum required OAuth2 scopes
+3. Use secure methods to manage environment variables in production
+4. Regularly rotate client secrets and monitor API usage
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/communication-types` | Base provider class and type definitions |
+| `@memberjunction/core` | Logging utilities |
+| `@memberjunction/global` | RegisterClass decorator |
+| `googleapis` | Google APIs Node.js client |
+| `dotenv` | Environment variable loading |
+| `env-var` | Environment variable validation |
 
 ## Development
 
-### Building
-
 ```bash
-npm run build
+npm run build    # Compile TypeScript
+npm run clean    # Remove dist directory
 ```
-
-### Cleaning
-
-```bash
-npm run clean
-```
-
-## License
-
-This package is part of the MemberJunction ecosystem. See the root repository for license information.

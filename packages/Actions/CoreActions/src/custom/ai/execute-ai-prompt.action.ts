@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView } from "@memberjunction/core";
-import { AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams} from "@memberjunction/ai-core-plus";
 
@@ -240,10 +240,10 @@ export class ExecuteAIPromptAction extends BaseAction {
     /**
      * Load AI prompt by name
      */
-    private async loadPrompt(promptName: string, contextUser?: any): Promise<AIPromptEntityExtended | null> {
+    private async loadPrompt(promptName: string, contextUser?: any): Promise<MJAIPromptEntityExtended | null> {
         const rv = new RunView();
-        const result = await rv.RunView<AIPromptEntityExtended>({
-            EntityName: 'AI Prompts',
+        const result = await rv.RunView<MJAIPromptEntityExtended>({
+            EntityName: 'MJ: AI Prompts',
             ExtraFilter: `Name = '${promptName.replace(/'/g, "''")}'`,
             MaxRows: 1,
             ResultType: 'entity_object'
@@ -276,11 +276,4 @@ export class ExecuteAIPromptAction extends BaseAction {
         const param = params.Params.find(p => p.Name.toLowerCase() === name.toLowerCase());
         return param?.Value;
     }
-}
-
-/**
- * Loader function to ensure the ExecuteAIPromptAction class is included in the bundle
- */
-export function LoadExecuteAIPromptAction() {
-    // Stub function to prevent tree shaking
 }

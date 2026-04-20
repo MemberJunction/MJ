@@ -3,7 +3,7 @@ import { MJGlobal, RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { NunjucksCallback, TemplateExtensionBase } from "./TemplateExtensionBase";
 import { AIEngine } from "@memberjunction/aiengine";
 import { BaseLLM, GetAIAPIKey } from "@memberjunction/ai";
-import { AIModelEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIModelEntityExtended } from "@memberjunction/ai-core-plus";
 // TODO: Add type defs based on nunjucks classes used for extensions
 type Parser = any;
 type Nodes = any;
@@ -114,7 +114,7 @@ export class AIPromptExtension extends TemplateExtensionBase {
         // then we will create an instance of the LLM class
         AIEngine.Instance.Config(false, this.ContextUser).then(async () => {
             try {
-                let model: AIModelEntityExtended = null;
+                let model: MJAIModelEntityExtended = null;
                 if(config.AIModel) {
                     model = AIEngine.Instance.Models.find(m => 
                         m.Name.toLowerCase() === config.AIModel.toLowerCase() ||
@@ -174,7 +174,7 @@ export class AIPromptExtension extends TemplateExtensionBase {
      * Default implementation simply grabs the first AI model that matches GetAIModelName().
      * @returns 
      */
-    protected async GetAIModel(vendorName: string, contextUser: UserInfo): Promise<AIModelEntityExtended> {
+    protected async GetAIModel(vendorName: string, contextUser: UserInfo): Promise<MJAIModelEntityExtended> {
         await AIEngine.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
         const models = AIEngine.Instance.Models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm' && 
                                                     m.Vendor.trim().toLowerCase() === vendorName.trim().toLowerCase())  
@@ -285,7 +285,7 @@ export type AIPromptConfig = {
 //  * Default implementation simply grabs the first AI model that matches GetAIModelName().
 //  * @returns 
 //  */
-// async function GetAIModel(vendorName: string, contextUser: UserInfo): Promise<AIModelEntityExtended> {
+// async function GetAIModel(vendorName: string, contextUser: UserInfo): Promise<MJAIModelEntityExtended> {
 //     await AIEngine.LoadAIMetadata(contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
 //     const models = AIEngine.Models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm' && 
 //                                                 m.Vendor.trim().toLowerCase() === vendorName.trim().toLowerCase())  
@@ -293,8 +293,3 @@ export type AIPromptConfig = {
 //     models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
 //     return models[0];
 // }
-
-
-export function LoadAIPromptExtension() {
-    // does nothing just to ensure the extension class isn't tree-shaken
-}

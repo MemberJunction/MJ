@@ -6,8 +6,8 @@ Create a changeset file for the current branch's changes following MemberJunctio
 
 1. **Check for new migration files:**
    - **CRITICAL**: Only check for migrations that were ADDED IN THIS BRANCH
-   - Compare `migrations/v2/` directory to find NEW files added in current branch commits
-   - Run: `git diff next...HEAD --name-only | grep "^migrations/v2/.*\.sql$"`
+   - Compare ALL `migrations/` version directories to find NEW files added in current branch commits
+   - Run: `git diff next...HEAD --name-only | grep "^migrations/v[0-9]\\+/.*\\.sql$"`
    - **IMPORTANT**: Use `next` branch as baseline (NOT `main`) to avoid counting migrations from other merged branches
    - If the command returns any files, these are NEW migrations added in this branch
    - Only if NEW migrations exist in THIS BRANCH, add `"@memberjunction/core": minor` to the changeset
@@ -46,8 +46,8 @@ Summary of changes based on commit messages
 
 ## Versioning Rules
 
-- **Minor bump**: ONLY when NEW migration files were ADDED IN THIS BRANCH in `migrations/v2/` (applied to `@memberjunction/core` only)
-  - Check: `git diff next...HEAD --name-only | grep "^migrations/v2/.*\.sql$"`
+- **Minor bump**: ONLY when NEW migration files were ADDED IN THIS BRANCH in any `migrations/v*/` folder (applied to `@memberjunction/core` only)
+  - Check: `git diff next...HEAD --name-only | grep "^migrations/v[0-9]\\+/.*\\.sql$"`
   - If this returns any files → include `"@memberjunction/core": minor`
   - If this returns nothing → do NOT include core in changeset
 - **Patch bump**: All TypeScript code changes, bug fixes, documentation updates

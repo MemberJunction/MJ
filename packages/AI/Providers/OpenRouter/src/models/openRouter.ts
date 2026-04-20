@@ -13,7 +13,3 @@ export class OpenRouterLLM extends OpenAILLM {
         super(apiKey, __openRouterURL);
     }
 }
-
-export function LoadOpenRouterLLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
-}

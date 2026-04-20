@@ -1,5 +1,1212 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [2542615]
+- Updated dependencies [115e4da]
+  - @memberjunction/ng-shared@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-entity-form-dialog@5.28.0
+  - @memberjunction/ng-entity-permissions@5.28.0
+  - @memberjunction/ng-join-grid@5.28.0
+  - @memberjunction/ng-base-application@5.28.0
+  - @memberjunction/ng-simple-record-list@5.28.0
+  - @memberjunction/ng-base-forms@5.28.0
+  - @memberjunction/ng-code-editor@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/ng-user-avatar@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/ng-tabstrip@5.28.0
+  - @memberjunction/ng-ui-components@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ng-base-application@5.27.1
+  - @memberjunction/ng-entity-form-dialog@5.27.1
+  - @memberjunction/ng-entity-permissions@5.27.1
+  - @memberjunction/ng-shared@5.27.1
+  - @memberjunction/ng-simple-record-list@5.27.1
+  - @memberjunction/ng-base-forms@5.27.1
+  - @memberjunction/ng-code-editor@5.27.1
+  - @memberjunction/ng-join-grid@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/ng-user-avatar@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/ng-tabstrip@5.27.1
+  - @memberjunction/ng-ui-components@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-application@5.27.0
+- @memberjunction/ng-entity-form-dialog@5.27.0
+- @memberjunction/ng-entity-permissions@5.27.0
+- @memberjunction/ng-shared@5.27.0
+- @memberjunction/ng-simple-record-list@5.27.0
+- @memberjunction/ng-base-forms@5.27.0
+- @memberjunction/ng-code-editor@5.27.0
+- @memberjunction/ng-join-grid@5.27.0
+- @memberjunction/ng-notifications@5.27.0
+- @memberjunction/ng-shared-generic@5.27.0
+- @memberjunction/ng-tabstrip@5.27.0
+- @memberjunction/ng-ui-components@5.27.0
+- @memberjunction/ng-user-avatar@5.27.0
+- @memberjunction/graphql-dataprovider@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/ng-code-editor@5.26.0
+  - @memberjunction/ng-shared-generic@5.26.0
+  - @memberjunction/ng-ui-components@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ng-base-application@5.26.0
+  - @memberjunction/ng-entity-form-dialog@5.26.0
+  - @memberjunction/ng-entity-permissions@5.26.0
+  - @memberjunction/ng-shared@5.26.0
+  - @memberjunction/ng-simple-record-list@5.26.0
+  - @memberjunction/ng-base-forms@5.26.0
+  - @memberjunction/ng-join-grid@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/ng-user-avatar@5.26.0
+  - @memberjunction/graphql-dataprovider@5.26.0
+  - @memberjunction/ng-tabstrip@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/ng-base-application@5.25.0
+  - @memberjunction/ng-entity-form-dialog@5.25.0
+  - @memberjunction/ng-entity-permissions@5.25.0
+  - @memberjunction/ng-shared@5.25.0
+  - @memberjunction/ng-simple-record-list@5.25.0
+  - @memberjunction/ng-base-forms@5.25.0
+  - @memberjunction/ng-code-editor@5.25.0
+  - @memberjunction/ng-join-grid@5.25.0
+  - @memberjunction/ng-notifications@5.25.0
+  - @memberjunction/ng-shared-generic@5.25.0
+  - @memberjunction/ng-user-avatar@5.25.0
+  - @memberjunction/ng-tabstrip@5.25.0
+  - @memberjunction/ng-ui-components@5.25.0
+  - @memberjunction/global@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/graphql-dataprovider@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/ng-base-forms@5.24.0
+  - @memberjunction/ng-shared@5.24.0
+  - @memberjunction/ng-notifications@5.24.0
+  - @memberjunction/ng-base-application@5.24.0
+  - @memberjunction/ng-entity-form-dialog@5.24.0
+  - @memberjunction/ng-entity-permissions@5.24.0
+  - @memberjunction/ng-simple-record-list@5.24.0
+  - @memberjunction/ng-code-editor@5.24.0
+  - @memberjunction/ng-join-grid@5.24.0
+  - @memberjunction/ng-shared-generic@5.24.0
+  - @memberjunction/ng-user-avatar@5.24.0
+  - @memberjunction/ng-tabstrip@5.24.0
+  - @memberjunction/ng-ui-components@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [37dc301]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [58af481]
+- Updated dependencies [fb0c69f]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ng-base-application@5.23.0
+  - @memberjunction/ng-base-forms@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ng-ui-components@5.23.0
+  - @memberjunction/ng-entity-form-dialog@5.23.0
+  - @memberjunction/ng-entity-permissions@5.23.0
+  - @memberjunction/ng-shared@5.23.0
+  - @memberjunction/ng-simple-record-list@5.23.0
+  - @memberjunction/ng-code-editor@5.23.0
+  - @memberjunction/ng-join-grid@5.23.0
+  - @memberjunction/ng-notifications@5.23.0
+  - @memberjunction/ng-shared-generic@5.23.0
+  - @memberjunction/ng-user-avatar@5.23.0
+  - @memberjunction/ng-tabstrip@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ng-base-application@5.22.0
+  - @memberjunction/graphql-dataprovider@5.22.0
+  - @memberjunction/ng-entity-form-dialog@5.22.0
+  - @memberjunction/ng-entity-permissions@5.22.0
+  - @memberjunction/ng-shared@5.22.0
+  - @memberjunction/ng-simple-record-list@5.22.0
+  - @memberjunction/ng-base-forms@5.22.0
+  - @memberjunction/ng-code-editor@5.22.0
+  - @memberjunction/ng-join-grid@5.22.0
+  - @memberjunction/ng-notifications@5.22.0
+  - @memberjunction/ng-shared-generic@5.22.0
+  - @memberjunction/ng-user-avatar@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/ng-tabstrip@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ng-base-application@5.21.0
+  - @memberjunction/ng-entity-form-dialog@5.21.0
+  - @memberjunction/ng-entity-permissions@5.21.0
+  - @memberjunction/ng-shared@5.21.0
+  - @memberjunction/ng-simple-record-list@5.21.0
+  - @memberjunction/ng-base-forms@5.21.0
+  - @memberjunction/ng-code-editor@5.21.0
+  - @memberjunction/ng-join-grid@5.21.0
+  - @memberjunction/ng-notifications@5.21.0
+  - @memberjunction/ng-shared-generic@5.21.0
+  - @memberjunction/ng-user-avatar@5.21.0
+  - @memberjunction/graphql-dataprovider@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/ng-tabstrip@5.21.0
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ng-base-application@5.20.0
+  - @memberjunction/ng-entity-form-dialog@5.20.0
+  - @memberjunction/ng-entity-permissions@5.20.0
+  - @memberjunction/ng-shared@5.20.0
+  - @memberjunction/ng-simple-record-list@5.20.0
+  - @memberjunction/ng-base-forms@5.20.0
+  - @memberjunction/ng-code-editor@5.20.0
+  - @memberjunction/ng-join-grid@5.20.0
+  - @memberjunction/ng-notifications@5.20.0
+  - @memberjunction/ng-shared-generic@5.20.0
+  - @memberjunction/ng-user-avatar@5.20.0
+  - @memberjunction/graphql-dataprovider@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/ng-tabstrip@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-application@5.19.0
+- @memberjunction/ng-entity-form-dialog@5.19.0
+- @memberjunction/ng-entity-permissions@5.19.0
+- @memberjunction/ng-shared@5.19.0
+- @memberjunction/ng-simple-record-list@5.19.0
+- @memberjunction/ng-base-forms@5.19.0
+- @memberjunction/ng-code-editor@5.19.0
+- @memberjunction/ng-join-grid@5.19.0
+- @memberjunction/ng-notifications@5.19.0
+- @memberjunction/ng-shared-generic@5.19.0
+- @memberjunction/ng-tabstrip@5.19.0
+- @memberjunction/ng-user-avatar@5.19.0
+- @memberjunction/graphql-dataprovider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.18.0
+- @memberjunction/ng-shared@5.18.0
+- @memberjunction/ng-notifications@5.18.0
+- @memberjunction/ng-entity-form-dialog@5.18.0
+- @memberjunction/ng-entity-permissions@5.18.0
+- @memberjunction/ng-join-grid@5.18.0
+- @memberjunction/ng-simple-record-list@5.18.0
+- @memberjunction/ng-base-forms@5.18.0
+- @memberjunction/ng-base-application@5.18.0
+- @memberjunction/ng-code-editor@5.18.0
+- @memberjunction/ng-shared-generic@5.18.0
+- @memberjunction/ng-tabstrip@5.18.0
+- @memberjunction/ng-user-avatar@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/core-entities@5.18.0
+- @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [bbfbf5e]
+- Updated dependencies [9881045]
+  - @memberjunction/graphql-dataprovider@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/ng-shared@5.17.0
+  - @memberjunction/ng-notifications@5.17.0
+  - @memberjunction/ng-base-application@5.17.0
+  - @memberjunction/ng-entity-form-dialog@5.17.0
+  - @memberjunction/ng-entity-permissions@5.17.0
+  - @memberjunction/ng-simple-record-list@5.17.0
+  - @memberjunction/ng-base-forms@5.17.0
+  - @memberjunction/ng-code-editor@5.17.0
+  - @memberjunction/ng-join-grid@5.17.0
+  - @memberjunction/ng-shared-generic@5.17.0
+  - @memberjunction/ng-user-avatar@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/ng-tabstrip@5.17.0
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [179a4ce]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/graphql-dataprovider@5.16.0
+  - @memberjunction/ng-base-application@5.16.0
+  - @memberjunction/ng-entity-form-dialog@5.16.0
+  - @memberjunction/ng-entity-permissions@5.16.0
+  - @memberjunction/ng-shared@5.16.0
+  - @memberjunction/ng-simple-record-list@5.16.0
+  - @memberjunction/ng-base-forms@5.16.0
+  - @memberjunction/ng-code-editor@5.16.0
+  - @memberjunction/ng-join-grid@5.16.0
+  - @memberjunction/ng-notifications@5.16.0
+  - @memberjunction/ng-shared-generic@5.16.0
+  - @memberjunction/ng-user-avatar@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/ng-tabstrip@5.16.0
+  - @memberjunction/global@5.16.0
+
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/ng-base-application@5.15.0
+  - @memberjunction/ng-entity-form-dialog@5.15.0
+  - @memberjunction/ng-entity-permissions@5.15.0
+  - @memberjunction/ng-shared@5.15.0
+  - @memberjunction/ng-simple-record-list@5.15.0
+  - @memberjunction/ng-base-forms@5.15.0
+  - @memberjunction/ng-code-editor@5.15.0
+  - @memberjunction/ng-join-grid@5.15.0
+  - @memberjunction/ng-notifications@5.15.0
+  - @memberjunction/ng-shared-generic@5.15.0
+  - @memberjunction/ng-user-avatar@5.15.0
+  - @memberjunction/graphql-dataprovider@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/ng-tabstrip@5.15.0
+  - @memberjunction/global@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/graphql-dataprovider@5.14.0
+  - @memberjunction/ng-base-application@5.14.0
+  - @memberjunction/ng-entity-form-dialog@5.14.0
+  - @memberjunction/ng-entity-permissions@5.14.0
+  - @memberjunction/ng-shared@5.14.0
+  - @memberjunction/ng-simple-record-list@5.14.0
+  - @memberjunction/ng-base-forms@5.14.0
+  - @memberjunction/ng-code-editor@5.14.0
+  - @memberjunction/ng-join-grid@5.14.0
+  - @memberjunction/ng-notifications@5.14.0
+  - @memberjunction/ng-shared-generic@5.14.0
+  - @memberjunction/ng-user-avatar@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/ng-tabstrip@5.14.0
+  - @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ng-base-application@5.13.0
+  - @memberjunction/ng-entity-form-dialog@5.13.0
+  - @memberjunction/ng-entity-permissions@5.13.0
+  - @memberjunction/ng-shared@5.13.0
+  - @memberjunction/ng-simple-record-list@5.13.0
+  - @memberjunction/ng-base-forms@5.13.0
+  - @memberjunction/ng-code-editor@5.13.0
+  - @memberjunction/ng-join-grid@5.13.0
+  - @memberjunction/ng-notifications@5.13.0
+  - @memberjunction/ng-shared-generic@5.13.0
+  - @memberjunction/ng-user-avatar@5.13.0
+  - @memberjunction/graphql-dataprovider@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/ng-tabstrip@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- a57b8d5: Migrate all hardcoded CSS colors to design tokens for dark mode and white-label support. Introduces `--mj-*` semantic CSS custom properties in `_tokens.scss` with full `[data-theme="dark"]` overrides. Migrates 1,544 of 1,659 hardcoded hex values (93%) across 72+ CSS files to semantic tokens. Adds logo token system (`--mj-logo-mark`, `--mj-logo-color`) for themeable branding. Fixes dark mode theming for CodeMirror, AG Grid v35, and Kendo popups. No API or behavioral changes — CSS only.
+- e87d153: design tokens phase 1
+- Updated dependencies [05f19ff]
+- Updated dependencies [a57b8d5]
+- Updated dependencies [e87d153]
+- Updated dependencies [7def002]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/ng-shared-generic@5.12.0
+  - @memberjunction/ng-base-application@5.12.0
+  - @memberjunction/ng-entity-permissions@5.12.0
+  - @memberjunction/ng-simple-record-list@5.12.0
+  - @memberjunction/ng-base-forms@5.12.0
+  - @memberjunction/ng-code-editor@5.12.0
+  - @memberjunction/ng-join-grid@5.12.0
+  - @memberjunction/ng-tabstrip@5.12.0
+  - @memberjunction/graphql-dataprovider@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/ng-entity-form-dialog@5.12.0
+  - @memberjunction/ng-shared@5.12.0
+  - @memberjunction/ng-notifications@5.12.0
+  - @memberjunction/ng-user-avatar@5.12.0
+  - @memberjunction/global@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/graphql-dataprovider@5.11.0
+  - @memberjunction/core@5.11.0
+  - @memberjunction/ng-shared@5.11.0
+  - @memberjunction/ng-notifications@5.11.0
+  - @memberjunction/ng-base-application@5.11.0
+  - @memberjunction/ng-entity-form-dialog@5.11.0
+  - @memberjunction/ng-entity-permissions@5.11.0
+  - @memberjunction/ng-simple-record-list@5.11.0
+  - @memberjunction/ng-base-forms@5.11.0
+  - @memberjunction/ng-code-editor@5.11.0
+  - @memberjunction/ng-join-grid@5.11.0
+  - @memberjunction/ng-shared-generic@5.11.0
+  - @memberjunction/ng-user-avatar@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/ng-tabstrip@5.11.0
+  - @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-application@5.10.1
+- @memberjunction/ng-entity-form-dialog@5.10.1
+- @memberjunction/ng-entity-permissions@5.10.1
+- @memberjunction/ng-shared@5.10.1
+- @memberjunction/ng-simple-record-list@5.10.1
+- @memberjunction/ng-base-forms@5.10.1
+- @memberjunction/ng-code-editor@5.10.1
+- @memberjunction/ng-join-grid@5.10.1
+- @memberjunction/ng-notifications@5.10.1
+- @memberjunction/ng-shared-generic@5.10.1
+- @memberjunction/ng-tabstrip@5.10.1
+- @memberjunction/ng-user-avatar@5.10.1
+- @memberjunction/graphql-dataprovider@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [4e298b7]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/graphql-dataprovider@5.10.0
+  - @memberjunction/ng-base-application@5.10.0
+  - @memberjunction/ng-entity-form-dialog@5.10.0
+  - @memberjunction/ng-entity-permissions@5.10.0
+  - @memberjunction/ng-shared@5.10.0
+  - @memberjunction/ng-simple-record-list@5.10.0
+  - @memberjunction/ng-base-forms@5.10.0
+  - @memberjunction/ng-code-editor@5.10.0
+  - @memberjunction/ng-join-grid@5.10.0
+  - @memberjunction/ng-notifications@5.10.0
+  - @memberjunction/ng-shared-generic@5.10.0
+  - @memberjunction/ng-user-avatar@5.10.0
+  - @memberjunction/ng-tabstrip@5.10.0
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ng-base-application@5.9.0
+  - @memberjunction/ng-entity-form-dialog@5.9.0
+  - @memberjunction/ng-entity-permissions@5.9.0
+  - @memberjunction/ng-shared@5.9.0
+  - @memberjunction/ng-simple-record-list@5.9.0
+  - @memberjunction/ng-base-forms@5.9.0
+  - @memberjunction/ng-code-editor@5.9.0
+  - @memberjunction/ng-join-grid@5.9.0
+  - @memberjunction/ng-notifications@5.9.0
+  - @memberjunction/ng-shared-generic@5.9.0
+  - @memberjunction/ng-user-avatar@5.9.0
+  - @memberjunction/graphql-dataprovider@5.9.0
+  - @memberjunction/ng-tabstrip@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [de9f2c0]
+- Updated dependencies [0753249]
+  - @memberjunction/graphql-dataprovider@5.8.0
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ng-shared@5.8.0
+  - @memberjunction/ng-notifications@5.8.0
+  - @memberjunction/ng-base-application@5.8.0
+  - @memberjunction/ng-entity-form-dialog@5.8.0
+  - @memberjunction/ng-entity-permissions@5.8.0
+  - @memberjunction/ng-simple-record-list@5.8.0
+  - @memberjunction/ng-base-forms@5.8.0
+  - @memberjunction/ng-code-editor@5.8.0
+  - @memberjunction/ng-join-grid@5.8.0
+  - @memberjunction/ng-shared-generic@5.8.0
+  - @memberjunction/ng-user-avatar@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/ng-tabstrip@5.8.0
+  - @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [642c4df]
+- Updated dependencies [7641cd2]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ng-base-forms@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/ng-base-application@5.7.0
+  - @memberjunction/ng-entity-form-dialog@5.7.0
+  - @memberjunction/ng-entity-permissions@5.7.0
+  - @memberjunction/ng-shared@5.7.0
+  - @memberjunction/ng-simple-record-list@5.7.0
+  - @memberjunction/ng-code-editor@5.7.0
+  - @memberjunction/ng-join-grid@5.7.0
+  - @memberjunction/ng-notifications@5.7.0
+  - @memberjunction/ng-shared-generic@5.7.0
+  - @memberjunction/ng-user-avatar@5.7.0
+  - @memberjunction/graphql-dataprovider@5.7.0
+  - @memberjunction/ng-tabstrip@5.7.0
+  - @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/graphql-dataprovider@5.6.0
+  - @memberjunction/ng-base-application@5.6.0
+  - @memberjunction/ng-entity-form-dialog@5.6.0
+  - @memberjunction/ng-entity-permissions@5.6.0
+  - @memberjunction/ng-shared@5.6.0
+  - @memberjunction/ng-simple-record-list@5.6.0
+  - @memberjunction/ng-base-forms@5.6.0
+  - @memberjunction/ng-code-editor@5.6.0
+  - @memberjunction/ng-join-grid@5.6.0
+  - @memberjunction/ng-notifications@5.6.0
+  - @memberjunction/ng-shared-generic@5.6.0
+  - @memberjunction/ng-user-avatar@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/ng-tabstrip@5.6.0
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/graphql-dataprovider@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ng-base-application@5.5.0
+  - @memberjunction/ng-entity-form-dialog@5.5.0
+  - @memberjunction/ng-entity-permissions@5.5.0
+  - @memberjunction/ng-shared@5.5.0
+  - @memberjunction/ng-simple-record-list@5.5.0
+  - @memberjunction/ng-base-forms@5.5.0
+  - @memberjunction/ng-code-editor@5.5.0
+  - @memberjunction/ng-join-grid@5.5.0
+  - @memberjunction/ng-notifications@5.5.0
+  - @memberjunction/ng-shared-generic@5.5.0
+  - @memberjunction/ng-tabstrip@5.5.0
+  - @memberjunction/ng-user-avatar@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- Updated dependencies [c28af42]
+- Updated dependencies [8789e86]
+  - @memberjunction/ng-base-forms@5.4.1
+  - @memberjunction/ng-shared@5.4.1
+  - @memberjunction/ng-entity-form-dialog@5.4.1
+  - @memberjunction/ng-entity-permissions@5.4.1
+  - @memberjunction/ng-join-grid@5.4.1
+  - @memberjunction/ng-simple-record-list@5.4.1
+  - @memberjunction/ng-base-application@5.4.1
+  - @memberjunction/ng-code-editor@5.4.1
+  - @memberjunction/ng-notifications@5.4.1
+  - @memberjunction/ng-shared-generic@5.4.1
+  - @memberjunction/ng-tabstrip@5.4.1
+  - @memberjunction/ng-user-avatar@5.4.1
+  - @memberjunction/graphql-dataprovider@5.4.1
+  - @memberjunction/core@5.4.1
+  - @memberjunction/core-entities@5.4.1
+  - @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- 081d657: regression fixes
+- 6bcfa1c: unified design tokens
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+- Updated dependencies [6bcfa1c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-shared@5.4.0
+  - @memberjunction/ng-notifications@5.4.0
+  - @memberjunction/ng-base-application@5.4.0
+  - @memberjunction/ng-entity-form-dialog@5.4.0
+  - @memberjunction/ng-entity-permissions@5.4.0
+  - @memberjunction/ng-simple-record-list@5.4.0
+  - @memberjunction/ng-base-forms@5.4.0
+  - @memberjunction/ng-code-editor@5.4.0
+  - @memberjunction/ng-join-grid@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/ng-user-avatar@5.4.0
+  - @memberjunction/ng-tabstrip@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-application@5.3.1
+- @memberjunction/ng-entity-form-dialog@5.3.1
+- @memberjunction/ng-entity-permissions@5.3.1
+- @memberjunction/ng-shared@5.3.1
+- @memberjunction/ng-simple-record-list@5.3.1
+- @memberjunction/ng-base-forms@5.3.1
+- @memberjunction/ng-code-editor@5.3.1
+- @memberjunction/ng-join-grid@5.3.1
+- @memberjunction/ng-notifications@5.3.1
+- @memberjunction/ng-shared-generic@5.3.1
+- @memberjunction/ng-tabstrip@5.3.1
+- @memberjunction/ng-user-avatar@5.3.1
+- @memberjunction/graphql-dataprovider@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [a6aea29]
+- Updated dependencies [1692c53]
+  - @memberjunction/graphql-dataprovider@5.3.0
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-shared@5.3.0
+  - @memberjunction/ng-notifications@5.3.0
+  - @memberjunction/ng-base-forms@5.3.0
+  - @memberjunction/ng-base-application@5.3.0
+  - @memberjunction/ng-entity-form-dialog@5.3.0
+  - @memberjunction/ng-entity-permissions@5.3.0
+  - @memberjunction/ng-simple-record-list@5.3.0
+  - @memberjunction/ng-code-editor@5.3.0
+  - @memberjunction/ng-join-grid@5.3.0
+  - @memberjunction/ng-shared-generic@5.3.0
+  - @memberjunction/ng-user-avatar@5.3.0
+  - @memberjunction/ng-tabstrip@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/graphql-dataprovider@5.2.0
+  - @memberjunction/ng-shared@5.2.0
+  - @memberjunction/ng-base-application@5.2.0
+  - @memberjunction/ng-entity-form-dialog@5.2.0
+  - @memberjunction/ng-entity-permissions@5.2.0
+  - @memberjunction/ng-simple-record-list@5.2.0
+  - @memberjunction/ng-base-forms@5.2.0
+  - @memberjunction/ng-code-editor@5.2.0
+  - @memberjunction/ng-join-grid@5.2.0
+  - @memberjunction/ng-notifications@5.2.0
+  - @memberjunction/ng-shared-generic@5.2.0
+  - @memberjunction/ng-user-avatar@5.2.0
+  - @memberjunction/ng-tabstrip@5.2.0
+  - @memberjunction/global@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+  - @memberjunction/global@5.1.0
+  - @memberjunction/ng-base-application@5.1.0
+  - @memberjunction/ng-entity-form-dialog@5.1.0
+  - @memberjunction/ng-entity-permissions@5.1.0
+  - @memberjunction/ng-shared@5.1.0
+  - @memberjunction/ng-simple-record-list@5.1.0
+  - @memberjunction/ng-base-forms@5.1.0
+  - @memberjunction/ng-code-editor@5.1.0
+  - @memberjunction/ng-join-grid@5.1.0
+  - @memberjunction/ng-notifications@5.1.0
+  - @memberjunction/ng-user-avatar@5.1.0
+  - @memberjunction/graphql-dataprovider@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/core-entities@5.1.0
+  - @memberjunction/ng-tabstrip@5.1.0
+  - @memberjunction/ng-shared-generic@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/graphql-dataprovider@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ng-base-application@5.0.0
+  - @memberjunction/ng-entity-form-dialog@5.0.0
+  - @memberjunction/ng-entity-permissions@5.0.0
+  - @memberjunction/ng-shared@5.0.0
+  - @memberjunction/ng-simple-record-list@5.0.0
+  - @memberjunction/ng-base-forms@5.0.0
+  - @memberjunction/ng-code-editor@5.0.0
+  - @memberjunction/ng-join-grid@5.0.0
+  - @memberjunction/ng-notifications@5.0.0
+  - @memberjunction/ng-shared-generic@5.0.0
+  - @memberjunction/ng-tabstrip@5.0.0
+  - @memberjunction/ng-user-avatar@5.0.0
+  - @memberjunction/global@5.0.0
+
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ng-base-application@4.4.0
+  - @memberjunction/ng-entity-form-dialog@4.4.0
+  - @memberjunction/ng-entity-permissions@4.4.0
+  - @memberjunction/ng-shared@4.4.0
+  - @memberjunction/ng-simple-record-list@4.4.0
+  - @memberjunction/ng-base-forms@4.4.0
+  - @memberjunction/ng-code-editor@4.4.0
+  - @memberjunction/ng-container-directives@4.4.0
+  - @memberjunction/ng-join-grid@4.4.0
+  - @memberjunction/ng-notifications@4.4.0
+  - @memberjunction/ng-shared-generic@4.4.0
+  - @memberjunction/ng-user-avatar@4.4.0
+  - @memberjunction/graphql-dataprovider@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/ng-tabstrip@4.4.0
+  - @memberjunction/global@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-forms@4.3.1
+- @memberjunction/ng-entity-form-dialog@4.3.1
+- @memberjunction/ng-simple-record-list@4.3.1
+- @memberjunction/ng-base-application@4.3.1
+- @memberjunction/ng-entity-permissions@4.3.1
+- @memberjunction/ng-shared@4.3.1
+- @memberjunction/ng-code-editor@4.3.1
+- @memberjunction/ng-container-directives@4.3.1
+- @memberjunction/ng-join-grid@4.3.1
+- @memberjunction/ng-notifications@4.3.1
+- @memberjunction/ng-shared-generic@4.3.1
+- @memberjunction/ng-tabstrip@4.3.1
+- @memberjunction/ng-user-avatar@4.3.1
+- @memberjunction/graphql-dataprovider@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/global@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/graphql-dataprovider@4.3.0
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ng-shared@4.3.0
+  - @memberjunction/ng-notifications@4.3.0
+  - @memberjunction/ng-base-application@4.3.0
+  - @memberjunction/ng-entity-form-dialog@4.3.0
+  - @memberjunction/ng-entity-permissions@4.3.0
+  - @memberjunction/ng-simple-record-list@4.3.0
+  - @memberjunction/ng-base-forms@4.3.0
+  - @memberjunction/ng-code-editor@4.3.0
+  - @memberjunction/ng-container-directives@4.3.0
+  - @memberjunction/ng-join-grid@4.3.0
+  - @memberjunction/ng-shared-generic@4.3.0
+  - @memberjunction/ng-user-avatar@4.3.0
+  - @memberjunction/ng-tabstrip@4.3.0
+  - @memberjunction/global@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-application@4.2.0
+- @memberjunction/ng-entity-form-dialog@4.2.0
+- @memberjunction/ng-entity-permissions@4.2.0
+- @memberjunction/ng-shared@4.2.0
+- @memberjunction/ng-simple-record-list@4.2.0
+- @memberjunction/ng-base-forms@4.2.0
+- @memberjunction/ng-code-editor@4.2.0
+- @memberjunction/ng-container-directives@4.2.0
+- @memberjunction/ng-join-grid@4.2.0
+- @memberjunction/ng-notifications@4.2.0
+- @memberjunction/ng-shared-generic@4.2.0
+- @memberjunction/ng-tabstrip@4.2.0
+- @memberjunction/ng-user-avatar@4.2.0
+- @memberjunction/graphql-dataprovider@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+
+## 4.1.0
+
+### Minor Changes
+
+- 2ea241f: metadata
+
+### Patch Changes
+
+- Updated dependencies [77839a9]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/core@4.1.0
+  - @memberjunction/ng-base-application@4.1.0
+  - @memberjunction/ng-base-forms@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ng-entity-form-dialog@4.1.0
+  - @memberjunction/ng-entity-permissions@4.1.0
+  - @memberjunction/ng-shared@4.1.0
+  - @memberjunction/ng-simple-record-list@4.1.0
+  - @memberjunction/ng-code-editor@4.1.0
+  - @memberjunction/ng-container-directives@4.1.0
+  - @memberjunction/ng-join-grid@4.1.0
+  - @memberjunction/ng-notifications@4.1.0
+  - @memberjunction/ng-shared-generic@4.1.0
+  - @memberjunction/ng-user-avatar@4.1.0
+  - @memberjunction/graphql-dataprovider@4.1.0
+  - @memberjunction/ng-tabstrip@4.1.0
+  - @memberjunction/global@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- Updated dependencies [65b4274]
+- Updated dependencies [8366d44]
+- Updated dependencies [f159146]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/graphql-dataprovider@4.0.0
+  - @memberjunction/ng-base-application@4.0.0
+  - @memberjunction/ng-base-forms@4.0.0
+  - @memberjunction/ng-entity-form-dialog@4.0.0
+  - @memberjunction/ng-entity-permissions@4.0.0
+  - @memberjunction/ng-shared@4.0.0
+  - @memberjunction/ng-simple-record-list@4.0.0
+  - @memberjunction/ng-code-editor@4.0.0
+  - @memberjunction/ng-container-directives@4.0.0
+  - @memberjunction/ng-join-grid@4.0.0
+  - @memberjunction/ng-notifications@4.0.0
+  - @memberjunction/ng-shared-generic@4.0.0
+  - @memberjunction/ng-tabstrip@4.0.0
+  - @memberjunction/ng-user-avatar@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/core-entities@4.0.0
+  - @memberjunction/global@4.0.0
+
+## 3.4.0
+
+### Patch Changes
+
+- 252794e: Refactor settings UI into modular components for better organization
+- Updated dependencies [18b4e65]
+- Updated dependencies [a3961d5]
+  - @memberjunction/core-entities@3.4.0
+  - @memberjunction/core@3.4.0
+  - @memberjunction/ng-base-application@3.4.0
+  - @memberjunction/ng-base-forms@3.4.0
+  - @memberjunction/ng-compare-records@3.4.0
+  - @memberjunction/ng-entity-form-dialog@3.4.0
+  - @memberjunction/ng-entity-permissions@3.4.0
+  - @memberjunction/ng-shared@3.4.0
+  - @memberjunction/ng-simple-record-list@3.4.0
+  - @memberjunction/ng-code-editor@3.4.0
+  - @memberjunction/ng-join-grid@3.4.0
+  - @memberjunction/ng-notifications@3.4.0
+  - @memberjunction/ng-shared-generic@3.4.0
+  - @memberjunction/ng-user-avatar@3.4.0
+  - @memberjunction/graphql-dataprovider@3.4.0
+  - @memberjunction/ng-container-directives@3.4.0
+  - @memberjunction/ng-tabstrip@3.4.0
+  - @memberjunction/global@3.4.0
+
+## 3.3.0
+
+### Patch Changes
+
+- 36714eb: No migration just UI refinement/bug fix
+- 2183cbb: No migration
+- 83d75a1: No migration only UI update
+- Updated dependencies [ca551dd]
+  - @memberjunction/core-entities@3.3.0
+  - @memberjunction/ng-base-forms@3.3.0
+  - @memberjunction/ng-base-application@3.3.0
+  - @memberjunction/ng-compare-records@3.3.0
+  - @memberjunction/ng-entity-form-dialog@3.3.0
+  - @memberjunction/ng-entity-permissions@3.3.0
+  - @memberjunction/ng-shared@3.3.0
+  - @memberjunction/ng-simple-record-list@3.3.0
+  - @memberjunction/ng-user-view-grid@3.3.0
+  - @memberjunction/ng-code-editor@3.3.0
+  - @memberjunction/ng-join-grid@3.3.0
+  - @memberjunction/ng-notifications@3.3.0
+  - @memberjunction/ng-shared-generic@3.3.0
+  - @memberjunction/ng-user-avatar@3.3.0
+  - @memberjunction/graphql-dataprovider@3.3.0
+  - @memberjunction/ng-container-directives@3.3.0
+  - @memberjunction/ng-tabstrip@3.3.0
+  - @memberjunction/core@3.3.0
+  - @memberjunction/global@3.3.0
+
+## 3.2.0
+
+### Minor Changes
+
+- 582ca0c: Added unified notification system with email/SMS delivery, user notification preferences, and agent completion notifications
+
+### Patch Changes
+
+- Updated dependencies [039983c]
+- Updated dependencies [6806a6c]
+- Updated dependencies [582ca0c]
+  - @memberjunction/core-entities@3.2.0
+  - @memberjunction/graphql-dataprovider@3.2.0
+  - @memberjunction/ng-base-application@3.2.0
+  - @memberjunction/ng-base-forms@3.2.0
+  - @memberjunction/ng-compare-records@3.2.0
+  - @memberjunction/ng-entity-form-dialog@3.2.0
+  - @memberjunction/ng-entity-permissions@3.2.0
+  - @memberjunction/ng-shared@3.2.0
+  - @memberjunction/ng-simple-record-list@3.2.0
+  - @memberjunction/ng-user-view-grid@3.2.0
+  - @memberjunction/ng-code-editor@3.2.0
+  - @memberjunction/ng-join-grid@3.2.0
+  - @memberjunction/ng-notifications@3.2.0
+  - @memberjunction/ng-shared-generic@3.2.0
+  - @memberjunction/ng-user-avatar@3.2.0
+  - @memberjunction/ng-container-directives@3.2.0
+  - @memberjunction/ng-tabstrip@3.2.0
+  - @memberjunction/core@3.2.0
+  - @memberjunction/global@3.2.0
+
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [8c0b624]
+  - @memberjunction/graphql-dataprovider@3.1.1
+  - @memberjunction/ng-shared@3.1.1
+  - @memberjunction/ng-user-view-grid@3.1.1
+  - @memberjunction/ng-notifications@3.1.1
+  - @memberjunction/ng-base-forms@3.1.1
+  - @memberjunction/ng-entity-form-dialog@3.1.1
+  - @memberjunction/ng-entity-permissions@3.1.1
+  - @memberjunction/ng-join-grid@3.1.1
+  - @memberjunction/ng-simple-record-list@3.1.1
+  - @memberjunction/ng-base-application@3.1.1
+  - @memberjunction/ng-compare-records@3.1.1
+  - @memberjunction/ng-code-editor@3.1.1
+  - @memberjunction/ng-container-directives@3.1.1
+  - @memberjunction/ng-shared-generic@3.1.1
+  - @memberjunction/ng-tabstrip@3.1.1
+  - @memberjunction/ng-user-avatar@3.1.1
+  - @memberjunction/core@3.1.1
+  - @memberjunction/core-entities@3.1.1
+  - @memberjunction/global@3.1.1
+
+## 3.0.0
+
+### Patch Changes
+
+- @memberjunction/ng-user-view-grid@3.0.0
+- @memberjunction/ng-base-application@3.0.0
+- @memberjunction/ng-base-forms@3.0.0
+- @memberjunction/ng-compare-records@3.0.0
+- @memberjunction/ng-entity-form-dialog@3.0.0
+- @memberjunction/ng-entity-permissions@3.0.0
+- @memberjunction/ng-shared@3.0.0
+- @memberjunction/ng-simple-record-list@3.0.0
+- @memberjunction/ng-code-editor@3.0.0
+- @memberjunction/ng-container-directives@3.0.0
+- @memberjunction/ng-join-grid@3.0.0
+- @memberjunction/ng-notifications@3.0.0
+- @memberjunction/ng-shared-generic@3.0.0
+- @memberjunction/ng-tabstrip@3.0.0
+- @memberjunction/ng-user-avatar@3.0.0
+- @memberjunction/graphql-dataprovider@3.0.0
+- @memberjunction/core@3.0.0
+- @memberjunction/core-entities@3.0.0
+- @memberjunction/global@3.0.0
+
+## 2.133.0
+
+### Patch Changes
+
+- Updated dependencies [c00bd13]
+  - @memberjunction/core@2.133.0
+  - @memberjunction/ng-base-forms@2.133.0
+  - @memberjunction/ng-user-view-grid@2.133.0
+  - @memberjunction/ng-base-application@2.133.0
+  - @memberjunction/ng-compare-records@2.133.0
+  - @memberjunction/ng-entity-form-dialog@2.133.0
+  - @memberjunction/ng-entity-permissions@2.133.0
+  - @memberjunction/ng-shared@2.133.0
+  - @memberjunction/ng-simple-record-list@2.133.0
+  - @memberjunction/ng-code-editor@2.133.0
+  - @memberjunction/ng-container-directives@2.133.0
+  - @memberjunction/ng-join-grid@2.133.0
+  - @memberjunction/ng-notifications@2.133.0
+  - @memberjunction/ng-shared-generic@2.133.0
+  - @memberjunction/ng-user-avatar@2.133.0
+  - @memberjunction/graphql-dataprovider@2.133.0
+  - @memberjunction/core-entities@2.133.0
+  - @memberjunction/ng-tabstrip@2.133.0
+  - @memberjunction/global@2.133.0
+
+## 2.132.0
+
+### Patch Changes
+
+- Updated dependencies [55a2b08]
+  - @memberjunction/core@2.132.0
+  - @memberjunction/ng-base-application@2.132.0
+  - @memberjunction/ng-base-forms@2.132.0
+  - @memberjunction/ng-compare-records@2.132.0
+  - @memberjunction/ng-entity-form-dialog@2.132.0
+  - @memberjunction/ng-entity-permissions@2.132.0
+  - @memberjunction/ng-shared@2.132.0
+  - @memberjunction/ng-simple-record-list@2.132.0
+  - @memberjunction/ng-user-view-grid@2.132.0
+  - @memberjunction/ng-code-editor@2.132.0
+  - @memberjunction/ng-container-directives@2.132.0
+  - @memberjunction/ng-join-grid@2.132.0
+  - @memberjunction/ng-notifications@2.132.0
+  - @memberjunction/ng-shared-generic@2.132.0
+  - @memberjunction/ng-user-avatar@2.132.0
+  - @memberjunction/graphql-dataprovider@2.132.0
+  - @memberjunction/core-entities@2.132.0
+  - @memberjunction/ng-tabstrip@2.132.0
+  - @memberjunction/global@2.132.0
+
+## 2.131.0
+
+### Patch Changes
+
+- Updated dependencies [280a4c7]
+- Updated dependencies [81598e3]
+  - @memberjunction/core@2.131.0
+  - @memberjunction/ng-base-application@2.131.0
+  - @memberjunction/ng-base-forms@2.131.0
+  - @memberjunction/ng-compare-records@2.131.0
+  - @memberjunction/ng-entity-form-dialog@2.131.0
+  - @memberjunction/ng-entity-permissions@2.131.0
+  - @memberjunction/ng-shared@2.131.0
+  - @memberjunction/ng-simple-record-list@2.131.0
+  - @memberjunction/ng-user-view-grid@2.131.0
+  - @memberjunction/ng-code-editor@2.131.0
+  - @memberjunction/ng-container-directives@2.131.0
+  - @memberjunction/ng-join-grid@2.131.0
+  - @memberjunction/ng-notifications@2.131.0
+  - @memberjunction/ng-shared-generic@2.131.0
+  - @memberjunction/ng-user-avatar@2.131.0
+  - @memberjunction/graphql-dataprovider@2.131.0
+  - @memberjunction/core-entities@2.131.0
+  - @memberjunction/ng-tabstrip@2.131.0
+  - @memberjunction/global@2.131.0
+
+## 2.130.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-forms@2.130.1
+- @memberjunction/ng-entity-form-dialog@2.130.1
+- @memberjunction/ng-simple-record-list@2.130.1
+- @memberjunction/ng-user-view-grid@2.130.1
+- @memberjunction/ng-base-application@2.130.1
+- @memberjunction/ng-compare-records@2.130.1
+- @memberjunction/ng-entity-permissions@2.130.1
+- @memberjunction/ng-shared@2.130.1
+- @memberjunction/ng-code-editor@2.130.1
+- @memberjunction/ng-container-directives@2.130.1
+- @memberjunction/ng-join-grid@2.130.1
+- @memberjunction/ng-notifications@2.130.1
+- @memberjunction/ng-shared-generic@2.130.1
+- @memberjunction/ng-tabstrip@2.130.1
+- @memberjunction/ng-user-avatar@2.130.1
+- @memberjunction/graphql-dataprovider@2.130.1
+- @memberjunction/core@2.130.1
+- @memberjunction/core-entities@2.130.1
+- @memberjunction/global@2.130.1
+
+## 2.130.0
+
+### Patch Changes
+
+- Updated dependencies [83ae347]
+- Updated dependencies [9f2ece4]
+- Updated dependencies [02e84a2]
+- Updated dependencies [c23d2b7]
+  - @memberjunction/graphql-dataprovider@2.130.0
+  - @memberjunction/core@2.130.0
+  - @memberjunction/ng-base-application@2.130.0
+  - @memberjunction/ng-base-forms@2.130.0
+  - @memberjunction/ng-shared@2.130.0
+  - @memberjunction/core-entities@2.130.0
+  - @memberjunction/ng-user-view-grid@2.130.0
+  - @memberjunction/ng-notifications@2.130.0
+  - @memberjunction/ng-compare-records@2.130.0
+  - @memberjunction/ng-entity-form-dialog@2.130.0
+  - @memberjunction/ng-entity-permissions@2.130.0
+  - @memberjunction/ng-simple-record-list@2.130.0
+  - @memberjunction/ng-code-editor@2.130.0
+  - @memberjunction/ng-container-directives@2.130.0
+  - @memberjunction/ng-join-grid@2.130.0
+  - @memberjunction/ng-shared-generic@2.130.0
+  - @memberjunction/ng-user-avatar@2.130.0
+  - @memberjunction/ng-tabstrip@2.130.0
+  - @memberjunction/global@2.130.0
+
 ## 2.129.0
 
 ### Patch Changes
@@ -1286,7 +2493,6 @@
   template organization
 
   **Dialog Functionality Improvements:**
-
   - Fixed role persistence bug in user dialog where roles from first
     record persisted when editing second record
   - Enhanced ApplicationEntity management with full CRUD operations and
@@ -1299,7 +2505,6 @@
     binding
 
   **Code Organization:**
-
   - Extracted all inline HTML templates to dedicated .html files for
     better separation of concerns
   - Separated TypeScript logic from HTML markup across all dialog
@@ -1309,7 +2514,6 @@
     extraction
 
   **Technical Details:**
-
   - Fixed ngModel cannot be used with FormGroup directive errors by adding
     `[ngModelOptions]="{standalone: true}"`
   - Enhanced entity-based dirty checking using MemberJunction's built-in
@@ -1320,7 +2524,6 @@
     including assigned entities list and available entities grid
 
   **Components Updated:**
-
   - Permission Dialog: Enhanced with better role permission management and
     entity change tracking
   - Application Dialog: Added comprehensive ApplicationEntity management

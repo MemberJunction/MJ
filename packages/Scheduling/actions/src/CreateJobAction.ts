@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-bas
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import { Metadata } from '@memberjunction/core';
-import { ScheduledJobEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { BaseJobAction } from './BaseJobAction';
 
 /**
@@ -102,7 +102,7 @@ export class CreateScheduledJobAction extends BaseJobAction {
 
             // Create entity object
             const md = new Metadata();
-            const job = await md.GetEntityObject<ScheduledJobEntity>('MJ: Scheduled Jobs', params.ContextUser);
+            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', params.ContextUser);
 
             // Set required fields
             job.NewRecord();
@@ -147,11 +147,4 @@ export class CreateScheduledJobAction extends BaseJobAction {
             };
         }
     }
-}
-
-/**
- * Loader function to prevent tree shaking
- */
-export function LoadCreateScheduledJobAction() {
-    // Stub function - ensures class is included in bundle
 }

@@ -2,8 +2,8 @@ import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFrom
 import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
-import { mjCoreSchema } from '../Config/config';
-import { makeDir, sortBySequenceAndCreatedAt } from './util';
+import { mjCoreSchema, resolveEntityPackageName } from '../Config/config';
+import { makeDir, sortBySequenceAndCreatedAt, sortRelatedEntities } from './util';
 
 /**
  * This class is responsible for generating the GraphQL Server resolvers and types for the entities, you can sub-class this class to extend/modify the logic, make sure to use @memberjunction/global RegisterClass decorator
@@ -75,12 +75,16 @@ export class GraphQLServerGeneratorBase {
       const fields: EntityFieldInfo[] = sortBySequenceAndCreatedAt(entity.Fields);
       const serverGraphQLTypeName: string = this.getServerGraphQLTypeName(entity);
 
-      if (includeFileHeader)
+      if (includeFileHeader) {
+        const resolvedLib = isInternal
+          ? generatedEntitiesImportLibrary
+          : resolveEntityPackageName(entity.SchemaName);
         sEntityOutput = this.generateEntitySpecificServerFileHeader(
           entity,
-          generatedEntitiesImportLibrary,
+          resolvedLib,
           excludeRelatedEntitiesExternalToSchema
         );
+      }
 
       sEntityOutput += this.generateServerEntityHeader(entity, serverGraphQLTypeName);
 
@@ -90,7 +94,7 @@ export class GraphQLServerGeneratorBase {
       }
 
       // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
-      const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
+      const sortedRelatedEntities = sortRelatedEntities(entity.RelatedEntities);
 
       for (let j: number = 0; j < sortedRelatedEntities.length; ++j) {
         const r = sortedRelatedEntities[j];
@@ -136,8 +140,7 @@ export class GraphQLServerGeneratorBase {
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
-            GetReadOnlyDataSource, GetReadWriteDataSource, GetReadOnlyProvider, GetReadWriteProvider } from '@memberjunction/server';
-import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+            GetReadOnlyProvider, GetReadWriteProvider, RestoreContextInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
@@ -148,9 +151,38 @@ ${
 }
 
 
-${entities.length > 0 ? `import { ${entities.map((e) => `${e.ClassName}Entity`).join(', ')} } from '${importLibrary}';` : `export {}`}
+${this.generateEntityImports(entities, importLibrary, isInternal)}
     `;
     return sRet;
+  }
+
+  /**
+   * Generates import statements for entity classes, grouping by package when
+   * entityPackageName is a schema-to-package map.
+   */
+  protected generateEntityImports(entities: EntityInfo[], defaultLibrary: string, isInternal: boolean): string {
+    if (entities.length === 0) return 'export {}';
+
+    if (isInternal) {
+      // Core entities always import from the single library
+      return `import { ${entities.map((e) => `${e.ClassName}Entity`).join(', ')} } from '${defaultLibrary}';`;
+    }
+
+    // Group entities by their resolved package
+    const packageGroups = new Map<string, string[]>();
+    for (const entity of entities) {
+      const pkg = resolveEntityPackageName(entity.SchemaName);
+      const existing = packageGroups.get(pkg) ?? [];
+      existing.push(`${entity.ClassName}Entity`);
+      packageGroups.set(pkg, existing);
+    }
+
+    // Generate one import line per package
+    const imports: string[] = [];
+    for (const [pkg, classNames] of packageGroups) {
+      imports.push(`import { ${classNames.join(', ')} } from '${pkg}';`);
+    }
+    return imports.join('\n');
   }
 
   public generateEntitySpecificServerFileHeader(
@@ -170,11 +202,11 @@ ${entities.length > 0 ? `import { ${entities.map((e) => `${e.ClassName}Entity`).
 *
 **********************************************************************************/
 import { MaxLength } from 'class-validator';
-import { Field, ${entity._floatCount > 0 ? 'Float, ' : ''}Int, ObjectType, GetReadOnlyDataSource, GetReadWriteDataSource } from '@memberjunction/server';
+import { Field, ${entity._floatCount > 0 ? 'Float, ' : ''}Int, ObjectType, GetReadOnlyProvider, GetReadWriteProvider } from '@memberjunction/server';
 import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
     `;
     // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
-    const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
+    const sortedRelatedEntities = sortRelatedEntities(entity.RelatedEntities);
 
     for (let i: number = 0; i < sortedRelatedEntities.length; ++i) {
       const r = sortedRelatedEntities[i];
@@ -218,7 +250,7 @@ export class ${serverGraphQLTypeName} {`;
       fieldOptions += (fieldOptions.length > 0 ? ', ' : '') + `description: \`${fieldInfo.Description.replace(/`/g, "\\`")}\``;
 
     return `
-    @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ? '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.Length > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.Length + ')' : ''}
+    @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ? '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.MaxLength > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.MaxLength + ')' : ''}
     ${codeName}${fieldInfo.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
         `;
   }
@@ -232,6 +264,8 @@ export class ${serverGraphQLTypeName} {`;
       case 'nchar':
       case 'nvarchar':
       case 'uniqueidentifier': //treat this as a string
+      case 'uuid': // PostgreSQL UUID type
+      case 'bytea': // PostgreSQL binary data, treat as string
         return '';
       case 'datetime':
       case 'datetime2':
@@ -239,8 +273,13 @@ export class ${serverGraphQLTypeName} {`;
       case 'datetimeoffset':
       case 'date':
       case 'time':
+      case 'timestamptz': // PostgreSQL timestamp with time zone
+      case 'timestamp with time zone': // PostgreSQL full type name
+      case 'timestamp without time zone': // PostgreSQL full type name
         return '';
       case 'bit':
+      case 'bool': // PostgreSQL boolean type (internal name)
+      case 'boolean': // PostgreSQL boolean type (full name)
         return '() => Boolean';
       case 'decimal':
       case 'numeric':
@@ -248,6 +287,8 @@ export class ${serverGraphQLTypeName} {`;
       case 'real':
       case 'money':
       case 'smallmoney':
+      case 'float4': // PostgreSQL single precision
+      case 'float8': // PostgreSQL double precision
         fieldInfo.IsFloat = true; // used by calling functions to determine if we need to import Float
         return '() => Float';
       case 'timestamp':
@@ -358,18 +399,17 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         graphQLPKEYArgs += `${pk.CodeName}: ${pk.TSType}`;
 
         whereClause += whereClause.length > 0 ? ' AND ' : '';
-        whereClause += `[${pk.CodeName}]=${idQuotes}\${${pk.CodeName}}${idQuotes}`;
+        whereClause += `\${provider.QuoteIdentifier('${pk.CodeName}')}=${idQuotes}\${${pk.CodeName}}${idQuotes}`;
       }
 
       sRet += `
     @Query(() => ${serverGraphQLTypeName}, { nullable: true })
-    async ${typeNameBase}(${graphQLPKEYArgs}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
+    async ${typeNameBase}(${graphQLPKEYArgs}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}] WHERE ${whereClause} \` + this.getRowLevelSecurityWhereClause(provider, '${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.MapFieldNamesToCodeNames('${entity.Name}', rows && rows.length > 0 ? rows[0] : {}, this.GetUserFromPayload(userPayload));
+        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(entity)}, '${entity.BaseView}')} WHERE ${whereClause} \` + this.getRowLevelSecurityWhereClause(provider, '${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('${entity.Name}', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
     `;
@@ -377,12 +417,11 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         // this entity allows a query to return all rows, so include that type of query next
         sRet += `
     @Query(() => [${serverGraphQLTypeName}])
-    async All${entity.CodeName}(@Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async All${entity.CodeName}(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}]\` + this.getRowLevelSecurityWhereClause(provider, '${entity.Name}', userPayload, EntityPermissionType.Read, ' WHERE');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(entity)}, '${entity.BaseView}')}\` + this.getRowLevelSecurityWhereClause(provider, '${entity.Name}', userPayload, EntityPermissionType.Read, ' WHERE');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('${entity.Name}', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -391,7 +430,7 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
 
       // now, generate the FieldResolvers for each of the one-to-many relationships
       // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
-      const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
+      const sortedRelatedEntities = sortRelatedEntities(entity.RelatedEntities);
 
       for (let i = 0; i < sortedRelatedEntities.length; i++) {
         const r = sortedRelatedEntities[i];
@@ -423,10 +462,16 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
     return sRet;
   }
 
-  protected schemaName(entity: EntityInfo): string {
+  /**
+   * Returns a JavaScript expression string (for use in generated code) that resolves
+   * to the schema name at runtime. Core schema uses the dynamic config lookup;
+   * non-core schemas use a literal string.
+   */
+  protected schemaNameExpression(entity: EntityInfo): string {
     if (entity.SchemaName === mjCoreSchema) {
-      return '${Metadata.Provider.ConfigData.MJCoreSchemaName}';
-    } else return entity.SchemaName; // put the actual schema name in
+      return 'Metadata.Provider.ConfigData.MJCoreSchemaName';
+    }
+    return `'${entity.SchemaName}'`;
   }
 
   protected generateServerGraphQLInputType(entity: EntityInfo): string {
@@ -449,7 +494,9 @@ export class ${classPrefix}${typeNameBase}Input {`;
     const fieldsToInclude = entity.Fields.filter((f) => {
       // include primary key for updates and also for creates if it is not an autoincrement field
       const includePrimaryKey = classPrefix === 'Update' || !f.AutoIncrement;
-      return (includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly
+      // IS-A parent fields are virtual but writable through the child entity's ORM routing
+      const isISAParentField = f.IsVirtual && f.AllowUpdateAPI && entity.IsChildType;
+      return (includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly || isISAParentField;
     });
 
     // sort the fields by sequence and created date for consistent ordering
@@ -483,6 +530,17 @@ export class ${classPrefix}${typeNameBase}Input {`;
     OldValues___?: KeyValuePairInput[];
 `;
     }
+
+    // RestoreContext___: present on BOTH Create and Update inputs so user-initiated
+    // restores from a deleted record (Create path) and from a live record (Update path)
+    // can both carry lineage to the server. The server-side resolver detects this blob
+    // and calls BaseEntity.SetRestoreContext() before Save() so the data provider
+    // writes the resulting RecordChange row with Source='Restore' and lineage columns.
+    sRet += `
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+`;
+
     sRet += `}
     `;
     return sRet;
@@ -525,28 +583,15 @@ export class ${classPrefix}${typeNameBase}Input {`;
     }
     if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
       let graphQLPKEYArgs = '';
-      let simplePKEYArgs = '';
       let compositeKeyString = '';
-      let pkeys = '';
-      let whereClause = '';
       for (let i = 0; i < entity.PrimaryKeys.length; i++) {
         const pk = entity.PrimaryKeys[i];
-        const idQuotes = pk.NeedsQuotes ? "'" : '';
         graphQLPKEYArgs += graphQLPKEYArgs.length > 0 ? ', ' : '';
         graphQLPKEYArgs += `@Arg('${pk.CodeName}', () => ${pk.GraphQLType}) `;
         graphQLPKEYArgs += `${pk.CodeName}: ${pk.TSType}`;
 
-        simplePKEYArgs += simplePKEYArgs.length > 0 ? ', ' : '';
-        simplePKEYArgs += `${pk.CodeName}: ${pk.TSType}`;
-
         compositeKeyString += compositeKeyString.length > 0 ? ', ' : '';
         compositeKeyString += `{FieldName: '${pk.Name}', Value: ${pk.CodeName}}`;
-
-        pkeys += pkeys.length > 0 ? ', ' : '';
-        pkeys += `${pk.CodeName}`;
-
-        whereClause += whereClause.length > 0 ? ' AND ' : '';
-        whereClause += `[${pk.CodeName}]=${idQuotes}\${${pk.CodeName}}${idQuotes}`;
       }
 
       sRet += `
@@ -601,12 +646,11 @@ export class ${classPrefix}${typeNameBase}Input {`;
 
     return `
     @FieldResolver(() => [${serverClassName}])
-    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${r.RelatedEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${r.RelatedEntityJoinField}')}=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -652,12 +696,11 @@ export class ${classPrefix}${typeNameBase}Input {`;
 
     return `
     @FieldResolver(() => [${serverClassName}])
-    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${re.FirstPrimaryKey.Name}] IN (SELECT [${r.JoinEntityInverseJoinField}] FROM [${this.schemaName(re)}].[${r.JoinView}] WHERE [${r.JoinEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${re.FirstPrimaryKey.Name}')} IN (SELECT \${provider.QuoteIdentifier('${r.JoinEntityInverseJoinField}')} FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.JoinView}')} WHERE \${provider.QuoteIdentifier('${r.JoinEntityJoinField}')}=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows, this.GetUserFromPayload(userPayload));
         return result;
     }

@@ -1,0 +1,67 @@
+# MemberJunction Full-Stack Test Environment
+# Usage:
+#   docker compose -f docker/docker-compose.test.yml up -d --build --wait
+#   docker compose -f docker/docker-compose.test.yml down -v
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C -No
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    tmpfs:
+      - /var/opt/mssql
+
+  mjapi:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      DB_HOST: sqlserver
+      DB_PORT: "1433"
+      DB_USERNAME: sa
+      DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      DB_DATABASE: MemberJunction_Test
+      NODE_ENV: test
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  mjexplorer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.explorer
+    depends_on:
+      mjapi:
+        condition: service_healthy
+    ports:
+      - "4200:4200"
+    environment:
+      API_URL: http://mjapi:4000
+
+  playwright:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.playwright
+    depends_on:
+      - mjexplorer
+    environment:
+      BASE_URL: http://mjexplorer:4200
+      API_URL: http://mjapi:4000
+    volumes:
+      - ./test-results:/app/test-results

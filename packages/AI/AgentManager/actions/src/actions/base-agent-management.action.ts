@@ -2,8 +2,8 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { BaseEntity, Metadata, LogError, RunView, UserInfo } from "@memberjunction/core";
 import { DatabaseProviderBase } from "@memberjunction/core";
-import { AIAgentTypeEntity, AIAgentPromptEntity } from "@memberjunction/core-entities";
-import { AIPromptEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentTypeEntity, MJAIAgentPromptEntity } from "@memberjunction/core-entities";
+import { MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { 
     AgentLoadResult,
     ParameterResult,
@@ -151,10 +151,10 @@ export abstract class BaseAgentManagementAction extends BaseAction {
      * 
      * try {
      *     // Perform multiple database operations
-     *     const agent = await md.GetEntityObject<AIAgentEntity>('AI Agents', contextUser);
+     *     const agent = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
      *     await agent.Save();
      *     
-     *     const prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts', contextUser);
+     *     const prompt = await md.GetEntityObject<MJAIPromptEntity>('MJ: AI Prompts', contextUser);
      *     await prompt.Save();
      *     
      *     // Commit transaction - all operations succeeded
@@ -207,7 +207,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     protected async loadAgent(agentID: string, contextUser: UserInfo): Promise<AgentLoadResult> {
         try {
             const md = this.getMetadata();
-            const agent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents', contextUser);
+            const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', contextUser);
             
             if (!agent) {
                 return {
@@ -248,7 +248,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     protected async validateAgentType(typeID: string, contextUser: UserInfo): Promise<AgentTypeValidationResult> {
         try {
             const md = this.getMetadata();
-            const agentType = await md.GetEntityObject<AIAgentTypeEntity>('MJ: AI Agent Types', contextUser);
+            const agentType = await md.GetEntityObject<MJAIAgentTypeEntity>('MJ: AI Agent Types', contextUser);
             
             if (!agentType) {
                 return {
@@ -301,7 +301,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
      * Creates a prompt and associates it with an agent
      */
     protected async createAndAssociatePrompt(
-        agent: AIAgentEntityExtended,
+        agent: MJAIAgentEntityExtended,
         promptText: string,
         contextUser: UserInfo
     ): Promise<PromptCreationResult> {
@@ -309,7 +309,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
             const md = this.getMetadata();
             
             // Create the prompt
-            const prompt = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts', contextUser);
+            const prompt = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts', contextUser);
             if (!prompt) {
                 return { success: false, error: 'Failed to create AI Prompt entity object' };
             }
@@ -333,7 +333,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
             }
             
             // Create the agent-prompt association
-            const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
+            const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
             if (!agentPrompt) {
                 return { success: false, error: 'Failed to create AI Agent Prompt entity object' };
             }
@@ -370,7 +370,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     private async getPromptTypeID(typeName: string, contextUser: UserInfo): Promise<string> {
         const rv = new RunView();
         const result = await rv.RunView({
-            EntityName: 'AI Prompt Types',
+            EntityName: 'MJ: AI Prompt Types',
             ExtraFilter: `Name = '${typeName}'`,
             MaxRows: 1,
             ResultType: 'simple'

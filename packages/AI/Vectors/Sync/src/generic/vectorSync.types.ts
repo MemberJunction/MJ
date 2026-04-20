@@ -1,7 +1,7 @@
 import { BaseEmbeddings, EmbedTextsResult } from "@memberjunction/ai";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { BaseEntity, UserInfo } from "@memberjunction/core";
-import { EntityDocumentEntity, TemplateContentEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
+import { MJEntityDocumentEntity, MJTemplateContentEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 
 export type VectorizeEntityParams = {
     entityID: string;
@@ -32,7 +32,38 @@ export type VectorizeEntityParams = {
      * The number of records to skip before starting to fetch records from the list.
      */
     StartingOffset?: number;
-    options?: any;
+    options?: VectorizeEntityOptions;
+    /**
+     * Optional callback invoked during vectorization with progress updates.
+     * Called after each batch is upserted to the vector database.
+     */
+    OnProgress?: (update: VectorizeProgressUpdate) => void;
+}
+
+export type VectorizeEntityOptions = {
+    /** Delay in ms between API calls to avoid rate limiting */
+    delayTimeMS?: number;
+    /** Whether to force re-vectorization of already-vectorized records */
+    forceRevectorize?: boolean;
+}
+
+/**
+ * Progress update emitted during vectorization.
+ * Pass a callback via VectorizeEntityParams.OnProgress to receive updates.
+ */
+export type VectorizeProgressUpdate = {
+    /** Total records to process (may increase as pages are fetched) */
+    TotalRecords: number;
+    /** Number of records processed so far */
+    ProcessedRecords: number;
+    /** Current pipeline stage */
+    Stage: 'embedding' | 'upserting' | 'complete' | 'error';
+    /** Percent complete (0-100) */
+    PercentComplete: number;
+    /** Elapsed time in ms since pipeline start */
+    ElapsedMs: number;
+    /** Records that failed template rendering, if any. Populated at 'complete' stage. */
+    Errors?: { RecordID: string; Message: string }[];
 }
 
 export type VectorizeEntityResponse = {
@@ -44,14 +75,14 @@ export type VectorizeEntityResponse = {
 export type EmbeddingData = {
     ID: number;
     Vector: number[];
-    VectorID?: unknown;
-    EntityData: Record<string, any>;
-    __mj_recordID: unknown;
-    __mj_compositeKey?: unknown;
-    //this is a plain object of the entity document
+    VectorID?: string;
+    EntityData: Record<string, unknown>;
+    __mj_recordID: string | number;
+    __mj_compositeKey?: string;
+    /** Plain object representation of the entity document */
     EntityDocument?: Record<string, unknown>;
     TemplateContent?: string;
-    VectorIndexID?: unknown;
+    VectorIndexID?: string;
 };
 
 export type VectorEmeddingData = { 
@@ -63,24 +94,32 @@ export type VectorEmeddingData = {
     embeddingAPIKey: string 
 };
 
+/**
+ * @deprecated Worker contexts are no longer used since worker_threads were replaced
+ * with main-thread async processing. Kept for backward compatibility.
+ */
 export type AnnotateWorkerContext = {
     executionId: number;
     entity: BaseEntity;
     entityDocument: Record<string, unknown>;
-    template: TemplateEntityExtended;
-    templateContent: TemplateContentEntity;
+    template: MJTemplateEntityExtended;
+    templateContent: MJTemplateContentEntity;
     embeddingDriverClass: string;
     embeddingAPIKey: string;
     delayTimeMS: number;
   };
-  
-  export type ArchiveWorkerContext = {
+
+/**
+ * @deprecated Worker contexts are no longer used since worker_threads were replaced
+ * with main-thread async processing. Kept for backward compatibility.
+ */
+export type ArchiveWorkerContext = {
     executionId: number;
     entity: BaseEntity;
-    entityDocument: EntityDocumentEntity;
+    entityDocument: MJEntityDocumentEntity;
     vectorDBClassKey: string;
     vectorDBAPIKey: string;
-    templateContent: TemplateContentEntity;
+    templateContent: MJTemplateContentEntity;
     embeddings: EmbedTextsResult;
     delayTimeMS: number;
   };

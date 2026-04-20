@@ -7,35 +7,41 @@ import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.serv
  * Shows as a floating panel in bottom-right corner when tasks are active.
  */
 @Component({
+  standalone: false,
   selector: 'mj-active-tasks-panel',
   template: `
-    <div class="active-tasks-panel" *ngIf="(taskCount$ | async)! > 0">
-      <div class="panel-header" (click)="toggleExpanded()">
-        <i class="fas fa-tasks"></i>
-        <span>Active Tasks ({{ taskCount$ | async }})</span>
-        <i class="fas" [ngClass]="isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-      </div>
-
-      <div class="panel-content" *ngIf="isExpanded">
-        <div class="task-item" *ngFor="let task of (tasks$ | async)">
-          <div class="task-header">
-            <i class="fas fa-circle-notch fa-spin"></i>
-            <span class="task-agent">{{ task.agentName }}</span>
-            <span class="task-elapsed">{{ getElapsedTime(task) }}</span>
-          </div>
-          <div class="task-status">{{ getTrimmedStatus(task.status) }}</div>
+    @if ((taskCount$ | async)! > 0) {
+      <div class="active-tasks-panel">
+        <div class="panel-header" (click)="toggleExpanded()">
+          <i class="fas fa-tasks"></i>
+          <span>Active Tasks ({{ taskCount$ | async }})</span>
+          <i class="fas" [ngClass]="isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
         </div>
+        @if (isExpanded) {
+          <div class="panel-content">
+            @for (task of (tasks$ | async); track task) {
+              <div class="task-item">
+                <div class="task-header">
+                  <i class="fas fa-circle-notch fa-spin"></i>
+                  <span class="task-agent">{{ task.agentName }}</span>
+                  <span class="task-elapsed">{{ getElapsedTime(task) }}</span>
+                </div>
+                <div class="task-status">{{ getTrimmedStatus(task.status) }}</div>
+              </div>
+            }
+          </div>
+        }
       </div>
-    </div>
-  `,
+    }
+    `,
   styles: [`
     .active-tasks-panel {
       position: fixed;
       bottom: 20px;
       right: 20px;
       width: 320px;
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       z-index: 1000;
@@ -46,22 +52,22 @@ import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.serv
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #F9FAFB;
-      border-bottom: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border-bottom: 1px solid var(--mj-border-default);
       border-radius: 8px 8px 0 0;
       cursor: pointer;
       font-weight: 600;
       font-size: 14px;
-      color: #111827;
+      color: var(--mj-text-primary);
       transition: background 150ms ease;
     }
 
     .panel-header:hover {
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .panel-header i:first-child {
-      color: #0076B6;
+      color: var(--mj-brand-primary);
     }
 
     .panel-header span {
@@ -69,7 +75,7 @@ import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.serv
     }
 
     .panel-header i:last-child {
-      color: #6B7280;
+      color: var(--mj-text-muted);
       font-size: 12px;
     }
 
@@ -80,7 +86,7 @@ import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.serv
 
     .task-item {
       padding: 12px 16px;
-      border-bottom: 1px solid #F3F4F6;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .task-item:last-child {
@@ -95,26 +101,26 @@ import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.serv
     }
 
     .task-header i {
-      color: #0076B6;
+      color: var(--mj-brand-primary);
       font-size: 14px;
     }
 
     .task-agent {
       flex: 1;
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
       font-size: 14px;
     }
 
     .task-elapsed {
       font-size: 12px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       font-weight: 500;
     }
 
     .task-status {
       font-size: 13px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       padding-left: 22px;
     }
   `]

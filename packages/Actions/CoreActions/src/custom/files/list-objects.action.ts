@@ -5,24 +5,18 @@ import { BaseAction } from "@memberjunction/actions";
 import { BaseFileStorageAction } from "./base-file-storage.action";
 
 /**
- * Action for listing objects (files and directories) in a storage provider path.
+ * Action for listing objects (files and directories) in a storage account path.
  *
- * Supported storage providers:
- * - Azure Blob Storage (Active)
- * - AWS S3 Storage (Inactive)
- * - Google Cloud Storage (Inactive)
- * - Google Drive (Active)
- * - Dropbox (Active)
- * - Box.com (Active)
- * - SharePoint Storage (Active)
+ * Uses the enterprise credential model where storage accounts are configured
+ * with credentials managed at the organization level.
  *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'File Storage: List Objects',
  *   Params: [{
- *     Name: 'StorageProvider',
- *     Value: 'Azure Blob Storage'
+ *     Name: 'StorageAccount',
+ *     Value: 'My Google Drive'
  *   }, {
  *     Name: 'Path',
  *     Value: 'documents/'
@@ -37,10 +31,10 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
 export class ListObjectsAction extends BaseFileStorageAction {
 
     /**
-     * List objects in a storage provider path
+     * List objects in a storage account path
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage account
      *   - Path: Optional - Directory path to list (default: "/")
      *   - Delimiter: Optional - Path delimiter (default: "/")
      *
@@ -85,8 +79,4 @@ export class ListObjectsAction extends BaseFileStorageAction {
             );
         }
     }
-}
-
-export function LoadListObjectsAction() {
-    // Stub function to prevent tree shaking
 }

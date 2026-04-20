@@ -1,8 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import { readFileSync, writeFileSync } from 'node:fs';
-import * as recast from 'recast';
 import { z } from 'zod';
-import * as fg from 'fast-glob';
+import fg from 'fast-glob';
 import ora from 'ora-classic';
 import { dirname } from 'node:path';
 
@@ -77,7 +76,7 @@ export default class Bump extends Command {
     }
 
     const skipped = [];
-    const mjRegx = /"@memberjunction\/([^"]+)":(\s*)("[^"]+")/g;
+    const mjRegx = /"@memberjunction\/([^"]+)":(\s*)"([~^]?)([^"]+)"/g;
     const banner = 'Bumping packages... ';
     const spinner = ora(banner);
     spinner.start();
@@ -95,7 +94,7 @@ export default class Bump extends Command {
         verboseLogger(`\tBumping ${dirname(packageJson)}`);
         spinner.text = `${banner} ${i + 1 - skipped.length}/${packageJsonFiles.length - skipped.length}`;
 
-        const bumpedPackageJson = packageJsonContents.replaceAll(mjRegx, `"@memberjunction/$1":$2"${targetVersion}"`);
+        const bumpedPackageJson = packageJsonContents.replaceAll(mjRegx, `"@memberjunction/$1":$2"$3${targetVersion}"`);
         if (!flags.dry) {
           writeFileSync(packageJson, bumpedPackageJson);
         }

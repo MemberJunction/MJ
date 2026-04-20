@@ -1,16 +1,123 @@
 # Angular Development Guidelines
 
-## 🚨 CRITICAL: NO STANDALONE COMPONENTS 🚨
-- **NEVER create standalone Angular components** - ALL components MUST be part of NgModules
-- **ALWAYS** use `@NgModule` with `declarations`, `imports`, and `exports`
-- **Why**: Standalone components cause style encapsulation issues, ::ng-deep doesn't work properly, and they bypass Angular's module system
-- When creating new components:
-  - Create or add to an NgModule
-  - Declare component in the module's `declarations` array
-  - Import `CommonModule` and other required modules in the module's `imports` array
-  - Export the component in the module's `exports` array if it needs to be used outside the module
-- **Remove** `standalone: true` and `imports: [...]` from ALL `@Component` decorators
-- This is **non-negotiable** - standalone components are strictly forbidden
+## 🚨 CRITICAL: Routing Rules 🚨
+
+### Generic Components MUST NOT Import Router
+
+Components in `packages/Angular/Generic/` are reusable across any Angular application (MJ Explorer, custom apps, embedded widgets). They **MUST NOT** import `Router`, `ActivatedRoute`, or any `@angular/router` types directly.
+
+**Why:** Generic components must be framework-context-agnostic. Different apps may use different routing strategies, and importing Router creates a hard dependency on Angular's router module being configured.
+
+**Instead:** Use `@Input()` properties to receive route-derived state from the parent:
+```typescript
+// ❌ BAD — Generic component using Router directly
+import { Router } from '@angular/router';
+export class MyGenericComponent {
+    private router = inject(Router);
+    private checkRoute() { /* router.url */ }
+}
+
+// ✅ GOOD — Generic component receives state via Input
+export class MyGenericComponent {
+    @Input() IsHidden = false;  // Parent sets based on route
+}
+```
+
+### Explorer Components MUST Use NavigationService
+
+Components in `packages/Angular/Explorer/` that need routing **MUST** use `NavigationService` from `@memberjunction/ng-explorer-core` — never `Router` directly. `NavigationService` encapsulates all routing logic for consistency and the ability to change routing strategy without touching individual components.
+
+The only exception is `MJExplorerAppComponent` which subscribes to `Router.events` to drive top-level state like the chat overlay visibility.
+
+---
+
+## 🚨 NPM Workspace and Peer Dependencies (For Downstream Projects)
+
+### Shared Singleton Services Pattern
+
+MemberJunction Angular packages use **peer dependencies** for shared singleton services to ensure proper npm deduplication in workspace monorepos. This prevents the "No provider found for MJAuthBase" error caused by multiple copies of `@memberjunction/ng-auth-services` being installed in nested `node_modules` directories.
+
+### Key Peer Dependencies
+
+The following packages are declared as peer dependencies and must be provided by the consuming application:
+
+- `@memberjunction/global` - Core MJ global utilities
+- `@memberjunction/core` - Core MJ metadata and entity system
+- `@memberjunction/ng-auth-services` - Authentication services (MJAuthBase)
+
+### For Downstream Projects Using MJ Packages
+
+If you're building an application that uses MJ Angular packages in an npm workspace monorepo, you **MUST** declare these packages as direct dependencies in your **root** `package.json`:
+
+```json
+{
+  "dependencies": {
+    "@memberjunction/global": "^4.2.0",
+    "@memberjunction/core": "^4.2.0",
+    "@memberjunction/ng-auth-services": "^4.2.0"
+  }
+}
+```
+
+This ensures npm hoists these packages to the root `node_modules` where all workspace packages can share them.
+
+### Why This Matters
+
+Without proper hoisting, npm may create nested copies:
+```
+node_modules/@memberjunction/ng-bootstrap/node_modules/@memberjunction/ng-auth-services
+node_modules/@memberjunction/ng-explorer-core/node_modules/@memberjunction/ng-auth-services
+```
+
+This causes Angular's dependency injection to fail because the `MJAuthBase` token from `AuthServicesModule.forRoot()` comes from a different module instance than what `APP_INITIALIZER` tries to inject.
+
+### Verification
+
+Run `npm ls @memberjunction/ng-auth-services` to verify only one copy exists at the root level:
+```bash
+# GOOD - single copy at root
+your-project@1.0.0
+└── @memberjunction/ng-auth-services@4.2.0
+
+# BAD - nested copies (will cause DI errors)
+your-project@1.0.0
+├─┬ @memberjunction/ng-bootstrap@4.2.0
+│ └── @memberjunction/ng-auth-services@4.2.0
+└─┬ @memberjunction/ng-explorer-core@4.2.0
+  └── @memberjunction/ng-auth-services@4.2.0
+```
+
+---
+
+## 📚 Dashboard Development Guide
+
+**IMPORTANT**: When building dashboards in MemberJunction, always refer to the comprehensive guide at **[/guides/DASHBOARD_BEST_PRACTICES.md](/guides/DASHBOARD_BEST_PRACTICES.md)**.
+
+This guide covers:
+- Architecture patterns (no Angular data services - use MJ Engine classes)
+- Naming conventions (PascalCase for public, camelCase for private)
+- Navigation patterns within dashboards (left panel, not top nav)
+- Getter/setter state management pattern
+- User preferences via UserInfoEngine
+- Data loading patterns with RunView and local caching
+- Layout patterns using CSS Flexbox/Grid
+- Permission checking patterns
+- Creating new Engine classes for domain logic
+
+**Read this guide before starting any dashboard work** to ensure consistency with established patterns.
+
+---
+
+## Angular Component & Module Strategy
+
+See the root [CLAUDE.md](../../CLAUDE.md) rule #4 for the full policy. Summary:
+
+- **Standalone components are allowed and preferred for new leaf components** (dialogs, panels, widgets, lazy-loaded routes)
+- **NgModules are still used for feature modules** grouping many related components
+- **Follow the existing pattern** in whichever package you're working in
+- **Use `standalone: false` explicitly** for NgModule-declared components (Angular 21 defaults to standalone)
+- **Use `@if`/`@for`/`@switch`** block syntax for all new templates (not `*ngIf`/`*ngFor`)
+- **Use `inject()` function** for DI in new components (not constructor injection)
 
 ## Icon Libraries
 - **PRIMARY ICON LIBRARY: Font Awesome** - Use Font Awesome icons throughout all Angular components
@@ -364,3 +471,72 @@ Look at these for reference:
 - `AIPromptFormComponentExtended` - extends `AIPromptFormComponent`
 - `EntityFormComponentExtended` - extends `EntityFormComponent`
 - `ActionFormComponentExtended` - extends `ActionFormComponent`
+
+---
+
+## ClassFactory Registration Priority
+
+The `@RegisterClass` decorator and `MJGlobal.ClassFactory` are the backbone of MemberJunction's runtime component discovery. Understanding how priority works is essential for custom forms, custom resource components, and entity class overrides.
+
+### How Registrations Are Stored
+
+ClassFactory stores all registrations in an **append-only array** — not a map. When multiple classes register for the same base class + key, **all registrations are kept**. Nothing is replaced or deduplicated.
+
+### Priority Assignment
+
+When `@RegisterClass` is called with the default priority of `0` (which is almost always), priority is **auto-incremented**:
+
+```
+Register(BaseEntity, UserEntity, "Users", priority=0)           → assigned priority 1
+Register(BaseEntity, UserEntityCustom, "Users", priority=0)     → assigned priority 2
+Register(BaseEntity, UserEntityCustomV2, "Users", priority=0)   → assigned priority 3
+```
+
+The logic: find the current max priority for this base class + key pair, then set `priority = max + 1`. This means **the last class to register automatically wins**.
+
+### How GetRegistration Picks a Winner
+
+When code calls `ClassFactory.GetRegistration(baseClass, key)`:
+
+1. Filter all registrations matching `baseClass` + `key` (case-insensitive, whitespace-trimmed)
+2. Find the highest priority number among matches
+3. If multiple registrations share the highest priority, return the **last one registered** (array insertion order)
+
+### Why Import Order Matters
+
+Since decorators execute when their module is imported, and auto-priority increments based on registration order, **the order in which modules are imported determines which class wins**.
+
+This is why the custom form pattern works:
+1. The generated form's module is imported first (it's a dependency of the custom form)
+2. Generated form registers → gets priority N
+3. Custom form registers → gets priority N+1 (auto-incremented)
+4. Custom form wins
+
+And it's why manifests are imported in a specific order in `app.module.ts`:
+1. `@memberjunction/ng-bootstrap-lite` imports first (framework classes)
+2. Local supplemental manifest imports second (user custom classes)
+3. User classes get higher auto-priorities, overriding framework defaults
+
+### Explicit Priority
+
+You can pass an explicit priority to `@RegisterClass`:
+
+```typescript
+@RegisterClass(BaseEntity, 'Users', 999)  // Explicit priority 999
+export class UserEntityOverride extends UserEntity { }
+```
+
+If two registrations share the same explicit priority, a console warning is emitted and the **last registered** wins. Explicit priorities are rarely needed — auto-increment handles the vast majority of cases correctly.
+
+### Implications for Lazy Loading
+
+Before a lazy chunk loads, the ClassFactory has **no registration** for classes in that chunk — `GetRegistration()` returns `null`. After the dynamic `import()` pulls in the feature module, decorators execute, registrations appear, and a retry succeeds. No priority conflicts occur because the eager `ng-bootstrap-lite` manifest intentionally excludes lazy-loaded packages.
+
+### Quick Reference
+
+| Scenario | Winner |
+|----------|--------|
+| Different auto-assigned priorities | Highest number (last registered) |
+| Same explicit priority | Last registered + console warning |
+| No registration found | `CreateInstance` falls back to instantiating the base class directly |
+| Lazy module not yet loaded | `GetRegistration` returns `null` → triggers lazy load → retry succeeds |

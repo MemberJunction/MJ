@@ -12,7 +12,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * await runAction({
  *   ActionName: 'Get Storage Object Metadata',
  *   Params: [{
- *     Name: 'StorageProvider',
+ *     Name: 'StorageAccount',
  *     Value: 'AWS S3 Storage'
  *   }, {
  *     Name: 'ObjectName',
@@ -28,7 +28,7 @@ export class GetMetadataAction extends BaseFileStorageAction {
      * Get metadata for a storage object
      *
      * @param params - The action parameters:
-     *   - StorageProvider: Required - Name of the storage provider
+     *   - StorageAccount: Required - Name of the storage provider
      *   - ObjectName: Required if ObjectID not provided - Name/path of the object
      *   - ObjectID: Optional - Provider-specific object ID (bypasses path resolution for faster access)
      *
@@ -96,8 +96,4 @@ export class GetMetadataAction extends BaseFileStorageAction {
             );
         }
     }
-}
-
-export function LoadGetMetadataAction() {
-    // Stub function to prevent tree shaking
 }

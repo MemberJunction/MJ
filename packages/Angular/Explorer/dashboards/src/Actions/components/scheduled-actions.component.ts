@@ -2,19 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-
-/**
- * Tree-shaking prevention function
- */
-export function LoadActionsScheduleResource() {
-  // Force inclusion in production builds
-}
-
 /**
  * Scheduled Actions Resource - displays calendar view and schedule management
  */
 @RegisterClass(BaseResourceComponent, 'ActionsScheduleResource')
 @Component({
+  standalone: false,
   selector: 'mj-scheduled-actions',
   template: `
     <div class="scheduled-actions-placeholder" >
@@ -34,7 +27,7 @@ export function LoadActionsScheduleResource() {
 
       .placeholder-content {
         text-align: center;
-        color: var(--kendo-color-subtle);
+        color: var(--mj-text-muted);
 
         i {
           font-size: 3rem;
@@ -57,16 +50,17 @@ export function LoadActionsScheduleResource() {
   `]
 })
 export class ScheduledActionsComponent extends BaseResourceComponent implements OnInit {
-  constructor(private navigationService: NavigationService) {
+  constructor() {
     super();
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.NotifyLoadComplete();
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'Scheduled Actions';
+    return 'MJ: Scheduled Actions';
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {

@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "GetConversationComplete",
-      "CategoryID": "@lookup:Query Categories.Name=Conversations",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Conversations",
       "UserQuestion": "What are all the messages, agent runs, and artifacts for this conversation?",
       "Description": "Returns complete conversation data in a single query: all messages with their related agent runs and artifacts aggregated as JSON. Optimized for fast conversation loading.",
       "SQL": "@file:SQL/get-conversation-complete.sql",
@@ -16,16 +16,8 @@
       "ID": "8F84DFB4-C38E-4B8D-80E7-9CCF30039E77"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:36.355Z",
-      "checksum": "acca6547950566e30cbccd6ef2a9ab76ee432caef3c4a2d0262d0c491a247e3f"
-    },
-    "__mj_sync_notes": [
-      {
-        "type": "lookup",
-        "field": "fields.CategoryID",
-        "expression": "@lookup:Query Categories.Name=Conversations",
-        "resolved": "5FB6FAFF-8904-490D-9BEE-CA1FF906BD44"
-      }
-    ]
+      "lastModified": "2026-02-13T21:09:25.617Z",
+      "checksum": "f70a2a7367088944e74738f7d1cf138feea9d8c15c208391775023aa5c171bfc"
+    }
   }
 ]

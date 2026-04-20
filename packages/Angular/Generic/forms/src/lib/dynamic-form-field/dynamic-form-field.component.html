@@ -1,0 +1,267 @@
+<div class="form-question" [class.required]="Question.required">
+  <!-- Label -->
+  @if (Question.label) {
+    <label class="question-label">
+      {{ Question.label }}
+      @if (Question.required) {
+        <span class="required-indicator">*</span>
+      }
+    </label>
+  }
+
+  <!-- Help Text -->
+  @if (Question.helpText) {
+    <div class="help-text">
+      {{ Question.helpText }}
+    </div>
+  }
+
+  <!-- Input Container with width class -->
+  <div class="input-container" [ngClass]="WidthClass">
+
+    <!-- Text Input -->
+    @if (QuestionType === 'text') {
+      <input
+        type="text"
+        class="mj-input question-input"
+        [value]="$any(Value) || ''"
+        [placeholder]="Placeholder"
+        [disabled]="Disabled"
+        (input)="OnValueChange($any($event.target).value)"
+        />
+    }
+
+    <!-- Email Input -->
+    @if (QuestionType === 'email') {
+      <input
+        type="email"
+        class="mj-input question-input"
+        [value]="$any(Value) || ''"
+        [placeholder]="Placeholder"
+        [disabled]="Disabled"
+        (input)="OnValueChange($any($event.target).value)"
+        />
+    }
+
+    <!-- Textarea -->
+    @if (QuestionType === 'textarea') {
+      <textarea
+        class="mj-textarea question-textarea"
+        [value]="$any(Value) || ''"
+        [placeholder]="Placeholder"
+        [disabled]="Disabled"
+        (input)="OnValueChange($any($event.target).value)"
+        rows="5"
+      ></textarea>
+    }
+
+    <!-- Number Input -->
+    @if (QuestionType === 'number') {
+      <mj-numeric-input
+        [ngModel]="$any(Value)"
+        [ngModelOptions]="{standalone: true}"
+        [Min]="Min || 0"
+        [Max]="Max || 999999999"
+        [Step]="Step || 1"
+        [Disabled]="Disabled"
+        (ngModelChange)="OnValueChange($any($event))"
+        class="question-input"
+      ></mj-numeric-input>
+    }
+
+    <!-- Currency Input -->
+    @if (QuestionType === 'currency') {
+      <mj-numeric-input
+        [ngModel]="$any(Value)"
+        [ngModelOptions]="{standalone: true}"
+        [Min]="Min || 0"
+        [Max]="Max || 999999999"
+        [Step]="Step || 0.01"
+        [Decimals]="2"
+        [Disabled]="Disabled"
+        (ngModelChange)="OnValueChange($any($event))"
+        class="question-input"
+      ></mj-numeric-input>
+    }
+
+    <!-- Date Picker -->
+    @if (QuestionType === 'date') {
+      <mj-datepicker
+        [ngModel]="$any(Value)"
+        [ngModelOptions]="{standalone: true}"
+        [Disabled]="Disabled"
+        (ValueChange)="OnValueChange($any($event))"
+        class="question-input"
+      ></mj-datepicker>
+    }
+
+    <!-- DateTime Picker -->
+    @if (QuestionType === 'datetime') {
+      <input
+        type="datetime-local"
+        class="mj-input question-input"
+        [value]="$any(Value)"
+        [disabled]="Disabled"
+        (change)="OnValueChange($any($event.target).value)"
+        />
+    }
+
+    <!-- Button Group -->
+    @if (QuestionType === 'buttongroup') {
+      <div class="mj-buttongroup question-buttongroup">
+        @for (option of Options; track TrackByValue($index, option)) {
+          <button
+            mjButton
+            [toggleable]="true"
+            [selected]="Value === option.value"
+            [disabled]="Disabled"
+            (click)="OnValueChange(option.value)"
+            class="buttongroup-option"
+            >
+            @if (option.icon) {
+              <i class="fa {{ option.icon }}" aria-hidden="true"></i>
+            }
+            {{ option.label }}
+          </button>
+        }
+      </div>
+    }
+
+    <!-- Radio Buttons -->
+    @if (QuestionType === 'radio') {
+      <div class="question-radio-group">
+        @for (option of Options; track TrackByValue($index, option)) {
+          <div class="radio-option">
+            <input
+              type="radio"
+              class="mj-radio"
+              [name]="Question.id"
+              [value]="option.value"
+              [checked]="Value === option.value"
+              [disabled]="Disabled"
+              (change)="OnValueChange(option.value)"
+              [id]="Question.id + '_' + option.value"
+              />
+            <label [for]="Question.id + '_' + option.value" class="radio-label">
+              @if (option.icon) {
+                <i class="fa {{ option.icon }}" aria-hidden="true"></i>
+              }
+              {{ option.label }}
+            </label>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Dropdown -->
+    @if (QuestionType === 'dropdown') {
+      <select
+        [formControl]="Control"
+        [disabled]="Disabled"
+        class="question-dropdown"
+        >
+        <option value="">Select an option...</option>
+        @for (option of Options; track TrackByValue($index, option)) {
+          <option [value]="option.value">
+            {{ option.label }}
+          </option>
+        }
+      </select>
+    }
+
+    <!-- Slider -->
+    @if (QuestionType === 'slider') {
+      <div class="question-slider-container">
+        <input
+          type="range"
+          class="mj-slider question-slider"
+          [min]="GetSliderConfig().min"
+          [max]="GetSliderConfig().max"
+          [step]="GetSliderConfig().step || 1"
+          [value]="$any(Value) || GetSliderConfig().min"
+          [disabled]="Disabled"
+          (input)="OnValueChange(+$any($event.target).value)"
+          />
+        <div class="slider-value">
+          {{ Value || GetSliderConfig().min }}{{ GetSliderConfig().suffix || '' }}
+        </div>
+      </div>
+    }
+
+    <!-- Date Range -->
+    @if (QuestionType === 'daterange') {
+      <div class="question-daterange">
+        <mj-datepicker
+          [ngModel]="$any(Value)?.start"
+          [ngModelOptions]="{standalone: true}"
+          [Disabled]="Disabled"
+          (ValueChange)="OnDateRangeStartChange($any($event))"
+          Placeholder="Start Date"
+          class="daterange-start"
+        ></mj-datepicker>
+        <span class="daterange-separator">to</span>
+        <mj-datepicker
+          [ngModel]="$any(Value)?.end"
+          [ngModelOptions]="{standalone: true}"
+          [Disabled]="Disabled"
+          (ValueChange)="OnDateRangeEndChange($any($event))"
+          Placeholder="End Date"
+          class="daterange-end"
+        ></mj-datepicker>
+      </div>
+    }
+
+    <!-- Time Picker -->
+    @if (QuestionType === 'time') {
+      <input
+        type="time"
+        class="mj-input question-input"
+        [value]="$any(Value)"
+        [disabled]="Disabled"
+        (change)="OnValueChange($any($event.target).value)"
+        />
+    }
+
+    <!-- Checkboxes -->
+    @if (QuestionType === 'checkbox') {
+      <div class="question-checkbox-group">
+        @for (option of Options; track TrackByValue($index, option)) {
+          <div class="checkbox-option">
+            <input
+              type="checkbox"
+              class="mj-checkbox"
+              [checked]="IsChecked(option)"
+              [disabled]="Disabled"
+              (change)="ToggleCheckbox(option)"
+              [id]="Question.id + '_' + option.value"
+              />
+            <label [for]="Question.id + '_' + option.value" class="checkbox-label">
+              @if (option.icon) {
+                <i class="fa {{ option.icon }}" aria-hidden="true"></i>
+              }
+              {{ option.label }}
+            </label>
+          </div>
+        }
+      </div>
+    }
+  </div><!-- end input-container -->
+
+  <!-- Validation Error -->
+  @if (Control.invalid && Control.touched) {
+    <div class="validation-error">
+      @if (Control.errors?.['required']) {
+        <span>This field is required</span>
+      }
+      @if (Control.errors?.['email']) {
+        <span>Please enter a valid email address</span>
+      }
+      @if (Control.errors?.['min']) {
+        <span>Value must be at least {{ Min }}</span>
+      }
+      @if (Control.errors?.['max']) {
+        <span>Value must be at most {{ Max }}</span>
+      }
+    </div>
+  }
+</div>

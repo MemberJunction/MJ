@@ -1,5 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { ActionService, OutputFormatter } from '@memberjunction/ai-cli';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 
@@ -44,6 +43,8 @@ export default class ActionsRun extends Command {
   };
 
   async run(): Promise<void> {
+    const { ActionService, OutputFormatter } = await import('@memberjunction/ai-cli');
+
     const { flags } = await this.parse(ActionsRun);
     const service = new ActionService();
     const formatter = new OutputFormatter(flags.output as 'compact' | 'json' | 'table');

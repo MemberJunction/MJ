@@ -4,7 +4,7 @@
  * from the main config file.
  */
 
-import * as mssql from 'mssql';
+import mssql from 'mssql';
 import { configInfo } from './config';
 
 /** Extract database connection parameters from configuration */

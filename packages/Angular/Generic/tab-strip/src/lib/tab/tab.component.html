@@ -1,4 +1,6 @@
 <div class="single-tab" [ngClass]="{'single-tab-selected': TabSelected}" (click)="selectTab()" (contextmenu)="handleContextMenu($event)">
-    <ng-content><!--CONTENT PROJECTION GOES HERE--></ng-content>
-    <span *ngIf="TabCloseable" class="tab-close-button" (click)="closeTab($event)" >✖</span>
+  <ng-content><!--CONTENT PROJECTION GOES HERE--></ng-content>
+  @if (TabCloseable) {
+    <span class="tab-close-button" (click)="closeTab($event)" >✖</span>
+  }
 </div>
