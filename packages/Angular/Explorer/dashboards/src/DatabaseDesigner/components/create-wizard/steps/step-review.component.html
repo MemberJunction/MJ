@@ -23,9 +23,19 @@
     </div>
   }
 
+  @if (TableDefinition.Description) {
+    <p class="entity-description">{{ TableDefinition.Description }}</p>
+  }
+
   <mj-database-review-panel
     [TableDefinition]="AsEntityTableSpec"
     ModificationType="create">
   </mj-database-review-panel>
+
+  @if (ERDMermaidBlock) {
+    <div class="erd-container">
+      <mj-markdown [data]="ERDMermaidBlock"></mj-markdown>
+    </div>
+  }
 
 </div>

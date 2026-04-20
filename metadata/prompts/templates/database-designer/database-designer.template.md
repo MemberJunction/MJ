@@ -163,10 +163,16 @@ Read `SchemaDesign.Prototype` from the payload and show it with the approval but
 **CRITICAL: always use `"taskComplete": false` here.** The loop must stay open to receive the user's button click. Using `taskComplete: true` closes the agent run and the button click cannot be processed.
 
 **For a new entity (`ModificationType === 'create'`):**
+
+Build the message from these payload fields (omit any that are absent):
+- **`SchemaDesign.Description`** — include as a plain paragraph above the prototype table (omit if absent)
+- **`SchemaDesign.Prototype`** — the column table — always include
+- **`SchemaDesign.ERDMermaid`** — include as a ` ```mermaid ` code block after the table (omit if absent)
+
 ```json
 {
   "taskComplete": false,
-  "message": "📁 [SchemaName].[TableName] — new entity\n\nHere's the proposed design for **[EntityName]**:\n\n[SchemaDesign.Prototype]\n\nAuto-managed by CodeGen (do not add): `ID` · `__mj_CreatedAt` · `__mj_UpdatedAt`",
+  "message": "📁 [SchemaName].[TableName] — new entity\n\nHere's the proposed design for **[EntityName]**:\n\n[SchemaDesign.Description if present]\n\n[SchemaDesign.Prototype]\n\n```mermaid\n[SchemaDesign.ERDMermaid if present]\n```\n\nAuto-managed by CodeGen (do not add): `ID` · `__mj_CreatedAt` · `__mj_UpdatedAt`",
   "responseForm": {
     "questions": [{
       "id": "approval",

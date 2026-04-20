@@ -17,6 +17,7 @@ import { FormsModule } from '@angular/forms';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { VersionsModule } from '@memberjunction/ng-versions';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 import { DatabaseDesignerDashboardComponent } from './components/database-designer-dashboard.component';
 import { EntityListComponent } from './components/entity-list.component';
@@ -58,6 +59,7 @@ import { DatabaseDesignerService } from './services/database-designer.service';
         MJButtonDirective,
         SharedGenericModule,
         VersionsModule,
+        MarkdownModule,
     ],
     providers: [
         DatabaseDesignerService,

@@ -211,8 +211,11 @@ Read `payload.callerContext.tableSpec` for the specification. Key fields:
 
 ---
 
-### Step 1 — Discover Existing Entities (ALWAYS FIRST)
-**Before designing anything**, call the **Database Research Agent** to search ALL registered MJ entities for anything that matches the user's intent.
+### Step 1 — Discover Existing Entities
+
+**Guard — skip this step if `entityResearch` is already in the payload.** This means a previous Schema Designer turn already ran the research and showed choices to the user. Skip directly to Step 2 to act on those results.
+
+**Only call the Database Research Agent if `entityResearch` is absent from the payload.** Call it to search ALL registered MJ entities for anything that matches the user's intent.
 
 **Why search everything**: `vwEntities` only contains MJ-registered entities — no system tables (sys, information_schema) are ever registered there, so it is safe to search without filters. Searching broadly surfaces existing entities in `__mj`, `__mj_UDT`, and any custom schemas so the user can make an informed decision.
 
@@ -241,10 +244,19 @@ Read `payload.callerContext.tableSpec` for the specification. Key fields:
 
 ### Step 2 — Act on Research Results
 
-Read `entityResearch` from the payload (or extract from conversation context as fallback).
+Read `entityResearch` from the payload. Use this decision table to determine which path you are on:
+
+| Condition | Path |
+|-----------|------|
+| `entityResearch` absent — Step 1 just ran and found nothing | **Path B** — design immediately |
+| `entityResearch.found === false` | **Path B** — design immediately |
+| `entityResearch.found === true` AND last user message contains `create_new` | **Path C** — user already chose, design immediately |
+| `entityResearch.found === true` AND no user choice yet | **Path A** — ask the user |
 
 #### Path A — Matches found → present choices to user (Chat response)
 Show the user what already exists, then ask what they want to do. Use a Chat response with buttons. **Do NOT proceed to schema design yet.**
+
+**IMPORTANT: Also write `entityResearch` back to `payloadChangeRequest.newElements` so the parent agent retains it when this sub-agent is called again.** Without this the parent loses the research results and the loop re-runs research on every turn.
 
 The message should:
 - List each matching entity with schema location and description
@@ -254,8 +266,8 @@ The message should:
 #### Path B — No matches → design the schema immediately
 Proceed directly to schema design without an intermediate Chat. Build the full `TableDefinition` and present the prototype.
 
-#### Path C — User just confirmed "create new" (returning after Path A choice)
-The user has seen the existing entities and chosen to create a new one. Build the `TableDefinition` and present the prototype.
+#### Path C — User already chose "create new" (re-invocation after Path A)
+`entityResearch` is in the payload AND the last user message contains `create_new`. The user has seen the existing entities and chosen to create a new one. Build the `TableDefinition` and present the prototype — do NOT show choices again.
 
 #### Schema design steps (Path B and C):
 1. Read `FunctionalRequirements` from the payload.
@@ -263,7 +275,8 @@ The user has seen the existing entities and chosen to create a new one. Build th
 3. Write a `Description` on every column and on the table itself — always required.
 4. Build the full `TableDefinition` including `ForeignKeys` and `SoftPrimaryKeys` where appropriate.
 5. Set `ModificationType` to `'create'` (or `'alter'` if the user chose to modify an existing entity).
-6. Write the `Prototype` markdown table (include `Default` column).
+6. Write `SchemaDesign.Description` — a one-paragraph plain-English summary of what this entity stores and what each row represents. Required for `create`; optional for `alter`.
+7. Write the `Prototype` markdown table (include `Default` column).
 
 **Never relay the Database Research Agent's raw output to the user.** They only need to see your curated summary.
 
@@ -287,10 +300,20 @@ The user has seen the existing entities and chosen to create a new one. Build th
 
 ### Step 2A Response (matches found — ask user what to do):
 
-**Use this when `entityResearch.found === true`.** Present matches and ask for a decision. Do NOT include `payloadChangeRequest` yet — wait for the user's choice.
+**Use this when `entityResearch.found === true`.** Present matches and ask for a decision. **Include `payloadChangeRequest` to write `entityResearch` back to the parent payload** — this is critical to prevent re-running research on the next turn.
 
 ```json
 {
+  "payloadChangeRequest": {
+    "newElements": {
+      "entityResearch": {
+        "found": true,
+        "matchingEntities": [
+          { "entityName": "Products", "schemaName": "__mj_UDT", "tableName": "Products", "description": "..." }
+        ]
+      }
+    }
+  },
   "message": "Before I design a new entity, I found some existing ones that might be what you need:\n\n**1. Products** (`__mj_UDT.Products`) — Stores product catalog items with pricing and inventory.\n**2. Inventory Items** (`sales.InventoryItems`) — Tracks physical inventory with SKUs and stock levels.\n\nWhat would you like to do?",
   "responseForm": {
     "questions": [{
@@ -334,6 +357,7 @@ The user has seen the existing entities and chosen to create a new one. Build th
     "newElements": {
       "SchemaDesign": {
         "ModificationType": "create",
+        "Description": "Stores product catalog information including pricing and inventory levels.",
         "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Name | NVARCHAR(200) | ✅ Yes | — | Product display name |\n| UnitPrice | DECIMAL(18,4) | ✅ Yes | — | Selling price per unit |\n| StockQuantity | INT | ✅ Yes | 0 | Current on-hand inventory count |\n| Description | NVARCHAR(MAX) | No | — | Detailed product description |\n| SKU | NVARCHAR(50) | No | — | Stock Keeping Unit identifier |\n| Status | NVARCHAR(50) | ✅ Yes | 'Active' | Record lifecycle status: Active, Inactive, Discontinued |",
         "TableDefinition": {
           "SchemaName": "__mj_UDT",

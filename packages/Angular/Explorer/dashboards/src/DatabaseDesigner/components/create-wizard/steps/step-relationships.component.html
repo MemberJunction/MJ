@@ -6,7 +6,7 @@
     Leave empty if this entity stands alone.
   </p>
 
-  @if (UuidColumns.length === 0 && rows.length === 0) {
+  @if (UuidColumns.length === 0) {
     <div class="no-fk-hint">
       <i class="fa-solid fa-link-slash"></i>
       <p>No UUID columns defined yet — go back to Step 2 and add a UUID column to use as a foreign key.</p>
@@ -99,7 +99,10 @@
   }
 
   <div class="add-bar">
-    <button mjButton buttonStyle="secondary" type="button" (click)="AddRelationship()">
+    <button mjButton buttonStyle="secondary" type="button"
+            [disabled]="UuidColumns.length === 0"
+            [title]="UuidColumns.length === 0 ? 'Add a UUID column in Step 2 first' : ''"
+            (click)="AddRelationship()">
       <i class="fa-solid fa-plus"></i>
       Add Relationship
     </button>

@@ -171,6 +171,17 @@ export interface ExistingEntityResearch {
  */
 export interface SchemaDesignSection {
     /**
+     * One-paragraph human-readable description of what this table stores and
+     * what each row represents.  Written by the Schema Designer LLM; shown to
+     * the user above the prototype column table in both the chat approval
+     * message and the Angular wizard review step.
+     *
+     * Required when `ModificationType === 'create'`.  Optional for `'alter'`
+     * where the entity already has a description.
+     */
+    Description?: string;
+
+    /**
      * Human-readable markdown table shown to the user for approval.
      * Example:
      * | Column | Type | Nullable | Description |
@@ -178,6 +189,17 @@ export interface SchemaDesignSection {
      * | Name   | string | No   | Full name   |
      */
     Prototype?: string;
+
+    /**
+     * Mermaid `erDiagram` block visualising the table's FK relationships.
+     * Injected server-side by `DatabaseDesignerAgent` after Schema Designer
+     * returns — NOT written by the LLM (eliminates mermaid syntax errors).
+     *
+     * Shown to the user in both the chat approval message (appended after the
+     * prototype table) and the Angular wizard review step via `MarkdownComponent`.
+     * Omitted when the table has no FK relationships.
+     */
+    ERDMermaid?: string;
 
     /** Fully typed input to SchemaEngine.GenerateMigration(). */
     TableDefinition?: TableDefinition;
@@ -188,10 +210,6 @@ export interface SchemaDesignSection {
     /**
      * Entity ID of the entity being modified.
      * Required when `ModificationType === 'alter'`.
-     *
-     * TODO(Phase3): Ownership check in Schema Validator will read this to
-     * compare against the MJ:UDT:Owner EntitySettings record and determine
-     * whether to require MODIFY_OWN_ENTITIES vs MODIFY_ANY_UDT_ENTITIES.
      */
     ExistingEntityID?: string;
 }

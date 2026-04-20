@@ -6,6 +6,7 @@
 
 import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import type { EntityTableSpec } from '../../../database-designer.types.js';
+import { generateERDFromTableSpec } from '../../../database-designer-erd.js';
 
 @Component({
     standalone: false,
@@ -36,6 +37,15 @@ import type { EntityTableSpec } from '../../../database-designer.types.js';
             display: flex; align-items: flex-start; gap: 8px;
             color: var(--mj-status-error-text);
         }
+        .entity-description {
+            margin: 12px 16px 0;
+            font-size: 0.875rem;
+            color: var(--mj-text-secondary);
+            line-height: 1.5;
+        }
+        .erd-container {
+            padding: 0 16px 12px;
+        }
     `],
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -48,5 +58,13 @@ export class StepReviewComponent {
         const td = this.TableDefinition;
         if (!td.EntityName || !td.TableName || !td.SchemaName) return null;
         return td as EntityTableSpec;
+    }
+
+    public get ERDMermaidBlock(): string | null {
+        const spec = this.AsEntityTableSpec;
+        if (!spec) return null;
+        const erd = generateERDFromTableSpec([spec]);
+        if (!erd) return null;
+        return `\`\`\`mermaid\n${erd}\n\`\`\``;
     }
 }

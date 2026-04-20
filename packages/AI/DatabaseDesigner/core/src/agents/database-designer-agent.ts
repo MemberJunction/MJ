@@ -46,6 +46,7 @@ import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 
 import type { DatabaseDesignerPayload } from '../interfaces.js';
+import { generateERDMermaid } from '../erd-generator.js';
 
 // ─── Module-level constants ────────────────────────────────────────────────────
 
@@ -156,8 +157,12 @@ export class DatabaseDesignerAgent extends BaseAgent {
         promptResult: AIPromptRunResult,
         currentPayload: P,
     ): Promise<BaseAgentNextStep<P>> {
+        // Pre-processing: inject ERD into SchemaDesign if the Schema Designer
+        // just wrote a TableDefinition and ERDMermaid isn't set yet.
+        const payload = this.injectERDMermaid(currentPayload);
+
         // Intercept 1: Subagent fast path — skip Requirements Analyst
-        const subagentMessage = this.buildSubagentSchemaDesignerMessage(currentPayload);
+        const subagentMessage = this.buildSubagentSchemaDesignerMessage(payload);
         if (subagentMessage !== null) {
             this.logStatus(
                 `🔒 DatabaseDesignerAgent: subagent mode detected with callerContext.tableSpec ` +
@@ -165,7 +170,7 @@ export class DatabaseDesignerAgent extends BaseAgent {
                 true,
                 params,
             );
-            return this.buildSubAgentStep(SCHEMA_DESIGNER_AGENT_NAME, subagentMessage, currentPayload);
+            return this.buildSubAgentStep(SCHEMA_DESIGNER_AGENT_NAME, subagentMessage, payload);
         }
 
         // Intercept 2: User approved creation — reset BuildAttemptCount so a
@@ -178,7 +183,7 @@ export class DatabaseDesignerAgent extends BaseAgent {
                 params,
             );
             const resetPayload: DatabaseDesignerPayload = {
-                ...(currentPayload as unknown as DatabaseDesignerPayload),
+                ...(payload as unknown as DatabaseDesignerPayload),
                 BuildAttemptCount: 0,
             };
             return this.buildSubAgentStep(SCHEMA_VALIDATOR_AGENT_NAME, SCHEMA_VALIDATOR_MESSAGE, resetPayload as unknown as P);
@@ -189,14 +194,14 @@ export class DatabaseDesignerAgent extends BaseAgent {
         // fails (and the framework discards its newPayload), this intercept will
         // NOT re-fire on the next turn — giving the LLM a chance to report the
         // error to the user instead of looping endlessly.
-        if (this.validationPassedNeedsBuilding(currentPayload)) {
+        if (this.validationPassedNeedsBuilding(payload)) {
             this.logStatus(
                 `🔒 DatabaseDesignerAgent: ValidationResult.Valid = true and no DatabaseDesignerResult ` +
                 `— overriding LLM decision with deterministic call to "${SCHEMA_BUILDER_AGENT_NAME}"`,
                 true,
                 params,
             );
-            const p = currentPayload as unknown as DatabaseDesignerPayload;
+            const p = payload as unknown as DatabaseDesignerPayload;
             const markedPayload: DatabaseDesignerPayload = {
                 ...p,
                 BuildAttemptCount: (p.BuildAttemptCount ?? 0) + 1,
@@ -205,10 +210,39 @@ export class DatabaseDesignerAgent extends BaseAgent {
         }
 
         // No intercept fired — let the LLM's decision stand as normal
-        return super.determineNextStep(params, agentType, promptResult, currentPayload);
+        return super.determineNextStep(params, agentType, promptResult, payload);
     }
 
     // ─── Private helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Injects `SchemaDesign.ERDMermaid` into the payload when all of the
+     * following are true:
+     *   - `SchemaDesign.TableDefinition` is present (Schema Designer has run)
+     *   - `SchemaDesign.ERDMermaid` is not yet set (first time through)
+     *
+     * The ERD is generated server-side — the LLM never writes mermaid syntax,
+     * which eliminates mermaid hallucination errors entirely.  Returns the
+     * original payload unchanged when injection is not needed.
+     */
+    private injectERDMermaid<P>(currentPayload: P): P {
+        if (!currentPayload) return currentPayload;
+
+        const p = currentPayload as unknown as DatabaseDesignerPayload;
+        if (!p.SchemaDesign?.TableDefinition) return currentPayload;
+        if (p.SchemaDesign.ERDMermaid) return currentPayload; // already set
+
+        const erd = generateERDMermaid([p.SchemaDesign.TableDefinition]);
+        if (!erd) return currentPayload; // no FKs — skip diagram
+
+        return {
+            ...currentPayload,
+            SchemaDesign: {
+                ...p.SchemaDesign,
+                ERDMermaid: erd,
+            },
+        } as unknown as P;
+    }
 
     /**
      * Returns the message to send to Schema Designer when running in subagent

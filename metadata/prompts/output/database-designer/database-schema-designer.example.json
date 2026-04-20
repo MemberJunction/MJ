@@ -1,8 +1,8 @@
 {
-  "description": "Database Schema Designer runs in two steps: (1) call Database Research Agent to check for existing entities, then (2) design the schema and write it to the payload with nextStep.type: Success. Do NOT use Chat. Do NOT include a message or responseForm. The parent Database Designer agent will present the design to the user.",
+  "description": "Database Schema Designer decision flow: (1) if entityResearch is already in payload skip to Step 2 immediately; (2) if absent call Database Research Agent; (3) on matches found write entityResearch to payloadChangeRequest AND present choices via Chat; (4) on re-invocation with create_new in last user message go directly to schema design.",
 
   "example_1_step1_call_db_research": {
-    "description": "Step 1: Search for existing entities matching the user's intent. Always terminateAfter: false so Schema Designer continues after research returns.",
+    "description": "Step 1: entityResearch is absent from payload — call DB Research Agent. terminateAfter: false so Schema Designer continues after research returns.",
     "nextStep": {
       "type": "Sub-Agent",
       "subAgent": {
@@ -13,12 +13,67 @@
     }
   },
 
-  "example_2_step2_write_schema_success": {
-    "description": "Step 2: After research returns — design the schema, write it to payloadChangeRequest, and return nextStep.type: Success. NO message. NO responseForm. The parent Database Designer will read SchemaDesign.Prototype from the payload and show it to the user.",
+  "example_1b_path_a_matches_found_write_entity_research": {
+    "description": "Path A: DB Research Agent returned matches. Write entityResearch to payloadChangeRequest (so the parent retains it when Schema Designer is called again) AND present choices to the user via Chat. If you omit payloadChangeRequest here, the parent loses entityResearch and re-runs research on every turn — causing an infinite loop.",
+    "payloadChangeRequest": {
+      "newElements": {
+        "entityResearch": {
+          "found": true,
+          "matchingEntities": [
+            { "entityName": "Products", "schemaName": "__mj_UDT", "tableName": "Products", "description": "Product catalog items with pricing and inventory." }
+          ]
+        }
+      }
+    },
+    "message": "Before I design a new entity, I found an existing one that might be what you need:\n\n**1. Products** (`__mj_UDT.Products`) — Product catalog items with pricing and inventory.\n\nWhat would you like to do?",
+    "responseForm": {
+      "questions": [{
+        "id": "existingEntityChoice",
+        "label": "What would you like to do?",
+        "type": {
+          "type": "buttongroup",
+          "options": [
+            { "value": "create_new", "label": "Create a new entity in __mj_UDT" },
+            { "value": "modify_existing", "label": "Modify an existing one instead" }
+          ]
+        }
+      }]
+    },
+    "nextStep": { "type": "Chat" }
+  },
+
+  "example_1c_path_c_user_chose_create_new": {
+    "description": "Path C: entityResearch is in the payload AND the last user message contains create_new. The user already saw the matches and chose to create a new entity. Skip Step 1 entirely — do NOT call DB Research Agent again. Design the schema directly and write it to payloadChangeRequest.",
     "payloadChangeRequest": {
       "newElements": {
         "SchemaDesign": {
           "ModificationType": "create",
+          "Description": "Stores product catalog information including pricing and inventory levels.",
+          "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Name | NVARCHAR(200) | ✅ Yes | — | Product display name |\n| UnitPrice | DECIMAL(18,4) | ✅ Yes | — | Selling price per unit |\n| Status | NVARCHAR(50) | ✅ Yes | 'Active' | Record lifecycle status |",
+          "TableDefinition": {
+            "SchemaName": "__mj_UDT",
+            "TableName": "Products",
+            "EntityName": "Products",
+            "Description": "Stores product catalog information.",
+            "Columns": [
+              { "Name": "Name", "RawSqlType": "NVARCHAR(200)", "IsNullable": false, "Description": "Product display name." },
+              { "Name": "UnitPrice", "RawSqlType": "DECIMAL(18,4)", "IsNullable": false, "Description": "Selling price per unit." },
+              { "Name": "Status", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Active'", "Description": "Record lifecycle status." }
+            ]
+          }
+        }
+      }
+    },
+    "nextStep": { "type": "Success" }
+  },
+
+  "example_2_step2_write_schema_success": {
+    "description": "Path B / Step 2: Research returned no matches (or entityResearch absent) — design the schema, write it to payloadChangeRequest, and return nextStep.type: Success. NO message. NO responseForm. The parent Database Designer will read SchemaDesign.Prototype from the payload and show it to the user.",
+    "payloadChangeRequest": {
+      "newElements": {
+        "SchemaDesign": {
+          "ModificationType": "create",
+          "Description": "Key checkpoints and milestones for projects, tracking title, status, due date, and responsible team member.",
           "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Title | NVARCHAR(200) | ✅ Yes | — | Milestone label |\n| Status | NVARCHAR(50) | ✅ Yes | 'Active' | Active, Completed, Cancelled |\n| DueDate | DATE | No | — | Target completion date |\n| CompletedDate | DATE | No | — | Actual completion date |\n| Notes | NVARCHAR(MAX) | No | — | Free-text description |\n| ProjectID | UNIQUEIDENTIFIER | No | — | FK → Projects.ID |\n| AssignedUserID | UNIQUEIDENTIFIER | No | — | FK → __mj.User.ID |",
           "TableDefinition": {
             "SchemaName": "__mj_UDT",
@@ -53,6 +108,7 @@
       "newElements": {
         "SchemaDesign": {
           "ModificationType": "create",
+          "Description": "Tracks orders placed by customers, capturing order date, status, and total amount.",
           "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| CustomerID | UNIQUEIDENTIFIER | ✅ Yes | — | FK → Customers.ID |\n| OrderDate | DATETIMEOFFSET | ✅ Yes | GETUTCDATE() | When order was placed |\n| Status | NVARCHAR(50) | ✅ Yes | 'Pending' | Pending, Fulfilled, Cancelled |\n| TotalAmount | DECIMAL(18,2) | No | — | Order total in USD |",
           "TableDefinition": {
             "SchemaName": "__mj_UDT",
@@ -83,6 +139,7 @@
       "newElements": {
         "SchemaDesign": {
           "ModificationType": "alter",
+          "Description": "Key checkpoints and milestones for projects.",
           "Prototype": "| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| Title | NVARCHAR(200) | ✅ Yes | — | Milestone label |\n| Status | NVARCHAR(50) | ✅ Yes | 'Active' | Active, Completed, Cancelled |\n| Priority | INT | No | — | 1 (high) to 5 (low) |",
           "TableDefinition": {
             "SchemaName": "__mj_UDT",

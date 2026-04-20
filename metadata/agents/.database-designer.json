@@ -125,7 +125,8 @@
               "*"
             ],
             "PayloadUpstreamPaths": [
-              "SchemaDesign.*"
+              "SchemaDesign.*",
+              "entityResearch"
             ],
             "FinalPayloadValidationMode": "Retry"
           },
@@ -175,8 +176,8 @@
             "ID": "FD11FB0D-A0CA-4EDA-A725-0933AB1BCC42"
           },
           "sync": {
-            "lastModified": "2026-04-20T17:13:55.716Z",
-            "checksum": "b98e80621ad0b4c6358a7df8046bdbbe1aff1467db17aec23b004205c1b06207"
+            "lastModified": "2026-04-20T19:11:26.465Z",
+            "checksum": "1a97b21465ea23859de79600ed218aca145f166c05e0b948522e641850f229e6"
           }
         },
         {
