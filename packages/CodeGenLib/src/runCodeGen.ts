@@ -161,28 +161,28 @@ export class RunCodeGenBase {
    * Does NOT create a new DB connection or call process.exit().
    * Designed for use by RuntimeSchemaManager inside a running MJAPI process.
    */
-  public async RunInProcess(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false, workingDirectory?: string): Promise<boolean> {
+  public async RunInProcess(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false, workingDirectory?: string, skipFileGeneration: boolean = false): Promise<boolean> {
     try {
       // Re-initialize config from the specified working directory (e.g. repo root)
       // so CodeGen picks up the correct mj.config.cjs with output directories
       if (workingDirectory) {
         initializeConfig(workingDirectory);
       }
-      return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration);
+      return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
     } catch (e) {
       logError('In-process CodeGen failed: ' + e);
       return false;
     }
   }
 
-  public async Run(skipDatabaseGeneration: boolean = false) {
+  public async Run(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
     try {
       const startTime = new Date();
       const platform = dbType();
       startSpinner('Starting MemberJunction CodeGen (' + platform + ') @ ' + startTime.toLocaleString());
 
       const dataSource = await this.setupDataSource();
-      const success = await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration);
+      const success = await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
       process.exit(success ? 0 : 1);
     } catch (e) {
       failSpinner('CodeGen failed: ' + e);
@@ -195,7 +195,7 @@ export class RunCodeGenBase {
    * Core CodeGen pipeline logic shared by Run() and RunInProcess().
    * Accepts an existing data source — does NOT create connections or call process.exit().
    */
-  protected async executeCodeGenPipeline(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false): Promise<boolean> {
+  protected async executeCodeGenPipeline(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false): Promise<boolean> {
       const { provider, connection: conn, currentUser } = dataSource;
       const startTime = new Date();
 
@@ -281,137 +281,143 @@ export class RunCodeGenBase {
         }
       }
 
-      const apiEntities = md.Entities.filter((e) => e.IncludeInAPI);
-      const excludedSchemaNames = configInfo.excludeSchemas.map(s => s.toLowerCase());
-      const includedEntities = apiEntities.filter(
-        (e) => !excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase())
-      );
+      const skipFiles = skipFileGeneration || getSettingValue('skip_file_generation', false);
+      if (!skipFiles) {
+        const apiEntities = md.Entities.filter((e) => e.IncludeInAPI);
+        const excludedSchemaNames = configInfo.excludeSchemas.map(s => s.toLowerCase());
+        const includedEntities = apiEntities.filter(
+          (e) => !excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase())
+        );
 
-      const excludedCount = apiEntities.length - includedEntities.length;
-      if (excludedCount > 0) {
-        const excludedBySchema = apiEntities
-          .filter((e) => excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase()))
-          .reduce((acc, e) => {
-            const schema = e.SchemaName.trim();
-            acc[schema] = (acc[schema] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>);
-        const schemaDetails = Object.entries(excludedBySchema)
-          .map(([schema, count]) => schema + ': ' + count)
-          .join(', ');
-        logStatus('Excluded ' + excludedCount + ' entities from code generation by schema: ' + schemaDetails);
+        const excludedCount = apiEntities.length - includedEntities.length;
+        if (excludedCount > 0) {
+          const excludedBySchema = apiEntities
+            .filter((e) => excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase()))
+            .reduce((acc, e) => {
+              const schema = e.SchemaName.trim();
+              acc[schema] = (acc[schema] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>);
+          const schemaDetails = Object.entries(excludedBySchema)
+            .map(([schema, count]) => schema + ': ' + count)
+            .join(', ');
+          logStatus('Excluded ' + excludedCount + ' entities from code generation by schema: ' + schemaDetails);
+        }
+
+        const coreEntities = includedEntities.filter(
+          (e) => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
+        );
+        const nonCoreEntities = includedEntities.filter(
+          (e) => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()
+        );
+
+        const isVerbose = configInfo?.verboseOutput ?? false;
+        if (!isVerbose) startSpinner('Generating TypeScript code...');
+
+        const graphQLCoreResolversOutputDir = outputDir('GraphQLCoreEntityResolvers', false);
+        if (graphQLCoreResolversOutputDir) {
+          if (isVerbose) startSpinner('Generating CORE Entity GraphQL Resolver Code...');
+          const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
+          if (!graphQLGenerator.generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities', true)) {
+            failSpinner('Error generating GraphQL server code');
+            return false;
+          } else if (isVerbose) succeedSpinner('CORE Entity GraphQL Resolver Code generated');
+        }
+
+        const graphqlOutputDir = outputDir('GraphQLServer', true);
+        if (graphqlOutputDir) {
+          if (isVerbose) startSpinner('Generating GraphQL Resolver Code...');
+          const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
+          const entityPackageName = typeof configInfo.entityPackageName === 'string'
+            ? (configInfo.entityPackageName || 'mj_generatedentities')
+            : 'mj_generatedentities';
+          if (!graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, entityPackageName, false)) {
+            failSpinner('Error generating GraphQL Resolver code');
+            return false;
+          } else if (isVerbose) succeedSpinner('GraphQL Resolver Code generated');
+        } else if (isVerbose) warnSpinner('GraphQL server output directory NOT found in config file, skipping...');
+
+        const coreEntitySubClassOutputDir = outputDir('CoreEntitySubClasses', false)!;
+        if (coreEntitySubClassOutputDir && coreEntitySubClassOutputDir.length > 0) {
+          if (isVerbose) startSpinner('Generating CORE Entity Subclass Code...');
+          const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
+          if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, coreEntities, coreEntitySubClassOutputDir, skipDB)) {
+            failSpinner('Error generating entity subclass code');
+            return false;
+          } else if (isVerbose) succeedSpinner('CORE Entity Subclass Code generated');
+        }
+
+        const externalSchemas = getExternalEntitySchemas().map(s => s.toLowerCase());
+        const localNonCoreEntities = externalSchemas.length > 0
+          ? nonCoreEntities.filter(e => !externalSchemas.includes(e.SchemaName.toLowerCase()))
+          : nonCoreEntities;
+
+        const entitySubClassOutputDir = outputDir('EntitySubClasses', true)!;
+        if (entitySubClassOutputDir) {
+          if (isVerbose) startSpinner('Generating Entity Subclass Code...');
+          const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
+          if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, localNonCoreEntities, entitySubClassOutputDir, skipDB)) {
+            failSpinner('Error generating entity subclass code');
+            return false;
+          } else if (isVerbose) succeedSpinner('Entity Subclass Code generated');
+        } else if (isVerbose) warnSpinner('Entity subclass output directory NOT found in config file, skipping...');
+
+        const angularCoreEntitiesOutputDir = outputDir('AngularCoreEntities', false);
+        if (angularCoreEntitiesOutputDir) {
+          if (isVerbose) startSpinner('Generating Angular CORE Entities Code...');
+          const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
+          if (!(await angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core', currentUser))) {
+            failSpinner('Error generating Angular CORE Entities code');
+            return false;
+          } else if (isVerbose) succeedSpinner('Angular CORE Entities Code generated');
+        }
+
+        const angularOutputDir = outputDir('Angular', false);
+        if (angularOutputDir) {
+          if (isVerbose) startSpinner('Generating Angular Code...');
+          const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
+          if (!(await angularGenerator.generateAngularCode(localNonCoreEntities, angularOutputDir, '', currentUser))) {
+            failSpinner('Error generating Angular code');
+            return false;
+          } else if (isVerbose) succeedSpinner('Angular Code generated');
+        } else if (isVerbose) warnSpinner('Angular output directory NOT found in config file, skipping...');
+
+        const dbSchemaOutputDir = outputDir('DBSchemaJSON', false);
+        if (dbSchemaOutputDir) {
+          if (isVerbose) startSpinner('Generating Database Schema JSON Output...');
+          const schemaGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<DBSchemaGeneratorBase>(DBSchemaGeneratorBase)!;
+          if (!schemaGeneratorObject.generateDBSchemaJSONOutput(md.Entities, dbSchemaOutputDir)) {
+            failSpinner('Error generating Database Schema JSON Output, non-fatal, continuing...');
+          } else if (isVerbose) succeedSpinner('Database Schema JSON Output generated');
+        } else if (isVerbose) warnSpinner('DB Schema output directory NOT found in config file, skipping...');
+
+        const coreActionsOutputDir = outputDir('CoreActionSubclasses', false);
+        await ActionEngineBase.Instance.Config(false, currentUser);
+        if (coreActionsOutputDir) {
+          if (isVerbose) startSpinner('Generating CORE Actions Code...');
+          const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
+          if (!(await actionsGenerator.generateActions(ActionEngineBase.Instance.CoreActions, coreActionsOutputDir))) {
+            failSpinner('Error generating CORE Actions code');
+            return false;
+          } else if (isVerbose) succeedSpinner('CORE Actions Code generated');
+        }
+
+        const actionsOutputDir = outputDir('ActionSubclasses', false);
+        if (actionsOutputDir) {
+          if (isVerbose) startSpinner('Generating Actions Code...');
+          const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
+          if (!(await actionsGenerator.generateActions(ActionEngineBase.Instance.NonCoreActions, actionsOutputDir))) {
+            failSpinner('Error generating Actions code');
+            return false;
+          } else if (isVerbose) succeedSpinner('Actions Code generated');
+        } else if (isVerbose) warnSpinner('Actions output directory NOT found in config file, skipping...');
+
+        SQLLogging.finishSQLLogging();
+        if (!isVerbose) succeedSpinner('TypeScript code generation completed');
+      } else {
+        warnSpinner('Skipping file generation (skip_file_generation = true)');
+        SQLLogging.finishSQLLogging();
       }
-
-      const coreEntities = includedEntities.filter(
-        (e) => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
-      );
-      const nonCoreEntities = includedEntities.filter(
-        (e) => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()
-      );
-
-      const isVerbose = configInfo?.verboseOutput ?? false;
-      if (!isVerbose) startSpinner('Generating TypeScript code...');
-
-      const graphQLCoreResolversOutputDir = outputDir('GraphQLCoreEntityResolvers', false);
-      if (graphQLCoreResolversOutputDir) {
-        if (isVerbose) startSpinner('Generating CORE Entity GraphQL Resolver Code...');
-        const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
-        if (!graphQLGenerator.generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities', true)) {
-          failSpinner('Error generating GraphQL server code');
-          return false;
-        } else if (isVerbose) succeedSpinner('CORE Entity GraphQL Resolver Code generated');
-      }
-
-      const graphqlOutputDir = outputDir('GraphQLServer', true);
-      if (graphqlOutputDir) {
-        if (isVerbose) startSpinner('Generating GraphQL Resolver Code...');
-        const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
-        const entityPackageName = typeof configInfo.entityPackageName === 'string'
-          ? (configInfo.entityPackageName || 'mj_generatedentities')
-          : 'mj_generatedentities';
-        if (!graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, entityPackageName, false)) {
-          failSpinner('Error generating GraphQL Resolver code');
-          return false;
-        } else if (isVerbose) succeedSpinner('GraphQL Resolver Code generated');
-      } else if (isVerbose) warnSpinner('GraphQL server output directory NOT found in config file, skipping...');
-
-      const coreEntitySubClassOutputDir = outputDir('CoreEntitySubClasses', false)!;
-      if (coreEntitySubClassOutputDir && coreEntitySubClassOutputDir.length > 0) {
-        if (isVerbose) startSpinner('Generating CORE Entity Subclass Code...');
-        const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, coreEntities, coreEntitySubClassOutputDir, skipDB)) {
-          failSpinner('Error generating entity subclass code');
-          return false;
-        } else if (isVerbose) succeedSpinner('CORE Entity Subclass Code generated');
-      }
-
-      const externalSchemas = getExternalEntitySchemas().map(s => s.toLowerCase());
-      const localNonCoreEntities = externalSchemas.length > 0
-        ? nonCoreEntities.filter(e => !externalSchemas.includes(e.SchemaName.toLowerCase()))
-        : nonCoreEntities;
-
-      const entitySubClassOutputDir = outputDir('EntitySubClasses', true)!;
-      if (entitySubClassOutputDir) {
-        if (isVerbose) startSpinner('Generating Entity Subclass Code...');
-        const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, localNonCoreEntities, entitySubClassOutputDir, skipDB)) {
-          failSpinner('Error generating entity subclass code');
-          return false;
-        } else if (isVerbose) succeedSpinner('Entity Subclass Code generated');
-      } else if (isVerbose) warnSpinner('Entity subclass output directory NOT found in config file, skipping...');
-
-      const angularCoreEntitiesOutputDir = outputDir('AngularCoreEntities', false);
-      if (angularCoreEntitiesOutputDir) {
-        if (isVerbose) startSpinner('Generating Angular CORE Entities Code...');
-        const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
-        if (!(await angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core', currentUser))) {
-          failSpinner('Error generating Angular CORE Entities code');
-          return false;
-        } else if (isVerbose) succeedSpinner('Angular CORE Entities Code generated');
-      }
-
-      const angularOutputDir = outputDir('Angular', false);
-      if (angularOutputDir) {
-        if (isVerbose) startSpinner('Generating Angular Code...');
-        const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
-        if (!(await angularGenerator.generateAngularCode(localNonCoreEntities, angularOutputDir, '', currentUser))) {
-          failSpinner('Error generating Angular code');
-          return false;
-        } else if (isVerbose) succeedSpinner('Angular Code generated');
-      } else if (isVerbose) warnSpinner('Angular output directory NOT found in config file, skipping...');
-
-      const dbSchemaOutputDir = outputDir('DBSchemaJSON', false);
-      if (dbSchemaOutputDir) {
-        if (isVerbose) startSpinner('Generating Database Schema JSON Output...');
-        const schemaGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<DBSchemaGeneratorBase>(DBSchemaGeneratorBase)!;
-        if (!schemaGeneratorObject.generateDBSchemaJSONOutput(md.Entities, dbSchemaOutputDir)) {
-          failSpinner('Error generating Database Schema JSON Output, non-fatal, continuing...');
-        } else if (isVerbose) succeedSpinner('Database Schema JSON Output generated');
-      } else if (isVerbose) warnSpinner('DB Schema output directory NOT found in config file, skipping...');
-
-      const coreActionsOutputDir = outputDir('CoreActionSubclasses', false);
-      await ActionEngineBase.Instance.Config(false, currentUser);
-      if (coreActionsOutputDir) {
-        if (isVerbose) startSpinner('Generating CORE Actions Code...');
-        const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
-        if (!(await actionsGenerator.generateActions(ActionEngineBase.Instance.CoreActions, coreActionsOutputDir))) {
-          failSpinner('Error generating CORE Actions code');
-          return false;
-        } else if (isVerbose) succeedSpinner('CORE Actions Code generated');
-      }
-
-      const actionsOutputDir = outputDir('ActionSubclasses', false);
-      if (actionsOutputDir) {
-        if (isVerbose) startSpinner('Generating Actions Code...');
-        const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
-        if (!(await actionsGenerator.generateActions(ActionEngineBase.Instance.NonCoreActions, actionsOutputDir))) {
-          failSpinner('Error generating Actions code');
-          return false;
-        } else if (isVerbose) succeedSpinner('Actions Code generated');
-      } else if (isVerbose) warnSpinner('Actions output directory NOT found in config file, skipping...');
-
-      SQLLogging.finishSQLLogging();
-      if (!isVerbose) succeedSpinner('TypeScript code generation completed');
 
       startSpinner('Running system integrity checks...');
       await SystemIntegrityBase.RunIntegrityChecks(conn, true);
@@ -441,7 +447,7 @@ export class RunCodeGenBase {
 /**
  * Convenience function to run the MemberJunction code generation process.
  */
-export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false) {
+export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
   const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
-  return await runObject.Run(skipDatabaseGeneration);
+  return await runObject.Run(skipDatabaseGeneration, skipFileGeneration);
 }
