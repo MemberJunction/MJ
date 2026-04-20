@@ -132,6 +132,31 @@ type ExtendedProgressStep = Parameters<AgentExecutionProgressCallback>[0] & {
 };
 
 /**
+ * Threshold above which the full action dump in the prompt is replaced with a
+ * category summary + instructions to use the built-in `_searchActions` meta-tool.
+ * Below this count the full dump is kept — it's cheap and LLMs handle it fine.
+ */
+const ACTION_SEARCH_THRESHOLD = 25;
+
+/**
+ * Reserved name for the built-in action-search meta-tool. The leading underscore
+ * signals that it isn't a real registered MJAction — it's handled inline by the
+ * agent runtime, and shouldn't be registered in the Action metadata table.
+ */
+const ACTION_SEARCH_TOOL_NAME = '_searchActions';
+
+/**
+ * Default topK returned by the action-search meta-tool when the LLM doesn't specify one.
+ */
+const ACTION_SEARCH_DEFAULT_TOP_K = 10;
+
+/**
+ * Minimum cosine similarity for action-search hits. Kept relatively loose so the
+ * agent gets some candidates to reason about even on vague queries.
+ */
+const ACTION_SEARCH_MIN_SIMILARITY = 0.3;
+
+/**
  * Base implementation for AI Agents in the MemberJunction framework.
  * 
  * The BaseAgent class provides the core execution logic for AI agents using
@@ -2235,6 +2260,17 @@ export class BaseAgent {
         const missingActions = nextStep.actions?.filter(action => {
             const actionName = action.name.trim().toLowerCase();
 
+            // Built-in action-search meta-tool is always valid — handled inline in executeActionsStep,
+            // not registered as a real MJAction. Only accept it when the prompt actually offered it
+            // (threshold crossed); otherwise treat as unknown so the LLM gets corrected.
+            if (actionName === ACTION_SEARCH_TOOL_NAME.toLowerCase()) {
+                if (effectiveActions.length > ACTION_SEARCH_THRESHOLD) {
+                    action.name = ACTION_SEARCH_TOOL_NAME;  // normalize casing
+                    return false;
+                }
+                return true;
+            }
+
             // Try exact match first against effective actions (by Name property)
             const exactMatch = effectiveActions.find(a =>
                 a.Name.trim().toLowerCase() === actionName
@@ -4328,14 +4364,28 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Formats action details as compact markdown for inclusion in prompt context.
-     * Produces ~75% fewer tokens than the previous JSON format while preserving
-     * all information the LLM needs to invoke actions correctly.
+     *
+     * When the agent has more than {@link ACTION_SEARCH_THRESHOLD} actions,
+     * dumping them all balloons the prompt and drowns the LLM. Above the
+     * threshold this returns a category summary plus instructions for the
+     * `_searchActions` meta-tool; at or below, it returns the full dump.
      *
      * @param {MJActionEntityExtended[]} actions - Array of action entities
      * @returns {string} Markdown formatted string with action details
      * @private
      */
     private formatActionDetails(actions: MJActionEntityExtended[]): string {
+        if (actions.length > ACTION_SEARCH_THRESHOLD) {
+            return this.formatActionSummary(actions);
+        }
+        return this.formatActionFullDump(actions);
+    }
+
+    /**
+     * Renders the full per-action markdown block the LLM consumes when the
+     * action count is small enough to fit in the prompt without pain.
+     */
+    private formatActionFullDump(actions: MJActionEntityExtended[]): string {
         return actions.map(action => {
             const lines: string[] = [];
             lines.push(`### ${action.Name}`);
@@ -4372,6 +4422,197 @@ The context is now within limits. Please retry your request with the recovered c
 
             return lines.join('\n');
         }).join('\n\n');
+    }
+
+    /**
+     * Renders a compact category summary + usage instructions for the
+     * `_searchActions` meta-tool, for agents with too many actions to dump
+     * into the prompt directly.
+     */
+    private formatActionSummary(actions: MJActionEntityExtended[]): string {
+        const categories = this.summarizeActionsByCategory(actions);
+        const catLines = categories.map(c => `- **${c.category}** — ${c.count}`).join('\n');
+
+        return [
+            `You have **${actions.length} actions** available — too many to list in full here.`,
+            ``,
+            `### Actions by category`,
+            catLines,
+            ``,
+            `### How to find an action: \`${ACTION_SEARCH_TOOL_NAME}\``,
+            `You have a built-in meta-tool for finding actions by semantic similarity. Call it like any other action:`,
+            ``,
+            `- \`query\` (string, required) — natural-language description of what you want to do`,
+            `- \`topK\` (number, optional, default ${ACTION_SEARCH_DEFAULT_TOP_K}) — max results to return`,
+            ``,
+            `It returns a ranked list of matching actions with their name, description, category, and similarity score. After searching, invoke the chosen action by its exact name on your next turn. Searching costs a turn but keeps the prompt small — use it whenever you're not sure of the exact action name.`
+        ].join('\n');
+    }
+
+    /**
+     * Groups actions by Category and returns descending-count buckets.
+     * Actions with no category are bucketed as "Uncategorized".
+     */
+    private summarizeActionsByCategory(actions: MJActionEntityExtended[]): Array<{ category: string; count: number }> {
+        const counts = new Map<string, number>();
+        for (const action of actions) {
+            const engine = ActionEngineServer.Instance;
+            const catEntity = action.CategoryID ? engine.ActionCategories.find(c => UUIDsEqual(c.ID, action.CategoryID!)) : null;
+            const category = catEntity?.Name?.trim() || 'Uncategorized';
+            counts.set(category, (counts.get(category) || 0) + 1);
+        }
+        return Array.from(counts.entries())
+            .map(([category, count]) => ({ category, count }))
+            .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+    }
+
+    /**
+     * Executes a call to the built-in `_searchActions` meta-tool. Resolves via
+     * {@link AIEngine.FindSimilarActions} scoped to the agent's own action list,
+     * creates a step entity for observability, and returns a ready-to-merge
+     * {@link ActionResultSummary} so the search result flows back to the LLM
+     * through the normal action-results message path.
+     *
+     * @param action - The `_searchActions` call produced by the LLM
+     * @param effectiveActions - The agent's full effective action set (for scoping)
+     * @param parentStepId - Parent step for hierarchy
+     * @param payloadAtStart - Current payload snapshot
+     * @param params - Overall agent execution params
+     * @param stepNumber - Unique step number slot for this call
+     */
+    private async executeActionSearch(
+        action: AgentAction,
+        effectiveActions: MJActionEntityExtended[],
+        parentStepId: string,
+        payloadAtStart: unknown,
+        params: ExecuteAgentParams,
+        stepNumber: number
+    ): Promise<ActionResultSummary> {
+        const rawParams = action.params || {};
+        const query = typeof rawParams.query === 'string' ? rawParams.query.trim() : '';
+        const requestedTopK = Number(rawParams.topK);
+        const topK = Number.isFinite(requestedTopK) && requestedTopK > 0
+            ? Math.min(Math.trunc(requestedTopK), 50)
+            : ACTION_SEARCH_DEFAULT_TOP_K;
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Actions',
+            stepName: `Execute Action: ${ACTION_SEARCH_TOOL_NAME}`,
+            contextUser: params.contextUser,
+            // No targetId — this isn't a real MJAction. createStepEntity tolerates null.
+            inputData: { actionName: ACTION_SEARCH_TOOL_NAME, actionParams: { query, topK } },
+            payloadAtStart,
+            payloadAtEnd: payloadAtStart,
+            parentId: parentStepId,
+        });
+        stepEntity.StepNumber = stepNumber;
+
+        if (!query) {
+            const errorMessage = `Missing required parameter 'query' (string) for ${ACTION_SEARCH_TOOL_NAME}.`;
+            await this.finalizeStepEntity(stepEntity, false, errorMessage);
+            return {
+                actionName: ACTION_SEARCH_TOOL_NAME,
+                success: false,
+                params: [],
+                resultCode: 'MISSING_PARAMETER',
+                message: errorMessage,
+            };
+        }
+
+        try {
+            const rawMatches = await AIEngine.Instance.FindSimilarActions(query, topK, ACTION_SEARCH_MIN_SIMILARITY);
+
+            // Scope matches to the agent's effective actions — agents must not learn about
+            // actions they can't invoke. Rebuild with full action entity info so the
+            // response message can include parameter signatures.
+            const effectiveById = new Map(effectiveActions.map(a => [a.ID, a]));
+            const scopedMatches = rawMatches
+                .map(m => ({ match: m, entity: effectiveById.get(m.actionId) }))
+                .filter((x): x is { match: typeof rawMatches[number]; entity: MJActionEntityExtended } => !!x.entity);
+
+            const message = this.formatActionSearchResults(query, scopedMatches);
+
+            const outputParam: ActionParam = {
+                Name: 'matches',
+                Type: 'Output',
+                Value: scopedMatches.map(({ match, entity }) => ({
+                    name: entity.Name,
+                    description: entity.Description,
+                    similarityScore: Number(match.similarityScore.toFixed(4)),
+                    category: match.categoryName ?? null,
+                    inputs: entity.Params
+                        .filter(p => p.Type.trim().toLowerCase() === 'input' || p.Type.trim().toLowerCase() === 'both')
+                        .map(p => ({ name: p.Name, type: p.ValueType, required: p.IsRequired, description: p.Description })),
+                    outputs: entity.Params
+                        .filter(p => p.Type.trim().toLowerCase() === 'output' || p.Type.trim().toLowerCase() === 'both')
+                        .map(p => ({ name: p.Name, type: p.ValueType, description: p.Description })),
+                })),
+            };
+
+            await this.finalizeStepEntity(stepEntity, true, undefined, {
+                actionResult: { success: true, resultCode: 'SUCCESS', matchCount: scopedMatches.length },
+            });
+
+            return {
+                actionName: ACTION_SEARCH_TOOL_NAME,
+                success: true,
+                params: [outputParam],
+                resultCode: 'SUCCESS',
+                message,
+            };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            LogError(`_searchActions failed for agent '${params.agent.Name}': ${errorMessage}`);
+            await this.finalizeStepEntity(stepEntity, false, errorMessage);
+            return {
+                actionName: ACTION_SEARCH_TOOL_NAME,
+                success: false,
+                params: [],
+                resultCode: 'SEARCH_ERROR',
+                message: `Action search failed: ${errorMessage}`,
+            };
+        }
+    }
+
+    /**
+     * Renders `_searchActions` hits as compact markdown so the result message
+     * gives the LLM everything it needs to pick an action on the next turn.
+     */
+    private formatActionSearchResults(
+        query: string,
+        scopedMatches: Array<{ match: { similarityScore: number; categoryName?: string | null }; entity: MJActionEntityExtended }>
+    ): string {
+        if (scopedMatches.length === 0) {
+            return `No actions matched query "${query}". Try rephrasing, or use broader terms.`;
+        }
+
+        const lines: string[] = [];
+        lines.push(`Found ${scopedMatches.length} action(s) for query "${query}":`);
+        lines.push('');
+        for (const { match, entity } of scopedMatches) {
+            const category = match.categoryName ? ` _(${match.categoryName})_` : '';
+            lines.push(`### ${entity.Name} — ${(match.similarityScore * 100).toFixed(1)}%${category}`);
+            if (entity.Description) {
+                lines.push(entity.Description);
+            }
+            const inputs = entity.Params.filter(p => {
+                const t = p.Type.trim().toLowerCase();
+                return t === 'input' || t === 'both';
+            });
+            const outputs = entity.Params.filter(p => {
+                const t = p.Type.trim().toLowerCase();
+                return t === 'output' || t === 'both';
+            });
+            if (inputs.length > 0) {
+                lines.push(`**Input:** ${inputs.map(p => this.formatActionParameter(p)).join(', ')}`);
+            }
+            if (outputs.length > 0) {
+                lines.push(`**Output:** ${outputs.map(p => this.formatActionParameter(p)).join(', ')}`);
+            }
+            lines.push('');
+        }
+        lines.push(`Invoke any of these by its exact name on your next turn.`);
+        return lines.join('\n');
     }
 
     /**
@@ -7099,13 +7340,26 @@ The context is now within limits. Please retry your request with the recovered c
                 // Continue with unmodified actions if pre-processing fails
             }
 
+            // Split out the built-in `_searchActions` meta-tool. It doesn't execute via ActionEngineServer —
+            // it resolves to a semantic lookup against the agent's own action list and returns the hits as
+            // a synthesized ActionResultSummary. Only valid when the prompt offered it (threshold crossed);
+            // validateActionsNextStep rejects it otherwise, so by the time we get here it's legitimate.
+            const searchCalls = actions.filter(a => a.name.trim().toLowerCase() === ACTION_SEARCH_TOOL_NAME.toLowerCase());
+            const regularActions = actions.filter(a => a.name.trim().toLowerCase() !== ACTION_SEARCH_TOOL_NAME.toLowerCase());
+
             // Track step numbers for parallel actions
             let numActionsProcessed = 0;
             const baseStepNumber = (this._agentRun!.Steps?.length || 0) + 1;
 
-            // Execute all actions in parallel
+            // Execute search-tool calls — each produces a ready-to-merge summary and its own step entity.
+            const searchSummaryPromises = searchCalls.map(async (aa) => {
+                const stepNumber = baseStepNumber + numActionsProcessed++;
+                return this.executeActionSearch(aa, effectiveActions, parentStepId, currentPayload, params, stepNumber);
+            });
+
+            // Execute all regular actions in parallel
             let lastStep: MJAIAgentRunStepEntityExtended | undefined = undefined;
-            const actionPromises = actions.map(async (aa) => {
+            const actionPromises = regularActions.map(async (aa) => {
                 // Find action entity from the effective actions (which includes runtime changes)
                 const actionEntity = effectiveActions.find(a => a.Name === aa.name);
                 if (!actionEntity) {
@@ -7160,17 +7414,21 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             });
             
-            // Wait for all actions to complete
+            // Wait for regular actions and search-tool calls. Both sets are already in-flight
+            // (the .map(async...) calls above started them eagerly), so awaiting sequentially
+            // doesn't serialize the work — but it preserves per-array type inference that
+            // Promise.all([a, b]) widens to a union.
             const actionResults = await Promise.all(actionPromises);
-            
+            const searchSummaries = await Promise.all(searchSummaryPromises);
+
             // Check for cancellation after actions complete
             if (params.cancellationToken?.aborted) {
                 throw new Error('Cancelled after action execution');
             }
-            
+
             // Build a clean summary of action results
             // Apply large binary content interception to prevent context overflow
-            const actionSummaries: ActionResultSummary[] = actionResults.map(result => {
+            const regularSummaries: ActionResultSummary[] = actionResults.map(result => {
                 const actionResult = result.success ? result.result : null;
 
                 // Filter to output params only
@@ -7194,6 +7452,10 @@ The context is now within limits. Please retry your request with the recovered c
                     aiDirectives: result.success ? actionResult?.AIDirectives : undefined
                 };
             });
+
+            // Search summaries are pre-built; interleave with regular summaries so the
+            // LLM sees results in the same order it invoked them.
+            const actionSummaries: ActionResultSummary[] = [...searchSummaries, ...regularSummaries];
             
             // Check if any actions failed
             const failedActions = actionSummaries.filter(a => !a.success);
