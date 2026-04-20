@@ -1,5 +1,6 @@
 import { DatabasePlatform } from '@memberjunction/core';
 import { SQLParser } from '@memberjunction/sql-parser';
+import { AnalyzeTopLevelOrderBy, findOrderByStatement as sharedFindOrderByStatement } from './orderByAnalyzer.js';
 
 /**
  * Result of wrapping SQL with paging directives.
@@ -221,7 +222,7 @@ export class QueryPagingEngine {
 
         if (extraction) {
             // Strip ORDER BY from the main SELECT only
-            const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(extraction.MainStatement);
+            const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(extraction.MainStatement, parserDialect);
             const quotedCTEDefs = extraction.CTEDefinitions.map(def =>
                 QueryPagingEngine.quoteCteName(def, platform)
             );
@@ -231,7 +232,7 @@ export class QueryPagingEngine {
         }
 
         // No CTEs — strip ORDER BY and wrap the whole SQL
-        const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(sql);
+        const { sqlWithoutOrder } = QueryPagingEngine.extractOrderBy(sql, parserDialect);
         return QueryPagingEngine.assembleCountSQL(sqlWithoutOrder, platform);
     }
 
@@ -244,136 +245,46 @@ export class QueryPagingEngine {
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // AST helpers
+    // AST helpers — delegate to shared orderByAnalyzer
     // ════════════════════════════════════════════════════════════════════
 
     private static findOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
-        if (stmt.orderby) return stmt;
-        if (stmt._next) return QueryPagingEngine.findOrderByStatement(stmt._next as Record<string, unknown>);
-        return null;
+        return sharedFindOrderByStatement(stmt);
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // SQL analysis helpers
+    // SQL analysis helpers — delegate to shared orderByAnalyzer
     // ════════════════════════════════════════════════════════════════════
 
     /**
      * Checks if the SQL has a top-level ORDER BY clause (not inside subqueries,
      * CTEs, window functions, comments, or string/identifier literals).
      *
-     * Tier 1: AST-based detection via SQLParser — correctly ignores comments,
-     * window-function ORDER BYs, and CTE-internal ORDER BYs.
-     *
-     * Tier 2: Regex fallback (paren-depth scan) — used only if parsing fails.
-     * The fallback can false-positive on `ORDER BY` text inside SQL comments
-     * or string literals, but is acceptable as a last resort.
+     * Delegates to the shared `AnalyzeTopLevelOrderBy` utility which handles
+     * both SQL+Nunjucks (composition) and clean SQL (paging) through AST parsing
+     * with MJLexer scanner fallback.
      */
     private static hasTopLevelOrderBy(sql: string, platform: DatabasePlatform): boolean {
-        const astResult = QueryPagingEngine.hasTopLevelOrderByViaAST(sql, platform);
-        if (astResult !== null) {
-            return astResult;
-        }
-        return QueryPagingEngine.extractOrderBy(sql).orderByClause !== null;
-    }
-
-    /**
-     * AST-based top-level ORDER BY detection.
-     * Returns true/false on successful parse, or null if parsing fails (caller
-     * should fall back to the regex scan).
-     */
-    private static hasTopLevelOrderByViaAST(sql: string, platform: DatabasePlatform): boolean | null {
         const parserDialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
-        try {
-            const ast = SQLParser.ParseSQL(sql, parserDialect);
-            if (!ast) return null;
-
-            const stmt = (Array.isArray(ast) ? ast[0] : ast) as unknown as Record<string, unknown>;
-            if (!stmt) return null;
-
-            // Walk UNION/INTERSECT/EXCEPT chains via _next; ORDER BY can live on
-            // any segment but is logically top-level.
-            return QueryPagingEngine.findOrderByStatement(stmt) !== null;
-        } catch {
-            return null;
-        }
+        return AnalyzeTopLevelOrderBy(sql, parserDialect).Positions.length > 0;
     }
 
     /**
      * Extracts the top-level ORDER BY clause from SQL, ignoring ORDER BY
-     * inside subqueries (paren depth), block comments, line comments,
-     * single-quoted strings, and bracket/double-quoted identifiers.
+     * inside subqueries, block comments, line comments, single-quoted strings,
+     * and bracket/double-quoted identifiers.
+     *
+     * Delegates to the shared `AnalyzeTopLevelOrderBy` utility. Preserves the
+     * public static API for existing callers and tests.
      */
-    static extractOrderBy(sql: string): { sqlWithoutOrder: string; orderByClause: string | null } {
-        const upperSQL = sql.toUpperCase();
-        const len = sql.length;
-        let depth = 0;
-        let lastOrderByPos = -1;
-        let i = 0;
-
-        while (i < len) {
-            const ch = sql[i];
-
-            // Block comment
-            if (ch === '/' && i + 1 < len && sql[i + 1] === '*') {
-                i += 2;
-                while (i < len - 1 && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
-                if (i < len - 1) i += 2; else i = len;
-                continue;
-            }
-            // Line comment
-            if (ch === '-' && i + 1 < len && sql[i + 1] === '-') {
-                i += 2;
-                while (i < len && sql[i] !== '\n') i++;
-                continue;
-            }
-            // Single-quoted string
-            if (ch === "'") {
-                i++;
-                while (i < len) {
-                    if (sql[i] === "'") {
-                        if (i + 1 < len && sql[i + 1] === "'") { i += 2; continue; }
-                        i++; break;
-                    }
-                    i++;
-                }
-                continue;
-            }
-            // Bracket-quoted identifier
-            if (ch === '[') {
-                i++;
-                while (i < len && sql[i] !== ']') i++;
-                if (i < len) i++;
-                continue;
-            }
-            // Double-quoted identifier
-            if (ch === '"') {
-                i++;
-                while (i < len && sql[i] !== '"') i++;
-                if (i < len) i++;
-                continue;
-            }
-
-            if (ch === '(') { depth++; i++; continue; }
-            if (ch === ')') { depth--; i++; continue; }
-
-            if (depth === 0 && i + 8 <= len && upperSQL.substring(i, i + 8) === 'ORDER BY') {
-                if (i === 0 || /\s/.test(sql[i - 1])) {
-                    lastOrderByPos = i;
-                }
-                i += 8;
-                continue;
-            }
-
-            i++;
-        }
-
-        if (lastOrderByPos === -1) {
-            return { sqlWithoutOrder: sql, orderByClause: null };
-        }
-
+    static extractOrderBy(
+        sql: string,
+        parserDialect: string = 'TransactSQL'
+    ): { sqlWithoutOrder: string; orderByClause: string | null } {
+        const analysis = AnalyzeTopLevelOrderBy(sql, parserDialect);
         return {
-            orderByClause: sql.substring(lastOrderByPos + 9).trim(),
-            sqlWithoutOrder: sql.substring(0, lastOrderByPos).trim(),
+            sqlWithoutOrder: analysis.SqlWithoutOrderBy,
+            orderByClause: analysis.OrderByClause,
         };
     }
 
