@@ -1,5 +1,32 @@
 # @memberjunction/core-entities-server
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [fdab4bb]
+- Updated dependencies [115e4da]
+  - @memberjunction/ai-prompts@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/tag-engine@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/ai-vectordb@5.28.0
+  - @memberjunction/ai-vector-dupe@5.28.0
+  - @memberjunction/ai-vectors-memory@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/doc-utils@5.28.0
+  - @memberjunction/generic-database-provider@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/skip-types@5.28.0
+  - @memberjunction/ai-provider-bundle@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/global@5.28.0
+  - @memberjunction/sql-converter@5.28.0
+  - @memberjunction/sql-parser@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes
