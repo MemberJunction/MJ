@@ -458,8 +458,8 @@ describe('ArchiveProcessor', () => {
             ).rejects.toThrow('has no FieldConfiguration');
         });
 
-        it('should throw when Fields array is empty', async () => {
-            const emptyFieldsJson = JSON.stringify({ Fields: [] });
+        it('should throw when Fields array is empty and ArchiveFullRecord is false', async () => {
+            const emptyFieldsJson = JSON.stringify({ Fields: [], ArchiveFullRecord: false });
             const configEntity = createMockConfigEntity(emptyFieldsJson);
             const config = createMockConfig();
             const archiveRun = createMockEntity({ ID: 'run-1' });
@@ -475,6 +475,26 @@ describe('ArchiveProcessor', () => {
                     contextUser
                 )
             ).rejects.toThrow('must have at least one field');
+        });
+
+        it('should allow empty Fields array when ArchiveFullRecord is true', async () => {
+            const fullRecordJson = JSON.stringify({ Fields: [], ArchiveFullRecord: true });
+            const configEntity = createMockConfigEntity(fullRecordJson);
+            const config = createMockConfig();
+            const archiveRun = createMockEntity({ ID: 'run-1' });
+            const storageManager = createMockStorageManager();
+            const contextUser = { ID: 'user-1' } as unknown as UserInfo;
+
+            // Should not throw - ArchiveFullRecord:true with empty Fields is valid
+            await expect(
+                processor.ProcessEntity(
+                    configEntity as unknown as BaseEntity,
+                    config as unknown as BaseEntity,
+                    archiveRun as unknown as BaseEntity,
+                    storageManager as unknown as ArchiveStorageManager,
+                    contextUser
+                )
+            ).resolves.not.toThrow();
         });
 
         it('should throw when a field has no FieldName', async () => {

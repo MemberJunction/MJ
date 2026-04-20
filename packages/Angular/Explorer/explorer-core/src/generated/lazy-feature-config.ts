@@ -183,4 +183,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 78;
+export const LAZY_FEATURE_CONFIG_COUNT = 80;

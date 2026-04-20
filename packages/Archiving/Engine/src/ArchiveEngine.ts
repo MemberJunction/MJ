@@ -108,14 +108,14 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
 
     /**
      * Loads all ArchiveConfigurationEntity records for the given configuration,
-     * ordered by ProcessOrder for controlled execution sequence.
+     * ordered by Priority for controlled execution sequence.
      */
     private async LoadConfigurationEntities(configId: string, contextUser: UserInfo): Promise<BaseEntity[]> {
         const rv = new RunView();
         const result = await rv.RunView<BaseEntity>({
             EntityName: 'MJ: Archive Configuration Entities',
             ExtraFilter: `ArchiveConfigurationID='${configId}' AND IsActive=1`,
-            OrderBy: 'ProcessOrder ASC',
+            OrderBy: 'Priority ASC',
             ResultType: 'entity_object',
         }, contextUser);
 
@@ -138,6 +138,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
         const run = await md.GetEntityObject('MJ: Archive Runs', contextUser);
 
         run.Set('ArchiveConfigurationID', config.Get('ID'));
+        run.Set('UserID', contextUser.ID);
         run.Set('Status', 'Running');
         run.Set('StartedAt', new Date().toISOString());
 
@@ -158,7 +159,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
         totals: AggregatedTotals,
         contextUser: UserInfo
     ): Promise<void> {
-        archiveRun.Set('Status', totals.Failed > 0 ? 'CompletedWithErrors' : 'Completed');
+        archiveRun.Set('Status', totals.Failed > 0 ? 'PartialSuccess' : 'Complete');
         archiveRun.Set('CompletedAt', new Date().toISOString());
         archiveRun.Set('TotalRecords', totals.Archived + totals.Failed + totals.Skipped);
         archiveRun.Set('ArchivedRecords', totals.Archived);
@@ -217,7 +218,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
             totals.Skipped += entityResult.Skipped;
             totals.Bytes += entityResult.Bytes;
 
-            const entityName = configEntity.Get('EntityName') as string;
+            const entityName = configEntity.Get('Entity') as string;
             LogStatus(
                 `ArchiveEngine: Entity "${entityName}" complete - ` +
                 `archived: ${entityResult.Archived}, failed: ${entityResult.Failed}, ` +

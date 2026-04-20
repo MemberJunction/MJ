@@ -33,9 +33,14 @@ vi.mock('@memberjunction/global', () => ({
 
 // ---- Helper factories ----
 
+interface MockFieldInfo {
+    Name: string;
+    AllowsNull: boolean;
+}
+
 interface MockBaseEntity {
     ID: string;
-    EntityInfo: { Name: string; ID: string };
+    EntityInfo: { Name: string; ID: string; Fields: MockFieldInfo[] };
     PrimaryKey: { KeyValuePairs: Array<{ FieldName: string; Value: string }> };
     LatestResult: { Message: string } | null;
     Get: ReturnType<typeof vi.fn>;
@@ -48,7 +53,14 @@ interface MockBaseEntity {
 function createMockRecord(overrides?: Partial<MockBaseEntity>): MockBaseEntity {
     return {
         ID: 'record-1',
-        EntityInfo: { Name: 'Test Entity', ID: 'entity-id-1' },
+        EntityInfo: {
+            Name: 'Test Entity',
+            ID: 'entity-id-1',
+            Fields: [
+                { Name: 'Description', AllowsNull: true },
+                { Name: 'Notes', AllowsNull: true },
+            ],
+        },
         PrimaryKey: { KeyValuePairs: [{ FieldName: 'ID', Value: 'record-1' }] },
         LatestResult: null,
         Get: vi.fn(),

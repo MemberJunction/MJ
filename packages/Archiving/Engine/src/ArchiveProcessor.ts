@@ -42,7 +42,7 @@ export class ArchiveProcessor {
         storageManager: ArchiveStorageManager,
         contextUser: UserInfo
     ): Promise<EntityProcessingResult> {
-        const entityName = configEntity.Get('EntityName') as string;
+        const entityName = configEntity.Get('Entity') as string;
         const driverClassName = configEntity.Get('DriverClass') as string | null;
         const batchSize = this.GetBatchSize(configEntity, config);
         const basePath = (config.Get('RootPath') as string) ?? '';
@@ -112,8 +112,13 @@ export class ArchiveProcessor {
      * Validates the parsed field configuration has the required structure.
      */
     private ValidateFieldConfiguration(config: ArchiveFieldConfiguration): void {
-        if (!config.Fields || !Array.isArray(config.Fields) || config.Fields.length === 0) {
-            throw new Error('FieldConfiguration must have at least one field in the Fields array');
+        if (!config.Fields || !Array.isArray(config.Fields)) {
+            throw new Error('FieldConfiguration must have a Fields array');
+        }
+
+        // Empty Fields array is only valid when ArchiveFullRecord is true
+        if (config.Fields.length === 0 && !config.ArchiveFullRecord) {
+            throw new Error('FieldConfiguration must have at least one field in the Fields array, or set ArchiveFullRecord to true');
         }
 
         for (const field of config.Fields) {
@@ -301,7 +306,7 @@ export class ArchiveProcessor {
             const detail = await md.GetEntityObject('MJ: Archive Run Details', contextUser);
 
             detail.Set('ArchiveRunID', archiveRun.Get('ID'));
-            detail.Set('EntityName', record.EntityInfo.Name);
+            detail.Set('EntityID', record.EntityInfo.ID);
             detail.Set('RecordID', record.PrimaryKey.Values());
             detail.Set('Status', archiveResult.Success ? 'Success' : 'Failed');
             detail.Set('StoragePath', archiveResult.StoragePath ?? '');

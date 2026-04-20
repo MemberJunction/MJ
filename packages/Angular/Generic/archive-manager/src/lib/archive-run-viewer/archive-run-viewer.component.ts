@@ -104,12 +104,13 @@ export class ArchiveRunViewerComponent implements OnInit, OnDestroy {
   }
 
   /** Format bytes into a readable string */
-  FormatBytes(bytes: number): string {
-    if (bytes === 0) return '0 B';
+  FormatBytes(bytes: number | string | null | undefined): string {
+    const numBytes = Number(bytes);
+    if (!numBytes || numBytes <= 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     const k = 1024;
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    const value = bytes / Math.pow(k, i);
+    const i = Math.floor(Math.log(numBytes) / Math.log(k));
+    const value = numBytes / Math.pow(k, i);
     return `${value.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
   }
 
@@ -195,10 +196,10 @@ export class ArchiveRunViewerComponent implements OnInit, OnDestroy {
       StartedAt: startedAt,
       CompletedAt: completedAt,
       Status: r.Status ?? 'Unknown',
-      RecordsArchived: r.ArchivedRecords ?? 0,
-      RecordsFailed: r.FailedRecords ?? 0,
-      RecordsSkipped: r.SkippedRecords ?? 0,
-      TotalBytes: r.TotalBytesArchived ?? 0,
+      RecordsArchived: Number(r.ArchivedRecords) || 0,
+      RecordsFailed: Number(r.FailedRecords) || 0,
+      RecordsSkipped: Number(r.SkippedRecords) || 0,
+      TotalBytes: Number(r.TotalBytesArchived) || 0,
       DurationSeconds: durationSeconds,
     };
   }
@@ -249,7 +250,7 @@ export class ArchiveRunViewerComponent implements OnInit, OnDestroy {
       RecordID: r.RecordID ?? '',
       Status: r.Status ?? 'Unknown',
       StoragePath: r.StoragePath ?? '',
-      Bytes: r.BytesArchived ?? 0,
+      Bytes: Number(r.BytesArchived) || 0,
       ArchivedAt: r.__mj_CreatedAt ?? '',
     };
   }

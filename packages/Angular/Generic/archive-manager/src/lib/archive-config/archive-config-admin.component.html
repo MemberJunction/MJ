@@ -85,15 +85,12 @@
                     class="detail-input" />
                 </div>
                 <div class="detail-field">
-                  <label>Status</label>
-                  <div class="detail-toggle">
-                    <label class="toggle-label">
-                      <input
-                        type="checkbox"
-                        [checked]="SelectedConfig.Status === 'Idle'"
-                        (change)="SelectedConfig.Status = SelectedConfig.Status === 'Idle' ? 'Disabled' : 'Idle'; OnConfigFieldChanged()" />
-                      <span class="toggle-text">{{ GetStatusLabel(SelectedConfig.Status) }}</span>
-                    </label>
+                  <label>Active</label>
+                  <div class="detail-checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="SelectedConfig.Status === 'Idle'"
+                      (change)="SelectedConfig.Status = SelectedConfig.Status === 'Idle' ? 'Disabled' : 'Idle'; OnConfigFieldChanged()" />
                   </div>
                 </div>
                 <div class="detail-field">
@@ -174,13 +171,12 @@
                   </div>
                   <div class="detail-field">
                     <label>Archive Record Changes</label>
-                    <label class="toggle-label">
+                    <div class="detail-checkbox">
                       <input
                         type="checkbox"
                         [(ngModel)]="SelectedConfig.ArchiveRelatedRecordChanges"
                         (ngModelChange)="OnConfigFieldChanged()" />
-                      <span class="toggle-text">{{ SelectedConfig.ArchiveRelatedRecordChanges ? 'Enabled' : 'Disabled' }}</span>
-                    </label>
+                    </div>
                   </div>
                 </div>
               </div>

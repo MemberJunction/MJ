@@ -271,17 +271,43 @@
   font-family: inherit;
 }
 
-.toggle-label {
-  display: inline-flex;
+.detail-checkbox {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  color: var(--mj-text-primary);
-}
+  padding-top: 2px;
 
-.toggle-text {
-  user-select: none;
+  input[type="checkbox"] {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--mj-border-default);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+
+    &:checked {
+      background: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
+
+      &::after {
+        content: '';
+        position: absolute;
+        left: 4px;
+        top: 1px;
+        width: 6px;
+        height: 10px;
+        border: solid var(--mj-text-inverse, white);
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--mj-border-focus);
+      outline-offset: 2px;
+    }
+  }
 }
 
 /* Entity table */
@@ -336,6 +362,40 @@
 
 .entity-input-sm {
   width: 70px;
+}
+
+/* Checkbox styling within entity table */
+.entity-table td input[type="checkbox"] {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--mj-border-default);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+
+  &:checked {
+    background: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+
+    &::after {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 1px;
+      width: 6px;
+      height: 10px;
+      border: solid var(--mj-text-inverse, white);
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mj-border-focus);
+    outline-offset: 2px;
+  }
 }
 
 .entity-empty {

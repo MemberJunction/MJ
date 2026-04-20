@@ -217,7 +217,7 @@ describe('ArchiveEngine', () => {
             expect(result.Success).toBe(false);
 
             // Verify run was finalized
-            expect(archiveRunRecord.Set).toHaveBeenCalledWith('Status', 'CompletedWithErrors');
+            expect(archiveRunRecord.Set).toHaveBeenCalledWith('Status', 'PartialSuccess');
             expect(archiveRunRecord.Set).toHaveBeenCalledWith('ArchivedRecords', 10);
             expect(archiveRunRecord.Set).toHaveBeenCalledWith('FailedRecords', 1);
             expect(archiveRunRecord.Save).toHaveBeenCalled();
@@ -261,8 +261,8 @@ describe('ArchiveEngine', () => {
             expect(result.ArchivedRecords).toBe(5);
             expect(result.FailedRecords).toBe(0);
 
-            // Verify run was finalized as Completed (not CompletedWithErrors)
-            expect(archiveRunRecord.Set).toHaveBeenCalledWith('Status', 'Completed');
+            // Verify run was finalized as Complete (not PartialSuccess)
+            expect(archiveRunRecord.Set).toHaveBeenCalledWith('Status', 'Complete');
         });
 
         it('should process multiple entities and aggregate totals', async () => {

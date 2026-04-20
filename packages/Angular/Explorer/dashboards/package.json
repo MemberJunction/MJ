@@ -57,6 +57,10 @@
       "types": "./dist/MCP/mcp.module.d.ts",
       "default": "./dist/MCP/mcp.module.js"
     },
+    "./archiving-dashboards.module": {
+      "types": "./dist/archiving-dashboards.module.d.ts",
+      "default": "./dist/archiving-dashboards.module.js"
+    },
     "./module": {
       "types": "./dist/module.d.ts",
       "default": "./dist/module.js"

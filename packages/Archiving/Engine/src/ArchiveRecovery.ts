@@ -1,6 +1,5 @@
 import { BaseEntity, CompositeKey, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
-import { FileStorageEngine } from '@memberjunction/core-entities';
+import { FileStorageEngineBase } from '@memberjunction/core-entities';
 import { initializeDriverWithAccountCredentials } from '@memberjunction/storage';
 import { BaseArchiveDriver } from './BaseArchiveDriver';
 import { DefaultArchiveDriver } from './DefaultArchiveDriver';
@@ -24,7 +23,7 @@ export class ArchiveRecovery {
         const rv = new RunView();
         const result = await rv.RunView<BaseEntity>({
             EntityName: 'MJ: Archive Run Details',
-            ExtraFilter: `EntityName='${entityName}' AND RecordID='${recordId}' AND Status='Success'`,
+            ExtraFilter: `Entity='${entityName}' AND RecordID='${recordId}' AND Status='Success'`,
             OrderBy: '__mj_CreatedAt DESC',
             ResultType: 'entity_object',
         }, contextUser);
@@ -59,7 +58,7 @@ export class ArchiveRecovery {
             }
 
             const storageDriver = await this.InitializeStorageDriver(archiveRun, contextUser);
-            const driver = this.ResolveDriver(detail);
+            const driver = this.ResolveDriver();
 
             const restoreContext: RestoreRecordContext = {
                 ArchiveRunDetail: detail,
@@ -119,8 +118,8 @@ export class ArchiveRecovery {
             throw new Error(`No StorageAccountID configured on ArchiveConfiguration: ${configId}`);
         }
 
-        await FileStorageEngine.Instance.Config(false, contextUser);
-        const accountWithProvider = FileStorageEngine.Instance.GetAccountWithProvider(storageAccountId);
+        await FileStorageEngineBase.Instance.Config(false, contextUser);
+        const accountWithProvider = FileStorageEngineBase.Instance.GetAccountWithProvider(storageAccountId);
         if (!accountWithProvider) {
             throw new Error(`File storage account not found or provider inactive for ID: ${storageAccountId}`);
         }
@@ -133,21 +132,11 @@ export class ArchiveRecovery {
     }
 
     /**
-     * Resolves the archive driver from the ArchiveRunDetail's DriverClass,
-     * falling back to DefaultArchiveDriver.
+     * Returns the DefaultArchiveDriver for restore operations.
+     * ArchiveRunDetail does not store the driver class used during archiving;
+     * the default driver handles the standard JSON-based restore path.
      */
-    private ResolveDriver(detail: BaseEntity): BaseArchiveDriver {
-        const driverClassName = detail.Get('DriverClass') as string | null;
-        if (driverClassName) {
-            const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArchiveDriver>(
-                BaseArchiveDriver,
-                driverClassName
-            );
-            if (driver) {
-                return driver;
-            }
-            LogError(`Failed to resolve archive driver "${driverClassName}", falling back to DefaultArchiveDriver`);
-        }
+    private ResolveDriver(): BaseArchiveDriver {
         return new DefaultArchiveDriver();
     }
 }

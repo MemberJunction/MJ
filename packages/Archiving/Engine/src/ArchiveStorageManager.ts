@@ -1,6 +1,6 @@
 import { LogStatus, UserInfo } from '@memberjunction/core';
 import { FileStorageBase, initializeDriverWithAccountCredentials } from '@memberjunction/storage';
-import { FileStorageEngine } from '@memberjunction/core-entities';
+import { FileStorageEngineBase } from '@memberjunction/core-entities';
 import { ArchiveDocument } from './types';
 
 /**
@@ -24,7 +24,7 @@ export class ArchiveStorageManager {
 
     /**
      * Initializes the storage driver for the given FileStorageAccount.
-     * Loads the account and provider from the FileStorageEngine cache,
+     * Loads the account and provider from the FileStorageEngineBase cache,
      * then creates and initializes the appropriate driver via ClassFactory.
      *
      * @param storageAccountId - ID of the MJ: File Storage Account to use
@@ -33,9 +33,9 @@ export class ArchiveStorageManager {
     public async Initialize(storageAccountId: string, contextUser: UserInfo): Promise<void> {
         this._accountId = storageAccountId;
 
-        await FileStorageEngine.Instance.Config(false, contextUser);
+        await FileStorageEngineBase.Instance.Config(false, contextUser);
 
-        const accountWithProvider = FileStorageEngine.Instance.GetAccountWithProvider(storageAccountId);
+        const accountWithProvider = FileStorageEngineBase.Instance.GetAccountWithProvider(storageAccountId);
         if (!accountWithProvider) {
             throw new Error(`File storage account not found or provider inactive for ID: ${storageAccountId}`);
         }

@@ -146,14 +146,16 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     }
 
     /**
-     * Sets all configured archive fields to null on the source record and saves it.
+     * Sets all configured archive fields to their empty value on the source record and saves it.
+     * Uses null for nullable columns and empty string for NOT NULL string columns.
      */
     private async NullifyArchivedFields(
         context: ArchiveRecordContext
     ): Promise<{ Success: boolean; StoragePath: string | null; BytesArchived: number; ErrorMessage?: string }> {
         for (const fieldConfig of context.FieldConfig.Fields) {
             if (fieldConfig.IsActive !== false) {
-                context.Record.Set(fieldConfig.FieldName, null);
+                const emptyValue = this.GetEmptyValueForField(context, fieldConfig.FieldName);
+                context.Record.Set(fieldConfig.FieldName, emptyValue);
             }
         }
 
@@ -168,6 +170,19 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
         }
 
         return { Success: true, StoragePath: null, BytesArchived: 0 };
+    }
+
+    /**
+     * Returns the appropriate empty value for a field based on its nullability.
+     * NOT NULL string fields get empty string; nullable fields get null.
+     */
+    private GetEmptyValueForField(context: ArchiveRecordContext, fieldName: string): string | null {
+        const fieldInfo = context.Record.EntityInfo.Fields.find(f => f.Name === fieldName);
+        if (fieldInfo && !fieldInfo.AllowsNull) {
+            // NOT NULL column — use empty string for string types, 0 for numeric
+            return '';
+        }
+        return null;
     }
 
     /**
