@@ -1604,6 +1604,22 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 vars.input[mapper.MapFieldName(f.CodeName)] = val;
             }
 
+            // Carry restore lineage across the network.
+            // BaseEntity._restoreContext is a client-side-only field — it doesn't
+            // serialize through GraphQL automatically. When set, mirror it onto the
+            // mutation input as RestoreContext___ so the server-side resolver can
+            // call SetRestoreContext() on the freshly-constructed BaseEntity before
+            // Save(). Without this, the data provider on the server reads
+            // entity.RestoreContext as null and writes Source='Internal' with NULL
+            // lineage columns — i.e., the restore audit trail is silently lost.
+            const clientRestoreContext = entity.RestoreContext;
+            if (clientRestoreContext) {
+                vars.input['RestoreContext___'] = {
+                    SourceChangeID: clientRestoreContext.SourceChangeID,
+                    Reason: clientRestoreContext.Reason,
+                };
+            }
+
             // now add an OldValues prop to the vars IF the type === 'update' and the options.SkipOldValuesCheck === false
             if (type.trim().toLowerCase() === 'update' &&
                 options.SkipOldValuesCheck === false) {
