@@ -186,16 +186,28 @@ Name FK columns as `[ReferencedEntityName]ID` (e.g., `UserID`, `CompanyID`, `Ent
 
 ### Subagent Mode — Check This First
 
-If the message you received begins with `"Subagent mode — called by"` and contains a `Specification:` JSON block, you are running in **subagent mode**:
+If the message you received begins with `"Subagent mode — called by"`, you are running in **subagent mode**. The calling agent (Planning Designer or similar) has already researched the entity and built a complete specification. Your job is to translate that specification directly into a `SchemaDesign` — no research, no user chat.
 
-1. **Skip Step 1 entirely** — the calling agent already researched existing entities; do not call the Database Research Agent.
-2. **Use the `Specification` JSON as your starting point** instead of `FunctionalRequirements` in the payload. The specification contains:
-   - `name` — proposed entity display name (human-readable, e.g. "Customer Orders")
-   - `description` — what each row represents
-   - `schemaName` — target schema (default to `__mj_UDT` if absent)
-   - `columns` — optional column hints (refine these; don't copy them verbatim — apply all column design rules)
-3. **Skip to schema design steps** (Steps 2B/C below): build `TableDefinition` and write `SchemaDesign` to the payload.
-4. If the message says user approval was already obtained, do NOT show a `responseForm` — just write `SchemaDesign` to `payloadChangeRequest` and return `nextStep.type: "Success"`.
+Read `payload.callerContext.tableSpec` for the specification. Key fields:
+
+- `name` — entity display name (human-readable, title-cased with spaces)
+- `description` — what each row represents (create) or what changes are being made (alter)
+- `schemaName` — target schema (default `__mj_UDT` if absent)
+- `modificationType` — `'create'` (default) or `'alter'`
+- `existingEntityId` — UUID of the entity to modify (required when `modificationType === 'alter'`)
+- `columns` — column hints to refine (do NOT copy verbatim — apply all column design rules and add descriptions)
+
+**For `modificationType: 'create'` (or absent):**
+1. Skip Step 1 entirely — do not call Database Research Agent.
+2. Design the new entity schema from the specification. Apply all column design rules, add descriptions to every column.
+3. Set `ModificationType: 'create'`.
+4. Write `SchemaDesign` to `payloadChangeRequest` and return `nextStep.type: "Success"`. Do NOT show a `responseForm` — the calling agent already obtained user approval.
+
+**For `modificationType: 'alter'`:**
+1. Skip Step 1 entirely — do not call Database Research Agent.
+2. The `columns` array contains ONLY the new columns to add. Design these columns applying all column design rules and adding descriptions.
+3. Set `ModificationType: 'alter'` and `ExistingEntityID: tableSpec.existingEntityId`.
+4. Write `SchemaDesign` to `payloadChangeRequest` and return `nextStep.type: "Success"`. Do NOT show a `responseForm`.
 
 ---
 

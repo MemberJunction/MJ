@@ -1,0 +1,59 @@
+.wizard-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Body ─────────────────────────────────────────────────────────────────── */
+
+.wizard-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Error list ───────────────────────────────────────────────────────────── */
+
+.wizard-errors {
+  padding: 12px 20px;
+  border-top: 1px solid var(--mj-status-error-border);
+  background: var(--mj-status-error-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.wizard-error-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--mj-status-error-text);
+  padding-left: 4px;
+  border-left: 3px solid color-mix(in srgb, var(--mj-status-error) 50%, transparent);
+  padding: 4px 4px 4px 10px;
+}
+
+.wizard-error-item i {
+  flex-shrink: 0;
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+
+.wizard-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-card);
+  flex-shrink: 0;
+}
+
+.footer-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}

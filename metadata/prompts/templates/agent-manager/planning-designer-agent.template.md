@@ -405,6 +405,172 @@ When the agent needs to create, read, update, or delete records, use these actio
 
 ---
 
+## Creating or Modifying Entities (Entity Designer)
+
+**Skip this section if the design only uses existing entities with no schema changes.**
+
+When your technical design requires a new database table **or** adding/changing columns on an existing one, use the **Entity Designer** sub-agent. **Always call Entity Designer in subagent mode** — never standalone. You have already gathered the requirements; Entity Designer's job is to execute the schema operation.
+
+> Always call **Database Research Agent** first to confirm whether the entity exists and to get its current schema, before invoking Entity Designer.
+
+---
+
+### Subagent Mode — Payload Structure
+
+Entity Designer always receives two things from you:
+
+1. **A message** — a clear, descriptive instruction that explains the operation and its business context
+2. **A payload** — the structured `tableSpec` with full column definitions
+
+**Creating a new entity** (`modificationType: 'create'` or omit it):
+
+```json
+{
+  "mode": "subagent",
+  "callerContext": {
+    "agentName": "Planning Designer",
+    "subagentConfirmedByParent": true,
+    "tableSpec": {
+      "name": "Customer Orders",
+      "description": "Tracks orders placed by customers. Each row is a single order with a total, status, and a reference to the customer who placed it.",
+      "schemaName": "__mj_UDT",
+      "modificationType": "create",
+      "columns": [
+        {
+          "name": "CustomerID",
+          "type": "UNIQUEIDENTIFIER",
+          "description": "References the customer (User) who placed the order",
+          "required": true,
+          "foreignKeyTarget": "__mj.User.ID"
+        },
+        {
+          "name": "TotalAmount",
+          "type": "DECIMAL(18,4)",
+          "description": "Total value of the order in base currency",
+          "required": true
+        },
+        {
+          "name": "Status",
+          "type": "NVARCHAR(50)",
+          "description": "Order lifecycle: Pending, Processing, Shipped, Delivered, Cancelled",
+          "required": true
+        }
+      ]
+    }
+  }
+}
+```
+
+**Modifying an existing entity** (`modificationType: 'alter'`):
+
+```json
+{
+  "mode": "subagent",
+  "callerContext": {
+    "agentName": "Planning Designer",
+    "subagentConfirmedByParent": true,
+    "tableSpec": {
+      "name": "Customer Orders",
+      "description": "Adding shipping address and tracking fields to support fulfillment tracking.",
+      "schemaName": "__mj_UDT",
+      "modificationType": "alter",
+      "existingEntityId": "UUID-OF-THE-ENTITY-FROM-DATABASE-RESEARCH",
+      "columns": [
+        {
+          "name": "ShippingAddress",
+          "type": "NVARCHAR(500)",
+          "description": "Full shipping address for this order",
+          "required": false
+        },
+        {
+          "name": "TrackingNumber",
+          "type": "NVARCHAR(100)",
+          "description": "Carrier tracking number assigned when the order ships",
+          "required": false
+        }
+      ]
+    }
+  }
+}
+```
+
+> For `'alter'`, **`existingEntityId`** must be the UUID from Database Research Agent. The `columns` array contains ONLY the new columns to add — do not repeat existing columns.
+
+---
+
+### The Message You Send to Entity Designer
+
+When you call Entity Designer as a sub-agent, the message you send is the instruction it reads first. Make it descriptive and precise — include the business context, the operation type, and any constraints. Entity Designer's Schema Designer reads this message directly.
+
+**For create:**
+```
+Subagent mode — called by Planning Designer.
+
+Create a new entity: "Customer Orders" in schema __mj_UDT.
+
+Business context: [Agent name] needs to track orders placed by customers. The agent reads these records to check order status and send notifications on status changes.
+
+Design the schema using the tableSpec in callerContext. Apply MJ column design rules (descriptions required, Status column, correct SQL types). The user has already approved this design — proceed directly to validation without asking for confirmation.
+```
+
+**For alter:**
+```
+Subagent mode — called by Planning Designer.
+
+Modify existing entity: "Customer Orders" (ID: [UUID]).
+
+Business context: [Agent name] needs to support fulfillment tracking. Add shipping address and tracking number fields to the existing Customer Orders entity.
+
+The columns to add are in callerContext.tableSpec.columns. The existing entity's UUID is in callerContext.tableSpec.existingEntityId. The user has already approved these changes — proceed directly to validation without asking for confirmation.
+```
+
+---
+
+### `tableSpec` Field Reference
+
+| Field | Required | Notes |
+|---|---|---|
+| `name` | Yes | Human-readable entity name, title-cased with spaces (e.g. `"Customer Orders"`) |
+| `description` | Yes | What this entity stores / what changes are being made |
+| `schemaName` | No | Defaults to `__mj_UDT` if omitted |
+| `modificationType` | No | `'create'` (default) or `'alter'` |
+| `existingEntityId` | For alter | UUID from Database Research Agent — required when `modificationType: 'alter'` |
+| `columns` | No | For create: full column list. For alter: ONLY the new columns to add. Omit to let Schema Designer infer. |
+| `columns[].name` | Yes | PascalCase column name |
+| `columns[].type` | Yes | SQL type: `NVARCHAR(255)`, `INT`, `BIT`, `UNIQUEIDENTIFIER`, `DECIMAL(18,4)`, `DATETIMEOFFSET`, etc. |
+| `columns[].description` | No | Recommended — Schema Designer writes column-level documentation from this |
+| `columns[].required` | No | `true` = NOT NULL; `false` or omit = nullable |
+| `columns[].foreignKeyTarget` | No | `"Schema.Table.Column"` — e.g. `"__mj.User.ID"` |
+
+**Never include** `ID`, `__mj_CreatedAt`, `__mj_UpdatedAt` — CodeGen always injects these automatically.
+
+---
+
+### Reading the Result
+
+After Entity Designer completes, the result is in `EntityDesignerResult` in your payload (mapped via `SubAgentOutputMapping` to `TechnicalDesign.entityCreationResult`).
+
+| Field | Meaning |
+|---|---|
+| `EntityDesignerResult.Success: true` | Entity was created or altered successfully |
+| `EntityDesignerResult.EntityID` | UUID of the entity — use this in CRUD action mappings |
+| `EntityDesignerResult.EntityName` | MJ entity name (e.g. `"Customer Orders"`) |
+| `EntityDesignerResult.TableName` | Physical SQL table name (e.g. `"CustomerOrders"`) |
+| `EntityDesignerResult.SchemaName` | SQL schema (e.g. `"__mj_UDT"`) |
+| `EntityDesignerResult.Success: false` | Operation failed — see `ErrorMessage` |
+| `EntityDesignerResult.ErrorMessage` | Failure reason: duplicate name, blocked schema, missing authorization, etc. |
+
+### Workflow Summary
+
+1. Call **Database Research Agent** to confirm whether the entity exists and retrieve its UUID + current schema
+2. **Doesn't exist** → call Entity Designer in subagent mode with `modificationType: 'create'`
+3. **Exists and needs new columns** → call Entity Designer in subagent mode with `modificationType: 'alter'` + `existingEntityId`
+4. On success — use `EntityDesignerResult.EntityName` in CRUD action mappings for the agent being designed
+5. On failure — explain the error and ask the user how to proceed
+6. Document the entity in `TechnicalDesign.databaseSchema`
+
+---
+
 ## Sending Emails (If Applicable)
 
 **Skip this section if the agent doesn't need to send emails.**
@@ -864,13 +1030,13 @@ When you write prompt text in your TechnicalDesign, **DO NOT include ANY templat
 ### ❌ WRONG - Including Template Syntax
 
 ```
-{% for deal in payload.deals %}
+{% raw %}{% for deal in payload.deals %}
 - Deal: {{ deal.name }}
 {% endfor %}
 
 or 
 
-When user asks about {{ payload.customerName }} ...
+When user asks about {{ payload.customerName }} ...{% endraw %}
 ```
 ### ✅ CORRECT - Plain Markdown Instructions
 

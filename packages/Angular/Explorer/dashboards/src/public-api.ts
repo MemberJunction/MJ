@@ -153,4 +153,6 @@ export * from './credentials-dashboards.module';
 export * from './data-explorer-dashboards.module';
 export * from './lists-dashboards.module';
 export * from './component-studio-dashboards.module';
+export * from './EntityDesigner/entity-designer-dashboards.module';
+export { EntityDesignerDashboardComponent, LoadEntityDesignerDashboard } from './EntityDesigner/components/entity-designer-dashboard.component';
 export * from './shared/shared-dashboard-widgets.module';

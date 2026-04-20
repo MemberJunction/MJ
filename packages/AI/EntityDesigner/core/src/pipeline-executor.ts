@@ -300,36 +300,55 @@ export class EntityDesignerPipelineExecutor {
             warnings.push(msg);
         }
 
-        const entityInfo = md.Entities.find(
+        // Try in-memory cache first (fast path after successful Refresh).
+        const cachedInfo = md.Entities.find(
             e =>
                 e.BaseTable.toLowerCase() === tableDefinition.TableName.toLowerCase() &&
                 e.SchemaName?.toLowerCase() === tableDefinition.SchemaName.toLowerCase()
         );
 
-        if (!entityInfo) {
-            // Pipeline succeeded but CodeGen hasn't registered the entity yet —
-            // common when SkipRestart is true or if refresh failed above.
-            return {
-                Success: true,
-                SchemaName: tableDefinition.SchemaName,
-                TableName: tableDefinition.TableName,
-                PipelineSteps: steps,
-                Warnings: warnings.length > 0 ? warnings : undefined,
-            };
+        let entityID: string | undefined = cachedInfo?.ID;
+        let entityName: string | undefined = cachedInfo?.Name;
+
+        if (!entityID) {
+            // Cache missed — Refresh may have failed or CodeGen registered the entity
+            // after the cache snapshot. Fall back to a direct DB query so provenance
+            // is always saved regardless of in-memory state.
+            const rv = new RunView();
+            const dbResult = await rv.RunView<{ ID: string; Name: string }>({
+                EntityName: 'MJ: Entities',
+                ExtraFilter: (
+                    `BaseTable = '${escapeSqlLiteral(tableDefinition.TableName)}' ` +
+                    `AND SchemaName = '${escapeSqlLiteral(tableDefinition.SchemaName)}'`
+                ),
+                Fields: ['ID', 'Name'],
+                ResultType: 'simple',
+            }, contextUser);
+
+            if (dbResult.Success && dbResult.Results.length > 0) {
+                entityID = dbResult.Results[0].ID;
+                entityName = dbResult.Results[0].Name;
+                warnings.push(
+                    `Entity found in DB but not in metadata cache — metadata may be stale until MJAPI restarts.`
+                );
+            }
         }
 
         // Persist provenance so the Modify and security layers can later
-        // determine ownership and origin.
-        await EntityDesignerPipelineExecutor.saveProvenance(
-            entityInfo.ID,
-            contextUser,
-            options.Source ?? UDT_SETTINGS.SOURCE_ENTITY_DESIGNER
-        );
+        // determine ownership and origin. Only skipped if the entity doesn't
+        // exist in the DB yet (CodeGen hasn't run — extremely rare).
+        if (entityID) {
+            await EntityDesignerPipelineExecutor.saveProvenance(
+                entityID,
+                contextUser,
+                options.Source ?? UDT_SETTINGS.SOURCE_ENTITY_DESIGNER
+            );
+        }
 
         return {
             Success: true,
-            EntityID: entityInfo.ID,
-            EntityName: entityInfo.Name,
+            EntityID: entityID,
+            EntityName: entityName ?? tableDefinition.EntityName,
             SchemaName: tableDefinition.SchemaName,
             TableName: tableDefinition.TableName,
             PipelineSteps: steps,

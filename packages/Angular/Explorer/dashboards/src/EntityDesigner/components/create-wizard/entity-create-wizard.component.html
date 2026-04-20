@@ -1,0 +1,112 @@
+<div class="wizard-root">
+
+  <!-- ── Step indicator ──────────────────────────────────────────────────── -->
+  <mj-entity-wizard-step-indicator
+    [Steps]="StepDefs"
+    [CurrentStep]="StepIndex">
+  </mj-entity-wizard-step-indicator>
+
+  <!-- ── Step content ────────────────────────────────────────────────────── -->
+  <div class="wizard-body">
+
+    <!-- Step 1: Basics -->
+    @if (CurrentStep === 'basics') {
+      <mj-entity-step-basics
+        [AvailableSchemas]="AvailableSchemas"
+        (ValueChanged)="OnBasicsChanged($event)">
+      </mj-entity-step-basics>
+    }
+
+    <!-- Step 2: Fields -->
+    @if (CurrentStep === 'fields') {
+      <mj-entity-step-fields
+        [InitialColumns]="TableDefinition.Columns ?? []"
+        (ColumnsChanged)="OnFieldsChanged($event)">
+      </mj-entity-step-fields>
+    }
+
+    <!-- Step 3: Relationships -->
+    @if (CurrentStep === 'relationships') {
+      <mj-entity-step-relationships
+        [InitialForeignKeys]="TableDefinition.ForeignKeys ?? []"
+        [AvailableColumns]="TableDefinition.Columns ?? []"
+        (ForeignKeysChanged)="OnRelationshipsChanged($event)">
+      </mj-entity-step-relationships>
+    }
+
+    <!-- Step 4: Review & Create -->
+    @if (CurrentStep === 'review') {
+      @if (!IsExecuting) {
+        <mj-entity-step-review
+          [TableDefinition]="TableDefinition"
+          [ValidationErrors]="ValidationErrors"
+          [IsValidating]="IsValidating">
+        </mj-entity-step-review>
+      } @else {
+        <mj-entity-step-pipeline
+          [TableDefinition]="TableDefinition"
+          (PipelineCompleted)="OnPipelineCompleted($event)"
+          (CreateAnother)="OnCreateAnother()">
+        </mj-entity-step-pipeline>
+      }
+    }
+
+  </div>
+
+  <!-- ── Validation error list ──────────────────────────────────────────── -->
+  @if (ValidationErrors.length > 0) {
+    <div class="wizard-errors" role="alert">
+      @for (err of ValidationErrors; track $index) {
+        <div class="wizard-error-item">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          {{ err }}
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ── Footer navigation ─────────────────────────────────────────────── -->
+  @if (!IsExecuting) {
+    <div class="wizard-footer">
+      <div class="footer-left">
+        @if (!IsFirstStep) {
+          <button
+            mjButton
+            buttonStyle="ghost"
+            type="button"
+            (click)="OnBack()">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back
+          </button>
+        }
+      </div>
+      <div class="footer-right">
+        <button
+          mjButton
+          buttonStyle="secondary"
+          type="button"
+          (click)="OnCancel()">
+          Cancel
+        </button>
+        <button
+          mjButton
+          buttonStyle="primary"
+          type="button"
+          [disabled]="IsValidating"
+          (click)="OnNext()">
+          @if (IsValidating) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            Validating…
+          } @else if (CurrentStep === 'review') {
+            Create Entity
+            <i class="fa-solid fa-rocket-launch"></i>
+          } @else {
+            Next
+            <i class="fa-solid fa-arrow-right"></i>
+          }
+        </button>
+      </div>
+    </div>
+  }
+
+</div>

@@ -110,7 +110,7 @@ export interface SubagentTableSpec {
     /** Proposed entity display name — human-readable, title-cased with spaces (e.g. "Customer Orders"). */
     name: string;
 
-    /** One-paragraph description of what each row represents. */
+    /** One-paragraph description of what each row represents (create) or what changes are being made (alter). */
     description: string;
 
     /**
@@ -119,13 +119,31 @@ export interface SubagentTableSpec {
      */
     schemaName?: string;
 
-    /** Optional column hints from the calling agent. Schema Designer refines these. */
+    /**
+     * Operation type.  Defaults to `'create'` when omitted.
+     * - `'create'`: design and create a brand-new entity
+     * - `'alter'`: add columns to an existing entity (requires `existingEntityId`)
+     */
+    modificationType?: 'create' | 'alter';
+
+    /**
+     * UUID of the entity to modify.  Required when `modificationType === 'alter'`.
+     * Must be obtained from Database Research Agent before invoking Entity Designer.
+     */
+    existingEntityId?: string;
+
+    /**
+     * Column hints from the calling agent.
+     * - For `'create'`: the full proposed column list (Schema Designer refines these).
+     * - For `'alter'`: ONLY the new columns to add — do not include existing columns.
+     * Omit entirely to let Schema Designer infer columns from name + description.
+     */
     columns?: Array<{
         name: string;
         type: string;
         description?: string;
         required?: boolean;
-        /** e.g. "Users.ID" — Schema Designer resolves to a proper FK definition. */
+        /** e.g. "__mj.User.ID" — Schema Designer resolves to a proper FK definition. */
         foreignKeyTarget?: string;
     }>;
 }
