@@ -581,24 +581,39 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         if (!confirm(`Are you sure you want to delete parameter "${param.Name}"?`)) {
             return;
         }
-        
+
         try {
-            const deleted = await param.Delete();
+            // Reload the parameter entity fresh to ensure we have a clean copy
+            // not tied to any form transaction state
+            const md = new Metadata();
+            const freshParam = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters');
+            const loaded = await freshParam.Load(param.ID);
+            if (!loaded) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Could not load parameter record. It may have already been deleted.',
+                    'warning',
+                    3000
+                );
+                // Remove from local list anyway since it doesn't exist
+                this.removeParameterFromList(param);
+                return;
+            }
+
+            const deleted = await freshParam.Delete();
             if (deleted) {
-                const index = this.queryParameters.indexOf(param);
-                if (index > -1) {
-                    this.queryParameters.splice(index, 1);
-                }
+                this.removeParameterFromList(param);
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Parameter deleted successfully',
                     'success',
                     3000
                 );
             } else {
+                const errorDetail = freshParam.LatestResult?.CompleteMessage ?? 'Unknown reason';
+                console.error('Failed to delete parameter:', errorDetail);
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    'Failed to delete parameter',
+                    `Failed to delete parameter: ${errorDetail}`,
                     'error',
-                    3000
+                    5000
                 );
             }
         } catch (error) {
@@ -609,6 +624,14 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 3000
             );
         }
+    }
+
+    private removeParameterFromList(param: MJQueryParameterEntity): void {
+        const index = this.queryParameters.indexOf(param);
+        if (index > -1) {
+            this.queryParameters.splice(index, 1);
+        }
+        this.cdr.detectChanges();
     }
     
     /**
@@ -854,9 +877,18 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         if (!confirm(`Are you sure you want to delete field "${field.Name}"?`)) {
             return;
         }
-        
+
         try {
-            const deleted = await field.Delete();
+            const md = new Metadata();
+            const freshField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields');
+            const loaded = await freshField.Load(field.ID);
+            if (!loaded) {
+                this.queryFields = this.queryFields.filter(f => !UUIDsEqual(f.ID, field.ID));
+                this.cdr.detectChanges();
+                return;
+            }
+
+            const deleted = await freshField.Delete();
             if (deleted) {
                 this.queryFields = this.queryFields.filter(f => !UUIDsEqual(f.ID, field.ID));
                 this.updateUnsavedChangesFlag();
@@ -864,6 +896,14 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                     'Field deleted successfully',
                     'success',
                     3000
+                );
+            } else {
+                const errorDetail = freshField.LatestResult?.CompleteMessage ?? 'Unknown reason';
+                console.error('Failed to delete field:', errorDetail);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to delete field: ${errorDetail}`,
+                    'error',
+                    5000
                 );
             }
         } catch (error) {
@@ -905,9 +945,18 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         if (!confirm(`Are you sure you want to delete entity "${entity.Entity}"?`)) {
             return;
         }
-        
+
         try {
-            const deleted = await entity.Delete();
+            const md = new Metadata();
+            const freshEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities');
+            const loaded = await freshEntity.Load(entity.ID);
+            if (!loaded) {
+                this.queryEntities = this.queryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
+                this.cdr.detectChanges();
+                return;
+            }
+
+            const deleted = await freshEntity.Delete();
             if (deleted) {
                 this.queryEntities = this.queryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
                 this.updateUnsavedChangesFlag();
@@ -915,6 +964,14 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                     'Entity deleted successfully',
                     'success',
                     3000
+                );
+            } else {
+                const errorDetail = freshEntity.LatestResult?.CompleteMessage ?? 'Unknown reason';
+                console.error('Failed to delete entity:', errorDetail);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to delete entity: ${errorDetail}`,
+                    'error',
+                    5000
                 );
             }
         } catch (error) {
