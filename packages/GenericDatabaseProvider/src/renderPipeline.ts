@@ -110,7 +110,6 @@ export interface RenderResult {
  * enabling diagnosis when SQL Server rejects the output.
  */
 export class RenderPipeline {
-    private static readonly compositionEngine = new QueryCompositionEngine();
 
     /**
      * Runs the full rendering pipeline: composition → Nunjucks → paging.
@@ -189,7 +188,7 @@ export class RenderPipeline {
         outerParams?: Record<string, string>,
         inlineDependencies?: QueryDependencySpec[]
     ): CompositionResult {
-        return RenderPipeline.compositionEngine.ResolveComposition(
+        return new QueryCompositionEngine().ResolveComposition(
             sql, platform, contextUser, outerParams, inlineDependencies
         );
     }
@@ -199,7 +198,7 @@ export class RenderPipeline {
      * Convenience wrapper for callers that need a fast guard.
      */
     static HasCompositionTokens(sql: string): boolean {
-        return RenderPipeline.compositionEngine.HasCompositionTokens(sql);
+        return new QueryCompositionEngine().HasCompositionTokens(sql);
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -207,7 +206,7 @@ export class RenderPipeline {
     // ═════════════════════════════════════════════════════���══════════
 
     private static runComposition(sql: string, ctx: RenderContext): CompositionResult {
-        const engine = RenderPipeline.compositionEngine;
+        const engine = new QueryCompositionEngine();
 
         if (!engine.HasCompositionTokens(sql) || !ctx.ContextUser) {
             return {
