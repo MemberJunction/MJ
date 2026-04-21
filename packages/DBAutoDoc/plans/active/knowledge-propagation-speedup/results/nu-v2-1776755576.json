@@ -1,0 +1,75 @@
+{
+  "results": [
+    {
+      "name": "two-cluster",
+      "nodes": 10,
+      "edges": 21,
+      "clustersFound": 2,
+      "clusterSizes": [
+        5,
+        5
+      ],
+      "expectedClusters": 2,
+      "bridgesFound": [],
+      "expectedBridges": [
+        "T4",
+        "T5"
+      ],
+      "lambda2": 0.2984379526002988,
+      "computationMs": 1,
+      "verdict": "✓ pass"
+    },
+    {
+      "name": "three-cluster",
+      "nodes": 12,
+      "edges": 20,
+      "clustersFound": 1,
+      "clusterSizes": [
+        12
+      ],
+      "expectedClusters": 3,
+      "bridgesFound": [],
+      "expectedBridges": [
+        "T3",
+        "T4",
+        "T7",
+        "T8"
+      ],
+      "lambda2": 0.17157914951639838,
+      "computationMs": 2,
+      "verdict": "⚠ expected 3, got 1"
+    },
+    {
+      "name": "dense",
+      "nodes": 8,
+      "edges": 28,
+      "clustersFound": 1,
+      "clusterSizes": [
+        8
+      ],
+      "expectedClusters": 1,
+      "bridgesFound": [],
+      "expectedBridges": [],
+      "lambda2": 4.70687473652907e-184,
+      "computationMs": 0,
+      "verdict": "✓ correctly kept as one cluster"
+    },
+    {
+      "name": "chinook",
+      "nodes": 11,
+      "edges": 11,
+      "clustersFound": 1,
+      "clusterSizes": [
+        11
+      ],
+      "expectedClusters": 1,
+      "bridgesFound": [],
+      "expectedBridges": [],
+      "lambda2": 0.19461897081193383,
+      "computationMs": 0,
+      "verdict": "✓ correctly kept as one cluster"
+    }
+  ],
+  "passes": 3,
+  "total": 4
+}

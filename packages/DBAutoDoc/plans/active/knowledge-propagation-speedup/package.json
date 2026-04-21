@@ -1,0 +1,15 @@
+{
+  "name": "dbautodoc-speedup-smoke-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reproducible smoke tests for the knowledge-propagation speedup plan.",
+  "scripts": {
+    "t1": "node smoke-tests/t1-distilled-propagation.mjs",
+    "t2": "node smoke-tests/t2-vif-ordering.mjs",
+    "t3": "node smoke-tests/t3-reach-priority.mjs",
+    "t4": "node smoke-tests/t4-synthesis-ramp.mjs",
+    "t5": "node smoke-tests/t5-simulator.mjs",
+    "all": "./run-tests.sh all"
+  }
+}

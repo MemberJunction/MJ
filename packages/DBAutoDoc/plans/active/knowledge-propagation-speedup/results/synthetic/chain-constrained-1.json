@@ -1,0 +1,123 @@
+{
+  "summary": {
+    "model": "gemini-3-flash-preview",
+    "chainLength": 10,
+    "firstHalfAvgDescChars": 124,
+    "secondHalfAvgDescChars": 135,
+    "descCharsChange": "8.9%",
+    "outputTokensChange": "9.7%",
+    "verdict": "FAIL: descriptions still grow — LLM ignoring directive"
+  },
+  "perPosition": [
+    {
+      "position": 0,
+      "name": "Corp",
+      "ancestorCount": 0,
+      "promptChars": 600,
+      "latencyMs": 3193,
+      "inputTokens": 165,
+      "outputTokens": 146,
+      "tableDescChars": 88,
+      "tableDescription": "This table stores unique identifiers and names for corporate entities within the system."
+    },
+    {
+      "position": 1,
+      "name": "Division",
+      "ancestorCount": 1,
+      "promptChars": 941,
+      "latencyMs": 4516,
+      "inputTokens": 238,
+      "outputTokens": 241,
+      "tableDescChars": 135,
+      "tableDescription": "Defines specific business units or segments categorized under a parent corporate entity to organize internal organizational structures."
+    },
+    {
+      "position": 2,
+      "name": "Department",
+      "ancestorCount": 1,
+      "promptChars": 1001,
+      "latencyMs": 3480,
+      "inputTokens": 243,
+      "outputTokens": 241,
+      "tableDescChars": 138,
+      "tableDescription": "Represents specific functional groups or operational teams nested within a division to manage localized business activities and personnel."
+    },
+    {
+      "position": 3,
+      "name": "Team",
+      "ancestorCount": 1,
+      "promptChars": 996,
+      "latencyMs": 4704,
+      "inputTokens": 244,
+      "outputTokens": 243,
+      "tableDescChars": 129,
+      "tableDescription": "Defines specific sub-units within a department to organize personnel and tasks for granular operational execution and management."
+    },
+    {
+      "position": 4,
+      "name": "Squad",
+      "ancestorCount": 1,
+      "promptChars": 977,
+      "latencyMs": 3795,
+      "inputTokens": 245,
+      "outputTokens": 241,
+      "tableDescChars": 129,
+      "tableDescription": "Represents the smallest organizational unit, grouping specific individuals under a team to execute specialized tasks or projects."
+    },
+    {
+      "position": 5,
+      "name": "Member",
+      "ancestorCount": 1,
+      "promptChars": 981,
+      "latencyMs": 3376,
+      "inputTokens": 244,
+      "outputTokens": 240,
+      "tableDescChars": 115,
+      "tableDescription": "Stores individual personnel records and maps each person to their specific organizational squad for task execution."
+    },
+    {
+      "position": 6,
+      "name": "Task",
+      "ancestorCount": 1,
+      "promptChars": 965,
+      "latencyMs": 4474,
+      "inputTokens": 242,
+      "outputTokens": 242,
+      "tableDescChars": 142,
+      "tableDescription": "Records specific work assignments and activities assigned to individual personnel for execution within their designated organizational squads."
+    },
+    {
+      "position": 7,
+      "name": "Subtask",
+      "ancestorCount": 1,
+      "promptChars": 994,
+      "latencyMs": 4128,
+      "inputTokens": 244,
+      "outputTokens": 245,
+      "tableDescChars": 148,
+      "tableDescription": "Decomposes primary tasks into smaller, manageable action items to track granular progress and specific requirements within a larger work assignment."
+    },
+    {
+      "position": 8,
+      "name": "Step",
+      "ancestorCount": 1,
+      "promptChars": 1000,
+      "latencyMs": 4502,
+      "inputTokens": 250,
+      "outputTokens": 246,
+      "tableDescChars": 141,
+      "tableDescription": "Defines the specific, sequential actions or individual checkpoints required to complete a single subtask within the overall project workflow."
+    },
+    {
+      "position": 9,
+      "name": "Action",
+      "ancestorCount": 1,
+      "promptChars": 991,
+      "latencyMs": 4301,
+      "inputTokens": 247,
+      "outputTokens": 247,
+      "tableDescChars": 128,
+      "tableDescription": "Stores the specific, named execution units or operations performed within a defined workflow step to achieve a discrete outcome."
+    }
+  ]
+}

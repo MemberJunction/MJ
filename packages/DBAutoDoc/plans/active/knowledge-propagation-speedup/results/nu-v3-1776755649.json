@@ -1,0 +1,83 @@
+{
+  "results": [
+    {
+      "name": "two-cluster",
+      "nodes": 10,
+      "edges": 21,
+      "clustersFound": 2,
+      "clusterSizes": [
+        5,
+        5
+      ],
+      "expectedClusters": 2,
+      "bridgesFound": [],
+      "expectedBridges": [
+        "T4",
+        "T5"
+      ],
+      "lambda2": 0.29843789706628104,
+      "computationMs": 2,
+      "verdict": "✓ pass"
+    },
+    {
+      "name": "three-cluster",
+      "nodes": 12,
+      "edges": 20,
+      "clustersFound": 3,
+      "clusterSizes": [
+        5,
+        3,
+        4
+      ],
+      "expectedClusters": 3,
+      "bridgesFound": [
+        "T5",
+        "T6"
+      ],
+      "expectedBridges": [
+        "T3",
+        "T4",
+        "T7",
+        "T8"
+      ],
+      "lambda2": 0.17157874254799715,
+      "computationMs": 1,
+      "verdict": "✓ pass"
+    },
+    {
+      "name": "dense",
+      "nodes": 8,
+      "edges": 28,
+      "clustersFound": 1,
+      "clusterSizes": [
+        8
+      ],
+      "expectedClusters": 1,
+      "bridgesFound": [],
+      "expectedBridges": [],
+      "lambda2": 7.399417953811895e-177,
+      "computationMs": 0,
+      "verdict": "✓ correctly kept as one cluster"
+    },
+    {
+      "name": "chinook",
+      "nodes": 11,
+      "edges": 11,
+      "clustersFound": 2,
+      "clusterSizes": [
+        7,
+        4
+      ],
+      "expectedClusters": 1,
+      "bridgesFound": [
+        "InvoiceLine"
+      ],
+      "expectedBridges": [],
+      "lambda2": 0.19461625416973305,
+      "computationMs": 3,
+      "verdict": "✗ over-split (expected 1, got 2)"
+    }
+  ],
+  "passes": 3,
+  "total": 4
+}

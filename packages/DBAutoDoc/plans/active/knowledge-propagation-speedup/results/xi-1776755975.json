@@ -1,0 +1,336 @@
+{
+  "summary": {
+    "model": "gemini-3-flash-preview",
+    "schema": "/app/enterprise-15-state.json",
+    "tables": 15,
+    "clusters": 4,
+    "clusterSizes": [
+      4,
+      4,
+      3,
+      4
+    ],
+    "bridges": [],
+    "p1Calls": 15,
+    "p2Calls": 9,
+    "totalCalls": 24,
+    "p1TotalLatency": 69178,
+    "p2TotalLatency": 29685,
+    "wallTime": 21624,
+    "hallucinations": 0,
+    "simulatedBaselineMs": 207534,
+    "speedup": 9.59739178690344
+  },
+  "clusterResults": [
+    {
+      "descriptions": {
+        "Warehouse": "Stores information regarding physical warehouse facilities, including their unique identifiers, names, and geographic locations. And manages inventory levels and product stock associations.",
+        "Product": "A core table used to store information about products, including their unique identifiers, names, and pricing details. , linking items to stock records and warehouse locations for inventory tracking.",
+        "Stock": "Tracks the inventory levels and stock quantities of items stored across various physical warehouse facilities. And links specific products to these stock records for granular inventory tracking.",
+        "ProductStock": "A mapping table that associates products with specific stock records and the physical warehouse locations where they are stored, facilitating inventory tracking across multiple facilities."
+      },
+      "callRecords": [
+        {
+          "phase": "P1",
+          "name": "Warehouse",
+          "latencyMs": 3573,
+          "inputTokens": 204,
+          "outputTokens": 192
+        },
+        {
+          "phase": "P1",
+          "name": "Product",
+          "latencyMs": 4208,
+          "inputTokens": 212,
+          "outputTokens": 192
+        },
+        {
+          "phase": "P1",
+          "name": "Stock",
+          "latencyMs": 4832,
+          "inputTokens": 236,
+          "outputTokens": 246
+        },
+        {
+          "phase": "P1",
+          "name": "ProductStock",
+          "latencyMs": 4562,
+          "inputTokens": 316,
+          "outputTokens": 397
+        },
+        {
+          "phase": "P2",
+          "name": "Product",
+          "latencyMs": 2974,
+          "inputTokens": 182,
+          "outputTokens": 37,
+          "hallucinated": false,
+          "changed": true
+        },
+        {
+          "phase": "P2",
+          "name": "Warehouse",
+          "latencyMs": 4131,
+          "inputTokens": 197,
+          "outputTokens": 39,
+          "hallucinated": false,
+          "changed": true
+        },
+        {
+          "phase": "P2",
+          "name": "Stock",
+          "latencyMs": 4445,
+          "inputTokens": 196,
+          "outputTokens": 45,
+          "hallucinated": false,
+          "changed": true
+        }
+      ],
+      "cluster": [
+        "Product",
+        "Warehouse",
+        "Stock",
+        "ProductStock"
+      ]
+    },
+    {
+      "descriptions": {
+        "Customer": "Stores unique customer records including identification, names, and contact email addresses. , linking to their specific orders and payment methods.",
+        "PaymentMethod": "Stores information regarding the payment methods associated with customers, allowing for multiple payment options per customer record.",
+        "Order": "Stores individual customer order records, capturing the transaction date, the associated customer, and the total financial amount of the purchase. , with associated line items detailing specific products, quantities, and unit prices.",
+        "OrderLine": "Stores individual line items for customer orders, linking specific products to orders and recording the quantity and unit price for each item."
+      },
+      "callRecords": [
+        {
+          "phase": "P1",
+          "name": "Customer",
+          "latencyMs": 4318,
+          "inputTokens": 212,
+          "outputTokens": 174
+        },
+        {
+          "phase": "P1",
+          "name": "PaymentMethod",
+          "latencyMs": 4175,
+          "inputTokens": 233,
+          "outputTokens": 257
+        },
+        {
+          "phase": "P1",
+          "name": "Order",
+          "latencyMs": 5011,
+          "inputTokens": 251,
+          "outputTokens": 279
+        },
+        {
+          "phase": "P1",
+          "name": "OrderLine",
+          "latencyMs": 6030,
+          "inputTokens": 285,
+          "outputTokens": 374
+        },
+        {
+          "phase": "P2",
+          "name": "Order",
+          "latencyMs": 3325,
+          "inputTokens": 208,
+          "outputTokens": 44,
+          "hallucinated": false,
+          "changed": true
+        },
+        {
+          "phase": "P2",
+          "name": "Customer",
+          "latencyMs": 4100,
+          "inputTokens": 195,
+          "outputTokens": 33,
+          "hallucinated": false,
+          "changed": true
+        }
+      ],
+      "cluster": [
+        "Customer",
+        "Order",
+        "OrderLine",
+        "PaymentMethod"
+      ]
+    },
+    {
+      "descriptions": {
+        "Supplier": "Stores information about suppliers, including their unique identifiers, names, and contact email addresses. And links to related purchase transactions and financial payment records.",
+        "Purchase": "Stores records of purchase transactions made to suppliers, including the date of the order and the total monetary value.",
+        "SupplierPayment": "Records financial transactions representing payments made to suppliers, including the amount and the employee responsible for the transaction."
+      },
+      "callRecords": [
+        {
+          "phase": "P1",
+          "name": "Supplier",
+          "latencyMs": 3705,
+          "inputTokens": 209,
+          "outputTokens": 181
+        },
+        {
+          "phase": "P1",
+          "name": "Purchase",
+          "latencyMs": 4817,
+          "inputTokens": 252,
+          "outputTokens": 279
+        },
+        {
+          "phase": "P1",
+          "name": "SupplierPayment",
+          "latencyMs": 5324,
+          "inputTokens": 259,
+          "outputTokens": 339
+        },
+        {
+          "phase": "P2",
+          "name": "Supplier",
+          "latencyMs": 2909,
+          "inputTokens": 196,
+          "outputTokens": 41,
+          "hallucinated": false,
+          "changed": true
+        }
+      ],
+      "cluster": [
+        "Supplier",
+        "Purchase",
+        "SupplierPayment"
+      ]
+    },
+    {
+      "descriptions": {
+        "Department": "Stores organizational unit information including unique identifiers, department names, and their physical locations. And links to associated job roles and employee records.",
+        "Role": "Stores information about specific job roles or positions within the organization, linking each role to a specific department. And defines the positions assigned to individual employees.",
+        "Employee": "Stores individual employee records, including contact details and organizational assignments to specific departments and job roles. And tracks their historical and current compensation records.",
+        "Compensation": "Stores historical and current compensation records for employees, tracking the monetary amount and the date each pay rate became effective."
+      },
+      "callRecords": [
+        {
+          "phase": "P1",
+          "name": "Department",
+          "latencyMs": 3949,
+          "inputTokens": 207,
+          "outputTokens": 181
+        },
+        {
+          "phase": "P1",
+          "name": "Role",
+          "latencyMs": 4058,
+          "inputTokens": 232,
+          "outputTokens": 242
+        },
+        {
+          "phase": "P1",
+          "name": "Employee",
+          "latencyMs": 5823,
+          "inputTokens": 295,
+          "outputTokens": 351
+        },
+        {
+          "phase": "P1",
+          "name": "Compensation",
+          "latencyMs": 4793,
+          "inputTokens": 251,
+          "outputTokens": 278
+        },
+        {
+          "phase": "P2",
+          "name": "Role",
+          "latencyMs": 2386,
+          "inputTokens": 187,
+          "outputTokens": 37,
+          "hallucinated": false,
+          "changed": true
+        },
+        {
+          "phase": "P2",
+          "name": "Employee",
+          "latencyMs": 2430,
+          "inputTokens": 231,
+          "outputTokens": 33,
+          "hallucinated": false,
+          "changed": true
+        },
+        {
+          "phase": "P2",
+          "name": "Department",
+          "latencyMs": 2985,
+          "inputTokens": 190,
+          "outputTokens": 37,
+          "hallucinated": false,
+          "changed": true
+        }
+      ],
+      "cluster": [
+        "Department",
+        "Role",
+        "Employee",
+        "Compensation"
+      ]
+    }
+  ],
+  "beliefSummary": {
+    "has_description": {
+      "count": 15,
+      "confident": 9,
+      "avgProb": 0.8639679075454622
+    },
+    "pk": {
+      "count": 15,
+      "confident": 0,
+      "avgProb": 0.7310585786300051
+    },
+    "fk:DepartmentId": {
+      "count": 2,
+      "confident": 0,
+      "avgProb": 0.9525741268224334
+    },
+    "fk:WarehouseId": {
+      "count": 2,
+      "confident": 0,
+      "avgProb": 0.9525741268224334
+    },
+    "fk:CustomerId": {
+      "count": 2,
+      "confident": 0,
+      "avgProb": 0.9525741268224334
+    },
+    "fk:SupplierId": {
+      "count": 2,
+      "confident": 0,
+      "avgProb": 0.9525741268224334
+    },
+    "fk:EmployeeId": {
+      "count": 2,
+      "confident": 0,
+      "avgProb": 0.9525741268224334
+    },
+    "descendants_known": {
+      "count": 9,
+      "confident": 0,
+      "avgProb": 0.8807970779778823
+    },
+    "fk:ProductId": {
+      "count": 2,
+      "confident": 0,
+      "avgProb": 0.9525741268224334
+    },
+    "fk:StockId": {
+      "count": 1,
+      "confident": 0,
+      "avgProb": 0.9525741268224334
+    },
+    "fk:RoleId": {
+      "count": 1,
+      "confident": 0,
+      "avgProb": 0.9525741268224334
+    },
+    "fk:OrderId": {
+      "count": 1,
+      "confident": 0,
+      "avgProb": 0.9525741268224334
+    }
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "results": [
+    {
+      "name": "two-cluster",
+      "nodes": 10,
+      "edges": 21,
+      "clustersFound": 5,
+      "clusterSizes": [
+        4,
+        1,
+        2,
+        2,
+        1
+      ],
+      "expectedClusters": 2,
+      "bridgesFound": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T0",
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "expectedBridges": [
+        "T4",
+        "T5"
+      ],
+      "lambda2": 0.29843789459775777,
+      "computationMs": 1,
+      "verdict": "⚠ expected 2, got 5"
+    },
+    {
+      "name": "three-cluster",
+      "nodes": 12,
+      "edges": 20,
+      "clustersFound": 5,
+      "clusterSizes": [
+        1,
+        2,
+        2,
+        4,
+        3
+      ],
+      "expectedClusters": 3,
+      "bridgesFound": [
+        "T5",
+        "T6",
+        "T3",
+        "T0",
+        "T1",
+        "T2",
+        "T8",
+        "T9",
+        "T10",
+        "T11",
+        "T7"
+      ],
+      "expectedBridges": [
+        "T3",
+        "T4",
+        "T7",
+        "T8"
+      ],
+      "lambda2": 0.17157898977139505,
+      "computationMs": 1,
+      "verdict": "⚠ expected 3, got 5"
+    },
+    {
+      "name": "dense",
+      "nodes": 8,
+      "edges": 28,
+      "clustersFound": 4,
+      "clusterSizes": [
+        2,
+        1,
+        2,
+        3
+      ],
+      "expectedClusters": 1,
+      "bridgesFound": [
+        "T0",
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "expectedBridges": [],
+      "lambda2": 6.913222269277072e-184,
+      "computationMs": 0,
+      "verdict": "✗ over-split (expected 1, got 4)"
+    },
+    {
+      "name": "chinook",
+      "nodes": 11,
+      "edges": 11,
+      "clustersFound": 5,
+      "clusterSizes": [
+        2,
+        3,
+        2,
+        2,
+        2
+      ],
+      "expectedClusters": 1,
+      "bridgesFound": [
+        "InvoiceLine",
+        "Genre",
+        "MediaType",
+        "Track"
+      ],
+      "expectedBridges": [],
+      "lambda2": 0.19461891127976402,
+      "computationMs": 0,
+      "verdict": "✗ over-split (expected 1, got 5)"
+    }
+  ],
+  "passes": 0,
+  "total": 4
+}

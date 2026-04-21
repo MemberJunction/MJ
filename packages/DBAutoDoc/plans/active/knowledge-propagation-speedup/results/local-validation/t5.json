@@ -1,0 +1,55 @@
+{
+  "depthLat": {
+    "0": 5000,
+    "1": 4500,
+    "2": 3500,
+    "3": 2500
+  },
+  "projections": [
+    {
+      "schema": "chinook",
+      "tables": 11,
+      "configs": [
+        {
+          "config": "baseline (today)",
+          "wallSec": 140,
+          "calls": 22
+        },
+        {
+          "config": "parallel only",
+          "wallSec": 80,
+          "calls": 22
+        },
+        {
+          "config": "+ distilled",
+          "wallSec": 16,
+          "calls": 11
+        },
+        {
+          "config": "+ reach priority",
+          "wallSec": 16,
+          "calls": 11
+        },
+        {
+          "config": "+ caching",
+          "wallSec": 15,
+          "calls": 11
+        },
+        {
+          "config": "full (+ clusters)",
+          "wallSec": 15,
+          "calls": 11
+        }
+      ],
+      "speedup": "9.33x"
+    },
+    {
+      "schema": "lousydb",
+      "skipped": "no state.json at ./lousydb-state.json"
+    },
+    {
+      "schema": "adventureworks",
+      "skipped": "no state.json at ./adventureworks-state.json"
+    }
+  ]
+}

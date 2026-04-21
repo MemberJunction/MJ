@@ -1,0 +1,10 @@
+services:
+  smoke-tests:
+    build: .
+    environment:
+      AI_API_KEY: ${AI_API_KEY:?AI_API_KEY is required}
+      AI_MODEL: ${AI_MODEL:-gemini-3-flash-preview}
+    volumes:
+      - ./results:/app/results
+    # Default CMD from Dockerfile runs all tests; override for subsets:
+    #   docker compose run --rm smoke-tests ./run-tests.sh t1 t4

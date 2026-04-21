@@ -1,0 +1,137 @@
+{
+  "summary": {
+    "model": "gemini-3-flash-preview",
+    "chainLength": 10,
+    "trends": {
+      "outTokens": "increasing",
+      "descChars": "flat/noisy",
+      "latency": "increasing"
+    },
+    "firstHalfAvgDescChars": 131,
+    "secondHalfAvgDescChars": 153,
+    "percentChange": "16.7%",
+    "verdict": "FAIL: descriptions GROW with depth — inverse of synthesis-ramp hypothesis"
+  },
+  "perPosition": [
+    {
+      "position": 0,
+      "name": "Corp",
+      "promptChars": 708,
+      "ancestorCount": 0,
+      "latencyMs": 3324,
+      "inputTokens": 195,
+      "outputTokens": 149,
+      "tableDescChars": 102,
+      "tableDescTokensApprox": 26,
+      "tableDescription": "Stores information about corporate entities, including a unique identifier and the corporation's name."
+    },
+    {
+      "position": 1,
+      "name": "Division",
+      "promptChars": 870,
+      "ancestorCount": 1,
+      "latencyMs": 4495,
+      "inputTokens": 233,
+      "outputTokens": 238,
+      "tableDescChars": 125,
+      "tableDescTokensApprox": 31,
+      "tableDescription": "Stores information about organizational divisions within corporate entities, linking each division to its parent corporation."
+    },
+    {
+      "position": 2,
+      "name": "Department",
+      "promptChars": 915,
+      "ancestorCount": 1,
+      "latencyMs": 4384,
+      "inputTokens": 235,
+      "outputTokens": 242,
+      "tableDescChars": 131,
+      "tableDescTokensApprox": 33,
+      "tableDescription": "Stores information about organizational departments, linking each department to a specific division within the corporate structure."
+    },
+    {
+      "position": 3,
+      "name": "Team",
+      "promptChars": 919,
+      "ancestorCount": 1,
+      "latencyMs": 4525,
+      "inputTokens": 238,
+      "outputTokens": 249,
+      "tableDescChars": 125,
+      "tableDescTokensApprox": 31,
+      "tableDescription": "Stores information about organizational teams, linking each team to its respective department within the corporate structure."
+    },
+    {
+      "position": 4,
+      "name": "Squad",
+      "promptChars": 891,
+      "ancestorCount": 1,
+      "latencyMs": 4606,
+      "inputTokens": 238,
+      "outputTokens": 254,
+      "tableDescChars": 171,
+      "tableDescTokensApprox": 43,
+      "tableDescription": "The Squad table represents specific sub-units or groups within an organization, establishing a hierarchical relationship where each squad is associated with a parent team."
+    },
+    {
+      "position": 5,
+      "name": "Member",
+      "promptChars": 943,
+      "ancestorCount": 1,
+      "latencyMs": 4609,
+      "inputTokens": 248,
+      "outputTokens": 243,
+      "tableDescChars": 136,
+      "tableDescTokensApprox": 34,
+      "tableDescription": "The Member table stores individual personnel records, associating each person with a specific squad within the organizational hierarchy."
+    },
+    {
+      "position": 6,
+      "name": "Task",
+      "promptChars": 908,
+      "ancestorCount": 1,
+      "latencyMs": 4504,
+      "inputTokens": 240,
+      "outputTokens": 253,
+      "tableDescChars": 154,
+      "tableDescTokensApprox": 39,
+      "tableDescription": "The Task table stores individual work items or assignments, linking each task to a specific member responsible for its completion within the organization."
+    },
+    {
+      "position": 7,
+      "name": "Subtask",
+      "promptChars": 924,
+      "ancestorCount": 1,
+      "latencyMs": 5516,
+      "inputTokens": 245,
+      "outputTokens": 254,
+      "tableDescChars": 153,
+      "tableDescTokensApprox": 38,
+      "tableDescription": "The Subtask table stores granular work items that are components of larger tasks, allowing for a hierarchical breakdown of assignments within the system."
+    },
+    {
+      "position": 8,
+      "name": "Step",
+      "promptChars": 929,
+      "ancestorCount": 1,
+      "latencyMs": 4520,
+      "inputTokens": 248,
+      "outputTokens": 261,
+      "tableDescChars": 173,
+      "tableDescTokensApprox": 43,
+      "tableDescription": "The Step table defines specific, sequential actions or components that must be completed as part of a Subtask, facilitating a granular level of task management and tracking."
+    },
+    {
+      "position": 9,
+      "name": "Action",
+      "promptChars": 941,
+      "ancestorCount": 1,
+      "latencyMs": 4710,
+      "inputTokens": 251,
+      "outputTokens": 257,
+      "tableDescChars": 147,
+      "tableDescTokensApprox": 37,
+      "tableDescription": "The Action table stores individual operations or tasks that are executed as part of a specific Step within a workflow or subtask management system."
+    }
+  ]
+}

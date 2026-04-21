@@ -1,0 +1,167 @@
+{
+  "summary": {
+    "model": "gemini-3-flash-preview",
+    "depthSummary": [
+      {
+        "depth": 0,
+        "count": 5,
+        "avgLatencyMs": 4510,
+        "avgOutputTokens": 246,
+        "avgInputTokens": 226,
+        "pkPassRate": 1,
+        "fkPassRate": 1
+      },
+      {
+        "depth": 1,
+        "count": 2,
+        "avgLatencyMs": 5838,
+        "avgOutputTokens": 396,
+        "avgInputTokens": 304,
+        "pkPassRate": 1,
+        "fkPassRate": 1
+      },
+      {
+        "depth": 2,
+        "count": 2,
+        "avgLatencyMs": 7213,
+        "avgOutputTokens": 487,
+        "avgInputTokens": 360,
+        "pkPassRate": 1,
+        "fkPassRate": 1
+      },
+      {
+        "depth": 3,
+        "count": 1,
+        "avgLatencyMs": 4518,
+        "avgOutputTokens": 295,
+        "avgInputTokens": 272,
+        "pkPassRate": 1,
+        "fkPassRate": 1
+      },
+      {
+        "depth": 4,
+        "count": 1,
+        "avgLatencyMs": 5325,
+        "avgOutputTokens": 393,
+        "avgInputTokens": 340,
+        "pkPassRate": 1,
+        "fkPassRate": 1
+      }
+    ],
+    "verdict": "FAIL: no depth-related decay observed — synthesis-ramp hypothesis not supported by this data",
+    "trendLat": "increasing",
+    "trendOut": "increasing"
+  },
+  "perTable": [
+    {
+      "table": "Artist",
+      "depth": 0,
+      "latencyMs": 3654,
+      "promptChars": 706,
+      "inputTokens": 196,
+      "outputTokens": 152,
+      "pkCorrect": true,
+      "fkCorrect": true
+    },
+    {
+      "table": "Employee",
+      "depth": 0,
+      "latencyMs": 7294,
+      "promptChars": 1295,
+      "inputTokens": 356,
+      "outputTokens": 602,
+      "pkCorrect": true,
+      "fkCorrect": true
+    },
+    {
+      "table": "Genre",
+      "depth": 0,
+      "latencyMs": 3676,
+      "promptChars": 701,
+      "inputTokens": 193,
+      "outputTokens": 160,
+      "pkCorrect": true,
+      "fkCorrect": true
+    },
+    {
+      "table": "MediaType",
+      "depth": 0,
+      "latencyMs": 3630,
+      "promptChars": 706,
+      "inputTokens": 190,
+      "outputTokens": 161,
+      "pkCorrect": true,
+      "fkCorrect": true
+    },
+    {
+      "table": "Playlist",
+      "depth": 0,
+      "latencyMs": 4297,
+      "promptChars": 707,
+      "inputTokens": 193,
+      "outputTokens": 154,
+      "pkCorrect": true,
+      "fkCorrect": true
+    },
+    {
+      "table": "Album",
+      "depth": 1,
+      "latencyMs": 4609,
+      "promptChars": 986,
+      "inputTokens": 258,
+      "outputTokens": 244,
+      "pkCorrect": true,
+      "fkCorrect": true
+    },
+    {
+      "table": "Customer",
+      "depth": 1,
+      "latencyMs": 7067,
+      "promptChars": 1253,
+      "inputTokens": 350,
+      "outputTokens": 547,
+      "pkCorrect": true,
+      "fkCorrect": true
+    },
+    {
+      "table": "Invoice",
+      "depth": 2,
+      "latencyMs": 6349,
+      "promptChars": 1160,
+      "inputTokens": 316,
+      "outputTokens": 411,
+      "pkCorrect": true,
+      "fkCorrect": true
+    },
+    {
+      "table": "Track",
+      "depth": 2,
+      "latencyMs": 8076,
+      "promptChars": 1503,
+      "inputTokens": 404,
+      "outputTokens": 562,
+      "pkCorrect": true,
+      "fkCorrect": true
+    },
+    {
+      "table": "PlaylistTrack",
+      "depth": 3,
+      "latencyMs": 4518,
+      "promptChars": 1061,
+      "inputTokens": 272,
+      "outputTokens": 295,
+      "pkCorrect": true,
+      "fkCorrect": true
+    },
+    {
+      "table": "InvoiceLine",
+      "depth": 4,
+      "latencyMs": 5325,
+      "promptChars": 1285,
+      "inputTokens": 340,
+      "outputTokens": 393,
+      "pkCorrect": true,
+      "fkCorrect": true
+    }
+  ]
+}

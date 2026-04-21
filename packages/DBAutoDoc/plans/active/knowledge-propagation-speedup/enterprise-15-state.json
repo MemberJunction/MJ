@@ -1,0 +1,1247 @@
+{
+  "version": "1.0.0",
+  "summary": {
+    "databaseName": "SyntheticEnterprise",
+    "totalSchemas": 1,
+    "totalTables": 15
+  },
+  "database": {
+    "name": "SyntheticEnterprise",
+    "server": "synthetic"
+  },
+  "phases": {},
+  "schemas": [
+    {
+      "name": "dbo",
+      "tables": [
+        {
+          "name": "Department",
+          "rowCount": 10,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "DepartmentId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 10,
+                "uniquenessRatio": 0.1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3
+                ]
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 10,
+                "uniquenessRatio": 0.1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Engineering",
+                  "Sales",
+                  "Finance"
+                ]
+              }
+            },
+            {
+              "name": "Location",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 5,
+                "uniquenessRatio": 0.05,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "HQ",
+                  "Remote",
+                  "Branch A"
+                ]
+              }
+            }
+          ],
+          "dependsOn": [],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Employee",
+              "column": "-",
+              "referencedColumn": "-"
+            },
+            {
+              "schema": "dbo",
+              "table": "Role",
+              "column": "-",
+              "referencedColumn": "-"
+            }
+          ]
+        },
+        {
+          "name": "Role",
+          "rowCount": 20,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "RoleId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 20,
+                "uniquenessRatio": 0.2,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Title",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 20,
+                "uniquenessRatio": 0.2,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Engineer",
+                  "Manager",
+                  "Analyst"
+                ]
+              }
+            },
+            {
+              "name": "DepartmentId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Department",
+                "column": "DepartmentId",
+                "referencedColumn": "DepartmentId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 10,
+                "uniquenessRatio": 0.1,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Department",
+              "column": "DepartmentId",
+              "referencedColumn": "DepartmentId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Employee",
+              "column": "-",
+              "referencedColumn": "-"
+            }
+          ]
+        },
+        {
+          "name": "Employee",
+          "rowCount": 100,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "EmployeeId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 100,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 100,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Alice",
+                  "Bob"
+                ]
+              }
+            },
+            {
+              "name": "Email",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 100,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "a@x.com"
+                ]
+              }
+            },
+            {
+              "name": "DepartmentId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Department",
+                "column": "DepartmentId",
+                "referencedColumn": "DepartmentId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 10,
+                "uniquenessRatio": 0.1,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "RoleId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Role",
+                "column": "RoleId",
+                "referencedColumn": "RoleId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 20,
+                "uniquenessRatio": 0.2,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Department",
+              "column": "DepartmentId",
+              "referencedColumn": "DepartmentId"
+            },
+            {
+              "schema": "dbo",
+              "table": "Role",
+              "column": "RoleId",
+              "referencedColumn": "RoleId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Compensation",
+              "column": "-",
+              "referencedColumn": "-"
+            }
+          ]
+        },
+        {
+          "name": "Compensation",
+          "rowCount": 100,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "CompensationId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 100,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "EmployeeId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Employee",
+                "column": "EmployeeId",
+                "referencedColumn": "EmployeeId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 100,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Amount",
+              "dataType": "decimal",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 80,
+                "uniquenessRatio": 0.8,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  50000,
+                  75000
+                ]
+              }
+            },
+            {
+              "name": "EffectiveDate",
+              "dataType": "date",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 50,
+                "uniquenessRatio": 0.5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Employee",
+              "column": "EmployeeId",
+              "referencedColumn": "EmployeeId"
+            }
+          ],
+          "dependents": []
+        },
+        {
+          "name": "Customer",
+          "rowCount": 500,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "CustomerId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 500,
+                "uniquenessRatio": 5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 500,
+                "uniquenessRatio": 5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Email",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 500,
+                "uniquenessRatio": 5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Order",
+              "column": "-",
+              "referencedColumn": "-"
+            }
+          ]
+        },
+        {
+          "name": "Product",
+          "rowCount": 200,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "ProductId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 200,
+                "uniquenessRatio": 2,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 200,
+                "uniquenessRatio": 2,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Widget A",
+                  "Widget B"
+                ]
+              }
+            },
+            {
+              "name": "Price",
+              "dataType": "decimal",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 150,
+                "uniquenessRatio": 1.5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "OrderLine",
+              "column": "-",
+              "referencedColumn": "-"
+            },
+            {
+              "schema": "dbo",
+              "table": "ProductStock",
+              "column": "-",
+              "referencedColumn": "-"
+            }
+          ]
+        },
+        {
+          "name": "Order",
+          "rowCount": 1000,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "OrderId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 1000,
+                "uniquenessRatio": 10,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "CustomerId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Customer",
+                "column": "CustomerId",
+                "referencedColumn": "CustomerId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 500,
+                "uniquenessRatio": 5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "OrderDate",
+              "dataType": "datetime",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 800,
+                "uniquenessRatio": 8,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "TotalAmount",
+              "dataType": "decimal",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 500,
+                "uniquenessRatio": 5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Customer",
+              "column": "CustomerId",
+              "referencedColumn": "CustomerId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "OrderLine",
+              "column": "-",
+              "referencedColumn": "-"
+            }
+          ]
+        },
+        {
+          "name": "OrderLine",
+          "rowCount": 3000,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "OrderLineId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 3000,
+                "uniquenessRatio": 30,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "OrderId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Order",
+                "column": "OrderId",
+                "referencedColumn": "OrderId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 1000,
+                "uniquenessRatio": 10,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "ProductId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Product",
+                "column": "ProductId",
+                "referencedColumn": "ProductId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 200,
+                "uniquenessRatio": 2,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Quantity",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 20,
+                "uniquenessRatio": 0.2,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "UnitPrice",
+              "dataType": "decimal",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 150,
+                "uniquenessRatio": 1.5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Order",
+              "column": "OrderId",
+              "referencedColumn": "OrderId"
+            },
+            {
+              "schema": "dbo",
+              "table": "Product",
+              "column": "ProductId",
+              "referencedColumn": "ProductId"
+            }
+          ],
+          "dependents": []
+        },
+        {
+          "name": "Warehouse",
+          "rowCount": 5,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "WarehouseId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 5,
+                "uniquenessRatio": 0.05,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 5,
+                "uniquenessRatio": 0.05,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Main",
+                  "East",
+                  "West"
+                ]
+              }
+            },
+            {
+              "name": "Location",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 5,
+                "uniquenessRatio": 0.05,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Stock",
+              "column": "-",
+              "referencedColumn": "-"
+            },
+            {
+              "schema": "dbo",
+              "table": "ProductStock",
+              "column": "-",
+              "referencedColumn": "-"
+            }
+          ]
+        },
+        {
+          "name": "Supplier",
+          "rowCount": 30,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "SupplierId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 30,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 30,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "ContactEmail",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 30,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Purchase",
+              "column": "-",
+              "referencedColumn": "-"
+            }
+          ]
+        },
+        {
+          "name": "Stock",
+          "rowCount": 200,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "StockId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 200,
+                "uniquenessRatio": 2,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "WarehouseId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Warehouse",
+                "column": "WarehouseId",
+                "referencedColumn": "WarehouseId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 5,
+                "uniquenessRatio": 0.05,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Quantity",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 100,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Warehouse",
+              "column": "WarehouseId",
+              "referencedColumn": "WarehouseId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "ProductStock",
+              "column": "-",
+              "referencedColumn": "-"
+            }
+          ]
+        },
+        {
+          "name": "Purchase",
+          "rowCount": 150,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "PurchaseId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 150,
+                "uniquenessRatio": 1.5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "SupplierId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Supplier",
+                "column": "SupplierId",
+                "referencedColumn": "SupplierId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 30,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "OrderDate",
+              "dataType": "date",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 100,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "TotalAmount",
+              "dataType": "decimal",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 100,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Supplier",
+              "column": "SupplierId",
+              "referencedColumn": "SupplierId"
+            }
+          ],
+          "dependents": []
+        },
+        {
+          "name": "ProductStock",
+          "rowCount": 500,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "ProductStockId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 500,
+                "uniquenessRatio": 5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "ProductId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Product",
+                "column": "ProductId",
+                "referencedColumn": "ProductId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 200,
+                "uniquenessRatio": 2,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "StockId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Stock",
+                "column": "StockId",
+                "referencedColumn": "StockId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 200,
+                "uniquenessRatio": 2,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "WarehouseId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Warehouse",
+                "column": "WarehouseId",
+                "referencedColumn": "WarehouseId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 5,
+                "uniquenessRatio": 0.05,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Product",
+              "column": "ProductId",
+              "referencedColumn": "ProductId"
+            },
+            {
+              "schema": "dbo",
+              "table": "Stock",
+              "column": "StockId",
+              "referencedColumn": "StockId"
+            },
+            {
+              "schema": "dbo",
+              "table": "Warehouse",
+              "column": "WarehouseId",
+              "referencedColumn": "WarehouseId"
+            }
+          ],
+          "dependents": []
+        },
+        {
+          "name": "PaymentMethod",
+          "rowCount": 100,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "PaymentMethodId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 100,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "CustomerId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Customer",
+                "column": "CustomerId",
+                "referencedColumn": "CustomerId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 500,
+                "uniquenessRatio": 5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Type",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 3,
+                "uniquenessRatio": 0.03,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "credit",
+                  "debit",
+                  "bank"
+                ]
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Customer",
+              "column": "CustomerId",
+              "referencedColumn": "CustomerId"
+            }
+          ],
+          "dependents": []
+        },
+        {
+          "name": "SupplierPayment",
+          "rowCount": 50,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "SupplierPaymentId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 50,
+                "uniquenessRatio": 0.5,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "SupplierId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Supplier",
+                "column": "SupplierId",
+                "referencedColumn": "SupplierId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 30,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "EmployeeId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Employee",
+                "column": "EmployeeId",
+                "referencedColumn": "EmployeeId"
+              },
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 100,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            },
+            {
+              "name": "Amount",
+              "dataType": "decimal",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 100,
+                "distinctCount": 40,
+                "uniquenessRatio": 0.4,
+                "nullPercentage": 0,
+                "sampleValues": []
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Supplier",
+              "column": "SupplierId",
+              "referencedColumn": "SupplierId"
+            },
+            {
+              "schema": "dbo",
+              "table": "Employee",
+              "column": "EmployeeId",
+              "referencedColumn": "EmployeeId"
+            }
+          ],
+          "dependents": []
+        }
+      ]
+    }
+  ]
+}

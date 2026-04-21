@@ -1,0 +1,253 @@
+{
+  "summary": {
+    "model": "gemini-3-flash-preview",
+    "p1": {
+      "calls": 10,
+      "latency": 41334,
+      "inputTokens": 2095,
+      "outputTokens": 2379,
+      "avgLatency": 4133,
+      "avgOutputTokens": 238
+    },
+    "p2": {
+      "calls": 9,
+      "latency": 25920,
+      "inputTokens": 1897,
+      "outputTokens": 353,
+      "avgLatency": 2880,
+      "avgOutputTokens": 39,
+      "changedCount": 9
+    },
+    "grand": {
+      "totalCalls": 19,
+      "totalLatency": 67254,
+      "totalInputTokens": 3992,
+      "totalOutputTokens": 2732
+    },
+    "p2OverP1Latency": 0.6968303895475442,
+    "p2OverP1Output": 0.1638655462184874,
+    "verdict": "STRONG PASS: P2 refinements meaningfully cheaper than P1 generations"
+  },
+  "p1Results": [
+    {
+      "phase": "P1",
+      "position": 0,
+      "name": "Corp",
+      "ancestorCount": 0,
+      "promptChars": 562,
+      "latencyMs": 3590,
+      "inputTokens": 157,
+      "outputTokens": 148,
+      "descChars": 105
+    },
+    {
+      "phase": "P1",
+      "position": 1,
+      "name": "Division",
+      "ancestorCount": 1,
+      "promptChars": 784,
+      "latencyMs": 3555,
+      "inputTokens": 208,
+      "outputTokens": 245,
+      "descChars": 155
+    },
+    {
+      "phase": "P1",
+      "position": 2,
+      "name": "Department",
+      "ancestorCount": 1,
+      "promptChars": 847,
+      "latencyMs": 4306,
+      "inputTokens": 217,
+      "outputTokens": 242,
+      "descChars": 167
+    },
+    {
+      "phase": "P1",
+      "position": 3,
+      "name": "Team",
+      "ancestorCount": 1,
+      "promptChars": 851,
+      "latencyMs": 4096,
+      "inputTokens": 214,
+      "outputTokens": 256,
+      "descChars": 175
+    },
+    {
+      "phase": "P1",
+      "position": 4,
+      "name": "Squad",
+      "ancestorCount": 1,
+      "promptChars": 849,
+      "latencyMs": 4521,
+      "inputTokens": 217,
+      "outputTokens": 243,
+      "descChars": 167
+    },
+    {
+      "phase": "P1",
+      "position": 5,
+      "name": "Member",
+      "ancestorCount": 1,
+      "promptChars": 845,
+      "latencyMs": 4487,
+      "inputTokens": 215,
+      "outputTokens": 248,
+      "descChars": 166
+    },
+    {
+      "phase": "P1",
+      "position": 6,
+      "name": "Task",
+      "ancestorCount": 1,
+      "promptChars": 842,
+      "latencyMs": 4608,
+      "inputTokens": 215,
+      "outputTokens": 252,
+      "descChars": 161
+    },
+    {
+      "phase": "P1",
+      "position": 7,
+      "name": "Subtask",
+      "ancestorCount": 1,
+      "promptChars": 839,
+      "latencyMs": 3888,
+      "inputTokens": 217,
+      "outputTokens": 248,
+      "descChars": 169
+    },
+    {
+      "phase": "P1",
+      "position": 8,
+      "name": "Step",
+      "ancestorCount": 1,
+      "promptChars": 847,
+      "latencyMs": 3587,
+      "inputTokens": 219,
+      "outputTokens": 254,
+      "descChars": 149
+    },
+    {
+      "phase": "P1",
+      "position": 9,
+      "name": "Action",
+      "ancestorCount": 1,
+      "promptChars": 825,
+      "latencyMs": 4696,
+      "inputTokens": 216,
+      "outputTokens": 243,
+      "descChars": 160
+    }
+  ],
+  "p2Results": [
+    {
+      "phase": "P2",
+      "position": 8,
+      "name": "Step",
+      "descendantCount": 1,
+      "promptChars": 1029,
+      "latencyMs": 2982,
+      "inputTokens": 211,
+      "outputTokens": 40,
+      "changed": true,
+      "descCharsAfter": 153
+    },
+    {
+      "phase": "P2",
+      "position": 7,
+      "name": "Subtask",
+      "descendantCount": 1,
+      "promptChars": 1043,
+      "latencyMs": 3233,
+      "inputTokens": 215,
+      "outputTokens": 38,
+      "changed": true,
+      "descCharsAfter": 160
+    },
+    {
+      "phase": "P2",
+      "position": 6,
+      "name": "Task",
+      "descendantCount": 1,
+      "promptChars": 1042,
+      "latencyMs": 2771,
+      "inputTokens": 211,
+      "outputTokens": 41,
+      "changed": true,
+      "descCharsAfter": 178
+    },
+    {
+      "phase": "P2",
+      "position": 5,
+      "name": "Member",
+      "descendantCount": 1,
+      "promptChars": 1064,
+      "latencyMs": 2595,
+      "inputTokens": 212,
+      "outputTokens": 39,
+      "changed": true,
+      "descCharsAfter": 157
+    },
+    {
+      "phase": "P2",
+      "position": 4,
+      "name": "Squad",
+      "descendantCount": 1,
+      "promptChars": 1045,
+      "latencyMs": 3077,
+      "inputTokens": 211,
+      "outputTokens": 39,
+      "changed": true,
+      "descCharsAfter": 171
+    },
+    {
+      "phase": "P2",
+      "position": 3,
+      "name": "Team",
+      "descendantCount": 1,
+      "promptChars": 1065,
+      "latencyMs": 2758,
+      "inputTokens": 212,
+      "outputTokens": 39,
+      "changed": true,
+      "descCharsAfter": 169
+    },
+    {
+      "phase": "P2",
+      "position": 2,
+      "name": "Department",
+      "descendantCount": 1,
+      "promptChars": 1060,
+      "latencyMs": 3077,
+      "inputTokens": 209,
+      "outputTokens": 39,
+      "changed": true,
+      "descCharsAfter": 166
+    },
+    {
+      "phase": "P2",
+      "position": 1,
+      "name": "Division",
+      "descendantCount": 1,
+      "promptChars": 1049,
+      "latencyMs": 2970,
+      "inputTokens": 211,
+      "outputTokens": 40,
+      "changed": true,
+      "descCharsAfter": 164
+    },
+    {
+      "phase": "P2",
+      "position": 0,
+      "name": "Corp",
+      "descendantCount": 1,
+      "promptChars": 991,
+      "latencyMs": 2457,
+      "inputTokens": 205,
+      "outputTokens": 38,
+      "changed": true,
+      "descCharsAfter": 161
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "summary": {
+    "concurrency": 4,
+    "tables": 11,
+    "alphabetical": {
+      "wallSec": 18
+    },
+    "vifAscending": {
+      "wallSec": 18
+    },
+    "delta": "0.0%",
+    "verdict": "TIE"
+  },
+  "depthLat": {
+    "0": 5500,
+    "1": 5000,
+    "2": 4000,
+    "3": 3000
+  }
+}

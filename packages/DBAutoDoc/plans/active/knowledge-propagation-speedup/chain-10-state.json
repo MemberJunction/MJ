@@ -1,0 +1,870 @@
+{
+  "version": "1.0.0",
+  "summary": {
+    "databaseName": "SyntheticChain10",
+    "totalSchemas": 1,
+    "totalTables": 10
+  },
+  "database": {
+    "name": "SyntheticChain10",
+    "server": "synthetic"
+  },
+  "phases": {},
+  "schemas": [
+    {
+      "name": "dbo",
+      "tables": [
+        {
+          "name": "Corp",
+          "rowCount": 50,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "CorpId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 50,
+                "distinctCount": 50,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  50,
+                  49
+                ]
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 50,
+                "distinctCount": 45,
+                "uniquenessRatio": 0.9,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Acme Industries",
+                  "Globex Ltd",
+                  "Initech"
+                ]
+              }
+            }
+          ],
+          "dependsOn": [],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Division",
+              "column": "CorpId",
+              "referencedColumn": "CorpId"
+            }
+          ]
+        },
+        {
+          "name": "Division",
+          "rowCount": 80,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "DivisionId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 80,
+                "distinctCount": 80,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  80,
+                  79
+                ]
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 80,
+                "distinctCount": 72,
+                "uniquenessRatio": 0.9,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Manufacturing",
+                  "Sales",
+                  "Research"
+                ]
+              }
+            },
+            {
+              "name": "CorpId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Corp",
+                "column": "CorpId",
+                "referencedColumn": "CorpId"
+              },
+              "statistics": {
+                "totalRows": 80,
+                "distinctCount": 50,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Corp",
+              "column": "CorpId",
+              "referencedColumn": "CorpId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Department",
+              "column": "DivisionId",
+              "referencedColumn": "DivisionId"
+            }
+          ]
+        },
+        {
+          "name": "Department",
+          "rowCount": 110,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "DepartmentId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 110,
+                "distinctCount": 110,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  110,
+                  109
+                ]
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 110,
+                "distinctCount": 99,
+                "uniquenessRatio": 0.9,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Engineering",
+                  "Quality",
+                  "Purchasing"
+                ]
+              }
+            },
+            {
+              "name": "DivisionId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Division",
+                "column": "DivisionId",
+                "referencedColumn": "DivisionId"
+              },
+              "statistics": {
+                "totalRows": 110,
+                "distinctCount": 80,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Division",
+              "column": "DivisionId",
+              "referencedColumn": "DivisionId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Team",
+              "column": "DepartmentId",
+              "referencedColumn": "DepartmentId"
+            }
+          ]
+        },
+        {
+          "name": "Team",
+          "rowCount": 140,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "TeamId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 140,
+                "distinctCount": 140,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  140,
+                  139
+                ]
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 140,
+                "distinctCount": 126,
+                "uniquenessRatio": 0.9,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Backend Platform",
+                  "Data Pipeline",
+                  "UI"
+                ]
+              }
+            },
+            {
+              "name": "DepartmentId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Department",
+                "column": "DepartmentId",
+                "referencedColumn": "DepartmentId"
+              },
+              "statistics": {
+                "totalRows": 140,
+                "distinctCount": 110,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Department",
+              "column": "DepartmentId",
+              "referencedColumn": "DepartmentId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Squad",
+              "column": "TeamId",
+              "referencedColumn": "TeamId"
+            }
+          ]
+        },
+        {
+          "name": "Squad",
+          "rowCount": 170,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "SquadId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 170,
+                "distinctCount": 170,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  170,
+                  169
+                ]
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 170,
+                "distinctCount": 153,
+                "uniquenessRatio": 0.9,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Alpha",
+                  "Bravo",
+                  "Charlie"
+                ]
+              }
+            },
+            {
+              "name": "TeamId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Team",
+                "column": "TeamId",
+                "referencedColumn": "TeamId"
+              },
+              "statistics": {
+                "totalRows": 170,
+                "distinctCount": 140,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Team",
+              "column": "TeamId",
+              "referencedColumn": "TeamId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Member",
+              "column": "SquadId",
+              "referencedColumn": "SquadId"
+            }
+          ]
+        },
+        {
+          "name": "Member",
+          "rowCount": 200,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "MemberId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 200,
+                "distinctCount": 200,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  200,
+                  199
+                ]
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 200,
+                "distinctCount": 180,
+                "uniquenessRatio": 0.9,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "A. Smith",
+                  "B. Jones",
+                  "C. Lee"
+                ]
+              }
+            },
+            {
+              "name": "SquadId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Squad",
+                "column": "SquadId",
+                "referencedColumn": "SquadId"
+              },
+              "statistics": {
+                "totalRows": 200,
+                "distinctCount": 170,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Squad",
+              "column": "SquadId",
+              "referencedColumn": "SquadId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Task",
+              "column": "MemberId",
+              "referencedColumn": "MemberId"
+            }
+          ]
+        },
+        {
+          "name": "Task",
+          "rowCount": 230,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "TaskId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 230,
+                "distinctCount": 230,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  230,
+                  229
+                ]
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 230,
+                "distinctCount": 207,
+                "uniquenessRatio": 0.9,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Migrate DB",
+                  "Deploy v2",
+                  "Fix bug #42"
+                ]
+              }
+            },
+            {
+              "name": "MemberId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Member",
+                "column": "MemberId",
+                "referencedColumn": "MemberId"
+              },
+              "statistics": {
+                "totalRows": 230,
+                "distinctCount": 200,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Member",
+              "column": "MemberId",
+              "referencedColumn": "MemberId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Subtask",
+              "column": "TaskId",
+              "referencedColumn": "TaskId"
+            }
+          ]
+        },
+        {
+          "name": "Subtask",
+          "rowCount": 260,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "SubtaskId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 260,
+                "distinctCount": 260,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  260,
+                  259
+                ]
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 260,
+                "distinctCount": 234,
+                "uniquenessRatio": 0.9,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Schema design",
+                  "ETL script",
+                  "Regression test"
+                ]
+              }
+            },
+            {
+              "name": "TaskId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Task",
+                "column": "TaskId",
+                "referencedColumn": "TaskId"
+              },
+              "statistics": {
+                "totalRows": 260,
+                "distinctCount": 230,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Task",
+              "column": "TaskId",
+              "referencedColumn": "TaskId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Step",
+              "column": "SubtaskId",
+              "referencedColumn": "SubtaskId"
+            }
+          ]
+        },
+        {
+          "name": "Step",
+          "rowCount": 290,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "StepId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 290,
+                "distinctCount": 290,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  290,
+                  289
+                ]
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 290,
+                "distinctCount": 261,
+                "uniquenessRatio": 0.9,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Gather requirements",
+                  "Write code",
+                  "Review"
+                ]
+              }
+            },
+            {
+              "name": "SubtaskId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Subtask",
+                "column": "SubtaskId",
+                "referencedColumn": "SubtaskId"
+              },
+              "statistics": {
+                "totalRows": 290,
+                "distinctCount": 260,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Subtask",
+              "column": "SubtaskId",
+              "referencedColumn": "SubtaskId"
+            }
+          ],
+          "dependents": [
+            {
+              "schema": "dbo",
+              "table": "Action",
+              "column": "StepId",
+              "referencedColumn": "StepId"
+            }
+          ]
+        },
+        {
+          "name": "Action",
+          "rowCount": 320,
+          "description": "",
+          "userApproved": false,
+          "descriptionIterations": [],
+          "columns": [
+            {
+              "name": "ActionId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": true,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 320,
+                "distinctCount": 320,
+                "uniquenessRatio": 1,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  320,
+                  319
+                ]
+              }
+            },
+            {
+              "name": "Name",
+              "dataType": "nvarchar",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": false,
+              "statistics": {
+                "totalRows": 320,
+                "distinctCount": 288,
+                "uniquenessRatio": 0.9,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  "Opened file",
+                  "Ran test",
+                  "Merged PR"
+                ]
+              }
+            },
+            {
+              "name": "StepId",
+              "dataType": "int",
+              "isNullable": false,
+              "isPrimaryKey": false,
+              "isForeignKey": true,
+              "foreignKeyReferences": {
+                "schema": "dbo",
+                "table": "Step",
+                "column": "StepId",
+                "referencedColumn": "StepId"
+              },
+              "statistics": {
+                "totalRows": 320,
+                "distinctCount": 290,
+                "uniquenessRatio": 0.3,
+                "nullPercentage": 0,
+                "sampleValues": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            }
+          ],
+          "dependsOn": [
+            {
+              "schema": "dbo",
+              "table": "Step",
+              "column": "StepId",
+              "referencedColumn": "StepId"
+            }
+          ],
+          "dependents": []
+        }
+      ]
+    }
+  ]
+}
