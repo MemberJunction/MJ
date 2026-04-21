@@ -17,7 +17,7 @@ import { CompositeKey, LogError, Metadata, SetProductionStatus } from '@memberju
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
-import { SystemValidationService } from '@memberjunction/ng-explorer-core';
+import { SystemValidationService, ServerConnectivityService } from '@memberjunction/ng-explorer-core';
 import { NavigationService, AgentContextUpdate } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
@@ -63,6 +63,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     public authBase: MJAuthBase,
     private workspaceInit: WorkspaceInitializerService,
     private validationService: SystemValidationService,
+    private connectivityService: ServerConnectivityService,
     private agentClient: AgentClientService,
     private navigationService: NavigationService,
     private bridge: ConversationBridgeService,
@@ -103,6 +104,9 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
             && (this.bridge.OverlayActive$.value || this.isChatRoute);
           return isViewingConvo;
         };
+
+        // Start server connectivity monitoring
+        this.startConnectivityMonitoring();
 
         // Chat overlay can now render — workspace is initialized
         this.IsChatOverlayReady = true;
@@ -273,6 +277,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.connectivityService.Stop();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -565,6 +570,14 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         return { Success: true, Data: { CurrentMode: this.IsDarkMode ? 'dark' : 'light' } };
       }
     });
+  }
+
+  /**
+   * Derive the health check URL from GRAPHQL_URI and start the connectivity polling service.
+   */
+  private startConnectivityMonitoring(): void {
+    const healthUrl = new URL('/healthcheck', this.environment.GRAPHQL_URI).toString();
+    this.connectivityService.Start(healthUrl);
   }
 
   /**

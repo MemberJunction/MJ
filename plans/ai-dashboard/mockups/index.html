@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Analytics Redesign — Mockup Gallery</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="shared-tokens.css">
+<style>
+body { background: var(--mj-bg-page); margin: 0; }
+
+.gallery {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px 32px;
+}
+
+.gallery-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.gallery-header h1 {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--mj-text-primary);
+  margin-bottom: 8px;
+}
+
+.gallery-header h1 i { color: var(--mj-brand-primary); }
+
+.gallery-header p {
+  font-size: 15px;
+  color: var(--mj-text-muted);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.gallery-header .plan-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 8px 18px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-link);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.gallery-header .plan-link:hover {
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+}
+
+.mockup-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mockup-card {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 14px;
+  padding: 24px 28px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mockup-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+
+.card-num {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.card-num.n1 { background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+.card-num.n2 { background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface)); color: var(--mj-status-success); }
+.card-num.n3 { background: color-mix(in srgb, var(--mj-brand-accent) 12%, var(--mj-bg-surface)); color: var(--mj-brand-accent); }
+.card-num.n4 { background: color-mix(in srgb, var(--mj-color-violet-500) 12%, var(--mj-bg-surface)); color: var(--mj-color-violet-500); }
+.card-num.n5 { background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface)); color: var(--mj-status-warning); }
+
+.card-body { flex: 1; }
+
+.card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  margin-bottom: 4px;
+}
+
+.card-desc {
+  font-size: 13px;
+  color: var(--mj-text-muted);
+  line-height: 1.5;
+}
+
+.card-options {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.card-option-pill {
+  padding: 3px 10px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+}
+
+.card-arrow {
+  color: var(--mj-text-disabled);
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: all 0.25s;
+}
+
+.mockup-card:hover .card-arrow {
+  color: var(--mj-brand-primary);
+  transform: translateX(4px);
+}
+
+.footer {
+  text-align: center;
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--mj-border-subtle);
+  font-size: 12px;
+  color: var(--mj-text-disabled);
+}
+</style>
+</head>
+<body>
+
+<div class="gallery">
+  <div class="gallery-header">
+    <h1><i class="fa-solid fa-robot"></i> AI Analytics Redesign</h1>
+    <p>Full-resolution HTML mockups with 3 design options per area. Each mockup uses MJ design tokens and is fully responsive. Click any card to view.</p>
+    <a href="../plan.md" class="plan-link"><i class="fa-solid fa-file-lines"></i> View Implementation Plan</a>
+  </div>
+
+  <div class="mockup-cards">
+    <a href="01-overview-hub.html" class="mockup-card">
+      <div class="card-num n1">1</div>
+      <div class="card-body">
+        <div class="card-title">Overview Hub</div>
+        <div class="card-desc">Fast-loading navigation dashboard using AIEngineBase in-memory metadata. Zero queries, instant render.</div>
+        <div class="card-options">
+          <span class="card-option-pill">A: Card Grid</span>
+          <span class="card-option-pill">B: Compact Strip + Activity</span>
+          <span class="card-option-pill">C: Dashboard Tiles</span>
+        </div>
+      </div>
+      <i class="fa-solid fa-arrow-right card-arrow"></i>
+    </a>
+
+    <a href="02-analytics-shell.html" class="mockup-card">
+      <div class="card-num n2">2</div>
+      <div class="card-body">
+        <div class="card-title">Analytics Shell + Executive Summary</div>
+        <div class="card-desc">Left-nav analytics shell with KPI sparklines, period deltas, global filters, top consumers, and error hotspots.</div>
+        <div class="card-options">
+          <span class="card-option-pill">A: Classic 6-KPI</span>
+          <span class="card-option-pill">B: Wide Chart + Sidebar</span>
+          <span class="card-option-pill">C: Bento Grid</span>
+        </div>
+      </div>
+      <i class="fa-solid fa-arrow-right card-arrow"></i>
+    </a>
+
+    <a href="03-prompt-run-analysis.html" class="mockup-card">
+      <div class="card-num n3">3</div>
+      <div class="card-body">
+        <div class="card-title">Prompt Run Analysis</div>
+        <div class="card-desc">Deep prompt analytics with multi-filter bar, stats summary, sortable table, time series, breakdowns, and JSON output preview.</div>
+        <div class="card-options">
+          <span class="card-option-pill">A: Table-First + Chart Tabs</span>
+          <span class="card-option-pill">B: Charts-First + Table</span>
+          <span class="card-option-pill">C: Split View (Detail Panel)</span>
+        </div>
+      </div>
+      <i class="fa-solid fa-arrow-right card-arrow"></i>
+    </a>
+
+    <a href="04-agent-run-analysis.html" class="mockup-card">
+      <div class="card-num n4">4</div>
+      <div class="card-body">
+        <div class="card-title">Agent Run Analysis</div>
+        <div class="card-desc">Agent hierarchy with step timelines, cost attribution stacked bars, and agent-vs-agent comparison with insights.</div>
+        <div class="card-options">
+          <span class="card-option-pill">A: Run Cards + Gantt Timeline</span>
+          <span class="card-option-pill">B: Cost Attribution Focus</span>
+          <span class="card-option-pill">C: Agent Comparison</span>
+        </div>
+      </div>
+      <i class="fa-solid fa-arrow-right card-arrow"></i>
+    </a>
+
+    <a href="05-model-perf-cost.html" class="mockup-card">
+      <div class="card-num n5">5</div>
+      <div class="card-body">
+        <div class="card-title">Model Performance + Cost &amp; Budget</div>
+        <div class="card-desc">Model leaderboard with ranked metrics, cost treemap, daily trend with anomaly detection, and monthly projection.</div>
+        <div class="card-options">
+          <span class="card-option-pill">A: Model Leaderboard</span>
+          <span class="card-option-pill">B: Cost &amp; Budget</span>
+          <span class="card-option-pill">C: Combined Health Cards</span>
+        </div>
+      </div>
+      <i class="fa-solid fa-arrow-right card-arrow"></i>
+    </a>
+  </div>
+
+  <div class="footer">
+    MemberJunction AI Analytics Redesign &bull; Mockups use MJ Design Token System &bull; All responsive
+  </div>
+</div>
+
+</body>
+</html>

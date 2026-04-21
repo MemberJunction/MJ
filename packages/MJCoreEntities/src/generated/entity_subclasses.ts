@@ -7274,7 +7274,7 @@ export const MJArtifactTypeSchema = z.object({
         * * Description: Parent artifact type ID for hierarchical artifact type organization. Child types inherit ExtractRules from parent but can override.`),
     ExtractRules: z.string().nullable().describe(`
         * * Field Name: ExtractRules
-        * * Display Name: Extract Rules
+        * * Display Name: Extraction Rules
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.`),
     DriverClass: z.string().nullable().describe(`
@@ -7297,6 +7297,11 @@ export const MJArtifactTypeSchema = z.object({
     *   * File
     *   * Text
         * * Description: Classifies whether this artifact type stores text content ('Text', the default for all existing types) or a binary file in MJStorage ('File'). Used by AgentRunner and viewer components to route file-based artifacts correctly.`),
+    ToolLibraryClass: z.string().nullable().describe(`
+        * * Field Name: ToolLibraryClass
+        * * Display Name: Tool Library Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Class name for the BaseArtifactToolLibrary subclass that provides type-specific artifact exploration tools for agents. Resolved via ClassFactory. When NULL, ArtifactToolManager uses name-based fallback resolution.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -13552,6 +13557,18 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.`),
+    AllowCaching: z.boolean().describe(`
+        * * Field Name: AllowCaching
+        * * Display Name: Allow Caching
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults.AllowCachingBySchema.`),
+    DetectExternalChanges: z.boolean().describe(`
+        * * Field Name: DetectExternalChanges
+        * * Display Name: Detect External Changes
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -16243,7 +16260,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: UI grouping category within the object`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Data Type
         * * SQL Data Type: nvarchar(100)
         * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.`),
     Length: z.number().nullable().describe(`
@@ -16274,31 +16291,31 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Default value from the source system`),
     IsPrimaryKey: z.boolean().describe(`
         * * Field Name: IsPrimaryKey
-        * * Display Name: Primary Key
+        * * Display Name: Is Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this field is part of the object primary key`),
     IsUniqueKey: z.boolean().describe(`
         * * Field Name: IsUniqueKey
-        * * Display Name: Unique Key
+        * * Display Name: Is Unique Key
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether values must be unique across all records`),
     IsReadOnly: z.boolean().describe(`
         * * Field Name: IsReadOnly
-        * * Display Name: Read Only
+        * * Display Name: Is Read Only
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this field cannot be written back to the source system`),
     IsRequired: z.boolean().describe(`
         * * Field Name: IsRequired
-        * * Display Name: Required
+        * * Display Name: Is Required
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this field is required for create/update operations`),
     RelatedIntegrationObjectID: z.string().nullable().describe(`
         * * Field Name: RelatedIntegrationObjectID
-        * * Display Name: Related Integration Object
+        * * Display Name: Related Integration Object ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
         * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.`),
@@ -16339,6 +16356,12 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    IsCustom: z.boolean().describe(`
+        * * Field Name: IsCustom
+        * * Display Name: Is Custom
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
     IntegrationObject: z.string().describe(`
         * * Field Name: IntegrationObject
         * * Display Name: Integration Object Name
@@ -16487,6 +16510,12 @@ export const MJIntegrationObjectSchema = z.object({
         * * SQL Data Type: nvarchar(10)
         * * Default Value: DELETE
         * * Description: HTTP method for delete operations. Defaults to DELETE.`),
+    IsCustom: z.boolean().describe(`
+        * * Field Name: IsCustom
+        * * Display Name: Is Custom
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration Name
@@ -19798,7 +19827,7 @@ export const MJRecordChangeSchema = z.object({
     *   * Snapshot
     *   * Update
         * * Description: Create, Update, or Delete`),
-    Source: z.union([z.literal('External'), z.literal('Internal')]).describe(`
+    Source: z.union([z.literal('External'), z.literal('Internal'), z.literal('Restore')]).describe(`
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(20)
@@ -19807,6 +19836,7 @@ export const MJRecordChangeSchema = z.object({
     * * Possible Values 
     *   * External
     *   * Internal
+    *   * Restore
         * * Description: Internal or External`),
     ChangedAt: z.date().describe(`
         * * Field Name: ChangedAt
@@ -19826,7 +19856,7 @@ export const MJRecordChangeSchema = z.object({
         * * Description: A generated, human-readable description of what was changed.`),
     FullRecordJSON: z.string().describe(`
         * * Field Name: FullRecordJSON
-        * * Display Name: Full Record Snapshot
+        * * Display Name: Full Record JSON
         * * SQL Data Type: nvarchar(MAX)
         * * Description: A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -19871,9 +19901,20 @@ export const MJRecordChangeSchema = z.object({
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()
         * * Description: Field UpdatedAt for entity Record Changes.`),
+    RestoredFromID: z.string().nullable().describe(`
+        * * Field Name: RestoredFromID
+        * * Display Name: Restored From ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Changes (vwRecordChanges.ID)
+        * * Description: When this RecordChange was produced by a restore operation, points at the historical RecordChange whose state was restored. NULL for ordinary changes. Together with Source='Restore' this builds the version-chain lineage for auditing and timeline navigation.`),
+    RestoreReason: z.string().nullable().describe(`
+        * * Field Name: RestoreReason
+        * * Display Name: Restore Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional user-entered explanation captured at restore time. Persisted for audit purposes (regulated industries often require a reason for every reversal). NULL when the user did not enter one or when the change was not a restore.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
@@ -19887,6 +19928,14 @@ export const MJRecordChangeSchema = z.object({
         * * Field Name: Integration
         * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
+    RestoredFrom: z.string().nullable().describe(`
+        * * Field Name: RestoredFrom
+        * * Display Name: Restored From
+        * * SQL Data Type: nvarchar(750)`),
+    RootRestoredFromID: z.string().nullable().describe(`
+        * * Field Name: RootRestoredFromID
+        * * Display Name: Root Restored From ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type MJRecordChangeEntityType = z.infer<typeof MJRecordChangeSchema>;
@@ -24462,6 +24511,16 @@ export const MJVectorDatabaseSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration settings for this vector database provider. Stores provider-specific connection settings like custom host URLs, authentication configuration, timeouts, retry policies, and batch size limits. NULL means use defaults from environment variables or provider defaults.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional link to a stored credential containing the API key and any other authentication details for this vector database provider. When set, the Credential Engine decrypts and supplies the key at runtime. When NULL, the system falls back to the environment variable AI_VENDOR_API_KEY__<ClassKey>.`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential Name
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJVectorDatabaseEntityType = z.infer<typeof MJVectorDatabaseSchema>;
@@ -24663,7 +24722,7 @@ export const MJVersionLabelItemSchema = z.object({
     RecordChange: z.string().describe(`
         * * Field Name: RecordChange
         * * Display Name: Record Change
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(750)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -44161,7 +44220,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
-        const raw = this.Get('DefaultNavItems');
+        const raw = this.DefaultNavItems;
         if (raw !== this._DefaultNavItemsObject_lastRaw) {
             this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
             this._DefaultNavItemsObject_lastRaw = raw;
@@ -44170,7 +44229,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('DefaultNavItems', raw);
+        this.DefaultNavItems = raw;
         this._DefaultNavItemsObject_cached = value;
         this._DefaultNavItemsObject_lastRaw = raw;
     }
@@ -44620,7 +44679,7 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
 
     /**
     * * Field Name: ExtractRules
-    * * Display Name: Extract Rules
+    * * Display Name: Extraction Rules
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.
     */
@@ -44673,6 +44732,19 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
     }
     set ContentCategory(value: 'File' | 'Text') {
         this.Set('ContentCategory', value);
+    }
+
+    /**
+    * * Field Name: ToolLibraryClass
+    * * Display Name: Tool Library Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Class name for the BaseArtifactToolLibrary subclass that provides type-specific artifact exploration tools for agents. Resolved via ClassFactory. When NULL, ArtifactToolManager uses name-based fallback resolution.
+    */
+    get ToolLibraryClass(): string | null {
+        return this.Get('ToolLibraryClass');
+    }
+    set ToolLibraryClass(value: string | null) {
+        this.Set('ToolLibraryClass', value);
     }
 
     /**
@@ -52095,7 +52167,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentProcessRunEntity_IContentProcessRunConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52104,7 +52176,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     }
     set ConfigurationObject(value: MJContentProcessRunEntity_IContentProcessRunConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -52557,7 +52629,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52566,7 +52638,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     }
     set ConfigurationObject(value: MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -52785,7 +52857,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceEntity_IContentSourceConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52794,7 +52866,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
     set ConfigurationObject(value: MJContentSourceEntity_IContentSourceConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -53220,7 +53292,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentTypeEntity_IContentTypeConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -53229,7 +53301,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
     set ConfigurationObject(value: MJContentTypeEntity_IContentTypeConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -60867,6 +60939,34 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
+    * * Field Name: AllowCaching
+    * * Display Name: Allow Caching
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults.AllowCachingBySchema.
+    */
+    get AllowCaching(): boolean {
+        return this.Get('AllowCaching');
+    }
+    set AllowCaching(value: boolean) {
+        this.Set('AllowCaching', value);
+    }
+
+    /**
+    * * Field Name: DetectExternalChanges
+    * * Display Name: Detect External Changes
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.
+    */
+    get DetectExternalChanges(): boolean {
+        return this.Get('DetectExternalChanges');
+    }
+    set DetectExternalChanges(value: boolean) {
+        this.Set('DetectExternalChanges', value);
+    }
+
+    /**
     * * Field Name: CodeName
     * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -67677,7 +67777,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Data Type
     * * SQL Data Type: nvarchar(100)
     * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.
     */
@@ -67756,7 +67856,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsPrimaryKey
-    * * Display Name: Primary Key
+    * * Display Name: Is Primary Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this field is part of the object primary key
@@ -67770,7 +67870,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsUniqueKey
-    * * Display Name: Unique Key
+    * * Display Name: Is Unique Key
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether values must be unique across all records
@@ -67784,7 +67884,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsReadOnly
-    * * Display Name: Read Only
+    * * Display Name: Is Read Only
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this field cannot be written back to the source system
@@ -67798,7 +67898,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: IsRequired
-    * * Display Name: Required
+    * * Display Name: Is Required
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this field is required for create/update operations
@@ -67812,7 +67912,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: RelatedIntegrationObjectID
-    * * Display Name: Related Integration Object
+    * * Display Name: Related Integration Object ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
     * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.
@@ -67901,6 +68001,20 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: IsCustom
+    * * Display Name: Is Custom
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.
+    */
+    get IsCustom(): boolean {
+        return this.Get('IsCustom');
+    }
+    set IsCustom(value: boolean) {
+        this.Set('IsCustom', value);
     }
 
     /**
@@ -68253,6 +68367,20 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     }
     set DeleteMethod(value: string | null) {
         this.Set('DeleteMethod', value);
+    }
+
+    /**
+    * * Field Name: IsCustom
+    * * Display Name: Is Custom
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.
+    */
+    get IsCustom(): boolean {
+        return this.Get('IsCustom');
+    }
+    set IsCustom(value: boolean) {
+        this.Set('IsCustom', value);
     }
 
     /**
@@ -76917,12 +77045,13 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     * * Possible Values 
     *   * External
     *   * Internal
+    *   * Restore
     * * Description: Internal or External
     */
-    get Source(): 'External' | 'Internal' {
+    get Source(): 'External' | 'Internal' | 'Restore' {
         return this.Get('Source');
     }
-    set Source(value: 'External' | 'Internal') {
+    set Source(value: 'External' | 'Internal' | 'Restore') {
         this.Set('Source', value);
     }
 
@@ -76968,7 +77097,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: FullRecordJSON
-    * * Display Name: Full Record Snapshot
+    * * Display Name: Full Record JSON
     * * SQL Data Type: nvarchar(MAX)
     * * Description: A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.
     */
@@ -77072,8 +77201,35 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     }
 
     /**
+    * * Field Name: RestoredFromID
+    * * Display Name: Restored From ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Changes (vwRecordChanges.ID)
+    * * Description: When this RecordChange was produced by a restore operation, points at the historical RecordChange whose state was restored. NULL for ordinary changes. Together with Source='Restore' this builds the version-chain lineage for auditing and timeline navigation.
+    */
+    get RestoredFromID(): string | null {
+        return this.Get('RestoredFromID');
+    }
+    set RestoredFromID(value: string | null) {
+        this.Set('RestoredFromID', value);
+    }
+
+    /**
+    * * Field Name: RestoreReason
+    * * Display Name: Restore Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional user-entered explanation captured at restore time. Persisted for audit purposes (regulated industries often require a reason for every reversal). NULL when the user did not enter one or when the change was not a restore.
+    */
+    get RestoreReason(): string | null {
+        return this.Get('RestoreReason');
+    }
+    set RestoreReason(value: string | null) {
+        this.Set('RestoreReason', value);
+    }
+
+    /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -77105,6 +77261,24 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     */
     get Integration(): string | null {
         return this.Get('Integration');
+    }
+
+    /**
+    * * Field Name: RestoredFrom
+    * * Display Name: Restored From
+    * * SQL Data Type: nvarchar(750)
+    */
+    get RestoredFrom(): string | null {
+        return this.Get('RestoredFrom');
+    }
+
+    /**
+    * * Field Name: RootRestoredFromID
+    * * Display Name: Root Restored From ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootRestoredFromID(): string | null {
+        return this.Get('RootRestoredFromID');
     }
 }
 
@@ -88875,7 +89049,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get GridStateObject(): MJUserViewEntity_IGridState | null {
-        const raw = this.Get('GridState');
+        const raw = this.GridState;
         if (raw !== this._GridStateObject_lastRaw) {
             this._GridStateObject_cached = raw ? JSON.parse(raw) : null;
             this._GridStateObject_lastRaw = raw;
@@ -88884,7 +89058,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set GridStateObject(value: MJUserViewEntity_IGridState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('GridState', raw);
+        this.GridState = raw;
         this._GridStateObject_cached = value;
         this._GridStateObject_lastRaw = raw;
     }
@@ -88910,7 +89084,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get FilterStateObject(): MJUserViewEntity_IFilterState | null {
-        const raw = this.Get('FilterState');
+        const raw = this.FilterState;
         if (raw !== this._FilterStateObject_lastRaw) {
             this._FilterStateObject_cached = raw ? JSON.parse(raw) : null;
             this._FilterStateObject_lastRaw = raw;
@@ -88919,7 +89093,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set FilterStateObject(value: MJUserViewEntity_IFilterState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('FilterState', raw);
+        this.FilterState = raw;
         this._FilterStateObject_cached = value;
         this._FilterStateObject_lastRaw = raw;
     }
@@ -89039,7 +89213,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SortStateObject(): Array<MJUserViewEntity_ISortStateItem> | null {
-        const raw = this.Get('SortState');
+        const raw = this.SortState;
         if (raw !== this._SortStateObject_lastRaw) {
             this._SortStateObject_cached = raw ? JSON.parse(raw) : null;
             this._SortStateObject_lastRaw = raw;
@@ -89048,7 +89222,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set SortStateObject(value: Array<MJUserViewEntity_ISortStateItem> | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('SortState', raw);
+        this.SortState = raw;
         this._SortStateObject_cached = value;
         this._SortStateObject_lastRaw = raw;
     }
@@ -89107,7 +89281,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get CardStateObject(): MJUserViewEntity_ICardState | null {
-        const raw = this.Get('CardState');
+        const raw = this.CardState;
         if (raw !== this._CardStateObject_lastRaw) {
             this._CardStateObject_cached = raw ? JSON.parse(raw) : null;
             this._CardStateObject_lastRaw = raw;
@@ -89116,7 +89290,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set CardStateObject(value: MJUserViewEntity_ICardState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('CardState', raw);
+        this.CardState = raw;
         this._CardStateObject_cached = value;
         this._CardStateObject_lastRaw = raw;
     }
@@ -89142,7 +89316,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DisplayStateObject(): MJUserViewEntity_IDisplayState | null {
-        const raw = this.Get('DisplayState');
+        const raw = this.DisplayState;
         if (raw !== this._DisplayStateObject_lastRaw) {
             this._DisplayStateObject_cached = raw ? JSON.parse(raw) : null;
             this._DisplayStateObject_lastRaw = raw;
@@ -89151,7 +89325,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set DisplayStateObject(value: MJUserViewEntity_IDisplayState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('DisplayState', raw);
+        this.DisplayState = raw;
         this._DisplayStateObject_cached = value;
         this._DisplayStateObject_lastRaw = raw;
     }
@@ -89625,6 +89799,29 @@ export class MJVectorDatabaseEntity extends BaseEntity<MJVectorDatabaseEntityTyp
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional link to a stored credential containing the API key and any other authentication details for this vector database provider. When set, the Credential Engine decrypts and supplies the key at runtime. When NULL, the system falls back to the environment variable AI_VENDOR_API_KEY__<ClassKey>.
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
     }
 }
 
@@ -90134,7 +90331,7 @@ export class MJVersionLabelItemEntity extends BaseEntity<MJVersionLabelItemEntit
     /**
     * * Field Name: RecordChange
     * * Display Name: Record Change
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(750)
     */
     get RecordChange(): string {
         return this.Get('RecordChange');

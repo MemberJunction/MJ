@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/global
 
+## 5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- d18aa6c: Fix XSS vulnerability in highlight match bindings by escaping HTML entities via centralized EscapeHTML utility.
+
+## 5.27.0
+
+## 5.26.0
+
+## 5.25.0
+
 ## 5.24.0
 
 ## 5.23.0

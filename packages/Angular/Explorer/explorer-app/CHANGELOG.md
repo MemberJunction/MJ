@@ -1,5 +1,98 @@
 # @memberjunction/ng-explorer-app
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [2542615]
+- Updated dependencies [115e4da]
+  - @memberjunction/ng-shared@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/ng-bootstrap@5.28.0
+  - @memberjunction/ng-explorer-core@5.28.0
+  - @memberjunction/ng-workspace-initializer@5.28.0
+  - @memberjunction/ai-agent-client@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/ng-auth-services@5.28.0
+  - @memberjunction/ng-base-application@5.28.0
+  - @memberjunction/ng-conversations@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-agent-client@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- 6c39ff0: Replace 30s polling heartbeat with socket-primary server connectivity, using /healthcheck only as a fallback when the GraphQL socket is disconnected. Fix CORS on the /healthcheck route and derive the health URL via `new URL('/healthcheck', base)` so it resolves correctly regardless of the GRAPHQL_URI suffix.
+- Updated dependencies [6c39ff0]
+  - @memberjunction/ng-explorer-core@5.27.1
+  - @memberjunction/ai-agent-client@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/ng-auth-services@5.27.1
+  - @memberjunction/ng-base-application@5.27.1
+  - @memberjunction/ng-shared@5.27.1
+  - @memberjunction/ng-workspace-initializer@5.27.1
+  - @memberjunction/ng-agent-client@5.27.1
+  - @memberjunction/ng-conversations@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/ng-bootstrap@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- 6fd2886: Add server connectivity heartbeat service with warning banner that alerts users when the API connection is lost.
+- Updated dependencies [4357090]
+- Updated dependencies [6fd2886]
+  - @memberjunction/ng-conversations@5.27.0
+  - @memberjunction/ng-explorer-core@5.27.0
+  - @memberjunction/ng-bootstrap@5.27.0
+  - @memberjunction/ng-workspace-initializer@5.27.0
+  - @memberjunction/ai-agent-client@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/ng-auth-services@5.27.0
+  - @memberjunction/ng-base-application@5.27.0
+  - @memberjunction/ng-shared@5.27.0
+  - @memberjunction/ng-agent-client@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/core@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- 55de456: Fix missing dependencies across 17 packages that accumulated while knip dependency checking was silently broken. Repair knip infrastructure: disable crashing vitest plugin, harden CI workflow to fail-fast on tool crashes instead of silently passing, and fix hardcoded Angular version in auto-fix script.
+- Updated dependencies [a1002f4]
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/ng-bootstrap@5.26.0
+  - @memberjunction/ng-base-application@5.26.0
+  - @memberjunction/ng-explorer-core@5.26.0
+  - @memberjunction/ng-shared@5.26.0
+  - @memberjunction/ng-conversations@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/ng-workspace-initializer@5.26.0
+  - @memberjunction/ai-agent-client@5.26.0
+  - @memberjunction/ng-auth-services@5.26.0
+  - @memberjunction/ng-agent-client@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [a24ff53]
+- Updated dependencies [008a62d]
+- Updated dependencies [5e2a64f]
+- Updated dependencies [1eb9f6e]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/ng-conversations@5.25.0
+  - @memberjunction/ng-explorer-core@5.25.0
+  - @memberjunction/ng-bootstrap@5.25.0
+  - @memberjunction/ng-auth-services@5.25.0
+  - @memberjunction/ng-workspace-initializer@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes

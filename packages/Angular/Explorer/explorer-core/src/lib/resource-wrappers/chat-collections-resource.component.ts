@@ -1,9 +1,11 @@
 import { Component, ViewEncapsulation, OnInit, OnDestroy, ChangeDetectorRef, inject } from '@angular/core';
-import { Metadata, CompositeKey, RunView } from '@memberjunction/core';
+import { DataSnapshot, Metadata, CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { ArtifactStateService, ArtifactPermissionService, CollectionStateService } from '@memberjunction/ng-conversations';
+import { AnalyzeArtifactService } from '@memberjunction/ng-artifacts';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject, takeUntil, distinctUntilChanged, combineLatest } from 'rxjs';
 /**
  * Chat Collections Resource - displays the collections full view for tab-based display
@@ -50,14 +52,16 @@ import { Subject, takeUntil, distinctUntilChanged, combineLatest } from 'rxjs';
             (closed)="closeArtifactPanel()"
             (maximizeToggled)="toggleMaximizeArtifactPanel()"
             (navigateToLink)="onNavigateToLink($event)"
-            (openEntityRecord)="onOpenEntityRecord($event)">
+            (openEntityRecord)="onOpenEntityRecord($event)"
+            (analyzeRequested)="onAnalyzeRequested($event)">
           </mj-artifact-viewer-panel>
         </div>
       }
     </div>
     `,
   styles: [`
-    :host {
+    /* :host doesn't work with ViewEncapsulation.None — use the element selector */
+    mj-chat-collections-resource {
       display: flex;
       flex-direction: column;
       width: 100%;
@@ -143,6 +147,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
   private artifactPermissionService = inject(ArtifactPermissionService);
   public collectionState = inject(CollectionStateService);
   private cdr = inject(ChangeDetectorRef);
+  private analyzeService = inject(AnalyzeArtifactService);
 
   ngOnInit() {
     super.ngOnInit();
@@ -424,6 +429,31 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
    */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  /**
+   * Handler for the Analyze button on the artifact viewer panel.
+   * Captures the live DataSnapshot, creates a new analysis conversation
+   * with the snapshot attached as an input artifact, and routes the user
+   * to the Conversations nav item for the new conversation.
+   */
+  async onAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+    if (!this.currentUser) return;
+
+    try {
+      const result = await this.analyzeService.StartAnalysisConversation({
+        snapshot: event.snapshot,
+        currentUser: this.currentUser,
+        environmentId: this.environmentId,
+      });
+
+      await this.navigationService.OpenNavItemByName('Conversations', {
+        conversationId: result.conversationId,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start analysis conversation';
+      MJNotificationService.Instance.CreateSimpleNotification(message, 'error', 5000);
+    }
   }
 
   /**

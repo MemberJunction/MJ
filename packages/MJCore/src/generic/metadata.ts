@@ -4,7 +4,7 @@ import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
 import { LogError, LogStatus } from "./logging";
 import { LibraryInfo } from "./libraryInfo";
@@ -17,6 +17,30 @@ import { RunView } from "../views/runView";
  */
 export class Metadata {
     private static _globalProviderKey: string = 'MJ_MetadataProvider';
+    private _entityMapByName = new Map<string, EntityInfo>();
+    private _entityMapByID = new Map<string, EntityInfo>();
+    private _entityMapPopulated = false;
+
+    /**
+     * Bolt Optimization: Populate entity maps on demand to ensure O(1) hash map lookups
+     * in EntityByName and EntityByID instead of O(N) array scans.
+     */
+    private PopulateEntityMaps() {
+        if (this._entityMapPopulated) return;
+
+        const entities = this.Entities;
+        if (!entities || entities.length === 0) return;
+
+        this._entityMapByName.clear();
+        this._entityMapByID.clear();
+        for (const e of entities) {
+            this._entityMapByName.set(e.Name.toLowerCase().trim(), e);
+            if (e.ID) {
+                this._entityMapByID.set(NormalizeUUID(e.ID), e);
+            }
+        }
+        this._entityMapPopulated = true;
+    }
     /**
      * When an application initializes, the Provider package that is being used for that application will handle setting the provider globally via this static property. 
      * This is done so that the provider can be accessed from anywhere in the application without having to pass it around. This pattern is used sparingly in MJ.
@@ -41,6 +65,7 @@ export class Metadata {
      * @returns 
      */
     public async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
+        this._entityMapPopulated = false;
         return await Metadata.Provider.Refresh(providerToUse);
     }
 
@@ -69,8 +94,15 @@ export class Metadata {
             if (p?.EntityByName) {
                 return p.EntityByName(entityName);
             }
-        } catch { /* Provider not set — fall through to linear search */ }
+        } catch { /* Provider not set — fall through to search */ }
+
         const key = entityName.trim().toLowerCase();
+        this.PopulateEntityMaps();
+
+        if (this._entityMapPopulated) {
+            return this._entityMapByName.get(key);
+        }
+
         return this.Entities.find(e => e.Name.toLowerCase().trim() === key);
     }
     /**
@@ -79,12 +111,21 @@ export class Metadata {
      * @returns
      */
     public EntityByID(entityID: string): EntityInfo {
+        if (!entityID) return undefined;
         try {
             const p = Metadata.Provider;
             if (p?.EntityByID) {
                 return p.EntityByID(entityID);
             }
-        } catch { /* Provider not set — fall through to linear search */ }
+        } catch { /* Provider not set — fall through to search */ }
+
+        const key = NormalizeUUID(entityID);
+        this.PopulateEntityMaps();
+
+        if (this._entityMapPopulated) {
+            return this._entityMapByID.get(key);
+        }
+
         return this.Entities.find(e => UUIDsEqual(e.ID, entityID));
     }
 

@@ -1,5 +1,58 @@
 # Change Log - @memberjunction/core
 
+## 5.28.0
+
+### Patch Changes
+
+- 115e4da: Hot-path optimizations and a new BaseEngine observable API.
+
+  **Performance (bundled from #2397, #2405, #2406, #2417):**
+  - `BaseEntity.GetFieldByName` and new `GetFieldByCodeName` back Fields lookups with lazy `Map` caches — O(1) in place of O(N) `.find()` scans inside `SetMany`, setters, and serialization. Caches clear on `init()` so re-initialized entities see fresh fields.
+  - `Metadata.EntityByName`/`EntityByID` fall back to a lazy `Map` when the provider doesn't own the lookup. UUID keys are normalized so SQL-Server-upper-case and PostgreSQL-lower-case resolve the same entry. Invalidated on `Refresh()`.
+  - `BaseInfo.copyInitData` uses `hasOwnProperty` instead of scanning `Object.keys(this)`, and short-circuits the `DefaultValue` case-insensitive match with an exact-equality fast path plus a length pre-check before falling back to `toLowerCase`.
+  - `RunView`/`RunViews` post-cache field filtering caches per-call key-to-keep decisions so repeated keys across rows avoid re-lowercasing and re-lookup.
+
+  **BaseEngine observable properties:**
+  - New `BaseEngine.ObserveProperty<E>(propertyName)` returns an `Observable<E[]>` backed by a lazy `BehaviorSubject`. Unobserved properties pay zero runtime cost.
+  - Five mutation paths (`applyImmediateMutation` add/remove, `LoadSingleEntityConfig`, `LoadMultipleEntityConfigs`, remote-record-data handling) now emit via `emitPropertyChange` so subscribers receive array updates.
+  - `UserInfoEngine` exposes `UserNotifications$`, `UserFavorites$`, `UserApplications$` as convenience accessors.
+
+  Fully test-covered: 918/918 tests pass in `@memberjunction/core` including new coverage for each cache and for the observable lifecycle.
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/global@5.27.0
+
+## 5.26.0
+
+### Minor Changes
+
+- a1002f4: - Entities now expose AllowCaching as the runtime source of truth for
+
+### Patch Changes
+
+- @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Minor Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+
+### Patch Changes
+
+- @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Minor Changes
