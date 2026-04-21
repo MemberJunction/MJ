@@ -1197,5 +1197,26 @@
       "lastModified": "2025-12-30T23:07:36.819Z",
       "checksum": "414ababb8f68e4bde6f4a69ed2ca146f879f81ddaf1f01d9c2ffb8efc2dcde92"
     }
+  },
+  {
+    "fields": {
+      "Name": "map-core",
+      "DisplayName": "MJ Map Core",
+      "Version": "5.28.0",
+      "GlobalVariable": "MapCore",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/@memberjunction/map-core@5.28.0/src/map-core.js",
+      "CDNCssUrl": null,
+      "Description": "Framework-agnostic Leaflet map engine for MemberJunction. Provides point markers, heatmap, and choropleth rendering with optional GeoDataEngine integration.",
+      "UsageType": "Dependency",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "BEC9ACBC-1C89-4DB0-BDE3-7F0CB4A55B84"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:21:45.654Z",
+      "checksum": "0f81272abe95690feebb7d23015974954eb967230367117ed33f4e08177cc5a0"
+    }
   }
 ]

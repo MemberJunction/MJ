@@ -1,5 +1,5 @@
 import { CompositeKey } from "@memberjunction/core";
-import { SimpleAITools, SimpleDataContext, SimpleMetadata, SimpleRunQuery, SimpleRunView, SimpleSearch } from "./shared";
+import { SimpleAITools, SimpleDataContext, SimpleGeoDataEngine, SimpleMetadata, SimpleRunQuery, SimpleRunView, SimpleSearch } from "./shared";
 
 /**
  * Callbacks a component can use.
@@ -272,5 +272,11 @@ export interface ComponentUtilities {
      * This will not always be available in all environments — ensure component code
      * has fallbacks when this property is undefined.
      */
-    search?: SimpleSearch
+    search?: SimpleSearch,
+    /**
+     * Access to GeoDataEngine for coordinate-based geographic resolution.
+     * Used by map components to resolve lat/lng to country/state via point-in-polygon.
+     * This will not always be available — ensure component code has fallbacks when undefined.
+     */
+    geoDataEngine?: SimpleGeoDataEngine
 }
