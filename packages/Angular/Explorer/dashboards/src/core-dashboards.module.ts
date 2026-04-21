@@ -11,6 +11,7 @@ import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 import { VersionsModule } from '@memberjunction/ng-versions';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
+import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 
 // Core components — eagerly loaded, most-visited pages
@@ -90,6 +91,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     DashboardViewerModule,
     VersionsModule,
     ExportServiceModule,
+    NgTreesModule,
     SharedPipesModule
   ],
   exports: [

@@ -39,6 +39,7 @@
     "@memberjunction/global": "5.28.0",
     "@memberjunction/skip-types": "5.28.0",
     "@memberjunction/sql-converter": "5.28.0",
+    "@memberjunction/sql-dialect": "5.28.0",
     "@memberjunction/sql-parser": "5.28.0",
     "@memberjunction/sqlserver-dataprovider": "5.28.0",
     "nunjucks": "3.2.4",
