@@ -353,7 +353,7 @@ describe('DataSnapshotToolLibrary', () => {
         it('should return error for unsupported aggregate operation', async () => {
             const result = await lib.InvokeTool(
                 'aggregate',
-                { table: 'customers', field: 'Revenue', operation: 'median' },
+                { table: 'customers', field: 'Revenue', operation: 'not_a_real_op' },
                 snapshot
             );
             expect(result.success).toBe(false);
@@ -487,6 +487,209 @@ describe('DataSnapshotToolLibrary', () => {
             expect(data.value).toBe(10);
             expect(data.contributingRows).toHaveLength(2);
             expect(data.contributingRows!.map(r => r.Name).sort()).toEqual(['A', 'B']);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // Statistical ops: mean (alias), median, mode, stdev, variance
+    // -----------------------------------------------------------------------
+
+    describe('aggregate — mean (alias for avg)', () => {
+        it('should behave identically to avg', async () => {
+            const avgResult = await lib.InvokeTool(
+                'aggregate',
+                { table: 'customers', field: 'Revenue', operation: 'avg' },
+                snapshot
+            );
+            const meanResult = await lib.InvokeTool(
+                'aggregate',
+                { table: 'customers', field: 'Revenue', operation: 'mean' },
+                snapshot
+            );
+            expect(avgResult.success).toBe(true);
+            expect(meanResult.success).toBe(true);
+            expect((meanResult.data as { value: number }).value)
+                .toBe((avgResult.data as { value: number }).value);
+        });
+    });
+
+    describe('aggregate — median', () => {
+        it('should return the middle value for an odd-count field', async () => {
+            const result = await lib.InvokeTool(
+                'aggregate',
+                { table: 'customers', field: 'Revenue', operation: 'median' },
+                snapshot
+            );
+            expect(result.success).toBe(true);
+            // Sorted: [20000, 30000, 50000] → median = 30000
+            expect((result.data as { value: number }).value).toBe(30000);
+        });
+
+        it('should return the average of the two middle values for an even-count field', async () => {
+            const evenSnap = JSON.stringify({
+                tables: [{
+                    name: 'scores',
+                    columns: [{ field: 'v' }],
+                    rows: [{ v: 1 }, { v: 2 }, { v: 3 }, { v: 4 }],
+                }],
+            });
+            const result = await lib.InvokeTool(
+                'aggregate',
+                { table: 'scores', field: 'v', operation: 'median' },
+                evenSnap
+            );
+            // (2 + 3) / 2 = 2.5
+            expect((result.data as { value: number }).value).toBe(2.5);
+        });
+
+        it('should skip null and non-numeric values', async () => {
+            const mixedSnap = JSON.stringify({
+                tables: [{
+                    name: 'mixed',
+                    columns: [{ field: 'v' }],
+                    rows: [{ v: 10 }, { v: null }, { v: 'skip me' }, { v: 20 }, { v: 30 }],
+                }],
+            });
+            const result = await lib.InvokeTool(
+                'aggregate',
+                { table: 'mixed', field: 'v', operation: 'median' },
+                mixedSnap
+            );
+            // Numeric only: [10, 20, 30] → median = 20
+            expect((result.data as { value: number }).value).toBe(20);
+        });
+    });
+
+    describe('aggregate — mode', () => {
+        it('should return the most frequent value with frequency and contributing rows', async () => {
+            const modeSnap = JSON.stringify({
+                tables: [{
+                    name: 'votes',
+                    columns: [{ field: 'candidate' }],
+                    rows: [
+                        { candidate: 'Alice' },
+                        { candidate: 'Bob' },
+                        { candidate: 'Alice' },
+                        { candidate: 'Carol' },
+                        { candidate: 'Alice' },
+                    ],
+                }],
+            });
+            const result = await lib.InvokeTool(
+                'aggregate',
+                { table: 'votes', field: 'candidate', operation: 'mode' },
+                modeSnap
+            );
+            const data = result.data as {
+                value: unknown;
+                frequency?: number;
+                contributingRows?: Array<Record<string, unknown>>;
+                allModes?: unknown[];
+            };
+            expect(data.value).toBe('Alice');
+            expect(data.frequency).toBe(3);
+            expect(data.contributingRows).toHaveLength(3);
+            expect(data.allModes).toBeUndefined();
+        });
+
+        it('should return allModes when multiple values share the top frequency', async () => {
+            const tieSnap = JSON.stringify({
+                tables: [{
+                    name: 'votes',
+                    columns: [{ field: 'candidate' }],
+                    rows: [
+                        { candidate: 'Alice' },
+                        { candidate: 'Bob' },
+                        { candidate: 'Alice' },
+                        { candidate: 'Bob' },
+                    ],
+                }],
+            });
+            const result = await lib.InvokeTool(
+                'aggregate',
+                { table: 'votes', field: 'candidate', operation: 'mode' },
+                tieSnap
+            );
+            const data = result.data as {
+                value: unknown;
+                frequency?: number;
+                allModes?: unknown[];
+            };
+            expect(data.frequency).toBe(2);
+            expect((data.allModes ?? []).sort()).toEqual(['Alice', 'Bob']);
+        });
+
+        it('should handle empty tables gracefully', async () => {
+            const emptySnap = JSON.stringify({
+                tables: [{ name: 'empty', columns: [{ field: 'x' }], rows: [] }],
+            });
+            const result = await lib.InvokeTool(
+                'aggregate',
+                { table: 'empty', field: 'x', operation: 'mode' },
+                emptySnap
+            );
+            const data = result.data as { value: unknown; frequency?: number };
+            expect(data.value).toBeNull();
+            expect(data.frequency).toBe(0);
+        });
+    });
+
+    describe('aggregate — stdev and variance', () => {
+        const statSnap = JSON.stringify({
+            tables: [{
+                name: 'measurements',
+                columns: [{ field: 'v' }],
+                // Sample values 2, 4, 4, 4, 5, 5, 7, 9 — classic stats-textbook example
+                // Mean = 5, sample variance = 32/7 ≈ 4.571, sample stdev ≈ 2.138
+                rows: [{ v: 2 }, { v: 4 }, { v: 4 }, { v: 4 }, { v: 5 }, { v: 5 }, { v: 7 }, { v: 9 }],
+            }],
+        });
+
+        it('should compute sample variance (N-1 divisor)', async () => {
+            const result = await lib.InvokeTool(
+                'aggregate',
+                { table: 'measurements', field: 'v', operation: 'variance' },
+                statSnap
+            );
+            expect((result.data as { value: number }).value).toBeCloseTo(32 / 7, 4);
+        });
+
+        it('should compute sample standard deviation', async () => {
+            const result = await lib.InvokeTool(
+                'aggregate',
+                { table: 'measurements', field: 'v', operation: 'stdev' },
+                statSnap
+            );
+            expect((result.data as { value: number }).value).toBeCloseTo(Math.sqrt(32 / 7), 4);
+        });
+
+        it('should return 0 for fewer than 2 numeric values (sample stats undefined)', async () => {
+            const singleSnap = JSON.stringify({
+                tables: [{ name: 't', columns: [{ field: 'v' }], rows: [{ v: 42 }] }],
+            });
+            const result = await lib.InvokeTool(
+                'aggregate',
+                { table: 't', field: 'v', operation: 'stdev' },
+                singleSnap
+            );
+            expect((result.data as { value: number }).value).toBe(0);
+        });
+
+        it('should skip null and non-numeric values', async () => {
+            const mixedSnap = JSON.stringify({
+                tables: [{
+                    name: 'mixed',
+                    columns: [{ field: 'v' }],
+                    rows: [{ v: 2 }, { v: null }, { v: 'ignore' }, { v: 4 }, { v: 4 }, { v: 4 }, { v: 5 }, { v: 5 }, { v: 7 }, { v: 9 }],
+                }],
+            });
+            const result = await lib.InvokeTool(
+                'aggregate',
+                { table: 'mixed', field: 'v', operation: 'variance' },
+                mixedSnap
+            );
+            // Numeric only: same 8 values as statSnap → 32/7
+            expect((result.data as { value: number }).value).toBeCloseTo(32 / 7, 4);
         });
     });
 });

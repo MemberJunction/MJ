@@ -33,21 +33,31 @@ interface SnapshotPayload {
 }
 
 type SearchOperator = 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'contains' | 'startsWith';
-type AggregateOperation = 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct_count';
+type AggregateOperation =
+    | 'sum' | 'avg' | 'mean' | 'count' | 'min' | 'max' | 'distinct_count'
+    | 'median' | 'mode' | 'stdev' | 'variance';
 
 /**
- * Structured aggregate result. Always carries the scalar `value`; for
- * operations where the identity matters (min/max → which row, distinct_count →
- * which values) the result includes context fields so the LLM doesn't have to
- * guess or make a follow-up tool call.
+ * Structured aggregate result. Always carries `value`; for operations where
+ * the identity matters (min/max → which row, distinct_count → which values,
+ * mode → which value + how often) the result includes context fields so the
+ * LLM doesn't have to guess or make a follow-up tool call.
+ *
+ * `value` is typed `unknown` because mode can return any scalar (string,
+ * boolean, number, null) while the other ops return number. Consumers should
+ * narrow based on the operation they requested.
  */
 interface AggregateResult {
-    value: number;
-    /** For min/max — rows whose field value equals the extremum. Capped at 10. */
+    value: unknown;
+    /** For min/max/mode — rows whose field value equals the extremum / most frequent value. Capped at 10. */
     contributingRows?: Array<Record<string, unknown>>;
     /** For distinct_count — the actual distinct values. Capped at 50. */
     distinctValues?: unknown[];
-    /** True when `contributingRows` / `distinctValues` was truncated by the cap. */
+    /** For mode — how many rows had the returned value. */
+    frequency?: number;
+    /** For mode — all tied mode values when frequency is shared by multiple values. Capped at 50. */
+    allModes?: unknown[];
+    /** True when `contributingRows` / `distinctValues` / `allModes` was truncated by the cap. */
     truncated?: boolean;
 }
 
@@ -56,7 +66,8 @@ const VALID_SEARCH_OPERATORS: ReadonlySet<string> = new Set<SearchOperator>([
 ]);
 
 const VALID_AGGREGATE_OPS: ReadonlySet<string> = new Set<AggregateOperation>([
-    'sum', 'avg', 'count', 'min', 'max', 'distinct_count',
+    'sum', 'avg', 'mean', 'count', 'min', 'max', 'distinct_count',
+    'median', 'mode', 'stdev', 'variance',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -116,10 +127,13 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
             },
             {
                 name: 'aggregate',
-                description: 'Computes an aggregate over a field. Operations: sum, avg, count, min, max, distinct_count. ' +
-                    'Returns an object { value, ...context }. For min/max the object also includes `contributingRows` — ' +
-                    'the rows whose field value equals the extremum (so you know WHICH row won, not just the number). ' +
+                description: 'Computes an aggregate over a field. Operations: ' +
+                    'sum, avg (alias: mean), count, min, max, distinct_count, median, mode, stdev (sample), variance (sample). ' +
+                    'Returns an object { value, ...context }. ' +
+                    'For min/max the object also includes `contributingRows` — rows whose field equals the extremum. ' +
                     'For distinct_count, the object includes `distinctValues` — the actual distinct values found. ' +
+                    'For mode, the object includes `frequency` (how many rows), `contributingRows`, and `allModes` when there is a tie. ' +
+                    'stdev/variance skip null/non-numeric values and use the sample divisor (N-1). ' +
                     'Use these context fields directly — do not guess the identity from the scalar alone.',
                 inputSchema: {
                     type: 'object',
@@ -331,6 +345,12 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         const MAX_CONTRIBUTING_ROWS = 10;
         const MAX_DISTINCT_VALUES = 50;
 
+        // Helper — extract finite numeric values for numeric-only operations.
+        const numericValues = (): number[] =>
+            rows
+                .map(r => r[field])
+                .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+
         switch (operation) {
             case 'count':
                 return { value: rows.length };
@@ -345,22 +365,72 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
             }
             case 'sum':
                 return { value: rows.reduce((acc, r) => acc + (r[field] as number), 0) };
-            case 'avg': {
+            case 'avg':
+            case 'mean': {
                 const sum = rows.reduce((acc, r) => acc + (r[field] as number), 0);
                 return { value: rows.length > 0 ? sum / rows.length : 0 };
             }
             case 'min':
             case 'max': {
                 if (rows.length === 0) return { value: 0, contributingRows: [] };
-                const numericValues = rows.map(r => r[field] as number);
+                const nums = rows.map(r => r[field] as number);
                 const extremum = operation === 'min'
-                    ? Math.min(...numericValues)
-                    : Math.max(...numericValues);
+                    ? Math.min(...nums)
+                    : Math.max(...nums);
                 const matching = rows.filter(r => (r[field] as number) === extremum);
                 const capped = matching.slice(0, MAX_CONTRIBUTING_ROWS);
                 const result: AggregateResult = { value: extremum, contributingRows: capped };
                 if (matching.length > capped.length) result.truncated = true;
                 return result;
+            }
+            case 'median': {
+                const nums = numericValues();
+                if (nums.length === 0) return { value: 0 };
+                nums.sort((a, b) => a - b);
+                const mid = Math.floor(nums.length / 2);
+                const median = nums.length % 2 === 0
+                    ? (nums[mid - 1] + nums[mid]) / 2
+                    : nums[mid];
+                return { value: median };
+            }
+            case 'mode': {
+                if (rows.length === 0) return { value: null, frequency: 0, contributingRows: [] };
+                const tally = new Map<unknown, number>();
+                for (const row of rows) {
+                    const v = row[field];
+                    tally.set(v, (tally.get(v) ?? 0) + 1);
+                }
+                let maxFreq = 0;
+                for (const freq of tally.values()) {
+                    if (freq > maxFreq) maxFreq = freq;
+                }
+                const modeValues: unknown[] = [];
+                for (const [v, freq] of tally.entries()) {
+                    if (freq === maxFreq) modeValues.push(v);
+                }
+                const primary = modeValues[0];
+                const matching = rows.filter(r => r[field] === primary);
+                const cappedContrib = matching.slice(0, MAX_CONTRIBUTING_ROWS);
+                const result: AggregateResult = {
+                    value: primary,
+                    frequency: maxFreq,
+                    contributingRows: cappedContrib,
+                };
+                if (modeValues.length > 1) {
+                    result.allModes = modeValues.slice(0, MAX_DISTINCT_VALUES);
+                }
+                if (matching.length > cappedContrib.length) result.truncated = true;
+                return result;
+            }
+            case 'variance':
+            case 'stdev': {
+                const nums = numericValues();
+                // Sample stats undefined for N<2; return 0 rather than NaN to keep the schema stable.
+                if (nums.length < 2) return { value: 0 };
+                const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+                const sumSquaredDiffs = nums.reduce((acc, x) => acc + (x - mean) ** 2, 0);
+                const variance = sumSquaredDiffs / (nums.length - 1); // sample (N-1)
+                return { value: operation === 'variance' ? variance : Math.sqrt(variance) };
             }
         }
     }
