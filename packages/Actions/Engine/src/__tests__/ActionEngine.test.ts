@@ -4,8 +4,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mocks - must be declared before imports that use them
 // ============================================================================
 
-// Mock @memberjunction/core
-vi.mock('@memberjunction/core', () => {
+// Mock @memberjunction/core — use real module for transitive imports from
+// RuntimeActionBridge (pulled in via the ActionEngine module graph) and only
+// override the specific constructors / functions these tests exercise.
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = (await importOriginal()) as Record<string, unknown>;
     const mockLogEntity = {
         NewRecord: vi.fn(),
         Save: vi.fn().mockResolvedValue(true),
@@ -27,12 +30,22 @@ vi.mock('@memberjunction/core', () => {
     };
 
     return {
+        ...actual,
+        // Override the specific exports these tests depend on behaviorally.
         Metadata: vi.fn(function() {
             return { GetEntityObject: vi.fn().mockResolvedValue(mockLogEntity) };
         }),
         LogError: vi.fn(),
         LogStatus: vi.fn(),
+        LogStatusEx: vi.fn(),
+        LogVerbose: vi.fn(),
+        // RunView is overridden so tests don't hit the real data provider.
         RunView: vi.fn(),
+        // RunQuery pulled in transitively by RuntimeActionBridge — stub so
+        // nothing blows up at module init.
+        RunQuery: vi.fn(),
+        // Override BaseEngine with a simple shell so ActionEngineServer's
+        // singleton path works under the mock.
         BaseEngine: class MockBaseEngine<T> {
             protected static getInstance<U>(_key?: string): U {
                 return {} as U;
@@ -43,31 +56,19 @@ vi.mock('@memberjunction/core', () => {
             protected async AdditionalLoading() {}
             protected HandleSingleViewResult() {}
             protected RunViewProviderToUse = undefined;
-        },
-        BaseEntity: class {},
-        UserInfo: class {},
-        BaseEnginePropertyConfig: class {},
-        IMetadataProvider: class {},
+        }
     };
 });
 
-// Mock @memberjunction/core-entities
-vi.mock('@memberjunction/core-entities', () => ({
-    MJActionExecutionLogEntity: class {},
-    MJActionFilterEntity: class {},
-    MJActionParamEntity: class {},
-    MJActionResultCodeEntity: class {},
-    MJActionCategoryEntity: class {},
-    MJActionEntity: class {},
-    MJActionLibraryEntity: class {},
-    MJEntityActionParamEntity: class {},
-    MJEntityActionFilterEntity: class {},
-    MJEntityActionInvocationEntity: class {},
-    MJEntityActionInvocationTypeEntity: class {},
-    MJEntityActionEntity: class {},
-    MJCompanyIntegrationEntity: class {},
-    MJIntegrationEntity: class {},
-}));
+// Mock @memberjunction/core-entities — use the REAL module so transitive
+// imports from RuntimeActionBridge (entity class references pulled in via
+// `@memberjunction/ai-prompts` and `@memberjunction/aiengine`) resolve
+// correctly. We only override `Metadata` calls through the core module
+// mock above, which is the actual surface the ActionEngine tests care about.
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+    const actual = (await importOriginal()) as Record<string, unknown>;
+    return actual;
+});
 
 // Mock @memberjunction/global
 const { mockClassFactory } = vi.hoisted(() => ({

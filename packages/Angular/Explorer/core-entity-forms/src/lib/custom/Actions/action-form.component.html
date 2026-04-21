@@ -407,6 +407,157 @@
                         </mj-accordion-panel>
                     }
 
+                    <!-- Runtime Action Configuration Section (only for Type='Runtime') -->
+                    @if (isRuntimeAction) {
+                        <mj-accordion-panel
+                            [Expanded]="true"
+                            style="margin-bottom: 12px;">
+                            <ng-template mjAccordionTitle>
+                                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                    <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--mj-status-warning);"></i>
+                                    Runtime Configuration &amp; Permissions
+                                    <span style="color: var(--mj-text-muted); font-weight: 400; font-size: 0.85em;">
+                                        ({{ getRuntimeConfigSummary() }})
+                                    </span>
+                                </span>
+                            </ng-template>
+
+                            <div style="padding: 16px;">
+                                @if (!runtimeConfig) {
+                                    <div style="padding: 12px; background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface)); border-left: 3px solid var(--mj-status-error); border-radius: 4px;">
+                                        <i class="fa-solid fa-triangle-exclamation" style="color: var(--mj-status-error); margin-right: 8px;"></i>
+                                        <strong>Missing or malformed RuntimeActionConfiguration.</strong>
+                                        This Runtime action cannot run until a valid configuration is supplied. Approval should not be granted in this state.
+                                    </div>
+                                } @else {
+                                    <!-- Declared permissions — the security contract an approver is blessing -->
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                                        <!-- Entities -->
+                                        <div style="border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 12px; background: var(--mj-bg-surface-card);">
+                                            <div style="font-weight: 600; margin-bottom: 8px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-database" style="margin-right: 6px; color: var(--mj-brand-primary);"></i>
+                                                Allowed Entities ({{ getAllowedEntities().length }})
+                                            </div>
+                                            @if (getAllowedEntities().length === 0) {
+                                                <div style="color: var(--mj-text-muted); font-style: italic;">None requested</div>
+                                            } @else {
+                                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                                    @for (e of getAllowedEntities(); track e.id) {
+                                                        <span style="background: var(--mj-bg-surface-sunken); padding: 4px 8px; border-radius: 4px; font-size: 0.9em; color: var(--mj-text-primary);">
+                                                            {{ e.name }}
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <!-- Actions -->
+                                        <div style="border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 12px; background: var(--mj-bg-surface-card);">
+                                            <div style="font-weight: 600; margin-bottom: 8px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-bolt" style="margin-right: 6px; color: var(--mj-brand-primary);"></i>
+                                                Allowed Actions ({{ getAllowedActions().length }})
+                                            </div>
+                                            @if (getAllowedActions().length === 0) {
+                                                <div style="color: var(--mj-text-muted); font-style: italic;">None requested</div>
+                                            } @else {
+                                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                                    @for (a of getAllowedActions(); track a.id) {
+                                                        <span style="background: var(--mj-bg-surface-sunken); padding: 4px 8px; border-radius: 4px; font-size: 0.9em; color: var(--mj-text-primary);">
+                                                            {{ a.name }}
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <!-- Agents -->
+                                        <div style="border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 12px; background: var(--mj-bg-surface-card);">
+                                            <div style="font-weight: 600; margin-bottom: 8px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-robot" style="margin-right: 6px; color: var(--mj-brand-primary);"></i>
+                                                Allowed Agents ({{ getAllowedAgents().length }})
+                                            </div>
+                                            @if (getAllowedAgents().length === 0) {
+                                                <div style="color: var(--mj-text-muted); font-style: italic;">None requested</div>
+                                            } @else {
+                                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                                    @for (g of getAllowedAgents(); track g.id) {
+                                                        <span style="background: var(--mj-bg-surface-sunken); padding: 4px 8px; border-radius: 4px; font-size: 0.9em; color: var(--mj-text-primary);">
+                                                            {{ g.name }}
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <!-- Limits + libraries -->
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                                        <div>
+                                            <div style="font-weight: 600; margin-bottom: 6px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-gauge-high" style="margin-right: 6px; color: var(--mj-text-muted);"></i>
+                                                Resource Limits
+                                            </div>
+                                            <div style="color: var(--mj-text-secondary); font-size: 0.9em;">
+                                                <div>Max memory: {{ getRuntimeLimits().maxMemoryMB }} MB</div>
+                                                <div>Max bridge calls: {{ getRuntimeLimits().maxBridgeCalls }}</div>
+                                                @if (record.MaxExecutionTimeMS) {
+                                                    <div>Max execution time: {{ record.MaxExecutionTimeMS }} ms</div>
+                                                }
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 600; margin-bottom: 6px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-book" style="margin-right: 6px; color: var(--mj-text-muted);"></i>
+                                                Additional Libraries
+                                            </div>
+                                            @if (getRequestedLibraries().length === 0) {
+                                                <div style="color: var(--mj-text-muted); font-style: italic;">None (only default set: lodash, date-fns, uuid, validator)</div>
+                                            } @else {
+                                                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                                                    @for (lib of getRequestedLibraries(); track lib.name) {
+                                                        <span style="background: var(--mj-bg-surface-sunken); padding: 2px 8px; border-radius: 10px; font-size: 0.85em;">
+                                                            {{ lib.name }}@if (lib.version) {<span style="color: var(--mj-text-muted);"> @{{ lib.version }}</span>}
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Code payload -->
+                                <div>
+                                    <div style="font-weight: 600; margin-bottom: 6px; color: var(--mj-text-primary);">
+                                        <i class="fa-solid fa-code" style="margin-right: 6px; color: var(--mj-text-muted);"></i>
+                                        JavaScript Payload
+                                    </div>
+                                    <pre style="background: var(--mj-bg-surface-sunken); color: var(--mj-text-primary); padding: 12px; border-radius: 4px; overflow-x: auto; max-height: 400px; font-family: 'SF Mono', Monaco, Consolas, monospace; font-size: 0.85em; margin: 0;"><code>{{ record.Code }}</code></pre>
+                                </div>
+
+                                <!-- Approval actions (Runtime-specific labels) -->
+                                @if (EditMode && record.CodeApprovalStatus === 'Pending') {
+                                    <div style="margin-top: 16px; padding: 12px; background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface)); border-radius: 6px;">
+                                        <div style="font-weight: 600; margin-bottom: 8px;">
+                                            <i class="fa-solid fa-circle-exclamation" style="color: var(--mj-status-warning); margin-right: 6px;"></i>
+                                            Approval required before this Runtime action can execute.
+                                        </div>
+                                        <div style="color: var(--mj-text-secondary); font-size: 0.9em; margin-bottom: 12px;">
+                                            Approving grants this action the permissions listed above on behalf of any user who invokes it. Review the code and permissions carefully before approving.
+                                        </div>
+                                        <div style="display: flex; gap: 8px;">
+                                            <button class="mj-button mj-button-primary" (click)="approveCode()">
+                                                <i class="fa-solid fa-check"></i> Approve
+                                            </button>
+                                            <button class="mj-button" (click)="rejectCode()">
+                                                <i class="fa-solid fa-ban"></i> Reject
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </mj-accordion-panel>
+                    }
+
                     <!-- Result Codes Section -->
                     <mj-accordion-panel
                         [Expanded]="expandedSections.resultCodes"

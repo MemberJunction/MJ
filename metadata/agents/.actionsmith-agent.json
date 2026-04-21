@@ -1,0 +1,127 @@
+[
+  {
+    "_comments": [
+      "ActionSmith — top-level Runtime-action-builder agent.",
+      "ExposeAsAction=true so it's invokable from the action catalog.",
+      "Linked to Agent Manager via MJ: AI Agent Sub-Agents (the referenced-sub-agent",
+      "relationship, NOT ParentID, because ParentID+ExposeAsAction are mutually exclusive).",
+      "Links Codesmith Agent as a sub-agent for delegated code generation + iteration."
+    ],
+    "fields": {
+      "Name": "ActionSmith Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
+      "Description": "Meta-agent that builds new Runtime actions for the MemberJunction action catalog. Defines the contract (inputs, outputs, minimal permissions, result codes, test cases), delegates code generation to Codesmith, runs tests via the sandbox, and persists the action for human approval. Ship capability gaps into the catalog without a developer in the loop.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ModelSelectionMode": "Agent",
+      "ExposeAsAction": true,
+      "InvocationMode": "Any",
+      "IconClass": "fa-solid fa-wand-magic-sparkles",
+      "PayloadSelfWritePaths": "[\"name\", \"description\", \"inputSchema\", \"outputSchema\", \"permissions\", \"resultCodes\", \"testCases\", \"limits\", \"code\", \"testResults\", \"iterationsUsed\", \"actionId\", \"approvalStatus\", \"status\", \"message\"]",
+      "FinalPayloadValidation": "{\"status\": \"string:!empty\", \"actionId\": \"any\", \"testResults\": \"any\"}",
+      "FinalPayloadValidationMode": "Warn",
+      "MaxIterationsPerRun": 5
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=ActionSmith Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "99B60806-3423-4FED-B3AB-F57D5693D47C"
+          },
+          "sync": {
+            "lastModified": "2026-04-21T03:15:13.958Z",
+            "checksum": "a30995e3c6c5786fd16e382c9a3d0ac4ee1bce37355ddd3ed4514ddbdf3ed96b"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Runtime Action",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0ACA82E3-93CB-44A0-B70E-0A659458BFB8"
+          },
+          "sync": {
+            "lastModified": "2026-04-21T03:15:13.973Z",
+            "checksum": "f52094aefc3731ea8c03ecdcd68f53d55b0ab640a70e5eab54007c3fb719cbb0"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Test Runtime Action",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8B672328-53AF-42FB-9BA7-5BD86601023E"
+          },
+          "sync": {
+            "lastModified": "2026-04-21T03:15:13.988Z",
+            "checksum": "dc680a2f72aa3f726d85f2b6b80580691728ce3197be612bd05725c682bbaf4e"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Actions",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "64021A24-07CF-484A-838F-73ADC5A08642"
+          },
+          "sync": {
+            "lastModified": "2026-04-21T03:15:14.001Z",
+            "checksum": "150413eed758e353aadcc3e6186c81a82876c19538ea49d97bd562cbfe8a2759"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Agents",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "67E272F0-64BA-4400-AC2B-0E3AF9A36229"
+          },
+          "sync": {
+            "lastModified": "2026-04-21T03:15:14.014Z",
+            "checksum": "8594e4c41f8dafa6b3254ca8ede1a7094801a11ada29a9aa2a8738be0c309067"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "_comment": "Codesmith is a referenced sub-agent — it remains a top-level agent with its own ExposeAsAction=true, while also being callable from ActionSmith for delegated code generation.",
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "81449566-3E6D-4C65-9792-BB3B4115B52E"
+          },
+          "sync": {
+            "lastModified": "2026-04-21T03:15:14.025Z",
+            "checksum": "80897788bb6d7109ec8636e688694f3b0f4f95ae042cf0c2eddaf54841200e24"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AF804075-E543-46E5-8D8F-2A0B8094628C"
+    },
+    "sync": {
+      "lastModified": "2026-04-21T03:15:13.921Z",
+      "checksum": "fa924f08c294139e83627de705a77dfbfb07375eecde9a17e71f5a0c5da00e7e"
+    }
+  }
+]

@@ -270,6 +270,7 @@ Then call Agent Spec Loader sub-agent - it will read `payload.ID` and load the f
 
 ## Sub-Agent Usage
 - **Agent Spec Loader**: Sub-agent that loads complete AgentSpec structure by agent ID
+- **ActionSmith Agent**: When the user's request surfaces a capability gap that needs a NEW action (a reusable piece of JavaScript composing existing actions, agents, and queries) — delegate to ActionSmith. ActionSmith defines the contract, drives Codesmith to generate the JavaScript, runs tests in the sandbox, and submits the result as a Runtime action for human approval. Do NOT ask Codesmith to create Runtime actions directly; ActionSmith is the orchestrator. Use this when: the user describes a workflow that doesn't match any existing action, when the user explicitly asks "create an action that...", or when you'd otherwise be tempted to hand-code a composition.
 
 ## Payload Management
 The payload IS an **AgentSpec** object throughout the entire workflow. Each sub-agent receives and updates the AgentSpec:

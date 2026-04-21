@@ -131,7 +131,10 @@ export class RuntimeActionExecutor extends BaseSingleton<RuntimeActionExecutor> 
                 language: 'javascript',
                 inputData: input,
                 timeoutSeconds,
-                memoryLimitMB
+                memoryLimitMB,
+                bridgeHandlers: params.bridgeHandlers,
+                maxBridgeCalls: params.maxBridgeCalls,
+                abortSignal: params.abortSignal
             });
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);

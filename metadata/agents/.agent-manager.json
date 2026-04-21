@@ -135,6 +135,26 @@
           }
         }
       ],
+      "MJ: AI Agent Relationships": [
+        {
+          "_comment": "ActionSmith is a top-level agent (ExposeAsAction=true, ParentID NULL). Referenced here so Agent Manager can delegate capability-gap scenarios: 'User wants a new reusable action / composition' routes to ActionSmith, which in turn delegates JS generation to Codesmith.",
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=ActionSmith Agent",
+            "Status": "Active",
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "77EF420D-5F7B-4AD4-A14E-D5E62A1ADF17"
+          },
+          "sync": {
+            "lastModified": "2026-04-21T03:15:14.212Z",
+            "checksum": "1e5769693904f9df544b4971bb101d3b75a151ff2484c0cd15f94635be13d7cd"
+          }
+        }
+      ],
       "MJ: AI Agents": [
         {
           "fields": {

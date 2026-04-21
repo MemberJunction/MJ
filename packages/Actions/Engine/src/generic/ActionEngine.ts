@@ -1,9 +1,10 @@
 import { LogError, Metadata } from "@memberjunction/core";
-import { MJActionExecutionLogEntity, MJActionFilterEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
+import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionFilterEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
-import { ActionEngineBase, MJActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionEngineBase, MJActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionParams, RuntimeActionConfigurationSchema } from "@memberjunction/actions-base";
 import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
+import { buildRuntimeActionBridgeHandlers, getRuntimeActionBridgePreamble } from "./RuntimeActionBridge";
 
  
 
@@ -299,16 +300,89 @@ export class ActionEngineServer extends ActionEngineBase {
    /**
     * Runs an `Action.Type='Runtime'` action by delegating to the sandboxed
     * RuntimeActionExecutor. Approval / Status / Code-presence checks are
-    * enforced inside the executor; here we just wire the plumbing and
-    * translate the executor's result shape into the `ActionResultSimple`
-    * shape that the rest of `InternalRunAction` expects.
+    * enforced inside the executor; here we parse the RuntimeActionConfiguration,
+    * build the permissioned bridge-handler map, and hand it off.
+    *
+    * The bridge handlers run in-process on the host (not inside the sandbox)
+    * so they have full access to Metadata, RunView, ActionEngine, etc.
+    * Permission enforcement against `RuntimeActionConfiguration.permissions`
+    * happens inside each handler — see `RuntimeActionBridge.ts`.
+    *
+    * If the configuration is missing or malformed, we still let the action
+    * run in pure-compute mode (no bridge). The action's Code can then only
+    * use `input` + `libs`; any attempt to call `utilities.*` at runtime
+    * rejects with a "handler not registered" error from the worker pool.
     */
    protected async RunRuntimeAction(params: RunActionParams): Promise<ActionResultSimple> {
+      // Extract + validate the RuntimeActionConfiguration JSON blob. Uses
+      // the strongly-typed accessor from @memberjunction/core-entities
+      // (emitted by the JSONType codegen) rather than parsing the raw string.
+      const actionEntity = params.Action as unknown as {
+         RuntimeActionConfigurationObject?: unknown;
+      };
+      const rawConfig = actionEntity.RuntimeActionConfigurationObject;
+
+      let bridgeHandlers: ReturnType<typeof buildRuntimeActionBridgeHandlers> | undefined;
+      let preamble = '';
+      let maxBridgeCalls: number | undefined;
+
+      if (rawConfig) {
+         const parsed = RuntimeActionConfigurationSchema.safeParse(rawConfig);
+         if (!parsed.success) {
+            return {
+               Success: false,
+               ResultCode: 'INVALID_CONFIG',
+               Message:
+                  `Runtime action '${params.Action.Name}' has a malformed ` +
+                  `RuntimeActionConfiguration: ${parsed.error.message}`,
+               Params: params.Params
+            };
+         }
+         // Cast to the JSONType-emitted interface: the Zod-inferred type
+         // has optional fields due to how `z.object()` composes with this
+         // repo's non-strict TS config; the runtime validation above has
+         // already proven the shape is valid, so the narrowing cast is safe.
+         const config = parsed.data as unknown as MJActionEntity_IRuntimeActionConfiguration;
+         bridgeHandlers = buildRuntimeActionBridgeHandlers({
+            action: params.Action,
+            config,
+            contextUser: params.ContextUser,
+            abortSignal: params.AbortSignal
+         });
+         preamble = getRuntimeActionBridgePreamble();
+         maxBridgeCalls = config.limits?.maxBridgeCalls;
+      }
+
+      // If we built a preamble, inject it BEFORE the user's code so
+      // `globalThis.utilities` is available from the first line. The
+      // executor wraps everything in an async IIFE — the preamble runs
+      // inside that same IIFE.
+      const codeToRun = preamble
+         ? `${preamble}\n${params.Action.Code ?? ''}`
+         : params.Action.Code ?? '';
+
+      // We mutate a defensive copy of the action entity so the executor sees
+      // the prepended preamble without modifying the live MJActionEntity
+      // instance (which the rest of the ActionEngine may still reference).
+      const actionForExecution = Object.create(
+         Object.getPrototypeOf(params.Action),
+         Object.getOwnPropertyDescriptors(params.Action)
+      ) as typeof params.Action;
+      // The executor checks `action.Code`; override just that getter.
+      Object.defineProperty(actionForExecution, 'Code', {
+         value: codeToRun,
+         writable: false,
+         enumerable: true,
+         configurable: true
+      });
+
       const execResult = await RuntimeActionExecutor.Instance.execute({
-         action: params.Action,
+         action: actionForExecution,
          params: params.Params ?? [],
          contextUser: params.ContextUser,
-         abortSignal: params.AbortSignal
+         abortSignal: params.AbortSignal,
+         bridgeHandlers,
+         maxBridgeCalls
       });
 
       return {

@@ -1,6 +1,7 @@
 import type { MJActionEntity } from '@memberjunction/core-entities';
 import type { ActionParam } from '@memberjunction/actions-base';
 import type { UserInfo } from '@memberjunction/core';
+import type { BridgeHandlerMap } from '@memberjunction/code-execution';
 
 /**
  * Parameters for a single Runtime action execution.
@@ -21,6 +22,22 @@ export interface RuntimeActionExecutionParams {
      * the sandbox can be terminated if the outer timeout fires.
      */
     abortSignal?: AbortSignal;
+
+    /**
+     * Optional bridge handlers to expose to sandbox code. When omitted, the
+     * action runs in pure-compute mode (just `input` + `libs`). The bridge
+     * layer (`@memberjunction/action-runtime`'s upcoming `RuntimeActionBridge`)
+     * builds this map based on the action's `RuntimeActionConfiguration`
+     * permissions.
+     */
+    bridgeHandlers?: BridgeHandlerMap;
+
+    /**
+     * Optional override for the per-execution bridge-call cap. Defaults to
+     * the value in `RuntimeActionConfiguration.limits.maxBridgeCalls` or 100
+     * if unset.
+     */
+    maxBridgeCalls?: number;
 }
 
 /**

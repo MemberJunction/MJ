@@ -10,6 +10,10 @@
  * - Automatic worker restart on crashes
  * - Request queuing when all workers are busy
  * - Health monitoring and circuit breaker pattern
+ * - Bidirectional bridge: sandbox code can call host-registered handlers
+ *   via `__bridgeCall(name, args)`; the host routes the call, executes the
+ *   handler, and sends the response back. See worker.ts for the sandbox-side
+ *   wiring.
  */
 
 import { fork, ChildProcess } from 'child_process';
@@ -18,15 +22,28 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-import { CodeExecutionParams, CodeExecutionResult } from './types';
+import {
+    BridgeHandlerMap,
+    CodeExecutionParams,
+    CodeExecutionResult
+} from './types';
 import { LogError, LogStatus } from '@memberjunction/core';
 
 interface PendingRequest {
     requestId: string;
     params: CodeExecutionParams;
+    /** Bridge handlers scoped to this execution only (never sent over IPC). */
+    bridgeHandlers?: BridgeHandlerMap;
     resolve: (result: CodeExecutionResult) => void;
     reject: (error: Error) => void;
     timeout: NodeJS.Timeout;
+    /**
+     * Listener we register on `params.abortSignal` so we can remove it again
+     * when the request settles. Kept here to make cleanup easy.
+     */
+    abortListener?: () => void;
+    /** Tracks whether we already sent an `abort` IPC message for this request. */
+    aborted?: boolean;
 }
 
 interface Worker {
@@ -136,11 +153,25 @@ export class WorkerPool {
     }
 
     /**
-     * Handle messages from worker process
+     * Handle messages from worker process.
+     *
+     * Types:
+     *  - `ready` — initial startup / post-restart signal, ignored here.
+     *  - `result` / `error` — the terminal outcome of the current execute() call.
+     *  - `bridge-call` — a host-service request from inside the sandbox; we
+     *    look up the registered handler and send back `bridge-response`.
+     *    Critically, `bridge-call` does NOT end the request; the worker is
+     *    still executing until it sends `result`/`error`.
      */
     private handleWorkerMessage(worker: Worker, message: any): void {
         if (message.type === 'ready') {
             // Worker is ready (initial startup or after restart)
+            return;
+        }
+
+        if (message.type === 'bridge-call') {
+            // Dispatch to the registered handler for this execution.
+            void this.handleBridgeCall(worker, message);
             return;
         }
 
@@ -149,19 +180,112 @@ export class WorkerPool {
             return;
         }
 
-        const request = worker.currentRequest;
-        clearTimeout(request.timeout);
-
-        if (message.type === 'result') {
-            request.resolve(message.result);
-        } else if (message.type === 'error') {
-            request.reject(new Error(message.error));
+        // If the worker included a requestId, make sure it matches — this
+        // catches stale messages from aborted executions. Legacy test
+        // harnesses (and very old workers) don't include a requestId; in
+        // that case fall through and treat the message as belonging to the
+        // current request.
+        if (message.requestId && message.requestId !== worker.currentRequest.requestId) {
+            return;
         }
 
-        // Mark worker as available and process queue
+        const request = worker.currentRequest;
+
+        if (message.type === 'result' || message.type === 'error') {
+            this.settleRequest(worker, request, message);
+        }
+    }
+
+    /**
+     * Finalize a request once the worker reports `result` or `error`.
+     * Clears timeouts, detaches abort listeners, frees the worker, and
+     * drains the queue.
+     */
+    private settleRequest(
+        worker: Worker,
+        request: PendingRequest,
+        message: { type: 'result' | 'error'; result?: CodeExecutionResult; error?: string }
+    ): void {
+        clearTimeout(request.timeout);
+        this.detachAbortListener(request);
+
+        if (message.type === 'result') {
+            request.resolve(message.result!);
+        } else {
+            request.reject(new Error(message.error ?? 'Worker returned error'));
+        }
+
         worker.busy = false;
         worker.currentRequest = null;
         this.processQueue();
+    }
+
+    /**
+     * Route a `bridge-call` from the worker to the registered host handler,
+     * execute it, and send `bridge-response` back. All error paths here
+     * produce a response with `error` populated so the sandbox's
+     * `await __bridgeCall(...)` rejects cleanly rather than hanging.
+     */
+    private async handleBridgeCall(
+        worker: Worker,
+        message: {
+            type: 'bridge-call';
+            requestId: string;
+            callId: string;
+            functionName: string;
+            args: unknown;
+        }
+    ): Promise<void> {
+        const sendResponse = (payload: { result?: unknown; error?: string }) => {
+            try {
+                worker.process.send({
+                    type: 'bridge-response',
+                    requestId: message.requestId,
+                    callId: message.callId,
+                    ...payload
+                });
+            } catch (err) {
+                LogError(
+                    new Error(
+                        `Failed to send bridge-response to worker ${worker.id}: ${
+                            err instanceof Error ? err.message : String(err)
+                        }`
+                    )
+                );
+            }
+        };
+
+        if (!worker.currentRequest || worker.currentRequest.requestId !== message.requestId) {
+            sendResponse({ error: 'No active execution for this bridge call.' });
+            return;
+        }
+
+        const handlers = worker.currentRequest.bridgeHandlers;
+        if (!handlers) {
+            sendResponse({
+                error:
+                    `Runtime action tried to call '${message.functionName}' but no bridge ` +
+                    'handlers were registered for this execution.'
+            });
+            return;
+        }
+
+        const handler = handlers[message.functionName];
+        if (!handler) {
+            sendResponse({
+                error:
+                    `Bridge handler '${message.functionName}' is not registered. ` +
+                    `Available: ${Object.keys(handlers).join(', ') || '(none)'}.`
+            });
+            return;
+        }
+
+        try {
+            const result = await handler(message.args);
+            sendResponse({ result });
+        } catch (err) {
+            sendResponse({ error: err instanceof Error ? err.message : String(err) });
+        }
     }
 
     /**
@@ -187,6 +311,7 @@ export class WorkerPool {
         // Reject current request if any
         if (worker.currentRequest) {
             clearTimeout(worker.currentRequest.timeout);
+            this.detachAbortListener(worker.currentRequest);
             worker.currentRequest.reject(new Error(
                 'Worker process crashed during code execution. This may indicate a severe error in the code.'
             ));
@@ -239,26 +364,42 @@ export class WorkerPool {
         return new Promise<CodeExecutionResult>((resolve, reject) => {
             // Create timeout for entire request (includes queue time + execution)
             const totalTimeout = ((params.timeoutSeconds || 30) + 5) * 1000; // Add 5s buffer for overhead
-            const timeout = setTimeout(() => {
-                // Remove from queue if still there
-                const queueIndex = this.requestQueue.findIndex(r => r.requestId === requestId);
-                if (queueIndex >= 0) {
-                    this.requestQueue.splice(queueIndex, 1);
-                }
-                resolve({
-                    success: false,
-                    error: 'Request timed out waiting for worker availability',
-                    errorType: 'TIMEOUT'
-                });
-            }, totalTimeout);
 
             const request: PendingRequest = {
                 requestId,
                 params,
+                bridgeHandlers: params.bridgeHandlers,
                 resolve,
                 reject,
-                timeout
+                // placeholder — reassigned below once we have the request ref
+                timeout: null as unknown as NodeJS.Timeout
             };
+
+            request.timeout = setTimeout(() => {
+                // If the worker is still processing, tell it to abort its
+                // in-flight bridge calls first — the sandbox's await will
+                // reject cleanly. Then reject on our side.
+                this.abortRequest(request, 'Request timed out waiting for worker availability');
+            }, totalTimeout);
+
+            // Mirror any caller-supplied AbortSignal into the same abort path.
+            if (params.abortSignal) {
+                const listener = () => {
+                    this.abortRequest(
+                        request,
+                        typeof params.abortSignal!.reason === 'string'
+                            ? params.abortSignal!.reason
+                            : 'Caller aborted'
+                    );
+                };
+                request.abortListener = listener;
+                if (params.abortSignal.aborted) {
+                    // Fire immediately if caller aborted before we even queued.
+                    setImmediate(listener);
+                } else {
+                    params.abortSignal.addEventListener('abort', listener, { once: true });
+                }
+            }
 
             // Add to queue
             this.requestQueue.push(request);
@@ -266,6 +407,81 @@ export class WorkerPool {
             // Try to process immediately
             this.processQueue();
         });
+    }
+
+    /**
+     * Abort an in-flight or queued request.
+     *
+     * If the request is still queued, removes it and resolves with a TIMEOUT
+     * result (no worker ever picked it up). If a worker is actively running
+     * it, sends an `abort` IPC message so the worker rejects its pending
+     * bridge calls cleanly, then resolves with a TIMEOUT result. The worker
+     * will still send its eventual `result` / `error` message when the
+     * sandbox unwinds; `handleWorkerMessage` drops it because
+     * `worker.currentRequest` is already cleared.
+     */
+    private abortRequest(request: PendingRequest, reason: string): void {
+        if (request.aborted) return;
+        request.aborted = true;
+
+        // Remove from queue if still waiting.
+        const queueIndex = this.requestQueue.findIndex(r => r.requestId === request.requestId);
+        if (queueIndex >= 0) {
+            this.requestQueue.splice(queueIndex, 1);
+        }
+
+        // If a worker is actively running this request, tell it to abort
+        // pending bridge calls. We do NOT kill the worker — the sandbox
+        // script will unwind naturally once its awaits reject.
+        const activeWorker = this.workers.find(
+            w => w && w.currentRequest && w.currentRequest.requestId === request.requestId
+        );
+        if (activeWorker && activeWorker.process.connected) {
+            try {
+                activeWorker.process.send({
+                    type: 'abort',
+                    requestId: request.requestId,
+                    reason
+                });
+            } catch (err) {
+                LogError(
+                    new Error(
+                        `Failed to send abort to worker ${activeWorker.id}: ${
+                            err instanceof Error ? err.message : String(err)
+                        }`
+                    )
+                );
+            }
+            // Decouple the request from the worker so the eventual
+            // result/error message is ignored by handleWorkerMessage. Leave
+            // worker.busy=true so we don't queue fresh work onto a worker
+            // that's still winding down; it'll flip back when the stale
+            // result arrives (and the `requestId !== worker.currentRequest`
+            // guard in handleWorkerMessage catches it).
+            activeWorker.currentRequest = null;
+            // Allow the worker to accept fresh work as soon as it's ready;
+            // the pool will swing back around on the next settle from the
+            // stale message because we won't match the requestId.
+            activeWorker.busy = false;
+        }
+
+        clearTimeout(request.timeout);
+        this.detachAbortListener(request);
+
+        request.resolve({
+            success: false,
+            error: reason,
+            errorType: 'TIMEOUT'
+        });
+
+        this.processQueue();
+    }
+
+    private detachAbortListener(request: PendingRequest): void {
+        if (request.params.abortSignal && request.abortListener) {
+            request.params.abortSignal.removeEventListener('abort', request.abortListener);
+            request.abortListener = undefined;
+        }
     }
 
     /**
@@ -292,11 +508,16 @@ export class WorkerPool {
         worker.busy = true;
         worker.currentRequest = request;
 
-        // Send execution request to worker
+        // Send execution request to worker — strip non-serializable fields
+        // (`bridgeHandlers` are functions, `abortSignal` is a live object).
+        const ipcParams = { ...request.params } as CodeExecutionParams;
+        delete (ipcParams as { bridgeHandlers?: unknown }).bridgeHandlers;
+        delete (ipcParams as { abortSignal?: unknown }).abortSignal;
+
         worker.process.send({
             type: 'execute',
             requestId: request.requestId,
-            params: request.params
+            params: ipcParams
         });
 
         // Try to process more if queue has items
@@ -335,6 +556,7 @@ export class WorkerPool {
         // Reject all queued requests
         for (const request of this.requestQueue) {
             clearTimeout(request.timeout);
+            this.detachAbortListener(request);
             request.resolve({
                 success: false,
                 error: 'Worker pool is shutting down',

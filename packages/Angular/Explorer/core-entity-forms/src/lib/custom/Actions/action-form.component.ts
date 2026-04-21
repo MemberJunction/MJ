@@ -1,5 +1,5 @@
 import { Component, OnInit, inject, ViewContainerRef } from '@angular/core';
-import { MJActionEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionCategoryEntity, MJActionExecutionLogEntity, MJActionLibraryEntity, MJLibraryEntity } from '@memberjunction/core-entities';
+import { MJActionEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionParamEntity, MJActionResultCodeEntity, MJActionCategoryEntity, MJActionExecutionLogEntity, MJActionLibraryEntity, MJLibraryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -393,11 +393,78 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     }
 
     getTypeColor(): string {
-        return this.record.Type === 'Generated' ? 'var(--mj-brand-primary)' : 'var(--mj-brand-primary)';
+        switch (this.record.Type) {
+            case 'Runtime':
+                return 'var(--mj-status-warning)';
+            case 'Generated':
+            case 'Custom':
+            default:
+                return 'var(--mj-brand-primary)';
+        }
     }
 
     getTypeIcon(): string {
-        return this.record.Type === 'Generated' ? 'fa-robot' : 'fa-code';
+        switch (this.record.Type) {
+            case 'Runtime': return 'fa-wand-magic-sparkles';
+            case 'Generated': return 'fa-robot';
+            case 'Custom':
+            default: return 'fa-code';
+        }
+    }
+
+    // =====================================================================
+    // Runtime Actions — approval-UI helpers (Phase 1i)
+    //
+    // Only relevant when `record.Type === 'Runtime'`. Each method reads the
+    // typed `RuntimeActionConfigurationObject` accessor emitted by CodeGen
+    // (via the JSONType metadata system) so consumers never hand-parse the
+    // raw JSON string. The approval panel uses these to surface the
+    // permission set an approver is implicitly blessing.
+    // =====================================================================
+
+    public get isRuntimeAction(): boolean {
+        return this.record?.Type === 'Runtime';
+    }
+
+    public get runtimeConfig(): MJActionEntity_IRuntimeActionConfiguration | null {
+        if (!this.isRuntimeAction) return null;
+        const accessor = (this.record as unknown as {
+            RuntimeActionConfigurationObject?: MJActionEntity_IRuntimeActionConfiguration | null;
+        });
+        return accessor.RuntimeActionConfigurationObject ?? null;
+    }
+
+    public getAllowedEntities(): Array<{ id: string; name: string }> {
+        return this.runtimeConfig?.permissions?.allowedEntities ?? [];
+    }
+
+    public getAllowedActions(): Array<{ id: string; name: string }> {
+        return this.runtimeConfig?.permissions?.allowedActions ?? [];
+    }
+
+    public getAllowedAgents(): Array<{ id: string; name: string }> {
+        return this.runtimeConfig?.permissions?.allowedAgents ?? [];
+    }
+
+    public getRequestedLibraries(): Array<{ name: string; version?: string }> {
+        return this.runtimeConfig?.sandbox?.additionalLibraries ?? [];
+    }
+
+    public getRuntimeLimits(): { maxMemoryMB: number; maxBridgeCalls: number } {
+        const limits = this.runtimeConfig?.limits ?? {};
+        return {
+            maxMemoryMB: limits.maxMemoryMB ?? 128,
+            maxBridgeCalls: limits.maxBridgeCalls ?? 100
+        };
+    }
+
+    public getRuntimeConfigSummary(): string {
+        const perms = this.runtimeConfig?.permissions;
+        if (!perms) return 'No permissions declared';
+        const e = perms.allowedEntities?.length ?? 0;
+        const a = perms.allowedActions?.length ?? 0;
+        const ag = perms.allowedAgents?.length ?? 0;
+        return `${e} entit${e === 1 ? 'y' : 'ies'}, ${a} action${a === 1 ? '' : 's'}, ${ag} agent${ag === 1 ? '' : 's'}`;
     }
 
     getApprovalStatusColor(): string {
