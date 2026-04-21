@@ -260,7 +260,25 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     if (dataState && typeof dataState === 'object') {
       return dataState as DataSnapshot;
     }
-    return null;
+
+    // Fallback for components with no captured data — static mockups,
+    // pure-display components, or components whose data hooks haven't fired.
+    // Rather than short-circuit Analyze with "No data available", emit a
+    // minimal snapshot so the user can still open an agent conversation about
+    // the component. The artifact itself is attached to the conversation as an
+    // Input junction, so the agent can reason from the spec + any static data
+    // baked into the component code.
+    const spec = this.resolvedComponentSpec;
+    if (!spec) return null;
+
+    const snap = new DataSnapshot();
+    snap.title = spec.title || spec.name || this.getDisplayTitle() || undefined;
+    snap.interpretation =
+      `Interactive component artifact${spec.name ? ` "${spec.name}"` : ''}. ` +
+      `No live data was captured — the component either has no data-fetching ` +
+      `hooks or has not yet run its queries. The component specification is ` +
+      `attached to this conversation; the agent should inspect it directly.`;
+    return snap;
   }
 
   /**
