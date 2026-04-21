@@ -30,10 +30,10 @@ import {
   ComponentRegistryService
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
-import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, RunViewParams, RunViewResult, DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
+import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, RunViewParams, RunViewResult, RunQueryParams, RunQueryResult, DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComponentMetadataEngine } from '@memberjunction/core-entities';
-import { ComponentUtilities, SimpleRunView } from '@memberjunction/interactive-component-types';
+import { ComponentUtilities, SimpleRunView, SimpleRunQuery } from '@memberjunction/interactive-component-types';
 
 /**
  * A captured RunView/RunQuery result with its original parameters.
@@ -1075,10 +1075,27 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       }
     };
 
+    const wrappedRq: SimpleRunQuery = {
+      RunQuery: async (params: RunQueryParams, contextUser?: unknown) => {
+        const result = await original.rq.RunQuery(params, contextUser as undefined);
+        if (result?.Success) {
+          self.capturedData.push({
+            sourceName: String(params.QueryID ?? params.QueryName ?? 'Query'),
+            sourceType: 'query',
+            params: params as unknown as Record<string, unknown>,
+            rows: (result.Results ?? []) as Record<string, unknown>[],
+            totalRows: result.TotalRowCount ?? result.Results?.length ?? 0,
+            fetchedAt: new Date()
+          });
+        }
+        return result;
+      }
+    };
+
     return {
       ...original,
-      rv: wrappedRv
-      // rq (RunQuery) could be wrapped similarly if needed
+      rv: wrappedRv,
+      rq: wrappedRq
     };
   }
 
