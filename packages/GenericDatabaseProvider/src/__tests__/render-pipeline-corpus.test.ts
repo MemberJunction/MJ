@@ -681,6 +681,361 @@ ORDER BY [r].[ID]`,
 });
 
 // ════════════════════════════════════════════════════════════════════
+// Recursive CTE Tests
+// ════════════════════════════════════════════════════════════════════
+
+describe('Recursive CTEs', () => {
+
+    // ── Standalone (no composition) ──────────────────────────────────
+
+    it('standalone recursive CTE (T-SQL): UNION ALL not confused with multiple CTEs', () => {
+        setupNoMetadata();
+        const result = RenderPipeline.Run(
+            `WITH Hierarchy AS (
+    SELECT [ID], [Name], [ParentID], 0 AS [Level]
+    FROM [org].[vwDepartments]
+    WHERE [ParentID] IS NULL
+    UNION ALL
+    SELECT [d].[ID], [d].[Name], [d].[ParentID], [h].[Level] + 1
+    FROM [org].[vwDepartments] [d]
+    INNER JOIN Hierarchy [h] ON [d].[ParentID] = [h].[ID]
+    WHERE [h].[Level] < 10
+)
+SELECT * FROM Hierarchy
+ORDER BY [Level], [Name]`,
+            { Platform: 'sqlserver', ContextUser: mockUser }
+        );
+        // No composition — passes straight through
+        expect(result.HasCompositions).toBe(false);
+        // UNION ALL preserved intact
+        expect(result.FinalSQL).toContain('UNION ALL');
+        // Recursive reference preserved
+        expect(result.FinalSQL).toContain('INNER JOIN Hierarchy');
+        // ORDER BY preserved (standalone, not a CTE body)
+        expect(result.FinalSQL).toContain('ORDER BY [Level], [Name]');
+    });
+
+    it('standalone recursive CTE (PostgreSQL): WITH RECURSIVE keyword preserved', () => {
+        setupNoMetadata();
+        const result = RenderPipeline.Run(
+            `WITH RECURSIVE org_tree AS (
+    SELECT id, name, parent_id, 0 AS depth
+    FROM organizations
+    WHERE parent_id IS NULL
+    UNION ALL
+    SELECT o.id, o.name, o.parent_id, t.depth + 1
+    FROM organizations o
+    INNER JOIN org_tree t ON t.id = o.parent_id
+)
+SELECT name, depth FROM org_tree
+ORDER BY depth, name`,
+            { Platform: 'postgresql', ContextUser: mockUser }
+        );
+        expect(result.HasCompositions).toBe(false);
+        expect(result.FinalSQL).toContain('WITH RECURSIVE');
+        expect(result.FinalSQL).toContain('UNION ALL');
+        // ORDER BY preserved — pgSQL allows it in standalone + CTEs
+        expect(result.FinalSQL).toContain('ORDER BY depth, name');
+    });
+
+    // ── Recursive CTE dep in composition (T-SQL) ─────────────────────
+
+    it('T-SQL: recursive CTE dep hoisted correctly in composition', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'OrgHierarchy', CategoryPath: '/Core/', SQL:
+`WITH Hierarchy AS (
+    SELECT [ID], [Name], [ParentID], 0 AS [Level]
+    FROM [org].[vwDepartments]
+    WHERE [ParentID] IS NULL
+    UNION ALL
+    SELECT [d].[ID], [d].[Name], [d].[ParentID], [h].[Level] + 1
+    FROM [org].[vwDepartments] [d]
+    INNER JOIN Hierarchy [h] ON [d].[ParentID] = [h].[ID]
+)
+SELECT [ID], [Name], [Level] FROM Hierarchy`,
+        }];
+        const result = RenderPipeline.Run(
+            `SELECT [oh].[Name], [oh].[Level]
+FROM {{query:"Core/OrgHierarchy"}} [oh]
+WHERE [oh].[Level] <= 3`,
+            { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps }
+        );
+        expect(result.HasCompositions).toBe(true);
+        // Inner recursive CTE hoisted as sibling
+        expect(result.FinalSQL).toContain('Hierarchy AS');
+        // UNION ALL body intact inside the hoisted CTE
+        expect(result.FinalSQL).toContain('UNION ALL');
+        // Recursive self-reference preserved (AST may bracket-quote it)
+        expect(result.FinalSQL).toMatch(/JOIN\s+\[?Hierarchy\]?/i);
+        // Outer WHERE preserved
+        expect(result.FinalSQL).toContain('[oh].[Level] <= 3');
+    });
+
+    // ── Recursive CTE dep on PostgreSQL ──────────────────────────────
+
+    it('pgSQL: recursive CTE dep body preserved through composition hoisting', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'OrgTree', CategoryPath: '/Core/', SQL:
+`WITH RECURSIVE org_tree AS (
+    SELECT id, name, parent_id, 0 AS depth
+    FROM organizations
+    WHERE parent_id IS NULL
+    UNION ALL
+    SELECT o.id, o.name, o.parent_id, t.depth + 1
+    FROM organizations o
+    INNER JOIN org_tree t ON t.id = o.parent_id
+)
+SELECT name, depth FROM org_tree`,
+        }];
+        const result = RenderPipeline.Run(
+            `SELECT [t].[name], [t].[depth]
+FROM {{query:"Core/OrgTree"}} [t]
+WHERE [t].[depth] <= 5`,
+            { Platform: 'postgresql', ContextUser: mockUser, Dependencies: deps }
+        );
+        expect(result.HasCompositions).toBe(true);
+        // The RECURSIVE keyword appears in the hoisted inner CTE body
+        expect(result.FinalSQL).toMatch(/RECURSIVE/i);
+        expect(result.FinalSQL).toContain('UNION ALL');
+        expect(result.FinalSQL).toContain('org_tree');
+    });
+
+    // ── Outer query has recursive CTE + composes a dep ───────────────
+
+    it('T-SQL: outer recursive CTE merged with composed dep CTEs', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'ActiveUsers', CategoryPath: '/Core/', SQL:
+`SELECT [ID], [Name], [DepartmentID] FROM [__mj].[vwUsers] WHERE [IsActive] = 1`,
+        }];
+        const result = RenderPipeline.Run(
+            `WITH DeptTree AS (
+    SELECT [ID], [Name], [ParentID], 0 AS [Depth]
+    FROM [org].[vwDepartments]
+    WHERE [ParentID] IS NULL
+    UNION ALL
+    SELECT [d].[ID], [d].[Name], [d].[ParentID], [dt].[Depth] + 1
+    FROM [org].[vwDepartments] [d]
+    INNER JOIN DeptTree [dt] ON [d].[ParentID] = [dt].[ID]
+)
+SELECT [dt].[Name] AS [Department], [au].[Name] AS [User]
+FROM DeptTree [dt]
+INNER JOIN {{query:"Core/ActiveUsers"}} [au] ON [au].[DepartmentID] = [dt].[ID]
+ORDER BY [dt].[Depth], [au].[Name]`,
+            { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps }
+        );
+        expect(result.HasCompositions).toBe(true);
+        // Outer recursive CTE preserved
+        expect(result.FinalSQL).toContain('DeptTree AS');
+        expect(result.FinalSQL).toContain('UNION ALL');
+        // Composed dep's CTE added alongside
+        expect(result.FinalSQL).toContain('__cte_ActiveUsers');
+        // Outer ORDER BY preserved
+        expect(result.FinalSQL).toContain('ORDER BY');
+    });
+
+    // ── Recursive CTE + Nunjucks templates ───────────────────────────
+
+    it('recursive CTE dep with templated depth limit and conditional filter', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'OrgHierarchy', CategoryPath: '/Analytics/',
+            UsesTemplate: true, SQL:
+`/*
+  Recursive org hierarchy with configurable depth.
+  No ORDER BY / TOP -- composable.
+*/
+WITH Hierarchy AS (
+    SELECT [ID], [Name], [ParentID], 0 AS [Level]
+    FROM [org].[vwDepartments]
+    WHERE [ParentID] IS NULL
+    UNION ALL
+    SELECT [d].[ID], [d].[Name], [d].[ParentID], [h].[Level] + 1
+    FROM [org].[vwDepartments] [d]
+    INNER JOIN Hierarchy [h] ON [d].[ParentID] = [h].[ID]
+    WHERE [h].[Level] < {{ MaxDepth | sqlNumber }}
+)
+SELECT [ID], [Name], [Level] FROM Hierarchy
+{% if Region %}
+WHERE [Region] = {{ Region | sqlString }}
+{% endif %}
+ORDER BY [Level], [Name]`,
+        }];
+        const result = RenderPipeline.Run(
+            `SELECT [oh].[Name], [oh].[Level]
+FROM {{query:"Analytics/OrgHierarchy(MaxDepth=MaxDepth, Region=Region)"}} [oh]`,
+            {
+                Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps,
+                UsesTemplate: true, Parameters: { MaxDepth: '5', Region: 'West' },
+            }
+        );
+        expect(result.HasCompositions).toBe(true);
+
+        // Block comment with "ORDER BY" must NOT truncate the dep body
+        expect(result.FinalSQL).toContain('Hierarchy AS');
+        expect(result.FinalSQL).toContain('UNION ALL');
+
+        // Dep's trailing ORDER BY stripped (illegal in CTE on SQL Server)
+        const afterComp = result.Trace.AfterComposition;
+        const cteBody = extractCTEBody(afterComp);
+        const hasDepOrderBy = /ORDER\s+BY\s+\[Level\],\s*\[Name\]/i.test(cteBody);
+        const hasOffset = /OFFSET\s+0\s+ROWS/i.test(cteBody);
+        expect(hasDepOrderBy === false || hasOffset).toBe(true);
+
+        // After Nunjucks: templates resolved
+        expect(result.Trace.AfterTemplates).not.toMatch(/\{\{[^}]*\}\}/);
+        expect(result.Trace.AfterTemplates).not.toMatch(/\{%[^%]*%\}/);
+        expect(result.FinalSQL).toContain("'West'");
+        // MaxDepth resolved to 5 in the recursive UNION ALL's WHERE
+        expect(result.FinalSQL).toMatch(/Level.*<.*5|5/);
+    });
+
+    it('recursive CTE dep with {% for %} loop inside recursive body', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'FilteredTree', CategoryPath: '/Analytics/',
+            UsesTemplate: true, SQL:
+`WITH Tree AS (
+    SELECT [ID], [Name], [ParentID], [Type], 0 AS [Depth]
+    FROM [org].[vwNodes]
+    WHERE [ParentID] IS NULL
+    {% if ExcludeTypes %}
+      AND [Type] NOT IN {{ ExcludeTypes | sqlIn }}
+    {% endif %}
+    UNION ALL
+    SELECT [n].[ID], [n].[Name], [n].[ParentID], [n].[Type], [t].[Depth] + 1
+    FROM [org].[vwNodes] [n]
+    INNER JOIN Tree [t] ON [n].[ParentID] = [t].[ID]
+    WHERE [t].[Depth] < 10
+    {% if ExcludeTypes %}
+      AND [n].[Type] NOT IN {{ ExcludeTypes | sqlIn }}
+    {% endif %}
+)
+SELECT * FROM Tree`,
+        }];
+        const result = RenderPipeline.Run(
+            `SELECT [ft].[Name], [ft].[Depth]
+FROM {{query:"Analytics/FilteredTree(ExcludeTypes=ExcludeTypes)"}} [ft]
+ORDER BY [ft].[Depth]`,
+            {
+                Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps,
+                UsesTemplate: true, Parameters: { ExcludeTypes: ['Archived', 'Draft'] as unknown as string },
+            }
+        );
+        expect(result.HasCompositions).toBe(true);
+
+        // UNION ALL preserved inside the recursive CTE
+        expect(result.FinalSQL).toContain('UNION ALL');
+        expect(result.FinalSQL).toContain('INNER JOIN Tree');
+
+        // {% if %} blocks resolved — ExcludeTypes provided so NOT IN rendered
+        expect(result.FinalSQL).not.toMatch(/\{%/);
+        expect(result.FinalSQL).toContain('NOT IN');
+        expect(result.FinalSQL).toMatch(/'Archived'/);
+        expect(result.FinalSQL).toMatch(/'Draft'/);
+
+        // Outer ORDER BY preserved
+        expect(result.FinalSQL).toContain('ORDER BY [ft].[Depth]');
+    });
+
+    it('recursive CTE dep with template expression inside string literal (Bug D pattern)', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'TypedTree', CategoryPath: '/Analytics/',
+            UsesTemplate: true, SQL:
+`WITH TypedTree AS (
+    SELECT [ID], [Name], [ParentID], [TypeName], 0 AS [Depth]
+    FROM [org].[vwNodes]
+    WHERE [ParentID] IS NULL
+    UNION ALL
+    SELECT [n].[ID], [n].[Name], [n].[ParentID], [n].[TypeName], [t].[Depth] + 1
+    FROM [org].[vwNodes] [n]
+    INNER JOIN TypedTree [t] ON [n].[ParentID] = [t].[ID]
+)
+SELECT * FROM TypedTree
+{% if TypeFilter %}
+WHERE [TypeName] = '{{ TypeFilter }}'
+{% endif %}
+ORDER BY [Depth]`,
+        }];
+        const result = RenderPipeline.Run(
+            `SELECT [tt].[Name], [tt].[Depth]
+FROM {{query:"Analytics/TypedTree(TypeFilter=TypeFilter)"}} [tt]`,
+            {
+                Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps,
+                UsesTemplate: true, Parameters: { TypeFilter: 'Division' },
+            }
+        );
+        expect(result.HasCompositions).toBe(true);
+
+        // UNION ALL intact
+        expect(result.FinalSQL).toContain('UNION ALL');
+        expect(result.FinalSQL).toContain('INNER JOIN TypedTree');
+
+        // Bug D pattern: '{{ TypeFilter }}' inside string literal must not
+        // break ORDER BY detection — dep ORDER BY should be stripped
+        const afterComp = result.Trace.AfterComposition;
+        const cteBody = extractCTEBody(afterComp);
+        const hasDepOrderBy = /ORDER\s+BY\s+\[Depth\]/i.test(cteBody);
+        const hasOffset = /OFFSET\s+0\s+ROWS/i.test(cteBody);
+        expect(hasDepOrderBy === false || hasOffset).toBe(true);
+
+        // After Nunjucks: template resolved
+        expect(result.FinalSQL).toContain("'Division'");
+        expect(result.FinalSQL).not.toMatch(/\{\{[^}]*\}\}/);
+    });
+
+    it('two recursive CTE deps with same inner CTE name (Bug C + recursive)', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [
+            {
+                Name: 'OrgTreeA', CategoryPath: '/Core/', SQL:
+`WITH Tree AS (
+    SELECT [ID], [Name], [ParentID] FROM [org].[vwDeptA] WHERE [ParentID] IS NULL
+    UNION ALL
+    SELECT [d].[ID], [d].[Name], [d].[ParentID]
+    FROM [org].[vwDeptA] [d] INNER JOIN Tree [t] ON [d].[ParentID] = [t].[ID]
+)
+SELECT [ID], [Name] FROM Tree`,
+            },
+            {
+                Name: 'OrgTreeB', CategoryPath: '/Core/', SQL:
+`WITH Tree AS (
+    SELECT [ID], [Name], [ParentID] FROM [org].[vwDeptB] WHERE [ParentID] IS NULL
+    UNION ALL
+    SELECT [d].[ID], [d].[Name], [d].[ParentID]
+    FROM [org].[vwDeptB] [d] INNER JOIN Tree [t] ON [d].[ParentID] = [t].[ID]
+)
+SELECT [ID], [Name] FROM Tree`,
+            },
+        ];
+        const result = RenderPipeline.Run(
+            `SELECT [a].[Name] AS [DeptA], [b].[Name] AS [DeptB]
+FROM {{query:"Core/OrgTreeA"}} [a]
+JOIN {{query:"Core/OrgTreeB"}} [b] ON [a].[ID] = [b].[ID]`,
+            { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps }
+        );
+        expect(result.HasCompositions).toBe(true);
+
+        // Both deps declare "Tree AS (...)" — Bug C: must be deconflicted
+        const treeAsCount = countMatches(result.FinalSQL, 'Tree AS (');
+        // At most one verbatim "Tree AS (" — the other is renamed (e.g. Tree__2)
+        expect(treeAsCount).toBeLessThanOrEqual(1);
+
+        // Both UNION ALLs preserved
+        const unionCount = countMatches(result.FinalSQL, 'UNION ALL');
+        expect(unionCount).toBe(2);
+
+        // Recursive self-references must match renamed CTE
+        // The second dep's "INNER JOIN Tree" should reference the renamed name
+        expect(result.FinalSQL).toContain('[DeptA]');
+        expect(result.FinalSQL).toContain('[DeptB]');
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
 // Helpers
 // ════════════════════════════════════════════════════════════════════
 
