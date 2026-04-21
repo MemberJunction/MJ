@@ -460,10 +460,6 @@ EXEC sp_addextendedproperty @name=N'MS_Description',
       )
    
 
-/* SQL generated to add new entity MJ: Archive Configuration Entities to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '83dbf4cb-56fe-496f-a5df-1fc7bf616653', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Archive Configuration Entities for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
@@ -530,10 +526,6 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
       )
    
 
-/* SQL generated to add new entity MJ: Archive Runs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '3f740d68-8510-46a6-a1d3-3fa5d79eb7c4', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Archive Runs for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
@@ -600,10 +592,6 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
       )
    
 
-/* SQL generated to add new entity MJ: Archive Run Details to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'c30f80ec-e7ce-468e-b6c6-b8888f0f45c6', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Archive Run Details for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
@@ -670,10 +658,6 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
       )
    
 
-/* SQL generated to add new entity MJ: Archive Configurations to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '4873b8b1-11e9-49e7-ac26-497c17c9cd04', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Archive Configurations for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
@@ -7497,4 +7481,55 @@ WHERE
          WHERE EntityID = '83DBF4CB-56FE-496F-A5DF-1FC7BF616653'
       
 
+
+-- Migration: Create Archiving Application and reassign Archive Entities
+-- Description: Creates the "Archiving" application with its default nav items
+--              (Configuration and Run History dashboards), then assigns the
+--              four Archive entities to the
+--              new Archiving application.
+--
+
+DECLARE @ArchivingAppID       UNIQUEIDENTIFIER = '87B3923D-6505-4E5C-A486-CA554CB6A0F0';
+DECLARE @MJAdminAppID         UNIQUEIDENTIFIER = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E';
+
+DECLARE @ArchiveConfigID      UNIQUEIDENTIFIER = '4873b8b1-11e9-49e7-ac26-497c17c9cd04';
+DECLARE @ArchiveConfigEntID   UNIQUEIDENTIFIER = '83dbf4cb-56fe-496f-a5df-1fc7bf616653';
+DECLARE @ArchiveRunID         UNIQUEIDENTIFIER = '3f740d68-8510-46a6-a1d3-3fa5d79eb7c4';
+DECLARE @ArchiveRunDetailID   UNIQUEIDENTIFIER = 'c30f80ec-e7ce-468e-b6c6-b8888f0f45c6';
+
+------------------------------------------------------
+-- 1) Create the Archiving application
+------------------------------------------------------
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Application] WHERE [ID] = @ArchivingAppID)
+BEGIN
+    INSERT INTO [${flyway:defaultSchema}].[Application]
+        ([ID], [Name], [Description], [Icon], [DefaultForNewUser], [DefaultSequence],
+         [Status], [NavigationStyle], [HideNavBarIconWhenActive], [Path], [AutoUpdatePath],
+         [DefaultNavItems])
+    VALUES
+        (@ArchivingAppID,
+         N'Archiving',
+         N'Manage database archiving configurations, view run history, and restore archived records.',
+         N'fa-solid fa-box-archive',
+         0,       -- DefaultForNewUser
+         1050,    -- DefaultSequence
+         N'Active',
+         N'Both',
+         1,       -- HideNavBarIconWhenActive
+         N'archiving',
+         1,       -- AutoUpdatePath
+         N'[{"Label":"Configuration","Icon":"fa-solid fa-sliders","ResourceType":"Custom","DriverClass":"ArchiveConfigResource","isDefault":true},{"Label":"Run History","Icon":"fa-solid fa-clock-rotate-left","ResourceType":"Custom","DriverClass":"ArchiveRunsResource"}]');
+END
+
+------------------------------------------------------
+-- 2) Associate the 4 archive entities with the Archiving application.
+--    Sequence ordering: Config (parent) first, then Config Entity, then Run, then Run Detail.
+------------------------------------------------------
+INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
+    ([ApplicationID], [EntityID], [Sequence], [DefaultForNewUser])
+VALUES
+    (@ArchivingAppID, @ArchiveConfigID,    1, 1),
+    (@ArchivingAppID, @ArchiveConfigEntID, 2, 0),
+    (@ArchivingAppID, @ArchiveRunID,       3, 1),
+    (@ArchivingAppID, @ArchiveRunDetailID, 4, 0);
 
