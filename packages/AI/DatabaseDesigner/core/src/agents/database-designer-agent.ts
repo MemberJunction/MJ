@@ -41,6 +41,8 @@ import type {
     ExecuteAgentParams,
     BaseAgentNextStep,
     AIPromptRunResult,
+    AgentConfiguration,
+    AIPromptParams,
 } from '@memberjunction/ai-core-plus';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
@@ -210,8 +212,26 @@ export class DatabaseDesignerAgent extends BaseAgent {
             return this.buildSubAgentStep(SCHEMA_BUILDER_AGENT_NAME, SCHEMA_BUILDER_MESSAGE, markedPayload as unknown as P);
         }
 
-        // No intercept fired — let the LLM's decision stand as normal
+        // No intercept fired — let the LLM's decision stand.
+        // ERDMermaid is injected into payload BEFORE the LLM call (preparePromptParams),
+        // so the LLM can read it and include it directly in the message field.
         return super.determineNextStep(params, agentType, promptResult, payload);
+    }
+
+    /**
+     * Pre-LLM hook: inject ERDMermaid into the payload BEFORE the prompt
+     * context is built so the LLM sees it when generating the approval message.
+     *
+     * `determineNextStep()` also calls `injectERDMermaid()` so the persisted
+     * `newPayload` stays consistent, but that runs post-LLM — too late to
+     * affect the message content.
+     */
+    protected override async preparePromptParams<P>(
+        config: AgentConfiguration,
+        payload: P,
+        params: ExecuteAgentParams,
+    ): Promise<AIPromptParams> {
+        return super.preparePromptParams(config, this.injectERDMermaid(payload), params);
     }
 
     // ─── Private helpers ────────────────────────────────────────────────────────

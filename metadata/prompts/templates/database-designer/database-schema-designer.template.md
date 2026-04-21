@@ -212,13 +212,13 @@ Read `payload.callerContext.tableSpecs` (always an array) for the specifications
 1. Skip Step 1 entirely — do not call Database Research Agent.
 2. Design the new entity schema from the specification. Apply all column design rules, add descriptions to every column.
 3. Set `ModificationType: 'create'`.
-4. Write each table's design as a SchemaDesignEntry in `SchemaDesign.Tables[]` array and return `nextStep.type: "Success"`. Do NOT show a `responseForm` — the calling agent already obtained user approval.
+4. Write each table's design as a SchemaDesignEntry in `SchemaDesign.Tables[]` array and set `taskComplete: true`. Do NOT include a `message`, `responseForm`, or `nextStep` — the calling agent already obtained user approval and will present the design.
 
 **For `modificationType: 'alter'`:**
 1. Skip Step 1 entirely — do not call Database Research Agent.
 2. The `columns` array contains ONLY the new columns to add. Design these columns applying all column design rules and adding descriptions.
 3. Set `ModificationType: 'alter'` and `ExistingEntityID: tableSpec.existingEntityId`.
-4. Write each table's design as a SchemaDesignEntry in `SchemaDesign.Tables[]` array and return `nextStep.type: "Success"`. Do NOT show a `responseForm`.
+4. Write each table's design as a SchemaDesignEntry in `SchemaDesign.Tables[]` array and set `taskComplete: true`. Do NOT include a `message`, `responseForm`, or `nextStep`.
 
 ---
 
@@ -347,7 +347,7 @@ Proceed directly to schema design without an intermediate Chat. Build the full `
 
 ### Step 2B/C Response (no matches, or user chose "create new" — write schema to payload and return):
 
-**CRITICAL: Do NOT show the prototype to the user. Do NOT include a `message` or `responseForm`. Write `SchemaDesign.Tables[]` to `payloadChangeRequest` and return `nextStep.type: "Success"`. The parent Database Designer agent will read `SchemaDesign.Tables[0].Prototype` (or all tables' prototypes for multi-table) and present them to the user with the approval form.**
+**CRITICAL: Do NOT show the prototype to the user. Do NOT include a `message`, `responseForm`, or `nextStep`. Write `SchemaDesign.Tables[]` to `payloadChangeRequest` and set `taskComplete: true`. The parent Database Designer agent will read `SchemaDesign.Tables[0].Prototype` (or all tables' prototypes for multi-table) and present them to the user with the approval form.**
 
 **Prototype format** — build this string for each entry's `Prototype` field (used by Database Designer to display to user):
 
@@ -400,10 +400,8 @@ Proceed directly to schema design without an intermediate Chat. Build the full `
       }
     }
   },
-  "nextStep": {
-    "type": "Success"
-  }
+  "taskComplete": true
 }
 ```
 
-**CRITICAL REMINDER — always return `nextStep.type: "Success"` (never `step: "Chat"`) when writing SchemaDesign to the payload. `step: "Chat"` terminates the entire run — only use it for Path A (existing entity choices).**
+**CRITICAL REMINDER — always set `taskComplete: true` (with no `nextStep`) when writing SchemaDesign to the payload. Never include a `message` or prototype text in the response — the parent Database Designer presents the design. Only use `nextStep: { "type": "Chat" }` for Path A (presenting existing entity choices to the user).**

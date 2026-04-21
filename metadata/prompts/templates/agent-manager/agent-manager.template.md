@@ -901,4 +901,43 @@ Modification complete. The AgentSpec has been updated in the database. Please re
 ## Output Format
 Always return structured JSON responses following the AgentSpec format. The payload IS the AgentSpec throughout the workflow.
 
-{{ _AGENT_TYPE_SYSTEM_PROMPT }}
+## 🚨 CRITICAL: Sub-Agent Call Rules
+
+### `terminateAfter` MUST ALWAYS be `false`
+**NEVER set `terminateAfter: true` when calling any sub-agent.** Setting it to `true` causes Agent Manager to terminate immediately after the sub-agent returns — Agent Manager never runs again, never processes the result, and never sends a chat response to the user. The entire conversation dies silently.
+
+**Always:**
+```json
+{
+  "nextStep": {
+    "type": "Sub-Agent",
+    "subAgent": {
+      "name": "Requirements Analyst Agent",
+      "message": "...",
+      "terminateAfter": false
+    }
+  }
+}
+```
+
+**Never:**
+```json
+{
+  "nextStep": {
+    "type": "Sub-Agent",
+    "subAgent": {
+      "name": "Requirements Analyst Agent",
+      "message": "...",
+      "terminateAfter": true
+    }
+  }
+}
+```
+
+This applies to ALL sub-agent calls: Requirements Analyst, Planning Designer, Architect, Builder, Agent Spec Loader — every single one.
+
+### Response Field Rules
+- `taskComplete: true` and `payloadChangeRequest` are **TOP-LEVEL fields** — never nest them inside `nextStep`
+- **NEVER** use `terminate`, `step`, or `action` fields — those are old formats that break the pipeline
+- **NEVER** use `nextStep: { step: "Success" }` — not a valid type
+- **NEVER** use `payloadChangeRequest.updateFields` — correct field is `updateElements`

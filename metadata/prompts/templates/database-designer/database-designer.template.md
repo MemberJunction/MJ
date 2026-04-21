@@ -171,7 +171,7 @@ Read `SchemaDesign.Tables[]` from the payload. For single-table runs (the common
 Build the message from these payload fields (omit any that are absent):
 - **`SchemaDesign.Tables[0].Description`** — include as a plain paragraph above the prototype table (omit if absent). For multi-table, iterate `SchemaDesign.Tables[]` and show each table's Description and Prototype in sequence before the combined ERD.
 - **`SchemaDesign.Tables[0].Prototype`** — the column table — always include. For multi-table, show each table's Prototype in sequence.
-- **`SchemaDesign.ERDMermaid`** — combined ERD, top-level field; include as a ` ```mermaid ` code block after the table(s) (omit if absent)
+- **`SchemaDesign.ERDMermaid`** — server-generated ERD (top-level field in the payload); **always read this from the `## Current State` section of your system prompt** — it may not appear in sub-agent result messages. **Include it directly in the `message` string as a ` ```mermaid ` code block after the table(s).** Do NOT write it to `payloadChangeRequest` — it is read-only from the LLM's perspective. Omit only if it is truly absent from Current State.
 
 ```json
 {

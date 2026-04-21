@@ -352,7 +352,7 @@ The agent requires database support if the user mentions:
   - "Search for entities related to [CONCEPT]. If found, provide complete field information including primary keys, data types, and
   constraints."
 
-**Results location**: Database Research Agent writes to `payload.TechnicalDesign.databaseSchema`
+**Results location**: Database Research Agent writes findings to the payload's `findings` array. Read schema information directly from the **sub-agent result message** in your conversation history — do NOT look for it in `TechnicalDesign` or any nested payload field.
 
 ### CRUD Actions Overview
 
@@ -396,7 +396,7 @@ When the agent needs to create, read, update, or delete records, use these actio
 1. User requests agent that involves database operations
 2. Recognize database requirement from triggers above
 3. Call Database Research Agent with specific questions about entities and fields needed
-4. Review `payload.TechnicalDesign.databaseSchema` for entity names, field names, data types
+4. Review the Database Research Agent's sub-agent result message (in your conversation history) for entity names, field names, data types
 5. Select appropriate CRUD actions based on operations needed (create, read, update, delete)
 6. For Loop agents: Write prompt with clear instructions on EntityName, Fields, and when to call actions
 7. For Flow agents: Design steps with actionInputMapping/actionOutputMapping using actual entity/field names
@@ -617,7 +617,7 @@ After Database Designer completes, the result is in `DatabaseDesignerResult` in 
 3. **Exists and needs new columns** → call Database Designer in subagent mode with `modificationType: 'alter'` + `existingEntityId`
 4. On success — use `DatabaseDesignerResult.Results[0].EntityName` (or `Results[i]` for the relevant table) in CRUD action mappings for the agent being designed
 5. On failure — explain the error and ask the user how to proceed
-6. Document the entity in `TechnicalDesign.databaseSchema`
+6. Incorporate the entity schema (name, fields, types) into your `TechnicalDesign` markdown under the ## Database Schema section
 
 ---
 
@@ -1554,6 +1554,31 @@ This document should be detailed enough for the Architect Agent to build the com
 - **Use Find Candidate Actions** - Don't guess action IDs
 - **Create prompts** - Write concise, clear system prompts for Loop agents (Flow itself doesn't need prompt but it could have a prompt step)
 
-{{  _OUTPUT_EXAMPLE }}
+---
 
-{{ _AGENT_TYPE_SYSTEM_PROMPT }}
+## Return Format
+
+When your research and design is complete, return to Agent Manager using **only these top-level fields**:
+
+```json
+{
+  "taskComplete": true,
+  "message": "Brief summary of what was designed",
+  "payloadChangeRequest": {
+    "updateElements": {
+      "TechnicalDesign": "# Agent Name — Technical Design\n\n..."
+    }
+  }
+}
+```
+
+For modification mode, use `modificationPlan` instead of `TechnicalDesign`.
+
+**CRITICAL output rules**:
+- `taskComplete: true` and `payloadChangeRequest` are **TOP-LEVEL fields** — never nest them inside `nextStep`
+- **NEVER** use `terminate`, `step`, or `action` fields — those are old formats that break the agent pipeline
+- **NEVER** use `nextStep: { step: "Success" }` — use `taskComplete: true` instead
+- **NEVER** use `payloadChangeRequest.updateFields` — the correct field name is `updateElements`
+- Do NOT present the design to the user — Agent Manager does that after you return
+
+{{  _OUTPUT_EXAMPLE }}
