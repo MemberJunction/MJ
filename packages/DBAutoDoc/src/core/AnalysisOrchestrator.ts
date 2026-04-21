@@ -62,7 +62,10 @@ export class AnalysisOrchestrator {
    * Execute the full analysis workflow
    */
   public async execute(): Promise<OrchestratorResult> {
+    const PERF_START = Date.now();
+    const perf = (label: string) => console.log(`[PERF] ${String(Date.now() - PERF_START).padStart(6)}ms  ${label}`);
     try {
+      perf('orchestrator.execute() begin');
       // Create run folder
       if (!this.config.output.outputDir) {
         throw new Error('output.outputDir must be specified in config');
@@ -123,8 +126,11 @@ export class AnalysisOrchestrator {
       };
 
       const db = new DatabaseConnection(driverConfig);
+      perf('DB.connect() begin');
       await db.connect();
+      perf('DB.connect() end');
       const testResult = await db.test();
+      perf('DB.test() end');
 
       if (!testResult.success) {
         throw new Error(`Database connection failed: ${testResult.message}`);
@@ -134,10 +140,12 @@ export class AnalysisOrchestrator {
       // Introspect database (unless resuming with existing schema data)
       if (!this.resumeFromState || state.schemas.length === 0) {
         this.onProgress('Introspecting database schema');
+        perf('introspection begin');
         const driver = db.getDriver();
         const introspector = new Introspector(driver);
         const schemas = await introspector.getSchemas(this.config.schemas, this.config.tables);
         state.schemas = schemas;
+        perf(`introspection end (${schemas.length} schemas, ${schemas.reduce((s, x) => s + x.tables.length, 0)} tables)`);
         this.onProgress('Schema introspection complete', {
           schemas: schemas.length,
           tables: schemas.reduce((sum, s) => sum + s.tables.length, 0)
@@ -145,7 +153,9 @@ export class AnalysisOrchestrator {
 
         // Load existing descriptions from database metadata (MS_Description, etc.)
         this.onProgress('Loading existing database descriptions');
+        perf('loadExistingDescriptions begin');
         await this.loadExistingDescriptions(state, db.getDriver(), stateManager);
+        perf('loadExistingDescriptions end');
 
         // Save state after introspection + existing descriptions
         stateManager.updateSummary(state);
@@ -153,6 +163,7 @@ export class AnalysisOrchestrator {
 
         // Analyze data
         this.onProgress('Analyzing table data');
+        perf('data sampling begin');
         const sampler = new DataSampler(driver, this.config.analysis);
         let samplingErrors = 0;
         for (const schema of schemas) {
@@ -168,6 +179,7 @@ export class AnalysisOrchestrator {
             }
           }
         }
+        perf(`data sampling end (${samplingErrors} errors)`);
         this.onProgress('Data analysis complete', {
           tablesAnalyzed: schemas.reduce((sum, s) => sum + s.tables.length, 0) - samplingErrors,
           errors: samplingErrors
@@ -229,11 +241,13 @@ export class AnalysisOrchestrator {
             : this.config.analysis.relationshipDiscovery.tokenBudget?.maxTokens || 50000;
 
           // Pass existing phase for resume, or let discover() create a new one
+          perf('Phase 0 (DiscoveryEngine.discover) begin');
           const discoveryResult = await discoveryEngine.discover(
             discoveryTokenBudget,
             triggerAnalysis,
             isResume ? state.phases.keyDetection : undefined
           );
+          perf(`Phase 0 end (PKs=${discoveryResult.phase.discovered.primaryKeys.length}, FKs=${discoveryResult.phase.discovered.foreignKeys.length}, tokens=${discoveryResult.phase.tokenBudget.used})`);
 
           // Save to new phases structure
           state.phases.keyDetection = discoveryResult.phase;
@@ -266,8 +280,10 @@ export class AnalysisOrchestrator {
 
       // Topological sort
       this.onProgress('Computing dependency graph');
+      perf('topo-sort begin');
       const sorter = new TopologicalSorter();
       const { levels } = sorter.buildAndSort(state.schemas);
+      perf(`topo-sort end (${levels.length} levels: [${levels.map(l => l.length).join(',')}])`);
       this.onProgress('Dependency graph computed', { levels: levels.length });
 
       // Initialize analysis components
@@ -304,12 +320,15 @@ export class AnalysisOrchestrator {
       while (!converged && !guardrailExceeded && run.iterationsPerformed < maxIterations) {
         iterationTracker.incrementIteration(state, run);
         this.onProgress('Starting iteration', { iteration: run.iterationsPerformed });
+        perf(`Phase 1 iter ${run.iterationsPerformed} begin`);
 
         // Process each level
         for (let levelNum = 0; levelNum < levels.length; levelNum++) {
           this.onProgress('Processing level', { level: levelNum, tables: levels[levelNum].length });
+          perf(`Phase 1 iter ${run.iterationsPerformed} level ${levelNum} begin (${levels[levelNum].length} tables)`);
 
           const levelResult = await analysisEngine.processLevel(state, run, levelNum, levels[levelNum]);
+          perf(`Phase 1 iter ${run.iterationsPerformed} level ${levelNum} end`);
 
           if (levelResult.guardrailExceeded) {
             guardrailExceeded = true;
@@ -334,11 +353,24 @@ export class AnalysisOrchestrator {
         }
 
         if (guardrailExceeded) break;
+        perf(`Phase 1 iter ${run.iterationsPerformed} end`);
+
+        // Grounded P2 ascent (feature flag). After P1 descent completes for
+        // this iteration, refine non-leaf table descriptions using descendant
+        // context. Validated by smoke test λ (5/7 judge wins, 0 hallucinations).
+        if (this.config.analysis.useGroundedP2Refinement === true) {
+          perf(`Phase 1 iter ${run.iterationsPerformed} P2 ascent begin`);
+          const p2Result = await analysisEngine.runGroundedP2Pass(state, run, levels);
+          perf(`Phase 1 iter ${run.iterationsPerformed} P2 ascent end (refined=${p2Result.refined}, unchanged=${p2Result.unchanged}, skipped=${p2Result.skipped})`);
+          stateManager.updateSummary(state);
+          await stateManager.save(state);
+        }
 
         // Check convergence
         converged = analysisEngine.checkConvergence(state, run);
         if (converged) {
           this.onProgress('Analysis converged');
+          perf('Phase 1 converged');
         }
       }
 
@@ -359,22 +391,26 @@ export class AnalysisOrchestrator {
 
       // PK pruning: lock high-confidence PKs as interim ground truth, then prune the rest
       if (state.phases.keyDetection && this.config.ai.modelOverrides?.['fkPruning']) {
+        perf('PK pruning begin');
         const { locked: pkLocked, unlocked: pkUnlocked } = analysisEngine.lockInterimPKGroundTruth(state);
         if (pkUnlocked > 0) {
           const { removed: pkRemoved, kept: pkKept } = await analysisEngine.prunePrimaryKeys(state, run);
           this.onProgress('PK pruning results', { locked: pkLocked, removed: pkRemoved, kept: pkKept });
         }
+        perf('PK pruning end');
         stateManager.updateSummary(state);
         await stateManager.save(state);
       }
 
       // FK pruning: lock high-confidence FKs as interim ground truth, then prune the rest
       if (state.phases.keyDetection && this.config.ai.modelOverrides?.['fkPruning']) {
+        perf('FK pruning begin');
         const { locked, unlocked } = analysisEngine.lockInterimGroundTruth(state);
         if (unlocked > 0) {
           const { removed, kept } = await analysisEngine.pruneForeignKeys(state, run);
           this.onProgress('FK pruning results', { locked, removed, kept });
         }
+        perf('FK pruning end');
         stateManager.updateSummary(state);
         await stateManager.save(state);
       }
@@ -401,6 +437,7 @@ export class AnalysisOrchestrator {
 
       // Export SQL and Markdown
       this.onProgress('Exporting documentation files');
+      perf('export begin');
       const sqlGen = new SQLGenerator();
       const sql = sqlGen.generate(state, {});
       const sqlPath = path.join(runFolder, 'extended-props.sql');
@@ -417,8 +454,10 @@ export class AnalysisOrchestrator {
       const schemaInfoPath = path.join(runFolder, 'additionalSchemaInfo.json');
       await fs.writeFile(schemaInfoPath, schemaInfo, 'utf-8');
 
+      perf('export end');
       // Close database
       await db.close();
+      perf(`orchestrator.execute() end (TOTAL ${Math.round((Date.now() - PERF_START) / 1000)}s)`);
 
       this.onProgress('Analysis complete', {
         iterations: run.iterationsPerformed,

@@ -157,6 +157,24 @@ export interface AnalysisConfig {
   guardrails?: GuardrailsConfig;
   relationshipDiscovery?: RelationshipDiscoveryConfig;
   sampleQueryGeneration?: SampleQueryGenerationConfig;
+
+  /**
+   * Speedup flags (default-on additions from the knowledge-propagation-speedup
+   * plan). See packages/DBAutoDoc/plans/active/knowledge-propagation-speedup/.
+   */
+  /** When true, parent table descriptions in the per-table prompt are reduced
+   *  to 1-line distilled summaries instead of full paragraphs. Smoke tests
+   *  showed 36% latency reduction with equal or better quality. Default: true. */
+  useDistilledPropagation?: boolean;
+  /** Number of parallel workers in `processLevel`. Tables within a topological
+   *  level are analyzed concurrently. Bounded by LLM provider rate limits.
+   *  Default: 4. Set to 1 for serial (legacy) behaviour. */
+  levelConcurrency?: number;
+  /** When true, after P1 descent completes a given iteration, run a grounded
+   *  P2 ascent pass that refines non-leaf tables' descriptions using
+   *  descendant context. Smoke test λ showed 5/7 judge wins, zero
+   *  hallucinations with schema grounding. Quality flag, off by default. */
+  useGroundedP2Refinement?: boolean;
 }
 
 export interface SampleQueryGenerationConfig {

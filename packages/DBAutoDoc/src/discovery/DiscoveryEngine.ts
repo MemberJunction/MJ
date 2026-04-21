@@ -342,7 +342,9 @@ export class DiscoveryEngine {
 
     // Phase 1: PK Detection
     iterationResult.phase = 'pk_detection';
+    const _pkStart = Date.now();
     let newPKs = await this.detectPrimaryKeys(iteration, phase);
+    console.log(`[PERF-P0] iter ${iteration} PK detection: ${Date.now() - _pkStart}ms (${newPKs.length} candidates)`);
     iterationResult.discoveries.newPKs = newPKs;
 
     // Checkpoint after PK detection — save PK results before slow FK phase
@@ -357,7 +359,9 @@ export class DiscoveryEngine {
     // Phase 2: FK Detection
     iterationResult.phase = 'fk_detection';
     const allPKs = [...phase.discovered.primaryKeys, ...newPKs];
+    const _fkStart = Date.now();
     let newFKs = await this.detectForeignKeys(iteration, phase, allPKs);
+    console.log(`[PERF-P0] iter ${iteration} FK detection: ${Date.now() - _fkStart}ms (${newFKs.length} candidates)`);
 
     // Checkpoint after FK detection — save before LLM phases
     iterationResult.discoveries.newFKs = newFKs;
@@ -380,7 +384,9 @@ export class DiscoveryEngine {
         fkCandidates: newFKs.length
       });
 
+      const _sanityStart = Date.now();
       const sanityResult = await this.sanityChecker.reviewCandidates(newPKs, newFKs);
+      console.log(`[PERF-P0] iter ${iteration} LLM sanity check: ${Date.now() - _sanityStart}ms (${sanityResult.tokensUsed} tokens)`);
       iterationResult.tokensUsed += sanityResult.tokensUsed;
       iterationResult.inputTokens += sanityResult.inputTokens || 0;
       iterationResult.outputTokens += sanityResult.outputTokens || 0;
@@ -448,6 +454,7 @@ export class DiscoveryEngine {
         tokensRemaining: remainingTokens - iterationResult.tokensUsed
       });
 
+      const _valStart = Date.now();
       const validationResults = await this.performLLMValidation(
         newPKs,
         newFKs,
@@ -455,6 +462,7 @@ export class DiscoveryEngine {
         iterationResult,
         remainingTokens - iterationResult.tokensUsed
       );
+      console.log(`[PERF-P0] iter ${iteration} LLM validation: ${Date.now() - _valStart}ms (${validationResults.tokensUsed} tokens)`);
 
       // Update candidates based on LLM feedback
       newPKs = validationResults.updatedPKs;
@@ -485,11 +493,13 @@ export class DiscoveryEngine {
       this.onProgress('Backpropagation triggered', { reason: backpropCheck.reason });
 
       // Re-analyze affected tables with new relationship context
+      const _bpStart = Date.now();
       const confidenceChanges = await this.performBackpropagation(
         phase,
         newPKs,
         newFKs
       );
+      console.log(`[PERF-P0] iter ${iteration} backprop: ${Date.now() - _bpStart}ms (${confidenceChanges.length} changes)`);
       iterationResult.discoveries.confidenceChanges = confidenceChanges;
     }
 
