@@ -21,6 +21,7 @@ const codegenConfig = {
   settings: [
     { name: 'mj_core_schema', value: '__mj' },
     { name: 'skip_database_generation', value: false },
+    { name: 'skip_file_generation', value: false },
     { name: 'recompile_mj_views', value: true },
     { name: 'auto_index_foreign_keys', value: true },
   ],

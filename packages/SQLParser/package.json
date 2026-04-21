@@ -17,7 +17,8 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "node-sql-parser": "^5.4.0"
+    "node-sql-parser": "^5.4.0",
+    "@memberjunction/sql-dialect": "5.28.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
