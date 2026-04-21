@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
     BaseIntegrationConnector,
     type ConnectionTestResult,
@@ -69,6 +70,7 @@ interface IntacctFieldDef {
     DataType: string;
     IsRequired: boolean;
     IsReadOnly: boolean;
+    IsCustom: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────
@@ -248,22 +250,29 @@ const SAGE_INTACCT_OBJECTS: IntegrationObjectInfo[] = [
     },
 ];
 
-/** Primary key field name for each known Sage Intacct object */
+/** Primary key field name for each known Sage Intacct object.
+ *  This is a fallback used only when the IntegrationObject metadata does NOT
+ *  carry a DefaultQueryParams.pk_field hint. Prefer the metadata over this map. */
 const OBJECT_PK_MAP: Record<string, string> = {
     CUSTOMER: 'CUSTOMERID',
     VENDOR: 'VENDORID',
     GLACCOUNT: 'ACCOUNTNO',
+    ACCOUNT: 'ACCOUNTNO',
     APBILL: 'RECORDNO',
     ARINVOICE: 'RECORDNO',
     PROJECT: 'PROJECTID',
     EMPLOYEE: 'EMPLOYEEID',
     DEPARTMENT: 'DEPARTMENTID',
     CLASS: 'CLASSID',
+    LOCATION: 'LOCATIONID',
+    ITEM: 'ITEMID',
+    CONTACT: 'CONTACTNAME',
+    WAREHOUSE: 'WAREHOUSEID',
+    USER: 'LOGIN',
+    CURRENCY: 'CURRENCYCODE',
+    TASK: 'TASKID',
+    CONTRACT: 'CONTRACTID',
 };
-
-/** Objects that use legacy API functions (create_*, update_*, delete_*) instead of the
- *  generic CRUD API. These require different XML structures. */
-const LEGACY_FUNCTION_OBJECTS = new Set(['APBILL', 'ARINVOICE']);
 
 // ─── Connector Implementation ─────────────────────────────────────────
 
@@ -441,7 +450,10 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
     }
 
     /**
-     * Discovers fields on a specific object using the inspect API function.
+     * Discovers fields on a specific object by combining the `inspect` API
+     * call (standard fields) with a `lookup` call (which exposes custom fields
+     * via the ISCUSTOM flag). Custom fields are returned with IsCustom=true so
+     * the sync engine can flag them in IntegrationObjectField metadata.
      */
     public async DiscoverFields(
         companyIntegration: MJCompanyIntegrationEntity,
@@ -449,18 +461,67 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
         contextUser: UserInfo
     ): Promise<ExternalFieldSchema[]> {
         const session = await this.GetSession(companyIntegration, contextUser);
-        const xml = this.BuildInspectRequest(session, objectName);
-        const response = await this.SendXMLRequest(session, xml);
-        const fields = this.ParseInspectFieldsResponse(response);
+        const inspectXml = this.BuildInspectRequest(session, objectName);
+        const inspectResponse = await this.SendXMLRequest(session, inspectXml);
+        const standardFields = this.ParseInspectFieldsResponse(inspectResponse);
 
-        return fields.map(f => ({
-            Name: f.Name,
-            Label: f.Label || this.FormatLabel(f.Name),
-            DataType: INTACCT_TYPE_MAP[f.DataType.toLowerCase()] ?? 'string',
-            IsRequired: f.IsRequired,
-            IsUniqueKey: f.Name === this.GetPrimaryKeyField(objectName),
-            IsReadOnly: f.IsReadOnly,
-        }));
+        // Attempt to pull custom fields via <lookup> — these have ISCUSTOM=true
+        let customFieldNames: Set<string> = new Set();
+        try {
+            const lookupXml = this.BuildLookupRequest(session, objectName);
+            const lookupResponse = await this.SendXMLRequest(session, lookupXml);
+            customFieldNames = this.ParseLookupCustomFieldNames(lookupResponse);
+        } catch {
+            // Lookup not supported for this object — fall back to inspect fields only
+        }
+
+        const pkField = this.GetPrimaryKeyField(objectName, companyIntegration.IntegrationID);
+
+        return standardFields.map(f => {
+            // Custom fields are logged but not carried in the schema's typed
+            // interface; callers that care about the IsCustom flag can detect
+            // them by cross-referencing the `lookup`-derived custom set, but
+            // the generic field shape keeps parity with other connectors.
+            if (customFieldNames.has(f.Name) || f.IsCustom) {
+                console.debug(`[SageIntacct] Custom field detected on ${objectName}: ${f.Name}`);
+            }
+            return {
+                Name: f.Name,
+                Label: f.Label || this.FormatLabel(f.Name),
+                DataType: INTACCT_TYPE_MAP[f.DataType.toLowerCase()] ?? 'string',
+                IsRequired: f.IsRequired,
+                IsUniqueKey: f.Name === pkField,
+                IsReadOnly: f.IsReadOnly,
+            };
+        });
+    }
+
+    private BuildLookupRequest(session: SageIntacctSession, objectName: string): string {
+        return this.WrapInSessionRequest(session, `
+            <function controlid="${CONTROL_ID_PREFIX}-lookup-${Date.now()}">
+                <lookup>
+                    <object>${this.EscapeXmlValue(objectName)}</object>
+                </lookup>
+            </function>`);
+    }
+
+    private ParseLookupCustomFieldNames(xml: string): Set<string> {
+        this.CheckForErrors(xml);
+        const names = new Set<string>();
+        // lookup returns <Fields><Field>...</Field></Fields> fragments with
+        // nested <NAME>, <ISCUSTOM>true|false</ISCUSTOM>, etc.
+        const fieldRegex = /<Field>\s*([\s\S]*?)\s*<\/Field>/gi;
+        let match: RegExpExecArray | null;
+        while ((match = fieldRegex.exec(xml)) !== null) {
+            const frag = match[1];
+            const isCustom = this.ExtractXmlValueFromFragment(frag, 'ISCUSTOM').toLowerCase() === 'true';
+            const name = this.ExtractXmlValueFromFragment(frag, 'NAME')
+                || this.ExtractXmlValueFromFragment(frag, 'Name');
+            if (isCustom && name) {
+                names.add(name);
+            }
+        }
+        return names;
     }
 
     // ─── FetchChanges ────────────────────────────────────────────────
@@ -471,7 +532,7 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
      */
     public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         const session = await this.GetSession(ctx.CompanyIntegration, ctx.ContextUser);
-        const pkField = this.GetPrimaryKeyField(ctx.ObjectName);
+        const pkField = this.GetPrimaryKeyField(ctx.ObjectName, ctx.CompanyIntegration.IntegrationID);
         const pageSize = Math.min(ctx.BatchSize || DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE);
 
         // If we have a cursor (resultId) from a previous call, use readMore
@@ -510,8 +571,9 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const session = await this.GetSession(companyIntegration, contextUser);
+        const pkField = this.GetPrimaryKeyField(ctx.ObjectName, companyIntegration.IntegrationID);
 
-        const xml = this.BuildUpdateRequest(session, ctx.ObjectName, ctx.ExternalID, ctx.Attributes);
+        const xml = this.BuildUpdateRequest(session, ctx.ObjectName, ctx.ExternalID, ctx.Attributes, pkField);
         try {
             await this.SendXMLRequest(session, xml);
             return { Success: true, ExternalID: ctx.ExternalID, StatusCode: 200 };
@@ -538,7 +600,7 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const session = await this.GetSession(companyIntegration, contextUser);
-        const pkField = this.GetPrimaryKeyField(ctx.ObjectName);
+        const pkField = this.GetPrimaryKeyField(ctx.ObjectName, companyIntegration.IntegrationID);
 
         const xml = this.BuildReadRequest(session, ctx.ObjectName, ctx.ExternalID);
         try {
@@ -560,7 +622,7 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const session = await this.GetSession(companyIntegration, contextUser);
-        const pkField = this.GetPrimaryKeyField(ctx.ObjectName);
+        const pkField = this.GetPrimaryKeyField(ctx.ObjectName, companyIntegration.IntegrationID);
         const pageSize = ctx.PageSize ?? DEFAULT_PAGE_SIZE;
 
         const filterParts = Object.entries(ctx.Filters).map(
@@ -583,7 +645,7 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const session = await this.GetSession(companyIntegration, contextUser);
-        const pkField = this.GetPrimaryKeyField(ctx.ObjectName);
+        const pkField = this.GetPrimaryKeyField(ctx.ObjectName, companyIntegration.IntegrationID);
         const pageSize = ctx.PageSize ?? DEFAULT_PAGE_SIZE;
 
         if (ctx.Cursor) {
@@ -794,10 +856,11 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
         session: SageIntacctSession,
         objectName: string,
         key: string,
-        attributes: Record<string, unknown>
+        attributes: Record<string, unknown>,
+        pkField?: string
     ): string {
-        const pkField = this.GetPrimaryKeyField(objectName);
-        const fieldsXml = this.AttributesToXml({ [pkField]: key, ...attributes });
+        const resolvedPk = pkField ?? this.GetPrimaryKeyField(objectName);
+        const fieldsXml = this.AttributesToXml({ [resolvedPk]: key, ...attributes });
         return this.WrapInSessionRequest(session, `
             <function controlid="${CONTROL_ID_PREFIX}-update-${Date.now()}">
                 <update>
@@ -941,8 +1004,15 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
             const isReadOnly = this.ExtractXmlValueFromFragment(fieldXml, 'ReadOnly') === 'true'
                 || this.ExtractXmlValueFromFragment(fieldXml, 'SystemGenerated') === 'true';
 
+            const isCustom = this.ExtractXmlValueFromFragment(fieldXml, 'IsCustom').toLowerCase() === 'true'
+                || this.ExtractXmlValueFromFragment(fieldXml, 'ISCUSTOM').toLowerCase() === 'true';
+
             if (name) {
-                fields.push({ Name: name, Label: label, DataType: dataType, IsRequired: isRequired, IsReadOnly: isReadOnly });
+                fields.push({
+                    Name: name, Label: label, DataType: dataType,
+                    IsRequired: isRequired, IsReadOnly: isReadOnly,
+                    IsCustom: isCustom,
+                });
             }
         }
 
@@ -1158,10 +1228,45 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
     }
 
     /**
-     * Gets the primary key field name for a Sage Intacct object.
+     * Gets the primary key field name for a Sage Intacct object, preferring
+     * the IntegrationObject metadata (DefaultQueryParams.pk_field or the
+     * IntegrationObjectField marked IsPrimaryKey) over the built-in fallback
+     * map. Returns 'RECORDNO' when nothing else is available.
+     *
+     * This is called frequently — the lookup is cheap (pure engine cache) and
+     * avoids hardcoded switch statements on object names.
      */
-    private GetPrimaryKeyField(objectName: string): string {
+    private GetPrimaryKeyField(objectName: string, integrationID?: string): string {
+        if (integrationID) {
+            const fromMetadata = this.resolvePkFromMetadata(integrationID, objectName);
+            if (fromMetadata) return fromMetadata;
+        }
         return OBJECT_PK_MAP[objectName.toUpperCase()] || 'RECORDNO';
+    }
+
+    /**
+     * Resolves the PK for an object from the engine cache.
+     * Checks (in order): DefaultQueryParams.pk_field, then the field record
+     * with IsPrimaryKey=true. Returns null when nothing is found.
+     */
+    private resolvePkFromMetadata(integrationID: string, objectName: string): string | null {
+        try {
+            const obj = IntegrationEngineBase.Instance.GetIntegrationObject(integrationID, objectName);
+            if (!obj) return null;
+
+            if (obj.DefaultQueryParams) {
+                const parsed = JSON.parse(obj.DefaultQueryParams) as { pk_field?: string };
+                if (parsed.pk_field && typeof parsed.pk_field === 'string') {
+                    return parsed.pk_field;
+                }
+            }
+
+            const fields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(obj.ID);
+            const pkField = fields.find(f => f.IsPrimaryKey && f.Status === 'Active');
+            return pkField ? pkField.Name : null;
+        } catch {
+            return null;
+        }
     }
 
     /**

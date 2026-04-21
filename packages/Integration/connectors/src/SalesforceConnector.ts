@@ -1,7 +1,11 @@
 import jwt from 'jsonwebtoken';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, type UserInfo } from '@memberjunction/core';
-import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import type {
+    MJCompanyIntegrationEntity,
+    MJCredentialEntity,
+} from '@memberjunction/core-entities';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
     BaseIntegrationConnector,
     BaseRESTIntegrationConnector,
@@ -36,6 +40,32 @@ import {
 
 /** Supported Salesforce auth flows */
 type SalesforceAuthFlow = 'jwt_bearer' | 'client_credentials';
+
+/**
+ * Salesforce API family routing hint. Drives which endpoint URLs and SOQL
+ * dialect a given IntegrationObject uses. Encoded in
+ * IntegrationObject.DefaultQueryParams as `{"api_family": "<value>"}`.
+ *
+ * - `sobject` (default): Standard REST SObjects at /services/data/vXX/sobjects
+ *   and SOQL via /query or /queryAll
+ * - `tooling`: Tooling API at /services/data/vXX/tooling/sobjects with SOQL
+ *   via /tooling/query
+ * - `knowledge`: Knowledge articles via /services/data/vXX/support/knowledgeArticles
+ * - `analytics_report`: Read-only Reports API at /services/data/vXX/analytics/reports
+ * - `analytics_dashboard`: Read-only Dashboards API at /services/data/vXX/analytics/dashboards
+ * - `bulk_ingest`: Bulk API 2.0 Ingest jobs at /services/data/vXX/jobs/ingest
+ * - `bulk_query`: Bulk API 2.0 Query jobs at /services/data/vXX/jobs/query
+ * - `composite`: Composite request batching at /services/data/vXX/composite
+ */
+type SalesforceAPIFamily =
+    | 'sobject'
+    | 'tooling'
+    | 'knowledge'
+    | 'analytics_report'
+    | 'analytics_dashboard'
+    | 'bulk_ingest'
+    | 'bulk_query'
+    | 'composite';
 
 /** Parsed Salesforce credentials — supports JWT Bearer and Client Credentials flows */
 interface SalesforceCredentials {
@@ -441,33 +471,120 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
      * Fetches changed records using SOQL queries with SystemModstamp watermarks.
      * Completely overrides the base class REST pagination because SF uses
      * SOQL + queryMore, not standard REST list endpoints.
+     *
+     * Dispatches to family-specific fetch routines based on the
+     * IntegrationObject metadata's `DefaultQueryParams.api_family` hint:
+     * tooling → Tooling API, analytics_report/dashboard → Analytics API,
+     * bulk_* / composite → not intended for listing (returns empty batch),
+     * everything else → standard SObject SOQL flow.
      */
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
         const batchSize = ctx.BatchSize || this.effectiveBatchSize;
+        const family = this.ResolveAPIFamily(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
 
         // If we have a queryLocator from a previous call, use queryMore
         if (this.queryLocator && ctx.CurrentCursor) {
             return this.FetchNextPage(auth, ctx.CurrentCursor);
         }
 
-        // Build and execute SOQL query
-        const fields = await this.GetQueryableFieldNames(auth, ctx.ObjectName);
+        if (family === 'analytics_report' || family === 'analytics_dashboard') {
+            return this.FetchAnalyticsList(auth, family, ctx.ObjectName);
+        }
+
+        if (family === 'bulk_ingest' || family === 'bulk_query') {
+            return this.FetchBulkJobs(auth, family, ctx.ObjectName);
+        }
+
+        if (family === 'composite') {
+            // Composite is a per-request construct, not a queryable endpoint
+            return { Records: [], HasMore: false };
+        }
+
+        if (family === 'knowledge') {
+            return this.FetchKnowledgeArticles(auth, ctx.ObjectName, ctx.WatermarkValue, batchSize);
+        }
+
+        // Standard SObject (sobject) and Tooling (tooling) both use SOQL —
+        // just against different endpoints.
+        const fields = await this.GetQueryableFieldNames(auth, ctx.ObjectName, family);
         const soql = this.BuildSOQLQuery(ctx.ObjectName, fields, ctx.WatermarkValue, batchSize, true);
-        return this.ExecuteSOQLQuery(auth, soql, ctx.ObjectName);
+        return this.ExecuteSOQLQuery(auth, soql, ctx.ObjectName, family);
+    }
+
+    /**
+     * Resolves the API family for a given IntegrationObject by reading its
+     * `DefaultQueryParams.api_family` flag from the engine cache. Defaults to
+     * `sobject` when no metadata is available (common in unit tests).
+     */
+    private ResolveAPIFamily(integrationID: string, objectName: string): SalesforceAPIFamily {
+        try {
+            const obj = IntegrationEngineBase.Instance.GetIntegrationObject(integrationID, objectName);
+            if (!obj || !obj.DefaultQueryParams) return 'sobject';
+            const parsed = JSON.parse(obj.DefaultQueryParams) as { api_family?: string };
+            if (this.IsValidFamily(parsed.api_family)) return parsed.api_family;
+            return 'sobject';
+        } catch {
+            return 'sobject';
+        }
+    }
+
+    private IsValidFamily(v: string | undefined): v is SalesforceAPIFamily {
+        return v === 'sobject' || v === 'tooling' || v === 'knowledge'
+            || v === 'analytics_report' || v === 'analytics_dashboard'
+            || v === 'bulk_ingest' || v === 'bulk_query' || v === 'composite';
+    }
+
+    /**
+     * Returns the REST path prefix for an SObject in the given API family.
+     * Used by CRUD operations and field discovery.
+     */
+    private SObjectBasePath(auth: SalesforceAuthContext, family: SalesforceAPIFamily): string {
+        const base = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}`;
+        return family === 'tooling' ? `${base}/tooling/sobjects` : `${base}/sobjects`;
+    }
+
+    /**
+     * Returns the SOQL query endpoint for the given API family.
+     * Standard uses /query + /queryAll; Tooling uses /tooling/query.
+     */
+    private SOQLEndpoint(auth: SalesforceAuthContext, family: SalesforceAPIFamily, includeDeleted: boolean): string {
+        const base = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}`;
+        if (family === 'tooling') return `${base}/tooling/query`;
+        return includeDeleted ? `${base}/queryAll` : `${base}/query`;
     }
 
     // ─── CRUD Operations ─────────────────────────────────────────────
 
     /**
-     * Creates a new record in Salesforce.
+     * Creates a new record in Salesforce. Dispatches to the appropriate API
+     * family endpoint (standard SObjects, Tooling, Bulk Ingest/Query jobs, or
+     * Composite) based on the IntegrationObject metadata.
      */
     public override async CreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> {
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
+        const family = this.ResolveAPIFamily(companyIntegration.IntegrationID, ctx.ObjectName);
+
+        if (family === 'bulk_ingest' || family === 'bulk_query') {
+            return this.CreateBulkJob(auth, family, ctx.Attributes);
+        }
+
+        if (family === 'composite') {
+            return this.ExecuteCompositeRequest(auth, ctx.Attributes);
+        }
+
+        if (family === 'analytics_report' || family === 'analytics_dashboard' || family === 'knowledge') {
+            return {
+                Success: false,
+                ErrorMessage: `[Salesforce] Create is not supported for API family "${family}" (${ctx.ObjectName})`,
+                StatusCode: 405,
+            };
+        }
+
         const headers = { ...this.BuildHeaders(auth), 'Content-Type': 'application/json' };
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/sobjects/${ctx.ObjectName}/`;
+        const url = `${this.SObjectBasePath(auth, family)}/${ctx.ObjectName}/`;
 
         const body = this.StripReadOnlyFields(ctx.Attributes);
         const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
@@ -486,13 +603,25 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Updates an existing record in Salesforce (PATCH — only changed fields).
+     * Honors API family routing; Tooling uses `/tooling/sobjects/`, everything
+     * else uses standard `/sobjects/`.
      */
     public override async UpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> {
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
+        const family = this.ResolveAPIFamily(companyIntegration.IntegrationID, ctx.ObjectName);
+
+        if (family !== 'sobject' && family !== 'tooling') {
+            return {
+                Success: false,
+                ErrorMessage: `[Salesforce] Update is not supported for API family "${family}" (${ctx.ObjectName})`,
+                StatusCode: 405,
+            };
+        }
+
         const headers = { ...this.BuildHeaders(auth), 'Content-Type': 'application/json' };
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/sobjects/${ctx.ObjectName}/${ctx.ExternalID}`;
+        const url = `${this.SObjectBasePath(auth, family)}/${ctx.ObjectName}/${ctx.ExternalID}`;
 
         const body = this.StripReadOnlyFields(ctx.Attributes);
         const response = await this.MakeHTTPRequest(auth, url, 'PATCH', headers, body);
@@ -509,14 +638,31 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
-     * Deletes a record from Salesforce.
+     * Deletes a record from Salesforce. For Bulk Job families, delete aborts
+     * the job. For standard and Tooling SObjects, performs a soft delete
+     * (Recycle Bin, 15-day retention). Analytics/Composite/Knowledge do not
+     * support deletion through this path.
      */
     public override async DeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> {
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
+        const family = this.ResolveAPIFamily(companyIntegration.IntegrationID, ctx.ObjectName);
+
+        if (family === 'bulk_ingest' || family === 'bulk_query') {
+            return this.AbortBulkJob(auth, family, ctx.ExternalID);
+        }
+
+        if (family !== 'sobject' && family !== 'tooling') {
+            return {
+                Success: false,
+                ErrorMessage: `[Salesforce] Delete is not supported for API family "${family}" (${ctx.ObjectName})`,
+                StatusCode: 405,
+            };
+        }
+
         const headers = this.BuildHeaders(auth);
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/sobjects/${ctx.ObjectName}/${ctx.ExternalID}`;
+        const url = `${this.SObjectBasePath(auth, family)}/${ctx.ObjectName}/${ctx.ExternalID}`;
 
         const response = await this.MakeHTTPRequest(auth, url, 'DELETE', headers);
 
@@ -533,14 +679,30 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
-     * Retrieves a single record by its Salesforce ID.
+     * Retrieves a single record by its Salesforce ID. Routes to the API family
+     * endpoint indicated by IntegrationObject metadata.
      */
     public override async GetRecord(ctx: GetRecordContext): Promise<ExternalRecord | null> {
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
+        const family = this.ResolveAPIFamily(companyIntegration.IntegrationID, ctx.ObjectName);
+
+        if (family === 'analytics_report') {
+            return this.GetAnalyticsReport(auth, ctx.ExternalID);
+        }
+        if (family === 'analytics_dashboard') {
+            return this.GetAnalyticsDashboard(auth, ctx.ExternalID);
+        }
+        if (family === 'bulk_ingest' || family === 'bulk_query') {
+            return this.GetBulkJob(auth, family, ctx.ExternalID);
+        }
+        if (family === 'composite') {
+            return null;
+        }
+
         const headers = this.BuildHeaders(auth);
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/sobjects/${ctx.ObjectName}/${ctx.ExternalID}`;
+        const url = `${this.SObjectBasePath(auth, family)}/${ctx.ObjectName}/${ctx.ExternalID}`;
 
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         if (response.Status === 404) return null;
@@ -554,13 +716,20 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Searches records using SOQL WHERE clauses built from the provided filters.
+     * Search is supported for Standard SObjects and Tooling SObjects; other API
+     * families return an empty result.
      */
     public override async SearchRecords(ctx: SearchContext): Promise<SearchResult> {
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
+        const family = this.ResolveAPIFamily(companyIntegration.IntegrationID, ctx.ObjectName);
 
-        const fields = await this.GetQueryableFieldNames(auth, ctx.ObjectName);
+        if (family !== 'sobject' && family !== 'tooling') {
+            return { Records: [], TotalCount: 0, HasMore: false };
+        }
+
+        const fields = await this.GetQueryableFieldNames(auth, ctx.ObjectName, family);
         const whereClause = this.BuildWhereClauseFromFilters(ctx.Filters);
         const limit = ctx.PageSize ?? 100;
         const offset = ctx.Page != null && ctx.Page > 1 ? (ctx.Page - 1) * limit : 0;
@@ -571,7 +740,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         soql += ` LIMIT ${limit}`;
         if (offset > 0) soql += ` OFFSET ${offset}`;
 
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/query?q=${encodeURIComponent(soql)}`;
+        const url = `${this.SOQLEndpoint(auth, family, false)}?q=${encodeURIComponent(soql)}`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         this.ValidateResponse(response, url);
@@ -786,14 +955,19 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Executes a SOQL query and returns records as a FetchBatchResult.
+     * For the standard SObject family this uses `queryAll` so that soft-deleted
+     * records are returned (IsDeleted=true). For the Tooling family, the
+     * Tooling API's `/tooling/query` endpoint is used — `queryAll` is not
+     * supported there.
      */
     private async ExecuteSOQLQuery(
         auth: SalesforceAuthContext,
         soql: string,
-        objectName: string
+        objectName: string,
+        family: SalesforceAPIFamily = 'sobject'
     ): Promise<FetchBatchResult> {
-        // Use queryAll to include deleted records (IsDeleted=true)
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/queryAll?q=${encodeURIComponent(soql)}`;
+        const includeDeleted = family === 'sobject';
+        const url = `${this.SOQLEndpoint(auth, family, includeDeleted)}?q=${encodeURIComponent(soql)}`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         this.ValidateResponse(response, url);
@@ -869,13 +1043,16 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
-     * Gets queryable field names for a SF object via the Describe API.
+     * Gets queryable field names for a SF object via the Describe API. When
+     * `family === 'tooling'`, calls the Tooling describe endpoint instead of
+     * the standard one.
      */
     private async GetQueryableFieldNames(
         auth: SalesforceAuthContext,
-        objectName: string
+        objectName: string,
+        family: SalesforceAPIFamily = 'sobject'
     ): Promise<string[]> {
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/sobjects/${objectName}/describe`;
+        const url = `${this.SObjectBasePath(auth, family)}/${objectName}/describe`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         this.ValidateResponse(response, url);
@@ -1229,6 +1406,9 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Maps a Salesforce field describe to an ExternalFieldSchema.
+     * Custom fields can be detected by callers via the `__c` suffix in the
+     * field name — Salesforce standardizes this convention for all custom
+     * fields on both standard and custom SObjects.
      */
     private MapSFFieldToSchema(f: SFieldDescribe): ExternalFieldSchema {
         return {
@@ -1525,6 +1705,214 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         if (typeof body === 'string') return body.slice(0, 500);
         return JSON.stringify(body).slice(0, 500);
     }
+
+    // ─── Analytics API (Reports & Dashboards) ────────────────────────
+
+    /**
+     * Lists Analytics Reports or Dashboards via the Analytics API. Read-only;
+     * no incremental-sync support at this endpoint.
+     */
+    private async FetchAnalyticsList(
+        auth: SalesforceAuthContext,
+        family: 'analytics_report' | 'analytics_dashboard',
+        objectName: string
+    ): Promise<FetchBatchResult> {
+        const segment = family === 'analytics_report' ? 'reports' : 'dashboards';
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/analytics/${segment}`;
+        const headers = this.BuildHeaders(auth);
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        this.ValidateResponse(response, url);
+
+        const body = response.Body as AnalyticsListResponse;
+        const list = body.reports ?? body.dashboards ?? [];
+        const records = list.map(item => this.AnalyticsItemToRecord(item, objectName));
+        return { Records: records, HasMore: false };
+    }
+
+    private AnalyticsItemToRecord(item: AnalyticsListItem, objectType: string): ExternalRecord {
+        return {
+            ExternalID: String(item.id ?? ''),
+            ObjectType: objectType,
+            Fields: { ...item },
+        };
+    }
+
+    private async GetAnalyticsReport(auth: SalesforceAuthContext, id: string): Promise<ExternalRecord | null> {
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/analytics/reports/${id}`;
+        const headers = this.BuildHeaders(auth);
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status === 404) return null;
+        this.ValidateResponse(response, url);
+        return {
+            ExternalID: id,
+            ObjectType: 'Report',
+            Fields: response.Body as Record<string, unknown>,
+        };
+    }
+
+    private async GetAnalyticsDashboard(auth: SalesforceAuthContext, id: string): Promise<ExternalRecord | null> {
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/analytics/dashboards/${id}`;
+        const headers = this.BuildHeaders(auth);
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status === 404) return null;
+        this.ValidateResponse(response, url);
+        return {
+            ExternalID: id,
+            ObjectType: 'Dashboard',
+            Fields: response.Body as Record<string, unknown>,
+        };
+    }
+
+    // ─── Knowledge Articles ──────────────────────────────────────────
+
+    /**
+     * Fetches published Knowledge article versions. This endpoint is
+     * paginated via `pageNumber`/`pageSize` (not cursor). The connector
+     * returns a single batch; callers that need pagination can issue
+     * additional requests via SearchRecords.
+     */
+    private async FetchKnowledgeArticles(
+        auth: SalesforceAuthContext,
+        objectName: string,
+        watermarkValue: string | null,
+        batchSize: number
+    ): Promise<FetchBatchResult> {
+        const params = new URLSearchParams({ pageSize: String(batchSize), pageNumber: '1' });
+        if (watermarkValue) {
+            params.set('publishStatus', 'Online');
+        }
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/support/knowledgeArticles?${params}`;
+        const headers = this.BuildHeaders(auth);
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        this.ValidateResponse(response, url);
+
+        const body = response.Body as KnowledgeArticlesResponse;
+        const records = (body.articles ?? []).map(a => ({
+            ExternalID: String(a.id ?? ''),
+            ObjectType: objectName,
+            Fields: a as unknown as Record<string, unknown>,
+        }));
+        return { Records: records, HasMore: false };
+    }
+
+    // ─── Bulk API 2.0 (Ingest & Query Jobs) ──────────────────────────
+
+    /**
+     * Lists in-flight Bulk API 2.0 jobs. Useful for monitoring background
+     * imports/queries the integration previously started.
+     */
+    private async FetchBulkJobs(
+        auth: SalesforceAuthContext,
+        family: 'bulk_ingest' | 'bulk_query',
+        objectName: string
+    ): Promise<FetchBatchResult> {
+        const segment = family === 'bulk_ingest' ? 'ingest' : 'query';
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/jobs/${segment}`;
+        const headers = this.BuildHeaders(auth);
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        this.ValidateResponse(response, url);
+
+        const body = response.Body as BulkJobListResponse;
+        const records = (body.records ?? []).map(r => ({
+            ExternalID: String(r.id ?? ''),
+            ObjectType: objectName,
+            Fields: r as unknown as Record<string, unknown>,
+            ModifiedAt: r.systemModstamp ? new Date(r.systemModstamp) : undefined,
+        }));
+        return {
+            Records: records,
+            HasMore: !body.done,
+            NextCursor: body.nextRecordsUrl ?? undefined,
+        };
+    }
+
+    /**
+     * Creates (starts) a new Bulk API 2.0 ingest or query job using the
+     * provided attributes. Required fields differ by operation; we pass
+     * attributes straight through to Salesforce after stripping any readonly
+     * fields. For ingest, CSV data is uploaded in a separate request (PUT) —
+     * callers must issue that themselves via UploadBulkData once the job ID
+     * is known.
+     */
+    private async CreateBulkJob(
+        auth: SalesforceAuthContext,
+        family: 'bulk_ingest' | 'bulk_query',
+        attrs: Record<string, unknown>
+    ): Promise<CRUDResult> {
+        const segment = family === 'bulk_ingest' ? 'ingest' : 'query';
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/jobs/${segment}`;
+        const headers = { ...this.BuildHeaders(auth), 'Content-Type': 'application/json' };
+        const body = this.StripReadOnlyFields(attrs);
+
+        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
+        if (response.Status >= 200 && response.Status < 300) {
+            const created = response.Body as { id?: string };
+            return { Success: true, ExternalID: created.id ?? '', StatusCode: response.Status };
+        }
+        return this.BuildCRUDError(response, 'CreateBulkJob', family);
+    }
+
+    /**
+     * Aborts a running Bulk API 2.0 job by PATCHing state=Aborted.
+     */
+    private async AbortBulkJob(
+        auth: SalesforceAuthContext,
+        family: 'bulk_ingest' | 'bulk_query',
+        jobId: string
+    ): Promise<CRUDResult> {
+        const segment = family === 'bulk_ingest' ? 'ingest' : 'query';
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/jobs/${segment}/${jobId}`;
+        const headers = { ...this.BuildHeaders(auth), 'Content-Type': 'application/json' };
+        const response = await this.MakeHTTPRequest(auth, url, 'PATCH', headers, { state: 'Aborted' });
+        if (response.Status >= 200 && response.Status < 300) {
+            return { Success: true, ExternalID: jobId, StatusCode: response.Status };
+        }
+        return this.BuildCRUDError(response, 'AbortBulkJob', family);
+    }
+
+    private async GetBulkJob(
+        auth: SalesforceAuthContext,
+        family: 'bulk_ingest' | 'bulk_query',
+        jobId: string
+    ): Promise<ExternalRecord | null> {
+        const segment = family === 'bulk_ingest' ? 'ingest' : 'query';
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/jobs/${segment}/${jobId}`;
+        const headers = this.BuildHeaders(auth);
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status === 404) return null;
+        this.ValidateResponse(response, url);
+        return {
+            ExternalID: jobId,
+            ObjectType: family === 'bulk_ingest' ? 'BulkIngestJob' : 'BulkQueryJob',
+            Fields: response.Body as Record<string, unknown>,
+        };
+    }
+
+    // ─── Composite Requests ──────────────────────────────────────────
+
+    /**
+     * Executes a composite request — up to 25 sub-requests in one HTTP call.
+     * The `attrs` payload is expected to be the full composite body or at
+     * least a `compositeRequest` array. Returns the overall composite
+     * response as the created record's ExternalID (Salesforce returns
+     * per-sub-request results; callers should inspect Fields for details).
+     */
+    private async ExecuteCompositeRequest(
+        auth: SalesforceAuthContext,
+        attrs: Record<string, unknown>
+    ): Promise<CRUDResult> {
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/composite`;
+        const headers = { ...this.BuildHeaders(auth), 'Content-Type': 'application/json' };
+        // Either pass the whole payload through or wrap a bare array
+        const body = Array.isArray((attrs as { compositeRequest?: unknown[] }).compositeRequest)
+            ? attrs
+            : { allOrNone: true, compositeRequest: [attrs] };
+        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
+        if (response.Status >= 200 && response.Status < 300) {
+            return { Success: true, ExternalID: 'composite', StatusCode: response.Status };
+        }
+        return this.BuildCRUDError(response, 'ExecuteCompositeRequest', 'CompositeRequest');
+    }
 }
 
 // ─── SF Describe API Type Definitions ─────────────────────────────────
@@ -1569,3 +1957,60 @@ interface SOQLQueryResponse {
     records: Record<string, unknown>[];
     nextRecordsUrl?: string;
 }
+
+/** Salesforce Analytics API list item for reports/dashboards */
+interface AnalyticsListItem {
+    id: string;
+    name?: string;
+    url?: string;
+    describeUrl?: string;
+    type?: string;
+    folderId?: string;
+    folderName?: string;
+    reportType?: { type: string; label: string };
+}
+
+/** Salesforce Analytics API list response */
+interface AnalyticsListResponse {
+    reports?: AnalyticsListItem[];
+    dashboards?: AnalyticsListItem[];
+}
+
+/** Salesforce Knowledge Article API list response */
+interface KnowledgeArticlesResponse {
+    articles: KnowledgeArticleSummary[];
+    currentPageUrl?: string;
+    pageNumber?: number;
+    nextPageUrl?: string | null;
+    previousPageUrl?: string | null;
+}
+
+interface KnowledgeArticleSummary {
+    id: string;
+    title: string;
+    urlName?: string;
+    summary?: string;
+    lastPublishedDate?: string;
+    publishStatus?: string;
+    articleNumber?: string;
+}
+
+/** Salesforce Bulk API 2.0 job list response */
+interface BulkJobListResponse {
+    done: boolean;
+    records: BulkJobInfo[];
+    nextRecordsUrl?: string;
+}
+
+interface BulkJobInfo {
+    id: string;
+    operation: string;
+    object?: string;
+    state: string;
+    createdDate?: string;
+    systemModstamp?: string;
+    numberRecordsProcessed?: number;
+    numberRecordsFailed?: number;
+    contentType?: string;
+}
+
