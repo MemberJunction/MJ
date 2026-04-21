@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Execution Details Section -->
+    <!-- Execution Context Section -->
     <mj-collapsible-panel
-        SectionKey="executionDetails"
-        SectionName="Execution Details"
-        Icon="fa fa-play-circle"
+        SectionKey="executionContext"
+        SectionName="Execution Context"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -24,6 +24,25 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="UserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Run Status and Timing Section -->
+    <mj-collapsible-panel
+        SectionKey="runStatusAndTiming"
+        SectionName="Run Status and Timing"
+        Icon="fa fa-clock"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -48,15 +67,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="UserID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -64,7 +74,7 @@
     <mj-collapsible-panel
         SectionKey="archiveStatistics"
         SectionName="Archive Statistics"
-        Icon="fa fa-poll"
+        Icon="fa fa-chart-line"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -114,14 +124,14 @@
     <mj-collapsible-panel
         SectionKey="errorDiagnostics"
         SectionName="Error Diagnostics"
-        Icon="fa fa-exclamation-circle"
+        Icon="fa fa-exclamation-triangle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="false"
             FieldName="ErrorLog"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -162,7 +172,7 @@
     <mj-collapsible-panel
         SectionKey="mJArchiveRunDetails"
         SectionName="Archive Run Details"
-        Icon="fa fa-file-archive"
+        Icon="fa fa-archive"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

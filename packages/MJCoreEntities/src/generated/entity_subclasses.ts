@@ -3362,7 +3362,7 @@ export const MJAIAgentSchema = z.object({
         * * Default Value: getutcdate()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent Agent
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.`),
@@ -3396,22 +3396,22 @@ export const MJAIAgentSchema = z.object({
         * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
-        * * Display Name: Compression Message Threshold
+        * * Display Name: Context Compression Message Threshold
         * * SQL Data Type: int
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Compression Prompt
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
-        * * Display Name: Retention Count
+        * * Display Name: Context Compression Message Retention Count
         * * SQL Data Type: int
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
         * * Field Name: TypeID
-        * * Display Name: Agent Type
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
         * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
@@ -3448,25 +3448,25 @@ export const MJAIAgentSchema = z.object({
         * * Description: Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility.`),
     PayloadDownstreamPaths: z.string().describe(`
         * * Field Name: PayloadDownstreamPaths
-        * * Display Name: Downstream Payload Paths
+        * * Display Name: Payload Downstream Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: ["*"]
         * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]`),
     PayloadUpstreamPaths: z.string().describe(`
         * * Field Name: PayloadUpstreamPaths
-        * * Display Name: Upstream Payload Paths
+        * * Display Name: Payload Upstream Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: ["*"]
         * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`),
     PayloadSelfReadPaths: z.string().nullable().describe(`
         * * Field Name: PayloadSelfReadPaths
-        * * Display Name: Self Read Paths
+        * * Display Name: Payload Self Read Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
 flow when the agent executes its own prompt step.`),
     PayloadSelfWritePaths: z.string().nullable().describe(`
         * * Field Name: PayloadSelfWritePaths
-        * * Display Name: Self Write Paths
+        * * Display Name: Payload Self Write Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
 data flow when the agent executes its own prompt step.`),
@@ -3482,7 +3482,7 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`),
     FinalPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Retry'), z.literal('Warn')]).describe(`
         * * Field Name: FinalPayloadValidationMode
-        * * Display Name: Final Validation Mode
+        * * Display Name: Final Payload Validation Mode
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Retry
     * * Value List Type: List
@@ -3493,7 +3493,7 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.`),
     FinalPayloadValidationMaxRetries: z.number().describe(`
         * * Field Name: FinalPayloadValidationMaxRetries
-        * * Display Name: Max Validation Retries
+        * * Display Name: Final Payload Validation Max Retries
         * * SQL Data Type: int
         * * Default Value: 3
         * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
@@ -3539,7 +3539,7 @@ if this limit is exceeded.`),
         * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.`),
     StartingPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Warn')]).describe(`
         * * Field Name: StartingPayloadValidationMode
-        * * Display Name: Starting Validation Mode
+        * * Display Name: Starting Payload Validation Mode
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Fail
     * * Value List Type: List
@@ -3549,7 +3549,7 @@ if this limit is exceeded.`),
         * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.`),
     DefaultPromptEffortLevel: z.number().nullable().describe(`
         * * Field Name: DefaultPromptEffortLevel
-        * * Display Name: Default Prompt Effort
+        * * Display Name: Default Prompt Effort Level
         * * SQL Data Type: int
         * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
     ChatHandlingOption: z.union([z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
@@ -3570,7 +3570,7 @@ if this limit is exceeded.`),
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner
+        * * Display Name: Owner User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -3689,7 +3689,7 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold
+        * * Display Name: Inline Storage Threshold Bytes
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -3739,7 +3739,7 @@ if this limit is exceeded.`),
         * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.`),
     DefaultStorageAccountID: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccountID
-        * * Display Name: Default Storage Account
+        * * Display Name: Default Storage Account ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
         * * Description: Default file storage account for this specific agent. Overrides both Type-level and Category-level defaults. Can be further overridden at runtime via ExecuteAgentParams.override.storageAccountId. FK to FileStorageAccount.`),
@@ -3749,11 +3749,11 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Compression Prompt Name
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Type Name
         * * SQL Data Type: nvarchar(100)`),
     DefaultArtifactType: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactType
@@ -3761,11 +3761,11 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().describe(`
         * * Field Name: OwnerUser
-        * * Display Name: Owner Name
+        * * Display Name: Owner User Name
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
-        * * Display Name: Storage Provider Name
+        * * Display Name: Attachment Storage Provider Name
         * * SQL Data Type: nvarchar(50)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
@@ -3773,7 +3773,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(200)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
-        * * Display Name: Default Storage Account Name
+        * * Display Name: Default Storage Account
         * * SQL Data Type: nvarchar(200)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -7173,7 +7173,7 @@ export const MJArchiveConfigurationEntitySchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Foreign key to the Entity being archived.`),
-    Mode: z.union([z.literal('ArchiveOnly'), z.literal('HardDelete'), z.literal('SoftDelete'), z.literal('StripFields')]).nullable().describe(`
+    Mode: z.union([z.literal('ArchiveOnly'), z.literal('HardDelete'), z.literal('StripFields')]).nullable().describe(`
         * * Field Name: Mode
         * * Display Name: Archive Mode
         * * SQL Data Type: nvarchar(20)
@@ -7181,7 +7181,6 @@ export const MJArchiveConfigurationEntitySchema = z.object({
     * * Possible Values 
     *   * ArchiveOnly
     *   * HardDelete
-    *   * SoftDelete
     *   * StripFields
         * * Description: Archive mode override for this entity. NULL inherits from the parent configuration's DefaultMode.`),
     RetentionDays: z.number().nullable().describe(`
@@ -7191,7 +7190,7 @@ export const MJArchiveConfigurationEntitySchema = z.object({
         * * Description: Retention period override in days. NULL inherits from the parent configuration's DefaultRetentionDays.`),
     DateField: z.string().describe(`
         * * Field Name: DateField
-        * * Display Name: Retention Date Field
+        * * Display Name: Date Field
         * * SQL Data Type: nvarchar(100)
         * * Default Value: __mj_CreatedAt
         * * Description: The date field on the entity used to determine record age for retention policy evaluation. Defaults to __mj_CreatedAt.`),
@@ -7228,7 +7227,7 @@ export const MJArchiveConfigurationEntitySchema = z.object({
         * * Description: Override for archiving related Record Changes. NULL inherits from the parent configuration.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this entity is active within the archive configuration.`),
@@ -7296,28 +7295,27 @@ export const MJArchiveConfigurationSchema = z.object({
         * * Description: Output format for archived records: JSON, Parquet, or CSV.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this configuration is active and eligible for scheduled archive runs.`),
     DefaultRetentionDays: z.number().describe(`
         * * Field Name: DefaultRetentionDays
-        * * Display Name: Default Retention (Days)
+        * * Display Name: Default Retention Days
         * * SQL Data Type: int
         * * Default Value: 365
         * * Description: Default number of days after which records become eligible for archiving. Can be overridden per entity.`),
-    DefaultMode: z.union([z.literal('ArchiveOnly'), z.literal('HardDelete'), z.literal('SoftDelete'), z.literal('StripFields')]).describe(`
+    DefaultMode: z.union([z.literal('ArchiveOnly'), z.literal('HardDelete'), z.literal('StripFields')]).describe(`
         * * Field Name: DefaultMode
-        * * Display Name: Default Archive Mode
+        * * Display Name: Default Mode
         * * SQL Data Type: nvarchar(20)
         * * Default Value: StripFields
     * * Value List Type: List
     * * Possible Values 
     *   * ArchiveOnly
     *   * HardDelete
-    *   * SoftDelete
     *   * StripFields
-        * * Description: Default archive mode: StripFields (remove specified fields), SoftDelete (mark as deleted), HardDelete (remove from source), ArchiveOnly (copy without modifying source).`),
+        * * Description: Default archive mode: StripFields (null out specified fields), HardDelete (delete from source after archiving), ArchiveOnly (copy to storage without modifying source).`),
     DefaultBatchSize: z.number().describe(`
         * * Field Name: DefaultBatchSize
         * * Display Name: Default Batch Size
@@ -7326,7 +7324,7 @@ export const MJArchiveConfigurationSchema = z.object({
         * * Description: Default number of records to process per batch during archive runs.`),
     ArchiveRelatedRecordChanges: z.boolean().describe(`
         * * Field Name: ArchiveRelatedRecordChanges
-        * * Display Name: Archive Related Changes
+        * * Display Name: Archive Related Record Changes
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When enabled, related Record Changes entries are also archived alongside the source records.`),
@@ -7344,7 +7342,7 @@ export const MJArchiveConfigurationSchema = z.object({
         * * Description: Current operational status of this configuration: Idle, Running, Error, or Disabled.`),
     CreatedByUserID: z.string().describe(`
         * * Field Name: CreatedByUserID
-        * * Display Name: Created By User
+        * * Display Name: Created By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: The user who created this archive configuration.`),
@@ -7364,7 +7362,7 @@ export const MJArchiveConfigurationSchema = z.object({
         * * SQL Data Type: nvarchar(200)`),
     CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
-        * * Display Name: Created By Name
+        * * Display Name: Created By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -7387,7 +7385,7 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Description: Foreign key to the parent ArchiveRun.`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity Record
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Foreign key to the Entity this record belongs to.`),
@@ -7448,13 +7446,9 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArchiveRun: z.string().describe(`
-        * * Field Name: ArchiveRun
-        * * Display Name: Archive Run
-        * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Type
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -7466,7 +7460,7 @@ export type MJArchiveRunDetailEntityType = z.infer<typeof MJArchiveRunDetailSche
 export const MJArchiveRunSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: Run ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     ArchiveConfigurationID: z.string().describe(`
@@ -7536,7 +7530,7 @@ export const MJArchiveRunSchema = z.object({
         * * Description: Aggregated error log for the run. Contains error details when Status is Failed or PartialSuccess.`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: Initiated By
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: The user who initiated this archive run.`),
@@ -7552,7 +7546,7 @@ export const MJArchiveRunSchema = z.object({
         * * Default Value: getutcdate()`),
     ArchiveConfiguration: z.string().describe(`
         * * Field Name: ArchiveConfiguration
-        * * Display Name: Archive Configuration Name
+        * * Display Name: Configuration Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
@@ -7767,10 +7761,10 @@ export const MJArtifactUseSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -7830,10 +7824,10 @@ export const MJArtifactVersionAttributeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJArtifactVersionAttributeEntityType = z.infer<typeof MJArtifactVersionAttributeSchema>;
@@ -8307,10 +8301,10 @@ export const MJCollectionArtifactSchema = z.object({
         * * Field Name: Collection
         * * Display Name: Collection
         * * SQL Data Type: nvarchar(255)`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJCollectionArtifactEntityType = z.infer<typeof MJCollectionArtifactSchema>;
@@ -11256,10 +11250,10 @@ export const MJConversationDetailArtifactSchema = z.object({
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail Summary
         * * SQL Data Type: nvarchar(MAX)`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version Summary
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJConversationDetailArtifactEntityType = z.infer<typeof MJConversationDetailArtifactSchema>;
@@ -13614,7 +13608,7 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     AutoUpdateDescription: z.boolean().describe(`
         * * Field Name: AutoUpdateDescription
-        * * Display Name: Auto-update Description
+        * * Display Name: Auto Update Description
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`),
@@ -13636,13 +13630,13 @@ export const MJEntitySchema = z.object({
         * * Description: When set to 0, CodeGen no longer generates a base view for the entity.`),
     SchemaName: z.string().describe(`
         * * Field Name: SchemaName
-        * * Display Name: Schema
+        * * Display Name: Schema Name
         * * SQL Data Type: nvarchar(255)
         * * Default Value: dbo
         * * Description: Database schema containing this entity's table and view.`),
     VirtualEntity: z.boolean().describe(`
         * * Field Name: VirtualEntity
-        * * Display Name: Is Virtual Entity
+        * * Display Name: Virtual Entity
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this is a virtual entity without a physical database table.`),
@@ -13702,46 +13696,46 @@ export const MJEntitySchema = z.object({
         * * Description: Set to 1 if a custom resolver has been created for the entity.`),
     AllowUserSearchAPI: z.boolean().describe(`
         * * Field Name: AllowUserSearchAPI
-        * * Display Name: Allow User Search API
+        * * Display Name: Allow User Search
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Enabling this bit will result in search being possible at the API and UI layers`),
     FullTextSearchEnabled: z.boolean().describe(`
         * * Field Name: FullTextSearchEnabled
-        * * Display Name: Full-text Search Enabled
+        * * Display Name: Full-Text Search Enabled
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether full-text search indexing is enabled for this entity.`),
     FullTextCatalog: z.string().nullable().describe(`
         * * Field Name: FullTextCatalog
-        * * Display Name: Full-text Catalog
+        * * Display Name: Full-Text Catalog
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the SQL Server full-text catalog if search is enabled.`),
     FullTextCatalogGenerated: z.boolean().describe(`
         * * Field Name: FullTextCatalogGenerated
-        * * Display Name: Full-text Catalog Generated
+        * * Display Name: Full-Text Catalog Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the full-text catalog was auto-generated by CodeGen.`),
     FullTextIndex: z.string().nullable().describe(`
         * * Field Name: FullTextIndex
-        * * Display Name: Full-text Index
+        * * Display Name: Full-Text Index
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the full-text index on this entity's table.`),
     FullTextIndexGenerated: z.boolean().describe(`
         * * Field Name: FullTextIndexGenerated
-        * * Display Name: Full-text Index Generated
+        * * Display Name: Full-Text Index Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the full-text index was auto-generated by CodeGen.`),
     FullTextSearchFunction: z.string().nullable().describe(`
         * * Field Name: FullTextSearchFunction
-        * * Display Name: Full-text Search Function
+        * * Display Name: Search Function
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the function used for full-text searching this entity.`),
     FullTextSearchFunctionGenerated: z.boolean().describe(`
         * * Field Name: FullTextSearchFunctionGenerated
-        * * Display Name: Full-text Search Function Generated
+        * * Display Name: Search Function Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the search function was auto-generated by CodeGen.`),
@@ -13768,19 +13762,19 @@ export const MJEntitySchema = z.object({
         * * Description: Name of the stored procedure for deleting records in this entity.`),
     spCreateGenerated: z.boolean().describe(`
         * * Field Name: spCreateGenerated
-        * * Display Name: Create Procedure Generated
+        * * Display Name: Create SP Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the create procedure was auto-generated by CodeGen.`),
     spUpdateGenerated: z.boolean().describe(`
         * * Field Name: spUpdateGenerated
-        * * Display Name: Update Procedure Generated
+        * * Display Name: Update SP Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the update procedure was auto-generated by CodeGen.`),
     spDeleteGenerated: z.boolean().describe(`
         * * Field Name: spDeleteGenerated
-        * * Display Name: Delete Procedure Generated
+        * * Display Name: Delete SP Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the delete procedure was auto-generated by CodeGen.`),
@@ -13834,7 +13828,7 @@ export const MJEntitySchema = z.object({
         * * Description: TypeScript class name for the entity subclass in the codebase.`),
     EntityObjectSubclassImport: z.string().nullable().describe(`
         * * Field Name: EntityObjectSubclassImport
-        * * Display Name: Subclass Import
+        * * Display Name: Subclass Import Path
         * * SQL Data Type: nvarchar(255)
         * * Description: Import path for the entity subclass in the TypeScript codebase.`),
     PreferredCommunicationField: z.string().nullable().describe(`
@@ -13864,7 +13858,7 @@ export const MJEntitySchema = z.object({
         * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.`),
     RowsToPackWithSchema: z.union([z.literal('All'), z.literal('None'), z.literal('Sample')]).describe(`
         * * Field Name: RowsToPackWithSchema
-        * * Display Name: Rows To Pack With Schema
+        * * Display Name: Rows To Pack
         * * SQL Data Type: nvarchar(20)
         * * Default Value: None
     * * Value List Type: List
@@ -13875,7 +13869,7 @@ export const MJEntitySchema = z.object({
         * * Description: Determines how entity rows should be packaged for external use. Options include None, Sample, and All. Defaults to None.`),
     RowsToPackSampleMethod: z.union([z.literal('bottom n'), z.literal('random'), z.literal('top n')]).describe(`
         * * Field Name: RowsToPackSampleMethod
-        * * Display Name: Rows To Pack Sample Method
+        * * Display Name: Packing Sample Method
         * * SQL Data Type: nvarchar(20)
         * * Default Value: random
     * * Value List Type: List
@@ -13886,18 +13880,18 @@ export const MJEntitySchema = z.object({
         * * Description: Defines the sampling method for row packing when RowsToPackWithSchema is set to Sample. Options include random, top n, and bottom n. Defaults to random.`),
     RowsToPackSampleCount: z.number().describe(`
         * * Field Name: RowsToPackSampleCount
-        * * Display Name: Rows To Pack Sample Count
+        * * Display Name: Packing Sample Count
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: The number of rows to pack when RowsToPackWithSchema is set to Sample, based on the designated sampling method. Defaults to 0.`),
     RowsToPackSampleOrder: z.string().nullable().describe(`
         * * Field Name: RowsToPackSampleOrder
-        * * Display Name: Rows To Pack Sample Order
+        * * Display Name: Packing Sample Order
         * * SQL Data Type: nvarchar(MAX)
         * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.`),
     AutoRowCountFrequency: z.number().nullable().describe(`
         * * Field Name: AutoRowCountFrequency
-        * * Display Name: Auto-row Count Frequency
+        * * Display Name: Refresh Frequency (Hours)
         * * SQL Data Type: int
         * * Description: Frequency in hours for automatically performing row counts on this entity. If NULL, automatic row counting is disabled. If greater than 0, schedules recurring SELECT COUNT(*) queries at the specified interval.`),
     RowCount: z.number().nullable().describe(`
@@ -13907,7 +13901,7 @@ export const MJEntitySchema = z.object({
         * * Description: Cached row count for this entity, populated by automatic row count processes when AutoRowCountFrequency is configured.`),
     RowCountRunAt: z.date().nullable().describe(`
         * * Field Name: RowCountRunAt
-        * * Display Name: Row Count Run At
+        * * Display Name: Last Counted At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp indicating when the last automatic row count was performed for this entity.`),
     Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
@@ -13934,31 +13928,31 @@ export const MJEntitySchema = z.object({
         * * Description: When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).`),
     AutoUpdateFullTextSearch: z.boolean().describe(`
         * * Field Name: AutoUpdateFullTextSearch
-        * * Display Name: Auto-update Full-text Search
+        * * Display Name: Auto Update Search Settings
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.`),
     AutoUpdateAllowUserSearchAPI: z.boolean().describe(`
         * * Field Name: AutoUpdateAllowUserSearchAPI
-        * * Display Name: Auto-update Search API
+        * * Display Name: Auto Update Search API
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.`),
     TrustServerCacheCompletely: z.boolean().describe(`
         * * Field Name: TrustServerCacheCompletely
-        * * Display Name: Trust Server Cache Completely
+        * * Display Name: Trust Server Cache
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.`),
     SupportsGeoCoding: z.boolean().describe(`
         * * Field Name: SupportsGeoCoding
-        * * Display Name: Supports Geo-coding
+        * * Display Name: Supports Geo-Coding
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).`),
     AutoUpdateSupportsGeoCoding: z.boolean().describe(`
         * * Field Name: AutoUpdateSupportsGeoCoding
-        * * Display Name: Auto-update Geo-coding
+        * * Display Name: Auto Update Geo-Coding
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.`),
@@ -16645,7 +16639,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Foreign key to the IntegrationObject this field belongs to`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Name
+        * * Display Name: Field Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Field name as returned by the external API`),
     DisplayName: z.string().nullable().describe(`
@@ -16720,7 +16714,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Whether this field is required for create/update operations`),
     RelatedIntegrationObjectID: z.string().nullable().describe(`
         * * Field Name: RelatedIntegrationObjectID
-        * * Display Name: Related Integration Object ID
+        * * Display Name: Related Integration Object
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
         * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.`),
@@ -16791,7 +16785,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Primary key`),
     IntegrationID: z.string().describe(`
         * * Field Name: IntegrationID
-        * * Display Name: Integration
+        * * Display Name: Integration ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
         * * Description: Foreign key to the Integration that owns this object`),
@@ -16863,7 +16857,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Whether data can be pushed back to this object via the API`),
     DefaultQueryParams: z.string().nullable().describe(`
         * * Field Name: DefaultQueryParams
-        * * Display Name: Default Query Parameters
+        * * Display Name: Default Query Params
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object of default query parameters to include with every API request for this object`),
     Configuration: z.string().nullable().describe(`
@@ -16923,7 +16917,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration Name
+        * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -34637,7 +34631,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent Agent
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.
@@ -34711,7 +34705,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageThreshold
-    * * Display Name: Compression Message Threshold
+    * * Display Name: Context Compression Message Threshold
     * * SQL Data Type: int
     * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
     */
@@ -34724,7 +34718,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Compression Prompt
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -34737,7 +34731,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
-    * * Display Name: Retention Count
+    * * Display Name: Context Compression Message Retention Count
     * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.
     */
@@ -34750,7 +34744,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Agent Type
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
     * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.
@@ -34827,7 +34821,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: PayloadDownstreamPaths
-    * * Display Name: Downstream Payload Paths
+    * * Display Name: Payload Downstream Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Default Value: ["*"]
     * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]
@@ -34841,7 +34835,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: PayloadUpstreamPaths
-    * * Display Name: Upstream Payload Paths
+    * * Display Name: Payload Upstream Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Default Value: ["*"]
     * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]
@@ -34855,7 +34849,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: PayloadSelfReadPaths
-    * * Display Name: Self Read Paths
+    * * Display Name: Payload Self Read Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
 flow when the agent executes its own prompt step.
@@ -34869,7 +34863,7 @@ flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: PayloadSelfWritePaths
-    * * Display Name: Self Write Paths
+    * * Display Name: Payload Self Write Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
 data flow when the agent executes its own prompt step.
@@ -34909,7 +34903,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidationMode
-    * * Display Name: Final Validation Mode
+    * * Display Name: Final Payload Validation Mode
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Retry
     * * Value List Type: List
@@ -34928,7 +34922,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidationMaxRetries
-    * * Display Name: Max Validation Retries
+    * * Display Name: Final Payload Validation Max Retries
     * * SQL Data Type: int
     * * Default Value: 3
     * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
@@ -35038,7 +35032,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: StartingPayloadValidationMode
-    * * Display Name: Starting Validation Mode
+    * * Display Name: Starting Payload Validation Mode
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Fail
     * * Value List Type: List
@@ -35056,7 +35050,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultPromptEffortLevel
-    * * Display Name: Default Prompt Effort
+    * * Display Name: Default Prompt Effort Level
     * * SQL Data Type: int
     * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.
     */
@@ -35101,7 +35095,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner
+    * * Display Name: Owner User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -35348,7 +35342,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold
+    * * Display Name: Inline Storage Threshold Bytes
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -35470,7 +35464,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultStorageAccountID
-    * * Display Name: Default Storage Account
+    * * Display Name: Default Storage Account ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
     * * Description: Default file storage account for this specific agent. Overrides both Type-level and Category-level defaults. Can be further overridden at runtime via ExecuteAgentParams.override.storageAccountId. FK to FileStorageAccount.
@@ -35493,7 +35487,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Compression Prompt Name
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -35502,7 +35496,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string | null {
@@ -35520,7 +35514,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUser
-    * * Display Name: Owner Name
+    * * Display Name: Owner User Name
     * * SQL Data Type: nvarchar(100)
     */
     get OwnerUser(): string {
@@ -35529,7 +35523,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentStorageProvider
-    * * Display Name: Storage Provider Name
+    * * Display Name: Attachment Storage Provider Name
     * * SQL Data Type: nvarchar(50)
     */
     get AttachmentStorageProvider(): string | null {
@@ -35547,7 +35541,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultStorageAccount
-    * * Display Name: Default Storage Account Name
+    * * Display Name: Default Storage Account
     * * SQL Data Type: nvarchar(200)
     */
     get DefaultStorageAccount(): string | null {
@@ -44844,14 +44838,13 @@ export class MJArchiveConfigurationEntityEntity extends BaseEntity<MJArchiveConf
     * * Possible Values 
     *   * ArchiveOnly
     *   * HardDelete
-    *   * SoftDelete
     *   * StripFields
     * * Description: Archive mode override for this entity. NULL inherits from the parent configuration's DefaultMode.
     */
-    get Mode(): 'ArchiveOnly' | 'HardDelete' | 'SoftDelete' | 'StripFields' | null {
+    get Mode(): 'ArchiveOnly' | 'HardDelete' | 'StripFields' | null {
         return this.Get('Mode');
     }
-    set Mode(value: 'ArchiveOnly' | 'HardDelete' | 'SoftDelete' | 'StripFields' | null) {
+    set Mode(value: 'ArchiveOnly' | 'HardDelete' | 'StripFields' | null) {
         this.Set('Mode', value);
     }
 
@@ -44870,7 +44863,7 @@ export class MJArchiveConfigurationEntityEntity extends BaseEntity<MJArchiveConf
 
     /**
     * * Field Name: DateField
-    * * Display Name: Retention Date Field
+    * * Display Name: Date Field
     * * SQL Data Type: nvarchar(100)
     * * Default Value: __mj_CreatedAt
     * * Description: The date field on the entity used to determine record age for retention policy evaluation. Defaults to __mj_CreatedAt.
@@ -44963,7 +44956,7 @@ export class MJArchiveConfigurationEntityEntity extends BaseEntity<MJArchiveConf
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this entity is active within the archive configuration.
@@ -45131,7 +45124,7 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this configuration is active and eligible for scheduled archive runs.
@@ -45145,7 +45138,7 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
 
     /**
     * * Field Name: DefaultRetentionDays
-    * * Display Name: Default Retention (Days)
+    * * Display Name: Default Retention Days
     * * SQL Data Type: int
     * * Default Value: 365
     * * Description: Default number of days after which records become eligible for archiving. Can be overridden per entity.
@@ -45159,21 +45152,20 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
 
     /**
     * * Field Name: DefaultMode
-    * * Display Name: Default Archive Mode
+    * * Display Name: Default Mode
     * * SQL Data Type: nvarchar(20)
     * * Default Value: StripFields
     * * Value List Type: List
     * * Possible Values 
     *   * ArchiveOnly
     *   * HardDelete
-    *   * SoftDelete
     *   * StripFields
-    * * Description: Default archive mode: StripFields (remove specified fields), SoftDelete (mark as deleted), HardDelete (remove from source), ArchiveOnly (copy without modifying source).
+    * * Description: Default archive mode: StripFields (null out specified fields), HardDelete (delete from source after archiving), ArchiveOnly (copy to storage without modifying source).
     */
-    get DefaultMode(): 'ArchiveOnly' | 'HardDelete' | 'SoftDelete' | 'StripFields' {
+    get DefaultMode(): 'ArchiveOnly' | 'HardDelete' | 'StripFields' {
         return this.Get('DefaultMode');
     }
-    set DefaultMode(value: 'ArchiveOnly' | 'HardDelete' | 'SoftDelete' | 'StripFields') {
+    set DefaultMode(value: 'ArchiveOnly' | 'HardDelete' | 'StripFields') {
         this.Set('DefaultMode', value);
     }
 
@@ -45193,7 +45185,7 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
 
     /**
     * * Field Name: ArchiveRelatedRecordChanges
-    * * Display Name: Archive Related Changes
+    * * Display Name: Archive Related Record Changes
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When enabled, related Record Changes entries are also archived alongside the source records.
@@ -45227,7 +45219,7 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
 
     /**
     * * Field Name: CreatedByUserID
-    * * Display Name: Created By User
+    * * Display Name: Created By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: The user who created this archive configuration.
@@ -45270,7 +45262,7 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
 
     /**
     * * Field Name: CreatedByUser
-    * * Display Name: Created By Name
+    * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
     */
     get CreatedByUser(): string {
@@ -45338,7 +45330,7 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity Record
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Foreign key to the Entity this record belongs to.
@@ -45482,17 +45474,8 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
     }
 
     /**
-    * * Field Name: ArchiveRun
-    * * Display Name: Archive Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ArchiveRun(): string {
-        return this.Get('ArchiveRun');
-    }
-
-    /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Type
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -45533,7 +45516,7 @@ export class MJArchiveRunEntity extends BaseEntity<MJArchiveRunEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: Run ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -45691,7 +45674,7 @@ export class MJArchiveRunEntity extends BaseEntity<MJArchiveRunEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: Initiated By
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: The user who initiated this archive run.
@@ -45725,7 +45708,7 @@ export class MJArchiveRunEntity extends BaseEntity<MJArchiveRunEntityType> {
 
     /**
     * * Field Name: ArchiveConfiguration
-    * * Display Name: Archive Configuration Name
+    * * Display Name: Configuration Name
     * * SQL Data Type: nvarchar(255)
     */
     get ArchiveConfiguration(): string {
@@ -46264,9 +46247,9 @@ export class MJArtifactUseEntity extends BaseEntity<MJArtifactUseEntityType> {
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 
@@ -46419,9 +46402,9 @@ export class MJArtifactVersionAttributeEntity extends BaseEntity<MJArtifactVersi
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 }
@@ -47637,9 +47620,9 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 }
@@ -55354,9 +55337,9 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version Summary
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 }
@@ -61508,7 +61491,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoUpdateDescription
-    * * Display Name: Auto-update Description
+    * * Display Name: Auto Update Description
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
@@ -61559,7 +61542,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: SchemaName
-    * * Display Name: Schema
+    * * Display Name: Schema Name
     * * SQL Data Type: nvarchar(255)
     * * Default Value: dbo
     * * Description: Database schema containing this entity's table and view.
@@ -61570,7 +61553,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: VirtualEntity
-    * * Display Name: Is Virtual Entity
+    * * Display Name: Virtual Entity
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this is a virtual entity without a physical database table.
@@ -61710,7 +61693,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AllowUserSearchAPI
-    * * Display Name: Allow User Search API
+    * * Display Name: Allow User Search
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Enabling this bit will result in search being possible at the API and UI layers
@@ -61724,7 +61707,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextSearchEnabled
-    * * Display Name: Full-text Search Enabled
+    * * Display Name: Full-Text Search Enabled
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether full-text search indexing is enabled for this entity.
@@ -61738,7 +61721,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextCatalog
-    * * Display Name: Full-text Catalog
+    * * Display Name: Full-Text Catalog
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the SQL Server full-text catalog if search is enabled.
     */
@@ -61751,7 +61734,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextCatalogGenerated
-    * * Display Name: Full-text Catalog Generated
+    * * Display Name: Full-Text Catalog Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the full-text catalog was auto-generated by CodeGen.
@@ -61765,7 +61748,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextIndex
-    * * Display Name: Full-text Index
+    * * Display Name: Full-Text Index
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the full-text index on this entity's table.
     */
@@ -61778,7 +61761,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextIndexGenerated
-    * * Display Name: Full-text Index Generated
+    * * Display Name: Full-Text Index Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the full-text index was auto-generated by CodeGen.
@@ -61792,7 +61775,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextSearchFunction
-    * * Display Name: Full-text Search Function
+    * * Display Name: Search Function
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the function used for full-text searching this entity.
     */
@@ -61805,7 +61788,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextSearchFunctionGenerated
-    * * Display Name: Full-text Search Function Generated
+    * * Display Name: Search Function Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the search function was auto-generated by CodeGen.
@@ -61872,7 +61855,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spCreateGenerated
-    * * Display Name: Create Procedure Generated
+    * * Display Name: Create SP Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the create procedure was auto-generated by CodeGen.
@@ -61886,7 +61869,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spUpdateGenerated
-    * * Display Name: Update Procedure Generated
+    * * Display Name: Update SP Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the update procedure was auto-generated by CodeGen.
@@ -61900,7 +61883,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spDeleteGenerated
-    * * Display Name: Delete Procedure Generated
+    * * Display Name: Delete SP Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the delete procedure was auto-generated by CodeGen.
@@ -62018,7 +62001,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: EntityObjectSubclassImport
-    * * Display Name: Subclass Import
+    * * Display Name: Subclass Import Path
     * * SQL Data Type: nvarchar(255)
     * * Description: Import path for the entity subclass in the TypeScript codebase.
     */
@@ -62090,7 +62073,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RowsToPackWithSchema
-    * * Display Name: Rows To Pack With Schema
+    * * Display Name: Rows To Pack
     * * SQL Data Type: nvarchar(20)
     * * Default Value: None
     * * Value List Type: List
@@ -62109,7 +62092,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RowsToPackSampleMethod
-    * * Display Name: Rows To Pack Sample Method
+    * * Display Name: Packing Sample Method
     * * SQL Data Type: nvarchar(20)
     * * Default Value: random
     * * Value List Type: List
@@ -62128,7 +62111,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RowsToPackSampleCount
-    * * Display Name: Rows To Pack Sample Count
+    * * Display Name: Packing Sample Count
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: The number of rows to pack when RowsToPackWithSchema is set to Sample, based on the designated sampling method. Defaults to 0.
@@ -62142,7 +62125,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RowsToPackSampleOrder
-    * * Display Name: Rows To Pack Sample Order
+    * * Display Name: Packing Sample Order
     * * SQL Data Type: nvarchar(MAX)
     * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.
     */
@@ -62155,7 +62138,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoRowCountFrequency
-    * * Display Name: Auto-row Count Frequency
+    * * Display Name: Refresh Frequency (Hours)
     * * SQL Data Type: int
     * * Description: Frequency in hours for automatically performing row counts on this entity. If NULL, automatic row counting is disabled. If greater than 0, schedules recurring SELECT COUNT(*) queries at the specified interval.
     */
@@ -62181,7 +62164,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RowCountRunAt
-    * * Display Name: Row Count Run At
+    * * Display Name: Last Counted At
     * * SQL Data Type: datetimeoffset
     * * Description: Timestamp indicating when the last automatic row count was performed for this entity.
     */
@@ -62240,7 +62223,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoUpdateFullTextSearch
-    * * Display Name: Auto-update Full-text Search
+    * * Display Name: Auto Update Search Settings
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.
@@ -62254,7 +62237,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoUpdateAllowUserSearchAPI
-    * * Display Name: Auto-update Search API
+    * * Display Name: Auto Update Search API
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.
@@ -62268,7 +62251,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: TrustServerCacheCompletely
-    * * Display Name: Trust Server Cache Completely
+    * * Display Name: Trust Server Cache
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.
@@ -62282,7 +62265,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: SupportsGeoCoding
-    * * Display Name: Supports Geo-coding
+    * * Display Name: Supports Geo-Coding
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).
@@ -62296,7 +62279,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoUpdateSupportsGeoCoding
-    * * Display Name: Auto-update Geo-coding
+    * * Display Name: Auto Update Geo-Coding
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.
@@ -69095,7 +69078,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: Name
-    * * Display Name: Name
+    * * Display Name: Field Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Field name as returned by the external API
     */
@@ -69282,7 +69265,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: RelatedIntegrationObjectID
-    * * Display Name: Related Integration Object ID
+    * * Display Name: Related Integration Object
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
     * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.
@@ -69453,7 +69436,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: IntegrationID
-    * * Display Name: Integration
+    * * Display Name: Integration ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
     * * Description: Foreign key to the Integration that owns this object
@@ -69621,7 +69604,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: DefaultQueryParams
-    * * Display Name: Default Query Parameters
+    * * Display Name: Default Query Params
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON object of default query parameters to include with every API request for this object
     */
@@ -69755,7 +69738,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration Name
+    * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {

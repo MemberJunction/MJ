@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Record Context Section -->
+    <!-- Archive Context Section -->
     <mj-collapsible-panel
-        SectionKey="recordContext"
-        SectionName="Record Context"
-        Icon="fa fa-info-circle"
+        SectionKey="archiveContext"
+        SectionName="Archive Context"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -41,21 +41,13 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="IsRecordChangeArchive"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Archival Outcome Section -->
+    <!-- Processing Results Section -->
     <mj-collapsible-panel
-        SectionKey="archivalOutcome"
-        SectionName="Archival Outcome"
+        SectionKey="processingResults"
+        SectionName="Processing Results"
         Icon="fa fa-check-circle"
         [Form]="this"
         [FormContext]="formContext">
@@ -70,36 +62,11 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ErrorMessage"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ArchivedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Storage Details Section -->
-    <mj-collapsible-panel
-        SectionKey="storageDetails"
-        SectionName="Storage Details"
-        Icon="fa fa-hdd"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="StoragePath"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="URL"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
@@ -112,8 +79,42 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="ErrorMessage"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Timeline and Versioning Section -->
+    <mj-collapsible-panel
+        SectionKey="timelineAndVersioning"
+        SectionName="Timeline and Versioning"
+        Icon="fa fa-history"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ArchivedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="VersionStamp"
             Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IsRecordChangeArchive"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

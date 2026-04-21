@@ -16,8 +16,9 @@ export class MJArchiveRunFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
-            { sectionKey: 'archiveStatistics', sectionName: 'Archive Statistics', isExpanded: true },
+            { sectionKey: 'executionContext', sectionName: 'Execution Context', isExpanded: true },
+            { sectionKey: 'runStatusAndTiming', sectionName: 'Run Status and Timing', isExpanded: true },
+            { sectionKey: 'archiveStatistics', sectionName: 'Archive Statistics', isExpanded: false },
             { sectionKey: 'errorDiagnostics', sectionName: 'Error Diagnostics', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJArchiveRunDetails', sectionName: 'Archive Run Details', isExpanded: false }

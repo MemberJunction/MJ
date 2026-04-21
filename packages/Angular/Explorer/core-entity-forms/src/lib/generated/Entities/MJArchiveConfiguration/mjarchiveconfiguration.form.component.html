@@ -8,10 +8,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Configuration Details Section -->
+    <!-- General Information Section -->
     <mj-collapsible-panel
-        SectionKey="configurationDetails"
-        SectionName="Configuration Details"
+        SectionKey="generalInformation"
+        SectionName="General Information"
         Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
@@ -50,11 +50,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Storage Settings Section -->
+    <!-- Storage Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="storageSettings"
-        SectionName="Storage Settings"
-        Icon="fa fa-hdd"
+        SectionKey="storageConfiguration"
+        SectionName="Storage Configuration"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -74,6 +74,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Archive Settings Section -->
+    <mj-collapsible-panel
+        SectionKey="archiveSettings"
+        SectionName="Archive Settings"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -82,16 +92,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Archiving Rules Section -->
-    <mj-collapsible-panel
-        SectionKey="archivingRules"
-        SectionName="Archiving Rules"
-        Icon="fa fa-clipboard-check"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -195,7 +195,7 @@
     <mj-collapsible-panel
         SectionKey="mJArchiveRuns"
         SectionName="Archive Runs"
-        Icon="fa fa-history"
+        Icon="fa fa-archive"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

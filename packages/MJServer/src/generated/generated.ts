@@ -19931,6 +19931,9 @@ export class CreateMJArchiveConfigurationEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -19980,6 +19983,9 @@ export class UpdateMJArchiveConfigurationEntityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20102,7 +20108,7 @@ export class MJArchiveConfiguration_ {
     @Field(() => Int, {description: `Default number of days after which records become eligible for archiving. Can be overridden per entity.`}) 
     DefaultRetentionDays: number;
         
-    @Field({description: `Default archive mode: StripFields (remove specified fields), SoftDelete (mark as deleted), HardDelete (remove from source), ArchiveOnly (copy without modifying source).`}) 
+    @Field({description: `Default archive mode: StripFields (null out specified fields), HardDelete (delete from source after archiving), ArchiveOnly (copy to storage without modifying source).`}) 
     @MaxLength(20)
     DefaultMode: string;
         
@@ -20185,6 +20191,9 @@ export class CreateMJArchiveConfigurationInput {
 
     @Field({ nullable: true })
     CreatedByUserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20234,6 +20243,9 @@ export class UpdateMJArchiveConfigurationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20394,10 +20406,6 @@ export class MJArchiveRunDetail_ {
         
     @Field() 
     @MaxLength(255)
-    ArchiveRun: string;
-        
-    @Field() 
-    @MaxLength(255)
     Entity: string;
         
 }
@@ -20439,6 +20447,9 @@ export class CreateMJArchiveRunDetailInput {
 
     @Field(() => Boolean, { nullable: true })
     IsRecordChangeArchive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20482,6 +20493,9 @@ export class UpdateMJArchiveRunDetailInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20674,6 +20688,9 @@ export class CreateMJArchiveRunInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20720,6 +20737,9 @@ export class UpdateMJArchiveRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -21348,8 +21368,9 @@ export class MJArtifactUse_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field(() => Int) 
-    ArtifactVersion: number;
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
         
     @Field() 
     @MaxLength(100)
@@ -21529,8 +21550,9 @@ export class MJArtifactVersionAttribute_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field(() => Int) 
-    ArtifactVersion: number;
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
         
 }
 
@@ -23157,8 +23179,9 @@ export class MJCollectionArtifact_ {
     @MaxLength(255)
     Collection: string;
         
-    @Field(() => Int) 
-    ArtifactVersion: number;
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
         
 }
 
@@ -32093,8 +32116,9 @@ export class MJConversationDetailArtifact_ {
     @Field() 
     ConversationDetail: string;
         
-    @Field(() => Int) 
-    ArtifactVersion: number;
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
         
 }
 
@@ -39780,9 +39804,6 @@ export class MJEntity_ {
     @Field(() => [MJEntityOrganicKey_])
     MJEntityOrganicKeys_EntityIDArray: MJEntityOrganicKey_[]; // Link to MJEntityOrganicKeys
     
-    @Field(() => [MJArchiveRunDetail_])
-    MJArchiveRunDetails_EntityIDArray: MJArchiveRunDetail_[]; // Link to MJArchiveRunDetails
-    
     @Field(() => [MJRecordGeoCode_])
     MJRecordGeoCodes_EntityIDArray: MJRecordGeoCode_[]; // Link to MJRecordGeoCodes
     
@@ -39800,6 +39821,9 @@ export class MJEntity_ {
     
     @Field(() => [MJArchiveConfigurationEntity_])
     MJArchiveConfigurationEntities_EntityIDArray: MJArchiveConfigurationEntity_[]; // Link to MJArchiveConfigurationEntities
+    
+    @Field(() => [MJArchiveRunDetail_])
+    MJArchiveRunDetails_EntityIDArray: MJArchiveRunDetail_[]; // Link to MJArchiveRunDetails
     
     @Field(() => [MJResourceType_])
     MJResourceTypes_CategoryEntityIDArray: MJResourceType_[]; // Link to MJResourceTypes
@@ -40730,16 +40754,6 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJArchiveRunDetail_])
-    async MJArchiveRunDetails_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Archive Run Details', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRunDetails')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Run Details', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJRecordGeoCode_])
     async MJRecordGeoCodes_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Geo Codes', userPayload);
@@ -40797,6 +40811,16 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurationEntities')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configuration Entities', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configuration Entities', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJArchiveRunDetail_])
+    async MJArchiveRunDetails_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRunDetails')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Run Details', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -47136,11 +47160,11 @@ export class MJFileStorageAccount_ {
     @MaxLength(200)
     Credential: string;
         
-    @Field(() => [MJArchiveConfiguration_])
-    MJArchiveConfigurations_StorageAccountIDArray: MJArchiveConfiguration_[]; // Link to MJArchiveConfigurations
-    
     @Field(() => [MJAIAgentType_])
     MJAIAgentTypes_DefaultStorageAccountIDArray: MJAIAgentType_[]; // Link to MJAIAgentTypes
+    
+    @Field(() => [MJArchiveConfiguration_])
+    MJArchiveConfigurations_StorageAccountIDArray: MJArchiveConfiguration_[]; // Link to MJArchiveConfigurations
     
     @Field(() => [MJFileStorageAccountPermission_])
     MJFileStorageAccountPermissions_FileStorageAccountIDArray: MJFileStorageAccountPermission_[]; // Link to MJFileStorageAccountPermissions
@@ -47268,16 +47292,6 @@ export class MJFileStorageAccountResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJArchiveConfiguration_])
-    async MJArchiveConfigurations_StorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Archive Configurations', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurations')} WHERE ${provider.QuoteIdentifier('StorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configurations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configurations', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIAgentType_])
     async MJAIAgentTypes_DefaultStorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Types', userPayload);
@@ -47285,6 +47299,16 @@ export class MJFileStorageAccountResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentTypes')} WHERE ${provider.QuoteIdentifier('DefaultStorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Types', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJArchiveConfiguration_])
+    async MJArchiveConfigurations_StorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Configurations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurations')} WHERE ${provider.QuoteIdentifier('StorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configurations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configurations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -73844,9 +73868,6 @@ export class MJUser_ {
     @Field(() => [MJOpenApp_])
     MJOpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJOpenApps
     
-    @Field(() => [MJArchiveConfiguration_])
-    MJArchiveConfigurations_CreatedByUserIDArray: MJArchiveConfiguration_[]; // Link to MJArchiveConfigurations
-    
     @Field(() => [MJContentItemDuplicate_])
     MJContentItemDuplicates_ResolvedByUserIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
     
@@ -73858,6 +73879,9 @@ export class MJUser_ {
     
     @Field(() => [MJTagAuditLog_])
     MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
+    
+    @Field(() => [MJArchiveConfiguration_])
+    MJArchiveConfigurations_CreatedByUserIDArray: MJArchiveConfiguration_[]; // Link to MJArchiveConfigurations
     
     @Field(() => [MJResourcePermission_])
     MJResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
@@ -73904,11 +73928,11 @@ export class MJUser_ {
     @Field(() => [MJDuplicateRun_])
     MJDuplicateRuns_ApprovedByUserIDArray: MJDuplicateRun_[]; // Link to MJDuplicateRuns
     
-    @Field(() => [MJArchiveRun_])
-    MJArchiveRuns_UserIDArray: MJArchiveRun_[]; // Link to MJArchiveRuns
-    
     @Field(() => [MJFileStorageAccountPermission_])
     MJFileStorageAccountPermissions_UserIDArray: MJFileStorageAccountPermission_[]; // Link to MJFileStorageAccountPermissions
+    
+    @Field(() => [MJArchiveRun_])
+    MJArchiveRuns_UserIDArray: MJArchiveRun_[]; // Link to MJArchiveRuns
     
     @Field(() => [MJAIAgentRun_])
     MJAIAgentRuns_UserIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
@@ -74709,16 +74733,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJArchiveConfiguration_])
-    async MJArchiveConfigurations_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Archive Configurations', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurations')} WHERE ${provider.QuoteIdentifier('CreatedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configurations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configurations', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJContentItemDuplicate_])
     async MJContentItemDuplicates_ResolvedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Item Duplicates', userPayload);
@@ -74756,6 +74770,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJArchiveConfiguration_])
+    async MJArchiveConfigurations_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Configurations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurations')} WHERE ${provider.QuoteIdentifier('CreatedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configurations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configurations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -74909,16 +74933,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJArchiveRun_])
-    async MJArchiveRuns_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Archive Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRuns')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Runs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJFileStorageAccountPermission_])
     async MJFileStorageAccountPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: File Storage Account Permissions', userPayload);
@@ -74926,6 +74940,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFileStorageAccountPermissions')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: File Storage Account Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: File Storage Account Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJArchiveRun_])
+    async MJArchiveRuns_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRuns')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

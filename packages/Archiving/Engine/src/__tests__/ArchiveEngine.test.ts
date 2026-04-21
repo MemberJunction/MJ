@@ -163,6 +163,9 @@ describe('ArchiveEngine', () => {
             configRecord.InnerLoad.mockResolvedValue(true);
             configRecord.Get.mockImplementation((field: string) => {
                 if (field === 'ID') return 'config-1';
+                if (field === 'IsActive') return true;
+                if (field === 'Status') return 'Idle';
+                if (field === 'Name') return 'Test Config';
                 if (field === 'StorageAccountID') return 'storage-account-1';
                 if (field === 'RootPath') return 'archives';
                 if (field === 'DefaultBatchSize') return 100;
@@ -227,6 +230,9 @@ describe('ArchiveEngine', () => {
             const configRecord = createMockEntity({ ID: 'config-1' });
             configRecord.InnerLoad.mockResolvedValue(true);
             configRecord.Get.mockImplementation((field: string) => {
+                if (field === 'IsActive') return true;
+                if (field === 'Status') return 'Idle';
+                if (field === 'Name') return 'Test Config';
                 if (field === 'StorageAccountID') return 'storage-account-1';
                 return null;
             });
@@ -269,6 +275,9 @@ describe('ArchiveEngine', () => {
             const configRecord = createMockEntity({ ID: 'config-1' });
             configRecord.InnerLoad.mockResolvedValue(true);
             configRecord.Get.mockImplementation((field: string) => {
+                if (field === 'IsActive') return true;
+                if (field === 'Status') return 'Idle';
+                if (field === 'Name') return 'Test Config';
                 if (field === 'StorageAccountID') return 'storage-account-1';
                 return null;
             });
@@ -331,7 +340,12 @@ describe('ArchiveEngine', () => {
         it('should return failure when no entity configurations are found', async () => {
             const configRecord = createMockEntity({ ID: 'config-1' });
             configRecord.InnerLoad.mockResolvedValue(true);
-            configRecord.Get.mockReturnValue(null);
+            configRecord.Get.mockImplementation((field: string) => {
+                if (field === 'IsActive') return true;
+                if (field === 'Status') return 'Idle';
+                if (field === 'Name') return 'Test Config';
+                return null;
+            });
 
             mockGetEntityObjectHandler = (entityName: string) => {
                 if (entityName === 'MJ: Archive Configurations') return configRecord;
@@ -356,6 +370,9 @@ describe('ArchiveEngine', () => {
             const configRecord = createMockEntity({ ID: 'config-1' });
             configRecord.InnerLoad.mockResolvedValue(true);
             configRecord.Get.mockImplementation((field: string) => {
+                if (field === 'IsActive') return true;
+                if (field === 'Status') return 'Idle';
+                if (field === 'Name') return 'Test Config';
                 if (field === 'StorageAccountID') return 'bad-storage-id';
                 return null;
             });
@@ -387,8 +404,13 @@ describe('ArchiveEngine', () => {
         it('should return failure when configuration has no StorageAccountID', async () => {
             const configRecord = createMockEntity({ ID: 'config-1' });
             configRecord.InnerLoad.mockResolvedValue(true);
-            // StorageAccountID returns null/falsy
-            configRecord.Get.mockReturnValue(null);
+            // StorageAccountID returns null/falsy but config is active
+            configRecord.Get.mockImplementation((field: string) => {
+                if (field === 'IsActive') return true;
+                if (field === 'Status') return 'Idle';
+                if (field === 'Name') return 'Test Config';
+                return null;
+            });
 
             const archiveRunRecord = createMockEntity({ ID: 'run-1' });
             const configEntityRecord = createMockEntity({ ID: 'ce-1' });

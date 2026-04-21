@@ -22,9 +22,6 @@ const loadActionsDashboardsModule = featureLoader(() => import('@memberjunction/
 // --- @memberjunction/ng-dashboards → ./ai-dashboards.module (14 entries) ---
 const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./archiving-dashboards.module (2 entries) ---
-const loadArchivingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/archiving-dashboards.module'));
-
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (6 entries) ---
 const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/communication-dashboards.module'));
 
@@ -48,6 +45,9 @@ const loadListsDashboardsModule = featureLoader(() => import('@memberjunction/ng
 
 // --- @memberjunction/ng-dashboards → ./mcp.module (2 entries) ---
 const loadMcpModule = featureLoader(() => import('@memberjunction/ng-dashboards/mcp.module'));
+
+// --- @memberjunction/ng-dashboards → ./module (2 entries) ---
+const loadModule = featureLoader(() => import('@memberjunction/ng-dashboards/module'));
 
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
 const loadSchedulingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/scheduling-dashboards.module'));
@@ -93,10 +93,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::KnowledgeConfigResource': loadAiDashboardsModule,
   'BaseResourceComponent::SchedulingResource': loadAiDashboardsModule,
   'BaseResourceComponent::VectorManagementResource': loadAiDashboardsModule,
-
-  // @memberjunction/ng-dashboards → ./archiving-dashboards.module
-  'BaseResourceComponent::ArchiveConfigResource': loadArchivingDashboardsModule,
-  'BaseResourceComponent::ArchiveRunsResource': loadArchivingDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
   'BaseDashboard::CommunicationDashboard': loadCommunicationDashboardsModule,
@@ -152,6 +148,10 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   // @memberjunction/ng-dashboards → ./mcp.module
   'BaseDashboard::MCPDashboard': loadMcpModule,
   'BaseResourceComponent::MCPResource': loadMcpModule,
+
+  // @memberjunction/ng-dashboards → ./module
+  'BaseResourceComponent::ArchiveConfigResource': loadModule,
+  'BaseResourceComponent::ArchiveRunsResource': loadModule,
 
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadSchedulingDashboardsModule,

@@ -8,10 +8,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Archive Identity Section -->
+    <!-- Relationships Section -->
     <mj-collapsible-panel
-        SectionKey="archiveIdentity"
-        SectionName="Archive Identity"
+        SectionKey="relationships"
+        SectionName="Relationships"
         Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
@@ -33,22 +33,14 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="IsActive"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Archiving Rules Section -->
+    <!-- Archive Policies Section -->
     <mj-collapsible-panel
-        SectionKey="archivingRules"
-        SectionName="Archiving Rules"
-        Icon="fa fa-filter"
+        SectionKey="archivePolicies"
+        SectionName="Archive Policies"
+        Icon="fa fa-shield-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -94,11 +86,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Processing and Output Section -->
+    <!-- Processing Settings Section -->
     <mj-collapsible-panel
-        SectionKey="processingAndOutput"
-        SectionName="Processing and Output"
-        Icon="fa fa-cogs"
+        SectionKey="processingSettings"
+        SectionName="Processing Settings"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -130,6 +122,14 @@
             [ShowLabel]="true"
             FieldName="DriverClass"
             Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IsActive"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

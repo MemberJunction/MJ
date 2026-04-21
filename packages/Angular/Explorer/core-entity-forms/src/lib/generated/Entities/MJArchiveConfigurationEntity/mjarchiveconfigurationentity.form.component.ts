@@ -15,9 +15,9 @@ export class MJArchiveConfigurationEntityFormComponent extends BaseFormComponent
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'archiveIdentity', sectionName: 'Archive Identity', isExpanded: true },
-            { sectionKey: 'archivingRules', sectionName: 'Archiving Rules', isExpanded: true },
-            { sectionKey: 'processingAndOutput', sectionName: 'Processing and Output', isExpanded: false },
+            { sectionKey: 'relationships', sectionName: 'Relationships', isExpanded: true },
+            { sectionKey: 'archivePolicies', sectionName: 'Archive Policies', isExpanded: true },
+            { sectionKey: 'processingSettings', sectionName: 'Processing Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

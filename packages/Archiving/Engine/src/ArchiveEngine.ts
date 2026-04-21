@@ -63,6 +63,16 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
                 return this.BuildFailureResult('', `ArchiveConfiguration not found: ${configId}`);
             }
 
+            const isActive = config.Get('IsActive') as boolean;
+            if (!isActive) {
+                return this.BuildFailureResult('', `ArchiveConfiguration "${config.Get('Name')}" is not active. Set IsActive to true before running.`);
+            }
+
+            const status = config.Get('Status') as string;
+            if (status === 'Running') {
+                return this.BuildFailureResult('', `ArchiveConfiguration "${config.Get('Name')}" is already running. Wait for the current run to complete.`);
+            }
+
             const configEntities = await this.LoadConfigurationEntities(configId, contextUser);
             if (configEntities.length === 0) {
                 return this.BuildFailureResult('', 'No entity configurations found for this archive configuration');
