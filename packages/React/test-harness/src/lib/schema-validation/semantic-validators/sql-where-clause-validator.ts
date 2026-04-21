@@ -48,12 +48,8 @@ import { SQLParser } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { GetDialect } from '@memberjunction/sql-dialect';
 
-/**
- * SQL dialect used for WHERE clause parsing. Defaults to SQL Server.
- * Call {@link SqlWhereClauseValidator.SetDialect} to change for PostgreSQL
- * or other platforms before running validations.
- */
-let activeDialect: SQLParserDialect = GetDialect('sqlserver');
+/** Default SQL dialect when none is provided via ValidationContext */
+const DEFAULT_DIALECT: SQLParserDialect = GetDialect('sqlserver');
 
 /**
  * Validates SQL WHERE clauses for syntax and field references
@@ -70,15 +66,6 @@ let activeDialect: SQLParserDialect = GetDialect('sqlserver');
  */
 @RegisterClass(SemanticValidator, 'sql-where-clause')
 export class SqlWhereClauseValidator extends SemanticValidator {
-  /**
-   * Sets the SQL dialect used for WHERE clause parsing.
-   * Call before running validations if targeting a non-SQL Server platform.
-   * @param platform - Database platform key (e.g., 'sqlserver', 'postgresql')
-   */
-  static SetDialect(platform: string): void {
-    activeDialect = GetDialect(platform);
-  }
-
   /**
    * SQL keywords that are not field references
    * Used in regex fallback when AST parsing fails
@@ -208,7 +195,8 @@ export class SqlWhereClauseValidator extends SemanticValidator {
     const violations: ConstraintViolation[] = [];
 
     // Parse WHERE clause using SQLParser (wraps node-sql-parser with FOR XML workaround)
-    const ast = SQLParser.ParseSQL(`SELECT * FROM t WHERE ${whereClause}`, activeDialect);
+    const dialect = context.dialect ?? DEFAULT_DIALECT;
+    const ast = SQLParser.ParseSQL(`SELECT * FROM t WHERE ${whereClause}`, dialect);
     if (!ast) {
       throw new Error('Failed to parse WHERE clause');
     }

@@ -20,6 +20,8 @@ import { TypeCompatibilityRule, LintContext as TypeRuleLintContext } from './typ
 import { ComponentPropRule } from './schema-validation/component-prop-rule';
 import { LintRule } from './lint-rule';
 import { RuleRegistry } from './rule-registry';
+import type { SQLParserDialect } from '@memberjunction/sql-dialect';
+import { GetDialect } from '@memberjunction/sql-dialect';
 // Side-effect import: triggers all runtime rules to self-register with RuleRegistry
 import './runtime-rules';
 
@@ -88,6 +90,17 @@ export class ComponentLinter {
     }
   }
 
+  /**
+   * The SQL dialect used for WHERE clause validation in semantic validators.
+   * Defaults to SQL Server. Set via the `sqlDialect` parameter on `lintComponent()`.
+   */
+  private static _sqlDialect: SQLParserDialect = GetDialect('sqlserver');
+
+  /** Current SQL dialect used for WHERE clause parsing */
+  public static get SqlDialect(): SQLParserDialect {
+    return ComponentLinter._sqlDialect;
+  }
+
   public static async lintComponent(
     code: string,
     componentName: string,
@@ -96,7 +109,11 @@ export class ComponentLinter {
     contextUser?: UserInfo,
     debugMode?: boolean,
     options?: ComponentExecutionOptions,
+    sqlDialect?: SQLParserDialect,
   ): Promise<LintResult> {
+    if (sqlDialect) {
+      ComponentLinter._sqlDialect = sqlDialect;
+    }
     try {
       // Require contextUser when libraries need to be checked
       if (componentSpec?.libraries && componentSpec.libraries.length > 0 && !contextUser) {
@@ -203,6 +220,7 @@ export class ComponentLinter {
           typeContext,
           typeEngine,
           controlFlowAnalyzer,
+          sqlDialect: ComponentLinter._sqlDialect,
         };
         const typeViolations = typeCompatRule.validate(ast, lintContext);
         violations.push(...typeViolations);
@@ -230,6 +248,7 @@ export class ComponentLinter {
           typeContext,
           typeEngine,
           controlFlowAnalyzer,
+          sqlDialect: ComponentLinter._sqlDialect,
         };
         const propViolations = componentPropRule.validate(ast, lintContext);
         violations.push(...propViolations);

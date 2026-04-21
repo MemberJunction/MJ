@@ -58,6 +58,8 @@ export interface LintContext {
   typeContext: TypeContext;
   typeEngine: TypeInferenceEngine;
   controlFlowAnalyzer: ControlFlowAnalyzer;
+  /** SQL dialect for WHERE clause parsing. Flows to semantic validators via ValidationContext. */
+  sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;
 }
 
 /**

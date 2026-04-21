@@ -59,6 +59,8 @@ export interface LintContext {
   typeContext: any; // TypeContext - avoiding import for now
   typeEngine: any; // TypeInferenceEngine
   controlFlowAnalyzer: any; // ControlFlowAnalyzer
+  /** SQL dialect for WHERE clause parsing in semantic validators */
+  sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;
 }
 
 /**
@@ -98,10 +100,14 @@ export class ComponentPropRule {
   // React special props
   private readonly reactSpecialProps = new Set(['children', 'dangerouslySetInnerHTML']);
 
+  /** SQL dialect for semantic validators, set from LintContext during validate() */
+  private _sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;
+
   /**
    * Validate component props
    */
   validate(ast: t.File, context: LintContext): Violation[] {
+    this._sqlDialect = context.sqlDialect;
     const violations: Violation[] = [];
 
     // Skip if no dependencies
@@ -704,7 +710,7 @@ export class ComponentPropRule {
         }
 
         // Build ValidationContext
-        const context: ValidationContext = {
+        const validationCtx: ValidationContext = {
           node: propAttr,
           path: path as any,
           componentName: elementName,
@@ -714,7 +720,8 @@ export class ComponentPropRule {
           siblingProps,
           entities: new Map(),
           queries: new Map(),
-          typeEngine: null as any,
+          typeEngine: null as never,
+          dialect: this._sqlDialect,
 
           getEntityFields: validationHelpers.getEntityFields,
           getEntityFieldType: validationHelpers.getEntityFieldType,
@@ -726,7 +733,7 @@ export class ComponentPropRule {
 
         // Run the validator
         try {
-          const constraintViolations = validator.validate(context, constraint);
+          const constraintViolations = validator.validate(validationCtx, constraint);
           for (const cv of constraintViolations) {
             violations.push({
               rule: 'component-props',

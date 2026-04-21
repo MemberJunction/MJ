@@ -13,6 +13,7 @@
 import * as t from '@babel/types';
 import { NodePath } from '@babel/traverse';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { TypeInferenceEngine } from '../../type-inference-engine';
 import { ExtractedValue } from '../../prop-value-extractor';
 
@@ -147,6 +148,15 @@ export interface ValidationContext {
    * Can infer types of variables, function calls, etc.
    */
   typeEngine: TypeInferenceEngine;
+
+  /**
+   * SQL dialect for WHERE clause parsing and validation.
+   *
+   * Used by the SqlWhereClauseValidator to parse SQL with the correct syntax
+   * for the target database platform (SQL Server, PostgreSQL, etc.).
+   * If not provided, the validator falls back to SQL Server dialect.
+   */
+  dialect?: SQLParserDialect;
 
   // ============================================================================
   // Helper Methods
