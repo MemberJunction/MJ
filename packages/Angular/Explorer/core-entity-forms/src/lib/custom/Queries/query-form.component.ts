@@ -4,6 +4,7 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent, FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { MJQueryFormComponent } from '../../generated/Entities/MJQuery/mjquery.form.component';
 import { Metadata, RunView, RUN_QUERY_SQL_FILTERS, CompositeKey, QueryInfo, QueryDependencyInfo } from '@memberjunction/core';
+import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CodeEditorComponent, CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { NavigationService } from '@memberjunction/ng-shared';
@@ -37,6 +38,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public showRunDialog = false;
     public showCategoryDialog = false;
     public categoryPathDisplay = '';
+    public IsSaving = false;
 
     // Expansion panel states
     public sqlPanelExpanded = true;
@@ -54,7 +56,34 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     ];
     public categories: MJQueryCategoryEntity[] = [];
     public categoryTreeData: CategoryTreeNode[] = [];
-    
+
+    /** Tree dropdown config for Query Categories */
+    public CategoryBranchConfig: TreeBranchConfig = {
+        EntityName: 'MJ: Query Categories',
+        DisplayField: 'Name',
+        IDField: 'ID',
+        ParentIDField: 'ParentID',
+        DefaultIcon: 'fa-solid fa-folder',
+        DescriptionField: 'Description',
+        OrderBy: 'Name ASC'
+    };
+
+    /** CategoryID as CompositeKey for tree dropdown binding */
+    public get CategoryIDAsKey(): CompositeKey | null {
+        return this.record?.CategoryID ? CompositeKey.FromID(this.record.CategoryID) : null;
+    }
+
+    /** Handle tree dropdown category selection */
+    public OnCategoryTreeChange(value: CompositeKey | CompositeKey[] | null): void {
+        if (!this.record) return;
+        if (value instanceof CompositeKey && value.HasValue) {
+            this.record.CategoryID = value.KeyValuePairs[0]?.Value ?? null;
+        } else {
+            this.record.CategoryID = null;
+        }
+        this.updateCategoryPathDisplay();
+    }
+
     // Status options — matches MJQueryEntity.Status type from database CHECK constraint
     public statusOptions = [
         { text: 'Pending', value: 'Pending' },
@@ -606,6 +635,18 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     async SaveRecord(StopEditModeAfterSave: boolean = true): Promise<boolean> {
+        this.IsSaving = true;
+        this.cdr.markForCheck();
+        try {
+            return await this.internalSaveRecord(StopEditModeAfterSave);
+        } finally {
+            await Promise.resolve(); // microtask to avoid ExpressionChangedAfterItHasBeenCheckedError
+            this.IsSaving = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    private async internalSaveRecord(StopEditModeAfterSave: boolean): Promise<boolean> {
         // Handle category creation before saving query
         if (this.record.CategoryID && !this.categoryOptions.find(opt => opt.value === this.record.CategoryID)) {
             if (this.isDuplicateCategory(this.record.CategoryID)) {
