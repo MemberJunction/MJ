@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions , UUIDsEqual } from '@memberjunction/global';
 import { MJArtifactEntity, MJArtifactVersionEntity, MJArtifactVersionAttributeEntity, MJArtifactTypeEntity, MJCollectionEntity, MJCollectionArtifactEntity, ArtifactMetadataEngine, MJConversationEntity, MJConversationDetailArtifactEntity, MJConversationDetailEntity, MJArtifactUseEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -40,6 +40,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
+  @Output() analyzeRequested = new EventEmitter<{ artifactId: string; snapshot: DataSnapshot }>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -1239,5 +1240,33 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     this.artifactIcon = this.artifact
       ? this.artifactIconService.getArtifactIcon(this.artifact)
       : 'fa-file';
+  }
+
+  /**
+   * Capture the current snapshot and emit an analyze event.
+   * The parent component handles routing this to an agent conversation.
+   */
+  public OnAnalyze(): void {
+    const snapshot = this.GetCurrentStateSnapshot();
+    if (snapshot && this.artifact) {
+      this.analyzeRequested.emit({
+        artifactId: this.artifact.ID,
+        snapshot
+      });
+    } else {
+      this.notificationService.CreateSimpleNotification(
+        'No data available to analyze',
+        'warning',
+        3000
+      );
+    }
+  }
+
+  /**
+   * Passthrough to the active plugin's GetCurrentStateSnapshot().
+   * Returns null if no plugin is loaded or the plugin has no snapshot.
+   */
+  public GetCurrentStateSnapshot(): DataSnapshot | null {
+    return this.pluginViewer?.pluginInstance?.GetCurrentStateSnapshot() ?? null;
   }
 }

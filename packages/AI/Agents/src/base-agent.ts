@@ -60,6 +60,7 @@ import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
+import { ArtifactToolManager, ArtifactToolCall, InputArtifact } from './ArtifactToolManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
@@ -733,6 +734,12 @@ export class BaseAgent {
     private _scratchpadManager: ScratchpadManager = new ScratchpadManager();
 
     /**
+     * Manages artifact tools for the current agent run.
+     * Allows agents to explore input artifacts on demand.
+     */
+    private _artifactToolManager: ArtifactToolManager = new ArtifactToolManager();
+
+    /**
      * Effective actions available to this agent after applying actionChanges.
      * Populated during gatherPromptTemplateData() and used for validation in executeActionsStep().
      * @private
@@ -1114,8 +1121,18 @@ export class BaseAgent {
                 this.convertUIMarkupInMessages(wrappedParams.conversationMessages);
             }
 
-            // Reset scratchpad for each new execution (ephemeral per run)
+            // Reset scratchpad and artifact tools for each new execution (ephemeral per run)
             this._scratchpadManager.Clear();
+            this._artifactToolManager.Clear();
+
+            // Initialize artifact tools with any input artifacts from the conversation
+            const inputArtifacts = (wrappedParams.data as Record<string, unknown>)?.__inputArtifacts as InputArtifact[] | undefined;
+            if (inputArtifacts?.length) {
+                this._artifactToolManager.Initialize(inputArtifacts);
+                this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
+            } else {
+                this.logStatus(`[ArtifactTools] No input artifacts found for this run`, true, params);
+            }
 
             // Initialize starting payload — must complete before AgentRun creation since the
             // run record stores the starting payload snapshot.
@@ -1976,6 +1993,27 @@ export class BaseAgent {
                 promptParams.data['_SCRATCHPAD_NOTES'] = this._scratchpadManager.GetNotes() || '_(no notes yet)_';
                 promptParams.data['_SCRATCHPAD_TASKS'] = this._scratchpadManager.ToPromptString();
                 promptParams.data['_SCRATCHPAD_TASK_SUMMARY'] = this._scratchpadManager.GetTaskSummary();
+            }
+
+            // Inject artifact tools template variables if enabled and artifacts are present
+            const artifactToolsEnabled = agentTypePromptParams?.includeArtifactToolsDocs !== false;
+            if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
+                promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
+                promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
+                promptParams.data['_ARTIFACT_TOOL_RESULTS'] = this._artifactToolManager.GetPendingResults();
+                promptParams.data['_ARTIFACT_TOOL_SUMMARY'] = this._artifactToolManager.GetSummary();
+                this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
+            } else if (this._artifactToolManager.HasArtifacts()) {
+                this.logStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`, true, params);
+            }
+
+            // Pass file artifacts as candidate native file inputs.
+            // The AIPromptRunner will check these against the resolved driver's
+            // FileCapabilities and attach qualifying files as native content blocks.
+            // When the driver doesn't support a file type, the runner falls back to
+            // the pre-extracted TextContent on each candidate.
+            if (this._artifactToolManager.HasArtifacts()) {
+                promptParams.nativeFileInputs = await this._artifactToolManager.GetNativeFileInputCandidates();
             }
         }
 
@@ -2937,14 +2975,38 @@ export class BaseAgent {
         errorMessage: string,
         config?: AgentConfiguration
     ): { isConfigError: boolean; detailedMessage: string } {
+        // Extract the property name from the error up front — used by the
+        // narrowed classifier below to decide whether this is a genuine config
+        // issue or a generic runtime exception that should bubble up normally.
+        const propertyMatch = errorMessage.match(/reading '(\w+)'/i);
+        const accessedProperty = propertyMatch ? propertyMatch[1].toLowerCase() : '';
+
+        // Only `.map/.x on undefined` errors that reference config-related
+        // properties are treated as configuration errors. Generic runtime
+        // errors (e.g. a tool handler crashing on `rows.map`) should not
+        // terminate the run as "unrecoverable config issue" — they should
+        // fail the step and let the agent try to recover.
+        const CONFIG_RELATED_PROPERTIES = new Set([
+            'prompt', 'childprompt', 'systemprompt', 'prompts',
+            'agent', 'agents', 'agenttype', 'agenttypes',
+            'model', 'models', 'vendor', 'vendors',
+            'template', 'templates',
+        ]);
+        const isConfigRelatedProperty = accessedProperty !== ''
+            && CONFIG_RELATED_PROPERTIES.has(accessedProperty);
+
         // Check for common configuration error patterns
         const configErrorPatterns = [
             {
-                pattern: /cannot read propert(y|ies) of (undefined|null)/i,
+                // Only match when the accessed property is config-related.
+                // Without this guard, any runtime `.map on undefined` (e.g.
+                // in an artifact tool handler) gets misclassified as a fatal
+                // configuration error and the agent run terminates.
+                pattern: isConfigRelatedProperty
+                    ? /cannot read propert(y|ies) of (undefined|null)/i
+                    : /__NEVER_MATCH_GENERIC_UNDEFINED_ACCESS__/,
                 getMessage: () => {
-                    // Try to extract what property was being accessed
-                    const propertyMatch = errorMessage.match(/reading '(\w+)'/i);
-                    const property = propertyMatch ? propertyMatch[1] : 'unknown property';
+                    const property = accessedProperty || 'unknown property';
 
                     let details = `Attempted to access property '${property}' on an undefined or null object.`;
 
@@ -3929,7 +3991,8 @@ The context is now within limits. Please retry your request with the recovered c
             { docsFlag: 'includeCommandDocs', responseTypeKey: 'commands' },
             { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
             { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' },
-            { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' }
+            { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' },
+            { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' }
         ];
 
         for (const { docsFlag, responseTypeKey } of alignmentMappings) {
@@ -5767,6 +5830,16 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
+            // Execute artifact tool calls if provided (zero turn cost — processed inline)
+            const artifactToolCalls = initialNextStep.artifactToolCalls as ArtifactToolCall[] | undefined;
+            const artifactToolsExecutedThisTurn = !!(artifactToolCalls?.length);
+            if (artifactToolsExecutedThisTurn) {
+                this.logStatus(`[ArtifactTools] LLM requested ${artifactToolCalls!.length} tool call(s): ${artifactToolCalls!.map(c => `${c.artifactId}.${c.tool}`).join(', ')}`, true, params);
+                await this._artifactToolManager.ExecuteToolCalls(artifactToolCalls!);
+            } else if (this._artifactToolManager.HasArtifacts()) {
+                this.logStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`, true, params);
+            }
+
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if
             // validation fails
             const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
@@ -5790,6 +5863,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // Include scratchpad snapshot after changes for audit/training data
                 ...(this._scratchpadManager.HasContent() && {
                     scratchpad: this._scratchpadManager.ToJSON()
+                }),
+                // Include artifact tools snapshot for audit/training data
+                ...(this._artifactToolManager.HasArtifacts() && {
+                    artifactTools: this._artifactToolManager.ToJSON()
                 }),
                 // Include memory attribution for observability
                 // This tracks which notes/examples were injected and influenced this step
@@ -5829,6 +5906,15 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Return based on next step
             if (updatedNextStep.step === 'Chat') {
+                // If artifact tools were called THIS turn, don't terminate yet — the LLM
+                // needs one more turn to see the results and incorporate them into its response.
+                // Without this, the tool results are wasted because the run exits before
+                // the LLM ever sees them.
+                if (artifactToolsExecutedThisTurn && this._artifactToolManager.HasArtifacts()) {
+                    this.logStatus(`[ArtifactTools] Chat step included tool calls — forcing one more turn so LLM can use results`, true, params);
+                    return { ...updatedNextStep, terminate: false, step: 'Retry' as BaseAgentNextStep<P>['step'] };
+                }
+
                 // For root agents, create a persistent AIAgentRequest so the request is
                 // tracked in the dashboard and can be responded to outside a conversation.
                 // This is done here because Chat decisions from executePromptStep terminate

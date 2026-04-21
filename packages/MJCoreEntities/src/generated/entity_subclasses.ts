@@ -7274,7 +7274,7 @@ export const MJArtifactTypeSchema = z.object({
         * * Description: Parent artifact type ID for hierarchical artifact type organization. Child types inherit ExtractRules from parent but can override.`),
     ExtractRules: z.string().nullable().describe(`
         * * Field Name: ExtractRules
-        * * Display Name: Extract Rules
+        * * Display Name: Extraction Rules
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.`),
     DriverClass: z.string().nullable().describe(`
@@ -7297,6 +7297,11 @@ export const MJArtifactTypeSchema = z.object({
     *   * File
     *   * Text
         * * Description: Classifies whether this artifact type stores text content ('Text', the default for all existing types) or a binary file in MJStorage ('File'). Used by AgentRunner and viewer components to route file-based artifacts correctly.`),
+    ToolLibraryClass: z.string().nullable().describe(`
+        * * Field Name: ToolLibraryClass
+        * * Display Name: Tool Library Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Class name for the BaseArtifactToolLibrary subclass that provides type-specific artifact exploration tools for agents. Resolved via ClassFactory. When NULL, ArtifactToolManager uses name-based fallback resolution.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -44674,7 +44679,7 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
 
     /**
     * * Field Name: ExtractRules
-    * * Display Name: Extract Rules
+    * * Display Name: Extraction Rules
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.
     */
@@ -44727,6 +44732,19 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
     }
     set ContentCategory(value: 'File' | 'Text') {
         this.Set('ContentCategory', value);
+    }
+
+    /**
+    * * Field Name: ToolLibraryClass
+    * * Display Name: Tool Library Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Class name for the BaseArtifactToolLibrary subclass that provides type-specific artifact exploration tools for agents. Resolved via ClassFactory. When NULL, ArtifactToolManager uses name-based fallback resolution.
+    */
+    get ToolLibraryClass(): string | null {
+        return this.Get('ToolLibraryClass');
+    }
+    set ToolLibraryClass(value: string | null) {
+        this.Set('ToolLibraryClass', value);
     }
 
     /**

@@ -2,8 +2,9 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef 
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
-import { RunView } from '@memberjunction/core';
+import { DataSnapshot, RunView } from '@memberjunction/core';
 import { MJArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
+import { createJsonSnapshot } from '../../snapshot-helpers';
 
 /**
  * Viewer component for JSON artifacts.
@@ -386,6 +387,10 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         console.error('Failed to copy to clipboard:', err);
       });
     }
+  }
+
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    return createJsonSnapshot(this.getRawContent(), this.getDisplayTitle());
   }
 
   /**
