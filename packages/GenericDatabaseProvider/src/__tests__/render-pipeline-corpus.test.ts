@@ -1036,6 +1036,193 @@ JOIN {{query:"Core/OrgTreeB"}} [b] ON [a].[ID] = [b].[ID]`,
 });
 
 // ════════════════════════════════════════════════════════════════════
+// Comment Stripping in Composition Pipeline
+// ════════════════════════════════════════════════════════════════════
+
+describe('Comment stripping in composition pipeline', () => {
+
+    it('strips comments from dep SQL containing {{ }} documentation examples', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'DocumentedDep', CategoryPath: '/Test/', UsesTemplate: true, SQL:
+`-- Canonical data source. Compose via {{query:"Test/DocumentedDep"}}
+-- Parameters: Region (optional)
+/* Example usage:
+   SELECT * FROM {{query:"Test/DocumentedDep(Region='West')"}} d
+*/
+SELECT [ID], [Name]
+FROM [data].[vwRecords]
+{% if Region %}
+WHERE [Region] = {{ Region | sqlString }}
+{% endif %}`,
+        }];
+        const result = RenderPipeline.Run(
+            `SELECT [d].[Name] FROM {{query:"Test/DocumentedDep(Region=Region)"}} [d]`,
+            { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps,
+              UsesTemplate: true, Parameters: { Region: 'West' } }
+        );
+        expect(result.HasCompositions).toBe(true);
+        // Comments stripped — no comment text in final SQL
+        expect(result.FinalSQL).not.toContain('Canonical data source');
+        expect(result.FinalSQL).not.toContain('Example usage');
+        // Template tokens resolved
+        expect(result.FinalSQL).toContain("'West'");
+        expect(result.FinalSQL).not.toMatch(/\{\{[^}]*\}\}/);
+        expect(result.FinalSQL).not.toMatch(/\{%[^%]*%\}/);
+    });
+
+    it('strips comments from nested deps (2 layers deep)', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [
+            {
+                Name: 'InnerDep', CategoryPath: '/Core/', UsesTemplate: true, SQL:
+`-- Inner dep: provides base member data
+-- {{ MemberType }} determines the filter
+SELECT [ID], [Name], [MemberTypeCode]
+FROM [ym].[vwMembers]
+{% if MemberType %}
+WHERE [MemberTypeCode] = {{ MemberType | sqlString }}
+{% endif %}`,
+            },
+            {
+                Name: 'OuterDep', CategoryPath: '/Analytics/', UsesTemplate: true, SQL:
+`/* Outer dep that composes InnerDep.
+   Call via {{query:"Analytics/OuterDep(MemberType='Regular')"}}
+*/
+SELECT [m].[Name], COUNT(*) AS [Total]
+FROM {{query:"Core/InnerDep(MemberType=MemberType)"}} [m]
+GROUP BY [m].[Name]`,
+                Dependencies: [{
+                    Name: 'InnerDep', CategoryPath: '/Core/', UsesTemplate: true, SQL:
+`-- Inner dep: provides base member data
+-- {{ MemberType }} determines the filter
+SELECT [ID], [Name], [MemberTypeCode]
+FROM [ym].[vwMembers]
+{% if MemberType %}
+WHERE [MemberTypeCode] = {{ MemberType | sqlString }}
+{% endif %}`,
+                }],
+            },
+        ];
+        const result = RenderPipeline.Run(
+            `SELECT [od].[Name], [od].[Total]
+FROM {{query:"Analytics/OuterDep(MemberType=MemberType)"}} [od]
+ORDER BY [od].[Total] DESC`,
+            { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps,
+              UsesTemplate: true, Parameters: { MemberType: 'Regular' } }
+        );
+        expect(result.HasCompositions).toBe(true);
+        // No comments from ANY level should survive to final SQL
+        expect(result.FinalSQL).not.toContain('Inner dep');
+        expect(result.FinalSQL).not.toContain('Outer dep');
+        expect(result.FinalSQL).not.toContain('determines the filter');
+        // No {{ }} or {% %} tokens in final SQL
+        expect(result.FinalSQL).not.toMatch(/\{\{[^}]*\}\}/);
+        expect(result.FinalSQL).not.toMatch(/\{%[^%]*%\}/);
+        // Template resolved
+        expect(result.FinalSQL).toContain("'Regular'");
+        // Outer ORDER BY preserved
+        expect(result.FinalSQL).toContain('ORDER BY');
+    });
+
+    it('strips "ORDER BY" from dep comment so it does not trigger false-positive stripping', () => {
+        setupNoMetadata();
+        const deps: QueryDependencySpec[] = [{
+            Name: 'CommentedDep', CategoryPath: '/Test/', UsesTemplate: true, SQL:
+`/*
+  Canonical data source for engagement metrics.
+  No ORDER BY / TOP -- composable. Callers add their own ORDER BY.
+*/
+SELECT [ID], [Name], [Score]
+FROM [data].[vwScores]
+{% if MinScore %}
+WHERE [Score] >= {{ MinScore | sqlNumber }}
+{% endif %}`,
+        }];
+        const result = RenderPipeline.Run(
+            `SELECT [d].[Name], [d].[Score]
+FROM {{query:"Test/CommentedDep(MinScore=MinScore)"}} [d]
+ORDER BY [d].[Score] DESC`,
+            { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps,
+              UsesTemplate: true, Parameters: { MinScore: '50' } }
+        );
+        // Comment with "ORDER BY" stripped — no truncation (Bug A)
+        expect(result.FinalSQL).toContain('[data].[vwScores]');
+        expect(result.FinalSQL).not.toContain('Canonical data source');
+        expect(result.FinalSQL).not.toContain('No ORDER BY');
+        // Template resolved
+        expect(result.FinalSQL).toContain('50');
+        // Outer ORDER BY preserved
+        expect(result.FinalSQL).toContain('ORDER BY [d].[Score] DESC');
+    });
+
+    it('strips "ORDER BY" comments from nested dep (2 layers deep)', () => {
+        setupNoMetadata();
+        const innerDep: QueryDependencySpec = {
+            Name: 'BaseScores', CategoryPath: '/Core/', UsesTemplate: true, SQL:
+`/*
+  Base scoring query. No ORDER BY / TOP -- composable.
+  Callers: {{query:"Core/BaseScores(MinScore='0')"}}
+*/
+SELECT [ID], [Name], [Score]
+FROM [data].[vwScores]
+{% if MinScore %}
+WHERE [Score] >= {{ MinScore | sqlNumber }}
+{% endif %}`,
+        };
+        const outerDep: QueryDependencySpec = {
+            Name: 'TopScorers', CategoryPath: '/Analytics/', UsesTemplate: true, SQL:
+`-- Aggregates BaseScores. ORDER BY added by caller.
+SELECT [bs].[Name], SUM([bs].[Score]) AS [TotalScore]
+FROM {{query:"Core/BaseScores(MinScore=MinScore)"}} [bs]
+GROUP BY [bs].[Name]`,
+            Dependencies: [innerDep],
+        };
+        const result = RenderPipeline.Run(
+            `SELECT [ts].[Name], [ts].[TotalScore]
+FROM {{query:"Analytics/TopScorers(MinScore=MinScore)"}} [ts]
+ORDER BY [ts].[TotalScore] DESC`,
+            { Platform: 'sqlserver', ContextUser: mockUser,
+              Dependencies: [innerDep, outerDep],
+              UsesTemplate: true, Parameters: { MinScore: '10' } }
+        );
+        expect(result.HasCompositions).toBe(true);
+        // No comments from either dep level in final SQL
+        expect(result.FinalSQL).not.toContain('Base scoring query');
+        expect(result.FinalSQL).not.toContain('No ORDER BY');
+        expect(result.FinalSQL).not.toContain('Aggregates BaseScores');
+        expect(result.FinalSQL).not.toContain('{{query:');
+        // Template resolved at both levels
+        expect(result.FinalSQL).toContain('10');
+        expect(result.FinalSQL).not.toMatch(/\{\{[^}]*\}\}/);
+        // Outer ORDER BY preserved
+        expect(result.FinalSQL).toContain('ORDER BY [ts].[TotalScore] DESC');
+    });
+
+    it('strips comments from outer query before Nunjucks', () => {
+        setupNoMetadata();
+        const result = RenderPipeline.Run(
+            `-- Dashboard query: shows active users
+/* Parameters:
+   - Status: filter by user status
+   - Compose with {{query:"..."}} for additional context
+*/
+SELECT [ID], [Name]
+FROM [__mj].[vwUsers]
+WHERE [Status] = {{ Status | sqlString }}`,
+            { Platform: 'sqlserver', ContextUser: mockUser,
+              UsesTemplate: true, Parameters: { Status: 'Active' } }
+        );
+        // Comments stripped
+        expect(result.FinalSQL).not.toContain('Dashboard query');
+        expect(result.FinalSQL).not.toContain('Parameters:');
+        expect(result.FinalSQL).not.toContain('{{query:');
+        // Template resolved
+        expect(result.FinalSQL).toContain("'Active'");
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
 // Helpers
 // ════════════════════════════════════════════════════════════════════
 

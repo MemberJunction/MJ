@@ -2,7 +2,7 @@ import { DatabasePlatform, UserInfo, QueryDependencySpec, QueryParameterInfo } f
 import { GetDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
 import { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
-import { QueryParameterProcessor } from '@memberjunction/query-processor';
+import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunction/query-processor';
 
 // ════════════════════════════════════════════════════════════════════
 // Types
@@ -59,6 +59,10 @@ export interface RenderContext {
     Dependencies?: QueryDependencySpec[];
     /** Original (pre-composition) SQL — used for template input metadata */
     OriginalSQL?: string;
+    /** Full query metadata object (saved query path). When provided, passed
+     *  directly to processQueryTemplate for parameter validation. When omitted,
+     *  a synthetic QueryTemplateInput is built from OriginalSQL + ParameterDefinitions. */
+    QueryInfo?: QueryTemplateInput;
     /** Paging parameters (omit to skip paging) */
     Paging?: { StartRow: number; MaxRows: number };
     /** MaxRows safety limit for transient query testing */
@@ -124,6 +128,14 @@ export class RenderPipeline {
         currentSQL = compositionResult.ResolvedSQL;
         const afterComposition = currentSQL;
         const compositionDiagnostics = buildCompositionDiagnostics(compositionResult);
+
+        // ── Step 1.5: Strip SQL comments ─────────────────────────────
+        // Comments serve no runtime purpose in executed SQL and can contain
+        // {{ }} patterns (e.g. documentation examples) that would crash
+        // Nunjucks. Strip them after composition (which correctly ignores
+        // comment-embedded tokens) and before Nunjucks processes the SQL.
+        // Comments are still visible in Trace.AfterComposition for debugging.
+        currentSQL = RenderPipeline.stripSQLComments(currentSQL);
 
         // ── Step 2: Nunjucks template evaluation ─────────────────────
         const templateResult = RenderPipeline.runTemplates(currentSQL, sql, ctx, compositionResult);
@@ -224,7 +236,10 @@ export class RenderPipeline {
             return { processedSQL: composedSQL, appliedParameters: {} };
         }
 
-        const templateInput = {
+        // Build the template input. When a QueryInfo object is provided (saved
+        // query path), pass it directly so processQueryTemplate gets the real
+        // Parameters array for validation. Otherwise build a synthetic input.
+        const templateInput = ctx.QueryInfo ?? {
             SQL: ctx.OriginalSQL ?? originalSQL,
             UsesTemplate: ctx.UsesTemplate ?? false,
             Parameters: ctx.ParameterDefinitions ?? [],
@@ -273,6 +288,54 @@ export class RenderPipeline {
 
     private static getDialect(platform: DatabasePlatform): SQLDialect {
         return GetDialect(platform);
+    }
+
+    /**
+     * Strips SQL comments (single-line -- and block comments) from a SQL string.
+     * Preserves single-quoted string literals to avoid stripping inside them.
+     */
+    private static stripSQLComments(sql: string): string {
+        let result = '';
+        let i = 0;
+
+        while (i < sql.length) {
+            // Single-quoted string literal — preserve as-is
+            if (sql[i] === "'") {
+                result += sql[i++];
+                while (i < sql.length) {
+                    if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") {
+                        result += "''";
+                        i += 2;
+                    } else if (sql[i] === "'") {
+                        result += sql[i++];
+                        break;
+                    } else {
+                        result += sql[i++];
+                    }
+                }
+            }
+            // Single-line comment: -- to end of line
+            else if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
+                while (i < sql.length && sql[i] !== '\n') i++;
+            }
+            // Block comment: /* ... */
+            else if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
+                i += 2;
+                while (i < sql.length) {
+                    if (sql[i] === '*' && i + 1 < sql.length && sql[i + 1] === '/') {
+                        i += 2;
+                        break;
+                    }
+                    i++;
+                }
+            }
+            // Normal character
+            else {
+                result += sql[i++];
+            }
+        }
+
+        return result;
     }
 }
 

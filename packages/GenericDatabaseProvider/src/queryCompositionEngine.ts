@@ -214,12 +214,9 @@ export class QueryCompositionEngine {
             finalSQL = this.assembleCTEs(cteEntries, resolvedSQL, platform);
         }
 
-        // If any dependency uses templates, Nunjucks will run on the resolved SQL.
-        // Neutralize any {{ }} patterns inside SQL comments so Nunjucks doesn't
-        // try to parse them as template expressions (e.g. -- Demonstrates {{query:"..."}}).
-        if (templateFlag.value) {
-            finalSQL = this.escapeTemplateTokensInComments(finalSQL);
-        }
+        // Comment-embedded {{ }} tokens (e.g. -- Example: {{query:"..."}}) are
+        // handled by the pipeline: RenderPipeline strips SQL comments before
+        // Nunjucks runs, so they never reach the template evaluator.
 
         return {
             ResolvedSQL: finalSQL,
@@ -294,8 +291,13 @@ export class QueryCompositionEngine {
                 continue;
             }
 
-            // Get platform-specific SQL for the referenced query
-            const refSQL = referencedQuery.GetPlatformSQL(platform);
+            // Get platform-specific SQL for the referenced query.
+            // Strip SQL comments immediately — they serve no runtime purpose and
+            // can contain {{ }} patterns that confuse substituteStaticParams,
+            // Nunjucks, or ORDER BY detection. The pipeline also strips comments
+            // from the outer query before Nunjucks, but dep SQL enters here
+            // before it reaches the pipeline's comment-stripping step.
+            const refSQL = this.stripSQLComments(referencedQuery.GetPlatformSQL(platform));
 
             // Substitute static parameter values directly into the referenced query's SQL
             const paramSubstitutedSQL = this.substituteStaticParams(refSQL, resolvedParams);
@@ -913,63 +915,4 @@ export class QueryCompositionEngine {
         return result;
     }
 
-    /**
-     * Escapes {{ and }} inside SQL comments so that Nunjucks doesn't try to parse them.
-     * This is needed because dependency queries may carry comments containing
-     * {{query:"..."}} examples or documentation that would otherwise cause
-     * Nunjucks "expected variable end" errors.
-     *
-     * Only modifies content inside -- single-line and block comments.
-     * Leaves string literals and normal SQL untouched.
-     */
-    public escapeTemplateTokensInComments(sql: string): string {
-        let result = '';
-        let i = 0;
-
-        while (i < sql.length) {
-            // Single-quoted string literal — preserve as-is
-            if (sql[i] === "'") {
-                result += sql[i++];
-                while (i < sql.length) {
-                    if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") {
-                        result += "''";
-                        i += 2;
-                    } else if (sql[i] === "'") {
-                        result += sql[i++];
-                        break;
-                    } else {
-                        result += sql[i++];
-                    }
-                }
-            }
-            // Single-line comment: -- to end of line — escape {{ and }} inside
-            else if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
-                let comment = '';
-                while (i < sql.length && sql[i] !== '\n') {
-                    comment += sql[i++];
-                }
-                result += comment.replace(/\{\{/g, '{ {').replace(/\}\}/g, '} }');
-            }
-            // Block comment: /* ... */ — escape {{ and }} inside
-            else if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
-                let comment = '/*';
-                i += 2;
-                while (i < sql.length) {
-                    if (sql[i] === '*' && i + 1 < sql.length && sql[i + 1] === '/') {
-                        comment += '*/';
-                        i += 2;
-                        break;
-                    }
-                    comment += sql[i++];
-                }
-                result += comment.replace(/\{\{/g, '{ {').replace(/\}\}/g, '} }');
-            }
-            // Normal character
-            else {
-                result += sql[i++];
-            }
-        }
-
-        return result;
-    }
 }
