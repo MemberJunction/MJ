@@ -38,6 +38,7 @@
     "@playwright/test": "^1.58.1",
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
+    "@memberjunction/sql-dialect": "5.28.0",
     "@memberjunction/sql-parser": "5.28.0",
     "ora": "^9.3.0",
     "playwright": "^1.58.1",

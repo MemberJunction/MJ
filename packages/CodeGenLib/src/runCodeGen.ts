@@ -161,28 +161,28 @@ export class RunCodeGenBase {
    * Does NOT create a new DB connection or call process.exit().
    * Designed for use by RuntimeSchemaManager inside a running MJAPI process.
    */
-  public async RunInProcess(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false, workingDirectory?: string): Promise<boolean> {
+  public async RunInProcess(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false, workingDirectory?: string, skipFileGeneration: boolean = false): Promise<boolean> {
     try {
       // Re-initialize config from the specified working directory (e.g. repo root)
       // so CodeGen picks up the correct mj.config.cjs with output directories
       if (workingDirectory) {
         initializeConfig(workingDirectory);
       }
-      return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration);
+      return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
     } catch (e) {
       logError('In-process CodeGen failed: ' + e);
       return false;
     }
   }
 
-  public async Run(skipDatabaseGeneration: boolean = false) {
+  public async Run(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
     try {
       const startTime = new Date();
       const platform = dbType();
       startSpinner('Starting MemberJunction CodeGen (' + platform + ') @ ' + startTime.toLocaleString());
 
       const dataSource = await this.setupDataSource();
-      const success = await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration);
+      const success = await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
       process.exit(success ? 0 : 1);
     } catch (e) {
       failSpinner('CodeGen failed: ' + e);
@@ -195,7 +195,7 @@ export class RunCodeGenBase {
    * Core CodeGen pipeline logic shared by Run() and RunInProcess().
    * Accepts an existing data source — does NOT create connections or call process.exit().
    */
-  protected async executeCodeGenPipeline(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false): Promise<boolean> {
+  protected async executeCodeGenPipeline(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false): Promise<boolean> {
       const { provider, connection: conn, currentUser } = dataSource;
       const startTime = new Date();
 
@@ -281,6 +281,53 @@ export class RunCodeGenBase {
         }
       }
 
+      const skipFiles = skipFileGeneration || getSettingValue('skip_file_generation', false);
+      if (skipFiles) {
+        warnSpinner('Skipping file generation (skip_file_generation = true)');
+        SQLLogging.finishSQLLogging();
+      } else if (!(await this.runFileGenerationPhase(conn, currentUser, md, skipDB))) {
+        return false;
+      }
+
+      startSpinner('Running system integrity checks...');
+      await SystemIntegrityBase.RunIntegrityChecks(conn, true);
+      succeedSpinner('System integrity checks completed');
+
+      const afterCommands = commands('AFTER');
+      if (afterCommands && afterCommands.length > 0) {
+        startSpinner('Executing AFTER commands...');
+        const results = await runCommandsObject.runCommands(afterCommands);
+        if (results.some((r) => !r.success)) failSpinner('ERROR running one or more AFTER commands');
+        else succeedSpinner('AFTER commands completed');
+      }
+
+      if (!skipDB) {
+        startSpinner('Executing after-all SQL Scripts...');
+        if (!(await sqlCodeGenObject.runCustomSQLScripts(conn, 'after-all'))) failSpinner('ERROR running after-all SQL Scripts');
+        else succeedSpinner('After-all SQL Scripts completed');
+      }
+
+      const endTime = new Date();
+      const totalSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
+      logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
+      return true;
+  }
+
+  /**
+   * Runs the file-generation phase of CodeGen: GraphQL resolvers, entity
+   * subclasses (core + non-core), Angular components, DB schema JSON, and
+   * action subclasses. Extracted so the caller can skip this phase entirely
+   * via `--skipfiles` / `skip_file_generation = true` without re-indenting
+   * the existing generator logic.
+   *
+   * @returns true on success, false if any generator reported a fatal error.
+   */
+  protected async runFileGenerationPhase(
+    conn: CodeGenConnection,
+    currentUser: UserInfo,
+    md: MJ.Metadata,
+    skipDB: boolean,
+  ): Promise<boolean> {
       const apiEntities = md.Entities.filter((e) => e.IncludeInAPI);
       const excludedSchemaNames = configInfo.excludeSchemas.map(s => s.toLowerCase());
       const includedEntities = apiEntities.filter(
@@ -412,28 +459,6 @@ export class RunCodeGenBase {
 
       SQLLogging.finishSQLLogging();
       if (!isVerbose) succeedSpinner('TypeScript code generation completed');
-
-      startSpinner('Running system integrity checks...');
-      await SystemIntegrityBase.RunIntegrityChecks(conn, true);
-      succeedSpinner('System integrity checks completed');
-
-      const afterCommands = commands('AFTER');
-      if (afterCommands && afterCommands.length > 0) {
-        startSpinner('Executing AFTER commands...');
-        const results = await runCommandsObject.runCommands(afterCommands);
-        if (results.some((r) => !r.success)) failSpinner('ERROR running one or more AFTER commands');
-        else succeedSpinner('AFTER commands completed');
-      }
-
-      if (!skipDB) {
-        startSpinner('Executing after-all SQL Scripts...');
-        if (!(await sqlCodeGenObject.runCustomSQLScripts(conn, 'after-all'))) failSpinner('ERROR running after-all SQL Scripts');
-        else succeedSpinner('After-all SQL Scripts completed');
-      }
-
-      const endTime = new Date();
-      const totalSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
-      logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
       return true;
   }
 }
@@ -441,7 +466,7 @@ export class RunCodeGenBase {
 /**
  * Convenience function to run the MemberJunction code generation process.
  */
-export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false) {
+export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
   const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
-  return await runObject.Run(skipDatabaseGeneration);
+  return await runObject.Run(skipDatabaseGeneration, skipFileGeneration);
 }
