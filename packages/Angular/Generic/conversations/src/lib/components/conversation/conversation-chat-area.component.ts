@@ -13,7 +13,7 @@ import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
-import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
+import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService } from '@memberjunction/ng-artifacts';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
@@ -293,7 +293,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private attachmentService: ConversationAttachmentService,
     private streamingService: ConversationStreamingService,
     private confirmDialog: ConversationsDialogService,
-    private bridge: ConversationBridgeService
+    private bridge: ConversationBridgeService,
+    private analyzeArtifactService: AnalyzeArtifactService
   ) {}
 
   async ngOnInit() {
@@ -2125,25 +2126,57 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   /**
    * Handle Analyze button click from the artifact viewer panel.
    *
-   * In-conversation flow (per design doc Section 8.8): "The user simply types
-   * their next message in the same conversation. The existing agent continues
-   * the conversation with the artifact already available."
+   * Persists the captured snapshot as a new Data Snapshot artifact and attaches
+   * it to the user's in-progress message as a pending attachment chip (same UX
+   * as image/file uploads). On send, the existing attachment pipeline creates
+   * a `ConversationDetailArtifact` with Direction='Input'; AgentRunner then
+   * picks it up via `gatherConversationArtifacts` and resolves the
+   * DataSnapshotToolLibrary for tool calls.
    *
-   * All artifacts in the conversation are automatically gathered by
-   * AgentRunner.gatherConversationArtifacts() when the agent run starts.
-   * This handler just sends a contextual analysis prompt.
+   * Falls back to plain message prefill if snapshot persistence fails — the
+   * user can still ask questions about the artifact that's already attached
+   * to the prior conversation turn.
    */
-  OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): void {
+  async OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
     if (!this.conversationId || !this.currentUser) return;
 
-    // Pre-fill the message input with a contextual prompt so the user
-    // can edit or add their own question before sending.
-    // AgentRunner automatically gathers all conversation artifacts when the run starts.
-    const title = event.snapshot.title || 'this data';
     const messageInput = this.getActiveMessageInputComponent();
-    if (messageInput) {
-      messageInput.messageText = `Analyze "${title}" — `;
-      messageInput.inputBox?.focus();
+    const snapshotTitle = event.snapshot.title || 'Untitled Snapshot';
+
+    try {
+      const result = await this.analyzeArtifactService.CreateSnapshotArtifact({
+        snapshot: event.snapshot,
+        currentUser: this.currentUser,
+        environmentId: this.environmentId,
+      });
+
+      if (messageInput) {
+        const rowCount = (event.snapshot.tables ?? []).reduce(
+          (sum, t) => sum + (t.rows?.length ?? 0),
+          0,
+        );
+        const serialized = JSON.stringify(event.snapshot);
+        messageInput.inputBox?.mentionEditor?.AddArtifactAttachment({
+          fileID: '',
+          fileName: rowCount > 0
+            ? `📸 ${result.title} · ${rowCount.toLocaleString()} rows`
+            : `📸 ${result.title}`,
+          mimeType: 'application/json',
+          sizeBytes: serialized.length,
+          artifactVersionId: result.artifactVersionId,
+        });
+        messageInput.messageText = `Analyze "${result.title}" — `;
+        messageInput.inputBox?.focus();
+      }
+    } catch (error) {
+      LogStatusEx({
+        message: `[OnAnalyzeArtifact] CreateSnapshotArtifact failed: ${error instanceof Error ? error.message : String(error)}`,
+        verboseOnly: false,
+      });
+      if (messageInput) {
+        messageInput.messageText = `Analyze "${snapshotTitle}" — `;
+        messageInput.inputBox?.focus();
+      }
     }
   }
 

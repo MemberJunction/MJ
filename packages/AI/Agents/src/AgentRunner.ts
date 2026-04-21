@@ -11,7 +11,7 @@
  */
 
 import { createHash } from 'crypto';
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, ActionStepOutputData, ActionStepSummary, ParseFileOutputRef } from '@memberjunction/ai-core-plus';
@@ -20,6 +20,22 @@ import { InputArtifact } from './ArtifactToolManager';
 import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
+/**
+ * Row shape returned by the `GetArtifactVersionsByID` stored query.
+ * Joins vwArtifactVersions → vwArtifacts → vwArtifactTypes so one
+ * round-trip gives us everything `gatherConversationArtifacts` needs.
+ */
+interface ArtifactVersionRow {
+    VersionID: string;
+    VersionName: string | null;
+    ContentMode: 'File' | 'Text';
+    FileID: string | null;
+    Content: string | null;
+    MimeType: string | null;
+    ArtifactName: string;
+    TypeName: string;
+    ToolLibraryClass: string | null;
+}
 
 /**
  * AgentRunner provides a thin wrapper for executing AI agents.
@@ -1572,11 +1588,12 @@ export class AgentRunner {
             const detailIds = details.Results.map((d) => d.ID);
 
             // Get all artifact junctions for these conversation details
-            const junctions = await rv.RunView<MJConversationDetailArtifactEntity>(
+            const junctions = await rv.RunView<{ ID: string; ArtifactVersionID: string | null }>(
                 {
                     EntityName: 'MJ: Conversation Detail Artifacts',
                     ExtraFilter: `ConversationDetailID IN ('${detailIds.join("','")}')`,
-                    ResultType: 'entity_object',
+                    Fields: ['ID', 'ArtifactVersionID'],
+                    ResultType: 'simple',
                 },
                 contextUser,
             );
@@ -1595,32 +1612,42 @@ export class AgentRunner {
                 : [];
 
             const inputArtifacts: InputArtifact[] = [];
-            const md = new Metadata();
 
-            for (const junction of uniqueJunctions) {
-                const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', contextUser);
-                if (await version.Load(junction.ArtifactVersionID)) {
-                    const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
-                    if (await artifact.Load(version.ArtifactID)) {
-                        // ToolLibraryClass comes from the ArtifactType entity via the view join.
-                        // Available after migration V202604140029 + CodeGen regenerates the view.
-                        // Until then, falls back to name-based resolution in ArtifactToolManager.
-                        const toolLibraryClass = artifact.Get('ToolLibraryClass') as string | undefined;
-                        const artifactName = version.Name || artifact.Name || 'Untitled';
-                        const typeName = artifact.Type || 'Text';
+            if (uniqueJunctions.length > 0) {
+                const versionIds = uniqueJunctions.map((j) => j.ArtifactVersionID);
+
+                const rq = new RunQuery();
+                const versionResult = await rq.RunQuery(
+                    {
+                        QueryName: 'GetArtifactVersionsByID',
+                        CategoryPath: '/MJ/AI/Agents/',
+                        Parameters: { versionIds },
+                    },
+                    contextUser,
+                );
+
+                if (!versionResult.Success) {
+                    LogError(`[AgentRunner] GetArtifactVersionsByID failed: ${versionResult.ErrorMessage}`);
+                } else {
+                    for (const row of versionResult.Results as ArtifactVersionRow[]) {
+                        const artifactName = row.VersionName || row.ArtifactName || 'Untitled';
+                        const typeName = row.TypeName || 'Text';
 
                         let content: string | Buffer = '';
-                        if (version.ContentMode === 'File' && version.FileID) {
-                            // File-backed artifact: download binary from MJStorage
-                            const downloaded = await this.downloadArtifactFileContent(version.FileID, contextUser);
+                        if (row.ContentMode === 'File' && row.FileID) {
+                            const downloaded = await this.downloadArtifactFileContent(row.FileID, contextUser);
                             if (downloaded) {
                                 content = downloaded;
                             } else {
-                                LogError(`[AgentRunner] Failed to download file content for artifact "${artifactName}" (FileID: ${version.FileID})`);
-                                continue; // Skip this artifact — content unavailable
+                                LogError(`[AgentRunner] Failed to download file content for artifact "${artifactName}" (FileID: ${row.FileID})`);
+                                continue;
                             }
                         } else {
-                            content = version.Content || '';
+                            content = row.Content || '';
+                        }
+
+                        if (typeof content === 'string' && content) {
+                            content = await this.hydrateSqlBackedContent(content, contextUser);
                         }
 
                         if (content) {
@@ -1628,8 +1655,8 @@ export class AgentRunner {
                                 name: artifactName,
                                 typeName,
                                 content,
-                                mimeType: version.MimeType ?? undefined,
-                                ...(toolLibraryClass ? { toolLibraryClass } : {}),
+                                mimeType: row.MimeType ?? undefined,
+                                ...(row.ToolLibraryClass ? { toolLibraryClass: row.ToolLibraryClass } : {}),
                             });
                         }
                     }
@@ -1649,11 +1676,18 @@ export class AgentRunner {
                 'application/json',
             ];
 
-            const attachments = await rv.RunView<MJConversationDetailAttachmentEntity>(
+            const attachments = await rv.RunView<{
+                ID: string;
+                MimeType: string | null;
+                FileID: string | null;
+                FileName: string | null;
+                InlineData: string | null;
+            }>(
                 {
                     EntityName: 'MJ: Conversation Detail Attachments',
                     ExtraFilter: `ConversationDetailID IN ('${detailIds.join("','")}')`,
-                    ResultType: 'entity_object',
+                    Fields: ['ID', 'MimeType', 'FileID', 'FileName', 'InlineData'],
+                    ResultType: 'simple',
                 },
                 contextUser,
             );
@@ -1705,6 +1739,71 @@ export class AgentRunner {
             LogError(`[AgentRunner] Failed to gather conversation artifacts: ${error}`);
             return [];
         }
+    }
+
+    /**
+     * Data artifacts from some agents persist the SQL spec (columns +
+     * `metadata.sql`) but not the resulting rows — the rows are re-executed
+     * live by `data-artifact-viewer` at render time. When an agent consumes the
+     * artifact directly there is no render step, so the tool library would see
+     * an empty `rows` array and report zero data.
+     *
+     * This method detects that shape (both the single-table legacy format and
+     * the multi-table `tables[]` format) and executes the stored SQL via
+     * `RunQuery` to inject real rows into the content before it reaches
+     * `ArtifactToolManager`. No-op for binary content, non-JSON content, or
+     * content that already has rows populated.
+     *
+     * Security: `RunQuery` uses the same read-only, `SQLExpressionValidator`-
+     * checked execution path that `data-artifact-viewer` already uses at
+     * render time — identical security posture to the existing view path.
+     */
+    private async hydrateSqlBackedContent(content: string, contextUser: UserInfo): Promise<string> {
+        let parsed: Record<string, unknown>;
+        try {
+            parsed = JSON.parse(content);
+        } catch {
+            return content;
+        }
+
+        let changed = false;
+        const rq = new RunQuery();
+
+        const rootMeta = parsed?.metadata as { sql?: string; rowCount?: number; executionTimeMs?: number } | undefined;
+        const rootRows = parsed?.rows as unknown[] | undefined;
+        if (rootMeta?.sql && (!rootRows || rootRows.length === 0)) {
+            const result = await rq.RunQuery({ SQL: rootMeta.sql }, contextUser);
+            if (result.Success) {
+                parsed.rows = result.Results;
+                parsed.metadata = {
+                    ...rootMeta,
+                    rowCount: result.RowCount,
+                    executionTimeMs: result.ExecutionTime,
+                };
+                changed = true;
+            } else {
+                LogError(`[AgentRunner] hydrateSqlBackedContent root SQL failed: ${result.ErrorMessage}`);
+            }
+        }
+
+        const tables = parsed?.tables as Array<{ metadata?: { sql?: string; rowCount?: number; executionTimeMs?: number }; rows?: unknown[] }> | undefined;
+        if (Array.isArray(tables)) {
+            for (const table of tables) {
+                if (table?.metadata?.sql && (!table.rows || table.rows.length === 0)) {
+                    const result = await rq.RunQuery({ SQL: table.metadata.sql }, contextUser);
+                    if (result.Success) {
+                        table.rows = result.Results;
+                        table.metadata.rowCount = result.RowCount;
+                        table.metadata.executionTimeMs = result.ExecutionTime;
+                        changed = true;
+                    } else {
+                        LogError(`[AgentRunner] hydrateSqlBackedContent table SQL failed: ${result.ErrorMessage}`);
+                    }
+                }
+            }
+        }
+
+        return changed ? JSON.stringify(parsed) : content;
     }
 
     /**

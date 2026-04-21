@@ -35,6 +35,22 @@ interface SnapshotPayload {
 type SearchOperator = 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'contains' | 'startsWith';
 type AggregateOperation = 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct_count';
 
+/**
+ * Structured aggregate result. Always carries the scalar `value`; for
+ * operations where the identity matters (min/max → which row, distinct_count →
+ * which values) the result includes context fields so the LLM doesn't have to
+ * guess or make a follow-up tool call.
+ */
+interface AggregateResult {
+    value: number;
+    /** For min/max — rows whose field value equals the extremum. Capped at 10. */
+    contributingRows?: Array<Record<string, unknown>>;
+    /** For distinct_count — the actual distinct values. Capped at 50. */
+    distinctValues?: unknown[];
+    /** True when `contributingRows` / `distinctValues` was truncated by the cap. */
+    truncated?: boolean;
+}
+
 const VALID_SEARCH_OPERATORS: ReadonlySet<string> = new Set<SearchOperator>([
     'eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'contains', 'startsWith',
 ]);
@@ -100,7 +116,11 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
             },
             {
                 name: 'aggregate',
-                description: 'Computes an aggregate over a field. Operations: sum, avg, count, min, max, distinct_count.',
+                description: 'Computes an aggregate over a field. Operations: sum, avg, count, min, max, distinct_count. ' +
+                    'Returns an object { value, ...context }. For min/max the object also includes `contributingRows` — ' +
+                    'the rows whose field value equals the extremum (so you know WHICH row won, not just the number). ' +
+                    'For distinct_count, the object includes `distinctValues` — the actual distinct values found. ' +
+                    'Use these context fields directly — do not guess the identity from the scalar alone.',
                 inputSchema: {
                     type: 'object',
                     properties: {
@@ -307,22 +327,41 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         rows: Array<Record<string, unknown>>,
         field: string,
         operation: AggregateOperation
-    ): number {
+    ): AggregateResult {
+        const MAX_CONTRIBUTING_ROWS = 10;
+        const MAX_DISTINCT_VALUES = 50;
+
         switch (operation) {
             case 'count':
-                return rows.length;
-            case 'distinct_count':
-                return new Set(rows.map(r => r[field])).size;
+                return { value: rows.length };
+            case 'distinct_count': {
+                const set = new Set<unknown>();
+                for (const row of rows) set.add(row[field]);
+                const all = Array.from(set);
+                const capped = all.slice(0, MAX_DISTINCT_VALUES);
+                const result: AggregateResult = { value: set.size, distinctValues: capped };
+                if (all.length > capped.length) result.truncated = true;
+                return result;
+            }
             case 'sum':
-                return rows.reduce((acc, r) => acc + (r[field] as number), 0);
+                return { value: rows.reduce((acc, r) => acc + (r[field] as number), 0) };
             case 'avg': {
                 const sum = rows.reduce((acc, r) => acc + (r[field] as number), 0);
-                return rows.length > 0 ? sum / rows.length : 0;
+                return { value: rows.length > 0 ? sum / rows.length : 0 };
             }
             case 'min':
-                return Math.min(...rows.map(r => r[field] as number));
-            case 'max':
-                return Math.max(...rows.map(r => r[field] as number));
+            case 'max': {
+                if (rows.length === 0) return { value: 0, contributingRows: [] };
+                const numericValues = rows.map(r => r[field] as number);
+                const extremum = operation === 'min'
+                    ? Math.min(...numericValues)
+                    : Math.max(...numericValues);
+                const matching = rows.filter(r => (r[field] as number) === extremum);
+                const capped = matching.slice(0, MAX_CONTRIBUTING_ROWS);
+                const result: AggregateResult = { value: extremum, contributingRows: capped };
+                if (matching.length > capped.length) result.truncated = true;
+                return result;
+            }
         }
     }
 

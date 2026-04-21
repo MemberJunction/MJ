@@ -223,7 +223,7 @@ describe('DataSnapshotToolLibrary', () => {
                 snapshot
             );
             expect(result.success).toBe(true);
-            expect(result.data).toBe(100000);
+            expect((result.data as { value: number }).value).toBe(100000);
         });
 
         it('should compute avg of a numeric field', async () => {
@@ -234,7 +234,7 @@ describe('DataSnapshotToolLibrary', () => {
             );
             expect(result.success).toBe(true);
             // 100000 / 3 ≈ 33333.33...
-            expect(result.data).toBeCloseTo(33333.33, 0);
+            expect((result.data as { value: number }).value).toBeCloseTo(33333.33, 0);
         });
     });
 
@@ -250,17 +250,20 @@ describe('DataSnapshotToolLibrary', () => {
                 snapshot
             );
             expect(result.success).toBe(true);
-            expect(result.data).toBe(3);
+            expect((result.data as { value: number }).value).toBe(3);
         });
 
-        it('should count distinct values', async () => {
+        it('should count distinct values and return the actual distinct values', async () => {
             const result = await lib.InvokeTool(
                 'aggregate',
                 { table: 'orders', field: 'CustomerID', operation: 'distinct_count' },
                 snapshot
             );
             expect(result.success).toBe(true);
-            expect(result.data).toBe(2);
+            const data = result.data as { value: number; distinctValues?: unknown[] };
+            expect(data.value).toBe(2);
+            expect(data.distinctValues).toHaveLength(2);
+            expect(new Set(data.distinctValues)).toEqual(new Set([1, 2]));
         });
     });
 
@@ -436,24 +439,54 @@ describe('DataSnapshotToolLibrary', () => {
     // -----------------------------------------------------------------------
 
     describe('aggregate — min and max', () => {
-        it('should compute min of a numeric field', async () => {
+        it('should compute min of a numeric field and return the contributing row', async () => {
             const result = await lib.InvokeTool(
                 'aggregate',
                 { table: 'customers', field: 'Revenue', operation: 'min' },
                 snapshot
             );
             expect(result.success).toBe(true);
-            expect(result.data).toBe(20000);
+            const data = result.data as { value: number; contributingRows?: Array<Record<string, unknown>> };
+            expect(data.value).toBe(20000);
+            expect(data.contributingRows).toHaveLength(1);
+            expect(data.contributingRows![0]).toMatchObject({ Revenue: 20000 });
         });
 
-        it('should compute max of a numeric field', async () => {
+        it('should compute max of a numeric field and return the contributing row', async () => {
             const result = await lib.InvokeTool(
                 'aggregate',
                 { table: 'customers', field: 'Revenue', operation: 'max' },
                 snapshot
             );
             expect(result.success).toBe(true);
-            expect(result.data).toBe(50000);
+            const data = result.data as { value: number; contributingRows?: Array<Record<string, unknown>> };
+            expect(data.value).toBe(50000);
+            expect(data.contributingRows).toHaveLength(1);
+            expect(data.contributingRows![0]).toMatchObject({ Name: 'Acme Corp', Revenue: 50000 });
+        });
+
+        it('should return multiple contributing rows when several tie on the extremum', async () => {
+            const tiedSnapshot = JSON.stringify({
+                tables: [{
+                    name: 'items',
+                    columns: [{ field: 'Name' }, { field: 'Score' }],
+                    rows: [
+                        { Name: 'A', Score: 10 },
+                        { Name: 'B', Score: 10 },
+                        { Name: 'C', Score: 5 },
+                    ],
+                }],
+            });
+            const result = await lib.InvokeTool(
+                'aggregate',
+                { table: 'items', field: 'Score', operation: 'max' },
+                tiedSnapshot
+            );
+            expect(result.success).toBe(true);
+            const data = result.data as { value: number; contributingRows?: Array<Record<string, unknown>> };
+            expect(data.value).toBe(10);
+            expect(data.contributingRows).toHaveLength(2);
+            expect(data.contributingRows!.map(r => r.Name).sort()).toEqual(['A', 'B']);
         });
     });
 });

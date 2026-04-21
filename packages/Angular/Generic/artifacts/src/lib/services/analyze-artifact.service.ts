@@ -26,6 +26,28 @@ export interface StartAnalysisConversationArgs {
 }
 
 /**
+ * Arguments for {@link AnalyzeArtifactService.CreateSnapshotArtifact}.
+ * Creates just the Artifact + ArtifactVersion — no conversation, no junction.
+ * Used by callers who already have a conversation and just want to persist
+ * the snapshot and link it to a specific user message themselves.
+ */
+export interface CreateSnapshotArtifactArgs {
+  snapshot: DataSnapshot;
+  currentUser: UserInfo;
+  environmentId: string;
+  title?: string;
+}
+
+/**
+ * Result of {@link AnalyzeArtifactService.CreateSnapshotArtifact}.
+ */
+export interface CreateSnapshotArtifactResult {
+  artifactId: string;
+  artifactVersionId: string;
+  title: string;
+}
+
+/**
  * Result of {@link AnalyzeArtifactService.StartAnalysisConversation}.
  */
 export interface AnalyzeArtifactResult {
@@ -51,19 +73,16 @@ export interface AnalyzeArtifactResult {
 @Injectable({ providedIn: 'root' })
 export class AnalyzeArtifactService {
   /**
-   * Create a new analysis conversation seeded with the captured snapshot.
-   * Performs six sequential saves; throws with the underlying entity error
-   * message on any failure.
+   * Creates ONLY the Artifact + ArtifactVersion for a captured snapshot.
+   * Does not create a conversation or any junctions. Used by callers who
+   * already have a conversation and want to attach the snapshot to a
+   * message they're about to send (e.g., in-conversation Analyze flow).
    */
-  async StartAnalysisConversation(args: StartAnalysisConversationArgs): Promise<AnalyzeArtifactResult> {
+  async CreateSnapshotArtifact(args: CreateSnapshotArtifactArgs): Promise<CreateSnapshotArtifactResult> {
     const { snapshot, currentUser, environmentId } = args;
     const title = args.title || snapshot.title || 'Untitled Snapshot';
-    const initialMessage = args.initialMessage || `Analyze "${title}"`;
 
-    // 1. Resolve the "Data Snapshot" artifact type.
-    //    Falls back to a force-refresh if the engine's cache predates the
-    //    Data Snapshot type being pushed (common on long-running browser
-    //    sessions that started before the type migration).
+    // Resolve the "Data Snapshot" artifact type.
     const engine = ArtifactMetadataEngine.Instance;
     await engine.Config(false, currentUser);
     let snapshotType = engine.FindArtifactType('Data Snapshot');
@@ -79,7 +98,6 @@ export class AnalyzeArtifactService {
 
     const md = new Metadata();
 
-    // 2. Create the artifact
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', currentUser);
     artifact.Name = title;
     artifact.Description = `Snapshot captured for analysis at ${new Date().toISOString()}`;
@@ -90,7 +108,6 @@ export class AnalyzeArtifactService {
       throw new Error(`Failed to save artifact: ${artifact.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
 
-    // 3. Create version 1 with the snapshot JSON inline
     const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', currentUser);
     version.ArtifactID = artifact.ID;
     version.VersionNumber = 1;
@@ -100,6 +117,33 @@ export class AnalyzeArtifactService {
     if (!(await version.Save())) {
       throw new Error(`Failed to save artifact version: ${version.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
+
+    return {
+      artifactId: artifact.ID,
+      artifactVersionId: version.ID,
+      title,
+    };
+  }
+
+  /**
+   * Create a new analysis conversation seeded with the captured snapshot.
+   * Performs six sequential saves; throws with the underlying entity error
+   * message on any failure.
+   */
+  async StartAnalysisConversation(args: StartAnalysisConversationArgs): Promise<AnalyzeArtifactResult> {
+    const { snapshot, currentUser, environmentId } = args;
+    const title = args.title || snapshot.title || 'Untitled Snapshot';
+    const initialMessage = args.initialMessage || `Analyze "${title}"`;
+
+    // Steps 1-3: Create the Data Snapshot artifact + version (shared with CreateSnapshotArtifact)
+    const { artifactId, artifactVersionId } = await this.CreateSnapshotArtifact({
+      snapshot,
+      currentUser,
+      environmentId,
+      title,
+    });
+
+    const md = new Metadata();
 
     // 4. Create the conversation
     const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', currentUser);
@@ -122,21 +166,21 @@ export class AnalyzeArtifactService {
     // 6. Link the snapshot as an input artifact on that message
     const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>('MJ: Conversation Detail Artifacts', currentUser);
     junction.ConversationDetailID = detail.ID;
-    junction.ArtifactVersionID = version.ID;
+    junction.ArtifactVersionID = artifactVersionId;
     junction.Direction = 'Input';
     if (!(await junction.Save())) {
       throw new Error(`Failed to link artifact to conversation: ${junction.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
 
     LogStatus(
-      `[AnalyzeArtifactService] Created conversation ${conversation.ID} with input artifact ${artifact.ID} v${version.VersionNumber}`,
+      `[AnalyzeArtifactService] Created conversation ${conversation.ID} with input artifact ${artifactId} v1`,
     );
 
     return {
       conversationId: conversation.ID,
       conversationDetailId: detail.ID,
-      artifactId: artifact.ID,
-      artifactVersionId: version.ID,
+      artifactId,
+      artifactVersionId,
     };
   }
 }
