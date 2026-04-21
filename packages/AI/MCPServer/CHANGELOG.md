@@ -1,5 +1,108 @@
 # @memberjunction/ai-mcp-server
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [1d62875]
+- Updated dependencies [fdab4bb]
+- Updated dependencies [115e4da]
+  - @memberjunction/server@5.28.0
+  - @memberjunction/ai-prompts@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-agents@5.28.0
+  - @memberjunction/actions@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/api-keys@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/auth-providers@5.28.0
+  - @memberjunction/credentials@5.28.0
+  - @memberjunction/encryption@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/server-bootstrap-lite@5.28.0
+  - @memberjunction/ai-provider-bundle@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/config@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/server@5.27.1
+  - @memberjunction/ai-agents@5.27.1
+  - @memberjunction/ai@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/aiengine@5.27.1
+  - @memberjunction/ai-prompts@5.27.1
+  - @memberjunction/api-keys@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/actions@5.27.1
+  - @memberjunction/auth-providers@5.27.1
+  - @memberjunction/credentials@5.27.1
+  - @memberjunction/encryption@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/sqlserver-dataprovider@5.27.1
+  - @memberjunction/server-bootstrap-lite@5.27.1
+  - @memberjunction/ai-provider-bundle@5.27.1
+  - @memberjunction/config@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/server-bootstrap-lite@5.27.0
+- @memberjunction/server@5.27.0
+- @memberjunction/sqlserver-dataprovider@5.27.0
+- @memberjunction/ai-agents@5.27.0
+- @memberjunction/ai@5.27.0
+- @memberjunction/ai-core-plus@5.27.0
+- @memberjunction/aiengine@5.27.0
+- @memberjunction/ai-prompts@5.27.0
+- @memberjunction/ai-provider-bundle@5.27.0
+- @memberjunction/api-keys@5.27.0
+- @memberjunction/actions-base@5.27.0
+- @memberjunction/actions@5.27.0
+- @memberjunction/auth-providers@5.27.0
+- @memberjunction/config@5.27.0
+- @memberjunction/credentials@5.27.0
+- @memberjunction/encryption@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/ai-agents@5.26.0
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/server@5.26.0
+  - @memberjunction/server-bootstrap-lite@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/aiengine@5.26.0
+  - @memberjunction/ai-prompts@5.26.0
+  - @memberjunction/api-keys@5.26.0
+  - @memberjunction/actions-base@5.26.0
+  - @memberjunction/actions@5.26.0
+  - @memberjunction/credentials@5.26.0
+  - @memberjunction/encryption@5.26.0
+  - @memberjunction/sqlserver-dataprovider@5.26.0
+  - @memberjunction/auth-providers@5.26.0
+  - @memberjunction/ai-provider-bundle@5.26.0
+  - @memberjunction/ai@5.26.0
+  - @memberjunction/config@5.26.0
+  - @memberjunction/global@5.26.0
+
 ## 5.25.0
 
 ### Patch Changes

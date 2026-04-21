@@ -176,6 +176,39 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _provider: IMetadataProvider;
     private _dataChange$ = new Subject<EngineDataChangeEvent>();
     private _cacheChangeUnsubscribers: (() => void)[] = [];
+    private _propertySubjects: Map<string, BehaviorSubject<BaseEntity[]>> = new Map();
+
+    /**
+     * Returns an Observable for a specific engine array property. Subscribers receive the
+     * current array immediately (BehaviorSubject semantics), then re-receive the same array
+     * reference whenever the engine mutates it (save, delete, remote-invalidate, refresh).
+     *
+     * The BehaviorSubject for a property is lazy-created on first call — engines where no
+     * one observes a property pay zero runtime cost.
+     *
+     * @param propertyName - The name of the backing array property on the engine (e.g. `_UserNotifications`).
+     */
+    public ObserveProperty<E extends BaseEntity>(propertyName: string): Observable<E[]> {
+        let subject = this._propertySubjects.get(propertyName);
+        if (!subject) {
+            const current = ((this as Record<string, unknown>)[propertyName] as BaseEntity[] | undefined) ?? [];
+            subject = new BehaviorSubject<BaseEntity[]>(current);
+            this._propertySubjects.set(propertyName, subject);
+        }
+        return subject.asObservable() as Observable<E[]>;
+    }
+
+    /**
+     * Notifies subscribers of `ObserveProperty(propertyName)` that the array has changed.
+     * No-op if no one has ever observed this property (BehaviorSubject not created).
+     * Called from the array mutation sites in BaseEngine.
+     */
+    protected emitPropertyChange(propertyName: string): void {
+        const subject = this._propertySubjects.get(propertyName);
+        if (!subject) return;
+        const current = ((this as Record<string, unknown>)[propertyName] as BaseEntity[] | undefined) ?? [];
+        subject.next(current);
+    }
 
     /**
      * While the BaseEngine class is a singleton, normally, it is possible to have multiple instances of the class in an application if the class is used in multiple contexts that have different providers.
@@ -619,6 +652,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
+                this.emitPropertyChange(config.PropertyName);
                 // LocalCacheManager handles its own cache sync by listening for
                 // remote-invalidate events directly — no need to sync here
             }
@@ -661,6 +695,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     currentData.splice(index, 1);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
                     this.NotifyDataChange(config, currentData, 'delete', removed);
+                    this.emitPropertyChange(config.PropertyName);
                 }
                 // LocalCacheManager handles its own cache sync for deletes
             }
@@ -966,6 +1001,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             }
         }
 
+        // Per-property observable emission for subscribers of ObserveProperty(config.PropertyName)
+        this.emitPropertyChange(config.PropertyName);
+
         // Sync to LocalCacheManager if CacheLocal is enabled for this config
         // This keeps IndexedDB/localStorage in sync with in-memory array
         if (config.CacheLocal) {
@@ -1134,6 +1172,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }, contextUser);
 
         this.HandleSingleViewResult(config, result);
+        this.emitPropertyChange(config.PropertyName);
     }
 
     /**
@@ -1184,6 +1223,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             const entityNames: string[] = [];
             for (let i = 0; i < configs.length; i++) {
                 this.HandleSingleViewResult(configs[i], results[i]);
+                this.emitPropertyChange(configs[i].PropertyName);
                 if (configs[i].EntityName) {
                     entityNames.push(configs[i].EntityName);
                 }

@@ -4,6 +4,7 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent, FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { MJQueryFormComponent } from '../../generated/Entities/MJQuery/mjquery.form.component';
 import { Metadata, RunView, RUN_QUERY_SQL_FILTERS, CompositeKey, QueryInfo, QueryDependencyInfo } from '@memberjunction/core';
+import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CodeEditorComponent, CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { NavigationService } from '@memberjunction/ng-shared';
@@ -37,6 +38,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public showRunDialog = false;
     public showCategoryDialog = false;
     public categoryPathDisplay = '';
+    public IsSaving = false;
 
     // Expansion panel states
     public sqlPanelExpanded = true;
@@ -54,7 +56,34 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     ];
     public categories: MJQueryCategoryEntity[] = [];
     public categoryTreeData: CategoryTreeNode[] = [];
-    
+
+    /** Tree dropdown config for Query Categories */
+    public CategoryBranchConfig: TreeBranchConfig = {
+        EntityName: 'MJ: Query Categories',
+        DisplayField: 'Name',
+        IDField: 'ID',
+        ParentIDField: 'ParentID',
+        DefaultIcon: 'fa-solid fa-folder',
+        DescriptionField: 'Description',
+        OrderBy: 'Name ASC'
+    };
+
+    /** CategoryID as CompositeKey for tree dropdown binding */
+    public get CategoryIDAsKey(): CompositeKey | null {
+        return this.record?.CategoryID ? CompositeKey.FromID(this.record.CategoryID) : null;
+    }
+
+    /** Handle tree dropdown category selection */
+    public OnCategoryTreeChange(value: CompositeKey | CompositeKey[] | null): void {
+        if (!this.record) return;
+        if (value instanceof CompositeKey && value.HasValue) {
+            this.record.CategoryID = value.KeyValuePairs[0]?.Value ?? null;
+        } else {
+            this.record.CategoryID = null;
+        }
+        this.updateCategoryPathDisplay();
+    }
+
     // Status options — matches MJQueryEntity.Status type from database CHECK constraint
     public statusOptions = [
         { text: 'Pending', value: 'Pending' },
@@ -552,24 +581,39 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         if (!confirm(`Are you sure you want to delete parameter "${param.Name}"?`)) {
             return;
         }
-        
+
         try {
-            const deleted = await param.Delete();
+            // Reload the parameter entity fresh to ensure we have a clean copy
+            // not tied to any form transaction state
+            const md = new Metadata();
+            const freshParam = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters');
+            const loaded = await freshParam.Load(param.ID);
+            if (!loaded) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Could not load parameter record. It may have already been deleted.',
+                    'warning',
+                    3000
+                );
+                // Remove from local list anyway since it doesn't exist
+                this.removeParameterFromList(param);
+                return;
+            }
+
+            const deleted = await freshParam.Delete();
             if (deleted) {
-                const index = this.queryParameters.indexOf(param);
-                if (index > -1) {
-                    this.queryParameters.splice(index, 1);
-                }
+                this.removeParameterFromList(param);
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Parameter deleted successfully',
                     'success',
                     3000
                 );
             } else {
+                const errorDetail = freshParam.LatestResult?.CompleteMessage ?? 'Unknown reason';
+                console.error('Failed to delete parameter:', errorDetail);
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    'Failed to delete parameter',
+                    `Failed to delete parameter: ${errorDetail}`,
                     'error',
-                    3000
+                    5000
                 );
             }
         } catch (error) {
@@ -580,6 +624,14 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 3000
             );
         }
+    }
+
+    private removeParameterFromList(param: MJQueryParameterEntity): void {
+        const index = this.queryParameters.indexOf(param);
+        if (index > -1) {
+            this.queryParameters.splice(index, 1);
+        }
+        this.cdr.detectChanges();
     }
     
     /**
@@ -606,6 +658,18 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     async SaveRecord(StopEditModeAfterSave: boolean = true): Promise<boolean> {
+        this.IsSaving = true;
+        this.cdr.markForCheck();
+        try {
+            return await this.internalSaveRecord(StopEditModeAfterSave);
+        } finally {
+            await Promise.resolve(); // microtask to avoid ExpressionChangedAfterItHasBeenCheckedError
+            this.IsSaving = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    private async internalSaveRecord(StopEditModeAfterSave: boolean): Promise<boolean> {
         // Handle category creation before saving query
         if (this.record.CategoryID && !this.categoryOptions.find(opt => opt.value === this.record.CategoryID)) {
             if (this.isDuplicateCategory(this.record.CategoryID)) {
@@ -813,9 +877,18 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         if (!confirm(`Are you sure you want to delete field "${field.Name}"?`)) {
             return;
         }
-        
+
         try {
-            const deleted = await field.Delete();
+            const md = new Metadata();
+            const freshField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields');
+            const loaded = await freshField.Load(field.ID);
+            if (!loaded) {
+                this.queryFields = this.queryFields.filter(f => !UUIDsEqual(f.ID, field.ID));
+                this.cdr.detectChanges();
+                return;
+            }
+
+            const deleted = await freshField.Delete();
             if (deleted) {
                 this.queryFields = this.queryFields.filter(f => !UUIDsEqual(f.ID, field.ID));
                 this.updateUnsavedChangesFlag();
@@ -823,6 +896,14 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                     'Field deleted successfully',
                     'success',
                     3000
+                );
+            } else {
+                const errorDetail = freshField.LatestResult?.CompleteMessage ?? 'Unknown reason';
+                console.error('Failed to delete field:', errorDetail);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to delete field: ${errorDetail}`,
+                    'error',
+                    5000
                 );
             }
         } catch (error) {
@@ -864,9 +945,18 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         if (!confirm(`Are you sure you want to delete entity "${entity.Entity}"?`)) {
             return;
         }
-        
+
         try {
-            const deleted = await entity.Delete();
+            const md = new Metadata();
+            const freshEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities');
+            const loaded = await freshEntity.Load(entity.ID);
+            if (!loaded) {
+                this.queryEntities = this.queryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
+                this.cdr.detectChanges();
+                return;
+            }
+
+            const deleted = await freshEntity.Delete();
             if (deleted) {
                 this.queryEntities = this.queryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
                 this.updateUnsavedChangesFlag();
@@ -874,6 +964,14 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                     'Entity deleted successfully',
                     'success',
                     3000
+                );
+            } else {
+                const errorDetail = freshEntity.LatestResult?.CompleteMessage ?? 'Unknown reason';
+                console.error('Failed to delete entity:', errorDetail);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to delete entity: ${errorDetail}`,
+                    'error',
+                    5000
                 );
             }
         } catch (error) {

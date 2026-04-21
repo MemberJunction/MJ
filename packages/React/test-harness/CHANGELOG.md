@@ -1,5 +1,70 @@
 # @memberjunction/react-test-harness
 
+## 5.28.0
+
+### Patch Changes
+
+- 1a6b1af: Adds an onPageReady callback to ComponentExecutionOptions so callers can drive post-render interactions on the live Playwright page (clicks, form fills, etc.) before the harness tears down. Errors inside the callback are caught and appended to result.errors instead of aborting the run.
+
+  Adds a fullPageScreenshot flag that forwards fullPage: true to page.screenshot(), capturing the entire scrollable content for tall components (dashboards, long forms) that overflow the viewport. Defaults to false to preserve existing behavior.
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/ai-vectors-memory@5.28.0
+  - @memberjunction/interactive-component-types@5.28.0
+  - @memberjunction/react-runtime@5.28.0
+  - @memberjunction/global@5.28.0
+  - @memberjunction/sql-parser@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/aiengine@5.27.1
+  - @memberjunction/ai-vectors-memory@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/react-runtime@5.27.1
+  - @memberjunction/interactive-component-types@5.27.1
+  - @memberjunction/sql-parser@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- Updated dependencies [4357090]
+  - @memberjunction/sql-parser@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/aiengine@5.27.0
+  - @memberjunction/ai-vectors-memory@5.27.0
+  - @memberjunction/interactive-component-types@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/react-runtime@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/aiengine@5.26.0
+  - @memberjunction/react-runtime@5.26.0
+  - @memberjunction/ai-vectors-memory@5.26.0
+  - @memberjunction/interactive-component-types@5.26.0
+  - @memberjunction/global@5.26.0
+  - @memberjunction/sql-parser@5.26.0
+
 ## 5.25.0
 
 ### Patch Changes

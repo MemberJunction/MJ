@@ -8,6 +8,9 @@
 import { describe, it, expect } from 'vitest';
 import { SQLParser } from '@memberjunction/sql-parser';
 import type { MJParameterInfo, SQLSelectColumn } from '@memberjunction/sql-parser';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
+
+const tsqlDialect = new SQLServerDialect();
 
 // ═══════════════════════════════════════════════════
 // Test the deterministic extraction via SQLParser
@@ -135,6 +138,49 @@ WHERE Limit = {{ Limit | default(25) | sqlNumber }}
             const region = params.find(p => p.name === 'Region')!;
             expect(region.defaultValue).toBe('US');
             expect(region.type).toBe('string');
+        });
+
+        // Regression test for Skip-Brain Bug B (run 0FEF1C47).
+        // Verifies the integration: when a query SQL contains a `{% for X in Y %}`
+        // loop, the deterministic extractor (consumed by parse.ts → enrich.ts →
+        // sync.ts) registers the iterable Y as a parameter and skips the loop
+        // local X. Without this, Save() would create a stale `kw` parameter
+        // record and reject every actual save attempt with
+        // "Required parameter 'kw' is missing; Unknown parameter: 'OrgKeywords'".
+        it('should register the iterable as an array parameter and skip the loop local (Skip Bug B)', () => {
+            const sql = `SELECT *
+FROM [Sessions]
+WHERE EXISTS (
+    SELECT 1 FROM [Speakers] s
+    WHERE (
+        {% for kw in OrgKeywords %}
+        s.[Org] LIKE {{ kw | sqlLikeContains }}
+        {% if not loop.last %}OR {% endif %}
+        {% endfor %}
+    )
+)
+AND YEAR(s.[Date]) >= {{ StartYear | sqlNumber }}`;
+
+            const params = SQLParser.ExtractParameterInfo(sql);
+
+            // OrgKeywords (iterable) is registered as array, required.
+            const orgKeywords = params.find(p => p.name === 'OrgKeywords');
+            expect(orgKeywords).toBeDefined();
+            expect(orgKeywords!.type).toBe('array');
+            expect(orgKeywords!.isRequired).toBe(true);
+
+            // Plain (non-loop) parameter still works.
+            const startYear = params.find(p => p.name === 'StartYear');
+            expect(startYear).toBeDefined();
+            expect(startYear!.type).toBe('number');
+
+            // Loop local must NOT leak as a parameter — the validator would
+            // otherwise reject every save with "Required parameter 'kw' is missing".
+            expect(params.find(p => p.name === 'kw')).toBeUndefined();
+
+            // Nunjucks built-ins must NOT leak either (loop.last → loop, last).
+            expect(params.find(p => p.name === 'loop')).toBeUndefined();
+            expect(params.find(p => p.name === 'last')).toBeUndefined();
         });
     });
 
@@ -1382,7 +1428,7 @@ describe('Field Type Enrichment from Composition References', () => {
 describe('Field Type Enrichment from Entity Metadata', () => {
     it('should resolve direct column from entity metadata via SQLParser', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,
@@ -1405,7 +1451,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should resolve AS alias to source column from entity metadata', () => {
         const sql = 'SELECT u.__mj_CreatedAt AS CreatedAt FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'CreatedAt', description: 'Creation timestamp', type: 'date', optional: false,
@@ -1428,7 +1474,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should disambiguate multiple tables by alias', () => {
         const sql = 'SELECT u.Name, e.Name AS EntityName FROM __mj.vwUsers u JOIN __mj.vwEntities e ON u.ID = e.ID';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [
             { name: 'Name', description: 'User name', type: 'string', optional: false },
@@ -1461,7 +1507,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should skip fields that already have sqlBaseType and sqlFullType', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'Already resolved', type: 'string', optional: false,
@@ -1482,7 +1528,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
     it('should fall back to flat lookup when no SELECT column matches', () => {
         // Field "Email" is not in the SELECT clause but exists in the entity
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Email', description: 'User email', type: 'string', optional: false,
@@ -1503,7 +1549,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should not overwrite existing sourceEntity on the field', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,

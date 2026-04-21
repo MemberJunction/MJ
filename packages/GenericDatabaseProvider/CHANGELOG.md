@@ -1,5 +1,79 @@
 # @memberjunction/generic-database-provider
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/actions@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/encryption@5.28.0
+  - @memberjunction/queue@5.28.0
+  - @memberjunction/query-processor@5.28.0
+  - @memberjunction/geo-core@5.28.0
+  - @memberjunction/global@5.28.0
+  - @memberjunction/sql-dialect@5.28.0
+  - @memberjunction/sql-parser@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/aiengine@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/actions@5.27.1
+  - @memberjunction/encryption@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/queue@5.27.1
+  - @memberjunction/query-processor@5.27.1
+  - @memberjunction/geo-core@5.27.1
+  - @memberjunction/sql-dialect@5.27.1
+  - @memberjunction/sql-parser@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- 4357090: Repair three query composition pipeline regressions surfaced by Skip-Brain, clear test feedback dialog state when switching conversations, strip tag IDs from taxonomy context injected into LLM prompts, exclude in-progress runs from last-run-date lookups, and replace direct UUID equality checks with `UUIDsEqual()` in the AI analytics dashboards to comply with the cross-platform UUID compliance test.
+- Updated dependencies [4357090]
+  - @memberjunction/sql-parser@5.27.0
+  - @memberjunction/aiengine@5.27.0
+  - @memberjunction/actions-base@5.27.0
+  - @memberjunction/actions@5.27.0
+  - @memberjunction/encryption@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/queue@5.27.0
+  - @memberjunction/query-processor@5.27.0
+  - @memberjunction/sql-dialect@5.27.0
+  - @memberjunction/geo-core@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/aiengine@5.26.0
+  - @memberjunction/actions-base@5.26.0
+  - @memberjunction/actions@5.26.0
+  - @memberjunction/encryption@5.26.0
+  - @memberjunction/queue@5.26.0
+  - @memberjunction/geo-core@5.26.0
+  - @memberjunction/query-processor@5.26.0
+  - @memberjunction/global@5.26.0
+  - @memberjunction/sql-dialect@5.26.0
+  - @memberjunction/sql-parser@5.26.0
+
 ## 5.25.0
 
 ### Patch Changes

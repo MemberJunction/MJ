@@ -304,6 +304,10 @@ export class PostgreSQLDialect extends SQLDialect {
         return true;
     }
 
+    get DefaultPagingOrderBy(): string {
+        return '1';
+    }
+
     // ─── Data Types ──────────────────────────────────────────────────
 
     get TypeMap(): DataTypeMap {
