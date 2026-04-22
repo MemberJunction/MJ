@@ -9,6 +9,7 @@ import {
   inject,
 } from '@angular/core';
 import { RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** Represents a single archived version of a record */
 export interface ArchiveVersion {
@@ -118,7 +119,7 @@ export class ArchiveRestoreDialogComponent implements OnDestroy {
 
   /** Check if a version is the currently selected one */
   IsSelected(version: ArchiveVersion): boolean {
-    return this.SelectedVersion?.ID === version.ID;
+    return UUIDsEqual(this.SelectedVersion?.ID, version.ID);
   }
 
   /** Initiate restore of the selected version */
