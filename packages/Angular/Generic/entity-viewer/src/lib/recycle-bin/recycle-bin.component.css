@@ -1,0 +1,186 @@
+/* ───────────────────────────────────────────────────────────────────
+ *  Recycle Bin
+ *  Slide-in panel that lists hard-deleted records and offers re-create.
+ *  All colors use --mj-* design tokens.
+ * ─────────────────────────────────────────────────────────────────── */
+
+.rb-container {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ─── Header ─── */
+
+.rb-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 8px 0 14px;
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.rb-header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
+  color: var(--mj-status-info);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 17px;
+}
+
+.rb-header-text { flex: 1; min-width: 0; }
+
+.rb-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  margin-bottom: 2px;
+}
+
+.rb-header-subtitle {
+  color: var(--mj-text-muted);
+  font-size: 12px;
+}
+
+/* ─── State (denied / error / empty) ─── */
+
+.rb-state {
+  text-align: center;
+  padding: 50px 20px;
+  color: var(--mj-text-muted);
+}
+
+.rb-state i {
+  font-size: 36px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.rb-state h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.rb-state p {
+  margin: 0;
+  font-size: 13px;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.rb-state-denied i { color: var(--mj-text-disabled); }
+.rb-state-error i  { color: var(--mj-status-error); }
+.rb-state-empty i  { color: var(--mj-text-disabled); }
+
+/* ─── List ─── */
+
+.rb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ─── Card ─── */
+
+.rb-card {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: center;
+  transition: border-color 0.15s;
+}
+
+.rb-card:hover {
+  border-color: var(--mj-border-strong);
+}
+
+.rb-card-info { min-width: 0; }
+
+.rb-card-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--mj-text-primary);
+  margin-bottom: 5px;
+  word-break: break-word;
+}
+
+.rb-card-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--mj-text-muted);
+}
+
+.rb-card-field strong {
+  color: var(--mj-text-secondary);
+  font-weight: 500;
+  margin-right: 3px;
+}
+
+.rb-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mj-text-muted);
+  font-size: 11px;
+}
+
+.rb-card-meta i {
+  color: var(--mj-text-disabled);
+}
+
+/* ─── Card actions ─── */
+
+.rb-card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.rb-btn {
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  background: var(--mj-bg-surface);
+  transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.rb-btn-restore {
+  color: var(--mj-status-success);
+  border-color: var(--mj-status-success);
+}
+
+.rb-btn-restore:hover:not(:disabled) {
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse, #fff);
+}
+
+.rb-btn-restore:disabled {
+  color: var(--mj-text-disabled);
+  border-color: var(--mj-border-default);
+  background: var(--mj-bg-surface-sunken);
+  cursor: not-allowed;
+}

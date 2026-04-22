@@ -1,5 +1,21 @@
 # @memberjunction/query-gen
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [fdab4bb]
+- Updated dependencies [115e4da]
+  - @memberjunction/ai-prompts@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/ai-vectors-memory@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/global@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

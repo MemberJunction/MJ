@@ -1,9 +1,9 @@
 /**
  * @fileoverview Main export module for the MemberJunction AI Agent framework.
- * 
+ *
  * This module exports all public APIs for the AI Agent system, including
  * base classes, type definitions, and utility functions.
- * 
+ *
  * @module @memberjunction/ai-agents
  * @author MemberJunction.com
  * @since 2.49.0
@@ -17,6 +17,14 @@ export * from './agent-types';
 export * from './AgentRunner';
 export * from './PayloadManager';
 export * from './ScratchpadManager';
+export * from './ArtifactToolManager';
+export * from './file-input-resolver';
+export * from './artifact-tools/DataSnapshotToolLibrary';
+export * from './artifact-tools/JSONToolLibrary';
+export * from './artifact-tools/TextToolLibrary';
+export * from './artifact-tools/PDFToolLibrary';
+export * from './artifact-tools/ExcelToolLibrary';
+export * from './artifact-tools/DocxToolLibrary';
 export * from './PayloadChangeAnalyzer';
 export * from './PayloadFeedbackManager';
 export * from './types/payload-operations';
@@ -30,10 +38,10 @@ export * from './ClientToolRequestManager';
 
 // Re-export from ai-reranker for backward compatibility
 export {
-    RerankerService,
-    RerankerConfiguration,
-    parseRerankerConfiguration,
-    RerankServiceResult,
-    RerankObservabilityOptions,
-    LLMReranker
+  RerankerService,
+  RerankerConfiguration,
+  parseRerankerConfiguration,
+  RerankServiceResult,
+  RerankObservabilityOptions,
+  LLMReranker,
 } from '@memberjunction/ai-reranker';

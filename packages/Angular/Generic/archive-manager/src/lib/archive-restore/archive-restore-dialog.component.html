@@ -1,0 +1,116 @@
+@if (Visible) {
+  <!-- Backdrop overlay -->
+  <div class="restore-overlay" (click)="Close()"></div>
+
+  <!-- Modal dialog -->
+  <div class="restore-dialog" role="dialog" aria-labelledby="restore-dialog-title">
+    <!-- Header -->
+    <div class="restore-header">
+      <h2 id="restore-dialog-title">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        Archive History
+      </h2>
+      <button class="restore-close-btn" (click)="Close()" aria-label="Close dialog">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Loading state -->
+    @if (Status === 'loading') {
+      <div class="restore-loading">
+        <mj-loading text="Loading archived versions..."></mj-loading>
+      </div>
+    }
+
+    <!-- Content area -->
+    @if (Status !== 'loading') {
+      <div class="restore-content">
+        <!-- Left: Timeline -->
+        <div class="restore-timeline-panel">
+          @if (Versions.length === 0) {
+            <div class="restore-empty">
+              <i class="fa-solid fa-inbox"></i>
+              <p>No archived versions found.</p>
+            </div>
+          }
+
+          @if (Versions.length > 0) {
+            <div class="timeline">
+              @for (version of Versions; track version.ID) {
+                <div
+                  class="timeline-node"
+                  [class.active]="IsSelected(version)"
+                  (click)="SelectVersion(version)"
+                  (keydown.enter)="SelectVersion(version)"
+                  tabindex="0"
+                  role="button"
+                  [attr.aria-label]="'Version from ' + FormatDate(version.ArchivedAt)">
+                  <div class="timeline-dot"></div>
+                  <div class="timeline-content">
+                    <span class="timeline-date">{{ FormatDate(version.ArchivedAt) }}</span>
+                    <span class="timeline-meta">
+                      {{ version.FieldCount }} field{{ version.FieldCount !== 1 ? 's' : '' }}
+                      &middot;
+                      {{ FormatBytes(version.Bytes) }}
+                    </span>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Right: Preview -->
+        <div class="restore-preview-panel">
+          @if (SelectedVersion) {
+            <div class="preview-header">
+              <h3>Archived Fields Preview</h3>
+              <span class="preview-date">{{ FormatDate(SelectedVersion.ArchivedAt) }}</span>
+            </div>
+            <pre class="preview-json">{{ PreviewJson }}</pre>
+          }
+
+          @if (!SelectedVersion && Versions.length > 0) {
+            <div class="preview-placeholder">
+              <i class="fa-solid fa-hand-pointer"></i>
+              <p>Select a version to preview</p>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Status messages -->
+    @if (Status === 'success') {
+      <div class="restore-message restore-message-success">
+        <i class="fa-solid fa-circle-check"></i>
+        {{ SuccessMessage }}
+      </div>
+    }
+    @if (Status === 'error' && ErrorMessage) {
+      <div class="restore-message restore-message-error">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        {{ ErrorMessage }}
+      </div>
+    }
+
+    <!-- Action bar -->
+    <div class="restore-actions">
+      <button
+        class="btn btn-primary"
+        [disabled]="!SelectedVersion || Status === 'restoring'"
+        (click)="RestoreSelectedVersion()">
+        @if (Status === 'restoring') {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          Restoring...
+        } @else {
+          <i class="fa-solid fa-rotate-left"></i>
+          Restore to this Version
+        }
+      </button>
+      <button class="btn btn-secondary" (click)="Close()">
+        Close
+      </button>
+    </div>
+  </div>
+}

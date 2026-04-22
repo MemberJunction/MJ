@@ -21,19 +21,21 @@ export abstract class BaseInfo {
         if (initData) {
             // copy the properties from the init data to the new class instance we are constructing
             const keys = Object.keys(initData);
-            const thisKeys = Object.keys(this);
             for (let j = 0; j < keys.length; j++) {
+                const key = keys[j];
                 // make sure it is one of our keys, we don't want to create NEW fields
-                if (thisKeys.indexOf(keys[j]) >= 0) {
-                    if (keys[j].trim().toLowerCase() === 'defaultvalue' && initData[keys[j]]) {
+                if (Object.prototype.hasOwnProperty.call(this, key)) {
+                    // fast path for exact match first, fallback to length check + lowercasing
+                    if ((key === 'DefaultValue' || (key.length === 12 && key.toLowerCase() === 'defaultvalue')) && initData[key]) {
                         // strip parens from default value from the DB, if they exist, for example defaults might be ((1)) or (getdate())   
                         // could also be something like (('Pending')) in which case we'll want to remove the SYMMETRIC parens
-                        const initialValue: string = initData[keys[j]];
+                        const initialValue: string = initData[key];
                         const trueDefault: string = ExtractActualDefaultValue(initialValue);
-                        this[keys[j]] = trueDefault;
+                        (this as Record<string, unknown>)[key] = trueDefault;
                     }
-                    else
-                        this[keys[j]] = initData[keys[j]];
+                    else {
+                        (this as Record<string, unknown>)[key] = initData[key];
+                    }
                 }
             }
         }
