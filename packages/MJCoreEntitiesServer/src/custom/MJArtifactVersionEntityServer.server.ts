@@ -3,6 +3,15 @@ import { MJArtifactVersionEntity, MJArtifactEntity, MJArtifactTypeEntity, MJArti
 import { RegisterClass } from "@memberjunction/global";
 import { createHash } from 'crypto';
 
+/**
+ * Returns the UTF-8 byte length of `content`. Used by the Save hook to
+ * populate `ContentSizeBytes` so clients can display file sizes without
+ * reading the full blob. Exported for direct unit-testing.
+ */
+export function CalculateContentSizeBytes(content: string): number {
+    return Buffer.byteLength(content, 'utf8');
+}
+
 @RegisterClass(BaseEntity, "MJ: Artifact Versions")
 export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
     private _pendingAttributes: any[] | null = null;
@@ -65,7 +74,11 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
                 // 1. Calculate ContentHash using SHA-256
                 this.ContentHash = this.CalculateContentHash(this.Content);
 
-                // 2. Extract attributes (sets Name/Description and stores pending attributes)
+                // 2. Capture the UTF-8 byte length so the client can render file sizes
+                //    without reading the full Content blob.
+                this.ContentSizeBytes = CalculateContentSizeBytes(this.Content);
+
+                // 3. Extract attributes (sets Name/Description and stores pending attributes)
                 await this.ExtractAndSaveAttributes();
             }
             catch (error) {

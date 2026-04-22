@@ -1671,9 +1671,26 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       this.selectedImageAlt = attachment.fileName || 'Image attachment';
       this.selectedImageFileName = attachment.fileName || 'image';
       this.showImageViewer = true;
-    } else {
-      // For non-image attachments, could trigger download or other action
-      console.log('Non-image attachment clicked:', attachment);
+      return;
+    }
+
+    // Artifact-backed attachments open in the artifact viewer panel.
+    if (attachment.source === 'artifact' && attachment.artifactId) {
+      this.onArtifactClicked({
+        artifactId: attachment.artifactId,
+        versionId: attachment.artifactVersionId
+      });
+      return;
+    }
+
+    // Plain uploads: trigger a browser download if we have a usable content URL.
+    if (attachment.contentUrl) {
+      const a = document.createElement('a');
+      a.href = attachment.contentUrl;
+      a.download = attachment.fileName || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   }
 

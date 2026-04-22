@@ -22,6 +22,7 @@ import { MentionAutocompleteService } from '../../services/mention-autocomplete.
 import { SuggestedResponse } from '../../models/conversation-state.model';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BadgeTextForAttachment } from '../../util/attachment-badge';
 
 /**
  * Represents an attachment on a message for display
@@ -38,6 +39,12 @@ export interface MessageAttachment {
   contentUrl?: string;
   /** Source of the attachment: 'upload' for chat uploads, 'artifact' for artifact picker */
   source?: 'upload' | 'artifact';
+  /** For source='artifact': the underlying MJArtifact.ID so clicks can open the viewer. */
+  artifactId?: string;
+  /** For source='artifact': the underlying MJArtifactVersion.ID. */
+  artifactVersionId?: string;
+  /** For source='artifact': resolved MJArtifactType.Name, e.g. "Data Snapshot". Drives the type badge. */
+  artifactTypeName?: string;
 }
 
 /**
@@ -935,6 +942,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  /** Compact UPPERCASE badge label (artifact-type name wins over file extension). */
+  public badgeTextFor(attachment: MessageAttachment): string {
+    return BadgeTextForAttachment(attachment);
   }
 
   /**
