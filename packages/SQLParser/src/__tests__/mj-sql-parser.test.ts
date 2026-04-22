@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { SQLParser } from '../sql-parser.js';
-const mjAstify = SQLParser.Astify.bind(SQLParser);
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
+const tsqlDialect = new SQLServerDialect();
+const mjAstify = (sql: string) => SQLParser.Astify(sql, tsqlDialect);
 const mjSqlify = SQLParser.Sqlify.bind(SQLParser);
 const extractTemplateExpressions = SQLParser.ExtractTemplateExpressions.bind(SQLParser);
 const extractCompositionRefs = SQLParser.ExtractCompositionRefs.bind(SQLParser);
@@ -386,7 +388,7 @@ describe('extractParameterInfo', () => {
 // ExtractSelectColumns, RenameTemplateVariable, SubstituteTemplateVariable
 // ═══════════════════════════════════════════════════
 
-const extractSelectColumns = SQLParser.ExtractSelectColumns.bind(SQLParser);
+const extractSelectColumns = (sql: string) => SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 const renameTemplateVariable = SQLParser.RenameTemplateVariable.bind(SQLParser);
 const substituteTemplateVariable = SQLParser.SubstituteTemplateVariable.bind(SQLParser);
 

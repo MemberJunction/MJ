@@ -8,6 +8,9 @@
 import { describe, it, expect } from 'vitest';
 import { SQLParser } from '@memberjunction/sql-parser';
 import type { MJParameterInfo, SQLSelectColumn } from '@memberjunction/sql-parser';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
+
+const tsqlDialect = new SQLServerDialect();
 
 // ═══════════════════════════════════════════════════
 // Test the deterministic extraction via SQLParser
@@ -1425,7 +1428,7 @@ describe('Field Type Enrichment from Composition References', () => {
 describe('Field Type Enrichment from Entity Metadata', () => {
     it('should resolve direct column from entity metadata via SQLParser', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,
@@ -1448,7 +1451,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should resolve AS alias to source column from entity metadata', () => {
         const sql = 'SELECT u.__mj_CreatedAt AS CreatedAt FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'CreatedAt', description: 'Creation timestamp', type: 'date', optional: false,
@@ -1471,7 +1474,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should disambiguate multiple tables by alias', () => {
         const sql = 'SELECT u.Name, e.Name AS EntityName FROM __mj.vwUsers u JOIN __mj.vwEntities e ON u.ID = e.ID';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [
             { name: 'Name', description: 'User name', type: 'string', optional: false },
@@ -1504,7 +1507,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should skip fields that already have sqlBaseType and sqlFullType', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'Already resolved', type: 'string', optional: false,
@@ -1525,7 +1528,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
     it('should fall back to flat lookup when no SELECT column matches', () => {
         // Field "Email" is not in the SELECT clause but exists in the entity
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Email', description: 'User email', type: 'string', optional: false,
@@ -1546,7 +1549,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should not overwrite existing sourceEntity on the field', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,

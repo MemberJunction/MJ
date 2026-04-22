@@ -1,6 +1,7 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityFieldTSType, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
 import { MJRecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
+import { EncryptionEngine } from "@memberjunction/encryption";
 import { SQLServerDataProvider, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { PostgreSQLDialect, SQLDialect, SQLServerDialect } from "@memberjunction/sql-dialect";
 import { getHeapStatistics } from "v8";
@@ -363,6 +364,16 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      * Creates a BaseEntity instance and loads it with data from a query result row.
      * Strips __ecd_ prefixed columns (our timestamp aliases) before loading to
      * avoid "field not found in entity" warnings from BaseEntity.SetMany().
+     *
+     * Also decrypts any Encrypt=1 field values. Detection queries run via
+     * RunQuery which does not call PostProcessRows, so encrypted fields arrive
+     * here as raw `$ENC$...` strings. Loading those directly and then calling
+     * Save() risks double-encryption — application-level Save() overrides that
+     * apply their own encryption will wrap the ciphertext again, and MJ's
+     * generic encrypt layer then wraps that. Decrypting here makes the replay
+     * path behave identically to a normal Load/Save cycle.
+     *
+     * Regression for https://github.com/MemberJunction/MJ/issues/2367
      */
     private async buildEntityFromRow(
         md: Metadata,
@@ -374,9 +385,52 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             if (!key.startsWith('__ecd_'))
                 cleanRow[key] = row[key];
         }
+
+        await this.decryptEncryptedFieldsInRow(entity, cleanRow);
+
         const record = await md.GetEntityObject(entity.Name, this.ContextUser);
         await record.LoadFromData(cleanRow);
         return record;
+    }
+
+    /**
+     * Decrypts any `Encrypt=1` field values in-place on the row so the replay
+     * path sees plaintext. No-op if the entity has no encrypted fields or if
+     * a field value is already plaintext / null / not a string.
+     *
+     * If decryption fails for any reason (misconfigured key, rotated key,
+     * corrupted ciphertext), the `$ENC$` value is left untouched. The
+     * provider's `EncryptFieldValuesForSave` guard will then detect the
+     * existing marker and skip re-encryption, so the DB value is preserved
+     * rather than corrupted — but the operator needs to see the error.
+     */
+    private async decryptEncryptedFieldsInRow(
+        entity: EntityInfo,
+        row: Record<string, unknown>
+    ): Promise<void> {
+        const encryptedFields = entity.Fields.filter(f => f.Encrypt && f.EncryptionKeyID);
+        if (encryptedFields.length === 0) return;
+
+        const engine = EncryptionEngine.Instance;
+        await engine.Config(false, this.ContextUser);
+
+        for (const field of encryptedFields) {
+            const value = row[field.Name];
+            if (typeof value !== 'string' || value.length === 0) continue;
+
+            const keyMarker = engine.GetKeyByID(field.EncryptionKeyID)?.Marker;
+            if (!engine.IsEncrypted(value, keyMarker)) continue;
+
+            try {
+                row[field.Name] = await engine.Decrypt(value, this.ContextUser);
+            }
+            catch (e) {
+                const detail = e instanceof Error ? e.message : String(e);
+                LogError(
+                    `ExternalChangeDetection: failed to decrypt ${entity.Name}.${field.Name} — leaving $ENC$ value intact to avoid corruption: ${detail}`
+                );
+            }
+        }
     }
 
     /**

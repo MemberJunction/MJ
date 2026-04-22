@@ -67,12 +67,13 @@ import {
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
-import { QueryParameterProcessor } from '@memberjunction/query-processor';
+// QueryParameterProcessor is now called internally by RenderPipeline
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect } from '@memberjunction/sql-dialect';
-import { QueryCompositionEngine } from './queryCompositionEngine.js';
+// QueryCompositionEngine is now owned by RenderPipeline
+import { RenderPipeline } from './renderPipeline.js';
 
 import {
     MJEntityAIActionEntity,
@@ -116,7 +117,7 @@ const GEO_EXTENDED_TYPES = new Set([
 ]);
 
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
-    private _compositionEngine = new QueryCompositionEngine();
+    // Composition engine is now owned by RenderPipeline
 
     /**************************************************************************/
     // Local Storage Provider — Server-Side Cache Backend
@@ -1306,8 +1307,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string): string {
         let sUserSearchSQL = '';
+        const safeUserSearchString = userSearchString.replace(/'/g, "''");
         if (entityInfo.FullTextSearchEnabled) {
-            let u = userSearchString;
+            let u = safeUserSearchString;
             const uUpper = u.toUpperCase();
             if (uUpper.includes(' AND ') || uUpper.includes(' OR ') || uUpper.includes(' NOT ')) {
                 u = uUpper.replace(/ /g, '%').replace(/%AND%/g, ' AND ').replace(/%OR%/g, ' OR ').replace(/%NOT%/g, ' NOT ');
@@ -1315,7 +1317,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 u = u.replace(/ /g, '%');
             } else if (u.includes(' ')) {
                 if (!(u.startsWith('"') && u.endsWith('"'))) {
-                    u = StripStopWords(userSearchString);
+                    u = StripStopWords(safeUserSearchString);
                     u = u.replace(/ /g, ' AND ');
                 }
             }
@@ -1327,9 +1329,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     let sParam = '';
                     if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
                     if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0)
-                        sParam = field.UserSearchParamFormatAPI.replace('{0}', userSearchString);
+                        sParam = field.UserSearchParamFormatAPI.replace('{0}', safeUserSearchString);
                     else
-                        sParam = ` LIKE '%${userSearchString}%'`;
+                        sParam = ` LIKE '%${safeUserSearchString}%'`;
                     sUserSearchSQL += `(${field.Name} ${sParam})`;
                 }
             }
@@ -2393,50 +2395,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Processes query parameters: resolves `{{query:"..."}}` composition tokens,
      * then applies Nunjucks template substitution for `{{param}}` tokens.
+     *
+     * Delegates to {@link RenderPipeline.Run} for the composition → template
+     * pipeline. Paging is handled separately by the caller (InternalRunQuery).
      */
     protected processQueryParameters(
         query: QueryInfo,
         parameters?: Record<string, string>,
         contextUser?: UserInfo,
     ): { finalSQL: string; appliedParameters: Record<string, string> } {
-        let finalSQL = query.GetPlatformSQL(this.PlatformKey);
-        let appliedParameters: Record<string, string> = {};
-
-        // Step 1: Resolve {{query:"..."}} composition tokens BEFORE Nunjucks processing
-        const compositionResult = this._compositionEngine.HasCompositionTokens(finalSQL) && contextUser
-            ? this._compositionEngine.ResolveComposition(finalSQL, this.PlatformKey, contextUser, parameters)
-            : { ResolvedSQL: finalSQL, CTEs: [], DependencyGraph: new Map<string, string[]>(), HasCompositions: false, AnyDependencyUsesTemplates: false };
-        finalSQL = compositionResult.ResolvedSQL;
-
-        // Step 2: Process Nunjucks template parameters.
-        // UsesTemplate is transitive: if ANY dependency uses templates, we must run Nunjucks
-        // even if the outer query itself has UsesTemplate = false.
-        const needsTemplateProcessing = query.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
-
-        if (needsTemplateProcessing) {
-            // Escape {{ }} inside SQL comments before Nunjucks processes them.
-            // Without this, patterns like {{query:"..."}} in comments cause
-            // Nunjucks parse errors ("expected variable end").
-            finalSQL = this._compositionEngine.escapeTemplateTokensInComments(finalSQL);
-
-            const processingResult = QueryParameterProcessor.processQueryTemplate(
-                query,
-                parameters,
-                finalSQL,
-                compositionResult.AnyDependencyUsesTemplates
-            );
-
-            if (!processingResult.success) {
-                throw new Error(processingResult.error);
+        const result = RenderPipeline.Run(
+            query.GetPlatformSQL(this.PlatformKey),
+            {
+                Platform: this.PlatformKey as DatabasePlatform,
+                ContextUser: contextUser,
+                Parameters: parameters,
+                UsesTemplate: query.UsesTemplate,
+                QueryInfo: query,
             }
+        );
 
-            finalSQL = processingResult.processedSQL;
-            appliedParameters = (processingResult.appliedParameters || {}) as Record<string, string>;
-        } else if (parameters && Object.keys(parameters).length > 0) {
+        if (!result.HasCompositions && !query.UsesTemplate && parameters && Object.keys(parameters).length > 0) {
             LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
         }
 
-        return { finalSQL, appliedParameters };
+        return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters };
     }
 
     /**
@@ -2490,82 +2473,36 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Resolves composition tokens and Nunjucks templates for a QueryExecutionSpec.
-     * Shared logic used by both `InternalExecuteQueryFromSpec` and can be reused
-     * if `processQueryParameters` is refactored in the future.
+     *
+     * Delegates to {@link RenderPipeline.Run} for the composition → template
+     * pipeline. Supports inline dependencies for transient query testing.
      */
     private resolveSpecParameters(
         spec: QueryExecutionSpec,
         contextUser?: UserInfo,
     ): { finalSQL: string; appliedParameters: Record<string, string> } {
-        let finalSQL = spec.SQL;
-        let appliedParameters: Record<string, string> = {};
-
-        // Step 1: Resolve {{query:"..."}} composition tokens (with inline deps support)
-        const compositionResult = this._compositionEngine.HasCompositionTokens(finalSQL) && contextUser
-            ? this._compositionEngine.ResolveComposition(finalSQL, this.PlatformKey, contextUser, spec.Parameters, spec.Dependencies)
-            : { ResolvedSQL: finalSQL, CTEs: [], DependencyGraph: new Map<string, string[]>(), HasCompositions: false, AnyDependencyUsesTemplates: false };
-        finalSQL = compositionResult.ResolvedSQL;
-
-        // Step 2: Process Nunjucks templates
-        const needsTemplateProcessing = spec.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
-        if (needsTemplateProcessing) {
-            const templateInput = {
-                SQL: spec.SQL,
-                UsesTemplate: spec.UsesTemplate ?? false,
-                Parameters: spec.ParameterDefinitions ?? [],
-            };
-            // Skip unknown-parameter validation when a dependency uses templates (existing behavior)
-            // OR when no formal ParameterDefinitions were provided (transient specs from TestQuerySQL
-            // don't have definitions — parameters should pass through to Nunjucks without validation).
-            const skipUnknownParamCheck = compositionResult.AnyDependencyUsesTemplates || !spec.ParameterDefinitions;
-            const processingResult = QueryParameterProcessor.processQueryTemplate(
-                templateInput,
-                spec.Parameters,
-                finalSQL,
-                skipUnknownParamCheck
-            );
-            if (!processingResult.success) {
-                throw new Error(processingResult.error);
+        const result = RenderPipeline.Run(
+            spec.SQL,
+            {
+                Platform: this.PlatformKey as DatabasePlatform,
+                ContextUser: contextUser,
+                Parameters: spec.Parameters,
+                ParameterDefinitions: spec.ParameterDefinitions,
+                UsesTemplate: spec.UsesTemplate,
+                Dependencies: spec.Dependencies,
+                OriginalSQL: spec.SQL,
+                MaxRows: spec.MaxRows,
             }
-            finalSQL = processingResult.processedSQL;
-            appliedParameters = (processingResult.appliedParameters || {}) as Record<string, string>;
-        } else if (spec.Parameters && Object.keys(spec.Parameters).length > 0) {
+        );
+
+        if (!result.HasCompositions && !spec.UsesTemplate && spec.Parameters && Object.keys(spec.Parameters).length > 0) {
             LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
         }
 
-        // Step 3: Apply MaxRows safety limit
-        if (spec.MaxRows != null && spec.MaxRows > 0) {
-            finalSQL = this.wrapWithMaxRows(finalSQL, spec.MaxRows);
-        }
-
-        return { finalSQL, appliedParameters };
+        return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters };
     }
 
-    /**
-     * Wraps SQL with a row limit for safety when testing transient queries.
-     * Uses platform-aware syntax: TOP N for SQL Server, LIMIT N for PostgreSQL.
-     */
-    private wrapWithMaxRows(sql: string, maxRows: number): string {
-        const platform = this.PlatformKey as DatabasePlatform;
-        const trimmed = sql.trim();
-
-        // Don't wrap if already has a TOP or LIMIT clause
-        if (/\bTOP\s+\d/i.test(trimmed) || /\bLIMIT\s+\d/i.test(trimmed)) {
-            return sql;
-        }
-
-        if (platform === 'postgresql') {
-            // Append LIMIT N — handle trailing semicolons
-            const withoutSemicolon = trimmed.replace(/;\s*$/, '');
-            return `${withoutSemicolon}\nLIMIT ${maxRows}`;
-        }
-
-        // SQL Server: inject TOP N after SELECT (handling SELECT DISTINCT)
-        return trimmed.replace(
-            /^(SELECT\s+(?:DISTINCT\s+)?)/i,
-            `$1TOP ${maxRows} `
-        );
-    }
+    // wrapWithMaxRows is now handled by RenderPipeline.applyMaxRows
 
     /**
      * Checks the query cache for existing results and returns them if valid.

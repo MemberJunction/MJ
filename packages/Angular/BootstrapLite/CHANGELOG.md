@@ -1,5 +1,70 @@
 # @memberjunction/ng-bootstrap-lite
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [2542615]
+- Updated dependencies [115e4da]
+  - @memberjunction/ng-shared@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-explorer-core@5.28.0
+  - @memberjunction/ng-core-entity-forms@5.28.0
+  - @memberjunction/ng-file-storage@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/ng-auth-services@5.28.0
+  - @memberjunction/ng-artifacts@5.28.0
+  - @memberjunction/ng-dashboard-viewer@5.28.0
+  - @memberjunction/communication-types@5.28.0
+  - @memberjunction/entity-communications-base@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/ng-dashboard-viewer@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ng-explorer-core@5.27.1
+  - @memberjunction/ai-engine-base@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/ng-auth-services@5.27.1
+  - @memberjunction/ng-core-entity-forms@5.27.1
+  - @memberjunction/ng-shared@5.27.1
+  - @memberjunction/ng-artifacts@5.27.1
+  - @memberjunction/ng-file-storage@5.27.1
+  - @memberjunction/communication-types@5.27.1
+  - @memberjunction/entity-communications-base@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- Updated dependencies [6fd2886]
+  - @memberjunction/ng-explorer-core@5.27.0
+  - @memberjunction/ng-core-entity-forms@5.27.0
+  - @memberjunction/ng-artifacts@5.27.0
+  - @memberjunction/ng-dashboard-viewer@5.27.0
+  - @memberjunction/ai-engine-base@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/actions-base@5.27.0
+  - @memberjunction/ng-auth-services@5.27.0
+  - @memberjunction/ng-shared@5.27.0
+  - @memberjunction/ng-file-storage@5.27.0
+  - @memberjunction/communication-types@5.27.0
+  - @memberjunction/entity-communications-base@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes
