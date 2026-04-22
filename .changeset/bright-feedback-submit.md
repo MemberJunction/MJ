@@ -1,5 +1,6 @@
 ---
 "@memberjunction/ng-feedback": patch
+"@memberjunction/ng-explorer-app": patch
 "@memberjunction/ng-explorer-core": patch
 "@memberjunction/server": patch
 "@memberjunction/server-bootstrap": patch

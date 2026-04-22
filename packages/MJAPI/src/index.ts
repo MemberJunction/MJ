@@ -29,15 +29,4 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const resolverPaths = [resolve(__dirname, 'generated/generated.{js,ts}')];
 
 // Start the server
-// Feedback is handled via GraphQL mutation (SubmitFeedback) - see FeedbackResolver in MJServer
-// Requires GITHUB_PAT environment variable with issues:write permission for feedback to work
-createMJServer({
-  resolverPaths
-}).catch((err) => {
-  console.error('Server error:');
-  console.error(err);
-  if (err instanceof Error) {
-    console.error('Stack:', err.stack);
-  }
-  process.exit(1);
-});
+createMJServer({ resolverPaths }).catch(console.error);

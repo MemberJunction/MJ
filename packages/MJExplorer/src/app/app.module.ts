@@ -17,7 +17,6 @@ import {
 } from '@memberjunction/ng-explorer-modules';
 import { AuthServicesModule, RedirectComponent, MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJExplorerAppModule } from '@memberjunction/ng-explorer-app';
-import { FeedbackModule } from '@memberjunction/ng-feedback';
 
 // Lazy loading infrastructure
 import { LazyModuleRegistry, LAZY_FEATURE_CONFIG } from '@memberjunction/ng-explorer-core';
@@ -84,30 +83,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     MJExplorerAppModule.forRoot(environment),
 
     // App-specific modules
-    GeneratedFormsModule,
-
-    // Feedback module for bug reporting (uses GraphQL mutation via standard MJ endpoint)
-    FeedbackModule.forRoot({
-      appName: 'MemberJunction Explorer',
-      title: 'Report an Issue',
-      subtitle: 'Help us improve MemberJunction Explorer',
-      fields: {
-        showSeverity: true,
-        showEnvironment: true,
-        affectedAreas: [
-          'Entities',
-          'Views',
-          'Queries',
-          'Reports',
-          'Dashboards',
-          'User Management',
-          'Admin Settings',
-          'Navigation',
-          'Search',
-          'Other'
-        ]
-      }
-    })
+    GeneratedFormsModule
   ],
   providers: [
     SharedService,
