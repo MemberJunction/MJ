@@ -17,6 +17,7 @@ import NodeSqlParser from 'node-sql-parser';
 const { Parser } = NodeSqlParser;
 import { MJLexer } from './mj-lexer.js';
 import { MJPlaceholderSubstitution } from './mj-placeholder.js';
+import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import {
     MJToken,
     MJTemplateExpr,
@@ -124,8 +125,8 @@ export interface SQLParseResult {
 export interface SQLParseOptions {
     /** The SQL string to parse */
     sql: string;
-    /** SQL dialect (default: 'TransactSQL') */
-    dialect?: string;
+    /** SQL dialect for parsing and identifier quoting */
+    dialect?: SQLParserDialect;
 }
 
 // ═══════════════════════════════════════════════════
@@ -164,11 +165,12 @@ export class SQLParser {
      * @param sql The MJ SQL string to parse
      * @param dialect SQL dialect ('TransactSQL' | 'PostgresQL', default: 'TransactSQL')
      */
-    static Astify(sql: string, dialect: string = 'TransactSQL'): MJAstifyResult {
+    static Astify(sql: string, dialect: SQLParserDialect): MJAstifyResult {
+        const parserDialect = dialect.ParserDialect;
         const mjParse = MJLexer.Parse(sql);
 
         if (!mjParse.hasMJExtensions) {
-            const ast = SQLParser.parseSQL(sql, dialect);
+            const ast = SQLParser.parseSQL(sql, parserDialect);
             return {
                 ast,
                 mjParse,
@@ -176,12 +178,12 @@ export class SQLParser {
                 strippedTokens: [],
                 cleanSQL: sql,
                 astParsed: ast !== null,
-                dialect,
+                dialect: parserDialect,
             };
         }
 
         const { cleanSQL, positionMap, strippedTokens } = MJPlaceholderSubstitution.Substitute(sql);
-        const ast = SQLParser.parseSQL(cleanSQL, dialect);
+        const ast = SQLParser.parseSQL(cleanSQL, parserDialect);
 
         return {
             ast,
@@ -190,7 +192,7 @@ export class SQLParser {
             strippedTokens,
             cleanSQL,
             astParsed: ast !== null,
-            dialect,
+            dialect: parserDialect,
         };
     }
 
@@ -218,17 +220,17 @@ export class SQLParser {
      * Handles FOR XML multi-directive workaround automatically.
      * Returns null if parsing fails.
      */
-    static ParseSQL(sql: string, dialect: string = 'TransactSQL'): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
-        return SQLParser.parseSQL(sql, dialect);
+    static ParseSQL(sql: string, dialect: SQLParserDialect): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
+        return SQLParser.parseSQL(sql, dialect.ParserDialect);
     }
 
     /**
      * Convert a node-sql-parser AST (or array of ASTs) back to a SQL string.
      * This is a thin wrapper around node-sql-parser's sqlify.
      */
-    static SqlifyAST(ast: NodeSqlParser.AST | NodeSqlParser.AST[], dialect: string = 'TransactSQL'): string {
+    static SqlifyAST(ast: NodeSqlParser.AST | NodeSqlParser.AST[], dialect: SQLParserDialect): string {
         const parser = new Parser();
-        const sql = parser.sqlify(Array.isArray(ast) ? ast[0] : ast, { database: dialect });
+        const sql = parser.sqlify(Array.isArray(ast) ? ast[0] : ast, { database: dialect.ParserDialect });
         return SQLParser.fixMaxTypeSerialization(sql);
     }
 
@@ -237,22 +239,16 @@ export class SQLParser {
      * Useful for extracting ORDER BY terms, column expressions, etc.
      *
      * node-sql-parser's exprToSQL always produces backtick-quoted identifiers
-     * regardless of dialect. This method converts to the appropriate quoting:
-     * - TransactSQL: backticks → square brackets
-     * - PostgresQL: backticks → double quotes
+     * regardless of dialect. This method converts backticks to the dialect's
+     * native identifier quoting via `dialect.QuoteIdentifier()`.
      */
-    static ExprToSQL(expr: unknown, dialect: string = 'TransactSQL'): string {
+    static ExprToSQL(expr: unknown, dialect: SQLParserDialect): string {
         const parser = new Parser();
         let sql = parser.exprToSQL(expr);
         sql = SQLParser.fixMaxTypeSerialization(sql);
 
-        if (dialect === 'TransactSQL') {
-            return sql.replace(/`([^`]+)`/g, '[$1]');
-        }
-        if (dialect === 'PostgresQL') {
-            return sql.replace(/`([^`]+)`/g, '"$1"');
-        }
-        return sql;
+        // node-sql-parser emits `backtick` quoting; convert to dialect-native quoting
+        return sql.replace(/`([^`]+)`/g, (_match, name: string) => dialect.QuoteIdentifier(name));
     }
 
     // ─── Tokenization ──────────────────────────────────
@@ -299,7 +295,7 @@ export class SQLParser {
      *
      * @param options Parse options, or just a SQL string for backward compatibility
      */
-    static Parse(options: SQLParseOptions | string, dialect?: string): SQLParseResult {
+    static Parse(options: SQLParseOptions | string, dialect?: SQLParserDialect): SQLParseResult {
         const { sql, parserDialect } = SQLParser.resolveParseArgs(options, dialect);
         if (!sql || sql.trim().length === 0) {
             return { Tables: [], Columns: [], UsedASTParsing: false };
@@ -337,7 +333,7 @@ export class SQLParser {
      *
      * @param options Parse options, or just a SQL string for backward compatibility
      */
-    static ParseWithTemplatePreprocessing(options: SQLParseOptions | string, dialect?: string): SQLParseResult {
+    static ParseWithTemplatePreprocessing(options: SQLParseOptions | string, dialect?: SQLParserDialect): SQLParseResult {
         return SQLParser.Parse(options, dialect);
     }
 
@@ -347,11 +343,12 @@ export class SQLParser {
      * Extract all table/view references from SQL.
      * Handles Nunjucks templates via placeholder substitution before AST parsing.
      */
-    static ExtractTableRefs(sql: string, dialect: string = 'TransactSQL'): SQLTableReference[] {
+    static ExtractTableRefs(sql: string, dialect?: SQLParserDialect): SQLTableReference[] {
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
-        const astResult = SQLParser.extractTablesViaAST(cleanSQL, dialect);
+        const parserDialect = dialect?.ParserDialect || 'TransactSQL';
+        const astResult = SQLParser.extractTablesViaAST(cleanSQL, parserDialect);
         if (astResult) return astResult;
 
         return SQLParser.extractTablesViaRegex(cleanSQL);
@@ -361,16 +358,17 @@ export class SQLParser {
      * Extract all column references from SQL.
      * Handles Nunjucks templates via placeholder substitution before AST parsing.
      */
-    static ExtractColumnRefs(sql: string, dialect: string = 'TransactSQL'): SQLColumnReference[] {
+    static ExtractColumnRefs(sql: string, dialect?: SQLParserDialect): SQLColumnReference[] {
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
+        const parserDialect = dialect?.ParserDialect || 'TransactSQL';
         const tableAliasMap = new Map<string, { schemaName: string; tableName: string }>();
         const columnRefs = new Set<string>();
 
         try {
             const parser = new Parser();
-            const ast = parser.astify(cleanSQL, { database: dialect });
+            const ast = parser.astify(cleanSQL, { database: parserDialect });
             const statements = Array.isArray(ast) ? ast : [ast];
             for (const statement of statements) {
                 SQLParser.walkAST(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
@@ -392,14 +390,14 @@ export class SQLParser {
      *   - Expressions: `COUNT(*)` → { OutputName: "COUNT(*)", SourceColumn: "COUNT(*)", IsExpression: true }
      *   - MJ template tokens are replaced with placeholders before AST parsing.
      */
-    static ExtractSelectColumns(sql: string, dialect: string = 'TransactSQL'): SQLSelectColumn[] {
+    static ExtractSelectColumns(sql: string, dialect: SQLParserDialect): SQLSelectColumn[] {
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
 
         try {
             const parser = new Parser();
-            const ast = parser.astify(cleanSQL, { database: dialect });
+            const ast = parser.astify(cleanSQL, { database: dialect.ParserDialect });
             const statements = Array.isArray(ast) ? ast : [ast];
             const columns: SQLSelectColumn[] = [];
 
@@ -502,7 +500,7 @@ export class SQLParser {
      * Uses AST parsing first (produces bracket-quoted identifiers for SQL Server),
      * falls back to paren-depth scanning if AST fails (e.g., Nunjucks-templated SQL).
      */
-    static ExtractCTEs(sql: string, dialect: string = 'TransactSQL'): SQLCTEExtraction | null {
+    static ExtractCTEs(sql: string, dialect: SQLParserDialect): SQLCTEExtraction | null {
         // Strip leading whitespace + SQL comments (/* */ and --) so that
         // queries with a descriptive header block are recognized as CTEs.
         // The AST parser handles comments natively, but when it fails
@@ -511,7 +509,7 @@ export class SQLParser {
         const stripped = SQLParser.skipLeadingCommentsAndWhitespace(sql);
         if (!/^WITH\s/i.test(stripped)) return null;
 
-        const astResult = SQLParser.extractCTEsViaAST(stripped, dialect);
+        const astResult = SQLParser.extractCTEsViaAST(stripped, dialect.ParserDialect);
         if (astResult) return astResult;
 
         return SQLParser.extractCTEsViaRegex(stripped);
@@ -1194,12 +1192,12 @@ export class SQLParser {
     /** Resolves overloaded Parse() args: (string, dialect?) or (options) */
     private static resolveParseArgs(
         options: SQLParseOptions | string,
-        dialect?: string
+        dialect?: SQLParserDialect
     ): { sql: string; parserDialect: string } {
         if (typeof options === 'string') {
-            return { sql: options, parserDialect: dialect || 'TransactSQL' };
+            return { sql: options, parserDialect: dialect?.ParserDialect || 'TransactSQL' };
         }
-        return { sql: options.sql, parserDialect: options.dialect || 'TransactSQL' };
+        return { sql: options.sql, parserDialect: options.dialect?.ParserDialect || 'TransactSQL' };
     }
     private static parseSQL(sql: string, dialect: string): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
         try {

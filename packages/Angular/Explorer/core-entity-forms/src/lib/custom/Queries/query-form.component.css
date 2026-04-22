@@ -10,6 +10,34 @@
 }
 
 /* ========================================
+   Saving Overlay
+   ======================================== */
+
+.saving-overlay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: color-mix(in srgb, var(--mj-status-info) 10%, var(--mj-bg-surface));
+    border-bottom: 1px solid var(--mj-border-subtle);
+    color: var(--mj-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.saving-spinner {
+    color: var(--mj-brand-primary);
+    font-size: 14px;
+}
+
+.content-saving {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+/* ========================================
    Header Section — matches Query Browser gradient
    ======================================== */
 
@@ -602,6 +630,18 @@
 
 .detail-tag.neutral {
     color: var(--mj-text-disabled);
+}
+
+.detail-hint {
+    font-size: var(--mj-text-xs);
+    color: var(--mj-text-muted);
+    line-height: 1.4;
+}
+
+.detail-input-narrow {
+    max-width: 120px;
+    padding: 4px 8px;
+    font-size: var(--mj-text-sm);
 }
 
 /* ========================================

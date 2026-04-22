@@ -17,6 +17,7 @@ import { MJExplorerAppComponent } from './explorer-app.component';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJ_STARTUP_VALIDATION } from '@memberjunction/ng-bootstrap';
 import { ShellModule, StartupValidationService, SystemValidationBannerComponent, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
+import { FeedbackModule } from '@memberjunction/ng-feedback';
 
 @NgModule({
   declarations: [
@@ -28,7 +29,28 @@ import { ConversationsModule } from '@memberjunction/ng-conversations';
     ShellModule,
     SystemValidationBannerComponent,  // Standalone component
     ServerConnectivityBannerComponent,  // Standalone component
-    ConversationsModule
+    ConversationsModule,
+    FeedbackModule.forRoot({
+      appName: 'MemberJunction Explorer',
+      title: 'Report an Issue',
+      subtitle: 'Help us improve MemberJunction Explorer',
+      fields: {
+        showSeverity: true,
+        showEnvironment: true,
+        affectedAreas: [
+          'Entities',
+          'Views',
+          'Queries',
+          'Reports',
+          'Dashboards',
+          'User Management',
+          'Admin Settings',
+          'Navigation',
+          'Search',
+          'Other'
+        ]
+      }
+    })
   ],
   exports: [
     MJExplorerAppComponent

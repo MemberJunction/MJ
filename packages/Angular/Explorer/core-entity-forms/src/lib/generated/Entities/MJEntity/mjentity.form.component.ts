@@ -75,6 +75,8 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJRecordLinksSourceEntityID', sectionName: 'Record Links (Source Entity ID)', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationEntityMaps', sectionName: 'Company Integration Entity Maps', isExpanded: false },
             { sectionKey: 'mJEntityFieldsRelatedEntityID', sectionName: 'Entity Fields (Related Entity)', isExpanded: false },
+            { sectionKey: 'mJArchiveConfigurationEntities', sectionName: 'Archive Configuration Entities', isExpanded: false },
+            { sectionKey: 'mJArchiveRunDetails', sectionName: 'Archive Run Details', isExpanded: false },
             { sectionKey: 'mJResourceTypesCategoryEntityID', sectionName: 'Resource Types (Category Entity ID)', isExpanded: false },
             { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'Test Runs', isExpanded: false },

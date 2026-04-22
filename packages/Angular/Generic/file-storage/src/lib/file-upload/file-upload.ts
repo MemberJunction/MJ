@@ -35,8 +35,8 @@ const FileFieldsFragment = gql`
 
 const FileUploadMutation = gql`
   ${FileFieldsFragment}
-  mutation CreateMJFile($input: CreateMJFileInput!) {
-    CreateMJFile(input: $input) {
+  mutation CreateFile($input: CreateMJFileInput!) {
+    CreateFile(input: $input) {
       NameExists
       UploadUrl
       File {
@@ -47,14 +47,14 @@ const FileUploadMutation = gql`
 `;
 
 const FileUploadMutationSchema = z.object({
-  CreateMJFile: z.object({
+  CreateFile: z.object({
     NameExists: z.boolean(),
     UploadUrl: z.string(),
     File: MJFileSchema.omit({ __mj_CreatedAt: true, __mj_UpdatedAt: true }).passthrough(),
   }),
 });
 
-type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateMJFile']['File'];
+type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateFile']['File'];
 type UploadTuple = [FileSelectInfo, ApiFile, string];
 
 @Component({
@@ -160,7 +160,7 @@ export class FileUploadComponent implements OnInit {
       // make sure the response is correct
       const parsedResult = FileUploadMutationSchema.safeParse(result);
       if (parsedResult.success) {
-        const { File, UploadUrl, NameExists } = parsedResult.data.CreateMJFile;
+        const { File, UploadUrl, NameExists } = parsedResult.data.CreateFile;
         const uploadTuple: UploadTuple = [file, File, UploadUrl];
 
         // Confirm we want to overwrite
