@@ -1,6 +1,8 @@
 import { Component } from '@angular/core';
+import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { createMarkdownSnapshot } from '../../snapshot-helpers';
 
 /**
  * Viewer component for Markdown artifacts
@@ -164,6 +166,10 @@ export class MarkdownArtifactViewerComponent extends BaseArtifactViewerPluginCom
 
   ngOnInit(): void {
     this.markdownContent = this.getContent();
+  }
+
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    return createMarkdownSnapshot(this.getRawContent(), this.getDisplayTitle());
   }
 
   onCopy(): void {

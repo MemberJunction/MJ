@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (315 classes)
+// @memberjunction/core-entities (319 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -115,6 +115,10 @@ import {
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
     MJApplicationSettingEntity,
+    MJArchiveConfigurationEntity,
+    MJArchiveConfigurationEntityEntity,
+    MJArchiveRunDetailEntity,
+    MJArchiveRunEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
     MJArtifactTypeEntity,
@@ -530,6 +534,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
     MJApplicationSettingEntity,
+    MJArchiveConfigurationEntity,
+    MJArchiveConfigurationEntityEntity,
+    MJArchiveRunDetailEntity,
+    MJArchiveRunEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
     MJArtifactTypeEntity,
@@ -829,7 +837,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 379;
+export const CLASS_REGISTRATIONS_COUNT = 383;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

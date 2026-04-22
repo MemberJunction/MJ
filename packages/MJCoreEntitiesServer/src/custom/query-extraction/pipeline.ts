@@ -148,11 +148,15 @@ async function sync(
     // Fields
     if (finalFields) {
         syncPromises.push(SyncFields(ctx.queryID, finalFields, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+    } else {
+        syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Fields', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
     }
 
     // Entities
     if (resolveResult.entityMetadata.length > 0) {
         syncPromises.push(SyncEntities(ctx.queryID, resolveResult.entityMetadata, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+    } else {
+        syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Entities', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
     }
 
     // Dependencies

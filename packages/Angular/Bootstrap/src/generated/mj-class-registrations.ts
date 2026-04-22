@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (315 classes)
+// @memberjunction/core-entities (319 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -115,6 +115,10 @@ import {
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
     MJApplicationSettingEntity,
+    MJArchiveConfigurationEntity,
+    MJArchiveConfigurationEntityEntity,
+    MJArchiveRunDetailEntity,
+    MJArchiveRunEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
     MJArtifactTypeEntity,
@@ -421,7 +425,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (69 classes)
+// @memberjunction/ng-dashboards (71 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -433,6 +437,8 @@ import {
     AgentRequestsResourceComponent,
     AnalyticsResourceComponent,
     ApplicationRolesResourceComponent,
+    ArchiveConfigResourceComponent,
+    ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -613,6 +619,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
     MJApplicationSettingEntity,
+    MJArchiveConfigurationEntity,
+    MJArchiveConfigurationEntityEntity,
+    MJArchiveRunDetailEntity,
+    MJArchiveRunEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
     MJArtifactTypeEntity,
@@ -907,6 +917,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     AgentRequestsResourceComponent,
     AnalyticsResourceComponent,
     ApplicationRolesResourceComponent,
+    ArchiveConfigResourceComponent,
+    ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -987,7 +999,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 454;
+export const CLASS_REGISTRATIONS_COUNT = 460;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

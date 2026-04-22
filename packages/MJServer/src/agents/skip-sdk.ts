@@ -17,12 +17,6 @@ import {
     SkipAPIRequestAPIKey,
     SkipQueryInfo,
     SkipQueryCatalogEntry,
-    SkipEntityInfo,
-    SkipEntityFieldInfo,
-    SkipEntityFieldValueInfo,
-    SkipEntityRelationshipInfo,
-    SkipEntityOrganicKeyInfo,
-    SkipEntityOrganicKeyRelatedEntityInfo,
     SkipAPIAgentNote,
     SkipAPIAgentNoteType,
     SkipAPIArtifact,
@@ -30,7 +24,7 @@ import {
     SkipAPIArtifactType
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo } from '@memberjunction/core';
+import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityFieldValueInfo, DatabaseProviderBase } from '@memberjunction/core';
 import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
 import { gzip as gzipCompress, createGunzip } from 'zlib';
@@ -206,7 +200,7 @@ export class SkipSDK {
     private config: SkipSDKConfig;
 
     // Static cache for Skip entities (shared across all instances)
-    private static __skipEntitiesCache$: BehaviorSubject<Promise<SkipEntityInfo[]> | null> = new BehaviorSubject<Promise<SkipEntityInfo[]> | null>(null);
+    private static __skipEntitiesCache$: BehaviorSubject<Promise<EntityInfo[]> | null> = new BehaviorSubject<Promise<EntityInfo[]> | null>(null);
     private static __lastRefreshTime: number = 0;
 
     constructor(config?: SkipSDKConfig) {
@@ -396,7 +390,7 @@ export class SkipSDK {
         includeCallbackAuth: boolean,
         additionalTokenInfo: any = {}
     ): Promise<Partial<SkipAPIRequest>> {
-        const entities = includeEntities ? await this.buildEntities(dataSource, forceEntityRefresh) : [];
+        const entities = includeEntities ? await this.buildEntities(forceEntityRefresh) : [];
         const queries = includeQueries ? this.buildQueries() : [];
         // Always build the lightweight query catalog for collision detection,
         // regardless of whether full queries are included
@@ -442,7 +436,7 @@ export class SkipSDK {
      * Build entity metadata for Skip
      * Copied from AskSkipResolver.BuildSkipEntities - uses cached metadata with refresh logic
      */
-    private async buildEntities(dataSource: mssql.ConnectionPool, forceRefresh: boolean, refreshIntervalMinutes: number = 15): Promise<SkipEntityInfo[]> {
+    private async buildEntities(forceRefresh: boolean, refreshIntervalMinutes: number = 15): Promise<EntityInfo[]> {
         try {
             const now = Date.now();
             const cacheExpired = (now - SkipSDK.__lastRefreshTime) > (refreshIntervalMinutes * 60 * 1000);
@@ -450,7 +444,7 @@ export class SkipSDK {
             // If force refresh is requested OR cache expired OR cache is empty, refresh
             if (forceRefresh || cacheExpired || SkipSDK.__skipEntitiesCache$.value === null) {
                 LogStatus(`[SkipSDK] Refreshing Skip entities cache (force: ${forceRefresh}, expired: ${cacheExpired})`);
-                const newData = this.refreshSkipEntities(dataSource);
+                const newData = this.refreshSkipEntities();
                 SkipSDK.__skipEntitiesCache$.next(newData);
             }
 
@@ -856,9 +850,11 @@ export class SkipSDK {
     /**
      * Refreshes the Skip entities cache
      * Rebuilds the entity information that is provided to Skip
-     * Copied from AskSkipResolver.refreshSkipEntities
+     * Refreshes the entity metadata cache. Filters entities by schema/scope config,
+     * filters fields by AI scope, and enriches field values from the database.
+     * Returns EntityInfo objects directly — no intermediate Skip-specific types needed.
      */
-    private async refreshSkipEntities(dataSource: mssql.ConnectionPool): Promise<SkipEntityInfo[]> {
+    private async refreshSkipEntities(): Promise<EntityInfo[]> {
         try {
             const md = new Metadata();
 
@@ -891,12 +887,12 @@ export class SkipSDK {
                 LogError(`[SkipSDK.refreshSkipEntities] WARNING: No entities passed filtering! This will result in empty Skip entities list.`);
             }
 
-            // Now we have our list of entities, pack em up
-            const result = await Promise.all(entities.map((e) => this.packSingleSkipEntityInfo(e, dataSource)));
+            // Build enriched EntityInfo objects with filtered fields and packed values
+            const result = await Promise.all(entities.map((e) => this.buildEntityForSkip(e)));
 
             LogStatus(`[SkipSDK.refreshSkipEntities] Successfully packed ${result.length} entities for Skip`);
 
-            SkipSDK.__lastRefreshTime = Date.now(); // Update last refresh time
+            SkipSDK.__lastRefreshTime = Date.now();
             return result;
         }
         catch (e) {
@@ -906,258 +902,95 @@ export class SkipSDK {
     }
 
     /**
-     * Packs information about a single entity for Skip
-     * Includes fields, relationships, and sample data
-     * Copied from AskSkipResolver.PackSingleSkipEntityInfo
+     * Builds an EntityInfo object for Skip, filtering fields by AI scope and
+     * enriching field values from the database. Returns a new EntityInfo
+     * constructed from a plain object so it serializes cleanly via toJSON().
      */
-    private async packSingleSkipEntityInfo(e: EntityInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityInfo> {
+    private async buildEntityForSkip(e: EntityInfo): Promise<EntityInfo> {
         try {
-            const ret: SkipEntityInfo = {
-                id: e.ID,
-                name: e.Name,
-                schemaName: e.SchemaName,
-                baseView: e.BaseView,
-                description: e.Description,
+            // Filter fields by scope (only include fields visible to AI)
+            const filteredFields = e.Fields.filter(f => {
+                const scopes = f.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase());
+                return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai');
+            });
 
-                fields: await Promise.all(e.Fields.filter(f => {
-                    // we want to check the scopes for the field level and make sure it is either All or AI or has both
-                    const scopes = f.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase());
-                    return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai');
-                }).map(f => {
-                    return this.packSingleSkipEntityField(f, dataSource);
-                })),
+            // Enrich each field with packed possible values
+            const enrichedFields = await Promise.all(filteredFields.map(f => this.enrichFieldValues(f)));
 
-                relatedEntities: e.RelatedEntities.map((r) => {
-                    return this.packSingleSkipEntityRelationship(r);
-                }),
-
-                organicKeys: (e.OrganicKeys ?? [])
-                    .filter((ok) => ok.Status === 'Active')
-                    .map((ok) => this.packSingleSkipOrganicKey(ok))
-                    .filter((ok): ok is SkipEntityOrganicKeyInfo => ok !== null)
-            };
-            return ret;
+            // Clone the entity via toJSON, then swap in filtered+enriched fields and Skip-specific
+            // Active-only organic keys. Any future EntityInfo properties flow through automatically.
+            return new EntityInfo({
+                ...e.toJSON(),
+                Fields: enrichedFields,
+                OrganicKeys: e.OrganicKeys.filter(ok => ok.Status === 'Active'),
+            });
         }
-        catch (e) {
-            LogError(`[SkipSDK] packSingleSkipEntityInfo error: ${e}`);
+        catch (err) {
+            LogError(`[SkipSDK] buildEntityForSkip error: ${err}`);
             return null;
         }
     }
 
     /**
-     * Packs information about a single organic key for Skip.
-     * Organic keys express cross-entity relationships via shared business data
-     * (email, acronym, etc.) rather than database FK constraints.
+     * Enriches a field's EntityFieldValues with possible values from the database.
+     * Returns a plain object that can be used to construct an EntityFieldInfo.
      */
-    private packSingleSkipOrganicKey(ok: EntityOrganicKeyInfo): SkipEntityOrganicKeyInfo | null {
-        try {
-            return {
-                id: ok.ID,
-                name: ok.Name,
-                description: ok.Description ?? undefined,
-                matchFieldNames: ok.MatchFieldNamesArray,
-                normalizationStrategy: ok.NormalizationStrategy,
-                customNormalizationExpression: ok.CustomNormalizationExpression ?? undefined,
-                sequence: ok.Sequence,
-                relatedEntities: ok.RelatedEntities
-                    .map((re) => this.packSingleSkipOrganicKeyRelatedEntity(re))
-                    .filter((re): re is SkipEntityOrganicKeyRelatedEntityInfo => re !== null)
-            };
-        }
-        catch (e) {
-            LogError(`[SkipSDK] packSingleSkipOrganicKey error: ${e}`);
-            return null;
-        }
+    private async enrichFieldValues(f: EntityFieldInfo): Promise<Record<string, unknown>> {
+        return {
+            ...f.toJSON(),
+            EntityFieldValues: await this.packFieldValues(f),
+        };
     }
 
     /**
-     * Packs information about a single organic key related entity for Skip.
-     * Looks up schema name and base view from metadata since they are not
-     * stored on EntityOrganicKeyRelatedEntityInfo directly.
+     * Packs possible values for an entity field based on the ValuesToPackWithSchema setting.
+     * Returns EntityFieldValueInfo-compatible objects.
      */
-    private packSingleSkipOrganicKeyRelatedEntity(
-        re: EntityOrganicKeyRelatedEntityInfo
-    ): SkipEntityOrganicKeyRelatedEntityInfo | null {
-        try {
-            // Look up the related entity to obtain schema name and base view, which
-            // Skip needs in order to generate schema-qualified SQL.
-            const relatedEntity = Metadata.Provider.Entities.find(
-                (ent) => UUIDsEqual(ent.ID, re.RelatedEntityID)
-            );
-            if (!relatedEntity) {
-                LogError(
-                    `[SkipSDK] packSingleSkipOrganicKeyRelatedEntity: related entity not found for ID ${re.RelatedEntityID}`
-                );
-                return null;
-            }
-
-            return {
-                id: re.ID,
-                relatedEntityID: re.RelatedEntityID,
-                relatedEntityName: relatedEntity.Name,
-                relatedEntitySchemaName: relatedEntity.SchemaName,
-                relatedEntityBaseView: relatedEntity.BaseView,
-                isDirectMatch: re.IsDirectMatch,
-                isTransitiveMatch: re.IsTransitiveMatch,
-                relatedEntityFieldNames: re.IsDirectMatch
-                    ? re.RelatedEntityFieldNamesArray
-                    : undefined,
-                transitiveObjectName: re.TransitiveObjectName ?? undefined,
-                transitiveObjectMatchFieldNames: re.IsTransitiveMatch
-                    ? re.TransitiveObjectMatchFieldNamesArray
-                    : undefined,
-                transitiveObjectOutputFieldName: re.TransitiveObjectOutputFieldName ?? undefined,
-                relatedEntityJoinFieldName: re.RelatedEntityJoinFieldName ?? undefined,
-                displayName: re.DisplayName ?? undefined,
-                sequence: re.Sequence
-            };
-        }
-        catch (e) {
-            LogError(`[SkipSDK] packSingleSkipOrganicKeyRelatedEntity error: ${e}`);
-            return null;
-        }
-    }
-
-    /**
-     * Packs information about a single entity relationship
-     * These relationships help Skip understand the data model
-     * Copied from AskSkipResolver.PackSingleSkipEntityRelationship
-     */
-    private packSingleSkipEntityRelationship(r: EntityRelationshipInfo): SkipEntityRelationshipInfo {
-        try {
-            return {
-                entityID: r.EntityID,
-                relatedEntityID: r.RelatedEntityID,
-                type: r.Type,
-                entityKeyField: r.EntityKeyField,
-                relatedEntityJoinField: r.RelatedEntityJoinField,
-                joinView: r.JoinView,
-                joinEntityJoinField: r.JoinEntityJoinField,
-                joinEntityInverseJoinField: r.JoinEntityInverseJoinField,
-                entity: r.Entity,
-                entityBaseView: r.EntityBaseView,
-                relatedEntity: r.RelatedEntity,
-                relatedEntityBaseView: r.RelatedEntityBaseView,
-            };
-        }
-        catch (e) {
-            LogError(`[SkipSDK] packSingleSkipEntityRelationship error: ${e}`);
-            return null;
-        }
-    }
-
-    /**
-     * Packs information about a single entity field
-     * Includes metadata and possible values
-     * Copied from AskSkipResolver.PackSingleSkipEntityField
-     */
-    private async packSingleSkipEntityField(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityFieldInfo> {
-        try {
-            return {
-                entityID: f.EntityID,
-                sequence: f.Sequence,
-                name: f.Name,
-                displayName: f.DisplayName,
-                category: f.Category,
-                type: f.Type,
-                description: f.Description,
-                isPrimaryKey: f.IsPrimaryKey,
-                allowsNull: f.AllowsNull,
-                isUnique: f.IsUnique,
-                length: f.Length,
-                precision: f.Precision,
-                scale: f.Scale,
-                sqlFullType: f.SQLFullType,
-                defaultValue: f.DefaultValue,
-                autoIncrement: f.AutoIncrement,
-                valueListType: f.ValueListType,
-                extendedType: f.ExtendedType,
-                defaultInView: f.DefaultInView,
-                defaultColumnWidth: f.DefaultColumnWidth,
-                isVirtual: f.IsVirtual,
-                isNameField: f.IsNameField,
-                relatedEntityID: f.RelatedEntityID,
-                relatedEntityFieldName: f.RelatedEntityFieldName,
-                relatedEntity: f.RelatedEntity,
-                relatedEntitySchemaName: f.RelatedEntitySchemaName,
-                relatedEntityBaseView: f.RelatedEntityBaseView,
-                possibleValues: await this.packFieldPossibleValues(f, dataSource),
-            };
-        }
-        catch (e) {
-            LogError(`[SkipSDK] packSingleSkipEntityField error: ${e}`);
-            return null;
-        }
-    }
-
-    /**
-     * Packs possible values for an entity field
-     * These values help Skip understand the domain and valid values for fields
-     * Copied from AskSkipResolver.PackFieldPossibleValues
-     */
-    private async packFieldPossibleValues(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityFieldValueInfo[]> {
+    private async packFieldValues(f: EntityFieldInfo): Promise<EntityFieldValueInfo[]> {
         try {
             if (f.ValuesToPackWithSchema === 'None') {
-                return []; // don't pack anything
+                return [];
             }
             else if (f.ValuesToPackWithSchema === 'All') {
-                // wants ALL of the distinct values
-                return await this.getFieldDistinctValues(f, dataSource);
+                return await this.getFieldDistinctValues(f);
             }
             else if (f.ValuesToPackWithSchema === 'Auto') {
-                // default setting - pack based on the ValueListType
                 if (f.ValueListTypeEnum === 'List') {
-                    // simple list of values in the Entity Field Values table
-                    return f.EntityFieldValues.map((v) => {
-                        return { value: v.Value, displayValue: v.Value };
-                    });
+                    return f.EntityFieldValues.map((v) => new EntityFieldValueInfo({ Value: v.Value, Code: v.Value }));
                 }
                 else if (f.ValueListTypeEnum === 'ListOrUserEntry') {
-                    // could be a user provided value, OR the values in the list of possible values.
-                    // get the distinct list of values from the DB and concat that with the f.EntityFieldValues array - deduped and return
-                    const values = await this.getFieldDistinctValues(f, dataSource);
+                    const values = await this.getFieldDistinctValues(f);
                     if (!values || values.length === 0) {
-                        // no result, just return the EntityFieldValues
-                        return f.EntityFieldValues.map((v) => {
-                            return { value: v.Value, displayValue: v.Value };
-                        });
+                        return f.EntityFieldValues.map((v) => new EntityFieldValueInfo({ Value: v.Value, Code: v.Value }));
                     }
                     else {
-                        return [...new Set([...f.EntityFieldValues.map((v) => {
-                            return { value: v.Value, displayValue: v.Value };
-                        }), ...values])];
+                        const fromEntityFieldValues = f.EntityFieldValues.map((v) => new EntityFieldValueInfo({ Value: v.Value, Code: v.Value }));
+                        return [...new Set([...fromEntityFieldValues, ...values])];
                     }
                 }
             }
-            return []; // if we get here, nothing to pack
+            return [];
         }
         catch (e) {
-            LogError(`[SkipSDK] packFieldPossibleValues error: ${e}`);
+            LogError(`[SkipSDK] packFieldValues error: ${e}`);
             return [];
         }
     }
 
     /**
-     * Gets distinct values for a field from the database
-     * Used to provide Skip with information about the possible values
-     * Copied from AskSkipResolver.GetFieldDistinctValues
+     * Gets distinct values for a field from the database.
+     * Returns EntityFieldValueInfo objects.
      */
-    private async getFieldDistinctValues(f: EntityFieldInfo, dataSource: mssql.ConnectionPool): Promise<SkipEntityFieldValueInfo[]> {
+    private async getFieldDistinctValues(f: EntityFieldInfo): Promise<EntityFieldValueInfo[]> {
         try {
+            // Uses the provider's ExecuteSQL so this works on both SQL Server and PostgreSQL.
+            const provider = Metadata.Provider as DatabaseProviderBase;
             const sql = `SELECT DISTINCT ${f.Name} FROM ${f.SchemaName}.${f.BaseView}`;
-            const request = new mssql.Request(dataSource);
-            const result = await request.query(sql);
-            if (!result || !result.recordset) {
+            const rows = await provider.ExecuteSQL<Record<string, unknown>>(sql);
+            if (!rows || rows.length === 0) {
                 return [];
             }
-            else {
-                return result.recordset.map((r) => {
-                    return {
-                        value: r[f.Name],
-                        displayValue: r[f.Name]
-                    };
-                });
-            }
+            return rows.map((r) => new EntityFieldValueInfo({ Value: r[f.Name] as string, Code: r[f.Name] as string }));
         }
         catch (e) {
             LogError(`[SkipSDK] getFieldDistinctValues error: ${e}`);

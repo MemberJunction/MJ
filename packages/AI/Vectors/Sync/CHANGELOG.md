@@ -1,5 +1,62 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [fdab4bb]
+- Updated dependencies [115e4da]
+  - @memberjunction/ai-prompts@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/ai-vectors@5.28.0
+  - @memberjunction/ai-vectordb@5.28.0
+  - @memberjunction/ai-vectors-pinecone@5.28.0
+  - @memberjunction/credentials@5.28.0
+  - @memberjunction/templates-base-types@5.28.0
+  - @memberjunction/templates@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ai@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/aiengine@5.27.1
+  - @memberjunction/ai-prompts@5.27.1
+  - @memberjunction/ai-vectors@5.27.1
+  - @memberjunction/ai-vectordb@5.27.1
+  - @memberjunction/ai-vectors-pinecone@5.27.1
+  - @memberjunction/credentials@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/templates-base-types@5.27.1
+  - @memberjunction/templates@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.27.0
+- @memberjunction/ai-core-plus@5.27.0
+- @memberjunction/aiengine@5.27.0
+- @memberjunction/ai-prompts@5.27.0
+- @memberjunction/ai-vectors@5.27.0
+- @memberjunction/ai-vectordb@5.27.0
+- @memberjunction/ai-vectors-pinecone@5.27.0
+- @memberjunction/credentials@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+- @memberjunction/templates-base-types@5.27.0
+- @memberjunction/templates@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes
