@@ -687,10 +687,16 @@ export class FeedbackFormComponent implements OnInit {
     this.feedbackService.Submit(submission).subscribe({
       next: (response) => {
         this.IsSubmitting = false;
-        this.SubmissionSuccess = true;
-        this.IssueNumber = response.issueNumber;
-        this.IssueUrl = response.issueUrl;
-        this.Success.emit(response);
+        if (response.success) {
+          this.SubmissionSuccess = true;
+          this.IssueNumber = response.issueNumber;
+          this.IssueUrl = response.issueUrl;
+          this.Success.emit(response);
+        } else {
+          const message = response.error || 'Submission failed. Please try again.';
+          this.ErrorMessage = message;
+          this.Error.emit(new Error(message));
+        }
         this.cdr.detectChanges();
       },
       error: (error: Error) => {
