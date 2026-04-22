@@ -4511,8 +4511,8 @@
       "ID": "5066433E-F36B-1410-8DA9-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:24.888Z",
-      "checksum": "9b78fd1edfdd7c41dc1c8f6d87d3fd27dd22f123d281dc0ac3fa0f3a5ff75c46"
+      "lastModified": "2026-04-22T21:07:56.315Z",
+      "checksum": "6e3d893652b0828d4fd55c77a2b469848a6ad4921817e40265162da546aa68d5"
     }
   },
   {
@@ -4814,8 +4814,8 @@
       "ID": "E1A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:24.894Z",
-      "checksum": "49fac27118b2e50323c1044634186b9467496d49781527a49b17c25892ee854f"
+      "lastModified": "2026-04-22T21:07:56.343Z",
+      "checksum": "ad22cf6d1ff6e13e30612dc05642a3f985d7903471ef5b054ef2c472855db61f"
     }
   },
   {
@@ -7096,8 +7096,8 @@
       "ID": "89C5433E-F36B-1410-8DAB-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:25.163Z",
-      "checksum": "27742541fbba0dc64be51cdba1311e5407271a3aad3f3cf5f36304e6d9b5479c"
+      "lastModified": "2026-04-22T21:07:56.757Z",
+      "checksum": "baae589d09ec53d4f67a3f683f1fc6dadf2c51def54244d81b34399bde2276a4"
     }
   },
   {
@@ -7228,8 +7228,8 @@
       "ID": "83C5433E-F36B-1410-8DAB-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:25.284Z",
-      "checksum": "4620955c0b42137e6e97f50d326b5cca4a941df53b2419786514de444d4d4954"
+      "lastModified": "2026-04-22T21:07:56.877Z",
+      "checksum": "0e861c55cd947336e0382e6310f7258e136f587ef84f0802faadd1f53e739745"
     }
   },
   {
@@ -12623,6 +12623,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "1CAB0A32-3B85-425B-ABF5-E4DE124E579D"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:13.121Z",
+            "checksum": "579fd3b8c146054746c1a753ca0a35ccc313e73417014bb46aa8b2d1a1713452"
           }
         },
         {
@@ -12639,6 +12646,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "B6ED4B6F-9968-48E6-949D-B0267C187F4F"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:13.140Z",
+            "checksum": "8dccacb2b28638fc10dd015d3ebff53264dd38727240780c5c38d9c1ad0159b5"
           }
         }
       ],
@@ -12656,9 +12670,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GLM 5.1 pricing on Z.AI direct API as of April 2026. Cached input tokens ~$0.19/1M. Incremental refresh of GLM 5 with improved benchmarks. 744B total / 40B active MoE, 203K context, 66K output. Open-weights under MIT license."
+          },
+          "primaryKey": {
+            "ID": "91C1285E-8C96-491C-AC3E-949FF8451AE4"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:13.155Z",
+            "checksum": "ae6ab97ad1e01c99132cf9f76b8e624acf2d9a345fb4a7dcb430f39c72f0761d"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "836FA78C-612E-4913-945D-8FEA6F862DFB"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:08:13.042Z",
+      "checksum": "f5434ef41056a6356ff52093bc6ab1172c766bee41555f6b0ff288203b818718"
     }
   },
   {
@@ -12684,6 +12712,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "4F67F918-49CA-44E7-943E-9E473047D2D8"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:12.082Z",
+            "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
           }
         },
         {
@@ -12700,6 +12735,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "AC35BB19-3CE7-47C2-B635-184BF1388750"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:12.098Z",
+            "checksum": "37b2b59a598edf9dfdfc3e8d5699aded7e97964957da489ec4162d71af98735d"
           }
         }
       ],
@@ -12717,9 +12759,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Gemma 4 31B Instruct pricing on Vertex AI as of April 2026. Dense 31B open-weights model under Gemma Terms of Use. 256K context, multilingual (140+), vision-in/text-out."
+          },
+          "primaryKey": {
+            "ID": "802CC7ED-C70F-492F-A37A-92B464B90DFB"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:12.129Z",
+            "checksum": "c75c767b6155f602e72ebca4640d28db03e3cdd5c82a34358e5f74884e290484"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "A0239704-1D04-4427-9FDE-CC0C670D5577"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:08:06.745Z",
+      "checksum": "581e521e2f53dd404428eccf2d1046f25ecdac61c81daafe42ae50ccc9ea747c"
     }
   },
   {
@@ -12745,6 +12801,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "AF62B95A-6920-442F-A5E0-FE871D6F5BE5"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:12.147Z",
+            "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
           }
         },
         {
@@ -12761,6 +12824,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "0D723CEF-5309-4554-A679-CD95DA74D122"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:12.164Z",
+            "checksum": "731d6de4f7c2e52e41fdad55bae093ce8e8cc4fa0329aa60b604478e9fdbd477"
           }
         }
       ],
@@ -12778,9 +12848,112 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Gemma 4 26B A4B Instruct pricing on Vertex AI as of April 2026. 26B total / 4B active MoE, optimized for speed and cost. 256K context, multilingual (140+). Open-weights under Gemma Terms of Use."
+          },
+          "primaryKey": {
+            "ID": "F5DE36F5-9F8A-42D0-95A3-6A3B2E658093"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:12.179Z",
+            "checksum": "517c422391eb9f86dcc05780d61cf4104154c1d1dfff292b77934c2d7052506a"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "EDBE22A5-AD7E-4B0C-A05D-11E8DEF9A06F"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:08:06.765Z",
+      "checksum": "f17b8c46d3836739905ad42b6e5fdc706dfaaae84fd8a033e54e1ace2c43e18b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kimi K2.6",
+      "PowerRank": 16,
+      "Description": "Moonshot AI's open-source native multimodal agentic model with 1T parameter Mixture-of-Experts architecture. Features 256K token context window with capabilities in long-horizon coding, coding-driven design, proactive autonomous execution, and swarm-based task orchestration. Released April 20, 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 7,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A9366B9C-E5EB-47DE-91B3-07C12275DFB6"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:12.198Z",
+            "checksum": "62a7006899577671c2699ec45f4d26be96261be35dfa4edd9a22216b174c723e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "accounts/fireworks/models/kimi-k2p6",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "1F4EFC23-7FA0-4302-93CB-6A00340BD545"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:12.215Z",
+            "checksum": "2496906a18221d094000087ad4c9a31eed36516349fd1999d9568af2263a1466"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-04-20T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.95,
+            "OutputPricePerUnit": 4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Kimi K2.6 serverless pricing on Fireworks.ai as of April 2026. Cached input tokens available at $0.16/1M. 1T parameter Mixture-of-Experts architecture with 256K context window."
+          },
+          "primaryKey": {
+            "ID": "F9F0B109-8B29-4CB6-8E5E-61E1EDF28653"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:08:12.234Z",
+            "checksum": "bb5be33f4d0362953d1d3efc62dbbd2dc6b10c86df476fd4d1e304fbdbc044d5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "EE18AD1E-0224-4351-83D5-665FA5045E78"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:08:06.780Z",
+      "checksum": "3fe9c86ae94c1556571ec936ce76517d137ac8cac250a8c73197716488d07a03"
     }
   }
 ]

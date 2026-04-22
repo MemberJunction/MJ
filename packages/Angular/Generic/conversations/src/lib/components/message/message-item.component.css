@@ -1468,33 +1468,73 @@
   font-size: 24px;
 }
 
-.attachment-file {
+/* Non-image attachment tile: horizontal strip with UPPERCASE type badge,
+   filename, and size. Artifact-typed attachments get a brand-primary tinted
+   badge to distinguish them from plain uploads. */
+.attachment-strip {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 8px 8px;
+  width: 320px;
+  max-width: 100%;
+  min-height: 56px;
+  cursor: pointer;
+  border-radius: 8px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.attachment-strip:hover {
+  background: var(--mj-bg-surface-hover);
+  border-color: var(--mj-border-strong);
+}
+
+.attachment-badge {
+  flex: 0 0 auto;
+  min-width: 48px;
+  height: 48px;
+  padding: 0 10px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px 20px;
-  min-width: 120px;
-  gap: 6px;
-}
-
-.attachment-file i {
-  font-size: 28px;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--mj-bg-surface-card);
   color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-subtle);
+  user-select: none;
+  text-align: center;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.attachment-file .file-name {
-  font-size: 12px;
+.attachment-strip.is-artifact .attachment-badge {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+}
+
+.attachment-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* allow ellipsis inside flex child */
+  gap: 2px;
+}
+
+.attachment-strip .file-name {
+  font-size: 13px;
   font-weight: 500;
   color: var(--mj-text-primary);
-  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: center;
 }
 
-.attachment-file .file-size {
+.attachment-strip .file-size {
   font-size: 11px;
   color: var(--mj-text-muted);
 }
@@ -1506,8 +1546,7 @@
     height: 112px;
   }
 
-  .attachment-file {
-    padding: 12px 16px;
-    min-width: 100px;
+  .attachment-strip {
+    width: 100%;
   }
 }

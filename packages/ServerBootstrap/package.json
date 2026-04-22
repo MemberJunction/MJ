@@ -40,6 +40,8 @@
     "@memberjunction/actions-bizapps-lms": "5.28.0",
     "@memberjunction/actions-bizapps-social": "5.28.0",
     "@memberjunction/actions-content-autotag": "5.28.0",
+    "@memberjunction/archiving-action": "5.28.0",
+    "@memberjunction/archiving-engine": "5.28.0",
     "@memberjunction/ai-agent-manager": "5.28.0",
     "@memberjunction/ai-agents": "5.28.0",
     "@memberjunction/ai-anthropic": "5.28.0",

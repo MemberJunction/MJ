@@ -115,6 +115,7 @@ export class LoopAgentType extends BaseAgentType {
                     terminate: true, // Chat always terminates to return to user
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
+                    artifactToolCalls: response.artifactToolCalls,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
                     automaticCommands: response.automaticCommands,
@@ -140,6 +141,7 @@ export class LoopAgentType extends BaseAgentType {
                     confidence: response.confidence,
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
+                    artifactToolCalls: response.artifactToolCalls,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
                     automaticCommands: response.automaticCommands
@@ -155,6 +157,7 @@ export class LoopAgentType extends BaseAgentType {
             const retVal: Partial<BaseAgentNextStep<P>> = {
                 payloadChangeRequest: response.payloadChangeRequest,
                 scratchpad: response.scratchpad,
+                artifactToolCalls: response.artifactToolCalls,
                 terminate: response.taskComplete,
                 responseForm: response.responseForm,
                 actionableCommands: response.actionableCommands,

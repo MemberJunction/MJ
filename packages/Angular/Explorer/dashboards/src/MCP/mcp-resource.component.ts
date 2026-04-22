@@ -10,18 +10,9 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 
-/**
- * MCP Resource Component — wrapper that hosts the MCP Dashboard.
- * Registered as 'MCPResource' for use with ResourceType: "Custom" nav items.
- *
- * The wrapper pattern is required because the resource container creates components
- * via createComponent() without the MCPModule's injector context. The wrapper's
- * template reference to <mj-mcp-dashboard> resolves through MCPModule's declarations,
- * ensuring all child standalone imports (mj-dialog, mjButton, etc.) are available.
- */
 @RegisterClass(BaseResourceComponent, 'MCPResource')
 @Component({
-  standalone: false,
+    standalone: false,
     selector: 'mj-mcp-resource',
     template: `
         <mj-mcp-dashboard></mj-mcp-dashboard>
