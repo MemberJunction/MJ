@@ -224,6 +224,7 @@ import { MJMCPServerConnectionFormComponent } from "./Entities/MJMCPServerConnec
 import { MJMCPServerToolFormComponent } from "./Entities/MJMCPServerTool/mjmcpservertool.form.component";
 import { MJMCPServerFormComponent } from "./Entities/MJMCPServer/mjmcpserver.form.component";
 import { MJMCPToolExecutionLogFormComponent } from "./Entities/MJMCPToolExecutionLog/mjmcptoolexecutionlog.form.component";
+import { MJMCPToolFavoriteFormComponent } from "./Entities/MJMCPToolFavorite/mjmcptoolfavorite.form.component";
 import { MJOAuthAuthServerMetadataCacheFormComponent } from "./Entities/MJOAuthAuthServerMetadataCache/mjoauthauthservermetadatacache.form.component";
 import { MJOAuthAuthorizationStateFormComponent } from "./Entities/MJOAuthAuthorizationState/mjoauthauthorizationstate.form.component";
 import { MJOAuthClientRegistrationFormComponent } from "./Entities/MJOAuthClientRegistration/mjoauthclientregistration.form.component";
@@ -698,6 +699,7 @@ declarations: [
     MJMCPServerToolFormComponent,
     MJMCPServerFormComponent,
     MJMCPToolExecutionLogFormComponent,
+    MJMCPToolFavoriteFormComponent,
     MJOAuthAuthServerMetadataCacheFormComponent,
     MJOAuthAuthorizationStateFormComponent,
     MJOAuthClientRegistrationFormComponent,
