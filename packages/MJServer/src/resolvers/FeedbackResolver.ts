@@ -259,10 +259,16 @@ export class FeedbackResolver {
   }
 
   /**
-   * Check feedbackSettings.enabled in config (defaults to true if not specified)
+   * Feedback is considered enabled only when both (a) the org kill switch
+   * is not explicitly off and (b) GitHub credentials are configured. Without
+   * (b) the feature cannot create issues, so we hide it rather than letting
+   * users submit into a broken pipe.
    */
   private isFeedbackEnabled(): boolean {
-    return configInfo.feedbackSettings.enabled !== false;
+    if (configInfo.feedbackSettings.enabled === false) {
+      return false;
+    }
+    return this.resolveAuth() !== null;
   }
 
   @Mutation(() => FeedbackResponseType)
