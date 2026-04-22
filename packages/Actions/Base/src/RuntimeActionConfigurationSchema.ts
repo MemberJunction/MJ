@@ -59,7 +59,13 @@ const RuntimeActionPermissionsSchema = z
     .object({
         allowedActions: z.array(RuntimeActionReferenceSchema),
         allowedAgents: z.array(RuntimeActionReferenceSchema),
-        allowedEntities: z.array(RuntimeActionReferenceSchema)
+        allowedEntities: z.array(RuntimeActionReferenceSchema),
+        // Escape hatches for framework-authored utility actions. See the
+        // JSONType interface file for full docs + warnings. Approval UI
+        // flags any of these when set.
+        allowAnyEntity: z.boolean().optional(),
+        allowAnyAction: z.boolean().optional(),
+        allowAnyAgent: z.boolean().optional()
     })
     .strict();
 

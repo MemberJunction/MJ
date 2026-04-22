@@ -196,6 +196,10 @@ function resolveAllowedByName(
 }
 
 function assertEntityAllowed(ctx: BridgeContext, entityName: string): void {
+    // Escape hatch for framework-authored utility actions that take the
+    // target entity as runtime input. See the JSONType interface comment.
+    if ((ctx.config.permissions as { allowAnyEntity?: boolean }).allowAnyEntity) return;
+
     const allowed = ctx.config.permissions.allowedEntities;
     const match = resolveAllowedByName(allowed, entityName);
     if (!match) {
@@ -221,11 +225,12 @@ interface SimpleEntityInfo {
 
 function handleListEntities(ctx: BridgeContext): SimpleEntityInfo[] {
     const md = new Metadata();
+    const allowAny = (ctx.config.permissions as { allowAnyEntity?: boolean }).allowAnyEntity === true;
     const allowedNames = new Set(
         ctx.config.permissions.allowedEntities.map((e) => e.name.trim().toLowerCase())
     );
     return md.Entities
-        .filter((e) => allowedNames.has(e.Name.trim().toLowerCase()))
+        .filter((e) => allowAny || allowedNames.has(e.Name.trim().toLowerCase()))
         .map((e) => ({
             ID: e.ID,
             Name: e.Name,
@@ -682,13 +687,16 @@ function resolveAllowedAction(
     args: InvokeActionArgs
 ): MJActionEntity_IRuntimeActionReference {
     const allowed = ctx.config.permissions.allowedActions;
+    const allowAny = (ctx.config.permissions as { allowAnyAction?: boolean }).allowAnyAction === true;
     if (args.ActionID) {
         const hit = allowed.find((a) => UUIDsEqual(a.id, args.ActionID!));
         if (hit) return hit;
+        if (allowAny) return { id: args.ActionID, name: args.ActionName ?? args.ActionID };
     }
     if (args.ActionName) {
         const hit = resolveAllowedByName(allowed, args.ActionName);
         if (hit) return hit;
+        if (allowAny) return { id: args.ActionName, name: args.ActionName };
     }
     throw new Error(
         `Action '${args.ActionName ?? args.ActionID}' is not in this runtime action's allowedActions. ` +
@@ -783,6 +791,10 @@ async function handleInvokeAllActions(
 function handleGetAvailableActions(
     ctx: BridgeContext
 ): Array<{ id: string; name: string }> {
+    // Always returns the declared allowedActions list. When allowAnyAction
+    // is true, the actual permission check in resolveAllowedAction still
+    // passes even for actions not in this list — GetAvailable is
+    // documentation for the sandbox, not authorization.
     return ctx.config.permissions.allowedActions.map((a) => ({ id: a.id, name: a.name }));
 }
 
@@ -803,13 +815,16 @@ function resolveAllowedAgent(
     args: AgentRunArgs
 ): MJActionEntity_IRuntimeActionReference {
     const allowed = ctx.config.permissions.allowedAgents;
+    const allowAny = (ctx.config.permissions as { allowAnyAgent?: boolean }).allowAnyAgent === true;
     if (args.AgentID) {
         const hit = allowed.find((a) => UUIDsEqual(a.id, args.AgentID!));
         if (hit) return hit;
+        if (allowAny) return { id: args.AgentID, name: args.AgentName ?? args.AgentID };
     }
     if (args.AgentName) {
         const hit = resolveAllowedByName(allowed, args.AgentName);
         if (hit) return hit;
+        if (allowAny) return { id: args.AgentName, name: args.AgentName };
     }
     throw new Error(
         `Agent '${args.AgentName ?? args.AgentID}' is not in this runtime action's allowedAgents. ` +

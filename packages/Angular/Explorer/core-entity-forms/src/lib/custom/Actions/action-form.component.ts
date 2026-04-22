@@ -464,7 +464,28 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         const e = perms.allowedEntities?.length ?? 0;
         const a = perms.allowedActions?.length ?? 0;
         const ag = perms.allowedAgents?.length ?? 0;
-        return `${e} entit${e === 1 ? 'y' : 'ies'}, ${a} action${a === 1 ? '' : 's'}, ${ag} agent${ag === 1 ? '' : 's'}`;
+        const wildcards = this.getWildcardFlags();
+        const parts: string[] = [];
+        parts.push(wildcards.entity ? 'ANY entity' : `${e} entit${e === 1 ? 'y' : 'ies'}`);
+        parts.push(wildcards.action ? 'ANY action' : `${a} action${a === 1 ? '' : 's'}`);
+        parts.push(wildcards.agent ? 'ANY agent' : `${ag} agent${ag === 1 ? '' : 's'}`);
+        return parts.join(', ');
+    }
+
+    /**
+     * Returns which wildcard permission flags are set on the runtime
+     * configuration. Any `true` flag is a prominent security-relevant
+     * concession to the action — the approval UI renders a warning banner
+     * when any of these are on so the approver sees the blast radius.
+     */
+    public getWildcardFlags(): { entity: boolean; action: boolean; agent: boolean; any: boolean } {
+        const perms = this.runtimeConfig?.permissions as
+            | { allowAnyEntity?: boolean; allowAnyAction?: boolean; allowAnyAgent?: boolean }
+            | undefined;
+        const entity = perms?.allowAnyEntity === true;
+        const action = perms?.allowAnyAction === true;
+        const agent = perms?.allowAnyAgent === true;
+        return { entity, action, agent, any: entity || action || agent };
     }
 
     getApprovalStatusColor(): string {

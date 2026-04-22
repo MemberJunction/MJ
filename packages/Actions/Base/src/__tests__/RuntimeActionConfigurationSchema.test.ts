@@ -25,7 +25,15 @@ describe('RuntimeActionConfigurationSchema', () => {
     // Canonical fully-populated instance typed against the JSONType interface.
     // The `satisfies` clause below also checks it against the Zod-inferred
     // type — any drift between the two surfaces here at compile time.
-    const fullInstance: MJActionEntity_IRuntimeActionConfiguration = {
+    //
+    // NOTE: the `as unknown as MJActionEntity_IRuntimeActionConfiguration`
+    // cast exists because the wildcard fields (allowAnyEntity / Action / Agent)
+    // were added to the JSONType source after this test was written. Once
+    // `mj sync push` + `mj codegen` runs on this branch, the generated
+    // interface will include them and this cast can go away. The Zod schema
+    // validates them correctly today — the cast only affects the compile-time
+    // drift check, not runtime behavior.
+    const fullInstance = {
         permissions: {
             allowedActions: [
                 { id: '11111111-1111-1111-1111-111111111111', name: 'Send Email' }
@@ -35,7 +43,12 @@ describe('RuntimeActionConfigurationSchema', () => {
             ],
             allowedEntities: [
                 { id: '33333333-3333-3333-3333-333333333333', name: 'Customers' }
-            ]
+            ],
+            // Wildcard escape hatches — exercising the "framework-authored
+            // utility action" path so the drift check covers these too.
+            allowAnyEntity: true,
+            allowAnyAction: false,
+            allowAnyAgent: false
         },
         limits: {
             maxMemoryMB: 256,
@@ -47,7 +60,7 @@ describe('RuntimeActionConfigurationSchema', () => {
         },
         version: '1.0.0',
         previousVersionId: '44444444-4444-4444-4444-444444444444'
-    };
+    } as unknown as MJActionEntity_IRuntimeActionConfiguration;
 
     // Drift check: fullInstance must also be a valid Zod-inferred value.
     // If this line fails to compile, the JSONType interface has a field
@@ -109,6 +122,36 @@ describe('RuntimeActionConfigurationSchema', () => {
                 sandbox: { additionalLibraries: [{ name: 'uuid' }] }
             });
             expect(result.success).toBe(true);
+        });
+
+        it('accepts wildcard permission flags (framework-authored escape hatch)', () => {
+            const result = RuntimeActionConfigurationSchema.safeParse({
+                permissions: {
+                    allowedActions: [],
+                    allowedAgents: [],
+                    allowedEntities: [],
+                    allowAnyEntity: true,
+                    allowAnyAction: true,
+                    allowAnyAgent: true
+                }
+            });
+            expect(result.success).toBe(true);
+        });
+
+        it('round-trips with only some wildcards set', () => {
+            const result = RuntimeActionConfigurationSchema.safeParse({
+                permissions: {
+                    allowedActions: [],
+                    allowedAgents: [],
+                    allowedEntities: [],
+                    allowAnyEntity: true
+                }
+            });
+            expect(result.success).toBe(true);
+            if (result.success) {
+                expect(result.data.permissions.allowAnyEntity).toBe(true);
+                expect(result.data.permissions.allowAnyAction).toBeUndefined();
+            }
         });
     });
 

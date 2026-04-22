@@ -43,6 +43,15 @@ export interface IRuntimeActionConfiguration {
  *
  * IDs are the source of truth; names are kept alongside for display, logging,
  * and human review during the approval workflow.
+ *
+ * The `allowAnyEntity` / `allowAnyAction` / `allowAnyAgent` booleans are
+ * escape hatches for framework-shipped utility actions that must accept the
+ * target entity/action/agent as runtime input (e.g. a generic "data quality
+ * report" that can analyze any entity). They bypass the allowlist entirely
+ * for their namespace. The approval UI renders a prominent warning when any
+ * of them is set so a human reviewer sees the blast radius at approval time;
+ * agent-authored Runtime actions should enumerate specific references rather
+ * than set these flags.
  */
 export interface IRuntimeActionPermissions {
     /** Other actions this Runtime action can invoke via utilities.actions.Invoke */
@@ -53,6 +62,28 @@ export interface IRuntimeActionPermissions {
 
     /** Entities this Runtime action can read or mutate via utilities.rv / utilities.entity */
     allowedEntities: IRuntimeActionReference[];
+
+    /**
+     * DANGEROUS ESCAPE HATCH. When true, allows access to ANY entity via
+     * `utilities.md.*`, `utilities.rv.*`, and `utilities.entity.*`, ignoring
+     * `allowedEntities`. Only set for framework-authored utility actions that
+     * accept the target entity as runtime input. Approval UI flags this.
+     */
+    allowAnyEntity?: boolean;
+
+    /**
+     * DANGEROUS ESCAPE HATCH. When true, allows invocation of ANY action via
+     * `utilities.actions.Invoke`, ignoring `allowedActions`. Only set for
+     * framework-authored orchestrators. Approval UI flags this.
+     */
+    allowAnyAction?: boolean;
+
+    /**
+     * DANGEROUS ESCAPE HATCH. When true, allows invocation of ANY agent via
+     * `utilities.agents.Run`, ignoring `allowedAgents`. Only set for
+     * framework-authored orchestrators. Approval UI flags this.
+     */
+    allowAnyAgent?: boolean;
 }
 
 /**

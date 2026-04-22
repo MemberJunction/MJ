@@ -430,6 +430,21 @@
                                         This Runtime action cannot run until a valid configuration is supplied. Approval should not be granted in this state.
                                     </div>
                                 } @else {
+                                    @if (getWildcardFlags().any) {
+                                        <div style="padding: 12px; background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface)); border-left: 3px solid var(--mj-status-warning); border-radius: 4px; margin-bottom: 16px;">
+                                            <div style="font-weight: 600; margin-bottom: 4px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-triangle-exclamation" style="color: var(--mj-status-warning); margin-right: 6px;"></i>
+                                                Wildcard permissions enabled
+                                            </div>
+                                            <div style="color: var(--mj-text-secondary); font-size: 0.9em;">
+                                                This runtime action has one or more wildcard flags set that bypass the specific allowlists below:
+                                                @if (getWildcardFlags().entity) { <strong>allowAnyEntity</strong> }
+                                                @if (getWildcardFlags().action) { <strong>allowAnyAction</strong> }
+                                                @if (getWildcardFlags().agent) { <strong>allowAnyAgent</strong> }
+                                                . Approving grants this action unrestricted access to that namespace on behalf of any user who invokes it. Only approve if the action is framework-authored or you have personally reviewed every place it touches those resources.
+                                            </div>
+                                        </div>
+                                    }
                                     <!-- Declared permissions — the security contract an approver is blessing -->
                                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px;">
                                         <!-- Entities -->
