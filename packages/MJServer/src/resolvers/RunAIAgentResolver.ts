@@ -2,7 +2,7 @@ import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubE
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
@@ -1310,43 +1310,100 @@ export class RunAIAgentResolver extends ResolverBase {
             );
             const attachmentDataResults = await Promise.all(attachmentDataPromises);
 
-            // Filter out nulls and convert to AttachmentData format
-            const validAttachments: AttachmentData[] = attachmentDataResults
-                .filter((result): result is NonNullable<typeof result> => result !== null)
-                .map(result => ({
-                    type: ConversationUtility.GetAttachmentTypeFromMime(result.attachment.MimeType),
-                    mimeType: result.attachment.MimeType,
-                    fileName: result.attachment.FileName ?? undefined,
-                    sizeBytes: result.attachment.FileSizeBytes ?? undefined,
-                    width: result.attachment.Width ?? undefined,
-                    height: result.attachment.Height ?? undefined,
-                    durationSeconds: result.attachment.DurationSeconds ?? undefined,
-                    content: result.contentUrl
-                }));
+            // Filter out nulls and convert to AttachmentData format.
+            // IMPORTANT: Skip large document attachments that are handled by artifact tools.
+            // These file types (PDF, Excel, Word) are accessible via ArtifactToolManager
+            // and embedding their multi-MB base64 content in the conversation causes
+            // context overflow on follow-up messages when conversation history is replayed.
+            // Images are kept inline since LLMs handle them natively via multimodal.
+            const ARTIFACT_TOOL_MIME_PREFIXES = [
+                'application/pdf',
+                'application/vnd.openxmlformats-officedocument', // .docx, .xlsx, .pptx
+                'application/vnd.ms-excel', // .xls
+                'application/msword', // .doc
+            ];
 
-            // Get input artifacts for this message and convert to AttachmentData
+            const validAttachments: AttachmentData[] = [];
+
+            for (const result of attachmentDataResults) {
+                if (!result) continue;
+                const mime = result.attachment.MimeType || '';
+                const isArtifactToolType = ARTIFACT_TOOL_MIME_PREFIXES.some(prefix => mime.startsWith(prefix));
+                if (isArtifactToolType) {
+                    // Skip raw file embedding — the agent accesses the file via
+                    // artifact tools (manifest injected into prompt) and/or native
+                    // file input (resolved per-driver in AIPromptRunner).
+                    // Do NOT add a placeholder attachment: 'Document' maps to 'file_url'
+                    // content blocks, and drivers attempt base64 decoding of the text,
+                    // causing API errors.
+                } else {
+                    validAttachments.push({
+                        type: ConversationUtility.GetAttachmentTypeFromMime(result.attachment.MimeType),
+                        mimeType: result.attachment.MimeType,
+                        fileName: result.attachment.FileName ?? undefined,
+                        sizeBytes: result.attachment.FileSizeBytes ?? undefined,
+                        width: result.attachment.Width ?? undefined,
+                        height: result.attachment.Height ?? undefined,
+                        durationSeconds: result.attachment.DurationSeconds ?? undefined,
+                        content: result.contentUrl
+                    });
+                }
+            }
+
+            // Get input artifacts for this message and convert to AttachmentData.
+            // Like regular attachments above, skip file-backed artifacts whose MIME
+            // types are handled by ArtifactToolManager — embedding their multi-MB
+            // base64 content in every conversation replay causes context overflow.
             const inputArtifacts = inputArtifactsByDetailId.get(detail.ID) || [];
             for (const artifactVersion of inputArtifacts) {
+                const artifactMime = artifactVersion.MimeType || '';
+                const isArtifactToolHandled = ARTIFACT_TOOL_MIME_PREFIXES.some(
+                    prefix => artifactMime.startsWith(prefix)
+                );
+
                 if (artifactVersion.ContentMode === 'File' && artifactVersion.FileID) {
-                    // File-backed artifact — download content and treat like a document attachment
-                    const fileContent = await this.downloadArtifactFileContent(artifactVersion, contextUser, provider);
-                    if (fileContent) {
-                        validAttachments.push({
-                            type: ConversationUtility.GetAttachmentTypeFromMime(artifactVersion.MimeType || ''),
-                            mimeType: artifactVersion.MimeType || 'application/octet-stream',
-                            fileName: artifactVersion.FileName || artifactVersion.Name || undefined,
-                            sizeBytes: artifactVersion.ContentSizeBytes || undefined,
-                            content: fileContent
-                        });
+                    if (isArtifactToolHandled) {
+                        // Skip raw file embedding — the agent accesses the file via
+                        // artifact tools (manifest injected into prompt) and/or native
+                        // file input (resolved per-driver in AIPromptRunner).
+                        // Do NOT add a placeholder attachment here: 'Document' maps to
+                        // 'file_url' content blocks, and drivers attempt base64 decoding
+                        // of the placeholder text, causing API errors.
+                    } else {
+                        // Non-artifact-tool file types: embed normally
+                        const fileContent = await this.downloadArtifactFileContent(artifactVersion, contextUser, provider);
+                        if (fileContent) {
+                            validAttachments.push({
+                                type: ConversationUtility.GetAttachmentTypeFromMime(artifactMime),
+                                mimeType: artifactMime || 'application/octet-stream',
+                                fileName: artifactVersion.FileName || artifactVersion.Name || undefined,
+                                sizeBytes: artifactVersion.ContentSizeBytes || undefined,
+                                content: fileContent
+                            });
+                        }
                     }
                 } else if (artifactVersion.Content) {
-                    // Text artifact — include content directly as a text attachment
-                    validAttachments.push({
-                        type: 'Document' as AttachmentData['type'],
-                        mimeType: 'text/plain',
-                        fileName: artifactVersion.Name || 'artifact.txt',
-                        content: `[Artifact: ${artifactVersion.Name || 'Untitled'}]\n\n${artifactVersion.Content}`
-                    });
+                    // Text artifact — use BuildInlinePreview for large DataSnapshots
+                    // to preserve table structure instead of raw substring truncation.
+                    const textContent = artifactVersion.Content;
+                    const MAX_INLINE_ARTIFACT_CHARS = 10_000;
+
+                    if (textContent.length > MAX_INLINE_ARTIFACT_CHARS) {
+                        const preview = ArtifactToolManager.BuildInlinePreview(textContent, 5);
+                        validAttachments.push({
+                            type: 'Document' as AttachmentData['type'],
+                            mimeType: 'text/plain',
+                            fileName: undefined,
+                            content: `[Artifact: ${artifactVersion.Name || 'Untitled'} — ${textContent.length.toLocaleString()} chars, accessible via artifact tools]\n\nPreview (first 5 rows per table):\n${preview}`
+                        });
+                    } else {
+                        validAttachments.push({
+                            type: 'Document' as AttachmentData['type'],
+                            mimeType: 'text/plain',
+                            fileName: artifactVersion.Name || 'artifact.txt',
+                            content: `[Artifact: ${artifactVersion.Name || 'Untitled'}]\n\n${textContent}`
+                        });
+                    }
                 }
             }
 

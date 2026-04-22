@@ -11,6 +11,7 @@ export * from './foreach-operation';
 export * from './while-operation';
 export * from './agent-scratchpad';
 export * from './app-context';
+export * from './artifact-tool-library';
 
 export * from './MJAIPromptEntityExtended';
 export * from './MJAIPromptCategoryEntityExtended';

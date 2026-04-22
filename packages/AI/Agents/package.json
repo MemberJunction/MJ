@@ -32,7 +32,10 @@
     "@memberjunction/global": "5.28.0",
     "@memberjunction/storage": "5.28.0",
     "dotenv": "^17.2.4",
+    "exceljs": "^4.4.0",
     "lodash": "^4.17.23",
+    "mammoth": "^1.8.0",
+    "pdfjs-dist": "^4.10.38",
     "rxjs": "^7.8.2",
     "sql-formatter": "^15.7.0"
   },
