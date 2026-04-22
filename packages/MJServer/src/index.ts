@@ -131,6 +131,7 @@ export * from './resolvers/MCPResolver.js';
 export * from './resolvers/ActionResolver.js';
 export * from './resolvers/CacheStatsResolver.js';
 export * from './resolvers/EntityCommunicationsResolver.js';
+export * from './resolvers/FeedbackResolver.js';
 export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';

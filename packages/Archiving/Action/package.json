@@ -18,5 +18,9 @@
     "@memberjunction/actions-base": "5.28.0",
     "@memberjunction/actions": "5.28.0",
     "@memberjunction/archiving-engine": "5.28.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }
