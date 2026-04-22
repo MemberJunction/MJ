@@ -41,8 +41,11 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (315 classes)
+// @memberjunction/core-entities (320 classes)
 import {
+    ApplicationRolePermissionProvider,
+    DashboardPermissionProvider,
+    EntityPermissionProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -264,6 +267,7 @@ import {
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJOutputTriggerTypeEntity,
+    MJPermissionDomainEntity,
     MJProjectEntity,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
@@ -358,6 +362,7 @@ import {
     MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/entity-communications-base (1 classes)
@@ -458,6 +463,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
     MJCommunicationProviderEntityExtended,
+    ApplicationRolePermissionProvider,
+    DashboardPermissionProvider,
+    EntityPermissionProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -679,6 +687,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJOutputTriggerTypeEntity,
+    MJPermissionDomainEntity,
     MJProjectEntity,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
@@ -773,6 +782,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    ResourcePermissionProvider,
     MJEntityCommunicationMessageTypeEntityExtended,
     CodeArtifactViewerComponent,
     ComponentArtifactViewerComponent,
@@ -829,7 +839,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 379;
+export const CLASS_REGISTRATIONS_COUNT = 384;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

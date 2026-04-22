@@ -37,6 +37,8 @@ import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
 import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
 // Application Roles
 import { ApplicationRolesResourceComponent } from './ApplicationRoles/application-roles-resource.component';
+// Sharing Center (Phase 2a — unified permissions)
+import { SharingCenterResourceComponent } from './SharingCenter/sharing-center-resource.component';
 // Version History
 import { VersionHistoryLabelsResourceComponent } from './VersionHistory/components/labels-resource.component';
 import { VersionHistoryDiffResourceComponent } from './VersionHistory/components/diff-resource.component';
@@ -67,6 +69,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     APIUsagePanelComponent,
     // Application Roles
     ApplicationRolesResourceComponent,
+    // Sharing Center
+    SharingCenterResourceComponent,
     // Version History
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
@@ -109,6 +113,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     APIScopesPanelComponent,
     APIUsagePanelComponent,
     ApplicationRolesResourceComponent,
+    SharingCenterResourceComponent,
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryRestoreResourceComponent,

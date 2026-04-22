@@ -15003,16 +15003,17 @@ export type MJEntityOrganicKeyEntityType = z.infer<typeof MJEntityOrganicKeySche
 export const MJEntityPermissionSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     RoleID: z.string().describe(`
         * * Field Name: RoleID
-        * * Display Name: Role ID
+        * * Display Name: Role
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)`),
     CanCreate: z.boolean().describe(`
@@ -15041,37 +15042,47 @@ export const MJEntityPermissionSchema = z.object({
         * * Description: Whether the role/user can delete records from this entity.`),
     ReadRLSFilterID: z.string().nullable().describe(`
         * * Field Name: ReadRLSFilterID
-        * * Display Name: Read RLSFilter ID
+        * * Display Name: Read Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)`),
     CreateRLSFilterID: z.string().nullable().describe(`
         * * Field Name: CreateRLSFilterID
-        * * Display Name: Create RLSFilter ID
+        * * Display Name: Create Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)`),
     UpdateRLSFilterID: z.string().nullable().describe(`
         * * Field Name: UpdateRLSFilterID
-        * * Display Name: Update RLSFilter ID
+        * * Display Name: Update Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)`),
     DeleteRLSFilterID: z.string().nullable().describe(`
         * * Field Name: DeleteRLSFilterID
-        * * Display Name: Delete RLSFilter ID
+        * * Display Name: Delete Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Type: z.union([z.literal('Allow'), z.literal('Deny')]).describe(`
+        * * Field Name: Type
+        * * Display Name: Permission Type
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Allow
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+        * * Description: Allow or Deny. Deny rows override any Allow grants on the same (EntityID, RoleID, action) at evaluation time, letting administrators exclude a role from an action another role grants.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     RoleName: z.string().describe(`
         * * Field Name: RoleName
@@ -15079,23 +15090,23 @@ export const MJEntityPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     RoleSQLName: z.string().nullable().describe(`
         * * Field Name: RoleSQLName
-        * * Display Name: Role SQLName
+        * * Display Name: Role SQL Name
         * * SQL Data Type: nvarchar(250)`),
     CreateRLSFilter: z.string().nullable().describe(`
         * * Field Name: CreateRLSFilter
-        * * Display Name: Create RLSFilter
+        * * Display Name: Create Filter
         * * SQL Data Type: nvarchar(100)`),
     ReadRLSFilter: z.string().nullable().describe(`
         * * Field Name: ReadRLSFilter
-        * * Display Name: Read RLSFilter
+        * * Display Name: Read Filter
         * * SQL Data Type: nvarchar(100)`),
     UpdateRLSFilter: z.string().nullable().describe(`
         * * Field Name: UpdateRLSFilter
-        * * Display Name: Update RLSFilter
+        * * Display Name: Update Filter
         * * SQL Data Type: nvarchar(100)`),
     DeleteRLSFilter: z.string().nullable().describe(`
         * * Field Name: DeleteRLSFilter
-        * * Display Name: Delete RLSFilter
+        * * Display Name: Delete Filter
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -16240,7 +16251,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Foreign key to the IntegrationObject this field belongs to`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Name
+        * * Display Name: Field Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Field name as returned by the external API`),
     DisplayName: z.string().nullable().describe(`
@@ -16315,7 +16326,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Description: Whether this field is required for create/update operations`),
     RelatedIntegrationObjectID: z.string().nullable().describe(`
         * * Field Name: RelatedIntegrationObjectID
-        * * Display Name: Related Integration Object ID
+        * * Display Name: Related Integration Object
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
         * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.`),
@@ -16386,7 +16397,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Primary key`),
     IntegrationID: z.string().describe(`
         * * Field Name: IntegrationID
-        * * Display Name: Integration
+        * * Display Name: Integration ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
         * * Description: Foreign key to the Integration that owns this object`),
@@ -16458,7 +16469,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Whether data can be pushed back to this object via the API`),
     DefaultQueryParams: z.string().nullable().describe(`
         * * Field Name: DefaultQueryParams
-        * * Display Name: Default Query Parameters
+        * * Display Name: Default Query Params
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object of default query parameters to include with every API request for this object`),
     Configuration: z.string().nullable().describe(`
@@ -16518,7 +16529,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration Name
+        * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -18525,6 +18536,89 @@ export const MJOutputTriggerTypeSchema = z.object({
 });
 
 export type MJOutputTriggerTypeEntityType = z.infer<typeof MJOutputTriggerTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Permission Domains
+ */
+export const MJPermissionDomainSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Human-readable unique name for the permission domain (e.g., "Entity Permissions", "Dashboard Permissions"). Used in admin UI and as the domain identifier in PermissionEngine API calls.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of what this permission domain covers and how permissions are enforced.`),
+    ProviderClassName: z.string().describe(`
+        * * Field Name: ProviderClassName
+        * * Display Name: Provider Class Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: ClassFactory key used to instantiate this provider. Must match the key passed to @RegisterClass(PermissionProviderBase, 'ClassName'). Convention: prefix with MJ for built-in providers (e.g., MJEntityPermissionProvider).`),
+    SupportedGranteeTypes: z.string().describe(`
+        * * Field Name: SupportedGranteeTypes
+        * * Display Name: Supported Grantee Types
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Comma-delimited list of grantee types this provider supports. Valid tokens: User, Role, Everyone, Public. Example: "User,Role".`),
+    SupportedActions: z.string().describe(`
+        * * Field Name: SupportedActions
+        * * Display Name: Supported Actions
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Comma-delimited list of permission actions this provider can evaluate. Valid tokens: Read, Create, Update, Delete, Share, Execute, Admin. Example: "Read,Create,Update,Delete".`),
+    SupportsDeny: z.boolean().describe(`
+        * * Field Name: SupportsDeny
+        * * Display Name: Supports Deny
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this provider supports explicit Deny records that override Allow grants at the same scope.`),
+    SupportsExpiration: z.boolean().describe(`
+        * * Field Name: SupportsExpiration
+        * * Display Name: Supports Expiration
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this provider supports time-bound permissions with an expiration timestamp.`),
+    SupportsHierarchyInheritance: z.boolean().describe(`
+        * * Field Name: SupportsHierarchyInheritance
+        * * Display Name: Supports Hierarchy Inheritance
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this provider resolves permissions hierarchically (e.g., category-level grants cascade to items within the category).`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When false, the PermissionEngine skips loading this provider at startup. Use to temporarily disable a provider without removing its record.`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Sort order for displaying domains in the Sharing Center admin UI. Lower numbers appear first.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome icon class for display in admin UI (e.g., "fa-solid fa-shield").`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJPermissionDomainEntityType = z.infer<typeof MJPermissionDomainSchema>;
 
 /**
  * zod schema definition for the entity MJ: Projects
@@ -64525,6 +64619,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -64537,7 +64632,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -64550,7 +64645,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: RoleID
-    * * Display Name: Role ID
+    * * Display Name: Role
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
     */
@@ -64619,7 +64714,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: ReadRLSFilterID
-    * * Display Name: Read RLSFilter ID
+    * * Display Name: Read Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
@@ -64632,7 +64727,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: CreateRLSFilterID
-    * * Display Name: Create RLSFilter ID
+    * * Display Name: Create Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
@@ -64645,7 +64740,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: UpdateRLSFilterID
-    * * Display Name: Update RLSFilter ID
+    * * Display Name: Update Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
@@ -64658,7 +64753,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: DeleteRLSFilterID
-    * * Display Name: Delete RLSFilter ID
+    * * Display Name: Delete Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
@@ -64671,7 +64766,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -64681,7 +64776,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -64690,8 +64785,26 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
     }
 
     /**
+    * * Field Name: Type
+    * * Display Name: Permission Type
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Allow
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    * * Description: Allow or Deny. Deny rows override any Allow grants on the same (EntityID, RoleID, action) at evaluation time, letting administrators exclude a role from an action another role grants.
+    */
+    get Type(): 'Allow' | 'Deny' {
+        return this.Get('Type');
+    }
+    set Type(value: 'Allow' | 'Deny') {
+        this.Set('Type', value);
+    }
+
+    /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -64709,7 +64822,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: RoleSQLName
-    * * Display Name: Role SQLName
+    * * Display Name: Role SQL Name
     * * SQL Data Type: nvarchar(250)
     */
     get RoleSQLName(): string | null {
@@ -64718,7 +64831,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: CreateRLSFilter
-    * * Display Name: Create RLSFilter
+    * * Display Name: Create Filter
     * * SQL Data Type: nvarchar(100)
     */
     get CreateRLSFilter(): string | null {
@@ -64727,7 +64840,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: ReadRLSFilter
-    * * Display Name: Read RLSFilter
+    * * Display Name: Read Filter
     * * SQL Data Type: nvarchar(100)
     */
     get ReadRLSFilter(): string | null {
@@ -64736,7 +64849,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: UpdateRLSFilter
-    * * Display Name: Update RLSFilter
+    * * Display Name: Update Filter
     * * SQL Data Type: nvarchar(100)
     */
     get UpdateRLSFilter(): string | null {
@@ -64745,7 +64858,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: DeleteRLSFilter
-    * * Display Name: Delete RLSFilter
+    * * Display Name: Delete Filter
     * * SQL Data Type: nvarchar(100)
     */
     get DeleteRLSFilter(): string | null {
@@ -67725,7 +67838,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: Name
-    * * Display Name: Name
+    * * Display Name: Field Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Field name as returned by the external API
     */
@@ -67912,7 +68025,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
 
     /**
     * * Field Name: RelatedIntegrationObjectID
-    * * Display Name: Related Integration Object ID
+    * * Display Name: Related Integration Object
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
     * * Description: Foreign key to another IntegrationObject, establishing a relationship. Used for DAG-based dependency ordering and template variable resolution in parent APIPath patterns.
@@ -68083,7 +68196,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: IntegrationID
-    * * Display Name: Integration
+    * * Display Name: Integration ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
     * * Description: Foreign key to the Integration that owns this object
@@ -68251,7 +68364,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: DefaultQueryParams
-    * * Display Name: Default Query Parameters
+    * * Display Name: Default Query Params
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON object of default query parameters to include with every API request for this object
     */
@@ -68385,7 +68498,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration Name
+    * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -73614,6 +73727,219 @@ export class MJOutputTriggerTypeEntity extends BaseEntity<MJOutputTriggerTypeEnt
     }
     set Description(value: string | null) {
         this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Permission Domains - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: PermissionDomain
+ * * Base View: vwPermissionDomains
+ * * @description Catalog of registered permission subsystems. Each row describes one permission provider; the PermissionEngine uses ProviderClassName as the ClassFactory key to instantiate providers at startup. Enables unified permission queries across all subsystems.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Permission Domains')
+export class MJPermissionDomainEntity extends BaseEntity<MJPermissionDomainEntityType> {
+    /**
+    * Loads the MJ: Permission Domains record from the database
+    * @param ID: string - primary key value to load the MJ: Permission Domains record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJPermissionDomainEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Human-readable unique name for the permission domain (e.g., "Entity Permissions", "Dashboard Permissions"). Used in admin UI and as the domain identifier in PermissionEngine API calls.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this permission domain covers and how permissions are enforced.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ProviderClassName
+    * * Display Name: Provider Class Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: ClassFactory key used to instantiate this provider. Must match the key passed to @RegisterClass(PermissionProviderBase, 'ClassName'). Convention: prefix with MJ for built-in providers (e.g., MJEntityPermissionProvider).
+    */
+    get ProviderClassName(): string {
+        return this.Get('ProviderClassName');
+    }
+    set ProviderClassName(value: string) {
+        this.Set('ProviderClassName', value);
+    }
+
+    /**
+    * * Field Name: SupportedGranteeTypes
+    * * Display Name: Supported Grantee Types
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Comma-delimited list of grantee types this provider supports. Valid tokens: User, Role, Everyone, Public. Example: "User,Role".
+    */
+    get SupportedGranteeTypes(): string {
+        return this.Get('SupportedGranteeTypes');
+    }
+    set SupportedGranteeTypes(value: string) {
+        this.Set('SupportedGranteeTypes', value);
+    }
+
+    /**
+    * * Field Name: SupportedActions
+    * * Display Name: Supported Actions
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-delimited list of permission actions this provider can evaluate. Valid tokens: Read, Create, Update, Delete, Share, Execute, Admin. Example: "Read,Create,Update,Delete".
+    */
+    get SupportedActions(): string {
+        return this.Get('SupportedActions');
+    }
+    set SupportedActions(value: string) {
+        this.Set('SupportedActions', value);
+    }
+
+    /**
+    * * Field Name: SupportsDeny
+    * * Display Name: Supports Deny
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this provider supports explicit Deny records that override Allow grants at the same scope.
+    */
+    get SupportsDeny(): boolean {
+        return this.Get('SupportsDeny');
+    }
+    set SupportsDeny(value: boolean) {
+        this.Set('SupportsDeny', value);
+    }
+
+    /**
+    * * Field Name: SupportsExpiration
+    * * Display Name: Supports Expiration
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this provider supports time-bound permissions with an expiration timestamp.
+    */
+    get SupportsExpiration(): boolean {
+        return this.Get('SupportsExpiration');
+    }
+    set SupportsExpiration(value: boolean) {
+        this.Set('SupportsExpiration', value);
+    }
+
+    /**
+    * * Field Name: SupportsHierarchyInheritance
+    * * Display Name: Supports Hierarchy Inheritance
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this provider resolves permissions hierarchically (e.g., category-level grants cascade to items within the category).
+    */
+    get SupportsHierarchyInheritance(): boolean {
+        return this.Get('SupportsHierarchyInheritance');
+    }
+    set SupportsHierarchyInheritance(value: boolean) {
+        this.Set('SupportsHierarchyInheritance', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When false, the PermissionEngine skips loading this provider at startup. Use to temporarily disable a provider without removing its record.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Sort order for displaying domains in the Sharing Center admin UI. Lower numbers appear first.
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome icon class for display in admin UI (e.g., "fa-solid fa-shield").
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
     }
 
     /**

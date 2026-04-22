@@ -142,6 +142,9 @@ export { HomeDashboardComponent } from './Home/home-dashboard.component';
 // Application Roles
 export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from './ApplicationRoles/application-roles-resource.component';
 
+// Sharing Center (Phase 2a — unified permissions)
+export { SharingCenterResourceComponent, LoadSharingCenterResource } from './SharingCenter/sharing-center-resource.component';
+
 // API Keys
 export { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
 export { APIKeyCreateDialogComponent, APIKeyCreateResult } from './APIKeys/api-key-create-dialog.component';

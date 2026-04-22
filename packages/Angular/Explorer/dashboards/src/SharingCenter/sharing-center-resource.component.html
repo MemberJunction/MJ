@@ -1,0 +1,266 @@
+<div class="sharing-center-container">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <i class="fa-solid fa-share-nodes header-icon"></i>
+      <h2 class="header-title">Sharing Center</h2>
+    </div>
+    <div class="header-actions">
+      @if (ActiveTab === 'UserAccess') {
+        <button mjButton variant="secondary" (click)="loadUsers()" [disabled]="IsLoadingUsers || IsLoadingUserPermissions">
+          <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoadingUsers"></i> Refresh
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button
+      type="button"
+      class="tab"
+      [class.tab-active]="ActiveTab === 'UserAccess'"
+      (click)="SwitchTab('UserAccess')"
+    >
+      <i class="fa-solid fa-user"></i> User Access Report
+    </button>
+    <button
+      type="button"
+      class="tab"
+      [class.tab-active]="ActiveTab === 'ResourceAccess'"
+      (click)="SwitchTab('ResourceAccess')"
+    >
+      <i class="fa-solid fa-cube"></i> Resource Access Report
+    </button>
+  </div>
+
+  <!-- Status messages -->
+  @if (ErrorMessage) {
+    <div class="message error-message">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span>{{ ErrorMessage }}</span>
+    </div>
+  }
+
+  <!-- ======================= User Access Report tab ======================= -->
+  @if (ActiveTab === 'UserAccess') {
+    <p class="description">
+      Select a user to see every resource they can access across all registered permission domains.
+    </p>
+
+    <div class="selector-row">
+      <label class="selector-label" for="user-select">User:</label>
+      <select
+        id="user-select"
+        class="mj-input"
+        [ngModel]="SelectedUserId"
+        (ngModelChange)="OnUserChanged($event)"
+        [disabled]="IsLoadingUsers || IsLoadingUserPermissions"
+      >
+        @for (user of Users; track user.ID) {
+          <option [ngValue]="user.ID">{{ user.Name }}{{ user.Email ? ' — ' + user.Email : '' }}</option>
+        }
+      </select>
+
+      @if (SelectedUserRoles.length > 0) {
+        <div class="roles-badge" title="Roles assigned to this user">
+          <i class="fa-solid fa-user-tag"></i>
+          <span>{{ SelectedUserRoles.join(', ') }}</span>
+        </div>
+      }
+    </div>
+
+    @if (IsLoadingUserPermissions) {
+      <mj-loading text="Loading permissions..." size="medium"></mj-loading>
+    } @else if (!SelectedUserId) {
+      <div class="empty-state">
+        <i class="fa-solid fa-user-slash"></i>
+        <p>Select a user above to see their access report.</p>
+      </div>
+    } @else if (UserDomainGroups.length === 0) {
+      <div class="empty-state">
+        <i class="fa-solid fa-folder-open"></i>
+        <p>This user has no permissions granted in any domain.</p>
+      </div>
+    } @else {
+      <div class="total-summary">
+        <strong>{{ TotalUserCount }}</strong> permission{{ TotalUserCount === 1 ? '' : 's' }} across
+        <strong>{{ UserDomainGroups.length }}</strong> domain{{ UserDomainGroups.length === 1 ? '' : 's' }}
+      </div>
+
+      <div class="domain-groups">
+        @for (group of UserDomainGroups; track TrackByDomain($index, group)) {
+          <div class="domain-group" [class.expanded]="group.Expanded">
+            <button type="button" class="domain-header" (click)="ToggleGroup(group)">
+              <div class="domain-header-left">
+                <i [class]="group.Icon" class="domain-icon"></i>
+                <span class="domain-name">{{ group.DomainName }}</span>
+                <span class="domain-count">{{ group.Count }}</span>
+              </div>
+              <i class="fa-solid fa-chevron-down toggle-icon" [class.rotated]="group.Expanded"></i>
+            </button>
+
+            @if (group.Expanded) {
+              <div class="domain-body">
+                <table class="perms-table">
+                  <thead>
+                    <tr>
+                      <th>Resource</th>
+                      <th>Type</th>
+                      <th>Actions</th>
+                      <th>Effect</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of group.Rows; track TrackByPermission($index, row)) {
+                      <tr>
+                        <td class="resource-cell">
+                          <span class="resource-name">{{ row.ResourceName || row.ResourceID || '—' }}</span>
+                          @if (row.ResourceID && row.ResourceName && row.ResourceName !== row.ResourceID) {
+                            <span class="resource-id">{{ row.ResourceID }}</span>
+                          }
+                        </td>
+                        <td>{{ row.ResourceType }}</td>
+                        <td>
+                          <div class="action-chips">
+                            @for (action of row.Actions; track action) {
+                              <span class="action-chip">{{ action }}</span>
+                            }
+                          </div>
+                        </td>
+                        <td>
+                          <span class="effect-badge" [class.effect-allow]="row.Effect === 'Allow'" [class.effect-deny]="row.Effect === 'Deny'">
+                            {{ row.Effect }}
+                          </span>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- ==================== Resource Access Report tab ===================== -->
+  @if (ActiveTab === 'ResourceAccess') {
+    <p class="description">
+      Look up every grantee for a specific resource. Pick a permission domain, supply the resource
+      type and the resource's ID, then press Lookup.
+    </p>
+
+    <div class="selector-row wrap">
+      <label class="selector-label" for="domain-select">Domain:</label>
+      <select
+        id="domain-select"
+        class="mj-input"
+        [ngModel]="SelectedDomainName"
+        (ngModelChange)="OnResourceDomainChanged($event)"
+        [disabled]="IsLoadingResourcePermissions"
+      >
+        @for (d of Domains; track d.ID) {
+          <option [ngValue]="d.Name">{{ d.Name }}</option>
+        }
+      </select>
+
+      <label class="selector-label" for="rtype-input">Resource Type:</label>
+      <input
+        id="rtype-input"
+        class="mj-input"
+        placeholder="e.g. Dashboards, Artifacts, Applications"
+        [(ngModel)]="ResourceTypeInput"
+        [disabled]="IsLoadingResourcePermissions"
+      />
+
+      <label class="selector-label" for="rid-input">Resource ID:</label>
+      <input
+        id="rid-input"
+        class="mj-input mono"
+        placeholder="UUID or record ID"
+        [(ngModel)]="ResourceIdInput"
+        [disabled]="IsLoadingResourcePermissions"
+      />
+
+      <button
+        mjButton
+        variant="primary"
+        (click)="OnLookupResource()"
+        [disabled]="IsLoadingResourcePermissions"
+      >
+        @if (IsLoadingResourcePermissions) {
+          <i class="fa-solid fa-spinner fa-spin"></i> Looking up...
+        } @else {
+          <i class="fa-solid fa-magnifying-glass"></i> Lookup
+        }
+      </button>
+    </div>
+
+    @if (IsLoadingResourcePermissions) {
+      <mj-loading text="Looking up grantees..." size="medium"></mj-loading>
+    } @else if (!LastResourceQueryLabel) {
+      <div class="empty-state">
+        <i class="fa-solid fa-cube"></i>
+        <p>Pick a domain and enter a resource type + ID, then press Lookup to see who has access.</p>
+      </div>
+    } @else if (ResourceAccessRows.length === 0) {
+      <div class="empty-state">
+        <i class="fa-solid fa-user-slash"></i>
+        <p>No grantees found for <strong>{{ LastResourceQueryLabel }}</strong>.</p>
+      </div>
+    } @else {
+      <div class="total-summary">
+        <strong>{{ ResourceAccessRows.length }}</strong> grantee{{ ResourceAccessRows.length === 1 ? '' : 's' }}
+        on <strong>{{ LastResourceQueryLabel }}</strong>
+      </div>
+
+      <div class="domain-body">
+        <table class="perms-table">
+          <thead>
+            <tr>
+              <th>Grantee</th>
+              <th>Type</th>
+              <th>Actions</th>
+              <th>Effect</th>
+              <th>Expires</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of ResourceAccessRows; track TrackByResourceRow($index, row)) {
+              <tr>
+                <td class="resource-cell">
+                  <span class="resource-name">{{ row.GranteeName || row.GranteeID || row.GranteeType }}</span>
+                  @if (row.GranteeID && row.GranteeName && row.GranteeName !== row.GranteeID) {
+                    <span class="resource-id">{{ row.GranteeID }}</span>
+                  }
+                </td>
+                <td>{{ row.GranteeType }}</td>
+                <td>
+                  <div class="action-chips">
+                    @for (action of row.Actions; track action) {
+                      <span class="action-chip">{{ action }}</span>
+                    }
+                  </div>
+                </td>
+                <td>
+                  <span class="effect-badge" [class.effect-allow]="row.Effect === 'Allow'" [class.effect-deny]="row.Effect === 'Deny'">
+                    {{ row.Effect }}
+                  </span>
+                </td>
+                <td>
+                  @if (row.ExpiresAt) {
+                    <span>{{ row.ExpiresAt | date:'short' }}</span>
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</div>

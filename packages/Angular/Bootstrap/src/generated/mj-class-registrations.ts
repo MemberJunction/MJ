@@ -41,8 +41,11 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (315 classes)
+// @memberjunction/core-entities (320 classes)
 import {
+    ApplicationRolePermissionProvider,
+    DashboardPermissionProvider,
+    EntityPermissionProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -264,6 +267,7 @@ import {
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJOutputTriggerTypeEntity,
+    MJPermissionDomainEntity,
     MJProjectEntity,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
@@ -358,6 +362,7 @@ import {
     MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/entity-communications-base (1 classes)
@@ -421,7 +426,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (69 classes)
+// @memberjunction/ng-dashboards (70 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -479,6 +484,7 @@ import {
     SchedulingJobsResourceComponent,
     SchedulingOverviewResourceComponent,
     SecurityPermissionsComponent,
+    SharingCenterResourceComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
     TestingAnalyticsResourceComponent,
@@ -541,6 +547,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
     MJCommunicationProviderEntityExtended,
+    ApplicationRolePermissionProvider,
+    DashboardPermissionProvider,
+    EntityPermissionProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -762,6 +771,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJOutputTriggerTypeEntity,
+    MJPermissionDomainEntity,
     MJProjectEntity,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
@@ -856,6 +866,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    ResourcePermissionProvider,
     MJEntityCommunicationMessageTypeEntityExtended,
     CodeArtifactViewerComponent,
     ComponentArtifactViewerComponent,
@@ -953,6 +964,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     SchedulingJobsResourceComponent,
     SchedulingOverviewResourceComponent,
     SecurityPermissionsComponent,
+    SharingCenterResourceComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
     TestingAnalyticsResourceComponent,
@@ -987,7 +999,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 454;
+export const CLASS_REGISTRATIONS_COUNT = 460;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
