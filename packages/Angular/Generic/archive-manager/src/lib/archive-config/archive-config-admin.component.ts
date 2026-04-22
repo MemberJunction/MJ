@@ -7,6 +7,7 @@ import {
   inject,
 } from '@angular/core';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
   MJArchiveConfigurationEntity,
   MJArchiveConfigurationEntityEntity,
@@ -113,7 +114,7 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
 
   /** Check if a config is the currently selected one */
   IsSelectedConfig(config: ArchiveConfig): boolean {
-    return this.SelectedConfig?.ID === config.ID;
+    return UUIDsEqual(this.SelectedConfig?.ID, config.ID);
   }
 
   /** Add a new empty entity row */
@@ -138,7 +139,7 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
 
   /** Remove an entity row */
   RemoveEntity(entity: ArchiveConfigEntity): void {
-    this.ConfigEntities = this.ConfigEntities.filter((e) => e.ID !== entity.ID);
+    this.ConfigEntities = this.ConfigEntities.filter((e) => !UUIDsEqual(e.ID, entity.ID));
     this.cdr.markForCheck();
   }
 
@@ -185,7 +186,7 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
     const configId = this.SelectedConfig.ID;
     this.clearStatus();
 
-    const original = this.Configs.find((c) => c.ID === configId);
+    const original = this.Configs.find((c) => UUIDsEqual(c.ID, configId));
     if (original) {
       this.SelectedConfig = { ...original };
       await this.loadConfigEntities(configId);
