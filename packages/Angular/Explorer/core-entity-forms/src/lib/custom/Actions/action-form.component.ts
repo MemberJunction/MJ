@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, ViewContainerRef } from '@angular/core';
 import { MJActionEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionParamEntity, MJActionResultCodeEntity, MJActionCategoryEntity, MJActionExecutionLogEntity, MJActionLibraryEntity, MJLibraryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJActionFormComponent } from '../../generated/Entities/MJAction/mjaction.form.component';
@@ -17,7 +17,14 @@ import { ActionParamDialogComponent, ActionResultCodeDialogComponent } from '@me
 })
 export class MJActionFormComponentExtended extends MJActionFormComponent implements OnInit {
     public record!: MJActionEntity;
-    
+
+    // This form has a fully custom layout (header panel + accordion
+    // sections we manage ourselves), so the toolbar's section-search,
+    // expand/collapse, manage-sections, and width-toggle widgets don't
+    // apply. `CUSTOM_LAYOUT_TOOLBAR_CONFIG` hides the entire right-hand
+    // group while keeping favorite / history / tags / list buttons intact.
+    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
     // Related entities
     public category: MJActionCategoryEntity | null = null;
     public actionParams: MJActionParamEntity[] = [];
@@ -172,17 +179,23 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
                 this.PendingRecords.length = 0;
                 this.paramsToDelete = [];
                 this.resultCodesToDelete = [];
-                
-                // Reload params and result codes to get updated data
-                await Promise.all([
-                    this.loadActionParams(),
-                    this.loadResultCodes()
-                ]);
-                
-                // Show success message
-                this.sharedService.CreateSimpleNotification('Action and related records saved successfully', 'success', 3000);
+
+                // Note: the base SaveRecord() already emits a "Record saved
+                // successfully" toast on success — don't emit another one
+                // from here or users get two toasts for one save.
+
+                // Defer the post-save reload so the template's post-save CD
+                // pass completes before `actionParams` / `resultCodes` mutate.
+                // We also run the reload *silently* (no isLoadingParams flash)
+                // and batch the final state into a single `detectChanges()`
+                // to avoid NG0100: previously the spinner toggle + array
+                // replacement generated multiple interleaved CD passes that
+                // saw `actionParams.length` change between check/verify.
+                queueMicrotask(() => {
+                    void this.reloadAfterSaveSilent();
+                });
             }
-            
+
             return success;
             
         } catch (error) {
@@ -267,6 +280,61 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             this.resultCodes = [];
         } finally {
             this.isLoadingResultCodes = false;
+        }
+    }
+
+    /**
+     * Silent post-save reload. Unlike `loadActionParams` / `loadResultCodes`,
+     * this version:
+     *   - Does NOT toggle `isLoadingParams` / `isLoadingResultCodes`. No
+     *     spinner is needed; the form is already back in read mode.
+     *   - Runs both RunViews in parallel off a single network round-trip.
+     *   - Commits the results in one synchronous block, then calls
+     *     `detectChanges()` once so Angular sees a single CD pass rather
+     *     than the three-or-four passes the original flow produced.
+     *
+     * This is what eliminates the NG0100 "`actionParams.length` changed
+     * from 33 to 35" error we were seeing after save: previously the
+     * length flipped between the check and verify phases of a CD pass
+     * triggered by the spinner-flag updates.
+     */
+    private async reloadAfterSaveSilent(): Promise<void> {
+        try {
+            const rv = new RunView();
+            const [paramResult, codeResult] = await rv.RunViews([
+                {
+                    EntityName: 'MJ: Action Params',
+                    ExtraFilter: `ActionID='${this.record.ID}'`,
+                    OrderBy: 'Name',
+                    ResultType: 'entity_object'
+                },
+                {
+                    EntityName: 'MJ: Action Result Codes',
+                    ExtraFilter: `ActionID='${this.record.ID}'`,
+                    OrderBy: 'IsSuccess DESC, ResultCode',
+                    ResultType: 'entity_object'
+                }
+            ]);
+
+            const params = (paramResult.Success ? paramResult.Results : []) as MJActionParamEntity[];
+            const codes = (codeResult.Success ? codeResult.Results : []) as MJActionResultCodeEntity[];
+
+            // Single synchronous commit — all template-observable arrays
+            // swap at once, avoiding interleaved CD passes.
+            this.actionParams = params;
+            this._inputParams = params.filter((p) => {
+                const type = p.Type?.trim().toLowerCase();
+                return type === 'input' || type === 'both';
+            });
+            this._outputParams = params.filter((p) => {
+                const type = p.Type?.trim().toLowerCase();
+                return type === 'output' || type === 'both';
+            });
+            this.resultCodes = codes;
+
+            this.cdr.detectChanges();
+        } catch (e) {
+            console.error('Post-save reload failed:', e);
         }
     }
 
@@ -486,6 +554,22 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         const action = perms?.allowAnyAction === true;
         const agent = perms?.allowAnyAgent === true;
         return { entity, action, agent, any: entity || action || agent };
+    }
+
+    /**
+     * Both Generated and Runtime actions carry executable code gated by
+     * `CodeApprovalStatus` — the RuntimeActionExecutor refuses to run
+     * anything that isn't `Approved`, and CodeGen blocks unapproved
+     * Generated code from being emitted. Custom actions run registered
+     * TypeScript classes and don't have this gate.
+     *
+     * Getter rather than method so Angular's change detector can't
+     * observe inconsistent results across check/verify passes — this
+     * is the standard fix for NG0100 when a conditional's expression
+     * depends on a method call.
+     */
+    get hasCodeApproval(): boolean {
+        return this.record?.Type === 'Generated' || this.record?.Type === 'Runtime';
     }
 
     getApprovalStatusColor(): string {

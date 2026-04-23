@@ -1,7 +1,20 @@
-<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-    @if (record) {
+<!--
+    NOTE: We wrap the form content in <mj-record-form-container> rather than
+    using <mj-form-toolbar> directly. The container owns the toolbar AND the
+    panels behind History/Tags/List buttons — without it those buttons emit
+    events that nothing listens to and the features silently break. Follow
+    this pattern for every custom entity form — see packages/Angular/CLAUDE.md.
+-->
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
         <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-            <mj-form-toolbar [Form]="this"></mj-form-toolbar>
 
             <!-- Main Content Area -->
             <div class="action-main-area" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
@@ -26,6 +39,14 @@
                                           [attr.data-color]="record.Status === 'Active' ? 'success' : record.Status === 'Pending' ? 'warning' : 'error'">
                                         {{ record.Status }}
                                     </span>
+                                    @if (hasCodeApproval && record.CodeApprovalStatus) {
+                                        <span class="status-chip"
+                                              [attr.data-color]="record.CodeApprovalStatus === 'Approved' ? 'success' : record.CodeApprovalStatus === 'Pending' ? 'warning' : 'error'"
+                                              [title]="'Code ' + record.CodeApprovalStatus">
+                                            <i [class]="'fa-solid ' + getApprovalStatusIcon()" style="margin-right: 4px;"></i>
+                                            {{ record.CodeApprovalStatus }}
+                                        </span>
+                                    }
                                 }
                             </div>
                             
@@ -67,6 +88,22 @@
                                                      style="width: 200px;">
                                         </mj-dropdown>
                                     </div>
+                                    @if (hasCodeApproval) {
+                                        <div>
+                                            <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--mj-text-secondary); font-size: 0.9em;">
+                                                <i [class]="'fa-solid ' + getApprovalStatusIcon()" [style.color]="getApprovalStatusColor()" style="margin-right: 4px;"></i>
+                                                Code Approval
+                                            </label>
+                                            <mj-dropdown [(ngModel)]="record.CodeApprovalStatus"
+                                                         name="codeApprovalStatus"
+                                                         [Data]="[{text: 'Approved', value: 'Approved'}, {text: 'Pending', value: 'Pending'}, {text: 'Rejected', value: 'Rejected'}]"
+                                                         TextField="text"
+                                                         ValueField="value"
+                                                         [ValuePrimitive]="true"
+                                                         style="width: 160px;">
+                                            </mj-dropdown>
+                                        </div>
+                                    }
                                 </div>
                             }
                             
@@ -100,7 +137,7 @@
                                     <span style="color: var(--mj-text-secondary); font-weight: 500;">{{ record.Type }}</span>
                                 </div>
                                 
-                                @if (record.Type === 'Generated' && record.CodeApprovalStatus) {
+                                @if (hasCodeApproval && record.CodeApprovalStatus) {
                                     <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
                                         <i [class]="'fa-solid ' + getApprovalStatusIcon()" [style.color]="getApprovalStatusColor()"></i>
                                         <span style="color: var(--mj-text-muted);">Code:</span>
@@ -120,7 +157,7 @@
                         <!-- Right: Action Buttons -->
                         <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
                             <div style="display: flex; gap: 8px;">
-                                @if (record.ID) {
+                                @if (record.ID && !EditMode) {
                                     <button mjButton variant="primary" size="lg"
                                                 (click)="openTestHarness()"
                                                 title="Open Run Harness"
@@ -136,19 +173,6 @@
                                     </button>
                                 }
                             </div>
-                            
-                            @if (EditMode && record.CodeApprovalStatus === 'Pending' && record.Type === 'Generated') {
-                                <div style="display: flex; gap: 8px;">
-                                    <button mjButton variant="success" size="sm"
-                                                (click)="approveCode()">
-                                        <i class="fa-solid fa-check"></i> Approve
-                                    </button>
-                                    <button mjButton variant="danger" size="sm"
-                                                (click)="rejectCode()">
-                                        <i class="fa-solid fa-times"></i> Reject
-                                    </button>
-                                </div>
-                            }
                             
                             @if (!EditMode && record.Status !== 'Active' && record.ID) {
                                 <div style="font-size: 0.75em; color: var(--mj-status-error); text-align: right;">
@@ -812,8 +836,8 @@
                 </div>
             </div>
         </form>
-    }
-</div>
+</mj-record-form-container>
+}
 
 <!-- Action Test Harness Dialog -->
 <mj-action-test-harness-dialog

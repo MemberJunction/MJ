@@ -1587,10 +1587,13 @@ export class EntityFormComponentExtended extends EntityFormComponent {
 
 **Why this works**: The `@RegisterClass` system uses registration order for priority. Since your custom form imports and extends the generated form, it creates a dependency that ensures it compiles AFTER the generated form, giving it higher priority.
 
+**Toolbar pattern**: Entity forms must wrap their content in `<mj-record-form-container>` — NOT `<mj-form-toolbar>` directly. The container owns the panels that the History / Tags / Add-to-List buttons open; a raw toolbar only emits events and those features silently break without the container to handle them. See the toolbar section in the Angular guide below for the exact pattern.
+
 **See [packages/Angular/CLAUDE.md](packages/Angular/CLAUDE.md)** for complete custom form documentation including:
 - Full checklist for creating custom forms
 - Module registration requirements
 - Tree-shaking prevention patterns
+- **Toolbar pattern — `<mj-record-form-container>` vs. `<mj-form-toolbar>`**
 - Examples of existing custom forms
 
 ## Metadata Files and mj-sync
