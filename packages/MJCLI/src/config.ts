@@ -320,8 +320,6 @@ export const getSkywayConfig = async (
 async function createSkywayProvider(dialect: DatabaseDialect, dbConfig: SkywayConfig['Database']): Promise<DatabaseProvider> {
   if (dialect === 'postgresql') {
     try {
-      // @ts-expect-error — package is part of the in-progress Skyway 0.6.x refactor;
-      // not yet published to npm. Runtime falls back to clear error if missing.
       const { PostgresProvider } = await import('@memberjunction/skyway-postgres');
       return new PostgresProvider(dbConfig);
     } catch {
@@ -331,8 +329,6 @@ async function createSkywayProvider(dialect: DatabaseDialect, dbConfig: SkywayCo
     }
   } else {
     try {
-      // @ts-expect-error — package is part of the in-progress Skyway 0.6.x refactor;
-      // not yet published to npm. Runtime falls back to clear error if missing.
       const { SqlServerProvider } = await import('@memberjunction/skyway-sqlserver');
       return new SqlServerProvider(dbConfig);
     } catch {

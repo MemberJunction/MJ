@@ -45,6 +45,8 @@ describe.skipIf(!hasMigrations)('v5 migration regression — conversion', () => 
 
   describe('every T-SQL migration converts without error', () => {
     for (const file of tsqlFiles) {
+      // V202604131200__v5.25.x__Metadata_Sync.sql is ~13 MB and takes ~220s to
+      // convert. A single per-case timeout is simpler than branching per file.
       it(`converts: ${file}`, () => {
         const result = convertFile({
           Source: join(MIGRATIONS_DIR, file),
@@ -54,10 +56,11 @@ describe.skipIf(!hasMigrations)('v5 migration regression — conversion', () => 
         });
         expect(result.OutputSQL).toBeTruthy();
         expect(result.OutputSQL.length).toBeGreaterThan(0);
-      });
+      }, 600_000);
     }
   });
 
+  // Loops through every T-SQL file; dominated by the 13 MB metadata_sync convert.
   it('should produce output with zero TODO markers', () => {
     let totalTodos = 0;
     for (const file of tsqlFiles) {
@@ -71,10 +74,12 @@ describe.skipIf(!hasMigrations)('v5 migration regression — conversion', () => 
       totalTodos += todos;
     }
     expect(totalTodos).toBe(0);
-  });
+  }, 600_000);
 });
 
 describe.skipIf(!hasMigrations)('v5 migration regression — sequence deduplication', () => {
+  // Converts all 84 T-SQL files to a tmp dir, then runs dedup. Dominated by
+  // the 13 MB metadata_sync file (~220s).
   it('should detect and fix sequence collisions in converted output', () => {
     const rules = getRulesForDialects('tsql', 'postgres');
     const tmpDir = mkdtempSync(join(tmpdir(), 'pg-regression-'));
@@ -104,7 +109,7 @@ describe.skipIf(!hasMigrations)('v5 migration regression — sequence deduplicat
     expect(verify.totalCollisions).toBe(0);
 
     rmSync(tmpDir, { recursive: true, force: true });
-  });
+  }, 600_000);
 });
 
 describe.skipIf(!hasPGMigrations)('v5 migration regression — committed PG files', () => {
@@ -126,9 +131,9 @@ describe.skipIf(!hasPGMigrations)('v5 migration regression — committed PG file
       const content = readFileSync(join(PG_MIGRATIONS_DIR, file), 'utf-8');
       const hasPgCast = content.includes('UPDATE pg_cast SET castcontext');
       if (hasPgCast) {
-        // Only the restored v5.0.x files from origin/next should have this
-        // New conversions should NOT include pg_cast
-        const isLegacy = file.includes('v5.0.x');
+        // Only the baseline and restored v5.0.x files from origin/next should have this.
+        // New conversions should NOT include pg_cast.
+        const isLegacy = file.startsWith('B') || file.includes('v5.0.x') || file.includes('v5.0__');
         if (!isLegacy) {
           expect.fail(`${file} contains pg_cast manipulation — should have been stripped by converter`);
         }
@@ -149,9 +154,11 @@ describe.skipIf(!hasPGMigrations)('v5 migration regression — committed PG file
   });
 
   it('should have zero EntityField sequence collisions in committed files', () => {
+    // Scans every .pg.sql file — metadata_sync files run 100K+ lines each, so
+    // parsing the full set is legitimately slow on cold disk.
     const result = deduplicateEntityFieldSequences(PG_MIGRATIONS_DIR, true);
     expect(result.totalCollisions).toBe(0);
-  });
+  }, 300_000);
 
   it('every PG file should be valid UTF-8 with no null bytes', () => {
     for (const file of pgFiles) {

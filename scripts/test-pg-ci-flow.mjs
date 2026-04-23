@@ -4,7 +4,7 @@
  *
  * Prerequisites:
  *   - PostgreSQL running on localhost:5432
- *   - PG_PASSWORD env var set (or uses default 'z2qXgNvvstcc')
+ *   - PG_PASSWORD env var set
  *   - SQLConverter already built (npm run build in packages/SQLConverter)
  *
  * Usage:
