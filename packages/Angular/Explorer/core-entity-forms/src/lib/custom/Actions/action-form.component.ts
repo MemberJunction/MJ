@@ -25,6 +25,9 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     // group while keeping favorite / history / tags / list buttons intact.
     public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
 
+    /** Custom-layout Action form looks best full-width on first open. */
+    public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
     // Related entities
     public category: MJActionCategoryEntity | null = null;
     public actionParams: MJActionParamEntity[] = [];

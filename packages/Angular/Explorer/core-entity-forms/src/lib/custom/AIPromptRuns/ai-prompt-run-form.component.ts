@@ -1,6 +1,6 @@
 import { Component, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJAIModelEntity } from "@memberjunction/core-entities";
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
@@ -20,7 +20,11 @@ import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 })
 export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent implements AfterViewInit, OnDestroy {
     public record!: MJAIPromptRunEntityExtended;
-    
+    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** Custom-layout AI Prompt Run form looks best full-width on first open. */
+    public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
     // Related entities
     public prompt: MJAIPromptEntityExtended | null = null;
     public model: MJAIModelEntity | null = null;
