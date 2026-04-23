@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -19,10 +19,12 @@ import { Violation } from '../component-linter';
  * Severity: critical
  * Applies to: all components
  */
-export const utilitiesApiValidationRule: LintRule = {
-  name: 'utilities-api-validation',
-  appliesTo: 'all',
-  test: (ast) => {
+@RegisterClass(BaseLintRule, 'utilities-api-validation')
+export class UtilitiesApiValidationRule extends BaseLintRule {
+  get Name() { return 'utilities-api-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File): Violation[] {
     const violations: Violation[] = [];
 
     // Define the complete utilities API surface
@@ -123,8 +125,5 @@ export const utilitiesApiValidationRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(utilitiesApiValidationRule);
+    }
+}

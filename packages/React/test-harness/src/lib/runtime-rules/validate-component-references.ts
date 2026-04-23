@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -14,10 +14,12 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * Severity: critical (for undefined references), low (for unused dependencies)
  * Applies to: all components
  */
-export const validateComponentReferencesRule: LintRule = {
-  name: 'validate-component-references',
-  appliesTo: 'all',
-  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'validate-component-references')
+export class ValidateComponentReferencesRule extends BaseLintRule {
+  get Name() { return 'validate-component-references'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // Skip if no spec or no dependencies
@@ -270,8 +272,5 @@ export const validateComponentReferencesRule: LintRule = {
     }
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(validateComponentReferencesRule);
+    }
+}

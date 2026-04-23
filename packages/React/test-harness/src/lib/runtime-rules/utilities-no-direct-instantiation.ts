@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -15,10 +15,12 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * Severity: high
  * Applies to: all components
  */
-export const utilitiesNoDirectInstantiationRule: LintRule = {
-  name: 'utilities-no-direct-instantiation',
-  appliesTo: 'all',
-  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'utilities-no-direct-instantiation')
+export class UtilitiesNoDirectInstantiationRule extends BaseLintRule {
+  get Name() { return 'utilities-no-direct-instantiation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
     const restrictedClasses = new Map([
       ['RunView', 'utilities.rv'],
@@ -49,8 +51,5 @@ export const utilitiesNoDirectInstantiationRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(utilitiesNoDirectInstantiationRule);
+    }
+}

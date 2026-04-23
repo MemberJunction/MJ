@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -250,10 +250,12 @@ function isDescendantOf(targetNode: t.Node, containerNode: t.Node): boolean {
   return found;
 }
 
-export const runviewResultNullSafetyRule: LintRule = {
-  name: 'runview-result-null-safety',
-  appliesTo: 'all',
-  test: (ast) => {
+@RegisterClass(BaseLintRule, 'runview-result-null-safety')
+export class RunviewResultNullSafetyRule extends BaseLintRule {
+  get Name() { return 'runview-result-null-safety'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File): Violation[] {
     const violations: Violation[] = [];
 
     const resultVars = collectResultVariables(ast);
@@ -289,8 +291,5 @@ export const runviewResultNullSafetyRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(runviewResultNullSafetyRule);
+    }
+}

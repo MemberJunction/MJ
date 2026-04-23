@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -14,10 +14,12 @@ import { Violation } from '../component-linter';
  * Severity: high (template patterns) / low (general)
  * Applies to: all components
  */
-export const stringReplaceAllOccurrencesRule: LintRule = {
-  name: 'string-replace-all-occurrences',
-  appliesTo: 'all',
-  test: (ast) => {
+@RegisterClass(BaseLintRule, 'string-replace-all-occurrences')
+export class StringReplaceAllOccurrencesRule extends BaseLintRule {
+  get Name() { return 'string-replace-all-occurrences'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File): Violation[] {
     const violations: Violation[] = [];
 
     // Template patterns that are HIGH severity (likely to have multiple occurrences)
@@ -102,8 +104,5 @@ export const stringReplaceAllOccurrencesRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(stringReplaceAllOccurrencesRule);
+  }
+}

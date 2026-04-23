@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -15,10 +15,12 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * Severity: critical
  * Applies to: all components
  */
-export const componentUsageWithoutDestructuringRule: LintRule = {
-  name: 'component-usage-without-destructuring',
-  appliesTo: 'all',
-  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'component-usage-without-destructuring')
+export class ComponentUsageWithoutDestructuringRule extends BaseLintRule {
+  get Name() { return 'component-usage-without-destructuring'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // Skip if no dependencies
@@ -121,8 +123,5 @@ function MyComponent({ components: { AccountList } }) {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(componentUsageWithoutDestructuringRule);
+  }
+}

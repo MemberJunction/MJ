@@ -1,8 +1,10 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { ComponentExecutionOptions } from '../component-runner';
 
 /**
  * Rule: component-props-validation
@@ -18,10 +20,12 @@ import { Violation } from '../component-linter';
  * Severity: critical
  * Applies to: all components
  */
-export const componentPropsValidationRule: LintRule = {
-  name: 'component-props-validation',
-  appliesTo: 'all',
-  test: (ast, componentName, componentSpec) => {
+@RegisterClass(BaseLintRule, 'component-props-validation')
+export class ComponentPropsValidationRule extends BaseLintRule {
+  get Name() { return 'component-props-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec, _options?: ComponentExecutionOptions): Violation[] {
     const violations: Violation[] = [];
     const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
 
@@ -228,8 +232,5 @@ function MyComponent({ utilities, styles, components, callbacks, savedUserSettin
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(componentPropsValidationRule);
+  }
+}

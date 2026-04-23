@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { StylesTypeAnalyzer } from '../styles-type-analyzer';
@@ -28,10 +28,12 @@ function getStylesAnalyzer(): StylesTypeAnalyzer {
   return _stylesAnalyzer;
 }
 
-export const stylesInvalidPathRule: LintRule = {
-  name: 'styles-invalid-path',
-  appliesTo: 'all',
-  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'styles-invalid-path')
+export class StylesInvalidPathRule extends BaseLintRule {
+  get Name() { return 'styles-invalid-path'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
     const analyzer = getStylesAnalyzer();
 
@@ -119,8 +121,5 @@ styles?.spacing?.sm || '8px'`,
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(stylesInvalidPathRule);
+    }
+}

@@ -1,9 +1,9 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { createViolation, truncateCode } from '../lint-utils';
+import { truncateCode } from '../lint-utils';
 
 /**
  * Rule: no-react-destructuring
@@ -14,10 +14,12 @@ import { createViolation, truncateCode } from '../lint-utils';
  * Severity: critical
  * Applies to: all components
  */
-export const noReactDestructuringRule: LintRule = {
-  name: 'no-react-destructuring',
-  appliesTo: 'all',
-  test: (ast) => {
+@RegisterClass(BaseLintRule, 'no-react-destructuring')
+export class NoReactDestructuringRule extends BaseLintRule {
+  get Name() { return 'no-react-destructuring'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -51,8 +53,5 @@ const [state, setState] = useState(initialValue);`,
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(noReactDestructuringRule);
+  }
+}

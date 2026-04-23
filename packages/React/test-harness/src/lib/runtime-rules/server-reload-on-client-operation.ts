@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -43,10 +43,12 @@ function getFunctionName(path: NodePath): string | null {
  * Severity: critical
  * Applies to: all components
  */
-export const serverReloadOnClientOperationRule: LintRule = {
-  name: 'server-reload-on-client-operation',
-  appliesTo: 'all',
-  test: (ast, componentName) => {
+@RegisterClass(BaseLintRule, 'server-reload-on-client-operation')
+export class ServerReloadOnClientOperationRule extends BaseLintRule {
+  get Name() { return 'server-reload-on-client-operation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -104,8 +106,5 @@ const sortedData = useMemo(() => {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(serverReloadOnClientOperationRule);
+    }
+}

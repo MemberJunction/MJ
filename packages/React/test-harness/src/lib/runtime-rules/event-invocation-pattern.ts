@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -15,10 +15,12 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * Severity: medium
  * Applies to: all components
  */
-export const eventInvocationPatternRule: LintRule = {
-  name: 'event-invocation-pattern',
-  appliesTo: 'all',
-  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'event-invocation-pattern')
+export class EventInvocationPatternRule extends BaseLintRule {
+  get Name() { return 'event-invocation-pattern'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // Build list of component's event names from spec
@@ -115,8 +117,5 @@ ${eventName}?.(data);`,
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(eventInvocationPatternRule);
+  }
+}

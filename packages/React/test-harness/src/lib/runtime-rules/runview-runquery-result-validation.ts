@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import type { RunQueryResult, RunViewResult } from '@memberjunction/core';
 
@@ -95,10 +95,12 @@ function isVariableFromRunQueryOrView(path: NodePath, varName: string, methodNam
  *
  * Closure dependencies: Uses isVariableFromRunQueryOrView helper (extracted from ComponentLinter)
  */
-export const runviewRunqueryResultValidationRule: LintRule = {
-  name: 'runview-runquery-result-validation',
-  appliesTo: 'all',
-  test: (ast) => {
+@RegisterClass(BaseLintRule, 'runview-runquery-result-validation')
+export class RunviewRunqueryResultValidationRule extends BaseLintRule {
+  get Name() { return 'runview-runquery-result-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File): Violation[] {
     const violations: Violation[] = [];
 
     const validRunQueryResultProps = new Set(runQueryResultProps);
@@ -631,8 +633,5 @@ Correct pattern:
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(runviewRunqueryResultValidationRule);
+    }
+}

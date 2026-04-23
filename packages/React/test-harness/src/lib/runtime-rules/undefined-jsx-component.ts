@@ -1,8 +1,9 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 // Standard HTML elements (lowercase) - subset needed for this rule
 const HTML_ELEMENTS = new Set([
@@ -44,11 +45,12 @@ const REACT_BUILT_INS = new Set(['Fragment', 'StrictMode', 'Suspense', 'Profiler
  * NOTE: This rule is currently commented out in the monolith. Extracted as-is for
  * future re-enablement.
  */
-export const undefinedJsxComponentRule: LintRule = {
-  name: 'undefined-jsx-component',
-  appliesTo: 'all',
-  deprecated: true, // Disabled due to false positives
-  test: (ast, componentName, componentSpec) => {
+@RegisterClass(BaseLintRule, 'undefined-jsx-component')
+export class UndefinedJsxComponentRule extends BaseLintRule {
+  get Name() { return 'undefined-jsx-component'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // Track what's available in scope
@@ -271,8 +273,5 @@ export const undefinedJsxComponentRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(undefinedJsxComponentRule);
+    }
+}

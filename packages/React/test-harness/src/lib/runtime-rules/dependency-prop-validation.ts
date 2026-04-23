@@ -1,5 +1,7 @@
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import * as t from '@babel/types';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
+import { Violation } from '../component-linter';
 
 /**
  * Rule: dependency-prop-validation
@@ -17,15 +19,13 @@ import { RuleRegistry } from '../rule-registry';
  *
  * Closure dependencies (in commented-out code): TypeInferenceEngine, ComponentMetadataEngine
  */
-export const dependencyPropValidationRule: LintRule = {
-  name: 'dependency-prop-validation',
-  appliesTo: 'all',
-  deprecated: true, // Phase 3: Merged into ComponentPropRule
-  test: () => {
+@RegisterClass(BaseLintRule, 'dependency-prop-validation')
+export class DependencyPropValidationRule extends BaseLintRule {
+  get Name() { return 'dependency-prop-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(_ast: t.File): Violation[] {
     // Skip - this rule is deprecated and replaced by ComponentPropRule
     return [];
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(dependencyPropValidationRule);
+  }
+}

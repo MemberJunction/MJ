@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -15,10 +15,12 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * Severity: critical (for shadowing), low (for unused dependencies)
  * Applies to: all components
  */
-export const dependencyShadowingRule: LintRule = {
-  name: 'dependency-shadowing',
-  appliesTo: 'all',
-  test: (ast, componentName, componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'dependency-shadowing')
+export class DependencyShadowingRule extends BaseLintRule {
+  get Name() { return 'dependency-shadowing'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // Get all dependency component names
@@ -100,7 +102,6 @@ export const dependencyShadowingRule: LintRule = {
 
     // Components must be destructured from the components prop or accessed via components.ComponentName
     // Check if they're being used correctly
-    let hasComponentsUsage = false;
     const usedDependencies = new Set<string>();
 
     (mainComponentPath as NodePath<t.FunctionDeclaration>).traverse({
@@ -113,7 +114,6 @@ export const dependencyShadowingRule: LintRule = {
             return;
           }
           usedDependencies.add(name);
-          hasComponentsUsage = true;
         }
       },
 
@@ -123,7 +123,6 @@ export const dependencyShadowingRule: LintRule = {
           const name = path.node.property.name;
           if (dependencyNames.has(name)) {
             usedDependencies.add(name);
-            hasComponentsUsage = true;
           }
         }
       },
@@ -134,7 +133,6 @@ export const dependencyShadowingRule: LintRule = {
           const name = path.node.property.name;
           if (dependencyNames.has(name)) {
             usedDependencies.add(name);
-            hasComponentsUsage = true; // Mark as properly accessed
           }
         }
       },
@@ -154,8 +152,5 @@ export const dependencyShadowingRule: LintRule = {
     }
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(dependencyShadowingRule);
+  }
+}

@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -14,10 +14,12 @@ import { Violation } from '../component-linter';
  * Severity: high (pattern violation, not a functional issue)
  * Applies to: all components
  */
-export const noUseReducerRule: LintRule = {
-  name: 'no-use-reducer',
-  appliesTo: 'all',
-  test: (ast, componentName) => {
+@RegisterClass(BaseLintRule, 'no-use-reducer')
+export class NoUseReducerRule extends BaseLintRule {
+  get Name() { return 'no-use-reducer'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -70,8 +72,5 @@ function Component({ savedUserSettings, onSaveUserSettings }) {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(noUseReducerRule);
+  }
+}

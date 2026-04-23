@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -12,10 +12,12 @@ import { Violation } from '../component-linter';
  * Severity: low
  * Applies to: all components
  */
-export const preferAsyncAwaitRule: LintRule = {
-  name: 'prefer-async-await',
-  appliesTo: 'all',
-  test: (ast: t.File, componentName: string) => {
+@RegisterClass(BaseLintRule, 'prefer-async-await')
+export class PreferAsyncAwaitRule extends BaseLintRule {
+  get Name() { return 'prefer-async-await'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -43,8 +45,5 @@ export const preferAsyncAwaitRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(preferAsyncAwaitRule);
+  }
+}

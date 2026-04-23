@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -14,10 +14,12 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * Severity: critical
  * Applies to: all components
  */
-export const componentNameMismatchRule: LintRule = {
-  name: 'component-name-mismatch',
-  appliesTo: 'all',
-  test: (ast, componentName, componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'component-name-mismatch')
+export class ComponentNameMismatchRule extends BaseLintRule {
+  get Name() { return 'component-name-mismatch'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // The expected component name from the spec
@@ -25,7 +27,6 @@ export const componentNameMismatchRule: LintRule = {
 
     // Find the main function declaration
     let foundMainFunction = false;
-    let actualFunctionName: string | null = null;
 
     traverse(ast, {
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
@@ -37,7 +38,6 @@ export const componentNameMismatchRule: LintRule = {
           // (starts with capital letter and has the typical props parameter)
           if (/^[A-Z]/.test(funcName)) {
             foundMainFunction = true;
-            actualFunctionName = funcName;
 
             // Check if the function name matches the spec name
             if (funcName !== expectedName) {
@@ -81,8 +81,5 @@ export const componentNameMismatchRule: LintRule = {
     }
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(componentNameMismatchRule);
+  }
+}

@@ -1,8 +1,9 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { TypeContext, mapSQLTypeToJSType } from '../type-context';
 
 /**
@@ -143,88 +144,6 @@ function getStringLiteralFromAttr(attr: t.JSXAttribute): string | null {
   return null;
 }
 
-export const chartFieldValidationRule: LintRule = {
-  name: 'chart-field-validation',
-  appliesTo: 'all',
-  test: (ast, _componentName, componentSpec) => {
-    const violations: Violation[] = [];
-
-    if (!componentSpec?.dataRequirements) {
-      return violations;
-    }
-
-    const typeContext = new TypeContext(componentSpec);
-    const availableFields = collectAvailableFields(typeContext, componentSpec);
-
-    // If no fields found in the spec, skip validation
-    if (availableFields.size === 0) {
-      return violations;
-    }
-
-    // Check if the component contains data transformations (.map, .reduce, .flatMap)
-    // that could create computed fields not in the original metadata.
-    // If so, skip chart field validation since we can't statically determine field names.
-    let hasDataTransformations = false;
-    traverse(ast, {
-      CallExpression(p: NodePath<t.CallExpression>) {
-        if (t.isMemberExpression(p.node.callee) && t.isIdentifier(p.node.callee.property)) {
-          const method = p.node.callee.property.name;
-          if (['map', 'flatMap', 'reduce'].includes(method)) {
-            hasDataTransformations = true;
-            p.stop();
-          }
-        }
-      },
-      noScope: true,
-    } as Parameters<typeof traverse>[1]);
-    if (hasDataTransformations) {
-      return violations;
-    }
-
-    traverse(ast, {
-      JSXOpeningElement(path: NodePath<t.JSXOpeningElement>) {
-        const nameNode = path.node.name;
-        if (!t.isJSXIdentifier(nameNode)) return;
-
-        const props = extractJsxProps(path.node);
-        const hasChartProps = Array.from(props.keys()).some(
-          (p) => CHART_FIELD_PROPS.has(p) || p === AGGREGATE_PROP,
-        );
-
-        if (!isChartComponent(nameNode.name, hasChartProps)) return;
-
-        // Check if the data prop comes from a transformation (.map, .reduce, etc.)
-        // If so, the fields may differ from raw metadata — skip validation
-        const dataAttr = props.get('data');
-        if (dataAttr) {
-          const dataValue = t.isJSXExpressionContainer(dataAttr.value) ? dataAttr.value.expression : null;
-          if (dataValue && t.isIdentifier(dataValue)) {
-            const binding = path.scope.getBinding(dataValue.name);
-            if (binding && t.isVariableDeclarator(binding.path.node)) {
-              const init = binding.path.node.init;
-              // Check if initialized from a .map(), .filter(), .reduce(), etc.
-              if (init && t.isCallExpression(init) && t.isMemberExpression(init.callee) && t.isIdentifier(init.callee.property)) {
-                const method = init.callee.property.name;
-                if (['map', 'flatMap', 'reduce'].includes(method)) {
-                  return; // Data is transformed — can't validate fields statically
-                }
-              }
-            }
-          }
-        }
-
-        // Validate each chart field prop
-        validateChartFieldProps(props, availableFields, violations);
-
-        // Validate aggregate function on numeric fields
-        validateAggregateFunction(props, availableFields, violations);
-      },
-    });
-
-    return violations;
-  },
-};
-
 /**
  * Validates that chart field props (valueField, groupBy, seriesField) reference
  * fields that exist in the available data source fields.
@@ -304,5 +223,86 @@ function validateAggregateFunction(
   }
 }
 
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(chartFieldValidationRule);
+@RegisterClass(BaseLintRule, 'chart-field-validation')
+export class ChartFieldValidationRule extends BaseLintRule {
+  get Name() { return 'chart-field-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec): Violation[] {
+    const violations: Violation[] = [];
+
+    if (!componentSpec?.dataRequirements) {
+      return violations;
+    }
+
+    const typeContext = new TypeContext(componentSpec);
+    const availableFields = collectAvailableFields(typeContext, componentSpec);
+
+    // If no fields found in the spec, skip validation
+    if (availableFields.size === 0) {
+      return violations;
+    }
+
+    // Check if the component contains data transformations (.map, .reduce, .flatMap)
+    // that could create computed fields not in the original metadata.
+    // If so, skip chart field validation since we can't statically determine field names.
+    let hasDataTransformations = false;
+    traverse(ast, {
+      CallExpression(p: NodePath<t.CallExpression>) {
+        if (t.isMemberExpression(p.node.callee) && t.isIdentifier(p.node.callee.property)) {
+          const method = p.node.callee.property.name;
+          if (['map', 'flatMap', 'reduce'].includes(method)) {
+            hasDataTransformations = true;
+            p.stop();
+          }
+        }
+      },
+      noScope: true,
+    } as Parameters<typeof traverse>[1]);
+    if (hasDataTransformations) {
+      return violations;
+    }
+
+    traverse(ast, {
+      JSXOpeningElement(path: NodePath<t.JSXOpeningElement>) {
+        const nameNode = path.node.name;
+        if (!t.isJSXIdentifier(nameNode)) return;
+
+        const props = extractJsxProps(path.node);
+        const hasChartProps = Array.from(props.keys()).some(
+          (p) => CHART_FIELD_PROPS.has(p) || p === AGGREGATE_PROP,
+        );
+
+        if (!isChartComponent(nameNode.name, hasChartProps)) return;
+
+        // Check if the data prop comes from a transformation (.map, .reduce, etc.)
+        // If so, the fields may differ from raw metadata — skip validation
+        const dataAttr = props.get('data');
+        if (dataAttr) {
+          const dataValue = t.isJSXExpressionContainer(dataAttr.value) ? dataAttr.value.expression : null;
+          if (dataValue && t.isIdentifier(dataValue)) {
+            const binding = path.scope.getBinding(dataValue.name);
+            if (binding && t.isVariableDeclarator(binding.path.node)) {
+              const init = binding.path.node.init;
+              // Check if initialized from a .map(), .filter(), .reduce(), etc.
+              if (init && t.isCallExpression(init) && t.isMemberExpression(init.callee) && t.isIdentifier(init.callee.property)) {
+                const method = init.callee.property.name;
+                if (['map', 'flatMap', 'reduce'].includes(method)) {
+                  return; // Data is transformed — can't validate fields statically
+                }
+              }
+            }
+          }
+        }
+
+        // Validate each chart field prop
+        validateChartFieldProps(props, availableFields, violations);
+
+        // Validate aggregate function on numeric fields
+        validateAggregateFunction(props, availableFields, violations);
+      },
+    });
+
+    return violations;
+  }
+}

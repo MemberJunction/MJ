@@ -1,8 +1,10 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { ComponentExecutionOptions } from '../component-runner';
 import { TypeContext, FieldTypeInfo } from '../type-context';
 import { createViolation, truncateCode } from '../lint-utils';
 
@@ -170,10 +172,12 @@ function resolveVariableType(
   return null;
 }
 
-export const entityFieldAccessValidationRule: LintRule = {
-  name: 'entity-field-access-validation',
-  appliesTo: 'all',
-  test: (ast, _componentName, componentSpec, _options, sharedTypeContext) => {
+@RegisterClass(BaseLintRule, 'entity-field-access-validation')
+export class EntityFieldAccessValidationRule extends BaseLintRule {
+  get Name() { return 'entity-field-access-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec, _options?: ComponentExecutionOptions, sharedTypeContext?: TypeContext): Violation[] {
     const violations: Violation[] = [];
 
     // Use shared TypeContext if available, otherwise create own (backward compat)
@@ -361,8 +365,5 @@ export const entityFieldAccessValidationRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(entityFieldAccessValidationRule);
+  }
+}

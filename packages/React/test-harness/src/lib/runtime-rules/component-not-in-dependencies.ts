@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -15,10 +15,12 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * Severity: critical (causes runtime errors)
  * Applies to: all components
  */
-export const componentNotInDependenciesRule: LintRule = {
-  name: 'component-not-in-dependencies',
-  appliesTo: 'all',
-  test: (ast, componentName, componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'component-not-in-dependencies')
+export class ComponentNotInDependenciesRule extends BaseLintRule {
+  get Name() { return 'component-not-in-dependencies'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // Get the list of available component names from dependencies
@@ -43,17 +45,17 @@ export const componentNotInDependenciesRule: LintRule = {
             openingElement.name.object.name === 'components' &&
             t.isJSXIdentifier(openingElement.name.property)
           ) {
-            const componentName = openingElement.name.property.name;
+            const compName = openingElement.name.property.name;
 
             // Check if this component is NOT in the dependencies
-            if (!availableComponents.has(componentName)) {
+            if (!availableComponents.has(compName)) {
               violations.push({
                 rule: 'component-not-in-dependencies',
                 severity: 'critical',
                 line: openingElement.loc?.start.line || 0,
                 column: openingElement.loc?.start.column || 0,
-                message: `Component "${componentName}" is used via components.${componentName} but is not defined in the component spec's dependencies array. This will cause a runtime error.`,
-                code: `<components.${componentName}>`,
+                message: `Component "${compName}" is used via components.${compName} but is not defined in the component spec's dependencies array. This will cause a runtime error.`,
+                code: `<components.${compName}>`,
               });
             }
           }
@@ -63,26 +65,26 @@ export const componentNotInDependenciesRule: LintRule = {
       // Also check for components.X usage in JavaScript expressions
       MemberExpression(path: NodePath<t.MemberExpression>) {
         if (t.isIdentifier(path.node.object) && path.node.object.name === 'components' && t.isIdentifier(path.node.property)) {
-          const componentName = path.node.property.name;
+          const compName = path.node.property.name;
 
           // Skip if this is a method call like components.hasOwnProperty
           const parent = path.parent;
           if (t.isCallExpression(parent) && parent.callee === path.node) {
             // Check if it looks like a component (starts with uppercase)
-            if (!/^[A-Z]/.test(componentName)) {
+            if (!/^[A-Z]/.test(compName)) {
               return; // Skip built-in methods
             }
           }
 
           // Check if this component is NOT in the dependencies
-          if (/^[A-Z]/.test(componentName) && !availableComponents.has(componentName)) {
+          if (/^[A-Z]/.test(compName) && !availableComponents.has(compName)) {
             violations.push({
               rule: 'component-not-in-dependencies',
               severity: 'critical',
               line: path.node.loc?.start.line || 0,
               column: path.node.loc?.start.column || 0,
-              message: `Component "${componentName}" is accessed via components.${componentName} but is not defined in the component spec's dependencies array. This will cause a runtime error.`,
-              code: `components.${componentName}`,
+              message: `Component "${compName}" is accessed via components.${compName} but is not defined in the component spec's dependencies array. This will cause a runtime error.`,
+              code: `components.${compName}`,
             });
           }
         }
@@ -90,8 +92,5 @@ export const componentNotInDependenciesRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(componentNotInDependenciesRule);
+  }
+}

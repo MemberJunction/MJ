@@ -1,8 +1,9 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
  * Rule: runview-entity-validation
@@ -13,10 +14,12 @@ import { Violation } from '../component-linter';
  * Severity: medium
  * Applies to: all components
  */
-export const runviewEntityValidationRule: LintRule = {
-  name: 'runview-entity-validation',
-  appliesTo: 'all',
-  test: (ast, _componentName, componentSpec) => {
+@RegisterClass(BaseLintRule, 'runview-entity-validation')
+export class RunviewEntityValidationRule extends BaseLintRule {
+  get Name() { return 'runview-entity-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -78,8 +81,5 @@ export const runviewEntityValidationRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(runviewEntityValidationRule);
+    }
+}

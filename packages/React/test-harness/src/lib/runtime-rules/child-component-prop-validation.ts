@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ComponentProperty, ComponentEvent } from '@memberjunction/interactive-component-types';
@@ -304,10 +304,104 @@ function collectVariableTypes(ast: t.File): Map<string, string> {
   return variableTypes;
 }
 
-export const childComponentPropValidationRule: LintRule = {
-  name: 'child-component-prop-validation',
-  appliesTo: 'all',
-  test: (ast, _componentName, componentSpec) => {
+/**
+ * Validate the type of a prop value against the expected type from the child spec.
+ */
+function validatePropType(
+  violations: Violation[],
+  tagName: string,
+  attrName: string,
+  attr: t.JSXAttribute,
+  childInfo: ChildComponentInfo,
+  variableTypes: Map<string, string>,
+  line: number,
+  column: number,
+): void {
+  // Find the property spec
+  const propSpec = childInfo.properties.find((p) => p.name === attrName);
+  if (!propSpec) return;
+
+  const expectedType = normalizeSpecType(propSpec.type);
+  if (!expectedType) return; // Can't determine expected type or it's 'any'
+
+  // Get the attribute value expression
+  const valueExpr = extractAttributeValueExpression(attr);
+  if (!valueExpr) return;
+
+  const actualType = inferExpressionType(valueExpr, variableTypes);
+  if (!actualType) return; // Can't determine actual type
+
+  if (!typesAreCompatible(actualType, expectedType)) {
+    violations.push({
+      rule: 'child-component-prop-validation',
+      severity: 'high',
+      line,
+      column,
+      message:
+        `Type mismatch on prop "${attrName}" of <${tagName}>: ` +
+        `expected "${expectedType}" but got "${actualType}".`,
+      suggestion: {
+        text: `Ensure the value passed to "${attrName}" is of type "${expectedType}".`,
+        example: buildTypeFixExample(tagName, attrName, expectedType, actualType),
+      },
+    });
+  }
+}
+
+/**
+ * Extract the expression from a JSX attribute value.
+ */
+function extractAttributeValueExpression(
+  attr: t.JSXAttribute,
+): t.Expression | t.JSXEmptyExpression | null {
+  const value = attr.value;
+  if (!value) return null; // Boolean shorthand like <Comp disabled />
+
+  if (t.isJSXExpressionContainer(value)) {
+    return value.expression;
+  }
+  if (t.isStringLiteral(value)) {
+    return value;
+  }
+  return null;
+}
+
+/**
+ * Build a helpful example showing how to fix a type mismatch.
+ */
+function buildTypeFixExample(
+  tagName: string,
+  propName: string,
+  expectedType: string,
+  actualType: string,
+): string {
+  const conversions: Record<string, Record<string, string>> = {
+    number: {
+      string: `// Convert string to number:\nconst parsed = Number(value);\n<${tagName} ${propName}={parsed} />`,
+    },
+    string: {
+      number: `// Convert number to string:\n<${tagName} ${propName}={String(value)} />`,
+      array: `// If you need a string, join the array:\n<${tagName} ${propName}={values.join(',')} />`,
+    },
+    boolean: {
+      number: `// Convert to boolean:\n<${tagName} ${propName}={value > 0} />`,
+      string: `// Convert to boolean:\n<${tagName} ${propName}={value === 'true'} />`,
+    },
+    array: {
+      string: `// Convert string to array:\n<${tagName} ${propName}={value.split(',')} />`,
+    },
+  };
+
+  return conversions[expectedType]?.[actualType]
+    ?? `<${tagName} ${propName}={/* provide a ${expectedType} value */} />`;
+}
+
+@RegisterClass(BaseLintRule, 'child-component-prop-validation')
+export class ChildComponentPropValidationRule extends BaseLintRule {
+  get Name() { return 'child-component-prop-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // If no dependencies, nothing to validate
@@ -430,100 +524,5 @@ export const childComponentPropValidationRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-/**
- * Validate the type of a prop value against the expected type from the child spec.
- */
-function validatePropType(
-  violations: Violation[],
-  tagName: string,
-  attrName: string,
-  attr: t.JSXAttribute,
-  childInfo: ChildComponentInfo,
-  variableTypes: Map<string, string>,
-  line: number,
-  column: number,
-): void {
-  // Find the property spec
-  const propSpec = childInfo.properties.find((p) => p.name === attrName);
-  if (!propSpec) return;
-
-  const expectedType = normalizeSpecType(propSpec.type);
-  if (!expectedType) return; // Can't determine expected type or it's 'any'
-
-  // Get the attribute value expression
-  const valueExpr = extractAttributeValueExpression(attr);
-  if (!valueExpr) return;
-
-  const actualType = inferExpressionType(valueExpr, variableTypes);
-  if (!actualType) return; // Can't determine actual type
-
-  if (!typesAreCompatible(actualType, expectedType)) {
-    violations.push({
-      rule: 'child-component-prop-validation',
-      severity: 'high',
-      line,
-      column,
-      message:
-        `Type mismatch on prop "${attrName}" of <${tagName}>: ` +
-        `expected "${expectedType}" but got "${actualType}".`,
-      suggestion: {
-        text: `Ensure the value passed to "${attrName}" is of type "${expectedType}".`,
-        example: buildTypeFixExample(tagName, attrName, expectedType, actualType),
-      },
-    });
   }
 }
-
-/**
- * Extract the expression from a JSX attribute value.
- */
-function extractAttributeValueExpression(
-  attr: t.JSXAttribute,
-): t.Expression | t.JSXEmptyExpression | null {
-  const value = attr.value;
-  if (!value) return null; // Boolean shorthand like <Comp disabled />
-
-  if (t.isJSXExpressionContainer(value)) {
-    return value.expression;
-  }
-  if (t.isStringLiteral(value)) {
-    return value;
-  }
-  return null;
-}
-
-/**
- * Build a helpful example showing how to fix a type mismatch.
- */
-function buildTypeFixExample(
-  tagName: string,
-  propName: string,
-  expectedType: string,
-  actualType: string,
-): string {
-  const conversions: Record<string, Record<string, string>> = {
-    number: {
-      string: `// Convert string to number:\nconst parsed = Number(value);\n<${tagName} ${propName}={parsed} />`,
-    },
-    string: {
-      number: `// Convert number to string:\n<${tagName} ${propName}={String(value)} />`,
-      array: `// If you need a string, join the array:\n<${tagName} ${propName}={values.join(',')} />`,
-    },
-    boolean: {
-      number: `// Convert to boolean:\n<${tagName} ${propName}={value > 0} />`,
-      string: `// Convert to boolean:\n<${tagName} ${propName}={value === 'true'} />`,
-    },
-    array: {
-      string: `// Convert string to array:\n<${tagName} ${propName}={value.split(',')} />`,
-    },
-  };
-
-  return conversions[expectedType]?.[actualType]
-    ?? `<${tagName} ${propName}={/* provide a ${expectedType} value */} />`;
-}
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(childComponentPropValidationRule);

@@ -1,5 +1,5 @@
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
+import { RegisterClass } from '@memberjunction/global';
 import { Violation } from '../component-linter';
 import * as t from '@babel/types';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -18,15 +18,13 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * Severity: varies
  * Applies to: all components
  */
-export const validateComponentPropsRule: LintRule = {
-  name: 'validate-component-props',
-  appliesTo: 'all',
-  deprecated: true, // Phase 3: Merged into ComponentPropRule
-  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'validate-component-props')
+export class ValidateComponentPropsRule extends BaseLintRule {
+  get Name() { return 'validate-component-props'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     // Skip - this rule is deprecated and replaced by ComponentPropRule
     return [];
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(validateComponentPropsRule);
+    }
+}

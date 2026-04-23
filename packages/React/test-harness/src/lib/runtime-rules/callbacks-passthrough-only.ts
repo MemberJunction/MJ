@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -14,10 +14,12 @@ import { Violation } from '../component-linter';
  * Severity: critical (most cases), medium (conditional expressions)
  * Applies to: all components
  */
-export const callbacksPassthroughOnlyRule: LintRule = {
-  name: 'callbacks-passthrough-only',
-  appliesTo: 'all',
-  test: (ast) => {
+@RegisterClass(BaseLintRule, 'callbacks-passthrough-only')
+export class CallbacksPassthroughOnlyRule extends BaseLintRule {
+  get Name() { return 'callbacks-passthrough-only'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -215,8 +217,5 @@ const extendedCallbacks = { ...callbacks, onCustomEvent: handler };
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(callbacksPassthroughOnlyRule);
+  }
+}

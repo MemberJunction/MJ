@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { StylesTypeAnalyzer } from '../styles-type-analyzer';
@@ -29,10 +29,12 @@ function getStylesAnalyzer(): StylesTypeAnalyzer {
   return _stylesAnalyzer;
 }
 
-export const stylesUnsafeAccessRule: LintRule = {
-  name: 'styles-unsafe-access',
-  appliesTo: 'all',
-  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'styles-unsafe-access')
+export class StylesUnsafeAccessRule extends BaseLintRule {
+  get Name() { return 'styles-unsafe-access'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
     const analyzer = getStylesAnalyzer();
 
@@ -78,8 +80,5 @@ export const stylesUnsafeAccessRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(stylesUnsafeAccessRule);
+    }
+}

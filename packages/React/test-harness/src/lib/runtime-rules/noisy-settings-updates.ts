@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -43,10 +43,12 @@ function getFunctionName(path: NodePath): string | null {
  * Severity: critical
  * Applies to: all components
  */
-export const noisySettingsUpdatesRule: LintRule = {
-  name: 'noisy-settings-updates',
-  appliesTo: 'all',
-  test: (ast, componentName) => {
+@RegisterClass(BaseLintRule, 'noisy-settings-updates')
+export class NoisySettingsUpdatesRule extends BaseLintRule {
+  get Name() { return 'noisy-settings-updates'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -105,8 +107,5 @@ const saveSearchTerm = useMemo(() =>
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(noisySettingsUpdatesRule);
+  }
+}

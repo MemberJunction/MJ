@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -15,10 +15,12 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * Severity: high (wrong parameter count), medium (invalid values), low (negative numbers)
  * Applies to: all components
  */
-export const callbackParameterValidationRule: LintRule = {
-  name: 'callback-parameter-validation',
-  appliesTo: 'all',
-  test: (ast: t.File, _componentName: string, _componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'callback-parameter-validation')
+export class CallbackParameterValidationRule extends BaseLintRule {
+  get Name() { return 'callback-parameter-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string, _componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -127,8 +129,5 @@ export const callbackParameterValidationRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(callbackParameterValidationRule);
+  }
+}

@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -52,10 +52,12 @@ function getFunctionName(path: NodePath): string | null {
  * Severity: critical (most violations), high (try/catch blocks)
  * Applies to: all components
  */
-export const reactHooksRulesRule: LintRule = {
-  name: 'react-hooks-rules',
-  appliesTo: 'all',
-  test: (ast, componentName) => {
+@RegisterClass(BaseLintRule, 'react-hooks-rules')
+export class ReactHooksRulesRule extends BaseLintRule {
+  get Name() { return 'react-hooks-rules'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
     const hooks = ['useState', 'useEffect', 'useMemo', 'useCallback', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect'];
 
@@ -235,8 +237,5 @@ export const reactHooksRulesRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(reactHooksRulesRule);
+    }
+}

@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -15,10 +15,12 @@ import { Violation } from '../component-linter';
  * Severity: critical (causes runtime errors or undefined values)
  * Applies to: all components
  */
-export const propertyNameConsistencyRule: LintRule = {
-  name: 'property-name-consistency',
-  appliesTo: 'all',
-  test: (ast, componentName) => {
+@RegisterClass(BaseLintRule, 'property-name-consistency')
+export class PropertyNameConsistencyRule extends BaseLintRule {
+  get Name() { return 'property-name-consistency'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string): Violation[] {
     const violations: Violation[] = [];
     const dataTransformations = new Map<
       string,
@@ -175,8 +177,5 @@ setAccountData(results.map(item => ({
     }
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(propertyNameConsistencyRule);
+  }
+}

@@ -1,9 +1,9 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { createViolation, truncateCode } from '../lint-utils';
-import { RuleRegistry } from '../rule-registry';
 
 /**
  * Rule: no-import-statements
@@ -14,10 +14,12 @@ import { RuleRegistry } from '../rule-registry';
  * Severity: critical
  * Applies to: all components
  */
-export const noImportStatementsRule: LintRule = {
-  name: 'no-import-statements',
-  appliesTo: 'all',
-  test: (ast, componentName) => {
+@RegisterClass(BaseLintRule, 'no-import-statements')
+export class NoImportStatementsRule extends BaseLintRule {
+  get Name() { return 'no-import-statements'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -65,8 +67,5 @@ function MyComponent({ utilities, styles, components }) {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(noImportStatementsRule);
+  }
+}

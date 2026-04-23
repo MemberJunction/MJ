@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -14,10 +14,12 @@ import { Violation } from '../component-linter';
  * Severity: medium (pattern issue but not breaking)
  * Applies to: all components
  */
-export const savedUserSettingsPatternRule: LintRule = {
-  name: 'saved-user-settings-pattern',
-  appliesTo: 'all',
-  test: (ast, componentName) => {
+@RegisterClass(BaseLintRule, 'saved-user-settings-pattern')
+export class SavedUserSettingsPatternRule extends BaseLintRule {
+  get Name() { return 'saved-user-settings-pattern'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
     // Check for improper onSaveUserSettings usage
@@ -81,8 +83,5 @@ const handleSelect = (id) => {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(savedUserSettingsPatternRule);
+    }
+}

@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { createViolation, truncateCode } from '../lint-utils';
 
@@ -14,10 +14,12 @@ import { createViolation, truncateCode } from '../lint-utils';
  * Severity: critical
  * Applies to: all components
  */
-export const useFunctionDeclarationRule: LintRule = {
-  name: 'use-function-declaration',
-  appliesTo: 'all',
-  test: (ast, componentName) => {
+@RegisterClass(BaseLintRule, 'use-function-declaration')
+export class UseFunctionDeclarationRule extends BaseLintRule {
+  get Name() { return 'use-function-declaration'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -139,8 +141,5 @@ function ChildComponent() {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(useFunctionDeclarationRule);
+    }
+}

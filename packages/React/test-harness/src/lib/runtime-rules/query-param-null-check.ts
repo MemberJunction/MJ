@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec, ComponentQueryParameterValue } from '@memberjunction/interactive-component-types';
 
@@ -117,54 +117,6 @@ function collectUseStateInits(
 
   return stateInits;
 }
-
-export const queryParamNullCheckRule: LintRule = {
-  name: 'query-param-null-check',
-  appliesTo: 'all',
-  test: (ast, _componentName, componentSpec) => {
-    const violations: Violation[] = [];
-
-    // Pre-collect useState initializers for type checking
-    const stateInits = collectUseStateInits(ast);
-
-    traverse(ast, {
-      CallExpression(path: NodePath<t.CallExpression>) {
-        // Match utilities.rq.RunQuery(...)
-        if (!isRunQueryCall(path.node.callee)) return;
-
-        const runQueryArg = path.node.arguments[0];
-        if (!t.isObjectExpression(runQueryArg)) return;
-
-        // Extract QueryName and Parameters from the call
-        const { queryName, parametersNode } = extractRunQueryInfo(runQueryArg);
-        if (!queryName || !parametersNode) return;
-        if (!t.isObjectExpression(parametersNode.value)) return;
-
-        const querySpec = findQuerySpec(componentSpec, queryName);
-        if (!querySpec?.parameters) return;
-
-        // Build a map of spec params by name (case-insensitive)
-        const specParamMap = new Map<string, ComponentQueryParameterValue>();
-        for (const p of querySpec.parameters) {
-          specParamMap.set(p.name.toLowerCase(), p);
-        }
-
-        // Validate each provided parameter
-        for (const prop of parametersNode.value.properties) {
-          if (!t.isObjectProperty(prop) || !t.isIdentifier(prop.key)) continue;
-
-          const paramName = prop.key.name;
-          const specParam = specParamMap.get(paramName.toLowerCase());
-          if (!specParam) continue;
-
-          validateParamValue(prop, paramName, specParam, stateInits, violations);
-        }
-      },
-    });
-
-    return violations;
-  },
-};
 
 /**
  * Checks if a callee node matches utilities.rq.RunQuery.
@@ -283,5 +235,52 @@ function validateParamValue(
   }
 }
 
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(queryParamNullCheckRule);
+@RegisterClass(BaseLintRule, 'query-param-null-check')
+export class QueryParamNullCheckRule extends BaseLintRule {
+  get Name() { return 'query-param-null-check'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec): Violation[] {
+    const violations: Violation[] = [];
+
+    // Pre-collect useState initializers for type checking
+    const stateInits = collectUseStateInits(ast);
+
+    traverse(ast, {
+      CallExpression(path: NodePath<t.CallExpression>) {
+        // Match utilities.rq.RunQuery(...)
+        if (!isRunQueryCall(path.node.callee)) return;
+
+        const runQueryArg = path.node.arguments[0];
+        if (!t.isObjectExpression(runQueryArg)) return;
+
+        // Extract QueryName and Parameters from the call
+        const { queryName, parametersNode } = extractRunQueryInfo(runQueryArg);
+        if (!queryName || !parametersNode) return;
+        if (!t.isObjectExpression(parametersNode.value)) return;
+
+        const querySpec = findQuerySpec(componentSpec, queryName);
+        if (!querySpec?.parameters) return;
+
+        // Build a map of spec params by name (case-insensitive)
+        const specParamMap = new Map<string, ComponentQueryParameterValue>();
+        for (const p of querySpec.parameters) {
+          specParamMap.set(p.name.toLowerCase(), p);
+        }
+
+        // Validate each provided parameter
+        for (const prop of parametersNode.value.properties) {
+          if (!t.isObjectProperty(prop) || !t.isIdentifier(prop.key)) continue;
+
+          const paramName = prop.key.name;
+          const specParam = specParamMap.get(paramName.toLowerCase());
+          if (!specParam) continue;
+
+          validateParamValue(prop, paramName, specParam, stateInits, violations);
+        }
+      },
+    });
+
+    return violations;
+  }
+}

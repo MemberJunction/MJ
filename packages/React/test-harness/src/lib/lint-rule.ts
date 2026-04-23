@@ -1,18 +1,44 @@
 import * as t from '@babel/types';
+import { RegisterClass } from '@memberjunction/global';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ComponentExecutionOptions } from './component-runner';
 import { Violation } from './component-linter';
 import { TypeContext } from './type-context';
 
 /**
- * Interface for lint rules in the component linter system.
- * All lint rules must implement this interface to be used by the RuleRegistry.
+ * Base class for all component linter rules.
+ *
+ * Rules extend this class and decorate with `@RegisterClass(BaseLintRule, 'rule-name')`
+ * to be automatically discovered by the linter via MJGlobal's ClassFactory.
+ *
+ * External packages (e.g., Skip-Brain) can define custom rules by extending this class
+ * and registering them — the linter will discover them at runtime through the manifest system.
+ *
+ * @example
+ * ```typescript
+ * import { BaseLintRule } from '@memberjunction/react-test-harness';
+ * import { RegisterClass } from '@memberjunction/global';
+ *
+ * @RegisterClass(BaseLintRule, 'my-custom-rule')
+ * export class MyCustomRule extends BaseLintRule {
+ *   Name = 'my-custom-rule';
+ *   AppliesTo = 'all' as const;
+ *
+ *   Test(ast, componentName) {
+ *     const violations = [];
+ *     // ... your validation logic
+ *     return violations;
+ *   }
+ * }
+ * ```
  */
-export interface LintRule {
+@RegisterClass(BaseLintRule)
+export abstract class BaseLintRule {
   /**
-   * Unique name of the rule (e.g., 'no-import-statements')
+   * Unique name of the rule (e.g., 'no-import-statements').
+   * Must match the key used in @RegisterClass(BaseLintRule, 'rule-name').
    */
-  name: string;
+  abstract get Name(): string;
 
   /**
    * Scope where this rule applies:
@@ -20,13 +46,7 @@ export interface LintRule {
    * - 'child': Only applies to child components
    * - 'root': Only applies to root components
    */
-  appliesTo: 'all' | 'child' | 'root';
-
-  /**
-   * Whether this rule is deprecated and should be phased out
-   * @deprecated Phase 3: Mark rules as deprecated during transition
-   */
-  deprecated?: boolean;
+  abstract get AppliesTo(): 'all' | 'child' | 'root';
 
   /**
    * Test function that analyzes the AST and returns violations.
@@ -36,11 +56,27 @@ export interface LintRule {
    * @param componentSpec - Optional component specification with metadata
    * @param options - Optional execution options for the component
    * @param typeContext - Optional shared type context with inferred variable types,
-   *   entity/query field metadata, and callback parameter types. Populated by the
-   *   orchestrator's TypeInferenceEngine before rule execution. Rules that need type
-   *   awareness should use this instead of creating their own TypeContext.
+   *   entity/query field metadata, and callback parameter types
    * @returns Array of violations found by this rule
    */
+  abstract Test(
+    ast: t.File,
+    componentName: string,
+    componentSpec?: ComponentSpec,
+    options?: ComponentExecutionOptions,
+    typeContext?: TypeContext
+  ): Violation[];
+}
+
+/**
+ * Legacy interface — kept for backward compatibility during migration.
+ * New rules should extend BaseLintRule instead.
+ * @deprecated Use BaseLintRule class with @RegisterClass decorator
+ */
+export interface LintRule {
+  name: string;
+  appliesTo: 'all' | 'child' | 'root';
+  deprecated?: boolean;
   test: (
     ast: t.File,
     componentName: string,

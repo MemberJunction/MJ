@@ -1,8 +1,9 @@
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { TypeInferenceEngine } from '../type-inference-engine';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
  * Rule: type-inference-errors
@@ -17,10 +18,12 @@ import { TypeInferenceEngine } from '../type-inference-engine';
  *
  * Closure dependencies: TypeInferenceEngine (instantiated locally, no closure)
  */
-export const typeInferenceErrorsRule: LintRule = {
-  name: 'type-inference-errors',
-  appliesTo: 'all',
-  test: (ast, _componentName, componentSpec) => {
+@RegisterClass(BaseLintRule, 'type-inference-errors')
+export class TypeInferenceErrorsRule extends BaseLintRule {
+  get Name() { return 'type-inference-errors'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // Create type inference engine
@@ -46,8 +49,5 @@ export const typeInferenceErrorsRule: LintRule = {
     }
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(typeInferenceErrorsRule);
+    }
+}

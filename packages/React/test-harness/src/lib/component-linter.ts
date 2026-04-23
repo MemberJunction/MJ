@@ -18,11 +18,11 @@ import { ControlFlowAnalyzer } from './control-flow-analyzer';
 import { SemanticValidator } from './schema-validation';
 import { TypeCompatibilityRule, LintContext as TypeRuleLintContext } from './type-rules/type-compatibility-rule';
 import { ComponentPropRule } from './schema-validation/component-prop-rule';
-import { LintRule } from './lint-rule';
-import { RuleRegistry } from './rule-registry';
+import { BaseLintRule } from './lint-rule';
+import { MJGlobal } from '@memberjunction/global';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { GetDialect } from '@memberjunction/sql-dialect';
-// Side-effect import: triggers all runtime rules to self-register with RuleRegistry
+// Side-effect import: triggers @RegisterClass decorators on all built-in rules
 import './runtime-rules';
 
 export interface LintResult {
@@ -177,31 +177,29 @@ export class ComponentLinter {
       await typeEngine.analyze(ast);
       const typeContext = typeEngine.getTypeContext();
 
-      // Get runtime rules from registry (auto-registered via side-effect imports)
-      const runtimeRules = RuleRegistry.getInstance().getRuntimeRules();
-
-      // All rules come from the registry (self-registered via side-effect imports)
-      let rules = [...runtimeRules];
-
-      // Filter rules based on component type and appliesTo property
-      if (isRootComponent) {
-        // Root components: include 'all' and 'root' rules
-        rules = rules.filter((rule) => rule.appliesTo === 'all' || rule.appliesTo === 'root');
-      } else {
-        // Child components: include 'all' and 'child' rules
-        rules = rules.filter((rule) => rule.appliesTo === 'all' || rule.appliesTo === 'child');
+      // Discover all registered lint rules via ClassFactory
+      const ruleRegistrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseLintRule);
+      const allRules: BaseLintRule[] = [];
+      for (const reg of ruleRegistrations) {
+        if (!reg.Key) continue; // Skip the base class registration (no key)
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLintRule>(BaseLintRule, reg.Key);
+        if (instance) allRules.push(instance);
       }
+
+      // Filter rules based on component type
+      const applicableRules = isRootComponent
+        ? allRules.filter(rule => rule.AppliesTo === 'all' || rule.AppliesTo === 'root')
+        : allRules.filter(rule => rule.AppliesTo === 'all' || rule.AppliesTo === 'child');
 
       const violations: Violation[] = [];
 
       // Run each rule with error handling to prevent crashes
-      for (const rule of rules) {
+      for (const rule of applicableRules) {
         try {
-          const ruleViolations = rule.test(ast, componentName, componentSpec, options, typeContext);
+          const ruleViolations = rule.Test(ast, componentName, componentSpec, options, typeContext);
           violations.push(...ruleViolations);
         } catch (error) {
-          // Log rule execution errors but don't crash the entire linting process
-          console.warn(`Rule "${rule.name}" failed during execution:`, error instanceof Error ? error.message : error);
+          console.warn(`Rule "${rule.Name}" failed during execution:`, error instanceof Error ? error.message : error);
           if (debugMode) {
             console.error('Full error:', error);
           }

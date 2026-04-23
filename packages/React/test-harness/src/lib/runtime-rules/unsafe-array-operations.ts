@@ -1,9 +1,10 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ControlFlowAnalyzer } from '../control-flow-analyzer';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
  * Rule: unsafe-array-operations
@@ -20,10 +21,12 @@ import { ControlFlowAnalyzer } from '../control-flow-analyzer';
  *
  * Closure dependencies: ControlFlowAnalyzer (instantiated locally, no closure)
  */
-export const unsafeArrayOperationsRule: LintRule = {
-  name: 'unsafe-array-operations',
-  appliesTo: 'all',
-  test: (ast, componentName, componentSpec) => {
+@RegisterClass(BaseLintRule, 'unsafe-array-operations')
+export class UnsafeArrayOperationsRule extends BaseLintRule {
+  get Name() { return 'unsafe-array-operations'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // Create control flow analyzer for guard detection
@@ -381,8 +384,5 @@ export const unsafeArrayOperationsRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(unsafeArrayOperationsRule);
+    }
+}

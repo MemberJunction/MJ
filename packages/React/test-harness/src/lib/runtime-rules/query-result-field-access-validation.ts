@@ -1,10 +1,11 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { TypeContext } from '../type-context';
 import { createViolation, truncateCode } from '../lint-utils';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
  * Rule: query-result-field-access-validation
@@ -144,10 +145,12 @@ function extractIterationParamNames(
   return params;
 }
 
-export const queryResultFieldAccessValidationRule: LintRule = {
-  name: 'query-result-field-access-validation',
-  appliesTo: 'all',
-  test: (ast, _componentName, componentSpec) => {
+@RegisterClass(BaseLintRule, 'query-result-field-access-validation')
+export class QueryResultFieldAccessValidationRule extends BaseLintRule {
+  get Name() { return 'query-result-field-access-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // Skip if no data requirements with queries
@@ -457,8 +460,5 @@ export const queryResultFieldAccessValidationRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(queryResultFieldAccessValidationRule);
+    }
+}

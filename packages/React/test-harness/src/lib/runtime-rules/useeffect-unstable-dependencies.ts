@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -18,10 +18,12 @@ import { Violation } from '../component-linter';
  *
  * Applies to: all components
  */
-export const useeffectUnstableDependenciesRule: LintRule = {
-  name: 'useeffect-unstable-dependencies',
-  appliesTo: 'all',
-  test: (ast, componentName) => {
+@RegisterClass(BaseLintRule, 'useeffect-unstable-dependencies')
+export class UseeffectUnstableDependenciesRule extends BaseLintRule {
+  get Name() { return 'useeffect-unstable-dependencies'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
     // Known prop names that are always objects/functions and unstable
@@ -219,8 +221,5 @@ export const useeffectUnstableDependenciesRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(useeffectUnstableDependenciesRule);
+  }
+}

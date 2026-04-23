@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/interactive-component-types';
 
@@ -14,10 +14,12 @@ import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/in
  * Severity: critical/high
  * Applies to: all components
  */
-export const runqueryParametersValidationRule: LintRule = {
-  name: 'runquery-parameters-validation',
-  appliesTo: 'all',
-  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+@RegisterClass(BaseLintRule, 'runquery-parameters-validation')
+export class RunqueryParametersValidationRule extends BaseLintRule {
+  get Name() { return 'runquery-parameters-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -321,8 +323,5 @@ export const runqueryParametersValidationRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(runqueryParametersValidationRule);
+    }
+}

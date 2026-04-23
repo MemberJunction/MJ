@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 
 /**
@@ -17,10 +17,12 @@ import { Violation } from '../component-linter';
  * Severity: critical/high
  * Applies to: all components
  */
-export const stringTemplateValidationRule: LintRule = {
-  name: 'string-template-validation',
-  appliesTo: 'all',
-  test: (ast, _componentName) => {
+@RegisterClass(BaseLintRule, 'string-template-validation')
+export class StringTemplateValidationRule extends BaseLintRule {
+  get Name() { return 'string-template-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -164,8 +166,5 @@ export const stringTemplateValidationRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(stringTemplateValidationRule);
+  }
+}

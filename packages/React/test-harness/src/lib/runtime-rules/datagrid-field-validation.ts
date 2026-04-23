@@ -1,8 +1,9 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { TypeContext } from '../type-context';
 
 /**
@@ -191,10 +192,12 @@ function validateFieldReferences(
   }
 }
 
-export const datagridFieldValidationRule: LintRule = {
-  name: 'datagrid-field-validation',
-  appliesTo: 'all',
-  test: (ast, _componentName, componentSpec) => {
+@RegisterClass(BaseLintRule, 'datagrid-field-validation')
+export class DatagridFieldValidationRule extends BaseLintRule {
+  get Name() { return 'datagrid-field-validation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     if (!componentSpec?.dataRequirements) {
@@ -248,8 +251,5 @@ export const datagridFieldValidationRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(datagridFieldValidationRule);
+  }
+}

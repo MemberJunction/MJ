@@ -1,10 +1,11 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { TypeInferenceEngine } from '../type-inference-engine';
 import { ControlFlowAnalyzer } from '../control-flow-analyzer';
+import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
  * Rule: type-mismatch-operation
@@ -19,10 +20,12 @@ import { ControlFlowAnalyzer } from '../control-flow-analyzer';
  *
  * Closure dependencies: TypeInferenceEngine, ControlFlowAnalyzer (instantiated locally, no closure)
  */
-export const typeMismatchOperationRule: LintRule = {
-  name: 'type-mismatch-operation',
-  appliesTo: 'all',
-  test: (ast, _componentName, componentSpec) => {
+@RegisterClass(BaseLintRule, 'type-mismatch-operation')
+export class TypeMismatchOperationRule extends BaseLintRule {
+  get Name() { return 'type-mismatch-operation'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec): Violation[] {
     const violations: Violation[] = [];
 
     // Create type inference engine
@@ -147,8 +150,5 @@ export const typeMismatchOperationRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(typeMismatchOperationRule);
+    }
+}

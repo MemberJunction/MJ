@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ComponentExecutionOptions } from '../component-runner';
@@ -22,10 +22,12 @@ import type { EntityFieldInfo, EntityInfo } from '@memberjunction/core';
  * Severity: medium-high (depends on entity metadata nullability)
  * Applies to: all components
  */
-export const unsafeFormattingMethodsRule: LintRule = {
-  name: 'unsafe-formatting-methods',
-  appliesTo: 'all',
-  test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec, options?: ComponentExecutionOptions) => {
+@RegisterClass(BaseLintRule, 'unsafe-formatting-methods')
+export class UnsafeFormattingMethodsRule extends BaseLintRule {
+  get Name() { return 'unsafe-formatting-methods'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec, options?: ComponentExecutionOptions): Violation[] {
     const violations: Violation[] = [];
 
     // Standard props that are always defined (passed by runtime to all components)
@@ -314,8 +316,5 @@ export const unsafeFormattingMethodsRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(unsafeFormattingMethodsRule);
+    }
+}

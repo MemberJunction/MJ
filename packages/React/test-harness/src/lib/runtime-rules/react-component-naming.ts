@@ -1,7 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
+import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import { LintRule } from '../lint-rule';
-import { RuleRegistry } from '../rule-registry';
+import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { createViolation } from '../lint-utils';
 
@@ -15,10 +15,12 @@ import { createViolation } from '../lint-utils';
  * Severity: critical
  * Applies to: all components
  */
-export const reactComponentNamingRule: LintRule = {
-  name: 'react-component-naming',
-  appliesTo: 'all',
-  test: (ast, componentName) => {
+@RegisterClass(BaseLintRule, 'react-component-naming')
+export class ReactComponentNamingRule extends BaseLintRule {
+  get Name() { return 'react-component-naming'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
+
+  Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -89,8 +91,5 @@ export const reactComponentNamingRule: LintRule = {
     });
 
     return violations;
-  },
-};
-
-// Self-register when this module is imported
-RuleRegistry.getInstance().registerRuntimeRule(reactComponentNamingRule);
+    }
+}
