@@ -2,9 +2,18 @@ import { LogError, Metadata } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionFilterEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
-import { ActionEngineBase, MJActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionParams, RuntimeActionConfigurationSchema } from "@memberjunction/actions-base";
+import {
+    ActionEngineBase,
+    MJActionEntityExtended,
+    ActionParam,
+    ActionResult,
+    ActionResultSimple,
+    RunActionParams,
+    RuntimeActionConfigurationSchema,
+    RuntimeActionBridgeBuilder
+} from "@memberjunction/actions-base";
 import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
-import { buildRuntimeActionBridgeHandlers, getRuntimeActionBridgePreamble } from "./RuntimeActionBridge";
+import type { BridgeHandlerMap } from "@memberjunction/code-execution";
 
  
 
@@ -322,7 +331,7 @@ export class ActionEngineServer extends ActionEngineBase {
       };
       const rawConfig = actionEntity.RuntimeActionConfigurationObject;
 
-      let bridgeHandlers: ReturnType<typeof buildRuntimeActionBridgeHandlers> | undefined;
+      let bridgeHandlers: BridgeHandlerMap | undefined;
       let preamble = '';
       let maxBridgeCalls: number | undefined;
 
@@ -343,13 +352,26 @@ export class ActionEngineServer extends ActionEngineBase {
          // repo's non-strict TS config; the runtime validation above has
          // already proven the shape is valid, so the narrowing cast is safe.
          const config = parsed.data as unknown as MJActionEntity_IRuntimeActionConfiguration;
-         bridgeHandlers = buildRuntimeActionBridgeHandlers({
-            action: params.Action,
-            config,
-            contextUser: params.ContextUser,
-            abortSignal: params.AbortSignal
-         });
-         preamble = getRuntimeActionBridgePreamble();
+
+         // Resolve the concrete bridge builder via MJ's ClassFactory. The
+         // implementation lives in `@memberjunction/action-runtime-host`
+         // (top of the stack — can statically import AIEngine, AgentRunner,
+         // ActionEngineServer, etc. without creating a cycle). If nothing
+         // is registered (the host package wasn't imported), we fall through
+         // to pure-compute mode: the user's Runtime action still runs, it
+         // just can't call any `utilities.*` bridge namespaces.
+         const builder = MJGlobal.Instance.ClassFactory.CreateInstance<RuntimeActionBridgeBuilder>(
+            RuntimeActionBridgeBuilder
+         );
+         if (builder) {
+            bridgeHandlers = builder.BuildHandlers({
+               action: params.Action,
+               config,
+               contextUser: params.ContextUser,
+               abortSignal: params.AbortSignal
+            });
+            preamble = builder.GetPreamble();
+         }
          maxBridgeCalls = config.limits?.maxBridgeCalls;
       }
 

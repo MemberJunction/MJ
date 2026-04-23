@@ -6,3 +6,4 @@ export * from './MJEntityActionEntityExtended';
 
 
 export * from './RuntimeActionConfigurationSchema';
+export * from './RuntimeActionBridgeBuilder';

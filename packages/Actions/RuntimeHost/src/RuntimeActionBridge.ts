@@ -2,12 +2,16 @@
  * RuntimeActionBridge — builds the bridge-handler map that
  * `@memberjunction/action-runtime` passes into `CodeExecutionService.execute()`.
  *
- * Lives in `@memberjunction/actions` (not `@memberjunction/action-runtime`)
- * because building handlers requires access to AIEngine, AgentRunner, the
- * AI prompt runner, and the full ActionEngineServer — all of which depend
- * on `@memberjunction/actions` upstream. Having the bridge live here breaks
- * what would otherwise be a circular dep between `actions` and
- * `action-runtime`.
+ * Lives in `@memberjunction/action-runtime-host` (the top of the Actions stack)
+ * so that every downstream service it touches — `AIEngine`, `AgentRunner`,
+ * the AI prompt runner, and the full `ActionEngineServer` — can be imported
+ * statically. Placing the bridge here breaks what would otherwise be a
+ * circular dependency between `@memberjunction/actions` and
+ * `@memberjunction/ai-agents` (each would need the other).
+ *
+ * `@memberjunction/actions` resolves the concrete implementation at runtime
+ * via `MJGlobal.ClassFactory.CreateInstance(RuntimeActionBridgeBuilder, ...)`.
+ * See `DefaultRuntimeActionBridgeBuilder` for the `@RegisterClass` registration.
  *
  * ## Security model
  *
@@ -37,38 +41,20 @@ import {
     LogError,
     Metadata,
     RunQuery,
-    RunView,
-    UserInfo
+    RunView
 } from '@memberjunction/core';
-import { ActionParam } from '@memberjunction/actions-base';
+import { ActionParam, BridgeContext } from '@memberjunction/actions-base';
 import {
-    MJActionEntity,
-    MJActionEntity_IRuntimeActionConfiguration,
     MJActionEntity_IRuntimeActionReference
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { BridgeHandler, BridgeHandlerMap } from '@memberjunction/code-execution';
+import type { ChatMessageRole } from '@memberjunction/ai';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { AgentRunner } from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-core-plus';
-
-/**
- * Context captured per-execution so every handler has what it needs to
- * enforce permissions and thread the user context through downstream calls.
- */
-export interface BridgeContext {
-    /** The Runtime action being executed — for audit / logging. */
-    action: MJActionEntity;
-
-    /** Parsed / validated configuration for this run. */
-    config: MJActionEntity_IRuntimeActionConfiguration;
-
-    /** User on whose behalf the sandbox is running. */
-    contextUser: UserInfo;
-
-    /** Upstream abort signal — checked at the top of every handler. */
-    abortSignal?: AbortSignal;
-}
 
 /**
  * Factory: returns a `BridgeHandlerMap` wiring the `utilities.*` namespaces
@@ -715,11 +701,7 @@ async function handleInvokeAction(
 }> {
     const allowedRef = resolveAllowedAction(ctx, args);
 
-    // Lazy-import ActionEngineServer so we don't pull it into this file's
-    // module-evaluation path (the Engine is loading us). At runtime the
-    // module is already initialized.
-    const engineModule = await import('./ActionEngine');
-    const engine = engineModule.ActionEngineServer.Instance;
+    const engine = ActionEngineServer.Instance;
     // Lazy-load action metadata.
     if (!engine.Actions || engine.Actions.length === 0) {
         await engine.Config(false, ctx.contextUser);
@@ -832,12 +814,6 @@ function resolveAllowedAgent(
     );
 }
 
-/**
- * Dynamic import — `@memberjunction/actions` cannot statically depend on
- * `@memberjunction/ai-agents` because ai-agents already depends on this
- * package (circular). At runtime ai-agents is always loaded (MJServer +
- * every other consumer pulls it in) so the await import resolves.
- */
 async function handleAgentRun(
     ctx: BridgeContext,
     args: AgentRunArgs
@@ -858,32 +834,35 @@ async function handleAgentRun(
         );
     }
 
-    const agentsModule: {
-        AgentRunner: new () => {
-            RunAgent: (params: Record<string, unknown>) => Promise<{
-                success: boolean;
-                agentRun?: { ID: string; Message?: string | null };
-                payload?: unknown;
-                message?: string;
-            }>;
-        };
-    } = (await import('@memberjunction/ai-agents')) as never;
+    // Coerce bare-string roles from sandbox input into the `ChatMessageRole`
+    // union the RunAgent API expects. Invalid roles fall back to 'user'.
+    const conversationMessages = (args.ConversationMessages ?? []).map((m) => {
+        const role: ChatMessageRole =
+            m.role === 'system' || m.role === 'user' || m.role === 'assistant'
+                ? (m.role as ChatMessageRole)
+                : 'user';
+        return { role, content: m.content };
+    });
 
-    const runner = new agentsModule.AgentRunner();
+    const runner = new AgentRunner();
     const result = await runner.RunAgent({
         agent,
         contextUser: ctx.contextUser,
-        conversationMessages: args.ConversationMessages ?? [],
+        conversationMessages,
         data: args.Data,
         maxExecutionTimeMs: args.MaxExecutionTimeMs,
         cancellationToken: ctx.abortSignal
     });
 
+    // ExecuteAgentResult has no top-level `Message`; error text lives on
+    // `agentRun.ErrorMessage`. Prefer a final-step assistant message if the
+    // run succeeded, else surface ErrorMessage, else null.
+    const errMessage = result.agentRun?.ErrorMessage ?? null;
     return {
         Success: Boolean(result.success),
         AgentRunID: result.agentRun?.ID ?? null,
         Payload: result.payload ?? null,
-        Message: result.agentRun?.Message ?? result.message ?? null
+        Message: errMessage
     };
 }
 

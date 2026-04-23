@@ -21,9 +21,11 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/global": "5.29.0",
+    "@memberjunction/code-execution": "5.29.0",
     "@memberjunction/core": "5.29.0",
-    "@memberjunction/core-entities": "5.29.0"
+    "@memberjunction/core-entities": "5.29.0",
+    "@memberjunction/global": "5.29.0",
+    "zod": "~3.24.4"
   },
   "repository": {
     "type": "git",
