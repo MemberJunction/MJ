@@ -226,8 +226,10 @@ export const getSkywayConfig = async (
 
   let location = mjConfig.migrationsLocation;
 
-  // When targeting PostgreSQL and no explicit --dir override, swap migrations → migrations-pg
-  if (isPG && !dir) {
+  // When targeting PostgreSQL and no explicit --dir override, swap migrations → migrations-pg.
+  // Skip if the path already contains 'migrations-pg' (e.g., user explicitly configured it)
+  // so we don't create migrations-pg-pg paths.
+  if (isPG && !dir && !location.includes('migrations-pg')) {
     location = location.replace(/\bmigrations\b/, 'migrations-pg');
   }
 

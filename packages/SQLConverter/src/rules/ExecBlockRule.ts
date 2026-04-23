@@ -22,6 +22,7 @@
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
 import { resolveType } from './TypeResolver.js';
+import { removeNPrefix } from './ExpressionHelpers.js';
 
 interface DeclaredVar {
   name: string;
@@ -392,7 +393,7 @@ export class ExecBlockRule implements IConversionRule {
     let result = value;
 
     // Remove N prefix from string literals
-    result = result.replace(/(?<![a-zA-Z])N'/g, "'");
+    result = removeNPrefix(result);
 
     // Convert CAST types: CAST(x AS NVARCHAR(MAX)) → CAST(x AS TEXT)
     result = result.replace(/\bAS\s+NVARCHAR\s*\(\s*MAX\s*\)/gi, 'AS TEXT');

@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions, transformCodeOnly } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions, transformCodeOnly, removeNPrefix } from './ExpressionHelpers.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
@@ -73,7 +73,22 @@ export class AlterTableRule implements IConversionRule {
     }
 
     // Remove N prefix from strings
-    result = result.replace(/(?<![a-zA-Z])N'/g, "'");
+    result = removeNPrefix(result);
+
+    // Quote mixed-case constraint names in ADD / DROP CONSTRAINT clauses.
+    // T-SQL is case-insensitive, so CodeGen often emits `DROP CONSTRAINT CK_EntityField_ExtendedType`
+    // without quotes. PG folds unquoted identifiers to lowercase at lookup time,
+    // then can't find the real mixed-case constraint. Quote any constraint name
+    // that contains uppercase and isn't already quoted.
+    result = result.replace(
+      /\b(ADD|DROP)\s+CONSTRAINT\s+([A-Za-z_]\w*)\b/gi,
+      (_m, verb, name: string) => {
+        if (/[A-Z]/.test(name) && !name.startsWith('"')) {
+          return `${verb} CONSTRAINT "${name}"`;
+        }
+        return _m;
+      }
+    );
 
     // Quote PascalCase column names inside FK/PK/UNIQUE column lists and REFERENCES(col)
     result = this.quoteConstraintColumns(result);
@@ -393,10 +408,13 @@ export class AlterTableRule implements IConversionRule {
     // Match ALTER TABLE ... ADD (non-anchored to handle leading comments)
     const addMatch = sql.match(/(ALTER\s+TABLE\s+\S+)\s+ADD\s+/i);
     if (!addMatch || addMatch.index === undefined) return sql;
-    // Skip if this is a constraint addition (ADD CONSTRAINT)
-    if (/\bADD\s+CONSTRAINT\b/i.test(sql)) return sql;
     // Skip if already has ADD COLUMN
     if (/\bADD\s+COLUMN\b/i.test(sql)) return sql;
+    // NOTE: ADD CONSTRAINT statements used to short-circuit here, which meant
+    // a multi-constraint ALTER like `ADD CONSTRAINT c1 ..., CONSTRAINT c2 ...`
+    // would not pick up `ADD` on the second clause. PG requires `ADD` before
+    // every constraint in a multi-constraint ALTER; the comma-split loop below
+    // correctly emits `ADD CONSTRAINT` for each clause, so we no longer skip.
 
     const prefix = sql.slice(0, addMatch.index);
     const tableClause = addMatch[1];

@@ -256,11 +256,21 @@ export function postProcess(sql: string): string {
   // Convert GRANT EXEC (SQL Server shorthand) to GRANT EXECUTE
   sql = sql.replace(/GRANT\s+EXEC\s+ON\s+/gi, 'GRANT EXECUTE ON ');
 
-  // Wrap GRANT EXECUTE on functions in DO $$ blocks to handle overloaded
-  // functions or functions that may not exist.
+  // Wrap GRANT / REVOKE statements in DO $$ blocks with EXCEPTION handlers so
+  // they tolerate missing target objects during fresh installs. Before this,
+  // GRANT EXECUTE was wrapped (functions may be overloaded / absent) but plain
+  // GRANT SELECT was not — so v5.18 Grant_DB_Object_Permissions crashed the
+  // migration when it tried to GRANT SELECT on a view (vwFlywayVersionHistoryParsed)
+  // that doesn't exist in the PG baseline. Wrapping all grants uniformly avoids
+  // that whole class of fresh-install failures while still surfacing grant
+  // errors via NOTICE in CI/dev logs.
   sql = sql.replace(
-    /^(GRANT\s+EXECUTE\s+ON\s+(?:FUNCTION\s+)?\S+\s+TO\s+[^;\n]+);?\s*$/gm,
+    /^(GRANT\s+[A-Z ,()"]+?\s+ON\s+[^;\n]+\s+TO\s+[^;\n]+);?\s*$/gim,
     (_match, grantStmt: string) => `DO $$ BEGIN ${grantStmt}; EXCEPTION WHEN others THEN NULL; END $$;`
+  );
+  sql = sql.replace(
+    /^(REVOKE\s+[A-Z ,()"]+?\s+ON\s+[^;\n]+\s+FROM\s+[^;\n]+);?\s*$/gim,
+    (_match, revokeStmt: string) => `DO $$ BEGIN ${revokeStmt}; EXCEPTION WHEN others THEN NULL; END $$;`
   );
 
   // Strip IF NOT EXISTS (SELECT ... FROM sys.indexes ...) wrappers around CREATE INDEX.

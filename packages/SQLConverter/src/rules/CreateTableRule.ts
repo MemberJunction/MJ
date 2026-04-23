@@ -6,7 +6,7 @@
  * Also tracks column types in ConversionContext for downstream INSERT boolean casting.
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, removeNPrefix } from './ExpressionHelpers.js';
 
 export class CreateTableRule implements IConversionRule {
   Name = 'CreateTableRule';
@@ -371,7 +371,7 @@ export class CreateTableRule implements IConversionRule {
     sql = sql.replace(/DEFAULT\s+\(+(-?\d+(?:\.\d+)?)\)+/g, 'DEFAULT $1');
 
     // Remove N prefix from remaining string literals
-    sql = sql.replace(/(?<![a-zA-Z])N'/g, "'");
+    sql = removeNPrefix(sql);
 
     return sql;
   }

@@ -16,7 +16,7 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions, removeNPrefix } from './ExpressionHelpers.js';
 
 export class ConditionalDDLRule implements IConversionRule {
   Name = 'ConditionalDDLRule';
@@ -43,7 +43,7 @@ export class ConditionalDDLRule implements IConversionRule {
     result = this.fixInformationSchema(result);
 
     // Remove N prefix from string literals
-    result = result.replace(/(?<![a-zA-Z])N'/g, "'");
+    result = removeNPrefix(result);
 
     // Convert common SQL Server functions BEFORE PascalCase quoting
     // (prevents GETUTCDATE from being quoted as "GETUTCDATE" before conversion to NOW())

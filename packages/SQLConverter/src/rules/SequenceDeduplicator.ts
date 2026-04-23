@@ -195,7 +195,11 @@ function extractEntityFieldInserts(content: string, fileName: string): SequenceE
   // Strategy: find lines with INSERT INTO __mj."EntityField", then scan forward
   // through column list to find VALUES, then extract positional values for EntityID (pos 2) and Sequence (pos 3).
   for (let i = 0; i < lines.length; i++) {
-    if (!/INSERT\s+INTO\s+__mj\."EntityField"/i.test(lines[i])) continue;
+    // Accept `__mj."EntityField"` as well as `"__mj"."EntityField"` — the v5.3
+    // Missing_Metadata file quotes the schema, older regex missed its inserts
+    // and the (EntityID, Sequence) collisions went undetected (e.g. v5.3
+    // ReplayRun at 100040 collided with v5.28 RestoreReason at the same value).
+    if (!/INSERT\s+INTO\s+"?__mj"?\."EntityField"/i.test(lines[i])) continue;
 
     // Found an INSERT. Determine the column order by scanning the column list.
     // Look for the column list to find positions of "EntityID" and "Sequence"
