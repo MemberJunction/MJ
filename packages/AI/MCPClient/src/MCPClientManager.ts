@@ -1674,7 +1674,13 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      */
     private async getCredentials(credentialId: string, contextUser: UserInfo): Promise<MCPCredentialData> {
         try {
-            const credential = CredentialEngine.Instance.getCredentialById(credentialId);
+            let credential = CredentialEngine.Instance.getCredentialById(credentialId);
+            if (!credential) {
+                // Credential not in cache — it may have been created after server startup; force a refresh
+                LogStatus(`[MCPClient] Credential ${credentialId} not in cache, refreshing CredentialEngine...`);
+                await CredentialEngine.Instance.Config(true, contextUser);
+                credential = CredentialEngine.Instance.getCredentialById(credentialId);
+            }
             if (!credential) {
                 throw new Error(`Credential not found: ${credentialId}`);
             }

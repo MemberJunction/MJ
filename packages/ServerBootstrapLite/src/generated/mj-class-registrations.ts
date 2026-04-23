@@ -183,13 +183,19 @@ import {
     PlanningDesignerAgent,
 } from '@memberjunction/ai-agent-manager';
 
-// @memberjunction/ai-agents (5 classes)
+// @memberjunction/ai-agents (11 classes)
 import {
+    DataSnapshotToolLibrary,
+    DocxToolLibrary,
+    ExcelToolLibrary,
     FlowAgentType,
+    JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
     MemoryManagerAgent,
+    PDFToolLibrary,
     QueryBuilderAgent,
+    TextToolLibrary,
 } from '@memberjunction/ai-agents';
 
 // @memberjunction/ai-anthropic (1 classes)
@@ -470,7 +476,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (315 classes)
+// @memberjunction/core-entities (320 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -544,6 +550,10 @@ import {
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
     MJApplicationSettingEntity,
+    MJArchiveConfigurationEntity,
+    MJArchiveConfigurationEntityEntity,
+    MJArchiveRunDetailEntity,
+    MJArchiveRunEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
     MJArtifactTypeEntity,
@@ -683,6 +693,7 @@ import {
     MJMCPServerEntity,
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
+    MJMCPToolFavoriteEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1017,11 +1028,17 @@ export const CLASS_REGISTRATIONS: any[] = [
     AgentArchitectAgent,
     AgentBuilderAgent,
     PlanningDesignerAgent,
+    DataSnapshotToolLibrary,
+    DocxToolLibrary,
+    ExcelToolLibrary,
     FlowAgentType,
+    JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
     MemoryManagerAgent,
+    PDFToolLibrary,
     QueryBuilderAgent,
+    TextToolLibrary,
     AnthropicLLM,
     AzureEmbedding,
     AzureLLM,
@@ -1252,6 +1269,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
     MJApplicationSettingEntity,
+    MJArchiveConfigurationEntity,
+    MJArchiveConfigurationEntityEntity,
+    MJArchiveRunDetailEntity,
+    MJArchiveRunEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
     MJArtifactTypeEntity,
@@ -1391,6 +1412,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMCPServerEntity,
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
+    MJMCPToolFavoriteEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1543,7 +1565,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 656;
+export const CLASS_REGISTRATIONS_COUNT = 664;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

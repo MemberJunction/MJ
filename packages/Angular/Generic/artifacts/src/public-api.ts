@@ -8,12 +8,16 @@ export * from './lib/artifacts.module';
 // Services
 export * from './lib/services/artifact-icon.service';
 export * from './lib/services/artifact-file.service';
+export * from './lib/services/analyze-artifact.service';
 
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';
 
 // Base component
 export * from './lib/components/base-artifact-viewer.component';
+
+// Snapshot helpers (pure functions for creating DataSnapshots from artifact content)
+export * from './lib/snapshot-helpers';
 
 // Artifact type plugin viewer (loads appropriate plugin based on DriverClass)
 export * from './lib/components/artifact-type-plugin-viewer.component';

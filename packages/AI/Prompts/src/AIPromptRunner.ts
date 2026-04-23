@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy } from '@memberjunction/ai';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
@@ -1296,6 +1296,8 @@ export class AIPromptRunner {
           });
           
           if (!childRenderResult.Success) {
+            console.error(`[ChildTemplateRender] FAILED for "${childPrompt.Name}": ${childRenderResult.Message}`);
+            console.error(`[ChildTemplateRender] Data keys: ${Object.keys(mergedChildData).join(', ')}`);
             throw new Error(`Failed to render child template for prompt ${childPrompt.Name}: ${childRenderResult.Message}`);
           }
           
@@ -3314,6 +3316,10 @@ export class AIPromptRunner {
       // Build message array with rendered prompt and conversation messages
       chatParams.messages = this.buildMessageArray(renderedPrompt, conversationMessages, templateMessageRole);
 
+      // Resolve native file inputs: check each file against the driver's capabilities
+      // and inject qualifying files as content blocks in the last user message.
+      this.injectNativeFileInputs(params, llm, chatParams, verbose);
+
       // Apply assistant prefill (native or fallback) based on prompt config and provider support
       this.applyAssistantPrefill(chatParams, prompt, model, vendorId, llm);
 
@@ -3354,6 +3360,57 @@ export class AIPromptRunner {
   /**
    * Builds the message array combining rendered prompt with conversation messages
    */
+  /**
+   * Checks each nativeFileInput against the resolved driver's FileCapabilities
+   * and injects qualifying files as content blocks in the last user message.
+   */
+  private injectNativeFileInputs(params: AIPromptParams, llm: BaseLLM, chatParams: ChatParams, verbose: boolean): void {
+    if (!params.nativeFileInputs?.length) return;
+
+    const caps = llm.GetFileCapabilities();
+    let nativeCount = 0;
+    const fileBlocks: { type: 'file_url'; content: string; mimeType: string; fileName?: string }[] = [];
+    const textFallbackBlocks: { type: 'text'; content: string }[] = [];
+
+    for (const file of params.nativeFileInputs) {
+      const strategy = ResolveFileInputStrategy(file.MimeType, file.SizeBytes, caps, null, nativeCount);
+      if (strategy.UseNativeFileInput) {
+        const dataUrl = file.Base64Content.startsWith('data:')
+          ? file.Base64Content
+          : 'data:' + file.MimeType + ';base64,' + file.Base64Content;
+        fileBlocks.push({ type: 'file_url', content: dataUrl, mimeType: file.MimeType, fileName: file.Name });
+        nativeCount++;
+        this.logStatus('[NativeFileInput] Attaching \'' + file.Name + '\' (' + file.MimeType + ') natively to prompt', verbose, params);
+      } else if (file.TextContent) {
+        // Driver doesn't support this file type natively — fall back to
+        // injecting pre-extracted text so the LLM can still see the content.
+        textFallbackBlocks.push({
+          type: 'text',
+          content: `--- File: ${file.Name} (${file.MimeType}) ---\n${file.TextContent}\n--- End of file ---`,
+        });
+        this.logStatus('[NativeFileInput] Text fallback for \'' + file.Name + '\' (' + file.MimeType + '): ' + strategy.Reason, verbose, params);
+      } else {
+        this.logStatus('[NativeFileInput] Skipping \'' + file.Name + '\': ' + strategy.Reason + ' (no text fallback available)', verbose, params);
+      }
+    }
+
+    if (fileBlocks.length === 0 && textFallbackBlocks.length === 0) return;
+
+    // Find the last user message and convert its content to content blocks
+    for (let i = chatParams.messages.length - 1; i >= 0; i--) {
+      const msg = chatParams.messages[i];
+      if (msg.role === 'user') {
+        const textContent = typeof msg.content === 'string' ? msg.content : '';
+        msg.content = [
+          ...fileBlocks,
+          ...textFallbackBlocks,
+          { type: 'text', content: textContent },
+        ];
+        break;
+      }
+    }
+  }
+
   private buildMessageArray(renderedPrompt: string, conversationMessages?: ChatMessage[], templateMessageRole: TemplateMessageRole = 'system'): ChatMessage[] {
     const messages: ChatMessage[] = [];
 

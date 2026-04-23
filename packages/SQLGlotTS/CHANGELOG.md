@@ -1,5 +1,7 @@
 # @memberjunction/sqlglot-ts
 
+## 5.29.0
+
 ## 5.28.0
 
 ## 5.27.1
