@@ -167,23 +167,28 @@ export class RuntimeActionExecutor extends BaseSingleton<RuntimeActionExecutor> 
     }
 
     /**
-     * Wraps the user-authored code in an async IIFE and assigns its return
-     * value to `output`, which is how CodeExecutionService surfaces results
-     * back to the host.
+     * Wraps the user-authored code so its return value ends up in the
+     * sandbox's `output` variable — which is how CodeExecutionService
+     * surfaces results back to the host. User code is expected to be the
+     * body of a function that can `return` a value.
      *
-     * User code is expected to be the body of a function that can `return`
-     * a value (object, scalar, array). We wrap rather than require the user
-     * to write `output = ...` so the authoring experience matches the Jan
-     * 2026 plan examples (which all use plain `return`).
+     * IMPORTANT: The worker's outer wrapper already looks like:
+     *   (async function() { let output; ${params.code}; globalThis._output = output; })();
+     * It does NOT await arbitrary expressions in `${params.code}`. If we wrap
+     * our own async IIFE here, the outer wrapper captures `output` before
+     * our IIFE resolves and the caller sees `undefined`. So we produce a
+     * single statement — an awaited call to an inline async function —
+     * which the worker's wrapper DOES await correctly because the whole
+     * block is inside an async IIFE that does sequential statements.
+     *
+     * Libraries are accessed via `require()` inside user code (lodash,
+     * date-fns, mathjs, papaparse, uuid, validator are on the allowlist).
      */
     private wrapUserCode(userCode: string): string {
         return [
-            '(async () => {',
-            '  async function __mj_runtime_action__(input, libs) {',
+            'output = await (async function(input) {',
             userCode,
-            '  }',
-            '  output = await __mj_runtime_action__(input, libs);',
-            '})();'
+            '})(input);'
         ].join('\n');
     }
 

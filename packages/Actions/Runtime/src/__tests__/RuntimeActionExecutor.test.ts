@@ -195,7 +195,7 @@ describe('RuntimeActionExecutor', () => {
             });
             const passed = capturedParams.value as { code: string };
             expect(passed.code).toContain('return 42;');
-            expect(passed.code).toContain('output = await __mj_runtime_action__(input, libs);');
+            expect(passed.code).toContain('output = await (async function(input) {');
         });
     });
 

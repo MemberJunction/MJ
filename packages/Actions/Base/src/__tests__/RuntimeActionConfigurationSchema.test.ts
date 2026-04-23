@@ -25,15 +25,7 @@ describe('RuntimeActionConfigurationSchema', () => {
     // Canonical fully-populated instance typed against the JSONType interface.
     // The `satisfies` clause below also checks it against the Zod-inferred
     // type — any drift between the two surfaces here at compile time.
-    //
-    // NOTE: the `as unknown as MJActionEntity_IRuntimeActionConfiguration`
-    // cast exists because the wildcard fields (allowAnyEntity / Action / Agent)
-    // were added to the JSONType source after this test was written. Once
-    // `mj sync push` + `mj codegen` runs on this branch, the generated
-    // interface will include them and this cast can go away. The Zod schema
-    // validates them correctly today — the cast only affects the compile-time
-    // drift check, not runtime behavior.
-    const fullInstance = {
+    const fullInstance: MJActionEntity_IRuntimeActionConfiguration = {
         permissions: {
             allowedActions: [
                 { id: '11111111-1111-1111-1111-111111111111', name: 'Send Email' }
@@ -60,7 +52,7 @@ describe('RuntimeActionConfigurationSchema', () => {
         },
         version: '1.0.0',
         previousVersionId: '44444444-4444-4444-4444-444444444444'
-    } as unknown as MJActionEntity_IRuntimeActionConfiguration;
+    };
 
     // Drift check: fullInstance must also be a valid Zod-inferred value.
     // If this line fails to compile, the JSONType interface has a field
@@ -232,6 +224,24 @@ describe('RuntimeActionConfigurationSchema', () => {
             });
             expect(zeroResult.success).toBe(false);
             expect(negativeResult.success).toBe(false);
+        });
+
+        it('accepts maxBridgeCalls=0 (pure-compute action)', () => {
+            // 0 means "no bridge calls allowed". Pure-compute Runtime actions
+            // (e.g. data transforms, numeric utilities) legitimately set this.
+            const result = RuntimeActionConfigurationSchema.safeParse({
+                ...minimalInstance,
+                limits: { maxBridgeCalls: 0 }
+            });
+            expect(result.success).toBe(true);
+        });
+
+        it('rejects negative maxBridgeCalls', () => {
+            const result = RuntimeActionConfigurationSchema.safeParse({
+                ...minimalInstance,
+                limits: { maxBridgeCalls: -1 }
+            });
+            expect(result.success).toBe(false);
         });
 
         it('rejects non-integer memory limits', () => {

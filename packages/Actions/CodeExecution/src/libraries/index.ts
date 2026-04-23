@@ -104,6 +104,56 @@ function getLodashSource(): string {
             return [...new Set(array)];
         },
 
+        // Min/Max — commonly reached for in numeric-summary style Runtime
+        // actions. Return undefined for empty arrays (matches real lodash).
+        min: function(array) {
+            if (!array || array.length === 0) return undefined;
+            let m = array[0];
+            for (let i = 1; i < array.length; i++) {
+                if (array[i] < m) m = array[i];
+            }
+            return m;
+        },
+
+        max: function(array) {
+            if (!array || array.length === 0) return undefined;
+            let m = array[0];
+            for (let i = 1; i < array.length; i++) {
+                if (array[i] > m) m = array[i];
+            }
+            return m;
+        },
+
+        minBy: function(array, iteratee) {
+            if (!array || array.length === 0) return undefined;
+            const fn = typeof iteratee === 'function' ? iteratee : (x) => x[iteratee];
+            let best = array[0];
+            let bestScore = fn(best);
+            for (let i = 1; i < array.length; i++) {
+                const score = fn(array[i]);
+                if (score < bestScore) {
+                    best = array[i];
+                    bestScore = score;
+                }
+            }
+            return best;
+        },
+
+        maxBy: function(array, iteratee) {
+            if (!array || array.length === 0) return undefined;
+            const fn = typeof iteratee === 'function' ? iteratee : (x) => x[iteratee];
+            let best = array[0];
+            let bestScore = fn(best);
+            for (let i = 1; i < array.length; i++) {
+                const score = fn(array[i]);
+                if (score > bestScore) {
+                    best = array[i];
+                    bestScore = score;
+                }
+            }
+            return best;
+        },
+
         difference: function(array, ...values) {
             const others = new Set(values.flat());
             return array.filter(x => !others.has(x));
@@ -150,6 +200,26 @@ function getLodashSource(): string {
                     const aVal = iteratee(a);
                     const bVal = iteratee(b);
                     if (aVal !== bVal) return aVal < bVal ? -1 : 1;
+                }
+                return 0;
+            });
+        },
+
+        // orderBy is like sortBy but supports per-iteratee asc/desc direction.
+        // Signature: orderBy(collection, iteratees, orders) where iteratees
+        // and orders are parallel arrays (or both scalars). Direction strings
+        // default to 'asc' when not supplied.
+        orderBy: function(collection, iteratees, orders) {
+            const itList = Array.isArray(iteratees) ? iteratees : [iteratees];
+            const orderList = Array.isArray(orders) ? orders : (orders ? [orders] : []);
+            const resolveFn = (it) => typeof it === 'function' ? it : x => x[it];
+            return [...collection].sort((a, b) => {
+                for (let i = 0; i < itList.length; i++) {
+                    const fn = resolveFn(itList[i]);
+                    const dir = (orderList[i] ?? 'asc') === 'desc' ? -1 : 1;
+                    const aVal = fn(a);
+                    const bVal = fn(b);
+                    if (aVal !== bVal) return aVal < bVal ? -1 * dir : 1 * dir;
                 }
                 return 0;
             });

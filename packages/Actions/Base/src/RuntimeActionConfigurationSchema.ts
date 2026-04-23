@@ -71,8 +71,11 @@ const RuntimeActionPermissionsSchema = z
 
 const RuntimeActionLimitsSchema = z
     .object({
+        // maxMemoryMB must be positive — zero memory means nothing can execute.
         maxMemoryMB: z.number().int().positive().optional(),
-        maxBridgeCalls: z.number().int().positive().optional()
+        // maxBridgeCalls=0 is legitimate ("pure compute, no bridge access
+        // allowed") so we use .nonnegative() rather than .positive().
+        maxBridgeCalls: z.number().int().nonnegative().optional()
     })
     .strict();
 

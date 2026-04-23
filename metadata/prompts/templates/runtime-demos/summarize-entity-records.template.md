@@ -22,11 +22,11 @@ Return ONLY a JSON object matching this exact shape — do not wrap in prose, do
 - `keyThemes` should be noun phrases or short sentences, not complete paragraphs.
 - `followUpQuestions` should be specific and grounded in what the data shows — not generic prompts.
 
-{{#if instructions}}
+{% if instructions %}
 ## Additional instructions from caller
 
 {{ instructions }}
-{{/if}}
+{% endif %}
 
 ## Input
 
@@ -37,7 +37,7 @@ Total records in entity (pre-sample): **{{ totalRowCount }}**
 Records (JSON):
 
 ```json
-{{{ recordsJson }}}
+{{ recordsJson | safe }}
 ```
 
 Return the JSON object now.

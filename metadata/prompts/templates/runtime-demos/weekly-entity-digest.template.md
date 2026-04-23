@@ -47,7 +47,7 @@ actions, not "consider evaluating".)
 - **Entity activity** (JSON):
 
 ```json
-{{{ activityJson }}}
+{{ activityJson | safe }}
 ```
 
 Return the markdown digest now.
