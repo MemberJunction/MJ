@@ -243,11 +243,13 @@ export class RuntimeActionExecutor extends BaseSingleton<RuntimeActionExecutor> 
                 existing.Value = value;
                 existing.Type = existing.Type === 'Input' ? 'Both' : existing.Type ?? 'Output';
             } else {
-                const param = new ActionParam();
-                param.Name = name;
-                param.Value = value;
-                param.Type = 'Output';
-                next.push(param);
+                // Emit a plain-object param rather than `new ActionParam()`.
+                // Downstream (the GraphQL resolver) runs result params through
+                // `CopyScalarsAndArrays`, which silently drops keys whose values
+                // are class instances with `constructor !== Object` and no
+                // `toJSON`. Emitting a class instance here would cause every
+                // new output param to vanish before it reaches the client.
+                next.push({ Name: name, Value: value, Type: 'Output' } as ActionParam);
             }
         };
 

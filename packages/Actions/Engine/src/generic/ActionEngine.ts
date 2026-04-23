@@ -417,7 +417,13 @@ export class ActionEngineServer extends ActionEngineBase {
    protected async EndActionLog(logEntity: MJActionExecutionLogEntity, params: RunActionParams, result: ActionResult) {
       // this is where the log entry for the action run will be created
       logEntity.EndedAt = new Date();
-      logEntity.Params = JSON.stringify(params.Params);
+      // Persist the final merged param set (inputs + outputs) — Runtime actions
+      // return a fresh array from the sandbox executor that lives on
+      // `result.Params`, so logging `params.Params` would lose every new output
+      // key. Custom/Generated actions mutate `params.Params` in place, and
+      // `result.Params` falls back to that same reference, so they remain
+      // equivalent.
+      logEntity.Params = JSON.stringify(result.Params ?? params.Params);
       logEntity.ResultCode = result.Result?.ResultCode;
       logEntity.Message = result.Message;
       
