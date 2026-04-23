@@ -112,33 +112,84 @@ CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_StateProvince_CountryID" ON __mj."S
 
 -- ===================== Helper Functions (fn*) =====================
 
--- Function: fn_MJ_GeoDistance (Scalar — Haversine formula)
--- Returns the great-circle distance between two lat/lng points.
--- Unit: 'mi' for miles, 'km' for kilometers.
--- (Geo helper functions removed — see V202604090002__v5.25.x__Geo_Functions.pg.sql)
-
--- (fn_MJ_GeoRecordsNear also removed — see V202604090002)
+-- Manual fix: the T-SQL source defines fn_MJ_GeoDistance and fn_MJ_GeoRecordsNear,
+-- but the auto-conversion produces invalid PG syntax (DECLARE x FLOAT = ...,
+-- ATN2 vs ATAN2, RETURNS TABLE AS RETURN (...), single $ delimiter).
+-- The hand-written PG versions live in V202604090002__v5.25.x__Geo_Functions.pg.sql
+-- which runs BEFORE this migration (earlier timestamp). Omit the broken
+-- auto-converted definitions here.
 
 
 -- ===================== Views =====================
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwCountries';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwCountries"
 AS SELECT
     c.*
 FROM
     __mj."Country" AS c$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwCountries" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwRecordGeoCodes';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwRecordGeoCodes"
 AS SELECT
     r.*,
@@ -159,16 +210,65 @@ LEFT OUTER JOIN
     __mj."StateProvince" AS "MJStateProvince_StateProvinceID"
   ON
     r."StateProvinceID" = "MJStateProvince_StateProvinceID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwRecordGeoCodes" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwStateProvinces';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwStateProvinces"
 AS SELECT
     s.*,
@@ -179,20 +279,145 @@ INNER JOIN
     __mj."Country" AS "MJCountry_CountryID"
   ON
     s."CountryID" = "MJCountry_CountryID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwStateProvinces" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 
 -- ===================== Stored Procedures (sp*) =====================
 
--- SKIPPED: References view "vwApplicationEntities" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spCreateApplicationEntity"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_ApplicationID UUID DEFAULT NULL,
+    IN p_EntityID UUID DEFAULT NULL,
+    IN p_Sequence INTEGER DEFAULT NULL,
+    IN p_DefaultForNewUser BOOLEAN DEFAULT NULL
+)
+RETURNS SETOF __mj."vwApplicationEntities" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."ApplicationEntity"
+            (
+                "ID",
+                "ApplicationID",
+                "EntityID",
+                "Sequence",
+                "DefaultForNewUser"
+            )
+        VALUES
+            (
+                p_ID,
+                p_ApplicationID,
+                p_EntityID,
+                p_Sequence,
+                COALESCE(p_DefaultForNewUser, TRUE)
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."ApplicationEntity"
+            (
+                "ApplicationID",
+                "EntityID",
+                "Sequence",
+                "DefaultForNewUser"
+            )
+        VALUES
+            (
+                p_ApplicationID,
+                p_EntityID,
+                p_Sequence,
+                COALESCE(p_DefaultForNewUser, TRUE)
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwApplicationEntities" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwApplicationEntities" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spUpdateApplicationEntity"(
+    IN p_ID UUID,
+    IN p_ApplicationID UUID,
+    IN p_EntityID UUID,
+    IN p_Sequence INTEGER,
+    IN p_DefaultForNewUser BOOLEAN
+)
+RETURNS SETOF __mj."vwApplicationEntities" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."ApplicationEntity"
+    SET
+        "ApplicationID" = p_ApplicationID,
+        "EntityID" = p_EntityID,
+        "Sequence" = p_Sequence,
+        "DefaultForNewUser" = p_DefaultForNewUser
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwApplicationEntities" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwApplicationEntities" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION __mj."spDeleteApplicationEntity"(
     IN p_ID UUID
@@ -350,9 +575,94 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwEntityFieldValues" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spCreateEntityFieldValue"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_EntityFieldID UUID DEFAULT NULL,
+    IN p_Sequence INTEGER DEFAULT NULL,
+    IN p_Value VARCHAR(255) DEFAULT NULL,
+    IN p_Code VARCHAR(50) DEFAULT NULL,
+    IN p_Description TEXT DEFAULT NULL
+)
+RETURNS SETOF __mj."vwEntityFieldValues" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."EntityFieldValue"
+            (
+                "ID",
+                "EntityFieldID",
+                "Sequence",
+                "Value",
+                "Code",
+                "Description"
+            )
+        VALUES
+            (
+                p_ID,
+                p_EntityFieldID,
+                p_Sequence,
+                p_Value,
+                p_Code,
+                p_Description
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."EntityFieldValue"
+            (
+                "EntityFieldID",
+                "Sequence",
+                "Value",
+                "Code",
+                "Description"
+            )
+        VALUES
+            (
+                p_EntityFieldID,
+                p_Sequence,
+                p_Value,
+                p_Code,
+                p_Description
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwEntityFieldValues" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwEntityFieldValues" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spUpdateEntityFieldValue"(
+    IN p_ID UUID,
+    IN p_EntityFieldID UUID,
+    IN p_Sequence INTEGER,
+    IN p_Value VARCHAR(255),
+    IN p_Code VARCHAR(50),
+    IN p_Description TEXT
+)
+RETURNS SETOF __mj."vwEntityFieldValues" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."EntityFieldValue"
+    SET
+        "EntityFieldID" = p_EntityFieldID,
+        "Sequence" = p_Sequence,
+        "Value" = p_Value,
+        "Code" = p_Code,
+        "Description" = p_Description
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwEntityFieldValues" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwEntityFieldValues" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION __mj."spDeleteEntityFieldValue"(
     IN p_ID UUID
@@ -4665,8 +4975,7 @@ UPDATE __mj."ApplicationEntity"
 
 -- ===================== Grants =====================
 
--- SKIPPED (view not created): GRANT SELECT ON __mj."vwApplicationEntities" TO "cdp_Developer", "cdp_Integration", "cdp_UI"
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwApplicationEntities" TO "cdp_Developer", "cdp_Integration", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Application Entities */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4679,16 +4988,12 @@ UPDATE __mj."ApplicationEntity"
 
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ApplicationEntity
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateApplicationEntity" TO "cdp_Developer", "cdp_Integration"
-    
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateApplicationEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate Permissions for MJ: Application Entities */
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateApplicationEntity" TO "cdp_Developer", "cdp_Integration"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateApplicationEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Application Entities */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4701,13 +5006,10 @@ UPDATE __mj."ApplicationEntity"
 
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ApplicationEntity
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateApplicationEntity" TO "cdp_Developer", "cdp_Integration"
-
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateApplicationEntity" TO "cdp_Developer", "cdp_Integration"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateApplicationEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateApplicationEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: Application Entities */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4720,7 +5022,7 @@ UPDATE __mj."ApplicationEntity"
 
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ApplicationEntity
-------------------------------------------------------------
+------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteApplicationEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete Permissions for MJ: Application Entities */
@@ -4754,8 +5056,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteApplicationEntity" TO "cdp_D
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwCountries" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCountries" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Countries */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4766,8 +5067,7 @@ GRANT SELECT ON __mj."vwCountries" TO "cdp_UI", "cdp_Developer", "cdp_Integratio
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwCountries" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCountries" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Countries */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4831,8 +5131,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCountry" TO "cdp_Integration
 -----------------------------------------------------------------
 -- Index for foreign key EntityFieldID in table EntityFieldValue;
 
--- SKIPPED (view not created): GRANT SELECT ON __mj."vwEntityFieldValues" TO "cdp_Developer", "cdp_UI", "cdp_Integration"
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwEntityFieldValues" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Entity Field Values */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4845,10 +5144,9 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCountry" TO "cdp_Integration
 
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR EntityFieldValue
-------------------------------------------------------------
+------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwRecordGeoCodes" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwRecordGeoCodes" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Record Geo Codes */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4859,8 +5157,7 @@ GRANT SELECT ON __mj."vwRecordGeoCodes" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwRecordGeoCodes" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwRecordGeoCodes" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Record Geo Codes */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4924,8 +5221,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteRecordGeoCode" TO "cdp_Integ
 -----------------------------------------------------------------
 -- Index for foreign key CountryID in table StateProvince;
 
-GRANT SELECT ON __mj."vwStateProvinces" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwStateProvinces" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: State Provinces */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4936,8 +5232,7 @@ GRANT SELECT ON __mj."vwStateProvinces" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwStateProvinces" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwStateProvinces" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: State Provinces */
 -----------------------------------------------------------------
 -- SQL Code Generation

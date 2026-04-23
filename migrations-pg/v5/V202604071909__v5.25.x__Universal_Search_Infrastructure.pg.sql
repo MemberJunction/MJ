@@ -11,16 +11,8 @@
 --   InstanceConfiguration: NEW TABLE (instance-level feature toggles)
 --
 
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 -- 1. EntityField: Search predicate and auto-update fields
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 ALTER TABLE __mj."EntityField"
  ADD COLUMN "UserSearchPredicateAPI" VARCHAR(20) NOT NULL DEFAULT 'Contains',
@@ -28,16 +20,8 @@ ALTER TABLE __mj."EntityField"
  ADD COLUMN "AutoUpdateFullTextSearch" BOOLEAN NOT NULL DEFAULT TRUE,
  ADD COLUMN "AutoUpdateExtendedType" BOOLEAN NOT NULL DEFAULT TRUE;
 
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 -- 2. Entity: FTS and search API auto-update fields
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 ALTER TABLE __mj."Entity"
  ADD COLUMN "AutoUpdateFullTextSearch" BOOLEAN NOT NULL DEFAULT TRUE,
@@ -46,30 +30,14 @@ ALTER TABLE __mj."Entity"
  ADD COLUMN "SupportsGeoCoding" BOOLEAN NOT NULL DEFAULT FALSE,
  ADD COLUMN "AutoUpdateSupportsGeoCoding" BOOLEAN NOT NULL DEFAULT TRUE;
 
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 -- 3. FileStorageAccount: Global search inclusion
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 ALTER TABLE __mj."FileStorageAccount"
  ADD COLUMN "IncludeInGlobalSearch" BOOLEAN NOT NULL DEFAULT FALSE;
 
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 -- 4. FileStorageAccountPermission: Account-level access control
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 CREATE TABLE __mj."FileStorageAccountPermission" (
  "ID" UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -99,16 +67,8 @@ CREATE TABLE __mj."FileStorageAccountPermission" (
  )
 );
 
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 -- 5. InstanceConfiguration: Feature toggle system
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 CREATE TABLE __mj."InstanceConfiguration" (
  "ID" UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -196,13 +156,12 @@ CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_FileStorageAccount_CredentialID" ON
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_SearchProvider_CredentialID" ON __mj."SearchProvider" ("CredentialID");
 
 
-ALTER TABLE __mj."EntityField" ENABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" ENABLE TRIGGER ALL;
-
 -- ===================== Views =====================
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwFileStorageAccounts';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwFileStorageAccounts"
 AS SELECT
     f.*,
@@ -218,16 +177,65 @@ INNER JOIN
     __mj."Credential" AS "MJCredential_CredentialID"
   ON
     f."CredentialID" = "MJCredential_CredentialID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwFileStorageAccounts" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwFileStorageAccountPermissions';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwFileStorageAccountPermissions"
 AS SELECT
     f.*,
@@ -248,31 +256,129 @@ LEFT OUTER JOIN
     __mj."Role" AS "MJRole_RoleID"
   ON
     f."RoleID" = "MJRole_RoleID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwFileStorageAccountPermissions" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwInstanceConfigurations';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwInstanceConfigurations"
 AS SELECT
     i.*
 FROM
     __mj."InstanceConfiguration" AS i$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwInstanceConfigurations" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwSearchProviders';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwSearchProviders"
 AS SELECT
     s.*,
@@ -283,20 +389,145 @@ LEFT OUTER JOIN
     __mj."Credential" AS "MJCredential_CredentialID"
   ON
     s."CredentialID" = "MJCredential_CredentialID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwSearchProviders" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 
 -- ===================== Stored Procedures (sp*) =====================
 
--- SKIPPED: References view "vwApplicationEntities" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spCreateApplicationEntity"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_ApplicationID UUID DEFAULT NULL,
+    IN p_EntityID UUID DEFAULT NULL,
+    IN p_Sequence INTEGER DEFAULT NULL,
+    IN p_DefaultForNewUser BOOLEAN DEFAULT NULL
+)
+RETURNS SETOF __mj."vwApplicationEntities" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."ApplicationEntity"
+            (
+                "ID",
+                "ApplicationID",
+                "EntityID",
+                "Sequence",
+                "DefaultForNewUser"
+            )
+        VALUES
+            (
+                p_ID,
+                p_ApplicationID,
+                p_EntityID,
+                p_Sequence,
+                COALESCE(p_DefaultForNewUser, TRUE)
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."ApplicationEntity"
+            (
+                "ApplicationID",
+                "EntityID",
+                "Sequence",
+                "DefaultForNewUser"
+            )
+        VALUES
+            (
+                p_ApplicationID,
+                p_EntityID,
+                p_Sequence,
+                COALESCE(p_DefaultForNewUser, TRUE)
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwApplicationEntities" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwApplicationEntities" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spUpdateApplicationEntity"(
+    IN p_ID UUID,
+    IN p_ApplicationID UUID,
+    IN p_EntityID UUID,
+    IN p_Sequence INTEGER,
+    IN p_DefaultForNewUser BOOLEAN
+)
+RETURNS SETOF __mj."vwApplicationEntities" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."ApplicationEntity"
+    SET
+        "ApplicationID" = p_ApplicationID,
+        "EntityID" = p_EntityID,
+        "Sequence" = p_Sequence,
+        "DefaultForNewUser" = p_DefaultForNewUser
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwApplicationEntities" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwApplicationEntities" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION __mj."spDeleteApplicationEntity"(
     IN p_ID UUID
@@ -321,9 +552,465 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwEntities" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spCreateEntity"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_ParentID UUID DEFAULT NULL,
+    IN p_Name VARCHAR(255) DEFAULT NULL,
+    IN p_NameSuffix VARCHAR(255) DEFAULT NULL,
+    IN p_Description TEXT DEFAULT NULL,
+    IN p_AutoUpdateDescription BOOLEAN DEFAULT NULL,
+    IN p_BaseView VARCHAR(255) DEFAULT NULL,
+    IN p_BaseViewGenerated BOOLEAN DEFAULT NULL,
+    IN p_VirtualEntity BOOLEAN DEFAULT NULL,
+    IN p_TrackRecordChanges BOOLEAN DEFAULT NULL,
+    IN p_AuditRecordAccess BOOLEAN DEFAULT NULL,
+    IN p_AuditViewRuns BOOLEAN DEFAULT NULL,
+    IN p_IncludeInAPI BOOLEAN DEFAULT NULL,
+    IN p_AllowAllRowsAPI BOOLEAN DEFAULT NULL,
+    IN p_AllowUpdateAPI BOOLEAN DEFAULT NULL,
+    IN p_AllowCreateAPI BOOLEAN DEFAULT NULL,
+    IN p_AllowDeleteAPI BOOLEAN DEFAULT NULL,
+    IN p_CustomResolverAPI BOOLEAN DEFAULT NULL,
+    IN p_AllowUserSearchAPI BOOLEAN DEFAULT NULL,
+    IN p_FullTextSearchEnabled BOOLEAN DEFAULT NULL,
+    IN p_FullTextCatalog VARCHAR(255) DEFAULT NULL,
+    IN p_FullTextCatalogGenerated BOOLEAN DEFAULT NULL,
+    IN p_FullTextIndex VARCHAR(255) DEFAULT NULL,
+    IN p_FullTextIndexGenerated BOOLEAN DEFAULT NULL,
+    IN p_FullTextSearchFunction VARCHAR(255) DEFAULT NULL,
+    IN p_FullTextSearchFunctionGenerated BOOLEAN DEFAULT NULL,
+    IN p_UserViewMaxRows INTEGER DEFAULT NULL,
+    IN p_spCreate VARCHAR(255) DEFAULT NULL,
+    IN p_spUpdate VARCHAR(255) DEFAULT NULL,
+    IN p_spDelete VARCHAR(255) DEFAULT NULL,
+    IN p_spCreateGenerated BOOLEAN DEFAULT NULL,
+    IN p_spUpdateGenerated BOOLEAN DEFAULT NULL,
+    IN p_spDeleteGenerated BOOLEAN DEFAULT NULL,
+    IN p_CascadeDeletes BOOLEAN DEFAULT NULL,
+    IN p_DeleteType VARCHAR(10) DEFAULT NULL,
+    IN p_AllowRecordMerge BOOLEAN DEFAULT NULL,
+    IN p_spMatch VARCHAR(255) DEFAULT NULL,
+    IN p_RelationshipDefaultDisplayType VARCHAR(20) DEFAULT NULL,
+    IN p_UserFormGenerated BOOLEAN DEFAULT NULL,
+    IN p_EntityObjectSubclassName VARCHAR(255) DEFAULT NULL,
+    IN p_EntityObjectSubclassImport VARCHAR(255) DEFAULT NULL,
+    IN p_PreferredCommunicationField VARCHAR(255) DEFAULT NULL,
+    IN p_Icon VARCHAR(500) DEFAULT NULL,
+    IN p_ScopeDefault VARCHAR(100) DEFAULT NULL,
+    IN p_RowsToPackWithSchema VARCHAR(20) DEFAULT NULL,
+    IN p_RowsToPackSampleMethod VARCHAR(20) DEFAULT NULL,
+    IN p_RowsToPackSampleCount INTEGER DEFAULT NULL,
+    IN p_RowsToPackSampleOrder TEXT DEFAULT NULL,
+    IN p_AutoRowCountFrequency INTEGER DEFAULT NULL,
+    IN p_RowCount BIGINT DEFAULT NULL,
+    IN p_RowCountRunAt TIMESTAMPTZ DEFAULT NULL,
+    IN p_Status VARCHAR(25) DEFAULT NULL,
+    IN p_DisplayName VARCHAR(255) DEFAULT NULL,
+    IN p_AllowMultipleSubtypes BOOLEAN DEFAULT NULL,
+    IN p_AutoUpdateFullTextSearch BOOLEAN DEFAULT NULL,
+    IN p_AutoUpdateAllowUserSearchAPI BOOLEAN DEFAULT NULL,
+    IN p_TrustServerCacheCompletely BOOLEAN DEFAULT NULL,
+    IN p_SupportsGeoCoding BOOLEAN DEFAULT NULL,
+    IN p_AutoUpdateSupportsGeoCoding BOOLEAN DEFAULT NULL
+)
+RETURNS SETOF __mj."vwEntities" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."Entity"
+            (
+                "ID",
+                "ParentID",
+                "Name",
+                "NameSuffix",
+                "Description",
+                "AutoUpdateDescription",
+                "BaseView",
+                "BaseViewGenerated",
+                "VirtualEntity",
+                "TrackRecordChanges",
+                "AuditRecordAccess",
+                "AuditViewRuns",
+                "IncludeInAPI",
+                "AllowAllRowsAPI",
+                "AllowUpdateAPI",
+                "AllowCreateAPI",
+                "AllowDeleteAPI",
+                "CustomResolverAPI",
+                "AllowUserSearchAPI",
+                "FullTextSearchEnabled",
+                "FullTextCatalog",
+                "FullTextCatalogGenerated",
+                "FullTextIndex",
+                "FullTextIndexGenerated",
+                "FullTextSearchFunction",
+                "FullTextSearchFunctionGenerated",
+                "UserViewMaxRows",
+                "spCreate",
+                "spUpdate",
+                "spDelete",
+                "spCreateGenerated",
+                "spUpdateGenerated",
+                "spDeleteGenerated",
+                "CascadeDeletes",
+                "DeleteType",
+                "AllowRecordMerge",
+                "spMatch",
+                "RelationshipDefaultDisplayType",
+                "UserFormGenerated",
+                "EntityObjectSubclassName",
+                "EntityObjectSubclassImport",
+                "PreferredCommunicationField",
+                "Icon",
+                "ScopeDefault",
+                "RowsToPackWithSchema",
+                "RowsToPackSampleMethod",
+                "RowsToPackSampleCount",
+                "RowsToPackSampleOrder",
+                "AutoRowCountFrequency",
+                "RowCount",
+                "RowCountRunAt",
+                "Status",
+                "DisplayName",
+                "AllowMultipleSubtypes",
+                "AutoUpdateFullTextSearch",
+                "AutoUpdateAllowUserSearchAPI",
+                "TrustServerCacheCompletely",
+                "SupportsGeoCoding",
+                "AutoUpdateSupportsGeoCoding"
+            )
+        VALUES
+            (
+                p_ID,
+                p_ParentID,
+                p_Name,
+                p_NameSuffix,
+                p_Description,
+                COALESCE(p_AutoUpdateDescription, TRUE),
+                p_BaseView,
+                COALESCE(p_BaseViewGenerated, TRUE),
+                COALESCE(p_VirtualEntity, FALSE),
+                COALESCE(p_TrackRecordChanges, TRUE),
+                COALESCE(p_AuditRecordAccess, TRUE),
+                COALESCE(p_AuditViewRuns, TRUE),
+                COALESCE(p_IncludeInAPI, FALSE),
+                COALESCE(p_AllowAllRowsAPI, FALSE),
+                COALESCE(p_AllowUpdateAPI, FALSE),
+                COALESCE(p_AllowCreateAPI, FALSE),
+                COALESCE(p_AllowDeleteAPI, FALSE),
+                COALESCE(p_CustomResolverAPI, FALSE),
+                COALESCE(p_AllowUserSearchAPI, FALSE),
+                COALESCE(p_FullTextSearchEnabled, FALSE),
+                p_FullTextCatalog,
+                COALESCE(p_FullTextCatalogGenerated, TRUE),
+                p_FullTextIndex,
+                COALESCE(p_FullTextIndexGenerated, TRUE),
+                p_FullTextSearchFunction,
+                COALESCE(p_FullTextSearchFunctionGenerated, TRUE),
+                p_UserViewMaxRows,
+                p_spCreate,
+                p_spUpdate,
+                p_spDelete,
+                COALESCE(p_spCreateGenerated, TRUE),
+                COALESCE(p_spUpdateGenerated, TRUE),
+                COALESCE(p_spDeleteGenerated, TRUE),
+                COALESCE(p_CascadeDeletes, FALSE),
+                COALESCE(p_DeleteType, 'Hard'),
+                COALESCE(p_AllowRecordMerge, FALSE),
+                p_spMatch,
+                COALESCE(p_RelationshipDefaultDisplayType, 'Search'),
+                COALESCE(p_UserFormGenerated, TRUE),
+                p_EntityObjectSubclassName,
+                p_EntityObjectSubclassImport,
+                p_PreferredCommunicationField,
+                p_Icon,
+                p_ScopeDefault,
+                COALESCE(p_RowsToPackWithSchema, 'None'),
+                COALESCE(p_RowsToPackSampleMethod, 'random'),
+                COALESCE(p_RowsToPackSampleCount, 0),
+                p_RowsToPackSampleOrder,
+                p_AutoRowCountFrequency,
+                p_RowCount,
+                p_RowCountRunAt,
+                COALESCE(p_Status, 'Active'),
+                p_DisplayName,
+                COALESCE(p_AllowMultipleSubtypes, FALSE),
+                COALESCE(p_AutoUpdateFullTextSearch, TRUE),
+                COALESCE(p_AutoUpdateAllowUserSearchAPI, TRUE),
+                COALESCE(p_TrustServerCacheCompletely, TRUE),
+                COALESCE(p_SupportsGeoCoding, FALSE),
+                COALESCE(p_AutoUpdateSupportsGeoCoding, TRUE)
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."Entity"
+            (
+                "ParentID",
+                "Name",
+                "NameSuffix",
+                "Description",
+                "AutoUpdateDescription",
+                "BaseView",
+                "BaseViewGenerated",
+                "VirtualEntity",
+                "TrackRecordChanges",
+                "AuditRecordAccess",
+                "AuditViewRuns",
+                "IncludeInAPI",
+                "AllowAllRowsAPI",
+                "AllowUpdateAPI",
+                "AllowCreateAPI",
+                "AllowDeleteAPI",
+                "CustomResolverAPI",
+                "AllowUserSearchAPI",
+                "FullTextSearchEnabled",
+                "FullTextCatalog",
+                "FullTextCatalogGenerated",
+                "FullTextIndex",
+                "FullTextIndexGenerated",
+                "FullTextSearchFunction",
+                "FullTextSearchFunctionGenerated",
+                "UserViewMaxRows",
+                "spCreate",
+                "spUpdate",
+                "spDelete",
+                "spCreateGenerated",
+                "spUpdateGenerated",
+                "spDeleteGenerated",
+                "CascadeDeletes",
+                "DeleteType",
+                "AllowRecordMerge",
+                "spMatch",
+                "RelationshipDefaultDisplayType",
+                "UserFormGenerated",
+                "EntityObjectSubclassName",
+                "EntityObjectSubclassImport",
+                "PreferredCommunicationField",
+                "Icon",
+                "ScopeDefault",
+                "RowsToPackWithSchema",
+                "RowsToPackSampleMethod",
+                "RowsToPackSampleCount",
+                "RowsToPackSampleOrder",
+                "AutoRowCountFrequency",
+                "RowCount",
+                "RowCountRunAt",
+                "Status",
+                "DisplayName",
+                "AllowMultipleSubtypes",
+                "AutoUpdateFullTextSearch",
+                "AutoUpdateAllowUserSearchAPI",
+                "TrustServerCacheCompletely",
+                "SupportsGeoCoding",
+                "AutoUpdateSupportsGeoCoding"
+            )
+        VALUES
+            (
+                p_ParentID,
+                p_Name,
+                p_NameSuffix,
+                p_Description,
+                COALESCE(p_AutoUpdateDescription, TRUE),
+                p_BaseView,
+                COALESCE(p_BaseViewGenerated, TRUE),
+                COALESCE(p_VirtualEntity, FALSE),
+                COALESCE(p_TrackRecordChanges, TRUE),
+                COALESCE(p_AuditRecordAccess, TRUE),
+                COALESCE(p_AuditViewRuns, TRUE),
+                COALESCE(p_IncludeInAPI, FALSE),
+                COALESCE(p_AllowAllRowsAPI, FALSE),
+                COALESCE(p_AllowUpdateAPI, FALSE),
+                COALESCE(p_AllowCreateAPI, FALSE),
+                COALESCE(p_AllowDeleteAPI, FALSE),
+                COALESCE(p_CustomResolverAPI, FALSE),
+                COALESCE(p_AllowUserSearchAPI, FALSE),
+                COALESCE(p_FullTextSearchEnabled, FALSE),
+                p_FullTextCatalog,
+                COALESCE(p_FullTextCatalogGenerated, TRUE),
+                p_FullTextIndex,
+                COALESCE(p_FullTextIndexGenerated, TRUE),
+                p_FullTextSearchFunction,
+                COALESCE(p_FullTextSearchFunctionGenerated, TRUE),
+                p_UserViewMaxRows,
+                p_spCreate,
+                p_spUpdate,
+                p_spDelete,
+                COALESCE(p_spCreateGenerated, TRUE),
+                COALESCE(p_spUpdateGenerated, TRUE),
+                COALESCE(p_spDeleteGenerated, TRUE),
+                COALESCE(p_CascadeDeletes, FALSE),
+                COALESCE(p_DeleteType, 'Hard'),
+                COALESCE(p_AllowRecordMerge, FALSE),
+                p_spMatch,
+                COALESCE(p_RelationshipDefaultDisplayType, 'Search'),
+                COALESCE(p_UserFormGenerated, TRUE),
+                p_EntityObjectSubclassName,
+                p_EntityObjectSubclassImport,
+                p_PreferredCommunicationField,
+                p_Icon,
+                p_ScopeDefault,
+                COALESCE(p_RowsToPackWithSchema, 'None'),
+                COALESCE(p_RowsToPackSampleMethod, 'random'),
+                COALESCE(p_RowsToPackSampleCount, 0),
+                p_RowsToPackSampleOrder,
+                p_AutoRowCountFrequency,
+                p_RowCount,
+                p_RowCountRunAt,
+                COALESCE(p_Status, 'Active'),
+                p_DisplayName,
+                COALESCE(p_AllowMultipleSubtypes, FALSE),
+                COALESCE(p_AutoUpdateFullTextSearch, TRUE),
+                COALESCE(p_AutoUpdateAllowUserSearchAPI, TRUE),
+                COALESCE(p_TrustServerCacheCompletely, TRUE),
+                COALESCE(p_SupportsGeoCoding, FALSE),
+                COALESCE(p_AutoUpdateSupportsGeoCoding, TRUE)
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwEntities" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwEntities" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spUpdateEntity"(
+    IN p_ID UUID,
+    IN p_ParentID UUID,
+    IN p_Name VARCHAR(255),
+    IN p_NameSuffix VARCHAR(255),
+    IN p_Description TEXT,
+    IN p_AutoUpdateDescription BOOLEAN,
+    IN p_BaseView VARCHAR(255),
+    IN p_BaseViewGenerated BOOLEAN,
+    IN p_VirtualEntity BOOLEAN,
+    IN p_TrackRecordChanges BOOLEAN,
+    IN p_AuditRecordAccess BOOLEAN,
+    IN p_AuditViewRuns BOOLEAN,
+    IN p_IncludeInAPI BOOLEAN,
+    IN p_AllowAllRowsAPI BOOLEAN,
+    IN p_AllowUpdateAPI BOOLEAN,
+    IN p_AllowCreateAPI BOOLEAN,
+    IN p_AllowDeleteAPI BOOLEAN,
+    IN p_CustomResolverAPI BOOLEAN,
+    IN p_AllowUserSearchAPI BOOLEAN,
+    IN p_FullTextSearchEnabled BOOLEAN,
+    IN p_FullTextCatalog VARCHAR(255),
+    IN p_FullTextCatalogGenerated BOOLEAN,
+    IN p_FullTextIndex VARCHAR(255),
+    IN p_FullTextIndexGenerated BOOLEAN,
+    IN p_FullTextSearchFunction VARCHAR(255),
+    IN p_FullTextSearchFunctionGenerated BOOLEAN,
+    IN p_UserViewMaxRows INTEGER,
+    IN p_spCreate VARCHAR(255),
+    IN p_spUpdate VARCHAR(255),
+    IN p_spDelete VARCHAR(255),
+    IN p_spCreateGenerated BOOLEAN,
+    IN p_spUpdateGenerated BOOLEAN,
+    IN p_spDeleteGenerated BOOLEAN,
+    IN p_CascadeDeletes BOOLEAN,
+    IN p_DeleteType VARCHAR(10),
+    IN p_AllowRecordMerge BOOLEAN,
+    IN p_spMatch VARCHAR(255),
+    IN p_RelationshipDefaultDisplayType VARCHAR(20),
+    IN p_UserFormGenerated BOOLEAN,
+    IN p_EntityObjectSubclassName VARCHAR(255),
+    IN p_EntityObjectSubclassImport VARCHAR(255),
+    IN p_PreferredCommunicationField VARCHAR(255),
+    IN p_Icon VARCHAR(500),
+    IN p_ScopeDefault VARCHAR(100),
+    IN p_RowsToPackWithSchema VARCHAR(20),
+    IN p_RowsToPackSampleMethod VARCHAR(20),
+    IN p_RowsToPackSampleCount INTEGER,
+    IN p_RowsToPackSampleOrder TEXT,
+    IN p_AutoRowCountFrequency INTEGER,
+    IN p_RowCount BIGINT,
+    IN p_RowCountRunAt TIMESTAMPTZ,
+    IN p_Status VARCHAR(25),
+    IN p_DisplayName VARCHAR(255),
+    IN p_AllowMultipleSubtypes BOOLEAN,
+    IN p_AutoUpdateFullTextSearch BOOLEAN,
+    IN p_AutoUpdateAllowUserSearchAPI BOOLEAN,
+    IN p_TrustServerCacheCompletely BOOLEAN,
+    IN p_SupportsGeoCoding BOOLEAN,
+    IN p_AutoUpdateSupportsGeoCoding BOOLEAN
+)
+RETURNS SETOF __mj."vwEntities" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."Entity"
+    SET
+        "ParentID" = p_ParentID,
+        "Name" = p_Name,
+        "NameSuffix" = p_NameSuffix,
+        "Description" = p_Description,
+        "AutoUpdateDescription" = p_AutoUpdateDescription,
+        "BaseView" = p_BaseView,
+        "BaseViewGenerated" = p_BaseViewGenerated,
+        "VirtualEntity" = p_VirtualEntity,
+        "TrackRecordChanges" = p_TrackRecordChanges,
+        "AuditRecordAccess" = p_AuditRecordAccess,
+        "AuditViewRuns" = p_AuditViewRuns,
+        "IncludeInAPI" = p_IncludeInAPI,
+        "AllowAllRowsAPI" = p_AllowAllRowsAPI,
+        "AllowUpdateAPI" = p_AllowUpdateAPI,
+        "AllowCreateAPI" = p_AllowCreateAPI,
+        "AllowDeleteAPI" = p_AllowDeleteAPI,
+        "CustomResolverAPI" = p_CustomResolverAPI,
+        "AllowUserSearchAPI" = p_AllowUserSearchAPI,
+        "FullTextSearchEnabled" = p_FullTextSearchEnabled,
+        "FullTextCatalog" = p_FullTextCatalog,
+        "FullTextCatalogGenerated" = p_FullTextCatalogGenerated,
+        "FullTextIndex" = p_FullTextIndex,
+        "FullTextIndexGenerated" = p_FullTextIndexGenerated,
+        "FullTextSearchFunction" = p_FullTextSearchFunction,
+        "FullTextSearchFunctionGenerated" = p_FullTextSearchFunctionGenerated,
+        "UserViewMaxRows" = p_UserViewMaxRows,
+        "spCreate" = p_spCreate,
+        "spUpdate" = p_spUpdate,
+        "spDelete" = p_spDelete,
+        "spCreateGenerated" = p_spCreateGenerated,
+        "spUpdateGenerated" = p_spUpdateGenerated,
+        "spDeleteGenerated" = p_spDeleteGenerated,
+        "CascadeDeletes" = p_CascadeDeletes,
+        "DeleteType" = p_DeleteType,
+        "AllowRecordMerge" = p_AllowRecordMerge,
+        "spMatch" = p_spMatch,
+        "RelationshipDefaultDisplayType" = p_RelationshipDefaultDisplayType,
+        "UserFormGenerated" = p_UserFormGenerated,
+        "EntityObjectSubclassName" = p_EntityObjectSubclassName,
+        "EntityObjectSubclassImport" = p_EntityObjectSubclassImport,
+        "PreferredCommunicationField" = p_PreferredCommunicationField,
+        "Icon" = p_Icon,
+        "ScopeDefault" = p_ScopeDefault,
+        "RowsToPackWithSchema" = p_RowsToPackWithSchema,
+        "RowsToPackSampleMethod" = p_RowsToPackSampleMethod,
+        "RowsToPackSampleCount" = p_RowsToPackSampleCount,
+        "RowsToPackSampleOrder" = p_RowsToPackSampleOrder,
+        "AutoRowCountFrequency" = p_AutoRowCountFrequency,
+        "RowCount" = p_RowCount,
+        "RowCountRunAt" = p_RowCountRunAt,
+        "Status" = p_Status,
+        "DisplayName" = p_DisplayName,
+        "AllowMultipleSubtypes" = p_AllowMultipleSubtypes,
+        "AutoUpdateFullTextSearch" = p_AutoUpdateFullTextSearch,
+        "AutoUpdateAllowUserSearchAPI" = p_AutoUpdateAllowUserSearchAPI,
+        "TrustServerCacheCompletely" = p_TrustServerCacheCompletely,
+        "SupportsGeoCoding" = p_SupportsGeoCoding,
+        "AutoUpdateSupportsGeoCoding" = p_AutoUpdateSupportsGeoCoding
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwEntities" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwEntities" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION __mj."spDeleteEntity"(
     IN p_ID UUID
@@ -348,13 +1035,491 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwEntityFieldValues" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spCreateEntityFieldValue"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_EntityFieldID UUID DEFAULT NULL,
+    IN p_Sequence INTEGER DEFAULT NULL,
+    IN p_Value VARCHAR(255) DEFAULT NULL,
+    IN p_Code VARCHAR(50) DEFAULT NULL,
+    IN p_Description TEXT DEFAULT NULL
+)
+RETURNS SETOF __mj."vwEntityFieldValues" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."EntityFieldValue"
+            (
+                "ID",
+                "EntityFieldID",
+                "Sequence",
+                "Value",
+                "Code",
+                "Description"
+            )
+        VALUES
+            (
+                p_ID,
+                p_EntityFieldID,
+                p_Sequence,
+                p_Value,
+                p_Code,
+                p_Description
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."EntityFieldValue"
+            (
+                "EntityFieldID",
+                "Sequence",
+                "Value",
+                "Code",
+                "Description"
+            )
+        VALUES
+            (
+                p_EntityFieldID,
+                p_Sequence,
+                p_Value,
+                p_Code,
+                p_Description
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwEntityFieldValues" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwEntityFieldValues" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spUpdateEntityFieldValue"(
+    IN p_ID UUID,
+    IN p_EntityFieldID UUID,
+    IN p_Sequence INTEGER,
+    IN p_Value VARCHAR(255),
+    IN p_Code VARCHAR(50),
+    IN p_Description TEXT
+)
+RETURNS SETOF __mj."vwEntityFieldValues" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."EntityFieldValue"
+    SET
+        "EntityFieldID" = p_EntityFieldID,
+        "Sequence" = p_Sequence,
+        "Value" = p_Value,
+        "Code" = p_Code,
+        "Description" = p_Description
+    WHERE
+        "ID" = p_ID;
 
--- SKIPPED: References view "vwEntityFields" not created in this file (CodeGen will recreate)
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
 
--- SKIPPED: References view "vwEntityFields" not created in this file (CodeGen will recreate)
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwEntityFieldValues" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwEntityFieldValues" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION __mj."spCreateEntityField"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_DisplayName VARCHAR(255) DEFAULT NULL,
+    IN p_Description TEXT DEFAULT NULL,
+    IN p_AutoUpdateDescription BOOLEAN DEFAULT NULL,
+    IN p_IsPrimaryKey BOOLEAN DEFAULT NULL,
+    IN p_IsUnique BOOLEAN DEFAULT NULL,
+    IN p_Category VARCHAR(255) DEFAULT NULL,
+    IN p_ValueListType VARCHAR(20) DEFAULT NULL,
+    IN p_ExtendedType VARCHAR(50) DEFAULT NULL,
+    IN p_CodeType VARCHAR(50) DEFAULT NULL,
+    IN p_DefaultInView BOOLEAN DEFAULT NULL,
+    IN p_ViewCellTemplate TEXT DEFAULT NULL,
+    IN p_DefaultColumnWidth INTEGER DEFAULT NULL,
+    IN p_AllowUpdateAPI BOOLEAN DEFAULT NULL,
+    IN p_AllowUpdateInView BOOLEAN DEFAULT NULL,
+    IN p_IncludeInUserSearchAPI BOOLEAN DEFAULT NULL,
+    IN p_FullTextSearchEnabled BOOLEAN DEFAULT NULL,
+    IN p_UserSearchParamFormatAPI VARCHAR(500) DEFAULT NULL,
+    IN p_IncludeInGeneratedForm BOOLEAN DEFAULT NULL,
+    IN p_GeneratedFormSection VARCHAR(10) DEFAULT NULL,
+    IN p_IsNameField BOOLEAN DEFAULT NULL,
+    IN p_RelatedEntityID UUID DEFAULT NULL,
+    IN p_RelatedEntityFieldName VARCHAR(255) DEFAULT NULL,
+    IN p_IncludeRelatedEntityNameFieldInBaseView BOOLEAN DEFAULT NULL,
+    IN p_RelatedEntityNameFieldMap VARCHAR(255) DEFAULT NULL,
+    IN p_RelatedEntityDisplayType VARCHAR(20) DEFAULT NULL,
+    IN p_EntityIDFieldName VARCHAR(100) DEFAULT NULL,
+    IN p_ScopeDefault VARCHAR(100) DEFAULT NULL,
+    IN p_AutoUpdateRelatedEntityInfo BOOLEAN DEFAULT NULL,
+    IN p_ValuesToPackWithSchema VARCHAR(10) DEFAULT NULL,
+    IN p_Status VARCHAR(25) DEFAULT NULL,
+    IN p_AutoUpdateIsNameField BOOLEAN DEFAULT NULL,
+    IN p_AutoUpdateDefaultInView BOOLEAN DEFAULT NULL,
+    IN p_AutoUpdateCategory BOOLEAN DEFAULT NULL,
+    IN p_AutoUpdateDisplayName BOOLEAN DEFAULT NULL,
+    IN p_AutoUpdateIncludeInUserSearchAPI BOOLEAN DEFAULT NULL,
+    IN p_Encrypt BOOLEAN DEFAULT NULL,
+    IN p_EncryptionKeyID UUID DEFAULT NULL,
+    IN p_AllowDecryptInAPI BOOLEAN DEFAULT NULL,
+    IN p_SendEncryptedValue BOOLEAN DEFAULT NULL,
+    IN p_IsSoftPrimaryKey BOOLEAN DEFAULT NULL,
+    IN p_IsSoftForeignKey BOOLEAN DEFAULT NULL,
+    IN p_RelatedEntityJoinFields TEXT DEFAULT NULL,
+    IN p_JSONType VARCHAR(255) DEFAULT NULL,
+    IN p_JSONTypeIsArray BOOLEAN DEFAULT NULL,
+    IN p_JSONTypeDefinition TEXT DEFAULT NULL,
+    IN p_UserSearchPredicateAPI VARCHAR(20) DEFAULT NULL,
+    IN p_AutoUpdateUserSearchPredicate BOOLEAN DEFAULT NULL,
+    IN p_AutoUpdateFullTextSearch BOOLEAN DEFAULT NULL,
+    IN p_AutoUpdateExtendedType BOOLEAN DEFAULT NULL
+)
+RETURNS SETOF __mj."vwEntityFields" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."EntityField"
+            (
+                "ID",
+                "DisplayName",
+                "Description",
+                "AutoUpdateDescription",
+                "IsPrimaryKey",
+                "IsUnique",
+                "Category",
+                "ValueListType",
+                "ExtendedType",
+                "CodeType",
+                "DefaultInView",
+                "ViewCellTemplate",
+                "DefaultColumnWidth",
+                "AllowUpdateAPI",
+                "AllowUpdateInView",
+                "IncludeInUserSearchAPI",
+                "FullTextSearchEnabled",
+                "UserSearchParamFormatAPI",
+                "IncludeInGeneratedForm",
+                "GeneratedFormSection",
+                "IsNameField",
+                "RelatedEntityID",
+                "RelatedEntityFieldName",
+                "IncludeRelatedEntityNameFieldInBaseView",
+                "RelatedEntityNameFieldMap",
+                "RelatedEntityDisplayType",
+                "EntityIDFieldName",
+                "ScopeDefault",
+                "AutoUpdateRelatedEntityInfo",
+                "ValuesToPackWithSchema",
+                "Status",
+                "AutoUpdateIsNameField",
+                "AutoUpdateDefaultInView",
+                "AutoUpdateCategory",
+                "AutoUpdateDisplayName",
+                "AutoUpdateIncludeInUserSearchAPI",
+                "Encrypt",
+                "EncryptionKeyID",
+                "AllowDecryptInAPI",
+                "SendEncryptedValue",
+                "IsSoftPrimaryKey",
+                "IsSoftForeignKey",
+                "RelatedEntityJoinFields",
+                "JSONType",
+                "JSONTypeIsArray",
+                "JSONTypeDefinition",
+                "UserSearchPredicateAPI",
+                "AutoUpdateUserSearchPredicate",
+                "AutoUpdateFullTextSearch",
+                "AutoUpdateExtendedType"
+            )
+        VALUES
+            (
+                p_ID,
+                p_DisplayName,
+                p_Description,
+                COALESCE(p_AutoUpdateDescription, TRUE),
+                COALESCE(p_IsPrimaryKey, FALSE),
+                COALESCE(p_IsUnique, FALSE),
+                p_Category,
+                COALESCE(p_ValueListType, 'None'),
+                p_ExtendedType,
+                p_CodeType,
+                COALESCE(p_DefaultInView, FALSE),
+                p_ViewCellTemplate,
+                p_DefaultColumnWidth,
+                COALESCE(p_AllowUpdateAPI, TRUE),
+                COALESCE(p_AllowUpdateInView, TRUE),
+                COALESCE(p_IncludeInUserSearchAPI, FALSE),
+                COALESCE(p_FullTextSearchEnabled, FALSE),
+                p_UserSearchParamFormatAPI,
+                COALESCE(p_IncludeInGeneratedForm, TRUE),
+                COALESCE(p_GeneratedFormSection, 'Details'),
+                COALESCE(p_IsNameField, FALSE),
+                p_RelatedEntityID,
+                p_RelatedEntityFieldName,
+                COALESCE(p_IncludeRelatedEntityNameFieldInBaseView, TRUE),
+                p_RelatedEntityNameFieldMap,
+                COALESCE(p_RelatedEntityDisplayType, 'Search'),
+                p_EntityIDFieldName,
+                p_ScopeDefault,
+                COALESCE(p_AutoUpdateRelatedEntityInfo, TRUE),
+                COALESCE(p_ValuesToPackWithSchema, 'Auto'),
+                COALESCE(p_Status, 'Active'),
+                COALESCE(p_AutoUpdateIsNameField, TRUE),
+                COALESCE(p_AutoUpdateDefaultInView, TRUE),
+                COALESCE(p_AutoUpdateCategory, TRUE),
+                COALESCE(p_AutoUpdateDisplayName, TRUE),
+                COALESCE(p_AutoUpdateIncludeInUserSearchAPI, TRUE),
+                COALESCE(p_Encrypt, FALSE),
+                p_EncryptionKeyID,
+                COALESCE(p_AllowDecryptInAPI, FALSE),
+                COALESCE(p_SendEncryptedValue, FALSE),
+                COALESCE(p_IsSoftPrimaryKey, FALSE),
+                COALESCE(p_IsSoftForeignKey, FALSE),
+                p_RelatedEntityJoinFields,
+                p_JSONType,
+                COALESCE(p_JSONTypeIsArray, FALSE),
+                p_JSONTypeDefinition,
+                COALESCE(p_UserSearchPredicateAPI, 'Contains'),
+                COALESCE(p_AutoUpdateUserSearchPredicate, TRUE),
+                COALESCE(p_AutoUpdateFullTextSearch, TRUE),
+                COALESCE(p_AutoUpdateExtendedType, TRUE)
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."EntityField"
+            (
+                "DisplayName",
+                "Description",
+                "AutoUpdateDescription",
+                "IsPrimaryKey",
+                "IsUnique",
+                "Category",
+                "ValueListType",
+                "ExtendedType",
+                "CodeType",
+                "DefaultInView",
+                "ViewCellTemplate",
+                "DefaultColumnWidth",
+                "AllowUpdateAPI",
+                "AllowUpdateInView",
+                "IncludeInUserSearchAPI",
+                "FullTextSearchEnabled",
+                "UserSearchParamFormatAPI",
+                "IncludeInGeneratedForm",
+                "GeneratedFormSection",
+                "IsNameField",
+                "RelatedEntityID",
+                "RelatedEntityFieldName",
+                "IncludeRelatedEntityNameFieldInBaseView",
+                "RelatedEntityNameFieldMap",
+                "RelatedEntityDisplayType",
+                "EntityIDFieldName",
+                "ScopeDefault",
+                "AutoUpdateRelatedEntityInfo",
+                "ValuesToPackWithSchema",
+                "Status",
+                "AutoUpdateIsNameField",
+                "AutoUpdateDefaultInView",
+                "AutoUpdateCategory",
+                "AutoUpdateDisplayName",
+                "AutoUpdateIncludeInUserSearchAPI",
+                "Encrypt",
+                "EncryptionKeyID",
+                "AllowDecryptInAPI",
+                "SendEncryptedValue",
+                "IsSoftPrimaryKey",
+                "IsSoftForeignKey",
+                "RelatedEntityJoinFields",
+                "JSONType",
+                "JSONTypeIsArray",
+                "JSONTypeDefinition",
+                "UserSearchPredicateAPI",
+                "AutoUpdateUserSearchPredicate",
+                "AutoUpdateFullTextSearch",
+                "AutoUpdateExtendedType"
+            )
+        VALUES
+            (
+                p_DisplayName,
+                p_Description,
+                COALESCE(p_AutoUpdateDescription, TRUE),
+                COALESCE(p_IsPrimaryKey, FALSE),
+                COALESCE(p_IsUnique, FALSE),
+                p_Category,
+                COALESCE(p_ValueListType, 'None'),
+                p_ExtendedType,
+                p_CodeType,
+                COALESCE(p_DefaultInView, FALSE),
+                p_ViewCellTemplate,
+                p_DefaultColumnWidth,
+                COALESCE(p_AllowUpdateAPI, TRUE),
+                COALESCE(p_AllowUpdateInView, TRUE),
+                COALESCE(p_IncludeInUserSearchAPI, FALSE),
+                COALESCE(p_FullTextSearchEnabled, FALSE),
+                p_UserSearchParamFormatAPI,
+                COALESCE(p_IncludeInGeneratedForm, TRUE),
+                COALESCE(p_GeneratedFormSection, 'Details'),
+                COALESCE(p_IsNameField, FALSE),
+                p_RelatedEntityID,
+                p_RelatedEntityFieldName,
+                COALESCE(p_IncludeRelatedEntityNameFieldInBaseView, TRUE),
+                p_RelatedEntityNameFieldMap,
+                COALESCE(p_RelatedEntityDisplayType, 'Search'),
+                p_EntityIDFieldName,
+                p_ScopeDefault,
+                COALESCE(p_AutoUpdateRelatedEntityInfo, TRUE),
+                COALESCE(p_ValuesToPackWithSchema, 'Auto'),
+                COALESCE(p_Status, 'Active'),
+                COALESCE(p_AutoUpdateIsNameField, TRUE),
+                COALESCE(p_AutoUpdateDefaultInView, TRUE),
+                COALESCE(p_AutoUpdateCategory, TRUE),
+                COALESCE(p_AutoUpdateDisplayName, TRUE),
+                COALESCE(p_AutoUpdateIncludeInUserSearchAPI, TRUE),
+                COALESCE(p_Encrypt, FALSE),
+                p_EncryptionKeyID,
+                COALESCE(p_AllowDecryptInAPI, FALSE),
+                COALESCE(p_SendEncryptedValue, FALSE),
+                COALESCE(p_IsSoftPrimaryKey, FALSE),
+                COALESCE(p_IsSoftForeignKey, FALSE),
+                p_RelatedEntityJoinFields,
+                p_JSONType,
+                COALESCE(p_JSONTypeIsArray, FALSE),
+                p_JSONTypeDefinition,
+                COALESCE(p_UserSearchPredicateAPI, 'Contains'),
+                COALESCE(p_AutoUpdateUserSearchPredicate, TRUE),
+                COALESCE(p_AutoUpdateFullTextSearch, TRUE),
+                COALESCE(p_AutoUpdateExtendedType, TRUE)
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwEntityFields" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION __mj."spUpdateEntityField"(
+    IN p_ID UUID,
+    IN p_DisplayName VARCHAR(255),
+    IN p_Description TEXT,
+    IN p_AutoUpdateDescription BOOLEAN,
+    IN p_IsPrimaryKey BOOLEAN,
+    IN p_IsUnique BOOLEAN,
+    IN p_Category VARCHAR(255),
+    IN p_ValueListType VARCHAR(20),
+    IN p_ExtendedType VARCHAR(50),
+    IN p_CodeType VARCHAR(50),
+    IN p_DefaultInView BOOLEAN,
+    IN p_ViewCellTemplate TEXT,
+    IN p_DefaultColumnWidth INTEGER,
+    IN p_AllowUpdateAPI BOOLEAN,
+    IN p_AllowUpdateInView BOOLEAN,
+    IN p_IncludeInUserSearchAPI BOOLEAN,
+    IN p_FullTextSearchEnabled BOOLEAN,
+    IN p_UserSearchParamFormatAPI VARCHAR(500),
+    IN p_IncludeInGeneratedForm BOOLEAN,
+    IN p_GeneratedFormSection VARCHAR(10),
+    IN p_IsNameField BOOLEAN,
+    IN p_RelatedEntityID UUID,
+    IN p_RelatedEntityFieldName VARCHAR(255),
+    IN p_IncludeRelatedEntityNameFieldInBaseView BOOLEAN,
+    IN p_RelatedEntityNameFieldMap VARCHAR(255),
+    IN p_RelatedEntityDisplayType VARCHAR(20),
+    IN p_EntityIDFieldName VARCHAR(100),
+    IN p_ScopeDefault VARCHAR(100),
+    IN p_AutoUpdateRelatedEntityInfo BOOLEAN,
+    IN p_ValuesToPackWithSchema VARCHAR(10),
+    IN p_Status VARCHAR(25),
+    IN p_AutoUpdateIsNameField BOOLEAN,
+    IN p_AutoUpdateDefaultInView BOOLEAN,
+    IN p_AutoUpdateCategory BOOLEAN,
+    IN p_AutoUpdateDisplayName BOOLEAN,
+    IN p_AutoUpdateIncludeInUserSearchAPI BOOLEAN,
+    IN p_Encrypt BOOLEAN,
+    IN p_EncryptionKeyID UUID,
+    IN p_AllowDecryptInAPI BOOLEAN,
+    IN p_SendEncryptedValue BOOLEAN,
+    IN p_IsSoftPrimaryKey BOOLEAN,
+    IN p_IsSoftForeignKey BOOLEAN,
+    IN p_RelatedEntityJoinFields TEXT,
+    IN p_JSONType VARCHAR(255),
+    IN p_JSONTypeIsArray BOOLEAN,
+    IN p_JSONTypeDefinition TEXT,
+    IN p_UserSearchPredicateAPI VARCHAR(20),
+    IN p_AutoUpdateUserSearchPredicate BOOLEAN,
+    IN p_AutoUpdateFullTextSearch BOOLEAN,
+    IN p_AutoUpdateExtendedType BOOLEAN
+)
+RETURNS SETOF __mj."vwEntityFields" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."EntityField"
+    SET
+        "DisplayName" = p_DisplayName,
+        "Description" = p_Description,
+        "AutoUpdateDescription" = p_AutoUpdateDescription,
+        "IsPrimaryKey" = p_IsPrimaryKey,
+        "IsUnique" = p_IsUnique,
+        "Category" = p_Category,
+        "ValueListType" = p_ValueListType,
+        "ExtendedType" = p_ExtendedType,
+        "CodeType" = p_CodeType,
+        "DefaultInView" = p_DefaultInView,
+        "ViewCellTemplate" = p_ViewCellTemplate,
+        "DefaultColumnWidth" = p_DefaultColumnWidth,
+        "AllowUpdateAPI" = p_AllowUpdateAPI,
+        "AllowUpdateInView" = p_AllowUpdateInView,
+        "IncludeInUserSearchAPI" = p_IncludeInUserSearchAPI,
+        "FullTextSearchEnabled" = p_FullTextSearchEnabled,
+        "UserSearchParamFormatAPI" = p_UserSearchParamFormatAPI,
+        "IncludeInGeneratedForm" = p_IncludeInGeneratedForm,
+        "GeneratedFormSection" = p_GeneratedFormSection,
+        "IsNameField" = p_IsNameField,
+        "RelatedEntityID" = p_RelatedEntityID,
+        "RelatedEntityFieldName" = p_RelatedEntityFieldName,
+        "IncludeRelatedEntityNameFieldInBaseView" = p_IncludeRelatedEntityNameFieldInBaseView,
+        "RelatedEntityNameFieldMap" = p_RelatedEntityNameFieldMap,
+        "RelatedEntityDisplayType" = p_RelatedEntityDisplayType,
+        "EntityIDFieldName" = p_EntityIDFieldName,
+        "ScopeDefault" = p_ScopeDefault,
+        "AutoUpdateRelatedEntityInfo" = p_AutoUpdateRelatedEntityInfo,
+        "ValuesToPackWithSchema" = p_ValuesToPackWithSchema,
+        "Status" = p_Status,
+        "AutoUpdateIsNameField" = p_AutoUpdateIsNameField,
+        "AutoUpdateDefaultInView" = p_AutoUpdateDefaultInView,
+        "AutoUpdateCategory" = p_AutoUpdateCategory,
+        "AutoUpdateDisplayName" = p_AutoUpdateDisplayName,
+        "AutoUpdateIncludeInUserSearchAPI" = p_AutoUpdateIncludeInUserSearchAPI,
+        "Encrypt" = p_Encrypt,
+        "EncryptionKeyID" = p_EncryptionKeyID,
+        "AllowDecryptInAPI" = p_AllowDecryptInAPI,
+        "SendEncryptedValue" = p_SendEncryptedValue,
+        "IsSoftPrimaryKey" = p_IsSoftPrimaryKey,
+        "IsSoftForeignKey" = p_IsSoftForeignKey,
+        "RelatedEntityJoinFields" = p_RelatedEntityJoinFields,
+        "JSONType" = p_JSONType,
+        "JSONTypeIsArray" = p_JSONTypeIsArray,
+        "JSONTypeDefinition" = p_JSONTypeDefinition,
+        "UserSearchPredicateAPI" = p_UserSearchPredicateAPI,
+        "AutoUpdateUserSearchPredicate" = p_AutoUpdateUserSearchPredicate,
+        "AutoUpdateFullTextSearch" = p_AutoUpdateFullTextSearch,
+        "AutoUpdateExtendedType" = p_AutoUpdateExtendedType
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwEntityFields" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwEntityFields" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION __mj."spDeleteEntityFieldValue"(
     IN p_ID UUID
@@ -6813,17 +7978,21 @@ INSERT INTO __mj."GeneratedCode" ("CategoryID", "GeneratedByModelID", "Generated
 
 -- ===================== FK & CHECK Constraints =====================
 
+
+-- Flush any pending deferred trigger events from prior DML so DDL below can proceed.
+SET CONSTRAINTS ALL IMMEDIATE;
+
 -- Update the CHECK constraint to include new Geo* ExtendedType values
-ALTER TABLE __mj."EntityField" DROP CONSTRAINT IF EXISTS CK_EntityField_ExtendedType;
-ALTER TABLE __mj."EntityField" ADD CONSTRAINT CK_EntityField_ExtendedType CHECK (
+ALTER TABLE __mj."EntityField" DROP CONSTRAINT "CK_EntityField_ExtendedType";
+ALTER TABLE __mj."EntityField"
+ ADD CONSTRAINT "CK_EntityField_ExtendedType" CHECK (
     "ExtendedType" IN ('Code', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg')
 ) NOT VALID;
 
 
 -- ===================== Grants =====================
 
--- SKIPPED (view not created): GRANT SELECT ON __mj."vwApplicationEntities" TO "cdp_Developer", "cdp_Integration", "cdp_UI"
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwApplicationEntities" TO "cdp_Developer", "cdp_Integration", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Application Entities */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6836,16 +8005,12 @@ ALTER TABLE __mj."EntityField" ADD CONSTRAINT CK_EntityField_ExtendedType CHECK 
 
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ApplicationEntity
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateApplicationEntity" TO "cdp_Developer", "cdp_Integration"
-    
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateApplicationEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate Permissions for MJ: Application Entities */
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateApplicationEntity" TO "cdp_Developer", "cdp_Integration"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateApplicationEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Application Entities */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6858,13 +8023,10 @@ ALTER TABLE __mj."EntityField" ADD CONSTRAINT CK_EntityField_ExtendedType CHECK 
 
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ApplicationEntity
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateApplicationEntity" TO "cdp_Developer", "cdp_Integration"
-
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateApplicationEntity" TO "cdp_Developer", "cdp_Integration"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateApplicationEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateApplicationEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: Application Entities */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6877,7 +8039,7 @@ ALTER TABLE __mj."EntityField" ADD CONSTRAINT CK_EntityField_ExtendedType CHECK 
 
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ApplicationEntity
-------------------------------------------------------------
+------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteApplicationEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete Permissions for MJ: Application Entities */
@@ -6894,8 +8056,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteApplicationEntity" TO "cdp_D
 -----------------------------------------------------------------
 -- Index for foreign key ParentID in table Entity;
 
--- SKIPPED (view not created): GRANT SELECT ON __mj."vwEntities" TO "cdp_Developer", "cdp_Integration", "cdp_UI"
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwEntities" TO "cdp_Developer", "cdp_Integration", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Entities */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6908,16 +8069,12 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteApplicationEntity" TO "cdp_D
 
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR Entity
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateEntity" TO "cdp_Developer", "cdp_Integration"
-    
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate Permissions for MJ: Entities */
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateEntity" TO "cdp_Developer", "cdp_Integration"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entities */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6930,13 +8087,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteApplicationEntity" TO "cdp_D
 
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR Entity
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateEntity" TO "cdp_Developer", "cdp_Integration"
-
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateEntity" TO "cdp_Developer", "cdp_Integration"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: Entities */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6949,7 +8103,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteApplicationEntity" TO "cdp_D
 
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR Entity
-------------------------------------------------------------
+------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntity" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete Permissions for MJ: Entities */
@@ -6966,8 +8120,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntity" TO "cdp_Developer", 
 -----------------------------------------------------------------
 -- Index for foreign key EntityFieldID in table EntityFieldValue;
 
--- SKIPPED (view not created): GRANT SELECT ON __mj."vwEntityFieldValues" TO "cdp_Developer", "cdp_UI", "cdp_Integration"
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwEntityFieldValues" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Entity Field Values */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6980,10 +8133,9 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntity" TO "cdp_Developer", 
 
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR EntityFieldValue
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (view not created): GRANT SELECT ON __mj."vwEntityFields" TO "cdp_UI", "cdp_Integration", "cdp_Developer"
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwEntityFields" TO "cdp_UI", "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Entity Fields */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6996,16 +8148,12 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntity" TO "cdp_Developer", 
 
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR EntityField
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateEntityField" TO "cdp_Integration", "cdp_Developer"
-    
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityField" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate Permissions for MJ: Entity Fields */
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateEntityField" TO "cdp_Integration", "cdp_Developer"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateEntityField" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Entity Fields */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7018,13 +8166,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntity" TO "cdp_Developer", 
 
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR EntityField
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateEntityField" TO "cdp_Integration", "cdp_Developer"
-
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateEntityField" TO "cdp_Integration", "cdp_Developer"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityField" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateEntityField" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: Entity Field Values */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7037,7 +8182,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntity" TO "cdp_Developer", 
 
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR EntityFieldValue
-------------------------------------------------------------
+------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityField" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete Permissions for MJ: Entity Fields */
@@ -7054,8 +8199,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteEntityField" TO "cdp_Integra
 -----------------------------------------------------------------
 -- Index for foreign key FileStorageAccountID in table FileStorageAccountPermission;
 
-GRANT SELECT ON __mj."vwFileStorageAccounts" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwFileStorageAccounts" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: File Storage Accounts */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7066,8 +8210,7 @@ GRANT SELECT ON __mj."vwFileStorageAccounts" TO "cdp_UI", "cdp_Developer", "cdp_
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwFileStorageAccounts" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwFileStorageAccounts" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: File Storage Accounts */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7122,8 +8265,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteFileStorageAccount" TO "cdp_
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteFileStorageAccount" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* SQL text to update entity field related entity name field map for entity field ID A73293C1-FB0D-4900-A60B-74F947D02B59 */
 
-GRANT SELECT ON __mj."vwFileStorageAccountPermissions" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwFileStorageAccountPermissions" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: File Storage Account Permissions */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7134,8 +8276,7 @@ GRANT SELECT ON __mj."vwFileStorageAccountPermissions" TO "cdp_UI", "cdp_Develop
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwFileStorageAccountPermissions" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwFileStorageAccountPermissions" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: File Storage Account Permissions */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7216,8 +8357,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteFileStorageAccountPermission
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwInstanceConfigurations" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwInstanceConfigurations" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Instance Configurations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7228,8 +8368,7 @@ GRANT SELECT ON __mj."vwInstanceConfigurations" TO "cdp_UI", "cdp_Developer", "c
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwInstanceConfigurations" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwInstanceConfigurations" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Instance Configurations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7293,8 +8432,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteInstanceConfiguration" TO "c
 -----------------------------------------------------------------
 -- Index for foreign key CredentialID in table SearchProvider;
 
-GRANT SELECT ON __mj."vwSearchProviders" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwSearchProviders" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Search Providers */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7305,8 +8443,7 @@ GRANT SELECT ON __mj."vwSearchProviders" TO "cdp_UI", "cdp_Developer", "cdp_Inte
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwSearchProviders" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwSearchProviders" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Search Providers */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7441,16 +8578,8 @@ COMMENT ON COLUMN __mj."SearchProvider"."Comments" IS 'Free-form notes about thi
 
 -- ===================== Other =====================
 
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 -- 6. Extended properties: EntityField columns
-SET CONSTRAINTS ALL IMMEDIATE;
-ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
-ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
-
 ----------------------------------------------------------------------
 
 /* SQL text to insert new entity field */

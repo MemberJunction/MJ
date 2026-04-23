@@ -82,21 +82,72 @@ CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentRequest_ResumingAgentRunID" 
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwAIAgentRequestTypes';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAIAgentRequestTypes"
 AS SELECT
     a.*
 FROM
     __mj."AIAgentRequestType" AS a$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwAIAgentRequestTypes" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwAIAgentRequests';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAIAgentRequests"
 AS SELECT
     a.*,
@@ -137,11 +188,58 @@ LEFT OUTER JOIN
     __mj."AIAgentRun" AS "MJAIAgentRun_ResumingAgentRunID"
   ON
     a."ResumingAgentRunID" = "MJAIAgentRun_ResumingAgentRunID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwAIAgentRequests" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
@@ -3802,8 +3900,12 @@ INSERT INTO __mj."GeneratedCode" ("CategoryID", "GeneratedByModelID", "Generated
 
 -- ===================== FK & CHECK Constraints =====================
 
+
+-- Flush any pending deferred trigger events from prior DML so DDL below can proceed.
+SET CONSTRAINTS ALL IMMEDIATE;
+
 ALTER TABLE __mj."AIAgentRequest"
-    ADD CONSTRAINT CK_AIAgentRequest_Status
+ ADD CONSTRAINT "CK_AIAgentRequest_Status"
     CHECK ("Status" IN ('Requested', 'Approved', 'Rejected', 'Canceled', 'Responded', 'Expired')) NOT VALID;
 
 ------------------------------------------------------------------------
@@ -3824,7 +3926,7 @@ WHERE ccu.table_name = 'AIAgentRun'
 END $$;
 
 ALTER TABLE __mj."AIAgentRun"
-    ADD CONSTRAINT CK_AIAgentRun_Status
+ ADD CONSTRAINT "CK_AIAgentRun_Status"
     CHECK ("Status" IN ('Running', 'Completed', 'Failed', 'Paused', 'Cancelled', 'AwaitingFeedback')) NOT VALID;
 
 ------------------------------------------------------------------------
@@ -3836,8 +3938,7 @@ ALTER TABLE __mj."AIAgentRun"
 
 -- ===================== Grants =====================
 
-GRANT SELECT ON __mj."vwAIAgentRequestTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwAIAgentRequestTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: AI Agent Request Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3848,8 +3949,7 @@ GRANT SELECT ON __mj."vwAIAgentRequestTypes" TO "cdp_UI", "cdp_Developer", "cdp_
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwAIAgentRequestTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwAIAgentRequestTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: AI Agent Request Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3904,8 +4004,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRequestType" TO "cdp_
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRequestType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* SQL text to update entity field related entity name field map for entity field ID 7C9DB7FC-90B2-4ECF-B82A-70A97AE1F796 */
 
-GRANT SELECT ON __mj."vwAIAgentRequests" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwAIAgentRequests" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: AI Agent Requests */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3916,8 +4015,7 @@ GRANT SELECT ON __mj."vwAIAgentRequests" TO "cdp_UI", "cdp_Developer", "cdp_Inte
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwAIAgentRequests" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwAIAgentRequests" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: AI Agent Requests */
 -----------------------------------------------------------------
 -- SQL Code Generation

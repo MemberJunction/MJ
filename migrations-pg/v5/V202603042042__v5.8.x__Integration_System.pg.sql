@@ -151,21 +151,72 @@ CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_CompanyIntegration_SourceTypeID" ON
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwCompanyIntegrationFieldMaps';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwCompanyIntegrationFieldMaps"
 AS SELECT
     c.*
 FROM
     __mj."CompanyIntegrationFieldMap" AS c$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwCompanyIntegrationFieldMaps" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwCompanyIntegrationEntityMaps';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwCompanyIntegrationEntityMaps"
 AS SELECT
     c.*,
@@ -181,46 +232,193 @@ INNER JOIN
     __mj."Entity" AS "MJEntity_EntityID"
   ON
     c."EntityID" = "MJEntity_EntityID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwCompanyIntegrationEntityMaps" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwCompanyIntegrationSyncWatermarks';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwCompanyIntegrationSyncWatermarks"
 AS SELECT
     c.*
 FROM
     __mj."CompanyIntegrationSyncWatermark" AS c$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwCompanyIntegrationSyncWatermarks" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwIntegrationSourceTypes';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwIntegrationSourceTypes"
 AS SELECT
     i.*
 FROM
     __mj."IntegrationSourceType" AS i$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwIntegrationSourceTypes" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwCompanyIntegrationFieldMaps';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwCompanyIntegrationFieldMaps"
 AS SELECT
     c.*,
@@ -231,16 +429,65 @@ INNER JOIN
     __mj."CompanyIntegrationEntityMap" AS "MJCompanyIntegrationEntityMap_EntityMapID"
   ON
     c."EntityMapID" = "MJCompanyIntegrationEntityMap_EntityMapID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwCompanyIntegrationFieldMaps" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwCompanyIntegrationSyncWatermarks';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwCompanyIntegrationSyncWatermarks"
 AS SELECT
     c.*,
@@ -251,16 +498,65 @@ INNER JOIN
     __mj."CompanyIntegrationEntityMap" AS "MJCompanyIntegrationEntityMap_EntityMapID"
   ON
     c."EntityMapID" = "MJCompanyIntegrationEntityMap_EntityMapID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwCompanyIntegrationSyncWatermarks" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwCompanyIntegrationFieldMaps';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwCompanyIntegrationFieldMaps"
 AS SELECT
     c.*,
@@ -271,16 +567,65 @@ INNER JOIN
     __mj."CompanyIntegrationEntityMap" AS "MJCompanyIntegrationEntityMap_EntityMapID"
   ON
     c."EntityMapID" = "MJCompanyIntegrationEntityMap_EntityMapID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwCompanyIntegrationFieldMaps" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwCompanyIntegrationSyncWatermarks';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwCompanyIntegrationSyncWatermarks"
 AS SELECT
     c.*,
@@ -291,11 +636,58 @@ INNER JOIN
     __mj."CompanyIntegrationEntityMap" AS "MJCompanyIntegrationEntityMap_EntityMapID"
   ON
     c."EntityMapID" = "MJCompanyIntegrationEntityMap_EntityMapID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwCompanyIntegrationSyncWatermarks" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
@@ -624,9 +1016,164 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwCompanyIntegrations" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spCreateCompanyIntegration"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_CompanyID UUID DEFAULT NULL,
+    IN p_IntegrationID UUID DEFAULT NULL,
+    IN p_IsActive BOOLEAN DEFAULT NULL,
+    IN p_AccessToken VARCHAR(255) DEFAULT NULL,
+    IN p_RefreshToken VARCHAR(255) DEFAULT NULL,
+    IN p_TokenExpirationDate TIMESTAMPTZ DEFAULT NULL,
+    IN p_APIKey VARCHAR(255) DEFAULT NULL,
+    IN p_ExternalSystemID VARCHAR(100) DEFAULT NULL,
+    IN p_IsExternalSystemReadOnly BOOLEAN DEFAULT NULL,
+    IN p_ClientID VARCHAR(255) DEFAULT NULL,
+    IN p_ClientSecret VARCHAR(255) DEFAULT NULL,
+    IN p_CustomAttribute1 VARCHAR(255) DEFAULT NULL,
+    IN p_Name VARCHAR(255) DEFAULT NULL,
+    IN p_SourceTypeID UUID DEFAULT NULL,
+    IN p_Configuration TEXT DEFAULT NULL
+)
+RETURNS SETOF __mj."vwCompanyIntegrations" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."CompanyIntegration"
+            (
+                "ID",
+                "CompanyID",
+                "IntegrationID",
+                "IsActive",
+                "AccessToken",
+                "RefreshToken",
+                "TokenExpirationDate",
+                "APIKey",
+                "ExternalSystemID",
+                "IsExternalSystemReadOnly",
+                "ClientID",
+                "ClientSecret",
+                "CustomAttribute1",
+                "Name",
+                "SourceTypeID",
+                "Configuration"
+            )
+        VALUES
+            (
+                p_ID,
+                p_CompanyID,
+                p_IntegrationID,
+                p_IsActive,
+                p_AccessToken,
+                p_RefreshToken,
+                p_TokenExpirationDate,
+                p_APIKey,
+                p_ExternalSystemID,
+                COALESCE(p_IsExternalSystemReadOnly, FALSE),
+                p_ClientID,
+                p_ClientSecret,
+                p_CustomAttribute1,
+                p_Name,
+                p_SourceTypeID,
+                p_Configuration
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."CompanyIntegration"
+            (
+                "CompanyID",
+                "IntegrationID",
+                "IsActive",
+                "AccessToken",
+                "RefreshToken",
+                "TokenExpirationDate",
+                "APIKey",
+                "ExternalSystemID",
+                "IsExternalSystemReadOnly",
+                "ClientID",
+                "ClientSecret",
+                "CustomAttribute1",
+                "Name",
+                "SourceTypeID",
+                "Configuration"
+            )
+        VALUES
+            (
+                p_CompanyID,
+                p_IntegrationID,
+                p_IsActive,
+                p_AccessToken,
+                p_RefreshToken,
+                p_TokenExpirationDate,
+                p_APIKey,
+                p_ExternalSystemID,
+                COALESCE(p_IsExternalSystemReadOnly, FALSE),
+                p_ClientID,
+                p_ClientSecret,
+                p_CustomAttribute1,
+                p_Name,
+                p_SourceTypeID,
+                p_Configuration
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwCompanyIntegrations" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwCompanyIntegrations" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spUpdateCompanyIntegration"(
+    IN p_ID UUID,
+    IN p_CompanyID UUID,
+    IN p_IntegrationID UUID,
+    IN p_IsActive BOOLEAN,
+    IN p_AccessToken VARCHAR(255),
+    IN p_RefreshToken VARCHAR(255),
+    IN p_TokenExpirationDate TIMESTAMPTZ,
+    IN p_APIKey VARCHAR(255),
+    IN p_ExternalSystemID VARCHAR(100),
+    IN p_IsExternalSystemReadOnly BOOLEAN,
+    IN p_ClientID VARCHAR(255),
+    IN p_ClientSecret VARCHAR(255),
+    IN p_CustomAttribute1 VARCHAR(255),
+    IN p_Name VARCHAR(255),
+    IN p_SourceTypeID UUID,
+    IN p_Configuration TEXT
+)
+RETURNS SETOF __mj."vwCompanyIntegrations" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."CompanyIntegration"
+    SET
+        "CompanyID" = p_CompanyID,
+        "IntegrationID" = p_IntegrationID,
+        "IsActive" = p_IsActive,
+        "AccessToken" = p_AccessToken,
+        "RefreshToken" = p_RefreshToken,
+        "TokenExpirationDate" = p_TokenExpirationDate,
+        "APIKey" = p_APIKey,
+        "ExternalSystemID" = p_ExternalSystemID,
+        "IsExternalSystemReadOnly" = p_IsExternalSystemReadOnly,
+        "ClientID" = p_ClientID,
+        "ClientSecret" = p_ClientSecret,
+        "CustomAttribute1" = p_CustomAttribute1,
+        "Name" = p_Name,
+        "SourceTypeID" = p_SourceTypeID,
+        "Configuration" = p_Configuration
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwCompanyIntegrations" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwCompanyIntegrations" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION __mj."spDeleteCompanyIntegration"(
     IN p_ID UUID
@@ -7781,8 +8328,12 @@ UPDATE __mj."EntityField"
 
 -- ===================== FK & CHECK Constraints =====================
 
+
+-- Flush any pending deferred trigger events from prior DML so DDL below can proceed.
+SET CONSTRAINTS ALL IMMEDIATE;
+
 ALTER TABLE __mj."CompanyIntegration"
-    ADD CONSTRAINT FK_CompanyIntegration_IntegrationSourceType
+ ADD CONSTRAINT "FK_CompanyIntegration_IntegrationSourceType"
     FOREIGN KEY ("SourceTypeID") REFERENCES __mj."IntegrationSourceType"("ID");
 
 ----------------------------------------------------------------------
@@ -7792,8 +8343,7 @@ ALTER TABLE __mj."CompanyIntegration"
 
 -- ===================== Grants =====================
 
-GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Company Integration Field Maps */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7804,8 +8354,7 @@ GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Company Integration Field Maps */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7860,8 +8409,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationFieldMap" 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationFieldMap" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* SQL text to update entity field related entity name field map for entity field ID 749758C4-A7B3-413A-A434-4844771C7F84 */
 
-GRANT SELECT ON __mj."vwCompanyIntegrationEntityMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationEntityMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Company Integration Entity Maps */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7872,8 +8420,7 @@ GRANT SELECT ON __mj."vwCompanyIntegrationEntityMaps" TO "cdp_UI", "cdp_Develope
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwCompanyIntegrationEntityMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationEntityMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Company Integration Entity Maps */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7937,8 +8484,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationEntityMap"
 -----------------------------------------------------------------
 -- Index for foreign key EntityMapID in table CompanyIntegrationSyncWatermark;
 
--- SKIPPED (view not created): GRANT SELECT ON __mj."vwCompanyIntegrations" TO "cdp_UI", "cdp_Integration", "cdp_Developer"
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrations" TO "cdp_UI", "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Company Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7951,16 +8497,12 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationEntityMap"
 
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR CompanyIntegration
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-    
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate Permissions for MJ: Company Integrations */
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Company Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7973,13 +8515,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationEntityMap"
 
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR CompanyIntegration
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: Company Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7992,7 +8531,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationEntityMap"
 
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR CompanyIntegration
-------------------------------------------------------------
+------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete Permissions for MJ: Company Integrations */
@@ -8015,8 +8554,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Company Integration Sync Watermarks */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8027,8 +8565,7 @@ GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Deve
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Company Integration Sync Watermarks */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8109,8 +8646,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationSyncWaterm
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwIntegrationSourceTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwIntegrationSourceTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Integration Source Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8121,8 +8657,7 @@ GRANT SELECT ON __mj."vwIntegrationSourceTypes" TO "cdp_UI", "cdp_Developer", "c
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwIntegrationSourceTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwIntegrationSourceTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Integration Source Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8177,8 +8712,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteIntegrationSourceType" TO "c
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteIntegrationSourceType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* SQL text to insert new entity field */
 
-GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Company Integration Field Maps */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8189,8 +8723,7 @@ GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Company Integration Field Maps */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8245,8 +8778,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationFieldMap" 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationFieldMap" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* SQL text to update entity field related entity name field map for entity field ID 846D8888-AF62-4D4B-AE06-A52C284377A7 */
 
-GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Company Integration Sync Watermarks */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8257,8 +8789,7 @@ GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Deve
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Company Integration Sync Watermarks */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8313,8 +8844,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationSyncWaterm
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationSyncWatermark" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* SQL text to insert new entity field */
 
-GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Company Integration Field Maps */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8325,8 +8855,7 @@ GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationFieldMaps" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Company Integration Field Maps */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8381,8 +8910,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationFieldMap" 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegrationFieldMap" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* SQL text to update entity field related entity name field map for entity field ID 846D8888-AF62-4D4B-AE06-A52C284377A7 */
 
-GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Company Integration Sync Watermarks */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8393,8 +8921,7 @@ GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Deve
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrationSyncWatermarks" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Company Integration Sync Watermarks */
 -----------------------------------------------------------------
 -- SQL Code Generation

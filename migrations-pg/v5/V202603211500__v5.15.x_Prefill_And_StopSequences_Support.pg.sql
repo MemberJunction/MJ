@@ -4,7 +4,7 @@
 ALTER TABLE __mj."AIPrompt"
  ADD COLUMN "AssistantPrefill" TEXT NULL,
  ADD COLUMN "PrefillFallbackMode" VARCHAR(20) NOT NULL DEFAULT 'Ignore',
- ADD CONSTRAINT CK_AIPrompt_PrefillFallbackMode CHECK ("PrefillFallbackMode" IN ('Ignore', 'SystemInstruction', 'None')) NOT VALID;
+ ADD CONSTRAINT "CK_AIPrompt_PrefillFallbackMode" CHECK ("PrefillFallbackMode" IN ('Ignore', 'SystemInstruction', 'None')) NOT VALID;
 
 ALTER TABLE __mj."AIModelType"
  ADD COLUMN "SupportsPrefill" BOOLEAN NOT NULL DEFAULT FALSE,
@@ -97,6 +97,8 @@ $$ LANGUAGE sql;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwAIModelTypes';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAIModelTypes"
 AS SELECT
     a.*,
@@ -112,16 +114,65 @@ INNER JOIN
     __mj."AIModality" AS "MJAIModality_DefaultOutputModalityID"
   ON
     a."DefaultOutputModalityID" = "MJAIModality_DefaultOutputModalityID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwAIModelTypes" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwAIModelVendors';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAIModelVendors"
 AS SELECT
     a.*,
@@ -142,16 +193,65 @@ INNER JOIN
     __mj."AIVendorTypeDefinition" AS "MJAIVendorTypeDefinition_TypeID"
   ON
     a."TypeID" = "MJAIVendorTypeDefinition_TypeID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwAIModelVendors" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwAIPrompts';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAIPrompts"
 AS SELECT
     a.*,
@@ -184,20 +284,201 @@ LEFT OUTER JOIN
   ON
     a."ResultSelectorPromptID" = "MJAIPrompt_ResultSelectorPromptID"."ID"
 LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIPromptResultSelectorPromptID_GetRootID"(a."ID", a."ResultSelectorPromptID")) AS "root_ResultSelectorPromptID" ON TRUE$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwAIPrompts" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 
 -- ===================== Stored Procedures (sp*) =====================
 
--- SKIPPED: References view "vwAIModels" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spCreateAIModel"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_Name VARCHAR(50) DEFAULT NULL,
+    IN p_Description TEXT DEFAULT NULL,
+    IN p_AIModelTypeID UUID DEFAULT NULL,
+    IN p_PowerRank INTEGER DEFAULT NULL,
+    IN p_IsActive BOOLEAN DEFAULT NULL,
+    IN p_SpeedRank INTEGER DEFAULT NULL,
+    IN p_CostRank INTEGER DEFAULT NULL,
+    IN p_ModelSelectionInsights TEXT DEFAULT NULL,
+    IN p_InheritTypeModalities BOOLEAN DEFAULT NULL,
+    IN p_PriorVersionID UUID DEFAULT NULL,
+    IN p_SupportsPrefill BOOLEAN DEFAULT NULL,
+    IN p_PrefillFallbackText TEXT DEFAULT NULL
+)
+RETURNS SETOF __mj."vwAIModels" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."AIModel"
+            (
+                "ID",
+                "Name",
+                "Description",
+                "AIModelTypeID",
+                "PowerRank",
+                "IsActive",
+                "SpeedRank",
+                "CostRank",
+                "ModelSelectionInsights",
+                "InheritTypeModalities",
+                "PriorVersionID",
+                "SupportsPrefill",
+                "PrefillFallbackText"
+            )
+        VALUES
+            (
+                p_ID,
+                p_Name,
+                p_Description,
+                p_AIModelTypeID,
+                p_PowerRank,
+                COALESCE(p_IsActive, TRUE),
+                p_SpeedRank,
+                p_CostRank,
+                p_ModelSelectionInsights,
+                COALESCE(p_InheritTypeModalities, TRUE),
+                p_PriorVersionID,
+                p_SupportsPrefill,
+                p_PrefillFallbackText
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."AIModel"
+            (
+                "Name",
+                "Description",
+                "AIModelTypeID",
+                "PowerRank",
+                "IsActive",
+                "SpeedRank",
+                "CostRank",
+                "ModelSelectionInsights",
+                "InheritTypeModalities",
+                "PriorVersionID",
+                "SupportsPrefill",
+                "PrefillFallbackText"
+            )
+        VALUES
+            (
+                p_Name,
+                p_Description,
+                p_AIModelTypeID,
+                p_PowerRank,
+                COALESCE(p_IsActive, TRUE),
+                p_SpeedRank,
+                p_CostRank,
+                p_ModelSelectionInsights,
+                COALESCE(p_InheritTypeModalities, TRUE),
+                p_PriorVersionID,
+                p_SupportsPrefill,
+                p_PrefillFallbackText
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwAIModels" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwAIModels" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spUpdateAIModel"(
+    IN p_ID UUID,
+    IN p_Name VARCHAR(50),
+    IN p_Description TEXT,
+    IN p_AIModelTypeID UUID,
+    IN p_PowerRank INTEGER,
+    IN p_IsActive BOOLEAN,
+    IN p_SpeedRank INTEGER,
+    IN p_CostRank INTEGER,
+    IN p_ModelSelectionInsights TEXT,
+    IN p_InheritTypeModalities BOOLEAN,
+    IN p_PriorVersionID UUID,
+    IN p_SupportsPrefill BOOLEAN,
+    IN p_PrefillFallbackText TEXT
+)
+RETURNS SETOF __mj."vwAIModels" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."AIModel"
+    SET
+        "Name" = p_Name,
+        "Description" = p_Description,
+        "AIModelTypeID" = p_AIModelTypeID,
+        "PowerRank" = p_PowerRank,
+        "IsActive" = p_IsActive,
+        "SpeedRank" = p_SpeedRank,
+        "CostRank" = p_CostRank,
+        "ModelSelectionInsights" = p_ModelSelectionInsights,
+        "InheritTypeModalities" = p_InheritTypeModalities,
+        "PriorVersionID" = p_PriorVersionID,
+        "SupportsPrefill" = p_SupportsPrefill,
+        "PrefillFallbackText" = p_PrefillFallbackText
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwAIModels" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwAIModels" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION __mj."spDeleteAIModel"(
     IN p_ID UUID
@@ -3616,8 +3897,7 @@ WHERE
 
 -- ===================== Grants =====================
 
--- SKIPPED (view not created): GRANT SELECT ON __mj."vwAIModels" TO "cdp_UI", "cdp_Developer", "cdp_Integration"
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwAIModels" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: AI Models */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3630,16 +3910,12 @@ WHERE
 
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR AIModel
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateAIModel" TO "cdp_Developer", "cdp_Integration"
-    
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate Permissions for MJ: AI Models */
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateAIModel" TO "cdp_Developer", "cdp_Integration"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIModel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: AI Models */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3652,13 +3928,10 @@ WHERE
 
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR AIModel
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateAIModel" TO "cdp_Developer", "cdp_Integration"
-
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateAIModel" TO "cdp_Developer", "cdp_Integration"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIModel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIModel" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: AI Models */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3671,7 +3944,7 @@ WHERE
 
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR AIModel
-------------------------------------------------------------
+------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModel" TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete Permissions for MJ: AI Models */
@@ -3694,8 +3967,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModel" TO "cdp_Developer";
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwAIModelTypes" TO "cdp_Integration", "cdp_Developer", "cdp_UI";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwAIModelTypes" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: AI Model Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3706,8 +3978,7 @@ GRANT SELECT ON __mj."vwAIModelTypes" TO "cdp_Integration", "cdp_Developer", "cd
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwAIModelTypes" TO "cdp_Integration", "cdp_Developer", "cdp_UI";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwAIModelTypes" TO "cdp_Integration", "cdp_Developer", "cdp_UI"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: AI Model Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3759,8 +4030,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIModelType" TO "cdp_Integra
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwAIModelVendors" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwAIModelVendors" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: AI Model Vendors */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3771,8 +4041,7 @@ GRANT SELECT ON __mj."vwAIModelVendors" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwAIModelVendors" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwAIModelVendors" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: AI Model Vendors */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3854,8 +4123,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIModelVendor" TO "cdp_Integ
 -----------------------------------------------------------------
 -- Index for foreign key TemplateID in table AIPrompt;
 
-GRANT SELECT ON __mj."vwAIPrompts" TO "cdp_UI", "cdp_Integration", "cdp_UI", "cdp_Developer";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwAIPrompts" TO "cdp_UI", "cdp_Integration", "cdp_UI", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: AI Prompts */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3866,8 +4134,7 @@ GRANT SELECT ON __mj."vwAIPrompts" TO "cdp_UI", "cdp_Integration", "cdp_UI", "cd
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwAIPrompts" TO "cdp_UI", "cdp_Integration", "cdp_UI", "cdp_Developer";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwAIPrompts" TO "cdp_UI", "cdp_Integration", "cdp_UI", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: AI Prompts */
 -----------------------------------------------------------------
 -- SQL Code Generation

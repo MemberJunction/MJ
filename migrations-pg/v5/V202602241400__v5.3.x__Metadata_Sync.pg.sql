@@ -270,7 +270,7 @@ BEGIN
   p_Type_61e8a3c8 := 'Input';
   p_ValueType_61e8a3c8 := 'Scalar';
   p_IsArray_61e8a3c8 := 0;
-  p_Description_61e8a3c8 := 'How often the judge evaluates progress. Options: ''EveryStep'' (every step, most accurate but highest cost), ''EveryNSteps:'' (every N steps, e.g. ''EveryNSteps:3''), ''OnStagnation:'' (only when N identical screenshots detected, e.g. ''OnStagnation:5''). Default: ''EveryStep''.';
+  p_Description_61e8a3c8 := 'How often the judge evaluates progress. Options: ''EveryStep'' (every step, most accurate but highest cost), ''EveryNSteps:N'' (every N steps, e.g. ''EveryNSteps:3''), ''OnStagnation:N'' (only when N identical screenshots detected, e.g. ''OnStagnation:5''). Default: ''EveryStep''.';
   p_IsRequired_61e8a3c8 := 0;
   PERFORM __mj."spCreateActionParam"(p_ID := p_ID_61e8a3c8, p_ActionID := p_ActionID_61e8a3c8, p_Name := p_Name_61e8a3c8, p_DefaultValue := p_DefaultValue_61e8a3c8, p_Type := p_Type_61e8a3c8, p_ValueType := p_ValueType_61e8a3c8, p_IsArray := p_IsArray_61e8a3c8, p_Description := p_Description_61e8a3c8, p_IsRequired := p_IsRequired_61e8a3c8, p_MediaModality := p_MediaModality_61e8a3c8);
 END $$;

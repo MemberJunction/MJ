@@ -30,6 +30,8 @@ CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_Integration_CredentialTypeID" ON __
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwIntegrations';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwIntegrations"
 AS SELECT
     i.*,
@@ -40,20 +42,229 @@ LEFT OUTER JOIN
     __mj."CredentialType" AS "MJCredentialType_CredentialTypeID"
   ON
     i."CredentialTypeID" = "MJCredentialType_CredentialTypeID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwIntegrations" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 
 -- ===================== Stored Procedures (sp*) =====================
 
--- SKIPPED: References view "vwCompanyIntegrations" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spCreateCompanyIntegration"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_CompanyID UUID DEFAULT NULL,
+    IN p_IntegrationID UUID DEFAULT NULL,
+    IN p_IsActive BOOLEAN DEFAULT NULL,
+    IN p_AccessToken VARCHAR(255) DEFAULT NULL,
+    IN p_RefreshToken VARCHAR(255) DEFAULT NULL,
+    IN p_TokenExpirationDate TIMESTAMPTZ DEFAULT NULL,
+    IN p_APIKey VARCHAR(255) DEFAULT NULL,
+    IN p_ExternalSystemID VARCHAR(100) DEFAULT NULL,
+    IN p_IsExternalSystemReadOnly BOOLEAN DEFAULT NULL,
+    IN p_ClientID VARCHAR(255) DEFAULT NULL,
+    IN p_ClientSecret VARCHAR(255) DEFAULT NULL,
+    IN p_CustomAttribute1 VARCHAR(255) DEFAULT NULL,
+    IN p_Name VARCHAR(255) DEFAULT NULL,
+    IN p_SourceTypeID UUID DEFAULT NULL,
+    IN p_Configuration TEXT DEFAULT NULL,
+    IN p_CredentialID UUID DEFAULT NULL
+)
+RETURNS SETOF __mj."vwCompanyIntegrations" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."CompanyIntegration"
+            (
+                "ID",
+                "CompanyID",
+                "IntegrationID",
+                "IsActive",
+                "AccessToken",
+                "RefreshToken",
+                "TokenExpirationDate",
+                "APIKey",
+                "ExternalSystemID",
+                "IsExternalSystemReadOnly",
+                "ClientID",
+                "ClientSecret",
+                "CustomAttribute1",
+                "Name",
+                "SourceTypeID",
+                "Configuration",
+                "CredentialID"
+            )
+        VALUES
+            (
+                p_ID,
+                p_CompanyID,
+                p_IntegrationID,
+                p_IsActive,
+                p_AccessToken,
+                p_RefreshToken,
+                p_TokenExpirationDate,
+                p_APIKey,
+                p_ExternalSystemID,
+                COALESCE(p_IsExternalSystemReadOnly, FALSE),
+                p_ClientID,
+                p_ClientSecret,
+                p_CustomAttribute1,
+                p_Name,
+                p_SourceTypeID,
+                p_Configuration,
+                p_CredentialID
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."CompanyIntegration"
+            (
+                "CompanyID",
+                "IntegrationID",
+                "IsActive",
+                "AccessToken",
+                "RefreshToken",
+                "TokenExpirationDate",
+                "APIKey",
+                "ExternalSystemID",
+                "IsExternalSystemReadOnly",
+                "ClientID",
+                "ClientSecret",
+                "CustomAttribute1",
+                "Name",
+                "SourceTypeID",
+                "Configuration",
+                "CredentialID"
+            )
+        VALUES
+            (
+                p_CompanyID,
+                p_IntegrationID,
+                p_IsActive,
+                p_AccessToken,
+                p_RefreshToken,
+                p_TokenExpirationDate,
+                p_APIKey,
+                p_ExternalSystemID,
+                COALESCE(p_IsExternalSystemReadOnly, FALSE),
+                p_ClientID,
+                p_ClientSecret,
+                p_CustomAttribute1,
+                p_Name,
+                p_SourceTypeID,
+                p_Configuration,
+                p_CredentialID
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwCompanyIntegrations" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwCompanyIntegrations" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spUpdateCompanyIntegration"(
+    IN p_ID UUID,
+    IN p_CompanyID UUID,
+    IN p_IntegrationID UUID,
+    IN p_IsActive BOOLEAN,
+    IN p_AccessToken VARCHAR(255),
+    IN p_RefreshToken VARCHAR(255),
+    IN p_TokenExpirationDate TIMESTAMPTZ,
+    IN p_APIKey VARCHAR(255),
+    IN p_ExternalSystemID VARCHAR(100),
+    IN p_IsExternalSystemReadOnly BOOLEAN,
+    IN p_ClientID VARCHAR(255),
+    IN p_ClientSecret VARCHAR(255),
+    IN p_CustomAttribute1 VARCHAR(255),
+    IN p_Name VARCHAR(255),
+    IN p_SourceTypeID UUID,
+    IN p_Configuration TEXT,
+    IN p_CredentialID UUID
+)
+RETURNS SETOF __mj."vwCompanyIntegrations" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."CompanyIntegration"
+    SET
+        "CompanyID" = p_CompanyID,
+        "IntegrationID" = p_IntegrationID,
+        "IsActive" = p_IsActive,
+        "AccessToken" = p_AccessToken,
+        "RefreshToken" = p_RefreshToken,
+        "TokenExpirationDate" = p_TokenExpirationDate,
+        "APIKey" = p_APIKey,
+        "ExternalSystemID" = p_ExternalSystemID,
+        "IsExternalSystemReadOnly" = p_IsExternalSystemReadOnly,
+        "ClientID" = p_ClientID,
+        "ClientSecret" = p_ClientSecret,
+        "CustomAttribute1" = p_CustomAttribute1,
+        "Name" = p_Name,
+        "SourceTypeID" = p_SourceTypeID,
+        "Configuration" = p_Configuration,
+        "CredentialID" = p_CredentialID
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwCompanyIntegrations" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwCompanyIntegrations" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION __mj."spDeleteCompanyIntegration"(
     IN p_ID UUID
@@ -849,21 +1060,24 @@ WHERE
 
 -- ===================== FK & CHECK Constraints =====================
 
+
+-- Flush any pending deferred trigger events from prior DML so DDL below can proceed.
+SET CONSTRAINTS ALL IMMEDIATE;
+
 ALTER TABLE __mj."Integration"
-ADD CONSTRAINT FK_Integration_CredentialType
+ ADD CONSTRAINT "FK_Integration_CredentialType"
     FOREIGN KEY ("CredentialTypeID")
     REFERENCES __mj."CredentialType"("ID") DEFERRABLE INITIALLY DEFERRED;
 
 ALTER TABLE __mj."CompanyIntegration"
-ADD CONSTRAINT FK_CompanyIntegration_Credential
+ ADD CONSTRAINT "FK_CompanyIntegration_Credential"
     FOREIGN KEY ("CredentialID")
     REFERENCES __mj."Credential"("ID") DEFERRABLE INITIALLY DEFERRED;
 
 
 -- ===================== Grants =====================
 
--- SKIPPED (view not created): GRANT SELECT ON __mj."vwCompanyIntegrations" TO "cdp_UI", "cdp_Integration", "cdp_Developer"
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrations" TO "cdp_UI", "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Company Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -876,16 +1090,12 @@ ADD CONSTRAINT FK_CompanyIntegration_Credential
 
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR CompanyIntegration
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-    
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate Permissions for MJ: Company Integrations */
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Company Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -898,13 +1108,10 @@ ADD CONSTRAINT FK_CompanyIntegration_Credential
 
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR CompanyIntegration
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: Company Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -917,7 +1124,7 @@ ADD CONSTRAINT FK_CompanyIntegration_Credential
 
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR CompanyIntegration
-------------------------------------------------------------
+------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete Permissions for MJ: Company Integrations */
@@ -934,8 +1141,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_
 -----------------------------------------------------------------
 -- Index for foreign key CredentialTypeID in table Integration;
 
-GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -946,8 +1152,7 @@ GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
