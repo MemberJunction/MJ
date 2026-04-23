@@ -914,6 +914,17 @@ export class AIPromptRunner {
       validationResult: parsedResult.validationResult,
       validationAttempts,
       combinedTokensUsed: (cumulativeTokens.promptTokens + cumulativeTokens.completionTokens) || ((usage?.promptTokens || 0) + (usage?.completionTokens || 0)),
+      // modelInfo: the parallel path populates this; we were silently skipping
+      // it here, so callers (e.g., the Runtime-action bridge) saw `undefined`
+      // and surfaced `modelUsed: null` on every single-model prompt run.
+      modelInfo: selectedModel
+        ? {
+            modelId: selectedModel.ID,
+            modelName: selectedModel.Name,
+            vendorId: modelSelectionInfo?.vendorSelected?.ID,
+            vendorName: selectedModel.Vendor
+          }
+        : undefined,
       modelSelectionInfo // Include model selection info if available
     };
   }

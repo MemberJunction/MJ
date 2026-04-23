@@ -50,7 +50,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import type { BridgeHandler, BridgeHandlerMap } from '@memberjunction/code-execution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-core-plus';
 
 /**
  * Context captured per-execution so every handler has what it needs to
@@ -938,20 +938,13 @@ async function handleExecutePrompt(
     promptParams.contextUser = ctx.contextUser;
 
     const runner = new AIPromptRunner();
-    const result = (await runner.ExecutePrompt<string>(promptParams)) as unknown as {
-        success: boolean;
-        result?: string;
-        rawResult?: string;
-        errorMessage?: string;
-        tokensUsed?: number;
-        modelInfo?: { name?: string };
-    };
+    const result: AIPromptRunResult<string> = await runner.ExecutePrompt<string>(promptParams);
     return {
         Success: Boolean(result.success),
         Response: result.result ?? result.rawResult ?? null,
         ErrorMessage: result.errorMessage ?? null,
-        ModelUsed: result.modelInfo?.name ?? null,
-        TokensUsed: result.tokensUsed ?? null
+        ModelUsed: result.modelInfo?.modelName ?? null,
+        TokensUsed: result.tokensUsed ?? result.combinedTokensUsed ?? null
     };
 }
 

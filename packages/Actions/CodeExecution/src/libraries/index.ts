@@ -312,15 +312,34 @@ function getDateFnsSource(): string {
     const dateFns = {
         format: function(date, formatStr) {
             const d = new Date(date);
+            const monthsLong = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            const monthsShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const daysLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+            const daysShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            const month = d.getMonth();
+            const dow = d.getDay();
+            // Supported tokens are listed longest-first in the regex so that
+            // e.g. 'MMMM' is matched before 'MMM' / 'MM' / 'M'.
+            // NOTE: this shim has no literal-escape support, so we deliberately
+            // omit ambiguous single-letter tokens from real date-fns (a/h/H/m/s
+            // bare) that collide with common English letters in format strings.
+            // Users who need time formatting can use the padded HH:mm:ss forms.
             const tokens = {
                 'yyyy': d.getFullYear(),
-                'MM': String(d.getMonth() + 1).padStart(2, '0'),
-                'dd': String(d.getDate()).padStart(2, '0'),
-                'HH': String(d.getHours()).padStart(2, '0'),
-                'mm': String(d.getMinutes()).padStart(2, '0'),
-                'ss': String(d.getSeconds()).padStart(2, '0')
+                'yy':   String(d.getFullYear()).slice(-2),
+                'MMMM': monthsLong[month],
+                'MMM':  monthsShort[month],
+                'MM':   String(month + 1).padStart(2, '0'),
+                'M':    String(month + 1),
+                'dd':   String(d.getDate()).padStart(2, '0'),
+                'd':    String(d.getDate()),
+                'EEEE': daysLong[dow],
+                'EEE':  daysShort[dow],
+                'HH':   String(d.getHours()).padStart(2, '0'),
+                'mm':   String(d.getMinutes()).padStart(2, '0'),
+                'ss':   String(d.getSeconds()).padStart(2, '0')
             };
-            return formatStr.replace(/yyyy|MM|dd|HH|mm|ss/g, match => tokens[match]);
+            return formatStr.replace(/yyyy|yy|MMMM|MMM|MM|M|dd|d|EEEE|EEE|HH|mm|ss/g, match => tokens[match]);
         },
 
         addDays: function(date, days) {
