@@ -7,7 +7,7 @@ ALTER TABLE __mj."AIPrompt"
  ADD CONSTRAINT CK_AIPrompt_PrefillFallbackMode CHECK ("PrefillFallbackMode" IN ('Ignore', 'SystemInstruction', 'None')) NOT VALID;
 
 ALTER TABLE __mj."AIModelType"
- ADD COLUMN "SupportsPrefill" BOOLEAN NOT NULL DEFAULT 0,
+ ADD COLUMN "SupportsPrefill" BOOLEAN NOT NULL DEFAULT FALSE,
  ADD COLUMN "PrefillFallbackText" TEXT NULL;
 
 ALTER TABLE __mj."AIModel"

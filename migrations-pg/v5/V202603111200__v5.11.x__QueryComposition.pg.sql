@@ -15,7 +15,7 @@
 -- 1. Add Reusable column to Query table
 -- ============================================================
 ALTER TABLE __mj."Query"
- ADD COLUMN "Reusable" BOOLEAN NOT NULL CONSTRAINT DF_Query_Reusable DEFAULT 0;
+ ADD COLUMN "Reusable" BOOLEAN NOT NULL CONSTRAINT DF_Query_Reusable DEFAULT FALSE;
 
 -- ============================================================
 -- 2. Create QueryDependency table

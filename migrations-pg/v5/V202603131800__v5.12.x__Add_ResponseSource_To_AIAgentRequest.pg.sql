@@ -1895,7 +1895,7 @@ BEGIN
         (
         '39ccc9e3-d229-4282-8fad-52f2cd82e53d',
         'F3C49FE2-B5D9-40D4-8562-6596261772A0', -- "Entity": "MJ": "AI" "Agent" "Requests"
-        100051, -- bumped from 100048: UQ_EntityField_EntityID_Sequence collision with V202603131600 (100048-100050 taken)
+        100051, -- auto-bumped from 100048 (UQ_EntityField_EntityID_Sequence dedup),
         'ResponseSource',
         'Response Source',
         'Identifies where the response originated: Conversation (handled by chat resolver), Dashboard (slide-in panel), or API (external integration). Used by the server-side entity subclass to determine whether agent resumption is needed.',

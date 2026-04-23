@@ -56,7 +56,7 @@ ALTER TABLE __mj."ContentProcessRun"
  ADD COLUMN "BatchSize" INTEGER NULL CONSTRAINT DF_ContentProcessRun_BatchSize DEFAULT 100,
  ADD COLUMN "ErrorCount" INTEGER NULL CONSTRAINT DF_ContentProcessRun_ErrorCount DEFAULT 0,
  ADD COLUMN "ErrorMessage" TEXT NULL,
- ADD COLUMN "CancellationRequested" BOOLEAN NOT NULL CONSTRAINT DF_ContentProcessRun_CancellationRequested DEFAULT 0,
+ ADD COLUMN "CancellationRequested" BOOLEAN NOT NULL CONSTRAINT DF_ContentProcessRun_CancellationRequested DEFAULT FALSE,
  ADD COLUMN "Configuration" TEXT NULL;
 
 CREATE TABLE __mj."ContentProcessRunDetail" (
@@ -96,7 +96,7 @@ ALTER TABLE __mj."DuplicateRun"
  ADD COLUMN "ProcessedItemCount" INTEGER NULL CONSTRAINT DF_DuplicateRun_ProcessedItemCount DEFAULT 0,
  ADD COLUMN "LastProcessedOffset" INTEGER NULL CONSTRAINT DF_DuplicateRun_LastProcessedOffset DEFAULT 0,
  ADD COLUMN "BatchSize" INTEGER NULL CONSTRAINT DF_DuplicateRun_BatchSize DEFAULT 100,
- ADD COLUMN "CancellationRequested" BOOLEAN NOT NULL CONSTRAINT DF_DuplicateRun_CancellationRequested DEFAULT 0;
+ ADD COLUMN "CancellationRequested" BOOLEAN NOT NULL CONSTRAINT DF_DuplicateRun_CancellationRequested DEFAULT FALSE;
 
 ALTER TABLE __mj."DuplicateRunDetail"
  ADD COLUMN "StartedAt" TIMESTAMPTZ NULL,
@@ -7289,7 +7289,7 @@ BEGIN
         (
         '3f8aec67-cbbb-47be-96c8-70795f10849c',
         'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- "Entity": "MJ": "Content" "Sources"
-        100027,
+        100042, -- auto-bumped from 100027 (UQ_EntityField_EntityID_Sequence dedup),
         'EntityID',
         'Entity ID',
         'For Entity-type content sources, the MJ Entity to pull records from. NULL for non-entity sources (files, RSS, websites, etc.).',
@@ -7355,7 +7355,7 @@ BEGIN
         (
         '7bfd47b8-2b7b-4d5e-af0f-510b6da68faa',
         'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- "Entity": "MJ": "Content" "Sources"
-        100028,
+        100043, -- auto-bumped from 100028 (UQ_EntityField_EntityID_Sequence dedup),
         'EntityDocumentID',
         'Entity Document ID',
         'For Entity-type content sources, the Entity Document template used to render entity records into text for autotagging. The template defines which fields to include, how to format them, and related record inclusion. NULL for non-entity sources.',
@@ -7619,7 +7619,7 @@ BEGIN
         (
         '399cbc27-d03e-4230-9ae3-547e14651719',
         'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', -- "Entity": "MJ": "Content" "Types"
-        100024,
+        100025, -- auto-bumped from 100024 (UQ_EntityField_EntityID_Sequence dedup),
         'Configuration',
         'Configuration',
         'JSON configuration blob for content-type-level settings. Conforms to the IContentTypeConfiguration interface. Reserved for future type-wide settings such as default tag taxonomy rules and processing options.',

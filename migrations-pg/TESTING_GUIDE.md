@@ -488,10 +488,12 @@ SQL
 Expected (ballpark — exact numbers depend on CodeGen output):
 - Tables: ~290
 - Views: ~290 (one per entity: `vw<EntityName>`)
-- Functions: ~850 (fn_create/fn_update/fn_delete per entity + trigger functions)
+- Functions: ~1200 (4 per entity: `fn_create_*`, `fn_update_*`, `fn_delete_*`, `fn_trg_update_*` + ~60 helpers/utilities)
 - Triggers: ~290 (one `__mj_UpdatedAt` trigger per entity)
 - Entities: ~292
-- EntityFields: ~3900
+- EntityFields: ~3900–4100
+
+Verified counts on a fresh `mj_pg_dev` after the full two-pass workflow: 294 tables / 299 views / 1225 functions / 292 triggers / 292 entities / 4060 EntityFields.
 
 ---
 

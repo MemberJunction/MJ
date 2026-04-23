@@ -7658,7 +7658,7 @@ BEGIN
         (
         'c233a240-755e-4148-b635-fb22f47ecf5d',
         'D5C4FEF3-21D0-4A41-893B-34F9527195F0', -- "Entity": "MJ": "Company" "Integration" "Sync" "Watermarks"
-        100019,
+        100020, -- auto-bumped from 100019 (UQ_EntityField_EntityID_Sequence dedup),
         'EntityMap',
         'Entity Map',
         NULL,
@@ -7724,7 +7724,7 @@ BEGIN
         (
         '0aebc08d-8462-4897-85bf-cc4dd6b7935a',
         'FECA4EDD-74F9-4A1C-A284-E586E76B23FE', -- "Entity": "MJ": "Company" "Integration" "Field" "Maps"
-        100031,
+        100032, -- auto-bumped from 100031 (UQ_EntityField_EntityID_Sequence dedup),
         'EntityMap',
         'Entity Map',
         NULL,

@@ -10,7 +10,7 @@
 
 -- Add scheduling fields to Company Integrations
 ALTER TABLE __mj."CompanyIntegration"
- ADD COLUMN "ScheduleEnabled" BOOLEAN NOT NULL DEFAULT 0,
+ ADD COLUMN "ScheduleEnabled" BOOLEAN NOT NULL DEFAULT FALSE,
  ADD COLUMN "ScheduleType" VARCHAR(20) NOT NULL DEFAULT 'Manual',
  ADD COLUMN "ScheduleIntervalMinutes" INTEGER NULL,
  ADD COLUMN "CronExpression" VARCHAR(200) NULL,
@@ -5489,7 +5489,7 @@ ALTER TABLE __mj."CompanyIntegration"
 
 -- Add distributed locking fields to prevent concurrent execution
 ALTER TABLE __mj."CompanyIntegration"
- ADD COLUMN "IsLocked" BOOLEAN NOT NULL DEFAULT 0,
+ ADD COLUMN "IsLocked" BOOLEAN NOT NULL DEFAULT FALSE,
  ADD COLUMN "LockedAt" TIMESTAMPTZ NULL,
  ADD COLUMN "LockedByInstance" VARCHAR(200) NULL,
  ADD COLUMN "LockExpiresAt" TIMESTAMPTZ NULL;

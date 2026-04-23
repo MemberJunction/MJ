@@ -11,33 +11,65 @@
 --   InstanceConfiguration: NEW TABLE (instance-level feature toggles)
 --
 
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
+
 ----------------------------------------------------------------------
 -- 1. EntityField: Search predicate and auto-update fields
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
+
 ----------------------------------------------------------------------
 ALTER TABLE __mj."EntityField"
  ADD COLUMN "UserSearchPredicateAPI" VARCHAR(20) NOT NULL DEFAULT 'Contains',
- ADD COLUMN "AutoUpdateUserSearchPredicate" BOOLEAN NOT NULL DEFAULT 1,
- ADD COLUMN "AutoUpdateFullTextSearch" BOOLEAN NOT NULL DEFAULT 1,
- ADD COLUMN "AutoUpdateExtendedType" BOOLEAN NOT NULL DEFAULT 1;
+ ADD COLUMN "AutoUpdateUserSearchPredicate" BOOLEAN NOT NULL DEFAULT TRUE,
+ ADD COLUMN "AutoUpdateFullTextSearch" BOOLEAN NOT NULL DEFAULT TRUE,
+ ADD COLUMN "AutoUpdateExtendedType" BOOLEAN NOT NULL DEFAULT TRUE;
+
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
 
 ----------------------------------------------------------------------
 -- 2. Entity: FTS and search API auto-update fields
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
+
 ----------------------------------------------------------------------
 ALTER TABLE __mj."Entity"
- ADD COLUMN "AutoUpdateFullTextSearch" BOOLEAN NOT NULL DEFAULT 1,
- ADD COLUMN "AutoUpdateAllowUserSearchAPI" BOOLEAN NOT NULL DEFAULT 1,
- ADD COLUMN "TrustServerCacheCompletely" BOOLEAN NOT NULL DEFAULT 1,
- ADD COLUMN "SupportsGeoCoding" BOOLEAN NOT NULL DEFAULT 0,
- ADD COLUMN "AutoUpdateSupportsGeoCoding" BOOLEAN NOT NULL DEFAULT 1;
+ ADD COLUMN "AutoUpdateFullTextSearch" BOOLEAN NOT NULL DEFAULT TRUE,
+ ADD COLUMN "AutoUpdateAllowUserSearchAPI" BOOLEAN NOT NULL DEFAULT TRUE,
+ ADD COLUMN "TrustServerCacheCompletely" BOOLEAN NOT NULL DEFAULT TRUE,
+ ADD COLUMN "SupportsGeoCoding" BOOLEAN NOT NULL DEFAULT FALSE,
+ ADD COLUMN "AutoUpdateSupportsGeoCoding" BOOLEAN NOT NULL DEFAULT TRUE;
+
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
 
 ----------------------------------------------------------------------
 -- 3. FileStorageAccount: Global search inclusion
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
+
 ----------------------------------------------------------------------
 ALTER TABLE __mj."FileStorageAccount"
- ADD COLUMN "IncludeInGlobalSearch" BOOLEAN NOT NULL DEFAULT 0;
+ ADD COLUMN "IncludeInGlobalSearch" BOOLEAN NOT NULL DEFAULT FALSE;
+
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
 
 ----------------------------------------------------------------------
 -- 4. FileStorageAccountPermission: Account-level access control
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
+
 ----------------------------------------------------------------------
 CREATE TABLE __mj."FileStorageAccountPermission" (
  "ID" UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -67,8 +99,16 @@ CREATE TABLE __mj."FileStorageAccountPermission" (
  )
 );
 
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
+
 ----------------------------------------------------------------------
 -- 5. InstanceConfiguration: Feature toggle system
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
+
 ----------------------------------------------------------------------
 CREATE TABLE __mj."InstanceConfiguration" (
  "ID" UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -155,6 +195,9 @@ CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_FileStorageAccount_CredentialID" ON
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_SearchProvider_CredentialID" ON __mj."SearchProvider" ("CredentialID");
 
+
+ALTER TABLE __mj."EntityField" ENABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" ENABLE TRIGGER ALL;
 
 -- ===================== Views =====================
 
@@ -6771,7 +6814,7 @@ INSERT INTO __mj."GeneratedCode" ("CategoryID", "GeneratedByModelID", "Generated
 -- ===================== FK & CHECK Constraints =====================
 
 -- Update the CHECK constraint to include new Geo* ExtendedType values
-ALTER TABLE __mj."EntityField" DROP CONSTRAINT CK_EntityField_ExtendedType;
+ALTER TABLE __mj."EntityField" DROP CONSTRAINT IF EXISTS CK_EntityField_ExtendedType;
 ALTER TABLE __mj."EntityField" ADD CONSTRAINT CK_EntityField_ExtendedType CHECK (
     "ExtendedType" IN ('Code', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg')
 ) NOT VALID;
@@ -7398,8 +7441,16 @@ COMMENT ON COLUMN __mj."SearchProvider"."Comments" IS 'Free-form notes about thi
 
 -- ===================== Other =====================
 
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
+
 ----------------------------------------------------------------------
 -- 6. Extended properties: EntityField columns
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE __mj."EntityField" DISABLE TRIGGER ALL;
+ALTER TABLE __mj."Entity" DISABLE TRIGGER ALL;
+
 ----------------------------------------------------------------------
 
 /* SQL text to insert new entity field */

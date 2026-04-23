@@ -33,7 +33,7 @@ CREATE TABLE __mj."AIAgentClientTool" (
 -- Extended properties for AIAgentClientTool columns;
 
 ALTER TABLE __mj."AIAgent"
- ADD COLUMN "AllowEphemeralClientTools" BOOLEAN NOT NULL DEFAULT 1;
+ ADD COLUMN "AllowEphemeralClientTools" BOOLEAN NOT NULL DEFAULT TRUE;
 
 ALTER TABLE __mj."AIAgentClientTool"
  ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NULL;

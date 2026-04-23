@@ -32,7 +32,7 @@ ALTER TABLE __mj."AIAgentRequestType"
  ADD COLUMN "DefaultAssignmentStrategy" TEXT NULL,
  ADD COLUMN "DefaultPriority" INTEGER NULL,
  ADD COLUMN "DefaultExpirationMinutes" INTEGER NULL,
- ADD COLUMN "RequiresResponse" BOOLEAN NOT NULL DEFAULT 1;
+ ADD COLUMN "RequiresResponse" BOOLEAN NOT NULL DEFAULT TRUE;
 
 -------------------------------------------------------
 -- 5. Extended Properties — table and column documentation
