@@ -18,6 +18,9 @@ import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { VersionsModule } from '@memberjunction/ng-versions';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
+import { AngularSplitModule } from 'angular-split';
 
 import { DatabaseDesignerDashboardComponent } from './components/database-designer-dashboard.component';
 import { EntityListComponent } from './components/entity-list.component';
@@ -32,6 +35,7 @@ import { StepRelationshipsComponent } from './components/create-wizard/steps/ste
 import { StepReviewComponent } from './components/create-wizard/steps/step-review.component';
 import { StepPipelineComponent } from './components/create-wizard/steps/step-pipeline.component';
 import { DatabaseModifyComponent } from './components/modify/database-modify.component';
+import { DatabasePreviewPaneComponent } from './components/shared/database-preview-pane.component';
 import { DatabaseDesignerService } from './services/database-designer.service';
 
 @NgModule({
@@ -43,6 +47,7 @@ import { DatabaseDesignerService } from './services/database-designer.service';
         EntityFieldsGridComponent,
         EntityReviewPanelComponent,
         EntityPipelinePanelComponent,
+        DatabasePreviewPaneComponent,
         // Phase 5d: wizard + steps
         DatabaseCreateWizardComponent,
         StepBasicsComponent,
@@ -60,6 +65,9 @@ import { DatabaseDesignerService } from './services/database-designer.service';
         SharedGenericModule,
         VersionsModule,
         MarkdownModule,
+        CodeEditorModule,
+        EntityRelationshipDiagramModule,
+        AngularSplitModule,
     ],
     providers: [
         DatabaseDesignerService,

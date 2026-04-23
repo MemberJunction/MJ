@@ -105,17 +105,32 @@ export class StepRelationshipsComponent {
             return;
         }
         const entity = new Metadata().Entities.find(e => e.ID === entityId);
-        this.rows = this.rows.map(r =>
-            r.rowIndex === rowIndex
-                ? {
-                    ...r,
-                    ReferencedTable: entity?.BaseTable ?? '',
-                    ReferencedColumn: 'ID',
-                    selectedEntityId: entityId,
-                }
-                : r
-        );
+        this.rows = this.rows.map(r => {
+            if (r.rowIndex !== rowIndex) return r;
+            // Auto-name the source FK column if the user hasn't chosen one — the
+            // wizard state service will materialize this as a real UUID column.
+            const autoSourceName = !r.ColumnName && entity?.BaseTable
+                ? this.defaultFkColumnName(entity.BaseTable)
+                : r.ColumnName;
+            return {
+                ...r,
+                ColumnName: autoSourceName,
+                ReferencedTable: entity?.BaseTable ?? '',
+                ReferencedColumn: 'ID',
+                selectedEntityId: entityId,
+            };
+        });
         this.emit();
+    }
+
+    /** "CustomerOrders" → "CustomerOrderID"; "People" → "PersonID". Best-effort singularizer. */
+    private defaultFkColumnName(tableName: string): string {
+        const base = tableName.endsWith('ies')
+            ? tableName.slice(0, -3) + 'y'
+            : tableName.endsWith('s') && !tableName.endsWith('ss')
+                ? tableName.slice(0, -1)
+                : tableName;
+        return `${base}ID`;
     }
 
     public OnColumnChange(rowIndex: number, column: string): void {

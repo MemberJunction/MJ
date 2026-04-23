@@ -119,8 +119,15 @@ export interface ERDConfig {
   linkDistance?: number;
   /** Collision radius padding */
   collisionPadding?: number;
-  /** Whether to show field details in nodes */
+  /** Whether to show field details in nodes (PK + FK rows). Defaults to true. */
   showFieldDetails?: boolean;
+  /**
+   * Whether to render all non-PK/non-FK fields as well.  When true, every field on
+   * each node is rendered (PKs first, FKs next, then all other fields in declaration
+   * order).  Use for "table card" style diagrams where users want to see every column.
+   * Defaults to false (classic schema-relationship view: keys only).
+   */
+  showAllFields?: boolean;
   /** Whether to show relationship labels */
   showRelationshipLabels?: boolean;
   /** Whether to enable node dragging */

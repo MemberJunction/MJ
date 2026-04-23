@@ -6,63 +6,117 @@
     [CurrentStep]="StepIndex">
   </mj-entity-wizard-step-indicator>
 
-  <!-- ── Step content ────────────────────────────────────────────────────── -->
-  <div class="wizard-body">
+  <!-- ── Split body: steps (left) + live preview (right) ─────────────────── -->
+  @if (IsExecuting) {
 
-    <!-- Step 1: Basics -->
-    @if (CurrentStep === 'basics') {
-      <mj-entity-step-basics
-        [AvailableSchemas]="AvailableSchemas"
-        (ValueChanged)="OnBasicsChanged($event)">
-      </mj-entity-step-basics>
-    }
-
-    <!-- Step 2: Fields -->
-    @if (CurrentStep === 'fields') {
-      <mj-entity-step-fields
-        [InitialColumns]="TableDefinition.Columns ?? []"
-        (ColumnsChanged)="OnFieldsChanged($event)">
-      </mj-entity-step-fields>
-    }
-
-    <!-- Step 3: Relationships -->
-    @if (CurrentStep === 'relationships') {
-      <mj-entity-step-relationships
-        [InitialForeignKeys]="TableDefinition.ForeignKeys ?? []"
-        [AvailableColumns]="TableDefinition.Columns ?? []"
-        (ForeignKeysChanged)="OnRelationshipsChanged($event)">
-      </mj-entity-step-relationships>
-    }
-
-    <!-- Step 4: Review & Create -->
-    @if (CurrentStep === 'review') {
-      @if (!IsExecuting) {
-        <mj-entity-step-review
-          [TableDefinition]="TableDefinition"
-          [ValidationErrors]="ValidationErrors"
-          [IsValidating]="IsValidating">
-        </mj-entity-step-review>
-      } @else {
-        <mj-entity-step-pipeline
-          [TableDefinition]="TableDefinition"
-          (PipelineCompleted)="OnPipelineCompleted($event)"
-          (CreateAnother)="OnCreateAnother()">
-        </mj-entity-step-pipeline>
-      }
-    }
-
-  </div>
-
-  <!-- ── Validation error list ──────────────────────────────────────────── -->
-  @if (ValidationErrors.length > 0) {
-    <div class="wizard-errors" role="alert">
-      @for (err of ValidationErrors; track $index) {
-        <div class="wizard-error-item">
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          {{ err }}
-        </div>
-      }
+    <!-- Pipeline takes the full width while it runs -->
+    <div class="wizard-body wizard-body-full">
+      <mj-entity-step-pipeline
+        [TableDefinition]="TableDefinition"
+        (PipelineCompleted)="OnPipelineCompleted($event)"
+        (CreateAnother)="OnCreateAnother()">
+      </mj-entity-step-pipeline>
     </div>
+
+  } @else {
+
+    <as-split direction="horizontal" class="wizard-split" gutterSize="6">
+
+      <as-split-area [size]="55" [minSize]="40">
+        <div class="wizard-body">
+
+          <!-- ── Inline validation banner (replaces bottom-floating error bar) ─── -->
+          @if (ValidationErrors.length > 0) {
+            <div class="wizard-banner wizard-banner-error" role="alert">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <div class="wizard-banner-body">
+                <div class="wizard-banner-title">
+                  @if (ValidationErrors.length === 1) {
+                    We hit a problem
+                  } @else {
+                    We hit {{ ValidationErrors.length }} problems
+                  }
+                </div>
+                <ul class="wizard-banner-list">
+                  @for (err of ValidationErrors; track $index) {
+                    <li>{{ err }}</li>
+                  }
+                </ul>
+              </div>
+              <div class="wizard-banner-actions">
+                @if (CurrentStep === 'relationships' || CurrentStep === 'review') {
+                  <button
+                    mjButton
+                    buttonStyle="secondary"
+                    type="button"
+                    [disabled]="IsValidating"
+                    (click)="OnRetryValidation()">
+                    @if (IsValidating) {
+                      <i class="fa-solid fa-spinner fa-spin"></i>
+                      Retrying…
+                    } @else {
+                      <i class="fa-solid fa-rotate-right"></i>
+                      Retry
+                    }
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="wizard-banner-dismiss"
+                  title="Dismiss"
+                  (click)="OnDismissErrors()">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            </div>
+          }
+
+          <!-- Step 1: Basics -->
+          @if (CurrentStep === 'basics') {
+            <mj-entity-step-basics
+              [AvailableSchemas]="AvailableSchemas"
+              (ValueChanged)="OnBasicsChanged($event)">
+            </mj-entity-step-basics>
+          }
+
+          <!-- Step 2: Fields -->
+          @if (CurrentStep === 'fields') {
+            <mj-entity-step-fields
+              [InitialColumns]="TableDefinition.Columns ?? []"
+              (ColumnsChanged)="OnFieldsChanged($event)">
+            </mj-entity-step-fields>
+          }
+
+          <!-- Step 3: Relationships -->
+          @if (CurrentStep === 'relationships') {
+            <mj-entity-step-relationships
+              [InitialForeignKeys]="TableDefinition.ForeignKeys ?? []"
+              [AvailableColumns]="TableDefinition.Columns ?? []"
+              (ForeignKeysChanged)="OnRelationshipsChanged($event)">
+            </mj-entity-step-relationships>
+          }
+
+          <!-- Step 4: Review & Create -->
+          @if (CurrentStep === 'review') {
+            <mj-entity-step-review
+              [TableDefinition]="TableDefinition"
+              [ValidationErrors]="ValidationErrors"
+              [IsValidating]="IsValidating">
+            </mj-entity-step-review>
+          }
+
+        </div>
+      </as-split-area>
+
+      <as-split-area [size]="45" [minSize]="25">
+        <mj-database-preview-pane
+          class="wizard-preview"
+          [TableDefinition]="(WizardState.tableDefinition$ | async) ?? {}">
+        </mj-database-preview-pane>
+      </as-split-area>
+
+    </as-split>
+
   }
 
   <!-- ── Footer navigation ─────────────────────────────────────────────── -->

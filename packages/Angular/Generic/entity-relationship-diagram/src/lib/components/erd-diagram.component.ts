@@ -51,6 +51,8 @@ interface InternalNode {
   height: number;
   primaryKeys: ERDField[];
   foreignKeys: ERDField[];
+  /** Fields that are neither PK nor FK — populated when `ERDConfig.showAllFields` is true. */
+  otherFields: ERDField[];
 }
 
 /**
@@ -90,6 +92,7 @@ const DEFAULT_CONFIG: Required<ERDConfig> = {
   linkDistance: 80,
   collisionPadding: 20,
   showFieldDetails: true,
+  showAllFields: false,
   showRelationshipLabels: true,
   showHeader: true,
   showNodeCount: true,
@@ -1203,8 +1206,11 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     this.internalNodes = this.nodes.map(node => {
       const primaryKeys = node.fields.filter(f => f.isPrimaryKey);
       const foreignKeys = node.fields.filter(f => f.relatedNodeId && !f.isPrimaryKey);
+      const otherFields = cfg.showAllFields
+        ? node.fields.filter(f => !f.isPrimaryKey && !f.relatedNodeId)
+        : [];
 
-      const fieldCount = Math.max(1, primaryKeys.length + foreignKeys.length);
+      const fieldCount = Math.max(1, primaryKeys.length + foreignKeys.length + otherFields.length);
       const calculatedHeight = Math.min(
         cfg.nodeBaseHeight + (fieldCount * cfg.fieldHeight),
         cfg.maxNodeHeight
@@ -1217,7 +1223,8 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         width: cfg.nodeWidth,
         height: calculatedHeight,
         primaryKeys: primaryKeys,
-        foreignKeys: foreignKeys
+        foreignKeys: foreignKeys,
+        otherFields: otherFields
       };
     });
   }
@@ -1711,6 +1718,38 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
           .node();
 
         if (fkNameEl) this.truncateTextElement(fkNameEl, d.width - 33);
+
+        currentY += 20;
+      });
+
+      // Other (non-PK / non-FK) fields — only populated when ERDConfig.showAllFields is true
+      d.otherFields.forEach((fld) => {
+        const fieldGroup = group.append('g').attr('class', 'field-group other-field');
+
+        const nameEl = fieldGroup
+          .append('text')
+          .attr('class', 'field-name')
+          .attr('x', -d.width / 2 + 8)
+          .attr('y', currentY - 2)
+          .attr('font-size', '11px')
+          .attr('fill', colors.nodeHeaderText)
+          .text(fld.name || '')
+          .node();
+
+        if (nameEl) this.truncateTextElement(nameEl, d.width - 60);
+
+        if (fld.type) {
+          fieldGroup
+            .append('text')
+            .attr('class', 'field-type')
+            .attr('x', d.width / 2 - 8)
+            .attr('y', currentY - 2)
+            .attr('text-anchor', 'end')
+            .attr('font-size', '10px')
+            .attr('fill', colors.nodeHeaderText)
+            .attr('opacity', 0.6)
+            .text(String(fld.type).toLowerCase());
+        }
 
         currentY += 20;
       });
