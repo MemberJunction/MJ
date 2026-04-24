@@ -57,6 +57,7 @@ import {
     type LaidOutEdge,
     type LaidOutBand,
 } from '../layout/compute-erd-layout';
+import { computeDagreLayout } from '../layout/compute-dagre-layout';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Internal view-model types
@@ -150,6 +151,13 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     /** Cached layout — recomputed when nodes, filter, search or expansion changes. */
     public layout: ErdLayout = { nodes: [], edges: [], bands: [], totalWidth: 0, totalHeight: 0 };
 
+    /**
+     * Active layout algorithm.  Starts from `config.layoutAlgorithm` (default
+     * `schema-grid`) but can be toggled at runtime via `setLayoutAlgorithm`.
+     * Exposed so the chrome toggle + saved user state can drive it.
+     */
+    public activeLayout: 'schema-grid' | 'dagre' = 'schema-grid';
+
     /** Derived schema summary for the chip row. */
     public schemaChips: SchemaChip[] = [];
 
@@ -192,6 +200,10 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
                 this.expandedNodeIds = new Set();
                 this.hoverNodeId = null;
             }
+            // Honour `config.layoutAlgorithm` on first arrival; runtime
+            // changes happen via `setLayoutAlgorithm`.
+            if (this.config.layoutAlgorithm === 'dagre') this.activeLayout = 'dagre';
+            else if (this.config.layoutAlgorithm === 'schema-grid') this.activeLayout = 'schema-grid';
             this.recompute();
             // Fit-to-view once the DOM has the new canvas dimensions.
             queueMicrotask(() => this.fitToView());
@@ -247,17 +259,39 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
 
         this.visibleCount = filtered.length;
 
-        this.layout = computeErdLayout(filtered, {
+        const commonOpts = {
             nodeWidth: this.config.nodeWidth ?? 220,
             fieldHeight: this.config.fieldHeight ?? 22,
             expandedNodeIds: this.expandedNodeIds,
             showAllFields: this.config.showAllFields ?? false,
-        });
+        };
+
+        this.layout = this.activeLayout === 'dagre'
+            ? computeDagreLayout(filtered, {
+                ...commonOpts,
+                rankDir: this.config.dagreConfig?.rankDir ?? 'LR',
+                nodeSep: this.config.dagreConfig?.nodeSep,
+                rankSep: this.config.dagreConfig?.rankSep,
+            })
+            : computeErdLayout(filtered, commonOpts);
 
         this.schemaChips = this.buildSchemaChips();
         this.updateHighlightSet();
         this.updateSelectedEntity();
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Switch between the schema-grid and dagre hierarchical layouts at
+     * runtime.  Emits a state change so the consumer can persist the
+     * user's preference (via `userStateChange` on `mj-erd-composite`).
+     */
+    public setLayoutAlgorithm(algo: 'schema-grid' | 'dagre'): void {
+        if (this.activeLayout === algo) return;
+        this.activeLayout = algo;
+        this.recompute();
+        queueMicrotask(() => this.fitToView());
+        this.stateChange.emit(this.getState());
     }
 
     private buildSchemaChips(): SchemaChip[] {
@@ -649,6 +683,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
             focusNodeId: this.focusNodeId,
             focusDepth: this.focusDepth,
             nodePositions: {},
+            layoutAlgorithm: this.activeLayout,
         };
     }
 
@@ -663,6 +698,10 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
                 x: state.translateX ?? this.transform.x,
                 y: state.translateY ?? this.transform.y,
             };
+        }
+        if (state.layoutAlgorithm && state.layoutAlgorithm !== this.activeLayout) {
+            this.activeLayout = state.layoutAlgorithm;
+            this.recompute();
         }
         this.updateHighlightSet();
         this.updateSelectedEntity();

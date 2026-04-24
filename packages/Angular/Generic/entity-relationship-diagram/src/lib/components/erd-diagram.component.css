@@ -205,6 +205,11 @@
   color: var(--mj-text-primary);
 }
 
+.erd-toolbar button.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
 .erd-zoom-val {
   padding: 0 8px;
   font-family: var(--erd-mono);

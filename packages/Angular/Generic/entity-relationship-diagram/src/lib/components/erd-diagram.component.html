@@ -42,6 +42,25 @@
         </div>
       }
 
+      <div class="erd-toolbar" role="group" aria-label="Layout mode">
+        <button
+          type="button"
+          [class.active]="activeLayout === 'schema-grid'"
+          (click)="setLayoutAlgorithm('schema-grid')"
+          title="Schema grid — grouped by schema, predictable"
+          aria-label="Schema-grid layout">
+          <i class="fa-solid fa-table-cells" aria-hidden="true"></i>
+        </button>
+        <button
+          type="button"
+          [class.active]="activeLayout === 'dagre'"
+          (click)="setLayoutAlgorithm('dagre')"
+          title="Hierarchical — classic ERD, relationship-driven"
+          aria-label="Hierarchical layout">
+          <i class="fa-solid fa-sitemap" aria-hidden="true"></i>
+        </button>
+      </div>
+
       <div class="erd-toolbar" role="group" aria-label="Zoom controls">
         <button type="button" (click)="zoomBy(1.2)" title="Zoom in" aria-label="Zoom in">
           <i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i>

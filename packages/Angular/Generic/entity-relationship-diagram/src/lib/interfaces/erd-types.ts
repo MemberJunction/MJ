@@ -282,6 +282,12 @@ export interface ERDState {
   focusDepth: number;
   /** Node positions for restoring exact layout */
   nodePositions: Record<string, { x: number; y: number; fx?: number | null; fy?: number | null }>;
+  /**
+   * Active layout algorithm — persisted so a user's preferred view
+   * (schema-grid vs. dagre hierarchical) survives navigation and
+   * reloads.  Defaults to 'schema-grid' when absent.
+   */
+  layoutAlgorithm?: 'schema-grid' | 'dagre';
 }
 
 /**

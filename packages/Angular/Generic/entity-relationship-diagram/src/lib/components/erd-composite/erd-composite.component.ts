@@ -21,6 +21,8 @@ export interface ERDCompositeState {
   panPosition: { x: number; y: number };
   fieldsSectionExpanded: boolean;
   relationshipsSectionExpanded: boolean;
+  /** User's preferred layout algorithm — 'schema-grid' (default) or 'dagre'. */
+  layoutAlgorithm?: 'schema-grid' | 'dagre';
 }
 
 /**
@@ -362,6 +364,7 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
       panPosition: { x: 0, y: 0 },
       fieldsSectionExpanded: this.fieldsSectionExpanded,
       relationshipsSectionExpanded: this.relationshipsSectionExpanded,
+      layoutAlgorithm: this.mjEntityErd?.erdDiagram?.activeLayout ?? 'schema-grid',
     };
   }
 
@@ -393,6 +396,13 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
       }
     } else {
       this.selectedEntity = null;
+    }
+
+    // Restore preferred layout algorithm.  Deferred to microtask so the
+    // diagram has mounted by the time we set it.
+    if (state.layoutAlgorithm) {
+      const algo = state.layoutAlgorithm;
+      queueMicrotask(() => this.mjEntityErd?.erdDiagram?.setLayoutAlgorithm(algo));
     }
 
     this.applyFilters();
