@@ -185,7 +185,7 @@ describe('RuntimeActionExecutor', () => {
             expect(passed.inputData).toEqual({ region: 'EMEA', maxRows: 25 });
         });
 
-        it('wraps the user code in an async IIFE that assigns `output`', async () => {
+        it('wraps the user code in an async IIFE that captures the return value into `output`', async () => {
             executeMock.mockResolvedValue({ success: true, output: null });
             const action = buildAction({ Code: 'return 42;' });
             await executor.execute({
@@ -194,8 +194,12 @@ describe('RuntimeActionExecutor', () => {
                 contextUser: {} as never
             });
             const passed = capturedParams.value as { code: string };
+            // User code is inlined inside an async IIFE. The IIFE's return
+            // value (if defined) is assigned to the outer `output`. Bare
+            // `output = ...` assignments inside the IIFE also work via closure.
             expect(passed.code).toContain('return 42;');
-            expect(passed.code).toContain('output = await (async function(input) {');
+            expect(passed.code).toContain('const __runtimeReturn = await (async function(input) {');
+            expect(passed.code).toContain('if (typeof __runtimeReturn !== "undefined") output = __runtimeReturn;');
         });
     });
 
