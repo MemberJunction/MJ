@@ -1123,15 +1123,21 @@ ORDER BY ordinal_position`;
 
         try {
             await client.connect();
-            // Postgres can execute multi-statement scripts in a single query call.
-            // On error, the full batch rolls back to last savepoint; we log and continue.
+            // Postgres executes a multi-statement script in a single query call. A single
+            // statement error aborts the rest of the batch server-side (simple query
+            // protocol) — so silently converting that to `return true` hid real data loss:
+            // CodeGen-generated DROP VIEW CASCADE would succeed, the follow-up CREATE
+            // would fail, and the caller would believe everything was fine. Return false
+            // on error and log it as an error, not a warning, so the per-entity batching
+            // loops can aggregate and (in strict mode) halt the install.
             try {
                 await client.query(sql);
+                return true;
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                logWarning(`[CodeGen] SQL warning in ${path.basename(absoluteFilePath)}: ${msg.substring(0, 200)}`);
+                logError(`[CodeGen] SQL execution failed in ${path.basename(absoluteFilePath)}: ${msg.substring(0, 400)}`);
+                return false;
             }
-            return true;
         } catch (e) {
             logError(`[CodeGen] Failed to execute SQL file ${absoluteFilePath}: ${e instanceof Error ? e.message : e}`);
             return false;

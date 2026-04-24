@@ -506,7 +506,7 @@ export class SQLCodeGenBase {
 
         const files: string[] = [];
         try {
-            let bFail: boolean = false;
+            const failedEntities: EntityInfo[] = [];
             const totalEntities = options.entities.length;
 
             for (let i = 0; i < totalEntities; i += options.batchSize) {
@@ -515,9 +515,9 @@ export class SQLCodeGenBase {
                     const pkeyField = e.Fields.find(f => f.IsPrimaryKey)
                     if (!pkeyField) {
                         logError(`SKIPPING SQL GENERATION: Entity ${e.Name} has no primary key field in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
-                        return {Success: false, Files: []};
+                        return {entity: e, result: {Success: false, Files: []}};
                     }
-                    return this.generateAndExecuteSingleEntitySQLToSeparateFiles({
+                    const result = await this.generateAndExecuteSingleEntitySQLToSeparateFiles({
                         pool: options.pool,
                         entity: e,
                         directory: options.directory,
@@ -526,17 +526,29 @@ export class SQLCodeGenBase {
                         skipExecution: options.skipExecution,
                         enableSQLLoggingForNewOrModifiedEntities: options.enableSQLLoggingForNewOrModifiedEntities
                     });
+                    return {entity: e, result};
                 });
 
                 const results = await Promise.all(promises);
-                results.forEach(r => {
-                    if (!r.Success)
-                        bFail = true; // keep going, but will return false at the end
-                    files.push(...r.Files); // add the files to the main files array
+                results.forEach(({entity, result}) => {
+                    if (!result.Success)
+                        failedEntities.push(entity);
+                    files.push(...result.Files); // add the files to the main files array
                 });
             }
 
-            return {Success: !bFail, Files: files};
+            // Batch summary — makes the full failure scope visible in one pass instead of
+            // forcing the operator to bisect across individually-logged per-entity errors.
+            // Per-entity error detail is already emitted inside generateAndExecuteSingleEntitySQLToSeparateFiles;
+            // this just recaps WHO failed so it's easy to spot.
+            if (failedEntities.length > 0) {
+                const list = failedEntities
+                    .map(e => `  - ${e.SchemaName}.${e.Name}`)
+                    .join('\n');
+                logError(`SQL generation/execution failed for ${failedEntities.length} of ${totalEntities} entity(ies):\n${list}`);
+            }
+
+            return {Success: failedEntities.length === 0, Files: files};
         }
         catch (err) {
             logError(err as string);
