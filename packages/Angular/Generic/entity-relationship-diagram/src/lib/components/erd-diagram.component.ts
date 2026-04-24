@@ -1722,7 +1722,9 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         currentY += 20;
       });
 
-      // Other (non-PK / non-FK) fields — only populated when ERDConfig.showAllFields is true
+      // Other (non-PK / non-FK) fields — only populated when ERDConfig.showAllFields is true.
+      // Fill is set via CSS (.field-group.other-field .field-name / .field-type) so it
+      // can adapt to light/dark theme via design tokens. No .attr('fill') here.
       d.otherFields.forEach((fld) => {
         const fieldGroup = group.append('g').attr('class', 'field-group other-field');
 
@@ -1732,7 +1734,6 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
           .attr('x', -d.width / 2 + 8)
           .attr('y', currentY - 2)
           .attr('font-size', '11px')
-          .attr('fill', colors.nodeHeaderText)
           .text(fld.name || '')
           .node();
 
@@ -1746,7 +1747,6 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
             .attr('y', currentY - 2)
             .attr('text-anchor', 'end')
             .attr('font-size', '10px')
-            .attr('fill', colors.nodeHeaderText)
             .attr('opacity', 0.6)
             .text(String(fld.type).toLowerCase());
         }

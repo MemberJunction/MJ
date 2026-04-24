@@ -196,6 +196,16 @@
   fill: var(--mj-text-primary);
 }
 
+/* Other (non-PK / non-FK) fields — rendered when ERDConfig.showAllFields is true.
+   D3 intentionally doesn't set fill on these; it's owned here so it can theme. */
+:host ::ng-deep .erd-container svg .field-group.other-field .field-name {
+  fill: var(--mj-text-primary);
+}
+
+:host ::ng-deep .erd-container svg .field-group.other-field .field-type {
+  fill: var(--mj-text-muted);
+}
+
 /* ── Link colors ── */
 :host ::ng-deep .erd-container svg .link-group .link-label-bg {
   fill: var(--mj-bg-surface-card);
