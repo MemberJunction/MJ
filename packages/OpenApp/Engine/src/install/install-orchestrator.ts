@@ -775,9 +775,10 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
   const exists = await SchemaExists(manifest.schema.name, context.DatabaseProvider);
 
   if (exists) {
-    if (isReinstall) {
-      // Schema left over from a previous install (e.g. --keep-data removal).
-      // Reuse it rather than failing.
+    if (isReinstall || manifest.schema.createIfNotExists !== false) {
+      // Schema already exists — either a reinstall (previously removed app),
+      // or createIfNotExists is set (the app expects to adopt an existing schema).
+      // Reuse it and let Skyway apply only new migrations.
       context.Callbacks?.OnProgress?.('Schema', `Reusing existing schema '${manifest.schema.name}'`);
       return { Success: true };
     }

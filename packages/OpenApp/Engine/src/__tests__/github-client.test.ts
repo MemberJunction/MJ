@@ -3,7 +3,8 @@
  * and GetLatestVersion fallback to tags.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ValidateGitHubTag, ListGitHubTags, GetLatestVersion, ParseGitHubUrl } from '../github/github-client.js';
+import { ValidateGitHubTag, ListGitHubTags, GetLatestVersion, ParseGitHubUrl, FetchManifestFromGitHub } from '../github/github-client.js';
+import type { GitHubClientOptions } from '../github/github-client.js';
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -167,5 +168,100 @@ describe('GetLatestVersion', () => {
 
         const result = await GetLatestVersion('https://github.com/Acme/App', {});
         expect(result).toBeNull();
+    });
+});
+
+describe('TokenMap resolution', () => {
+    beforeEach(() => {
+        mockFetch.mockReset();
+    });
+
+    it('uses per-repo token from TokenMap when available', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ content: btoa('{}'), encoding: 'base64' }),
+        });
+
+        const options: GitHubClientOptions = {
+            Token: 'default-token',
+            TokenMap: {
+                'https://github.com/Acme/SpecialRepo': 'special-token',
+            },
+        };
+
+        await FetchManifestFromGitHub('https://github.com/Acme/SpecialRepo', undefined, options);
+        const headers = mockFetch.mock.calls[0][1].headers;
+        expect(headers['Authorization']).toBe('Bearer special-token');
+    });
+
+    it('falls back to default Token when repo not in TokenMap', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ content: btoa('{}'), encoding: 'base64' }),
+        });
+
+        const options: GitHubClientOptions = {
+            Token: 'default-token',
+            TokenMap: {
+                'https://github.com/Acme/OtherRepo': 'other-token',
+            },
+        };
+
+        await FetchManifestFromGitHub('https://github.com/Acme/UnmatchedRepo', undefined, options);
+        const headers = mockFetch.mock.calls[0][1].headers;
+        expect(headers['Authorization']).toBe('Bearer default-token');
+    });
+
+    it('matches TokenMap keys case-insensitively', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ content: btoa('{}'), encoding: 'base64' }),
+        });
+
+        const options: GitHubClientOptions = {
+            Token: 'default-token',
+            TokenMap: {
+                'https://github.com/BlueCypress/SaaS': 'saas-token',
+            },
+        };
+
+        await FetchManifestFromGitHub('https://github.com/bluecypress/saas', undefined, options);
+        const headers = mockFetch.mock.calls[0][1].headers;
+        expect(headers['Authorization']).toBe('Bearer saas-token');
+    });
+
+    it('strips .git suffix when matching TokenMap keys', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ content: btoa('{}'), encoding: 'base64' }),
+        });
+
+        const options: GitHubClientOptions = {
+            Token: 'default-token',
+            TokenMap: {
+                'https://github.com/Acme/App': 'app-token',
+            },
+        };
+
+        await FetchManifestFromGitHub('https://github.com/Acme/App.git', undefined, options);
+        const headers = mockFetch.mock.calls[0][1].headers;
+        expect(headers['Authorization']).toBe('Bearer app-token');
+    });
+
+    it('sends no auth header when no token matches and no default', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ content: btoa('{}'), encoding: 'base64' }),
+        });
+
+        const options: GitHubClientOptions = {
+            TokenMap: {
+                'https://github.com/Acme/OtherRepo': 'other-token',
+            },
+        };
+
+        await FetchManifestFromGitHub('https://github.com/Acme/UnmatchedRepo', undefined, options);
+        const headers = mockFetch.mock.calls[0][1].headers;
+        expect(headers['Authorization']).toBeUndefined();
     });
 });

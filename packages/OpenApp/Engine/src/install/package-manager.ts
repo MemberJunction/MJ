@@ -195,22 +195,27 @@ export function hasPnpmCatalog(repoRoot: string): boolean {
 export function RunPackageInstall(repoRoot: string, verbose?: boolean, registryUrl?: string, packageManager?: PackageManagerType): PackageOperationResult {
   const pm = packageManager ?? detectPackageManager(repoRoot);
 
+  // Only pass --registry for non-default registries. The standard npm registry
+  // (https://registry.npmjs.org) is already the default, and passing it explicitly
+  // overrides scoped registry + auth token settings in .npmrc, breaking private packages.
+  const isCustomRegistry = registryUrl && !registryUrl.includes('registry.npmjs.org');
+
   try {
     let cmd: string;
     switch (pm) {
       case 'pnpm': {
         cmd = 'pnpm install';
-        if (registryUrl) cmd += ` --registry=${registryUrl}`;
+        if (isCustomRegistry) cmd += ` --registry=${registryUrl}`;
         break;
       }
       case 'yarn': {
         cmd = 'yarn install';
-        if (registryUrl) cmd += ` --registry=${registryUrl}`;
+        if (isCustomRegistry) cmd += ` --registry=${registryUrl}`;
         break;
       }
       default: {
         let flags = verbose ? '' : '--loglevel=warn';
-        if (registryUrl) flags += ` --registry=${registryUrl}`;
+        if (isCustomRegistry) flags += ` --registry=${registryUrl}`;
         cmd = `npm install ${flags}`;
         break;
       }

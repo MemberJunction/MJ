@@ -11,8 +11,15 @@ import { join } from 'node:path';
  * Options for configuring the GitHub client.
  */
 export interface GitHubClientOptions {
-    /** Personal access token for private repos */
+    /** Default personal access token for private repos */
     Token?: string;
+    /**
+     * Per-repository token overrides. Keys are GitHub repository URLs
+     * (e.g., 'https://github.com/BlueCypress/SaaS'). When a function
+     * receives a repo URL, it checks this map first before falling back
+     * to the default Token.
+     */
+    TokenMap?: Record<string, string>;
 }
 
 /**
@@ -70,6 +77,30 @@ export function ParseGitHubUrl(repoUrl: string): { Owner: string; Repo: string }
 }
 
 /**
+ * Resolves the appropriate token for a given repository URL.
+ * Checks the TokenMap first (matching by normalized URL), then falls back to the default Token.
+ */
+function ResolveToken(repoUrl: string, options: GitHubClientOptions): string | undefined {
+    if (options.TokenMap) {
+        const normalized = normalizeRepoUrl(repoUrl);
+        for (const [mapUrl, mapToken] of Object.entries(options.TokenMap)) {
+            if (normalizeRepoUrl(mapUrl) === normalized) {
+                return mapToken;
+            }
+        }
+    }
+    return options.Token;
+}
+
+/**
+ * Normalizes a GitHub repo URL for comparison: strips trailing .git, trailing slash,
+ * and lowercases for case-insensitive matching.
+ */
+function normalizeRepoUrl(url: string): string {
+    return url.replace(/\.git$/, '').replace(/\/$/, '').toLowerCase();
+}
+
+/**
  * Builds the authorization headers for GitHub API requests.
  */
 function BuildHeaders(token?: string): Record<string, string> {
@@ -106,7 +137,7 @@ export async function FetchManifestFromGitHub(
 
     try {
         const response = await fetch(apiUrl, {
-            headers: BuildHeaders(options.Token)
+            headers: BuildHeaders(ResolveToken(repoUrl, options))
         });
 
         if (!response.ok) {
@@ -150,7 +181,7 @@ export async function ListGitHubReleases(
 
     try {
         const response = await fetch(apiUrl, {
-            headers: BuildHeaders(options.Token)
+            headers: BuildHeaders(ResolveToken(repoUrl, options))
         });
 
         if (!response.ok) {
@@ -204,7 +235,7 @@ export async function DownloadMigrations(
 
     try {
         const response = await fetch(apiUrl, {
-            headers: BuildHeaders(options.Token)
+            headers: BuildHeaders(ResolveToken(repoUrl, options))
         });
 
         if (!response.ok) {
@@ -234,7 +265,7 @@ export async function DownloadMigrations(
             }
 
             const fileResponse = await fetch(file.download_url, {
-                headers: BuildHeaders(options.Token)
+                headers: BuildHeaders(ResolveToken(repoUrl, options))
             });
 
             if (fileResponse.ok) {
@@ -303,7 +334,7 @@ export async function ListGitHubTags(
 
     try {
         const response = await fetch(apiUrl, {
-            headers: BuildHeaders(options.Token)
+            headers: BuildHeaders(ResolveToken(repoUrl, options))
         });
 
         if (!response.ok) {
@@ -346,7 +377,7 @@ export async function ValidateGitHubTag(
 
     try {
         const response = await fetch(apiUrl, {
-            headers: BuildHeaders(options.Token)
+            headers: BuildHeaders(ResolveToken(repoUrl, options))
         });
 
         if (response.ok) {
