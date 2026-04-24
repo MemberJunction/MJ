@@ -89,6 +89,8 @@ const openAppsConfigSchema = z.object({
   })).optional(),
   /** File subpath within client workspace for bootstrap file */
   clientBootstrapSubpath: z.string().optional(),
+  /** Extra placeholders merged into migration SQL substitution (e.g. { mjSchema: '__mj' }) */
+  migrationPlaceholders: z.record(z.string(), z.string()).optional(),
 }).optional();
 
 // Schema for dynamic packages section
