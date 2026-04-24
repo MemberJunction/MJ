@@ -1,35 +1,307 @@
-<div class="erd-section">
-  @if (showHeader) {
-    <div class="section-header">
-      <h3>{{ headerTitle }}</h3>
-      <div class="erd-controls">
-        <button class="control-btn" (click)="zoomIn()" title="Zoom In">
-          <span class="fa-solid fa-search-plus"></span>
+<!-- ── CHROME ──────────────────────────────────────────────────────────── -->
+@if (showHeader) {
+  <header class="erd-chrome">
+    <div class="erd-title-group">
+      <div class="erd-title">{{ headerTitle }}</div>
+      <div class="erd-subtitle">
+        <span class="erd-count-pill">{{ visibleCount }}</span>
+        <span class="erd-count-label">of {{ totalCount }} entities</span>
+        <span class="erd-dot">·</span>
+        <span>{{ layout.edges.length }} relationships</span>
+      </div>
+    </div>
+
+    <label class="erd-search">
+      <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+      <input
+        type="text"
+        [value]="searchQuery"
+        (input)="onSearchChange($any($event.target).value)"
+        placeholder="Search entities, schemas, fields…"
+        spellcheck="false"
+        aria-label="Search entities" />
+      @if (searchQuery) {
+        <button type="button" class="erd-search-clear" (click)="onClearSearch()" aria-label="Clear search">×</button>
+      }
+    </label>
+
+    <div class="erd-chrome-right">
+      @if (schemaChips.length > 1) {
+        <div class="erd-schema-chips" role="group" aria-label="Filter by schema">
+          @for (chip of schemaChips; track trackByChip($index, chip)) {
+            <button
+              type="button"
+              class="erd-chip"
+              [class.active]="chip.active"
+              [style.--chip-color]="chip.color"
+              (click)="onSchemaChipToggle(chip.name)"
+              [attr.aria-pressed]="chip.active">
+              <span class="erd-chip-dot"></span>
+              <span class="erd-chip-label">{{ chip.name }}</span>
+              <span class="erd-chip-count">{{ chip.count }}</span>
+            </button>
+          }
+        </div>
+      }
+
+      <div class="erd-toolbar" role="group" aria-label="Zoom controls">
+        <button type="button" (click)="zoomBy(1.2)" title="Zoom in" aria-label="Zoom in">
+          <i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i>
         </button>
-        <button class="control-btn" (click)="zoomOut()" title="Zoom Out">
-          <span class="fa-solid fa-search-minus"></span>
+        <button type="button" (click)="zoomBy(0.83)" title="Zoom out" aria-label="Zoom out">
+          <i class="fa-solid fa-magnifying-glass-minus" aria-hidden="true"></i>
         </button>
-        <button class="control-btn" (click)="resetZoom()" title="Reset Zoom">
-          <span class="fa-solid fa-expand"></span>
+        <button type="button" (click)="fitToView()" title="Fit to view" aria-label="Fit to view">
+          <i class="fa-solid fa-expand" aria-hidden="true"></i>
         </button>
-        <button class="control-btn" (click)="refresh(); refreshRequested.emit()" title="Refresh Diagram">
-          <span class="fa-solid fa-refresh"></span>
-        </button>
+        <span class="erd-zoom-val">{{ zoomPercent }}</span>
+      </div>
+    </div>
+  </header>
+}
+
+<!-- ── CANVAS ──────────────────────────────────────────────────────────── -->
+<div
+  class="erd-canvas-wrap"
+  (mousemove)="onBackgroundMouseMove($event)"
+  (mouseup)="onBackgroundMouseUp()"
+  (mouseleave)="onBackgroundMouseUp()">
+
+  <svg
+    #canvasRef
+    class="erd-canvas"
+    [attr.data-panning]="panning ? 'true' : null"
+    (mousedown)="onBackgroundMouseDown($event)"
+    (wheel)="onWheel($event)">
+
+    <defs>
+      <marker id="erd-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" class="erd-marker" />
+      </marker>
+      <marker id="erd-arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" class="erd-marker erd-marker-active" />
+      </marker>
+      <marker id="erd-many" viewBox="-10 -6 14 12" refX="-8" refY="0" markerWidth="14" markerHeight="14" orient="auto">
+        <path d="M 0 -5 L -8 0 L 0 5 M -8 0 L 4 0" class="erd-marker-stroke" />
+      </marker>
+      <marker id="erd-many-active" viewBox="-10 -6 14 12" refX="-8" refY="0" markerWidth="14" markerHeight="14" orient="auto">
+        <path d="M 0 -5 L -8 0 L 0 5 M -8 0 L 4 0" class="erd-marker-stroke erd-marker-active" />
+      </marker>
+    </defs>
+
+    <g [attr.transform]="'translate(' + transform.x + ' ' + transform.y + ') scale(' + transform.k + ')'">
+
+      <!-- Schema bands -->
+      @if ((config.showSchemaBands ?? true)) {
+        @for (band of layout.bands; track trackByBand($index, band)) {
+          <g class="erd-band">
+            <rect
+              [attr.x]="band.x" [attr.y]="band.y"
+              [attr.width]="band.width" [attr.height]="band.height"
+              rx="16"
+              [attr.fill]="bandFill(band.schemaName)"
+              class="erd-band-rect" />
+            <text
+              [attr.x]="band.x + band.width / 2"
+              [attr.y]="band.y + 32"
+              text-anchor="middle"
+              class="erd-band-title"
+              [attr.fill]="schemaColor(band.schemaName)">
+              {{ band.schemaName }}
+            </text>
+          </g>
+        }
+      }
+
+      <!-- Edges -->
+      <g class="erd-edges">
+        @for (edge of layout.edges; track trackByEdge($index, edge)) {
+          <path
+            [attr.d]="edgePath(edge)"
+            fill="none"
+            class="erd-edge"
+            [class.erd-edge-active]="isEdgeActive(edge)"
+            [class.erd-edge-dimmed]="isEdgeDimmed(edge)"
+            [attr.marker-start]="(config.crowsFoot ?? true) ? (isEdgeActive(edge) ? 'url(#erd-many-active)' : 'url(#erd-many)') : null"
+            [attr.marker-end]="isEdgeActive(edge) ? 'url(#erd-arrow-active)' : 'url(#erd-arrow)'" />
+        }
+      </g>
+
+      <!-- Nodes -->
+      <g class="erd-nodes">
+        @for (node of layout.nodes; track trackByNode($index, node)) {
+          <g
+            class="erd-node"
+            [attr.transform]="'translate(' + node.x + ' ' + node.y + ')'"
+            [class.erd-node-focus]="isFocus(node.id)"
+            [class.erd-node-neighbour]="isNeighbour(node.id)"
+            [class.erd-node-dimmed]="isDimmed(node.id)"
+            (click)="onNodeClick(node, $event)"
+            (mouseenter)="onNodeMouseEnter(node, $event)"
+            (mouseleave)="onNodeMouseLeave(node)">
+
+            <!-- Card shadow -->
+            <rect class="erd-node-shadow"
+              [attr.width]="node.width" [attr.height]="node.height"
+              x="0" y="2" rx="8" />
+
+            <!-- Card body -->
+            <rect class="erd-node-body"
+              [attr.width]="node.width" [attr.height]="node.height"
+              x="0" y="0" rx="8" />
+
+            <!-- Schema left rail -->
+            <rect class="erd-node-rail"
+              [attr.height]="node.height"
+              [attr.fill]="schemaColor(node.schemaName || '_')"
+              x="0" y="0" width="4" rx="0" />
+
+            <!-- Header -->
+            <rect class="erd-node-header"
+              x="4" y="0"
+              [attr.width]="node.width - 4" height="36"
+              rx="6" />
+            <text class="erd-node-name" x="14" y="22">{{ node.name }}</text>
+            @if (node.customData && $any(node.customData).rows != null) {
+              <text class="erd-node-rows" [attr.x]="node.width - 12" y="22" text-anchor="end">
+                {{ formatCount($any(node.customData).rows) }}
+              </text>
+            }
+
+            <!-- Separator -->
+            <line class="erd-node-separator"
+              x1="4" [attr.x2]="node.width - 4" y1="36" y2="36" />
+
+            <!-- Fields -->
+            @for (field of node.visibleFields; track trackByField($index, field); let i = $index) {
+              <g class="erd-field" [attr.transform]="'translate(0 ' + (36 + i * 22) + ')'">
+                @if (field.isPrimaryKey) {
+                  <rect class="erd-field-key-bg erd-field-key-pk" x="8" y="4" width="22" height="14" rx="3" />
+                  <text class="erd-field-key erd-field-key-pk" x="19" y="14" text-anchor="middle">PK</text>
+                } @else if (field.relatedNodeId) {
+                  <rect class="erd-field-key-bg erd-field-key-fk" x="8" y="4" width="22" height="14" rx="3" />
+                  <text class="erd-field-key erd-field-key-fk" x="19" y="14" text-anchor="middle">FK</text>
+                }
+                <text class="erd-field-name"
+                  [attr.x]="(field.isPrimaryKey || field.relatedNodeId) ? 36 : 14"
+                  y="15">
+                  {{ field.name }}
+                </text>
+                @if (field.type) {
+                  <text class="erd-field-type" [attr.x]="node.width - 12" y="15" text-anchor="end">
+                    {{ field.type }}
+                  </text>
+                }
+              </g>
+            }
+
+            <!-- +N more toggle -->
+            @if (node.hasMore) {
+              <g class="erd-field-more"
+                [attr.transform]="'translate(0 ' + (36 + node.visibleFields.length * 22 + 6) + ')'"
+                (click)="onToggleExpand(node.id, $event)">
+                <rect class="erd-field-more-bg" x="4" y="0" [attr.width]="node.width - 8" height="14" rx="3" />
+                <text class="erd-field-more-text"
+                  [attr.x]="node.width / 2" y="10" text-anchor="middle">
+                  + {{ node.fields.length - node.visibleFields.length }} more fields
+                </text>
+              </g>
+            }
+          </g>
+        }
+      </g>
+    </g>
+  </svg>
+
+  <!-- ── Focus details card ───────────────────────────────────────────── -->
+  @if (selectedEntity && focusNodeId) {
+    <aside class="erd-focus-card" role="dialog" aria-label="Entity details">
+      <header class="erd-focus-header">
+        @if (selectedEntity.schemaName) {
+          <span class="erd-focus-schema"
+                [style.--hue-color]="schemaColor(selectedEntity.schemaName)">
+            <span class="erd-focus-schema-dot"></span>
+            {{ selectedEntity.schemaName }}
+          </span>
+        }
+        <h3 class="erd-focus-title">{{ selectedEntity.name }}</h3>
+        <button type="button" class="erd-focus-close" (click)="onCloseFocusCard()" aria-label="Close details">×</button>
+      </header>
+
+      <div class="erd-focus-meta">
+        @if (selectedEntity.customData && $any(selectedEntity.customData).rows != null) {
+          <div>
+            <span class="erd-focus-meta-label">Rows</span>
+            <span class="erd-focus-meta-val">{{ $any(selectedEntity.customData).rows.toLocaleString() }}</span>
+          </div>
+        }
+        <div>
+          <span class="erd-focus-meta-label">Fields</span>
+          <span class="erd-focus-meta-val">{{ selectedEntity.fields.length }}</span>
+        </div>
+        <div>
+          <span class="erd-focus-meta-label">Keys</span>
+          <span class="erd-focus-meta-val">{{ pkCount(selectedEntity) }} PK · {{ fkCount(selectedEntity) }} FK</span>
+        </div>
+      </div>
+
+      @let outgoing = outgoingReferences(selectedEntity);
+      @if (outgoing.length > 0) {
+        <section class="erd-focus-section">
+          <div class="erd-focus-section-title">
+            References
+            <span class="erd-focus-section-count">{{ outgoing.length }}</span>
+          </div>
+          @for (ref of outgoing; track trackByReference($index, ref)) {
+            <button type="button" class="erd-focus-row" (click)="onNavigateToEntity(ref.entity.id)">
+              <span class="erd-focus-row-arrow">→</span>
+              <span class="erd-focus-row-field">{{ ref.field.name }}</span>
+              <span class="erd-focus-row-target">{{ ref.entity.name }}</span>
+            </button>
+          }
+        </section>
+      }
+
+      @let incoming = incomingReferences(selectedEntity.id);
+      @if (incoming.length > 0) {
+        <section class="erd-focus-section">
+          <div class="erd-focus-section-title">
+            Referenced by
+            <span class="erd-focus-section-count">{{ incoming.length }}</span>
+          </div>
+          @for (ref of incoming; track trackByReference($index, ref)) {
+            <button type="button" class="erd-focus-row" (click)="onNavigateToEntity(ref.entity.id)">
+              <span class="erd-focus-row-arrow">←</span>
+              <span class="erd-focus-row-field">{{ ref.entity.name }}.{{ ref.field.name }}</span>
+            </button>
+          }
+        </section>
+      }
+    </aside>
+  }
+
+  <!-- ── Empty state ─────────────────────────────────────────────────── -->
+  @if (visibleCount === 0) {
+    <div class="erd-empty">
+      <div class="erd-empty-icon">
+        <i [class]="config.emptyStateIcon || 'fa-solid fa-diagram-project'" aria-hidden="true"></i>
+      </div>
+      <div class="erd-empty-title">
+        {{ totalCount === 0 ? (config.emptyStateMessage || 'No entities to display') : 'No entities match' }}
+      </div>
+      @if (totalCount > 0) {
+        <div class="erd-empty-hint">Try adjusting schema filters or clearing search</div>
+      }
+    </div>
+  }
+
+  <!-- ── Loading overlay ─────────────────────────────────────────────── -->
+  @if (isRefreshing) {
+    <div class="erd-loading-overlay">
+      <div class="erd-loading-content">
+        <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
+        <span>Loading…</span>
       </div>
     </div>
   }
-  <div class="erd-container" #erdContainer>
-    @if (isRefreshing) {
-      <div class="loading-overlay">
-        <div class="loading-content">
-          <div class="loading-spinner">
-            <div class="spinner-ring"></div>
-            <div class="spinner-ring"></div>
-            <div class="spinner-ring"></div>
-          </div>
-          <div class="loading-text">Loading diagram...</div>
-        </div>
-      </div>
-    }
-  </div>
 </div>

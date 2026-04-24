@@ -382,13 +382,14 @@ export interface ERDNodeDragEvent {
 
 /**
  * Layout algorithm options for the ERD diagram.
- * - 'force': D3 force-directed layout (dynamic, animated)
- * - 'dagre': Dagre hierarchical layout with orthogonal edges (static, clean)
- * - 'horizontal': Left-to-right hierarchical layout using Dagre
- * - 'vertical': Top-to-bottom hierarchical layout using Dagre
+ * - 'schema-grid': Schema-grouped rectangular bands with grid-tiled nodes (default, clean, predictable)
+ * - 'force': Legacy D3 force-directed layout (dynamic, animated) — retained for compat
+ * - 'dagre': Legacy Dagre hierarchical layout with orthogonal edges — retained for compat
+ * - 'horizontal': Left-to-right hierarchical layout using Dagre — retained for compat
+ * - 'vertical': Top-to-bottom hierarchical layout using Dagre — retained for compat
  * - 'radial': Radial layout (not yet implemented)
  */
-export type ERDLayoutAlgorithm = 'force' | 'dagre' | 'horizontal' | 'vertical' | 'radial';
+export type ERDLayoutAlgorithm = 'schema-grid' | 'force' | 'dagre' | 'horizontal' | 'vertical' | 'radial';
 
 /**
  * Dagre-specific layout configuration options.
@@ -502,11 +503,24 @@ export interface ERDConfig {
   // Layout
   // ============================================================================
 
-  /** Layout algorithm to use. Default: 'force' */
+  /** Layout algorithm to use. Default: 'schema-grid' */
   layoutAlgorithm?: ERDLayoutAlgorithm;
 
   /** Dagre-specific layout configuration (only used when layoutAlgorithm is 'dagre', 'horizontal', or 'vertical') */
   dagreConfig?: ERDDagreConfig;
+
+  /** Draw rounded rectangular bands grouping nodes by schema. Default: true (schema-grid layout only) */
+  showSchemaBands?: boolean;
+
+  /** Draw crow's-foot markers at the source end of edges (many side). Default: true */
+  crowsFoot?: boolean;
+
+  /**
+   * Max visible fields on a node before the "+N more" toggle kicks in.
+   * Default: Infinity when `showAllFields` is true; when `showAllFields` is false,
+   * only PK + FK fields are shown regardless of this value.
+   */
+  maxVisibleFields?: number;
 
   // ============================================================================
   // Colors
