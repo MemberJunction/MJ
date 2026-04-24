@@ -351,10 +351,17 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         if (rect.width === 0 || rect.height === 0 || this.layout.totalWidth === 0) return;
 
         const padding = 60;
+        // Allow fit to scale UP for small diagrams (e.g. the Database Designer
+        // wizard preview, where a single entity + a couple of satellites
+        // would otherwise look lost in the pane).  Consumers can override via
+        // `config.maxFitZoom`.  Default 2.5x: a 220px card becomes ~550px,
+        // which comfortably fills a typical preview pane without looking
+        // cartoonish (13px text → ~33px, still a readable ceiling).
+        const maxFit = this.config.maxFitZoom ?? 2.5;
         const idealK = Math.min(
             (rect.width - padding * 2) / this.layout.totalWidth,
             (rect.height - padding * 2) / this.layout.totalHeight,
-            1,
+            maxFit,
         );
 
         // Clamp the fit zoom so cards stay legible.  On very large schemas

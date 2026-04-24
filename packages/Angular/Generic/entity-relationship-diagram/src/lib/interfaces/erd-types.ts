@@ -469,6 +469,13 @@ export interface ERDConfig {
   minZoom?: number;
   /** Maximum zoom level. Default: 4 */
   maxZoom?: number;
+  /**
+   * Maximum zoom level applied during fit-to-view.  Default 2.5 — allows small
+   * diagrams (e.g. Database Designer wizard preview with 1–3 entities) to scale
+   * up enough to fill the pane without looking "lost", while still letting
+   * manual zoom (wheel/pinch) go higher up to `maxZoom`.
+   */
+  maxFitZoom?: number;
   /** Initial zoom level (1 = 100%). Default: 1 */
   initialZoom?: number;
   /** Enable multi-select with Ctrl+click. Default: false */
