@@ -203,10 +203,21 @@ export function computeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {
     return { nodes: laidOutNodes, edges, bands, totalWidth, totalHeight };
 }
 
+/**
+ * Column count for a schema band.  Targets a roughly square aspect ratio,
+ * capped at 12 columns so cards remain recognizable when the user zooms
+ * out to see the whole band.  A single schema with hundreds of entities
+ * would otherwise produce an unreadable vertical strip.
+ */
 function colsFor(count: number): number {
     if (count <= 3) return 1;
     if (count <= 8) return 2;
-    return 3;
+    if (count <= 20) return 3;
+    if (count <= 40) return 4;
+    if (count <= 75) return 6;
+    if (count <= 120) return 8;
+    if (count <= 200) return 10;
+    return 12;
 }
 
 /**

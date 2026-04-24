@@ -391,16 +391,30 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         if (!svg) return;
         const rect = svg.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0 || this.layout.totalWidth === 0) return;
+
         const padding = 60;
-        const k = Math.min(
+        const idealK = Math.min(
             (rect.width - padding * 2) / this.layout.totalWidth,
             (rect.height - padding * 2) / this.layout.totalHeight,
             1,
         );
+
+        // Clamp the fit zoom so cards stay legible.  On very large schemas
+        // (hundreds of entities) fit-to-view would otherwise shrink each card
+        // to a few pixels wide.  We'd rather show part of the canvas at a
+        // readable zoom and let the user pan to see the rest.
+        const minZoom = this.config.minZoom ?? 0.35;
+        const k = Math.max(idealK, minZoom);
+
+        // Center horizontally only if the canvas fits; otherwise anchor at left
+        // so the user starts at the first schema band instead of the middle.
+        const canvasFitsX = this.layout.totalWidth * k <= rect.width - padding * 2;
+        const canvasFitsY = this.layout.totalHeight * k <= rect.height - padding * 2;
+
         this.transform = {
             k,
-            x: (rect.width - this.layout.totalWidth * k) / 2,
-            y: (rect.height - this.layout.totalHeight * k) / 2,
+            x: canvasFitsX ? (rect.width - this.layout.totalWidth * k) / 2 : padding,
+            y: canvasFitsY ? (rect.height - this.layout.totalHeight * k) / 2 : padding,
         };
         this.emitZoom();
         this.layoutComplete.emit();
