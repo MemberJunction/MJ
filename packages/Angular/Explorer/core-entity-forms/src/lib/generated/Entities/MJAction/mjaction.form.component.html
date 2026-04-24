@@ -112,7 +112,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Config"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -224,6 +224,31 @@
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RuntimeActionConfiguration"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxExecutionTimeMS"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedByAgentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>

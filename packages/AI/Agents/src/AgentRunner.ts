@@ -11,14 +11,31 @@
  */
 
 import { createHash } from 'crypto';
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, ActionStepOutputData, ActionStepSummary, ParseFileOutputRef } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
+import { InputArtifact } from './ArtifactToolManager';
 import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
+/**
+ * Row shape returned by the `GetArtifactVersionsByID` stored query.
+ * Joins vwArtifactVersions → vwArtifacts → vwArtifactTypes so one
+ * round-trip gives us everything `gatherConversationArtifacts` needs.
+ */
+interface ArtifactVersionRow {
+    VersionID: string;
+    VersionName: string | null;
+    ContentMode: 'File' | 'Text';
+    FileID: string | null;
+    Content: string | null;
+    MimeType: string | null;
+    ArtifactName: string;
+    TypeName: string;
+    ToolLibraryClass: string | null;
+}
 
 /**
  * AgentRunner provides a thin wrapper for executing AI agents.
@@ -359,7 +376,10 @@ export class AgentRunner {
                     // Update the agent response detail with progress message
                     if (agentResponseDetail && progress.message) {
                         agentResponseDetail.Message = progress.message;
-                        await agentResponseDetail.Save();
+                        const saved = await agentResponseDetail.Save();
+                        if (!saved) {
+                            LogError('Failed to save agent response detail progress update');
+                        }
                     }
                     // Call original callback if provided
                     if (originalOnProgress) {
@@ -368,9 +388,20 @@ export class AgentRunner {
                 }
                 : originalOnProgress;
 
+            // Gather all artifacts from this conversation for the ArtifactToolManager.
+            // Per design doc Section 8.8: in the in-conversation flow, "the agent continues
+            // the conversation with the artifact already available." This means ALL artifacts
+            // in the conversation (both agent-produced Output and user-attached Input) should
+            // be available to the agent via artifact tools.
+            const inputArtifacts = await this.gatherConversationArtifacts(conversationId, contextUser);
+
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
-                data: {...params.data, conversationId}, // ensure we pass along OUR conversationId
+                data: {
+                    ...params.data,
+                    conversationId,
+                    ...(inputArtifacts.length > 0 ? { __inputArtifacts: inputArtifacts } : {}),
+                },
                 conversationDetailId: agentResponseDetailId,
                 onProgress: wrappedOnProgress
             };
@@ -409,7 +440,10 @@ export class AgentRunner {
                     LogStatus('Updating agent response detail with final result');
 
                     // Reload to get any updates from agent execution
-                    await agentResponseDetail.Load(agentResponseDetailId);
+                    const loaded = await agentResponseDetail.Load(agentResponseDetailId);
+                    if (!loaded) {
+                        LogError(`Failed to reload agent response detail ${agentResponseDetailId}`);
+                    }
 
                     agentResponseDetail.Message = agentResult.agentRun?.Message ||
                                                  (agentResult.success
@@ -428,7 +462,10 @@ export class AgentRunner {
                         agentResponseDetail.AutomaticCommands = JSON.stringify(agentResult.automaticCommands);
                     }
 
-                    await agentResponseDetail.Save();
+                    const saved = await agentResponseDetail.Save();
+                    if (!saved) {
+                        LogError(`Failed to save agent response detail ${agentResponseDetailId} with final status`);
+                    }
                     LogStatus(`Updated agent response detail ${agentResponseDetailId} with final status: ${agentResponseDetail.Status}`);
                 }
             })();
@@ -1522,5 +1559,314 @@ export class AgentRunner {
             'video/ogg': 'ogv'
         };
         return mimeToExt[mimeType.toLowerCase()] || 'bin';
+    }
+
+    /**
+     * Gathers all artifacts from a conversation (both artifact-system records and
+     * uploaded file attachments) so the ArtifactToolManager can make them available
+     * to the agent as input artifacts.
+     */
+    private async gatherConversationArtifacts(conversationId: string, contextUser: UserInfo): Promise<InputArtifact[]> {
+        try {
+            const rv = new RunView();
+
+            // Get all conversation detail IDs for this conversation
+            const details = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Conversation Details',
+                    ExtraFilter: `ConversationID='${conversationId}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+
+            if (!details.Success || details.Results.length === 0) {
+                return [];
+            }
+
+            const detailIds = details.Results.map((d) => d.ID);
+
+            // Get all artifact junctions for these conversation details
+            const junctions = await rv.RunView<{ ID: string; ArtifactVersionID: string | null }>(
+                {
+                    EntityName: 'MJ: Conversation Detail Artifacts',
+                    ExtraFilter: `ConversationDetailID IN ('${detailIds.join("','")}')`,
+                    Fields: ['ID', 'ArtifactVersionID'],
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+
+            // Process artifact junctions (if any) — but don't return early,
+            // because file attachments (ConversationDetailAttachment) are checked
+            // separately below and may exist even when there are no artifact junctions.
+            const seenVersionIds = new Set<string>();
+            const uniqueJunctions = (junctions.Success && junctions.Results.length > 0)
+                ? junctions.Results.filter((j) => {
+                    const vid = j.ArtifactVersionID?.toLowerCase();
+                    if (!vid || seenVersionIds.has(vid)) return false;
+                    seenVersionIds.add(vid);
+                    return true;
+                })
+                : [];
+
+            const inputArtifacts: InputArtifact[] = [];
+
+            if (uniqueJunctions.length > 0) {
+                const versionIds = uniqueJunctions.map((j) => j.ArtifactVersionID);
+
+                const rq = new RunQuery();
+                const versionResult = await rq.RunQuery(
+                    {
+                        QueryName: 'GetArtifactVersionsByID',
+                        CategoryPath: '/MJ/AI/Agents/',
+                        Parameters: { versionIds },
+                    },
+                    contextUser,
+                );
+
+                if (!versionResult.Success) {
+                    LogError(`[AgentRunner] GetArtifactVersionsByID failed: ${versionResult.ErrorMessage}`);
+                } else {
+                    for (const row of versionResult.Results as ArtifactVersionRow[]) {
+                        const artifactName = row.VersionName || row.ArtifactName || 'Untitled';
+                        const typeName = row.TypeName || 'Text';
+
+                        let content: string | Buffer = '';
+                        if (row.ContentMode === 'File' && row.FileID) {
+                            const downloaded = await this.downloadArtifactFileContent(row.FileID, contextUser);
+                            if (downloaded) {
+                                content = downloaded;
+                            } else {
+                                LogError(`[AgentRunner] Failed to download file content for artifact "${artifactName}" (FileID: ${row.FileID})`);
+                                continue;
+                            }
+                        } else {
+                            content = row.Content || '';
+                        }
+
+                        if (typeof content === 'string' && content) {
+                            content = await this.hydrateSqlBackedContent(content, contextUser);
+                        }
+
+                        if (content) {
+                            inputArtifacts.push({
+                                name: artifactName,
+                                typeName,
+                                content,
+                                mimeType: row.MimeType ?? undefined,
+                                ...(row.ToolLibraryClass ? { toolLibraryClass: row.ToolLibraryClass } : {}),
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Also gather file attachments (ConversationDetailAttachment) that are
+            // document types the agent can explore (PDF, Excel, Word, etc.).
+            // Uploaded files go through the attachment system, not the artifact system,
+            // so gatherConversationArtifacts would miss them without this.
+            const FILE_MIME_PREFIXES = [
+                'application/pdf',
+                'application/vnd.openxmlformats-officedocument', // .docx, .xlsx, .pptx
+                'application/vnd.ms-excel', // .xls
+                'application/msword', // .doc
+                'text/', // .txt, .csv, .json, .md, etc.
+                'application/json',
+            ];
+
+            const attachments = await rv.RunView<{
+                ID: string;
+                MimeType: string | null;
+                FileID: string | null;
+                FileName: string | null;
+                InlineData: string | null;
+            }>(
+                {
+                    EntityName: 'MJ: Conversation Detail Attachments',
+                    ExtraFilter: `ConversationDetailID IN ('${detailIds.join("','")}')`,
+                    Fields: ['ID', 'MimeType', 'FileID', 'FileName', 'InlineData'],
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+
+            if (attachments.Success && attachments.Results.length > 0) {
+                for (const att of attachments.Results) {
+                    const mime = att.MimeType ?? '';
+                    const isDocumentType = FILE_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix));
+                    if (!isDocumentType) continue;
+
+                    let content: string | Buffer = '';
+                    if (att.FileID) {
+                        const downloaded = await this.downloadArtifactFileContent(att.FileID, contextUser);
+                        if (downloaded) {
+                            content = downloaded;
+                        } else {
+                            LogError(`[AgentRunner] Failed to download attachment file "${att.FileName}" (FileID: ${att.FileID})`);
+                            continue;
+                        }
+                    } else if (att.InlineData) {
+                        // InlineData is base64-encoded — decode for binary files, keep as string for text
+                        if (mime.startsWith('text/') || mime === 'application/json') {
+                            content = Buffer.from(att.InlineData, 'base64').toString('utf-8');
+                        } else {
+                            content = Buffer.from(att.InlineData, 'base64');
+                        }
+                    } else {
+                        continue; // No content available
+                    }
+
+                    const typeName = this.inferArtifactTypeName(mime);
+                    inputArtifacts.push({
+                        name: att.FileName || 'Uploaded File',
+                        typeName,
+                        content,
+                        mimeType: mime || undefined,
+                    });
+                }
+            }
+
+            if (inputArtifacts.length > 0) {
+                LogStatus(`[AgentRunner] Gathered ${inputArtifacts.length} input artifact(s) for conversation ${conversationId}: ${inputArtifacts.map(a => `${a.typeName}:"${a.name}" (${a.mimeType || 'no mime'})`).join(', ')}`);
+            } else {
+                LogStatus(`[AgentRunner] No input artifacts found for conversation ${conversationId} (${junctions.Results.length} artifact junction(s), ${attachments.Success ? attachments.Results.length : 0} attachment(s) checked)`);
+            }
+
+            return inputArtifacts;
+        } catch (error) {
+            LogError(`[AgentRunner] Failed to gather conversation artifacts: ${error}`);
+            return [];
+        }
+    }
+
+    /**
+     * Data artifacts from some agents persist the SQL spec (columns +
+     * `metadata.sql`) but not the resulting rows — the rows are re-executed
+     * live by `data-artifact-viewer` at render time. When an agent consumes the
+     * artifact directly there is no render step, so the tool library would see
+     * an empty `rows` array and report zero data.
+     *
+     * This method detects that shape (both the single-table legacy format and
+     * the multi-table `tables[]` format) and executes the stored SQL via
+     * `RunQuery` to inject real rows into the content before it reaches
+     * `ArtifactToolManager`. No-op for binary content, non-JSON content, or
+     * content that already has rows populated.
+     *
+     * Security: `RunQuery` uses the same read-only, `SQLExpressionValidator`-
+     * checked execution path that `data-artifact-viewer` already uses at
+     * render time — identical security posture to the existing view path.
+     */
+    private async hydrateSqlBackedContent(content: string, contextUser: UserInfo): Promise<string> {
+        let parsed: Record<string, unknown>;
+        try {
+            parsed = JSON.parse(content);
+        } catch {
+            return content;
+        }
+
+        let changed = false;
+        const rq = new RunQuery();
+
+        const rootMeta = parsed?.metadata as { sql?: string; rowCount?: number; executionTimeMs?: number } | undefined;
+        const rootRows = parsed?.rows as unknown[] | undefined;
+        if (rootMeta?.sql && (!rootRows || rootRows.length === 0)) {
+            const result = await rq.RunQuery({ SQL: rootMeta.sql }, contextUser);
+            if (result.Success) {
+                parsed.rows = result.Results;
+                parsed.metadata = {
+                    ...rootMeta,
+                    rowCount: result.RowCount,
+                    executionTimeMs: result.ExecutionTime,
+                };
+                changed = true;
+            } else {
+                LogError(`[AgentRunner] hydrateSqlBackedContent root SQL failed: ${result.ErrorMessage}`);
+            }
+        }
+
+        const tables = parsed?.tables as Array<{ metadata?: { sql?: string; rowCount?: number; executionTimeMs?: number }; rows?: unknown[] }> | undefined;
+        if (Array.isArray(tables)) {
+            for (const table of tables) {
+                if (table?.metadata?.sql && (!table.rows || table.rows.length === 0)) {
+                    const result = await rq.RunQuery({ SQL: table.metadata.sql }, contextUser);
+                    if (result.Success) {
+                        table.rows = result.Results;
+                        table.metadata.rowCount = result.RowCount;
+                        table.metadata.executionTimeMs = result.ExecutionTime;
+                        changed = true;
+                    } else {
+                        LogError(`[AgentRunner] hydrateSqlBackedContent table SQL failed: ${result.ErrorMessage}`);
+                    }
+                }
+            }
+        }
+
+        return changed ? JSON.stringify(parsed) : content;
+    }
+
+    /**
+     * Infer an artifact type name from a MIME type so ArtifactToolManager
+     * can resolve the correct tool library.
+     */
+    private inferArtifactTypeName(mimeType: string): string {
+        if (mimeType.startsWith('application/pdf')) return 'PDF';
+        if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType.includes('ms-excel')) return 'Excel';
+        if (mimeType.includes('wordprocessing') || mimeType.includes('msword')) return 'Word';
+        if (mimeType === 'application/json') return 'JSON';
+        if (mimeType.startsWith('text/')) return 'Text';
+        return 'Text'; // Fallback
+    }
+
+    /**
+     * Downloads binary content for a file-backed artifact from MJStorage.
+     * Uses FileStorageEngine to resolve the storage account and driver,
+     * then fetches the file by its ProviderKey.
+     *
+     * @param fileId - The MJ: Files entity ID referenced by ArtifactVersion.FileID
+     * @param contextUser - User context for storage driver authentication
+     * @returns Buffer of file content, or null if download fails
+     */
+    private async downloadArtifactFileContent(fileId: string, contextUser: UserInfo): Promise<Buffer | null> {
+        try {
+            await FileStorageEngine.Instance.Config(false, contextUser);
+
+            const rv = new RunView();
+            const fileResult = await rv.RunView<{ ID: string; Name: string; ContentType: string; ProviderID: string; ProviderKey: string }>(
+                {
+                    EntityName: 'MJ: Files',
+                    ExtraFilter: `ID = '${fileId}'`,
+                    Fields: ['ID', 'Name', 'ContentType', 'ProviderID', 'ProviderKey'],
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+
+            if (!fileResult.Success || fileResult.Results.length === 0) {
+                LogError(`[AgentRunner] File not found in MJ: Files for FileID: ${fileId}`);
+                return null;
+            }
+
+            const file = fileResult.Results[0];
+            const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+            if (accounts.length === 0) {
+                LogError(`[AgentRunner] No FileStorageAccount found for ProviderID: ${file.ProviderID}`);
+                return null;
+            }
+
+            const driver = await FileStorageEngine.Instance.GetDriver(accounts[0].ID, contextUser);
+            const objectName = file.ProviderKey ?? file.Name;
+            const content = await driver.GetObject({ fullPath: objectName });
+
+            // GetObject returns string or Buffer depending on provider
+            if (Buffer.isBuffer(content)) {
+                return content;
+            }
+            return Buffer.from(content as string);
+        } catch (error) {
+            LogError(`[AgentRunner] Failed to download file content for FileID ${fileId}: ${error}`);
+            return null;
+        }
     }
 }

@@ -1,0 +1,302 @@
+[
+  {
+    "_comments": [
+      "Runtime Actions demo #3 — the classic query+LLM pattern.",
+      "Uses a shipped prompt ('Runtime Demo: Summarize Entity Records') so",
+      "the prompt itself is version-controlled, review-able, and reusable",
+      "by other Runtime actions that agents may author later."
+    ],
+    "fields": {
+      "Name": "Summarize Entity Records",
+      "Description": "Queries a sample of records from the specified entity, passes them to an AI prompt, and returns a structured summary with key themes and suggested follow-up questions. Exercises the `rv` + `ai` bridge namespaces — the most common composition agents reach for.",
+      "Type": "Runtime",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved",
+      "IconClass": "fa-solid fa-feather-pointed",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
+      "Code": "@file:runtime/code/summarize-entity-records.js",
+      "RuntimeActionConfiguration": {
+        "permissions": {
+          "allowedActions": [],
+          "allowedAgents": [],
+          "allowedEntities": [],
+          "allowAnyEntity": true
+        },
+        "limits": {
+          "maxMemoryMB": 256,
+          "maxBridgeCalls": 10
+        }
+      },
+      "MaxExecutionTimeMS": 120000
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "entityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the entity to query and summarize.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "468B8259-936A-49B4-867F-9C4E15FD7C97"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.843Z",
+            "checksum": "ed84baba295bf5818867eb9934dfbca012f79553051a97bc6972697e3138e5c7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "extraFilter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional SQL WHERE clause fragment (e.g. \"Status='Active' AND CreatedAt > DATEADD(day, -30, GETUTCDATE())\").",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D8E24D5D-6B63-4444-96C7-D79CA0747EF3"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.877Z",
+            "checksum": "64f252533c8b03ccfa01bf706345b60a8ad4a70d33a3715b05d477aaade4fe22"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "maxRows",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum rows to include in the AI prompt. Default: 50. Larger values cost more tokens and risk hitting the model's context limit.",
+            "IsRequired": false,
+            "DefaultValue": "50"
+          },
+          "primaryKey": {
+            "ID": "5E6A3D84-09DB-4F5D-A156-5E15F9518CA4"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.911Z",
+            "checksum": "e513c7ce4f48e0ed9422189a3d2636619bba17b3c3b9c9128f367750a58388b6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "instructions",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional free-text instructions to steer the summary (e.g. 'Focus on geographic distribution' or 'Flag any records with missing contact info').",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "66273D04-A683-4514-8997-897B1CBFC7D6"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.942Z",
+            "checksum": "18faad2f309b1b3dc8b2de77f0dd20e17857b42bc5333c3339fd870f94974809"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "summary",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "2-4 sentence natural-language overview of the sampled records."
+          },
+          "primaryKey": {
+            "ID": "20E1A24A-6C2E-4882-815D-B9EB70DF533B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.971Z",
+            "checksum": "4515757e0728bd129a2938689a92762781d5e32b2764fb633d3dba753fd60d4d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "keyThemes",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "3-5 short phrases capturing recurring patterns, concentrations, or notable signals in the data."
+          },
+          "primaryKey": {
+            "ID": "8C6C99E4-4ED5-420D-A2BF-205A2D35AD19"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.002Z",
+            "checksum": "15568c351496613625f888453d480a995b266820b0efd82d581b72fa053a5614"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "followUpQuestions",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "2-4 specific questions a business user might want answered next."
+          },
+          "primaryKey": {
+            "ID": "0E652C4E-8FA8-4EFC-857A-3FA550624FED"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.032Z",
+            "checksum": "56a48b022fb3f5622cafbabe64dcd5f73948209856aefc686ee224c22a459eaf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "recordCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Number of records that were passed to the AI prompt."
+          },
+          "primaryKey": {
+            "ID": "CC26C41F-7AAE-4E4D-9AF3-F536CA11609A"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.060Z",
+            "checksum": "897503a8f5f1c8c93e2efcd410160404b612a333b9faa2800d1d21d1b8b33c0c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "totalRowCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Total rows in the entity matching the filter (before the maxRows cap)."
+          },
+          "primaryKey": {
+            "ID": "64804605-10EE-48F5-9389-ED6BDE611634"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.090Z",
+            "checksum": "7f098768c6d16ab74ba20e62fcb6cac0d2d85a87a5d19d2838bb82b3f02e0660"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "modelUsed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Name of the AI model that served the summarization request."
+          },
+          "primaryKey": {
+            "ID": "9EC6B89A-5213-4223-89D7-E1648B5A1D88"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.119Z",
+            "checksum": "2a121da7c15a766915f0e49813b3fdf387a4f81d885b63b6c0d15c8cbfc7fce8"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Records summarized successfully (includes the empty-sample case)."
+          },
+          "primaryKey": {
+            "ID": "1D4B8C86-48FD-4FB6-B761-B71E4F28A163"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.164Z",
+            "checksum": "3e84508ad47391327025d0e7162c85e2516859f13aa113d620052659baee9593"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ENTITY_NAME",
+            "IsSuccess": false,
+            "Description": "entityName parameter is required."
+          },
+          "primaryKey": {
+            "ID": "61BE2AE9-EF8C-4349-92C3-F6DF56CCCED6"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.183Z",
+            "checksum": "fecf240f98d39e60331fcc9df8461944f3218cd12cec45213d61826f2e7042c9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RUNVIEW_FAILED",
+            "IsSuccess": false,
+            "Description": "RunView returned Success=false."
+          },
+          "primaryKey": {
+            "ID": "AA6C9326-EE4A-48B2-AA83-5F664A8FB726"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.200Z",
+            "checksum": "ffc3df50fae26cc16e55f2ab4d8b9b07cde9801904657bacfefeb37972d868c3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROMPT_FAILED",
+            "IsSuccess": false,
+            "Description": "AI prompt execution failed."
+          },
+          "primaryKey": {
+            "ID": "0F09EF10-13CA-4E47-8804-8B7C11F7C782"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.217Z",
+            "checksum": "28d89d9ec5c8cc374e82c8d4811d05c9f8765bb4ab9d1faa44fd774f262cc114"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_AI_RESPONSE",
+            "IsSuccess": false,
+            "Description": "AI prompt returned non-JSON output (prompt response format issue)."
+          },
+          "primaryKey": {
+            "ID": "A702C0A3-D4A7-4AF8-9935-0686753F4B48"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.234Z",
+            "checksum": "f6879b992e096820006a6bd950933609d18591ed813ea55a42aefcca3f28e91b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "408C0473-99D1-4C56-99F7-7207A6F64915"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T13:09:47.773Z",
+      "checksum": "1cc302e9ceecf70f8e430340893b4f3cf2df32f0795906955dcf4a1f8f68f43e"
+    }
+  }
+]

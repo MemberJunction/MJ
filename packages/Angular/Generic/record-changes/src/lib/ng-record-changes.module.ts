@@ -3,12 +3,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 import { RecordChangesComponent } from './ng-record-changes.component';
+import { RestorePreviewPanelComponent } from './restore-preview-panel/restore-preview-panel.component';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { VersionsModule } from '@memberjunction/ng-versions';
 
 @NgModule({
   declarations: [
-    RecordChangesComponent
+    RecordChangesComponent,
+    RestorePreviewPanelComponent
   ],
   imports: [
     CommonModule,
@@ -17,7 +19,8 @@ import { VersionsModule } from '@memberjunction/ng-versions';
     VersionsModule
   ],
   exports: [
-    RecordChangesComponent
+    RecordChangesComponent,
+    RestorePreviewPanelComponent
   ]
 })
 export class RecordChangesModule {}

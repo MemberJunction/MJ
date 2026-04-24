@@ -7,26 +7,16 @@
  * without any platform branching.
  */
 import type { ColumnDefinition, ColumnModification, DatabasePlatform, TableDefinition } from './interfaces.js';
-import { SQLDialect, SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
+import { SQLDialect, GetDialect as GetDialectFromPackage } from '@memberjunction/sql-dialect';
 import { ValidateIdentifier } from './utils.js';
-
-// ─── Dialect Lookup ─────────────────────────────────────────────────
-
-const DIALECT_MAP: Record<string, () => SQLDialect> = {
-  sqlserver: () => new SQLServerDialect(),
-  postgresql: () => new PostgreSQLDialect(),
-};
 
 /**
  * Get the SQLDialect for a given platform string.
- * Throws if the platform is not supported.
+ * Delegates to the canonical factory in `@memberjunction/sql-dialect`.
+ * Re-exported here for backward compatibility with SchemaEngine consumers.
  */
 export function GetDialect(platform: DatabasePlatform | string): SQLDialect {
-  const factory = DIALECT_MAP[platform];
-  if (!factory) {
-    throw new Error(`No SQLDialect registered for "${platform}". Supported: ${Object.keys(DIALECT_MAP).join(', ')}`);
-  }
-  return factory();
+  return GetDialectFromPackage(platform);
 }
 
 // ─── DDLGenerator ───────────────────────────────────────────────────

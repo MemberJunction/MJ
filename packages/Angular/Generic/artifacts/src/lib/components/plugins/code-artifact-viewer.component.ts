@@ -1,6 +1,8 @@
 import { Component, Input } from '@angular/core';
+import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { createCodeSnapshot } from '../../snapshot-helpers';
 
 /**
  * Viewer component for code artifacts (Python, C#, Java, TypeScript, JavaScript, SQL, CSS, XML)
@@ -128,6 +130,10 @@ export class CodeArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       this.language = 'plaintext';
       this.languageLabel = 'Code';
     }
+  }
+
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    return createCodeSnapshot(this.getRawContent(), this.getDisplayTitle());
   }
 
   onCopy(): void {

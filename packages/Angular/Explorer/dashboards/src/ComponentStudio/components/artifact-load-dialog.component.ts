@@ -7,7 +7,6 @@ import {
   MJCollectionArtifactEntity
 } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';

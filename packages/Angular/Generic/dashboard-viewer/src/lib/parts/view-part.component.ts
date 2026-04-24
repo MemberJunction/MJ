@@ -5,6 +5,7 @@ import { PanelConfig } from '../models/dashboard-types';
 import { Metadata, EntityInfo } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
+import { MapRenderMode } from '@memberjunction/ng-map-view';
 
 /**
  * Runtime renderer for View dashboard parts.
@@ -46,6 +47,7 @@ import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberj
               [entity]="entityInfo"
               [viewEntity]="viewEntity"
               [(viewMode)]="viewMode"
+              [mapRenderMode]="mapRenderMode"
               [gridSelectionMode]="selectionMode"
               [showGridToolbar]="false"
               (recordSelected)="onRecordSelected($event)"
@@ -114,6 +116,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
     public viewEntity: MJUserViewEntityExtended | null = null;
     public entityInfo: EntityInfo | null = null;
     public viewMode: EntityViewMode = 'grid';
+    public mapRenderMode: MapRenderMode = 'point';
     public selectionMode: 'single' | 'multiple' = 'single';
 
     constructor(cdr: ChangeDetectorRef) {
@@ -144,6 +147,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
 
             // Set view mode from config
             this.viewMode = (config?.['displayMode'] as EntityViewMode) || 'grid';
+            this.mapRenderMode = (config?.['mapRenderMode'] as MapRenderMode) || 'point';
             this.selectionMode = config?.['selectionMode'] === 'multiple' ? 'multiple' : 'single';
 
             if (viewId) {

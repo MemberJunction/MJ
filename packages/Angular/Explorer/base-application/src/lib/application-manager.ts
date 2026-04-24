@@ -95,6 +95,15 @@ export class ApplicationManager {
   }
 
   /**
+   * Get all applications the current user's roles grant access to.
+   * Filters out apps where ApplicationRole records exist but the user's roles lack CanAccess.
+   */
+  GetAuthorizedSystemApps(): BaseApplication[] {
+    const engine = UserInfoEngine.Instance;
+    return this.allApplications$.value.filter(app => engine.UserHasApplicationAccess(app.ID));
+  }
+
+  /**
    * Get user's application configurations synchronously
    */
   GetUserAppConfigs(): UserAppConfig[] {
@@ -167,7 +176,7 @@ export class ApplicationManager {
 
     for (const userApp of userApps) {
       const app = appMap.get(userApp.ApplicationID);
-      if (app && userApp.IsActive) {
+      if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,
           userAppId: userApp.ID,
@@ -306,7 +315,7 @@ export class ApplicationManager {
 
     for (const userApp of userApps) {
       const app = appMap.get(userApp.ApplicationID);
-      if (app && userApp.IsActive) {
+      if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,
           userAppId: userApp.ID,
@@ -490,6 +499,15 @@ export class ApplicationManager {
         };
       }
 
+      case 'not_authorized':
+        return {
+          status: 'not_authorized',
+          message: `You do not have the required role to access "${appInfo.Name}".`,
+          appName: appInfo.Name,
+          appId: appInfo.ID,
+          canInstall: false
+        };
+
       case 'installed_inactive':
         return {
           status: 'disabled',
@@ -562,7 +580,7 @@ export class ApplicationManager {
  */
 export interface AppAccessResult {
   /** Status of the access check */
-  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled';
+  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled' | 'not_authorized';
   /** Human-readable message describing the access status */
   message: string;
   /** Name of the application (if found) */

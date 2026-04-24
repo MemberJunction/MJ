@@ -87,11 +87,15 @@ export * from './custom/workflow/delay.action';
 
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';
+export * from './custom/ai/execute-agent.action';
+export * from './custom/ai/create-runtime-action.action';
+export * from './custom/ai/test-runtime-action.action';
 export * from './custom/ai/summarize-content.action';
 export * from './custom/ai/find-candidate-agents.action';
 export * from './custom/ai/find-candidate-actions.action';
 export * from './custom/ai/load-agent-spec.action';
 export * from './custom/ai/generate-image.action';
+export * from './custom/ai/actionsmith-agent';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';

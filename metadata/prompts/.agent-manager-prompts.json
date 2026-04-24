@@ -9,7 +9,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -77,8 +77,8 @@
       "ID": "96BCAE1C-B1F0-4FC4-9988-54B067BC962A"
     },
     "sync": {
-      "lastModified": "2026-04-21T05:10:59.371Z",
-      "checksum": "44495c993f57b3ec58e617204cb575f08882ee1f754e3f58f69c068240ce73a6"
+      "lastModified": "2026-04-23T13:10:15.808Z",
+      "checksum": "c291c476562783815e9c59192e5f5be8fe5e6df05bff631c72c3d77745b7ec49"
     }
   },
   {
@@ -91,7 +91,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -173,7 +173,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -255,7 +255,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -323,8 +323,8 @@
       "ID": "FA0031BB-4838-4C16-A161-ED670E9A147B"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:37.735Z",
-      "checksum": "6ef511f6be3608cce6c3f4b5ddc154ebc0cb5a6d3b222e28ef1fb6bf4f60062e"
+      "lastModified": "2026-04-20T14:29:13.723Z",
+      "checksum": "e006d08fa86c536fc49b74e49d466f8731251af6b3c06bfb5272023ffdc61060"
     }
   }
 ]
