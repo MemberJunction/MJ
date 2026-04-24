@@ -6,7 +6,7 @@
  * whether to modify it, or for display in the Database Designer UI.
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RunView, Metadata } from '@memberjunction/core';
@@ -102,7 +102,7 @@ export class DescribeEntityAction extends BaseDatabaseDesignerAction {
 
         // Fast path: look up by ID or name in the in-memory metadata cache.
         let entity = entityID
-            ? md.Entities.find(e => e.ID === entityID)
+            ? md.Entities.find(e => UUIDsEqual(e.ID, entityID))
             : entityName
             ? md.Entities.find(e => e.Name.toLowerCase() === entityName.toLowerCase())
             : md.Entities.find(

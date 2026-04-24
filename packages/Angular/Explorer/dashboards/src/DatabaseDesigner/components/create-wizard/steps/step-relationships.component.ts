@@ -19,6 +19,7 @@ import {
     ChangeDetectionStrategy, ChangeDetectorRef, inject,
 } from '@angular/core';
 import { Metadata, EntityInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { ColumnSpec, ForeignKeySpec } from '../../../database-designer.types.js';
 
 // `MJ: Schema Info` only surfaces MJ-registered schemas, so only __mj needs blocking here.
@@ -92,7 +93,7 @@ export class StepRelationshipsComponent {
      */
     public ColumnsForEntity(entityId: string): EntityColumnInfo[] {
         if (!entityId) return [];
-        const entity = new Metadata().Entities.find(e => e.ID === entityId);
+        const entity = new Metadata().Entities.find(e => UUIDsEqual(e.ID, entityId));
         if (!entity) return [{ Name: 'ID', SqlType: 'uniqueidentifier' }];
         return entity.Fields
             .filter(f => !f.IsVirtual)
@@ -137,7 +138,7 @@ export class StepRelationshipsComponent {
             this.emit();
             return;
         }
-        const entity = new Metadata().Entities.find(e => e.ID === entityId);
+        const entity = new Metadata().Entities.find(e => UUIDsEqual(e.ID, entityId));
         this.rows = this.rows.map(r =>
             r.rowIndex === rowIndex
                 ? {
