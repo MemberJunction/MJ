@@ -29,7 +29,9 @@
  * - validate-component-props (semantic constraint validation)
  */
 
-import traverse, { NodePath } from '@babel/traverse';
+import _traverse, { NodePath } from '@babel/traverse';
+type TraverseModule = typeof _traverse & { default?: typeof _traverse };
+const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
 import * as t from '@babel/types';
 import { ComponentSpec, PropertyConstraint } from '@memberjunction/interactive-component-types';
 import { ComponentMetadataEngine } from '@memberjunction/core-entities';
