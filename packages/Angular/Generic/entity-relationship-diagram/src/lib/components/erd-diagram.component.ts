@@ -333,15 +333,12 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         if (target.closest('.erd-node')) return;
         this.panning = true;
         this.panStart = { x: e.clientX - this.transform.x, y: e.clientY - this.transform.y };
-        // Clicking the background deselects.
-        if (this.focusNodeId || this.selectedNodeId) {
-            this.focusNodeId = null;
-            this.selectedNodeId = null;
-            this.updateHighlightSet();
-            this.updateSelectedEntity();
-            this.nodeDeselected.emit();
-            this.cdr.markForCheck();
-        }
+        // Intentionally do NOT deselect on background mousedown — users
+        // commonly need to drag the canvas while an entity is focused (to
+        // see a neighbour off-screen), and that shouldn't clear the
+        // highlight.  Deselect happens only via (a) clicking the focused
+        // entity again to toggle it off, or (b) the close button on the
+        // focus details card.
     }
 
     public onBackgroundMouseMove(e: MouseEvent): void {
