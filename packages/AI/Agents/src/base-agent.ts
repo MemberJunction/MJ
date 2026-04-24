@@ -1071,10 +1071,63 @@ export class BaseAgent {
      * });
      * ```
      */
+    /**
+     * Engine-default wall-clock timeout applied to any agent run whose
+     * `ExecuteAgentParams.maxExecutionTimeMs` is not set. Sub-classes can
+     * override to globally change the default. Intentionally generous
+     * (2 hours) — tighten per-run for interactive scenarios.
+     */
+    protected get DefaultAgentTimeoutMS(): number {
+        return 2 * 60 * 60 * 1000;
+    }
+
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         // Capture per-request provider for the duration of this execution so all entity
         // saves go through the isolated provider, never the global singleton's transaction.
         this._activeProvider = params.provider || Metadata.Provider;
+
+        // =====================================================================================
+        // UNIVERSAL WALL-CLOCK TIMEOUT
+        //
+        // We chain any caller-supplied `cancellationToken` with an internal
+        // AbortController that fires after `maxExecutionTimeMs` (falling back
+        // to `DefaultAgentTimeoutMS`). The chained signal replaces
+        // `params.cancellationToken` for the duration of the run, so every
+        // existing cancellation check in the body of Execute sees the merged
+        // abort condition — whether it came from the caller, the timeout, or
+        // both.
+        //
+        // Actions invoked from this agent carry their own AbortSignal on
+        // `RunActionParams.AbortSignal` (see ActionEngine.RunAction) and are
+        // unaffected by this wrapper — their timeout budget is independent.
+        // =====================================================================================
+        const agentTimeoutMS = params.maxExecutionTimeMs ?? this.DefaultAgentTimeoutMS;
+        const upstreamToken = params.cancellationToken;
+        const timeoutController = new AbortController();
+        const relayUpstreamAbort = () => {
+            if (!timeoutController.signal.aborted) {
+                timeoutController.abort(upstreamToken?.reason ?? 'upstream cancellation');
+            }
+        };
+        if (upstreamToken) {
+            if (upstreamToken.aborted) {
+                relayUpstreamAbort();
+            } else {
+                upstreamToken.addEventListener('abort', relayUpstreamAbort, { once: true });
+            }
+        }
+        const timeoutId = setTimeout(() => {
+            if (!timeoutController.signal.aborted) {
+                timeoutController.abort(
+                    `Agent '${params.agent.Name}' exceeded maxExecutionTimeMs (${agentTimeoutMS}ms)`
+                );
+            }
+        }, agentTimeoutMS);
+        // Route the merged signal back through `params` so the existing body of
+        // Execute (and downstream sub-agent invocations that propagate
+        // `cancellationToken`) observe it.
+        params.cancellationToken = timeoutController.signal;
+
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
 
@@ -1319,8 +1372,12 @@ export class BaseAgent {
         } catch (error) {
             // Check if error is due to cancellation
             if (params.cancellationToken?.aborted || error.message === 'Cancelled during execution') {
-                this.logStatus(`⚠️ Agent '${params.agent.Name}' execution cancelled: ${error.message}`, true, params);
-                return await this.createCancelledResult(error.message || 'Cancelled due to error during execution', params.contextUser);
+                const reason =
+                    typeof timeoutController.signal.reason === 'string'
+                        ? timeoutController.signal.reason
+                        : error.message;
+                this.logStatus(`⚠️ Agent '${params.agent.Name}' execution cancelled: ${reason}`, true, params);
+                return await this.createCancelledResult(reason || 'Cancelled due to error during execution', params.contextUser);
             }
             this.logError(error, {
                 agent: params.agent,
@@ -1328,14 +1385,25 @@ export class BaseAgent {
                 severity: 'critical'
             });
             return await this.createFailureResult(error.message, params.contextUser);
+        } finally {
+            // Release timeout / upstream-abort listeners so we don't leak
+            // handles when the run completes (success, failure, or cancel).
+            clearTimeout(timeoutId);
+            if (upstreamToken) {
+                upstreamToken.removeEventListener('abort', relayUpstreamAbort);
+            }
+            // Restore the caller's original cancellationToken on `params` so
+            // consumers that re-read `params` after the call see what they
+            // passed in, not our chained signal.
+            params.cancellationToken = upstreamToken;
         }
     }
 
     /**
      * Sub-classes can override this method to perform any specialized initialization
-     * @param params 
+     * @param params
      */
-    protected async initializeStartingPayload<P = any>(params: ExecuteAgentParams<any, P>): Promise<void> { 
+    protected async initializeStartingPayload<P = any>(params: ExecuteAgentParams<any, P>): Promise<void> {
         // the base class doesn't do anything here, this allows sub-classes
         // to do specialized initialization of the starting payload
     }

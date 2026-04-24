@@ -1,7 +1,13 @@
-<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-    @if (record) {
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
         <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-            <mj-form-toolbar [Form]="this"></mj-form-toolbar>
 
             <!-- Header Section -->
             <div class="prompt-run-header">
@@ -1210,9 +1216,10 @@
 
             </div>
         </form>
-    }
+</mj-record-form-container>
+}
 
-    <!-- Full-screen overlay -->
+<!-- Full-screen overlay -->
     @if (FullScreenContent) {
         <div class="fullscreen-overlay" (click)="closeFullScreen()">
             <div class="fullscreen-container" (click)="$event.stopPropagation()">
@@ -1249,4 +1256,3 @@
             </div>
         </div>
     }
-</div>

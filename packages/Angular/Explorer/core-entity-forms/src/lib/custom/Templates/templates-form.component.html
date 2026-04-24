@@ -1,7 +1,13 @@
-<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-    @if (record) {
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
         <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-        <mj-form-toolbar [Form]="this"></mj-form-toolbar>
 
         <!-- Main Content Area -->
         <div class="template-main-area" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
@@ -286,12 +292,12 @@
             </div>
         </div>
         </form>
+</mj-record-form-container>
 
-        <!-- Template Parameter Dialog -->
-        <mj-template-param-dialog
-            [template]="record"
-            [(isVisible)]="showParamDialog"
-            (onClose)="onParamDialogClose()">
-        </mj-template-param-dialog>
-    }
-</div>
+<!-- Template Parameter Dialog -->
+<mj-template-param-dialog
+    [template]="record"
+    [(isVisible)]="showParamDialog"
+    (onClose)="onParamDialogClose()">
+</mj-template-param-dialog>
+}

@@ -2051,6 +2051,16 @@ export class MJAction_ {
     @Field({nullable: true, description: `Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.`}) 
     Config?: string;
         
+    @Field({nullable: true, description: `JSON blob holding configuration specific to Type='Runtime' actions: declarative permission scopes (allowedEntities, allowedActions, allowedAgents with id+name pairs), resource limits (maxMemoryMB, maxBridgeCalls), and sandbox options (additionalLibraries, debugMode). Evolvable — new keys can be introduced without schema changes. NULL for non-Runtime actions.`}) 
+    RuntimeActionConfiguration?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Universal maximum execution time in milliseconds for a single action invocation. Enforced by ActionEngine across ALL action types (Custom, Generated, Runtime) via AbortSignal passed through RunActionParams. NULL means use the engine default.`}) 
+    MaxExecutionTimeMS?: number;
+        
+    @Field({nullable: true, description: `Optional reference to the AI Agent that authored this action — populated when an agent (e.g. ActionSmith) dynamically generates a Runtime action. NULL for human-authored Custom/Generated actions. Provides an audit trail linking agent-generated capabilities back to their creator.`}) 
+    @MaxLength(36)
+    CreatedByAgentID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Category?: string;
@@ -2066,6 +2076,10 @@ export class MJAction_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     DefaultCompactPrompt?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    CreatedByAgent?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -2180,6 +2194,15 @@ export class CreateMJActionInput {
     @Field({ nullable: true })
     Config: string | null;
 
+    @Field({ nullable: true })
+    RuntimeActionConfiguration: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionTimeMS: number | null;
+
+    @Field({ nullable: true })
+    CreatedByAgentID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -2255,6 +2278,15 @@ export class UpdateMJActionInput {
 
     @Field({ nullable: true })
     Config?: string | null;
+
+    @Field({ nullable: true })
+    RuntimeActionConfiguration?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionTimeMS?: number | null;
+
+    @Field({ nullable: true })
+    CreatedByAgentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9189,6 +9221,9 @@ if this limit is exceeded.`})
     @Field(() => [MJAIAgent_])
     MJAIAgents_ParentIDArray: MJAIAgent_[]; // Link to MJAIAgents
     
+    @Field(() => [MJAction_])
+    MJActions_CreatedByAgentIDArray: MJAction_[]; // Link to MJActions
+    
 }
 
 //****************************************************************************
@@ -9869,6 +9904,16 @@ export class MJAIAgentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgents')} WHERE ${provider.QuoteIdentifier('ParentID')}='${mjaiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAction_])
+    async MJActions_CreatedByAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Actions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwActions')} WHERE ${provider.QuoteIdentifier('CreatedByAgentID')}='${mjaiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Actions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

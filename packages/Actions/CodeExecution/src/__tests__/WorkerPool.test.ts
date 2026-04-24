@@ -125,7 +125,9 @@ describe('WorkerPool', () => {
         expect.stringContaining('worker.js'),
         [],
         expect.objectContaining({
-          stdio: ['ignore', 'inherit', 'inherit', 'ipc']
+          // stderr is 'pipe' so the pool can capture a rolling tail for
+          // crash diagnostics while still forwarding it to MJAPI stderr.
+          stdio: ['ignore', 'inherit', 'pipe', 'ipc']
         })
       );
     });
@@ -342,8 +344,10 @@ describe('WorkerPool', () => {
       // Simulate the worker crashing
       mockProcesses[0].simulateCrash(1, 'SIGSEGV');
 
-      // The promise should reject because the worker crashed
-      await expect(executePromise).rejects.toThrow('Worker process crashed');
+      // The promise should reject with the enriched diagnostic — the
+      // classifier recognizes SIGSEGV as a native crash and surfaces
+      // actionable guidance instead of the old opaque message.
+      await expect(executePromise).rejects.toThrow(/SIGSEGV/);
     });
 
     it('should attempt to restart crashed workers', async () => {

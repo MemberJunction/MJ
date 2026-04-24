@@ -31,6 +31,7 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
+    "@memberjunction/action-runtime-host": "5.29.0",
     "@memberjunction/actions": "5.29.0",
     "@memberjunction/actions-apollo": "5.29.0",
     "@memberjunction/actions-base": "5.29.0",

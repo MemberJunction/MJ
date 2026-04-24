@@ -823,12 +823,27 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return this.record?.EntityInfo?.Name || '';
   }
 
+  /**
+   * Component-level default width mode, used when the user has NOT
+   * explicitly chosen a width for this entity yet (first visit, nothing
+   * persisted in User Settings). Subclasses can override this — for
+   * example, custom forms with full-bleed layouts should return
+   * `'full-width'` here and the container will respect it on first open.
+   *
+   * Once the user toggles the width via the toolbar, their choice
+   * persists via `setFormWidthMode()` and takes priority over this
+   * default on subsequent opens.
+   */
+  public getDefaultFormWidthMode(): 'centered' | 'full-width' {
+    return 'centered';
+  }
+
   public getFormWidthMode(): 'centered' | 'full-width' {
     const entityName = this.getEntityName();
-    if (entityName) {
+    if (entityName && this.formStateService.hasExplicitWidthMode(entityName)) {
       return this.formStateService.getWidthMode(entityName);
     }
-    return 'centered';
+    return this.getDefaultFormWidthMode();
   }
 
   public setFormWidthMode(widthMode: 'centered' | 'full-width'): void {
