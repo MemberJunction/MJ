@@ -134,9 +134,10 @@ export async function CreateAppSchema(
  */
 export async function DropAppSchema(
   schemaName: string,
-  provider: DatabaseProviderBase
+  provider: DatabaseProviderBase,
+  options: ValidateSchemaNameOptions = {}
 ): Promise<SchemaOperationResult> {
-  const validation = ValidateSchemaName(schemaName);
+  const validation = ValidateSchemaName(schemaName, options);
   if (!validation.Success) {
     return validation;
   }

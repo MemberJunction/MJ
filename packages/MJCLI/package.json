@@ -38,7 +38,8 @@
     "commands": "./dist/commands",
     "hooks": {
       "init": "./dist/hooks/init",
-      "prerun": "./dist/hooks/prerun"
+      "prerun": "./dist/hooks/prerun",
+      "postrun": "./dist/hooks/postrun"
     },
     "dirname": "mj",
     "topicSeparator": " ",

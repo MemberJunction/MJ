@@ -32,6 +32,10 @@ export default class AppRemove extends Command {
     force: Flags.boolean({ description: 'Force removal even if other apps depend on this one' }),
     yes: Flags.boolean({ char: 'y', description: 'Skip confirmation prompt' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
+    'dangerously-ignore-dbl-underscore-schema-rule': Flags.boolean({
+      hidden: true,
+      default: false,
+    }),
   };
 
   async run(): Promise<void> {
@@ -54,7 +58,13 @@ export default class AppRemove extends Command {
       const context = await buildOrchestratorContext(this, flags.verbose);
 
       const result = await RemoveApp(
-        { AppName: args.name, KeepData: flags['keep-data'], Force: flags.force, Verbose: flags.verbose },
+        {
+          AppName: args.name,
+          KeepData: flags['keep-data'],
+          Force: flags.force,
+          Verbose: flags.verbose,
+          AllowDoubleUnderscoreSchema: flags['dangerously-ignore-dbl-underscore-schema-rule'],
+        },
         context
       );
 

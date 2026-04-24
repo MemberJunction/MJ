@@ -64,6 +64,10 @@ export interface OrchestratorContext {
   AdditionalTargets?: WorkspaceTarget[];
   /** File subpath within client workspace for bootstrap file (default: 'src/app/generated/open-app-bootstrap.generated.ts') */
   ClientBootstrapSubpath?: string;
+  /** MJ core schema name. Used to resolve `${mjSchema}` placeholder in app migrations. Defaults to '__mj'. */
+  MJCoreSchema?: string;
+  /** Extra user placeholders merged into the Skyway Placeholders map for migration SQL substitution. */
+  MigrationPlaceholders?: Record<string, string>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -164,7 +168,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     if (manifest.migrations && manifest.schema) {
       const migrationResult = await HandleMigrations(manifest, context);
       if (!migrationResult.Success) {
-        await CompensateSchemaOnFailure(manifest, context, schemaCreated, Callbacks);
+        await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Migration', startTime, migrationResult.ErrorMessage ?? 'Migration failed');
       }
     }
@@ -173,7 +177,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     Callbacks?.OnProgress?.('Record', 'Recording app installation...');
     const recordResult = await RecordInstallationAtomically(context.ContextUser, manifest, Callbacks);
     if (!recordResult.Success) {
-      await CompensateSchemaOnFailure(manifest, context, schemaCreated, Callbacks);
+      await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Record', startTime, recordResult.ErrorMessage ?? 'Failed to record installation');
     }
     createdAppId = recordResult.AppId;
@@ -285,6 +289,7 @@ async function CompensateSchemaOnFailure(
   manifest: MJAppManifest,
   context: OrchestratorContext,
   schemaWasCreated: boolean,
+  allowDoubleUnderscore: boolean,
   callbacks?: AppInstallCallbacks,
 ): Promise<void> {
   if (!schemaWasCreated || !manifest.schema) {
@@ -292,7 +297,7 @@ async function CompensateSchemaOnFailure(
   }
   try {
     callbacks?.OnProgress?.('Rollback', `Rolling back: dropping schema '${manifest.schema.name}'...`);
-    await DropAppSchema(manifest.schema.name, context.DatabaseProvider);
+    await DropAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
     callbacks?.OnProgress?.('Rollback', `Schema '${manifest.schema.name}' dropped successfully`);
   } catch (rollbackError: unknown) {
     const msg = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
@@ -552,7 +557,9 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     // Step 7: Drop schema (unless --keep-data)
     if (!options.KeepData && existingApp.SchemaName) {
       Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
-      const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider);
+      const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
+        allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+      });
       if (!dropResult.Success) {
         Callbacks?.OnWarn?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
       }
@@ -779,6 +786,8 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
     MigrationsDir: tempDir,
     SchemaName: manifest.schema.name,
     DatabaseConfig: context.DatabaseConfig,
+    MJCoreSchema: context.MJCoreSchema,
+    ExtraPlaceholders: context.MigrationPlaceholders,
   });
 
   return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };
