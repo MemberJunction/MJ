@@ -285,10 +285,6 @@
   fill: color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
 }
 
-.erd-node-rail {
-  fill: var(--mj-border-strong);
-}
-
 .erd-node-body {
   fill: var(--mj-bg-surface);
   stroke: var(--mj-border-default);

@@ -146,15 +146,10 @@
               [attr.width]="node.width" [attr.height]="node.height"
               x="0" y="0" rx="8" />
 
-            <!-- Schema left rail (neutral accent) -->
-            <rect class="erd-node-rail"
-              [attr.height]="node.height"
-              x="0" y="0" width="4" rx="0" />
-
             <!-- Header -->
             <rect class="erd-node-header"
-              x="4" y="0"
-              [attr.width]="node.width - 4" height="36"
+              x="0" y="0"
+              [attr.width]="node.width" height="36"
               rx="6" />
             <foreignObject x="14" y="8" [attr.width]="node.width - 28" height="22">
               <div xmlns="http://www.w3.org/1999/xhtml" class="erd-node-header-content">
@@ -167,7 +162,7 @@
 
             <!-- Separator -->
             <line class="erd-node-separator"
-              x1="4" [attr.x2]="node.width - 4" y1="36" y2="36" />
+              x1="0" [attr.x2]="node.width" y1="36" y2="36" />
 
             <!-- Fields -->
             @for (field of node.visibleFields; track trackByField($index, field); let i = $index) {
