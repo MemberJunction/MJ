@@ -471,6 +471,41 @@ Look at these for reference:
 - `AIPromptFormComponentExtended` - extends `AIPromptFormComponent`
 - `EntityFormComponentExtended` - extends `EntityFormComponent`
 - `ActionFormComponentExtended` - extends `ActionFormComponent`
+- `ContentSourceFormComponentExtended` - clean reference for the toolbar pattern below
+
+### 🚨 Toolbar Pattern: Use `<mj-record-form-container>`, NOT `<mj-form-toolbar>` directly
+
+For entity forms, **always wrap your content in `<mj-record-form-container>`** rather than dropping in `<mj-form-toolbar>` yourself. The container owns the toolbar AND the panels that the toolbar's buttons open (Record Changes, Add to List, Tags). A raw toolbar only emits events — if nothing wires them up, those features silently break (buttons appear but do nothing).
+
+#### ✅ DO — wrap in the container
+```html
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    <!-- Your form content — panels, sections, etc. -->
+
+</mj-record-form-container>
+}
+```
+
+All five handlers (`OnFormNavigate`, `OnDeleteRequested`, `OnFavoriteToggled`, `OnHistoryRequested`, `OnListManagementRequested`) already exist on `BaseFormComponent` — you do not need to implement them.
+
+#### ❌ DON'T — use the raw toolbar for entity forms
+```html
+<!-- History / Tags / Add-to-List buttons render but do nothing -->
+<mj-form-toolbar [Form]="this"></mj-form-toolbar>
+```
+
+#### When it's OK to use `<mj-form-toolbar>` directly
+Lightweight scenarios where you genuinely don't need Record Changes / Tags / Lists — for example a modal dialog, an embedded widget, or a purpose-built editor. For anything opened from the Explorer's entity-navigation path, use the container.
+
+#### Reference
+The canonical working example is `packages/Angular/Explorer/core-entity-forms/src/lib/custom/ContentSources/content-source-form.component.html`. The generated forms under `core-entity-forms/src/lib/generated/` also all follow this pattern — your custom form should too.
 
 ---
 

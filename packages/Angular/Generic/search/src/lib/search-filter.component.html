@@ -9,7 +9,7 @@
                     Clear ({{ GetActiveFilterCount() }})
                 </button>
             }
-            <button class="filter-close-btn" (click)="CloseRequested.emit()" title="Hide filters">
+            <button class="filter-close-btn" (click)="CloseRequested.emit()" title="Hide filters" aria-label="Hide filters">
                 <i class="fa-solid fa-times"></i>
             </button>
         </div>

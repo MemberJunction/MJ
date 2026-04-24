@@ -1,0 +1,286 @@
+[
+  {
+    "_comments": [
+      "Runs a Runtime action against one or more declared test cases, returning",
+      "per-case pass/fail plus aggregated counts. Supports either an existing",
+      "Action record (ActionID/ActionName) OR an ephemeral in-memory action",
+      "(Code + Configuration) that hasn't been persisted yet — that path is how",
+      "ActionSmith exercises freshly-generated code before calling Create Runtime",
+      "Action."
+    ],
+    "fields": {
+      "Name": "Test Runtime Action",
+      "Description": "Runs a Runtime action against declared test cases. Accepts either (ActionID/ActionName) for an existing Action record or (Code + Configuration) for a freshly-generated, not-yet-persisted Runtime action. Each case runs through ActionEngine.RunAction so the full timeout / bridge / approval path is exercised. Returns per-case pass/fail plus AllPassed / PassedCount / FailedCount for the whole batch.",
+      "DriverClass": "Test Runtime Action",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-vial",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ActionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of an existing Action record to test. Mutually exclusive with (Code + Configuration).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3A32994C-6060-4A30-A870-C01BD2A7B745"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.556Z",
+            "checksum": "7ed2c121791e1a5f4533274faf139d92266530c4615dc14e96915c0733896426"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ActionName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of an existing Action record to test. Mutually exclusive with (Code + Configuration).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A968C4E7-9DB8-4D34-8DAE-6E28A0DA1FC0"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.593Z",
+            "checksum": "b7963b33fbc29ac458c679474e138141ba0a48faee2ea52865f3855934743642"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Code",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JavaScript code body for an ephemeral (not-yet-persisted) Runtime action. Requires Configuration.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6C008F60-980C-42B5-8137-ACBAEEAC614B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.628Z",
+            "checksum": "31b1e4793abca1f6af413ee767ec07d3ea20fbb7fb2ea7c5ce305838f2713ccc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Configuration",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "RuntimeActionConfiguration for the ephemeral action. Required when Code is supplied.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CBB2E1DA-BF91-42DF-9053-67CF570E02C7"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.660Z",
+            "checksum": "2f14a66d439d24954116f9f4523bb47fed8b7cbcc27f85c8b136204da9d8623c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TestCases",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of { name, input?, expectedOutput? }. Each case runs the action with `input` supplied as the sandbox `input` object. If expectedOutput is provided, structural deep-equality determines pass/fail.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "80C09320-576B-47D8-A3C6-15C31CE707F5"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.691Z",
+            "checksum": "0f80a71e003f51d4a1907e5f9bc2240218195f4bc84db65ab8677c6763929bd8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TestResults",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Per-case trace: { name, passed, success, message, output, expectedOutput, elapsedMs }.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1BE02844-5E26-458E-AD8D-068DCD1F2655"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.722Z",
+            "checksum": "8f0755e6006befe5a7b0a0c9ce7efe25fac8504ddd930d243c9e488198ca6b77"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PassedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of test cases that passed.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B0C7A267-563B-4E60-AFF0-D45B09FBBC5D"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.754Z",
+            "checksum": "516553a7bc8ee255324abf6388894ee670839e2dbae8455df768c75285c78392"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FailedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of test cases that failed.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BE4D027B-0B88-47DC-852B-66899603D661"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.783Z",
+            "checksum": "d28c4fc3904512496b9d4437798e86b276653c5d3722ea7ff455df5ab3303bb5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AllPassed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "True when every test case passed.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A70BFC49-3F17-4B51-9BA5-B9CBF8D6B0DA"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.813Z",
+            "checksum": "8f66a772a71cb6fe081a7b61bbb1c5cf2581308b618ca4c32c4c01bc03ed060b"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ALL_PASSED",
+            "IsSuccess": true,
+            "Description": "Every declared test case passed."
+          },
+          "primaryKey": {
+            "ID": "3A084409-36A8-4AD0-9EEC-AEC26D59F602"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.848Z",
+            "checksum": "c15d6d977859e777ab4b266e8c82628366e90e89b98b550a6b14bf6068839ede"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SOME_FAILED",
+            "IsSuccess": true,
+            "Description": "The action ran cleanly but one or more test cases failed. Success=true because the test run itself completed — read PassedCount/FailedCount and TestResults for details."
+          },
+          "primaryKey": {
+            "ID": "D0EDB5CE-F561-434E-BDA0-AE67CB43CA0B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.888Z",
+            "checksum": "4364db1d4a0b5bbc1553670b5601c1175270defe03b8607cca293de4f4652da6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_TEST_CASES",
+            "IsSuccess": false,
+            "Description": "TestCases parameter is required and must be non-empty."
+          },
+          "primaryKey": {
+            "ID": "7CD765F9-5728-4BCC-8F64-09232A2B308B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.908Z",
+            "checksum": "0ef71e9d22f6736cb9c78fcb4be888a81e138f946f4926b9ed9f94cf267e3331"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_INPUTS",
+            "IsSuccess": false,
+            "Description": "Neither (ActionID/ActionName) nor (Code + Configuration) were supplied."
+          },
+          "primaryKey": {
+            "ID": "927B1352-9ACF-497B-9AD3-2EAAC0AE3655"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.925Z",
+            "checksum": "05cfeebda162018ef9c827bef7972fb8b2fd0904617f6573b945fe5a2243f0cf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ACTION_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No action matches the supplied ActionID or ActionName."
+          },
+          "primaryKey": {
+            "ID": "A8AF3A4C-F920-4767-929B-4CA146CDC9E3"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.942Z",
+            "checksum": "414932c63795edff038e02cf356ef370beec2d0629386e9a46ff5748deeab1d5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected exception occurred while running the tests."
+          },
+          "primaryKey": {
+            "ID": "75F193B5-ABD8-4A78-BEAC-58ECF91D0285"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:45.958Z",
+            "checksum": "981e60d47a938e36cf26b7283dca4d5f123ccc9ac0e5d95e1e4a43ca340db6e3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0503095B-682F-48D8-B363-6FD4494D1C18"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T13:09:45.476Z",
+      "checksum": "953bf49eba177bd294a38bb43dd7a74445d73281c1d589d00b0766998eeae7e9"
+    }
+  }
+]

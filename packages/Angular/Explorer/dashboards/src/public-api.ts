@@ -64,6 +64,16 @@ export {
   LoadAnalyticsResource
 } from './KnowledgeHub/components/analytics/analytics-resource.component';
 
+// Archiving components
+export {
+  ArchiveConfigResourceComponent,
+  LoadArchiveConfigResource
+} from './Archiving/components/archive-config-resource.component';
+export {
+  ArchiveRunsResourceComponent,
+  LoadArchiveRunsResource
+} from './Archiving/components/archive-runs-resource.component';
+
 // Export Actions components as resources (BaseResourceComponent-based)
 export {
   ActionsOverviewComponent,
@@ -176,3 +186,4 @@ export * from './data-explorer-dashboards.module';
 export * from './lists-dashboards.module';
 export * from './component-studio-dashboards.module';
 export * from './shared/shared-dashboard-widgets.module';
+export * from './archiving-dashboards.module';

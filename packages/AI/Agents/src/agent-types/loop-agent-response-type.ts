@@ -1,7 +1,8 @@
 import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad } from "@memberjunction/ai-core-plus";
+import { ArtifactToolCall } from "../ArtifactToolManager";
 
 // Re-export universal types for backward compatibility
-export type { ForEachOperation, WhileOperation };
+export type { ForEachOperation, WhileOperation, ArtifactToolCall };
 
 /**
  * Response structure for Loop Agent Type
@@ -50,6 +51,14 @@ export interface LoopAgentResponse<P = any> {
      * @since 2.46.0
      */
     scratchpad?: AgentScratchpad;
+
+    /**
+     * Artifact tool invocations — explore input artifacts without
+     * dumping full content into context. Processed inline on the same
+     * turn as other response fields (zero turn cost). Results are
+     * injected into the next turn's prompt via _ARTIFACT_TOOL_RESULTS.
+     */
+    artifactToolCalls?: ArtifactToolCall[];
 
     /**
      * Internal reasoning for debugging

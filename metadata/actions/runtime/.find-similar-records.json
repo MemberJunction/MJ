@@ -1,0 +1,319 @@
+[
+  {
+    "_comments": [
+      "Runtime Actions demo #4 — fuzzy record matching with no AI cost.",
+      "Exercises metadata introspection (to validate the field type), RunView",
+      "(to pull candidates), and real compute in the sandbox (inline Levenshtein",
+      "distance combined with substring-containment scoring)."
+    ],
+    "fields": {
+      "Name": "Find Similar Records",
+      "Description": "Finds records in an entity whose text field is similar to a search string. Ranks matches by a blended score (30% containment, 70% normalized Levenshtein) so both typos and long-substring matches rank well. No AI dependency — cheap and deterministic. Validates the target field via metadata before scanning.",
+      "Type": "Runtime",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved",
+      "IconClass": "fa-solid fa-magnifying-glass-location",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data",
+      "Code": "@file:runtime/code/find-similar-records.js",
+      "RuntimeActionConfiguration": {
+        "permissions": {
+          "allowedActions": [],
+          "allowedAgents": [],
+          "allowedEntities": [],
+          "allowAnyEntity": true
+        },
+        "limits": {
+          "maxMemoryMB": 256,
+          "maxBridgeCalls": 10
+        }
+      },
+      "MaxExecutionTimeMS": 60000
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "entityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity to search (e.g. 'Customers', 'Users').",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "3E75E4C9-A565-4DA3-9893-82D6632EA406"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.332Z",
+            "checksum": "cfad187769ca1a95a93986a85a176e17885a28a72e82243dac119223a50d0e43"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "searchField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the text field to match against. Must be a text/varchar/nvarchar field on the entity.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "DDBAF9EF-94E6-4BD0-80AC-7E3781775953"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.362Z",
+            "checksum": "27e3324a2480bcaefe406ee9cfab0d639bc957c7b327526c767b99647c320a53"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "searchText",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Text to find similar records for (e.g. 'Acme Corp', 'john@example.com').",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5BB7A1AC-E2A0-4503-B62E-F472FE5721EF"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.393Z",
+            "checksum": "a3ac12e48738e72e28bb7e7f1c0abd490d1c4fd913e9f6c09e7c049b2256b0da"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "threshold",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum similarity in [0,1] for a record to be returned. Default: 0.5. Raise for tighter matches, lower for broader.",
+            "IsRequired": false,
+            "DefaultValue": "0.5"
+          },
+          "primaryKey": {
+            "ID": "782198E6-1563-48E8-853E-F7CD2AD6987D"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.423Z",
+            "checksum": "c9bbea4887be6e1d683d630da0632cf8d68375b9fd7154c735a430fc3b165f1d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "maxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Cap on matches returned after scoring. Default: 10.",
+            "IsRequired": false,
+            "DefaultValue": "10"
+          },
+          "primaryKey": {
+            "ID": "0CB0042F-563D-4E3F-960D-025B954BC112"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.454Z",
+            "checksum": "b895b720fd1566778dd08fa6a52189336dbfd6bf08d5c490bf68ad3cb61af0d1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "maxScan",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum rows to scan. Default: 5000. Narrow with extraFilter for very large entities.",
+            "IsRequired": false,
+            "DefaultValue": "5000"
+          },
+          "primaryKey": {
+            "ID": "4E0E288D-3ACD-4F84-B735-BB82FEC121A5"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.484Z",
+            "checksum": "53f58d79900cd4753e1d5645b5fa7619f04b8c79d80388a2f2e5f6c192e3f19f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "extraFilter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional SQL WHERE clause fragment to narrow the scan before scoring.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2389FC09-41A8-45D1-9725-02B8E9A1A90D"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.514Z",
+            "checksum": "4fd2d6d45ba970f774d2214f10dae86b20671bc2d9a6c6d15a2ac3cd7ae49533"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "matches",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Top N matches, each { id, value, similarity }. similarity is in [0,1]."
+          },
+          "primaryKey": {
+            "ID": "78AA25DA-8648-432C-9EEE-20328C095416"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.542Z",
+            "checksum": "ed8a55ccb3d64faaf31c84e516e4871f36bb0d974795584629576617ea868e69"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "matchCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Number of matches returned (≤ maxResults)."
+          },
+          "primaryKey": {
+            "ID": "1A790DA6-BC47-49C9-B75D-4E935BC9E0F6"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.573Z",
+            "checksum": "9c79edde0accb5045fa048a9ad45005c73f93221bfe6ccf2665a653cf8f3f32c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "rowsScanned",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Actual rows scanned (may be less than maxScan if entity has fewer)."
+          },
+          "primaryKey": {
+            "ID": "E6C3DFA1-FA15-4599-A18B-84F176BCFC0A"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.602Z",
+            "checksum": "b4e03fef1031935e7964c71241a3f8ca4528fe29678d38635c5bb2ba0a6a4eff"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Search completed (may return zero matches)."
+          },
+          "primaryKey": {
+            "ID": "E795A80C-3348-4F78-978B-85E45F474779"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.651Z",
+            "checksum": "785d9554302a697f40981fb8fce8ba58d0e214026242a1fd20072bbb3931b256"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_INPUT",
+            "IsSuccess": false,
+            "Description": "entityName, searchField, or searchText is missing."
+          },
+          "primaryKey": {
+            "ID": "5D8D5442-D58F-488B-8067-E4FE7F874EE9"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.669Z",
+            "checksum": "09915c646f369c0acd8cc93dd441fe43658225c3a3916c931e27937aec8f320d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Entity metadata lookup returned no fields."
+          },
+          "primaryKey": {
+            "ID": "B2D516E6-204E-47CB-B20A-E8BAC7502621"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.687Z",
+            "checksum": "3d6cc4638facdf3f76a14a1f3ecbc639415319fdcee777b5a30de753aab8c845"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FIELD_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "searchField doesn't exist on the target entity."
+          },
+          "primaryKey": {
+            "ID": "6D50A589-308D-4D4B-BE44-523484EB5B20"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.704Z",
+            "checksum": "5722aab760266f20c73365a56a072fa81a77110c18356c5119c48e5ec7a8a44d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FIELD_NOT_TEXTUAL",
+            "IsSuccess": false,
+            "Description": "searchField exists but is not a text-compatible type."
+          },
+          "primaryKey": {
+            "ID": "452DFBCC-34B5-4D33-8C7B-889EC0B77558"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.721Z",
+            "checksum": "2d15354ce7a4df0e1b74183fb859237cc9fb8362b66a87200288b9d124b6cd76"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RUNVIEW_FAILED",
+            "IsSuccess": false,
+            "Description": "RunView returned Success=false."
+          },
+          "primaryKey": {
+            "ID": "7A677264-A2E6-4675-99D0-E5F2FC05D0CD"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.740Z",
+            "checksum": "ffc3df50fae26cc16e55f2ab4d8b9b07cde9801904657bacfefeb37972d868c3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8785E9AA-AF9D-41EF-A8B8-7CA524785DA6"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T13:09:47.262Z",
+      "checksum": "cfa9af9174e74a352b12d49e81e73c2c9ee926b58c2c9735b6caa58d03458573"
+    }
+  }
+]

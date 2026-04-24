@@ -12,7 +12,8 @@ import { UUIDsEqual } from "@memberjunction/global";
 import {
     MJMCPServerEntity,
     MJMCPServerConnectionEntity,
-    MJMCPServerToolEntity
+    MJMCPServerToolEntity,
+    MJMCPToolFavoriteEntity
 } from "../generated/entity_subclasses";
 
 /**
@@ -70,6 +71,12 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
                 EntityName: 'MJ: MCP Server Tools',
                 PropertyName: '_Tools',
                 CacheLocal: true
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: MCP Tool Favorites',
+                PropertyName: '_Favorites',
+                CacheLocal: true
             }
         ];
 
@@ -90,6 +97,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
     private _Servers: MJMCPServerEntity[] = [];
     private _Connections: MJMCPServerConnectionEntity[] = [];
     private _Tools: MJMCPServerToolEntity[] = [];
+    private _Favorites: MJMCPToolFavoriteEntity[] = [];
 
     // ========================================
     // Public Getters
@@ -114,6 +122,33 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      */
     public get Tools(): MJMCPServerToolEntity[] {
         return this._Tools;
+    }
+
+    /**
+     * Gets all cached MCP tool favorites (across all users).
+     * For current-user-only access, use {@link GetFavoritesByUser}.
+     */
+    public get Favorites(): MJMCPToolFavoriteEntity[] {
+        return this._Favorites;
+    }
+
+    /**
+     * Gets all MCP tool favorites for a specific user.
+     *
+     * @param userId - The user ID
+     */
+    public GetFavoritesByUser(userId: string): MJMCPToolFavoriteEntity[] {
+        return this._Favorites.filter(f => UUIDsEqual(f.UserID, userId));
+    }
+
+    /**
+     * Gets a single MCP tool favorite for a user/tool pair.
+     *
+     * @param userId - The user ID
+     * @param toolId - The MCP server tool ID
+     */
+    public GetFavoriteByUserAndTool(userId: string, toolId: string): MJMCPToolFavoriteEntity | undefined {
+        return this._Favorites.find(f => UUIDsEqual(f.UserID, userId) && UUIDsEqual(f.MCPServerToolID, toolId));
     }
 
     // ========================================

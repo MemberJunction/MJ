@@ -437,8 +437,14 @@ export class BedrockLLM extends BaseLLM {
           if (imageBlock) {
             bedrockContent.push(imageBlock);
           }
+        } else if (block.type === 'file_url') {
+          // Convert document to Bedrock/Claude format
+          const docBlock = this.formatDocumentForBedrock(block);
+          if (docBlock) {
+            bedrockContent.push(docBlock);
+          }
         }
-        // Note: audio_url, video_url, file_url not yet supported by Bedrock Claude
+        // Note: audio_url, video_url not yet supported by Bedrock Claude
       }
 
       return {
@@ -496,6 +502,69 @@ export class BedrockLLM extends BaseLLM {
         data: content
       }
     };
+  }
+
+  /**
+   * Format a file content block as a Bedrock Claude document block.
+   * Bedrock Converse API supports documents in the format:
+   * { type: "document", source: { type: "base64", media_type: "application/pdf", data: "..." } }
+   *
+   * Same format as direct Anthropic API — Bedrock mirrors the Claude content block types.
+   */
+  private formatDocumentForBedrock(block: ChatMessageContentBlock): any | null {
+    const content = block.content;
+
+    // Determine the MIME type
+    const mimeType = block.mimeType || this.inferDocumentMimeType(block.fileName) || 'application/octet-stream';
+
+    // Check if it's a data URL (data:application/pdf;base64,...)
+    const parsed = parseBase64DataUrl(content);
+    if (parsed) {
+      return {
+        type: 'document',
+        source: {
+          type: 'base64',
+          media_type: parsed.mediaType,
+          data: parsed.data
+        }
+      };
+    }
+
+    // Raw base64 with mimeType
+    if (mimeType && !content.startsWith('http')) {
+      return {
+        type: 'document',
+        source: {
+          type: 'base64',
+          media_type: mimeType,
+          data: content
+        }
+      };
+    }
+
+    // Bedrock doesn't support URL-based documents — must be base64
+    if (content.startsWith('http://') || content.startsWith('https://')) {
+      console.warn('Bedrock Claude does not support document URLs, only base64. Skipping document.');
+      return null;
+    }
+
+    console.warn(`Document content block has unknown format (mime: ${mimeType}), skipping`);
+    return null;
+  }
+
+  /** Infer MIME type from file extension when mimeType is not provided */
+  private inferDocumentMimeType(fileName?: string): string | null {
+    if (!fileName) return null;
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    switch (ext) {
+      case 'pdf': return 'application/pdf';
+      case 'csv': return 'text/csv';
+      case 'txt': return 'text/plain';
+      case 'html': case 'htm': return 'text/html';
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      default: return null;
+    }
   }
 
   /**

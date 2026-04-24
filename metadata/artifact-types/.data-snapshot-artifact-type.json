@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "Data Snapshot",
+      "Description": "Point-in-time snapshot of structured data from any source - a component's state, user input, an imported CSV/Excel file, an API result, or any other origin. Contains multi-table data with optional computations and interpretation. Rendered using the DataArtifactViewerPlugin (inherited from parent Data type).",
+      "ParentID": "@lookup:MJ: Artifact Types.Name=Data",
+      "ContentType": "application/vnd.mj.data-snapshot",
+      "DriverClass": "DataArtifactViewerPlugin",
+      "ToolLibraryClass": "DataSnapshotToolLibrary",
+      "IsEnabled": true,
+      "Icon": "fa-solid fa-camera"
+    },
+    "primaryKey": {
+      "ID": "511B217C-B2BB-490D-8AC2-095893C3048B"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:08:13.728Z",
+      "checksum": "390e6f24d196ee62594ad97cde6a7b5c4ce59742bbd23c6ebcd5778086469511"
+    }
+  }
+]
