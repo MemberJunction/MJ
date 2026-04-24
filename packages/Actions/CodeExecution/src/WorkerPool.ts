@@ -53,7 +53,21 @@ interface Worker {
     currentRequest: PendingRequest | null;
     crashCount: number;
     lastCrashTime: number;
+    /**
+     * Rolling tail of the worker's stderr. We keep at most
+     * `STDERR_TAIL_BYTES` so a crashing worker that spews a huge stack
+     * doesn't balloon memory in the host. Used by `handleWorkerCrash`
+     * to enrich the error surfaced to the calling action — agents need
+     * to see the actual V8/Node diagnostic (e.g. "JavaScript heap out
+     * of memory") rather than an opaque "Worker process crashed".
+     */
+    stderrTail: string;
 }
+
+/** Max bytes of stderr we keep per worker for crash diagnostics. 64KB is
+ *  big enough for a full V8 fatal-error banner + stack trace, small
+ *  enough that the host can't be starved by pathological output. */
+const STDERR_TAIL_BYTES = 64 * 1024;
 
 /**
  * Configuration options for worker pool
@@ -105,8 +119,11 @@ export class WorkerPool {
      */
     private async createWorker(id: number): Promise<void> {
         const workerPath = path.join(__dirname, 'worker.js'); // Use .js because worker.ts is compiled
+        // stdout 'inherit' so debug logs still reach MJAPI's console.
+        // stderr 'pipe' so we can capture a rolling tail for crash diagnostics
+        // AND still forward it to MJAPI's stderr — we listen below and echo.
         const childProcess = fork(workerPath, [], {
-            stdio: ['ignore', 'inherit', 'inherit', 'ipc'] // Inherit stdout/stderr for debugging
+            stdio: ['ignore', 'inherit', 'pipe', 'ipc']
         });
 
         const worker: Worker = {
@@ -115,8 +132,26 @@ export class WorkerPool {
             busy: false,
             currentRequest: null,
             crashCount: 0,
-            lastCrashTime: 0
+            lastCrashTime: 0,
+            stderrTail: ''
         };
+
+        // Capture stderr for crash diagnostics + forward to MJAPI stderr so
+        // operators still see it live in logs during non-crash scenarios.
+        if (childProcess.stderr) {
+            childProcess.stderr.on('data', (chunk: Buffer) => {
+                // Forward to parent stderr — preserves existing debug behavior.
+                // Convert to string first since Node's ArrayBuffer types differ
+                // between versions and writing the Buffer directly trips TS.
+                const str = chunk.toString('utf8');
+                process.stderr.write(str);
+                // Append to rolling tail, truncating from the front.
+                worker.stderrTail += str;
+                if (worker.stderrTail.length > STDERR_TAIL_BYTES) {
+                    worker.stderrTail = worker.stderrTail.slice(-STDERR_TAIL_BYTES);
+                }
+            });
+        }
 
         this.workers[id] = worker;
 
@@ -303,8 +338,11 @@ export class WorkerPool {
         }
         worker.lastCrashTime = now;
 
+        const diagnostic = classifyWorkerCrash(code, signal, worker.stderrTail);
+
         LogError(new Error(
             `Worker ${worker.id} crashed (code: ${code}, signal: ${signal}). ` +
+            `Reason: ${diagnostic.reason}. ` +
             `Crash count: ${worker.crashCount}/${this.maxCrashesPerWorker}`
         ));
 
@@ -312,9 +350,7 @@ export class WorkerPool {
         if (worker.currentRequest) {
             clearTimeout(worker.currentRequest.timeout);
             this.detachAbortListener(worker.currentRequest);
-            worker.currentRequest.reject(new Error(
-                'Worker process crashed during code execution. This may indicate a severe error in the code.'
-            ));
+            worker.currentRequest.reject(new Error(diagnostic.userMessage));
             worker.currentRequest = null;
         }
 
@@ -591,4 +627,118 @@ export class WorkerPool {
         await Promise.all(killPromises);
         LogStatus('Worker pool shutdown complete');
     }
+}
+
+/**
+ * Classify an unexpected worker-process exit into an actionable error.
+ *
+ * "Worker process crashed" by itself is useless to a downstream AI agent
+ * trying to fix its Runtime action code — it doesn't know whether the
+ * problem is a memory leak, a bad native call, or a runaway loop. This
+ * helper inspects the Node exit `code`, kill `signal`, and the tail of
+ * stderr the worker emitted before dying, then returns:
+ *
+ *   - `reason`:      short label for logs
+ *   - `userMessage`: the human-readable message surfaced all the way to
+ *                    the action's `message` field. Includes a "what to
+ *                    do about it" hint so agents can self-correct.
+ */
+function classifyWorkerCrash(
+    code: number | null,
+    signal: string | null,
+    stderrTail: string
+): { reason: string; userMessage: string } {
+    const stderr = (stderrTail || '').trim();
+    const stderrForUser = stderr
+        ? `\n\nWorker stderr (last ${STDERR_TAIL_BYTES / 1024}KB):\n${stderr.length > 4000 ? stderr.slice(-4000) : stderr}`
+        : '';
+
+    // 1) V8 Node-heap OOM — usually `code=134` + stderr with "JavaScript
+    //    heap out of memory" banner.
+    if (/heap out of memory|Allocation failed/i.test(stderr) || code === 134) {
+        return {
+            reason: 'NODE_HEAP_OOM',
+            userMessage:
+                "Sandbox worker ran out of Node.js heap memory. The most common cause is a RunView / RunViews call that returned too many rows (e.g. `MaxRows: 0` against a high-volume table like `MJ: AI Prompt Runs`). Fix the Runtime action code to (a) cap `MaxRows` to a reasonable number, (b) add a time-window filter, or (c) page through results instead of loading everything at once." +
+                stderrForUser
+        };
+    }
+
+    // 2) isolated-vm memory-limit OOM propagated from the v8 isolate via
+    //    the standard "Array buffer allocation failed" / "out of memory"
+    //    patterns. Separate from node-heap OOM because the fix is the
+    //    same but the surface is different.
+    if (/out of memory|RangeError.*memory/i.test(stderr)) {
+        return {
+            reason: 'ISOLATE_OOM',
+            userMessage:
+                'Sandbox isolated-vm ran out of memory (128MB default). Reduce the data volume the Runtime action loads — cap `MaxRows`, narrow the ExtraFilter, or process in batches. Avoid pulling whole rows when you only need a few columns; project with `Fields` where supported.' +
+                stderrForUser
+        };
+    }
+
+    // 3) Linux OOM killer — kernel killed the process because system
+    //    memory was exhausted. code=null + signal='SIGKILL' is the
+    //    canonical signature; stderr is often empty (the kernel doesn't
+    //    let the process write anything before the kill).
+    if (signal === 'SIGKILL') {
+        return {
+            reason: 'KERNEL_SIGKILL',
+            userMessage:
+                'Sandbox worker was killed by the OS (SIGKILL). The most likely cause is the Linux OOM killer reclaiming memory under pressure — your Runtime action or the bridge result was large enough to put the host under memory stress. Reduce the data volume: cap `MaxRows`, narrow filters, or page through results.' +
+                stderrForUser
+        };
+    }
+
+    // 4) Native crash — segfault, bus error, abort. ivm / v8 bugs, or
+    //    passing something ExternalCopy cannot serialize.
+    if (signal === 'SIGSEGV' || signal === 'SIGBUS') {
+        return {
+            reason: 'NATIVE_CRASH',
+            userMessage:
+                `Sandbox worker crashed with native signal ${signal} — usually an isolated-vm / V8 fault, not something your code can fix directly. Common triggers include passing very deeply-nested objects or circular references through the utilities bridge. Simplify the values you return from RunView / actions before using them.` +
+                stderrForUser
+        };
+    }
+    if (signal === 'SIGABRT') {
+        return {
+            reason: 'PROCESS_ABORT',
+            userMessage:
+                'Sandbox worker aborted (SIGABRT). Usually triggered by an unrecoverable v8 assertion or a failed native check — often the same class of issue as a segfault. If this is reproducible, reduce the size and complexity of data your code allocates.' +
+                stderrForUser
+        };
+    }
+
+    // 5) Maximum call stack — v8 throws a catchable RangeError normally,
+    //    but in deep-native contexts (ivm bridge marshaling, sync
+    //    callbacks) it can escape and kill the process. Signature is
+    //    usually stderr mentioning "Maximum call stack size exceeded"
+    //    with code=1.
+    if (/Maximum call stack|stack size exceeded/i.test(stderr)) {
+        return {
+            reason: 'STACK_OVERFLOW',
+            userMessage:
+                'Sandbox worker hit a stack overflow. Likely a recursive function with no base case, or a call pattern that recurses indirectly through the utilities bridge. Review loops and recursion in your Runtime action code.' +
+                stderrForUser
+        };
+    }
+
+    // 6) Uncaught JS exception — code=1 with stderr containing a stack.
+    if (code === 1 && stderr.length > 0) {
+        return {
+            reason: 'UNCAUGHT_EXCEPTION',
+            userMessage:
+                'Sandbox worker crashed on an uncaught exception before the isolate could wrap it. Check the stderr tail below for the offending JS trace.' +
+                stderrForUser
+        };
+    }
+
+    // 7) Unknown / fallback — still include exit metadata and stderr so
+    //    the agent has SOMETHING to act on.
+    return {
+        reason: 'UNKNOWN',
+        userMessage:
+            `Sandbox worker process exited unexpectedly (code=${code}, signal=${signal}). The Runtime action code may be triggering a low-level issue in the sandbox. Simplify the code and retry.` +
+            stderrForUser
+    };
 }
