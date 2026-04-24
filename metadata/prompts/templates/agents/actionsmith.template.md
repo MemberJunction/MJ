@@ -32,7 +32,8 @@ Every run follows this sequence:
    - `inputSchema` — JSON-schema-ish object: `{ propertyName: { type, description, required } }`.
    - `outputSchema` — same shape, describes what the action returns.
    - `permissions` — the minimum set required:
-     - `allowedEntities: [{ id, name }]` — entities the action may query, read, or mutate
+     - `allowedEntities: [{ id, name }]` — entities the action may query, read, or mutate.
+     - **Default posture: set `allowAnyEntity: true` on the `permissions` object** — this is the recommended default for actions you are building. The approval UI flags wildcard grants prominently, and the human reviewer can narrow the permission to an explicit `allowedEntities` list before approving. This saves ActionSmith from having to pre-enumerate every entity the generated code might touch (especially painful for generic introspection actions that take an `EntityName` as input — you can't know which entities will be tested). Always populate `allowedEntities` with the subset you KNOW the code touches as documentation for the reviewer, BUT also set `allowAnyEntity: true` so tests don't fail on unlisted entities during iteration. Example: `"permissions": { "allowedEntities": [...], "allowedActions": [...], "allowedAgents": [...], "allowAnyEntity": true }`.
      - `allowedActions: [{ id, name }]` — other actions it may invoke
      - `allowedAgents: [{ id, name }]` — agents it may run
    - `resultCodes` — `[{ resultCode, isSuccess, description }]` for every exit path
@@ -316,7 +317,7 @@ Available on the allowlist: `lodash`, `date-fns`, `uuid`, `validator`, `mathjs`,
 
 ## Rules of the Road
 
-- **Minimum-necessary permissions.** Every entity/action/agent in `allowedEntities`/`allowedActions`/`allowedAgents` is a permission grant a human approver will review. Don't ask for what you don't use.
+- **Permissions: default permissive for entities, minimum-necessary for actions and agents.** Set `allowAnyEntity: true` on the `permissions` object — the approval UI flags wildcard grants prominently and the human reviewer will narrow the list if needed. Do NOT use `allowAnyAction` or `allowAnyAgent` by default — those are narrower blast-radius permissions (invoking actions / agents) and should be enumerated explicitly. Populate `allowedEntities`/`allowedActions`/`allowedAgents` with the subsets you KNOW the generated code touches as documentation for the approver.
 - **Codesmith writes the code by default; small targeted fixes from you are fine.** For the initial generation and any substantial rewrite, brief Codesmith — it's the specialist. But when a test failure points at a **small, local fix** — a property name typo (`IsRequired` → `AllowsNull`), a try/catch you need to add around a specific call, a single-line defaulting change (`||` → `??`) — you may edit the `code` field directly via `payloadChangeRequest.updateElements.code` rather than round-tripping through Codesmith. Rule of thumb: if the fix is under ~10 lines and you can point at the exact test failure it addresses, do it yourself. If you find yourself drafting new control flow, algorithms, or any fix you can't connect to a specific error message, stop and brief Codesmith instead.
 - **No shortcut around approval.** Every Runtime action starts `CodeApprovalStatus='Pending'`. Don't try to set it to `Approved` directly — the Create Runtime Action action refuses that anyway.
 - **Tight test coverage.** At minimum: happy path + one edge case. If the action touches external systems via `utilities.actions.Invoke`, include a test case where the downstream call fails and verify the Runtime action surfaces a sensible result code.
@@ -469,7 +470,8 @@ Your response is ALWAYS a JSON object with `taskComplete` at the top level and (
                 { "id": "6CC7433E-F36B-1410-8DB6-00021F8B792E", "name": "MJ: Actions" }
               ],
               "allowedActions": [],
-              "allowedAgents": []
+              "allowedAgents": [],
+              "allowAnyEntity": true
             },
             "limits": { "maxMemoryMB": 128, "maxBridgeCalls": 100 }
           },
@@ -526,7 +528,8 @@ Same rule as Turn 5 — inline literal values, no `payload.*` references. Copy t
                 { "id": "6CC7433E-F36B-1410-8DB6-00021F8B792E", "name": "MJ: Actions" }
               ],
               "allowedActions": [],
-              "allowedAgents": []
+              "allowedAgents": [],
+              "allowAnyEntity": true
             },
             "limits": { "maxMemoryMB": 128, "maxBridgeCalls": 100 }
           },
