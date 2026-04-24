@@ -177,9 +177,17 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     // ─── LIFECYCLE ────────────────────────────────────────────────────────
 
     public ngOnChanges(changes: SimpleChanges): void {
-        if (changes['nodes'] || changes['config']) {
-            // Reset filters to include every schema when new nodes arrive.
-            if (changes['nodes']) {
+        const nodesChanged = !!changes['nodes'];
+        // Compare config by the fields we actually use — consumers that bind
+        // an inline `[config]="{...}"` object literal get a new reference
+        // every CD cycle, so a naive `changes['config']` check would
+        // recompute + refit endlessly.
+        const configChanged = this.configAffectsLayout(
+            changes['config']?.previousValue as ERDConfig | undefined,
+            changes['config']?.currentValue as ERDConfig | undefined,
+        );
+        if (nodesChanged || configChanged) {
+            if (nodesChanged) {
                 this.activeSchemas = null;
                 this.expandedNodeIds = new Set();
                 this.hoverNodeId = null;
@@ -192,6 +200,21 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
             this.updateHighlightSet();
             this.cdr.markForCheck();
         }
+    }
+
+    /** True iff any config field that influences the cached layout changed. */
+    private configAffectsLayout(prev: ERDConfig | undefined, curr: ERDConfig | undefined): boolean {
+        if (prev === curr) return false;
+        return (
+            (prev?.nodeWidth ?? null) !== (curr?.nodeWidth ?? null) ||
+            (prev?.fieldHeight ?? null) !== (curr?.fieldHeight ?? null) ||
+            (prev?.showAllFields ?? null) !== (curr?.showAllFields ?? null) ||
+            (prev?.showSchemaBands ?? null) !== (curr?.showSchemaBands ?? null) ||
+            (prev?.crowsFoot ?? null) !== (curr?.crowsFoot ?? null) ||
+            (prev?.maxFitZoom ?? null) !== (curr?.maxFitZoom ?? null) ||
+            (prev?.minZoom ?? null) !== (curr?.minZoom ?? null) ||
+            (prev?.maxZoom ?? null) !== (curr?.maxZoom ?? null)
+        );
     }
 
     public ngAfterViewInit(): void {
@@ -376,11 +399,25 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         const canvasFitsX = this.layout.totalWidth * k <= rect.width - padding * 2;
         const canvasFitsY = this.layout.totalHeight * k <= rect.height - padding * 2;
 
-        this.transform = {
-            k,
-            x: canvasFitsX ? (rect.width - this.layout.totalWidth * k) / 2 : padding,
-            y: canvasFitsY ? (rect.height - this.layout.totalHeight * k) / 2 : padding,
-        };
+        const newX = canvasFitsX ? (rect.width - this.layout.totalWidth * k) / 2 : padding;
+        const newY = canvasFitsY ? (rect.height - this.layout.totalHeight * k) / 2 : padding;
+
+        // Idempotent guard.  If the computed transform is effectively identical
+        // to the current one, bail out without reassigning or calling
+        // markForCheck.  Without this, a consumer that passes an inline
+        // `[config]="{...}"` object literal re-triggers ngOnChanges on every
+        // change-detection tick, producing an infinite fitToView → markForCheck
+        // → CD → ngOnChanges → fitToView loop (NG0103).
+        const TOL = 0.001;
+        if (
+            Math.abs(this.transform.k - k) < TOL &&
+            Math.abs(this.transform.x - newX) < 0.5 &&
+            Math.abs(this.transform.y - newY) < 0.5
+        ) {
+            return;
+        }
+
+        this.transform = { k, x: newX, y: newY };
         this.emitZoom();
         this.layoutComplete.emit();
         this.cdr.markForCheck();

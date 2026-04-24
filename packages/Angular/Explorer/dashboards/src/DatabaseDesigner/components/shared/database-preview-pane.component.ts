@@ -75,6 +75,14 @@ export class DatabasePreviewPaneComponent {
     /** Focus node ID — lets `mj-erd-diagram` highlight the in-progress entity. */
     public FocusNodeId: string | null = null;
 
+    /**
+     * Stable config reference — bound to `mj-erd-diagram` via `[config]`.
+     * Must be a class property, not an inline object literal in the template,
+     * or every CD cycle produces a new reference and the ERD re-runs its
+     * layout / fit-to-view on every tick.
+     */
+    public readonly ErdConfig = { showAllFields: true, maxNodeHeight: 520 } as const;
+
     // ─── Tab handler ───────────────────────────────────────────────────────
 
     public SelectTab(tab: PreviewTab): void {
