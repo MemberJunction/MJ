@@ -5,7 +5,7 @@
  * This file is produced by: scripts/bundle-simple-map.sh
  *
  * Sources:
- *   MapCore engine : packages/map-core/src/map-core.js
+ *   MapCore engine : packages/geo/geo-maps/src/map-core.js
  *   React wrapper  : metadata/components/code/generic/simple-map-wrapper.js
  *
  * To regenerate:  npm run mj:bundle:simple-map
@@ -495,51 +495,64 @@ var MapCore = (function () {
                     var geojson = typeof boundaryRaw === 'string'
                         ? JSON.parse(boundaryRaw) : boundaryRaw;
 
-                    var geoLayer = L.geoJSON(geojson, {
-                        style: {
-                            fillColor: color,
+                    // IIFE to capture color and record per iteration
+                    (function (rec, recName, recColor, recId) {
+                        var baseStyle = {
+                            fillColor: recColor,
                             fillOpacity: 0.5,
-                            color: color,
+                            color: recColor,
                             weight: 2,
                             opacity: 0.8
-                        },
-                        onEachFeature: function (feature, featureLayer) {
-                            featureLayer.on({
-                                mouseover: function (e) {
-                                    e.target.setStyle({ fillOpacity: 0.8, weight: 3 });
-                                    if (e.target.bringToFront) e.target.bringToFront();
-                                },
-                                mouseout: function (e) {
-                                    geoLayer.resetStyle(e.target);
-                                }
-                            });
-                        }
-                    });
+                        };
 
-                    geoLayer.bindTooltip(escapeHtml(name), { sticky: true, direction: 'auto' });
-                    geoLayer.bindPopup(buildSinglePopup(record, config));
+                        var geoLayer = L.geoJSON(geojson, {
+                            style: baseStyle,
+                            onEachFeature: function (feature, featureLayer) {
+                                featureLayer.on({
+                                    mouseover: function (e) {
+                                        e.target.setStyle({ fillOpacity: 0.8, weight: 3 });
+                                        if (e.target.bringToFront) e.target.bringToFront();
+                                    },
+                                    mouseout: function (e) {
+                                        e.target.setStyle(baseStyle);
+                                    }
+                                });
+                            }
+                        });
 
-                    if (config.onMarkerClick) {
-                        (function (rec, nm) {
-                            geoLayer.on('click', function () {
+                        geoLayer.bindTooltip(escapeHtml(recName), { sticky: true, direction: 'auto' });
+                        geoLayer.bindPopup(buildSinglePopup(rec, config));
+
+                        // Fire onMarkerClick for per-record clicks
+                        geoLayer.on('click', function () {
+                            if (config.onMarkerClick) {
                                 config.onMarkerClick({
-                                    recordId: getId(rec),
+                                    recordId: recId,
                                     lat: 0,
                                     lng: 0,
                                     record: rec
                                 });
-                            });
-                        })(record, name);
-                    }
+                            }
+                            // Also fire onRegionClick so parent components can use either event
+                            if (config.onRegionClick) {
+                                config.onRegionClick({
+                                    regionName: recName,
+                                    groupBy: 'boundary',
+                                    recordCount: 1,
+                                    records: [rec]
+                                });
+                            }
+                        });
 
-                    layer.addLayer(geoLayer);
+                        layer.addLayer(geoLayer);
 
-                    // Collect bounds from the rendered layer
-                    var layerBounds = geoLayer.getBounds();
-                    if (layerBounds && layerBounds.isValid()) {
-                        bounds.push(layerBounds.getSouthWest());
-                        bounds.push(layerBounds.getNorthEast());
-                    }
+                        // Collect bounds from the rendered layer
+                        var layerBounds = geoLayer.getBounds();
+                        if (layerBounds && layerBounds.isValid()) {
+                            bounds.push(layerBounds.getSouthWest());
+                            bounds.push(layerBounds.getNorthEast());
+                        }
+                    })(record, name, color, getId(record));
                 } catch (e) {
                     console.warn('[MapCore] Boundary GeoJSON parse failed for "' + name + '"', e);
                 }
@@ -927,10 +940,10 @@ var MapCore = (function () {
  * MapCore must be available in scope — either inlined above this code
  * (via the bundle script) or loaded as a component library from CDN.
  *
- * Source of truth for rendering logic: packages/map-core/src/map-core.js
+ * Source of truth for rendering logic: packages/geo/geo-maps/src/map-core.js
  * Source of truth for this wrapper: metadata/components/code/generic/simple-map-wrapper.js
  *
- * @requires MapCore (from @memberjunction/map-core)
+ * @requires MapCore (from @memberjunction/geo-maps)
  * @requires Leaflet 1.9.4 (declared in spec as globalVariable "L")
  */
 function SimpleMap({
@@ -951,6 +964,10 @@ function SimpleMap({
     countryField = 'Country',
     boundaryField,
     maxPopupRecords = 5,
+    // Event callback props (passed by parent/Skip-generated root component)
+    onMarkerClick,
+    onRegionClick,
+    onMapRendered,
     // Standard MJ component props
     utilities,
     styles,
@@ -1004,8 +1021,14 @@ function SimpleMap({
                 }
             }
         }
+        // Try common name fields before iterating all keys
+        var commonNames = ['Name', 'name', 'Title', 'title', 'DisplayName', 'Label'];
+        for (var n = 0; n < commonNames.length; n++) {
+            var nameVal = getField(record, commonNames[n]);
+            if (nameVal != null && typeof nameVal === 'string' && nameVal.length > 0) return nameVal;
+        }
         var keys = Object.keys(record).filter(function (k) {
-            return k !== latitudeField && k !== longitudeField && !k.startsWith('__mj_');
+            return k !== 'ID' && k !== 'id' && k !== latitudeField && k !== longitudeField && !k.startsWith('__mj_');
         });
         for (var i = 0; i < keys.length; i++) {
             var v = record[keys[i]];
@@ -1052,7 +1075,20 @@ function SimpleMap({
                 maxZoom: 12,
                 getRecordId: getRecordId,
                 getRecordName: getRecordName,
+                onMarkerClick: function (event) {
+                    // Call parent's onMarkerClick prop if provided
+                    if (onMarkerClick) {
+                        onMarkerClick({
+                            record: event.record,
+                            lat: event.lat,
+                            lng: event.lng,
+                            entityName: entityName,
+                            recordId: event.recordId
+                        });
+                    }
+                },
                 onPopupRecordClick: function (recordId) {
+                    // Default: open entity record via callbacks
                     if (callbacks && callbacks.OpenEntityRecord && entityName && entityPrimaryKeys) {
                         var pkValues = recordId.split('||');
                         var keyPairs = entityPrimaryKeys.map(function (k, idx) {
@@ -1060,25 +1096,41 @@ function SimpleMap({
                         });
                         callbacks.OpenEntityRecord(entityName, keyPairs);
                     }
+                    // Also notify parent
+                    if (onMarkerClick) {
+                        onMarkerClick({ recordId: recordId, entityName: entityName });
+                    }
                 },
                 onRegionClick: function (event) {
+                    var payload = {
+                        region: event.regionName,
+                        records: event.records,
+                        groupBy: event.groupBy,
+                        count: event.recordCount
+                    };
+                    // Call parent's onRegionClick prop if provided
+                    if (onRegionClick) {
+                        onRegionClick(payload);
+                    }
+                    // Also route through callbacks for legacy support
                     if (callbacks && callbacks.onRegionClick) {
-                        callbacks.onRegionClick({
-                            region: event.regionName,
-                            records: event.records,
-                            groupBy: event.groupBy,
-                            count: event.recordCount
-                        });
+                        callbacks.onRegionClick(payload);
                     }
                 },
                 onRenderComplete: function (stats) {
                     setMarkerCount(stats.markerCount);
+                    var payload = {
+                        renderMode: stats.mode,
+                        markerCount: stats.markerCount,
+                        bounds: stats.bounds
+                    };
+                    // Call parent's onMapRendered prop if provided
+                    if (onMapRendered) {
+                        onMapRendered(payload);
+                    }
+                    // Also route through callbacks for legacy support
                     if (callbacks && callbacks.onMapRendered) {
-                        callbacks.onMapRendered({
-                            renderMode: stats.mode,
-                            markerCount: stats.markerCount,
-                            bounds: stats.bounds
-                        });
+                        callbacks.onMapRendered(payload);
                     }
                 }
             });

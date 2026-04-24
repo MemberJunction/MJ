@@ -1200,12 +1200,12 @@
   },
   {
     "fields": {
-      "Name": "map-core",
-      "DisplayName": "MJ Map Core",
-      "Version": "5.28.0",
+      "Name": "geo-maps",
+      "DisplayName": "MJ Geo Maps",
+      "Version": "5.29.0",
       "GlobalVariable": "MapCore",
       "Category": "Utility",
-      "CDNUrl": "https://cdn.jsdelivr.net/npm/@memberjunction/map-core@5.28.0/src/map-core.js",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/@memberjunction/geo-maps@5.29.0/src/map-core.js",
       "CDNCssUrl": null,
       "Description": "Framework-agnostic Leaflet map engine for MemberJunction. Provides point markers, heatmap, and choropleth rendering with optional GeoDataEngine integration.",
       "UsageType": "Dependency",

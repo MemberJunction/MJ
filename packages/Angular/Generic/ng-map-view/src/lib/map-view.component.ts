@@ -16,7 +16,7 @@ import {
 import { EntityInfo } from '@memberjunction/core';
 import { GeoDataEngine } from '@memberjunction/core-entities';
 import { MapRenderMode, MapDisplayState, MapMarkerClickEvent, MapRegionClickEvent } from './map-view.types';
-import * as MapCore from '@memberjunction/map-core';
+import * as MapCore from '@memberjunction/geo-maps';
 // Leaflet is loaded as a global script at runtime via angular.json scripts array.
 // The L namespace is available globally — see leaflet.d.ts for type declarations.
 
@@ -31,7 +31,7 @@ import * as MapCore from '@memberjunction/map-core';
  * - **choropleth**: Region shading by country/state (requires BoundaryGeoJSON)
  * - **heatmap**: Density visualization
  *
- * Delegates all rendering logic to @memberjunction/map-core.
+ * Delegates all rendering logic to @memberjunction/geo-maps.
  * This component is a thin Angular wrapper managing lifecycle, inputs/outputs,
  * and IntersectionObserver-based deferred initialization.
  */

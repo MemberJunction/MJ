@@ -482,51 +482,64 @@ var MapCore = (function () {
                     var geojson = typeof boundaryRaw === 'string'
                         ? JSON.parse(boundaryRaw) : boundaryRaw;
 
-                    var geoLayer = L.geoJSON(geojson, {
-                        style: {
-                            fillColor: color,
+                    // IIFE to capture color and record per iteration
+                    (function (rec, recName, recColor, recId) {
+                        var baseStyle = {
+                            fillColor: recColor,
                             fillOpacity: 0.5,
-                            color: color,
+                            color: recColor,
                             weight: 2,
                             opacity: 0.8
-                        },
-                        onEachFeature: function (feature, featureLayer) {
-                            featureLayer.on({
-                                mouseover: function (e) {
-                                    e.target.setStyle({ fillOpacity: 0.8, weight: 3 });
-                                    if (e.target.bringToFront) e.target.bringToFront();
-                                },
-                                mouseout: function (e) {
-                                    geoLayer.resetStyle(e.target);
-                                }
-                            });
-                        }
-                    });
+                        };
 
-                    geoLayer.bindTooltip(escapeHtml(name), { sticky: true, direction: 'auto' });
-                    geoLayer.bindPopup(buildSinglePopup(record, config));
+                        var geoLayer = L.geoJSON(geojson, {
+                            style: baseStyle,
+                            onEachFeature: function (feature, featureLayer) {
+                                featureLayer.on({
+                                    mouseover: function (e) {
+                                        e.target.setStyle({ fillOpacity: 0.8, weight: 3 });
+                                        if (e.target.bringToFront) e.target.bringToFront();
+                                    },
+                                    mouseout: function (e) {
+                                        e.target.setStyle(baseStyle);
+                                    }
+                                });
+                            }
+                        });
 
-                    if (config.onMarkerClick) {
-                        (function (rec, nm) {
-                            geoLayer.on('click', function () {
+                        geoLayer.bindTooltip(escapeHtml(recName), { sticky: true, direction: 'auto' });
+                        geoLayer.bindPopup(buildSinglePopup(rec, config));
+
+                        // Fire onMarkerClick for per-record clicks
+                        geoLayer.on('click', function () {
+                            if (config.onMarkerClick) {
                                 config.onMarkerClick({
-                                    recordId: getId(rec),
+                                    recordId: recId,
                                     lat: 0,
                                     lng: 0,
                                     record: rec
                                 });
-                            });
-                        })(record, name);
-                    }
+                            }
+                            // Also fire onRegionClick so parent components can use either event
+                            if (config.onRegionClick) {
+                                config.onRegionClick({
+                                    regionName: recName,
+                                    groupBy: 'boundary',
+                                    recordCount: 1,
+                                    records: [rec]
+                                });
+                            }
+                        });
 
-                    layer.addLayer(geoLayer);
+                        layer.addLayer(geoLayer);
 
-                    // Collect bounds from the rendered layer
-                    var layerBounds = geoLayer.getBounds();
-                    if (layerBounds && layerBounds.isValid()) {
-                        bounds.push(layerBounds.getSouthWest());
-                        bounds.push(layerBounds.getNorthEast());
-                    }
+                        // Collect bounds from the rendered layer
+                        var layerBounds = geoLayer.getBounds();
+                        if (layerBounds && layerBounds.isValid()) {
+                            bounds.push(layerBounds.getSouthWest());
+                            bounds.push(layerBounds.getNorthEast());
+                        }
+                    })(record, name, color, getId(record));
                 } catch (e) {
                     console.warn('[MapCore] Boundary GeoJSON parse failed for "' + name + '"', e);
                 }

@@ -33650,18 +33650,24 @@ export class MJCountry_ {
     @Field({nullable: true, description: `JSON array of common aliases and alternate names (e.g., ["United States","USA","U.S.","America"]). Used by GeoResolver for fuzzy text-to-country matching.`}) 
     CommonAliases?: string;
         
-    @Field() 
+    @Field()
     _mj__CreatedAt: Date;
-        
-    @Field() 
+
+    @Field()
     _mj__UpdatedAt: Date;
-        
+
+    @Field(() => Float, {nullable: true, description: `Virtual geo field — alias of Latitude for map rendering.`})
+    _mj__Latitude?: number;
+
+    @Field(() => Float, {nullable: true, description: `Virtual geo field — alias of Longitude for map rendering.`})
+    _mj__Longitude?: number;
+
     @Field(() => [MJStateProvince_])
     MJStateProvinces_CountryIDArray: MJStateProvince_[]; // Link to MJStateProvinces
-    
+
     @Field(() => [MJRecordGeoCode_])
     MJRecordGeoCodes_CountryIDArray: MJRecordGeoCode_[]; // Link to MJRecordGeoCodes
-    
+
 }
 
 //****************************************************************************
@@ -65567,19 +65573,25 @@ export class MJStateProvince_ {
     @Field({nullable: true, description: `JSON array of common aliases (e.g., ["Calif.","California","Cal"]). Used by GeoResolver for fuzzy text-to-state matching.`}) 
     CommonAliases?: string;
         
-    @Field() 
+    @Field()
     _mj__CreatedAt: Date;
-        
-    @Field() 
+
+    @Field()
     _mj__UpdatedAt: Date;
-        
-    @Field() 
+
+    @Field()
     @MaxLength(200)
     Country: string;
-        
+
+    @Field(() => Float, {nullable: true, description: `Virtual geo field — alias of Latitude for map rendering.`})
+    _mj__Latitude?: number;
+
+    @Field(() => Float, {nullable: true, description: `Virtual geo field — alias of Longitude for map rendering.`})
+    _mj__Longitude?: number;
+
     @Field(() => [MJRecordGeoCode_])
     MJRecordGeoCodes_StateProvinceIDArray: MJRecordGeoCode_[]; // Link to MJRecordGeoCodes
-    
+
 }
 
 //****************************************************************************
@@ -66361,11 +66373,11 @@ export class MJTag_ {
     @Field(() => [MJTaggedItem_])
     MJTaggedItems_TagIDArray: MJTaggedItem_[]; // Link to MJTaggedItems
     
-    @Field(() => [MJContentItemTag_])
-    MJContentItemTags_TagIDArray: MJContentItemTag_[]; // Link to MJContentItemTags
-    
     @Field(() => [MJTagCoOccurrence_])
     MJTagCoOccurrences_TagBIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
+    
+    @Field(() => [MJContentItemTag_])
+    MJContentItemTags_TagIDArray: MJContentItemTag_[]; // Link to MJContentItemTags
     
     @Field(() => [MJTagAuditLog_])
     MJTagAuditLogs_RelatedTagIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
@@ -66522,16 +66534,6 @@ export class MJTagResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJContentItemTag_])
-    async MJContentItemTags_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Content Item Tags', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemTags')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Tags', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJTagCoOccurrence_])
     async MJTagCoOccurrences_TagBIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tag Co Occurrences', userPayload);
@@ -66539,6 +66541,16 @@ export class MJTagResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagCoOccurrences')} WHERE ${provider.QuoteIdentifier('TagBID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Co Occurrences', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Co Occurrences', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentItemTag_])
+    async MJContentItemTags_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Item Tags', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemTags')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Tags', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

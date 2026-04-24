@@ -2,7 +2,7 @@
 # bundle-simple-map.sh
 #
 # Generates metadata/components/code/generic/simple-map.js by concatenating:
-#   1. packages/map-core/src/map-core.js   (MapCore rendering engine)
+#   1. packages/geo/geo-maps/src/map-core.js   (MapCore rendering engine)
 #   2. metadata/components/code/generic/simple-map-wrapper.js (React wrapper)
 #
 # Run from repo root:  bash scripts/bundle-simple-map.sh
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MAP_CORE="$REPO_ROOT/packages/map-core/src/map-core.js"
+MAP_CORE="$REPO_ROOT/packages/geo/geo-maps/src/map-core.js"
 WRAPPER="$REPO_ROOT/metadata/components/code/generic/simple-map-wrapper.js"
 OUTPUT="$REPO_ROOT/metadata/components/code/generic/simple-map.js"
 
@@ -33,7 +33,7 @@ cat > "$OUTPUT" <<'HEADER'
  * This file is produced by: scripts/bundle-simple-map.sh
  *
  * Sources:
- *   MapCore engine : packages/map-core/src/map-core.js
+ *   MapCore engine : packages/geo/geo-maps/src/map-core.js
  *   React wrapper  : metadata/components/code/generic/simple-map-wrapper.js
  *
  * To regenerate:  npm run mj:bundle:simple-map

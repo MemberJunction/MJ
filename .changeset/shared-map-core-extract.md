@@ -1,5 +1,5 @@
 ---
-"@memberjunction/map-core": patch
+"@memberjunction/geo-maps": patch
 "@memberjunction/ng-map-view": patch
 "@memberjunction/ng-react": patch
 "@memberjunction/interactive-component-types": patch
