@@ -201,18 +201,20 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
     }
 
-    // Step 13: Update client imports
+    // Step 13: Flip status to Active BEFORE regenerating the client bootstrap,
+    // so the regen reads the new status and emits enabled imports.
+    Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
+    await SetAppStatus(context.ContextUser, createdAppId!, 'Active');
+
+    // Step 14: Update client imports (reads current app status from DB)
     await HandleClientBootstrapRegeneration(context);
 
-    // Step 14: Execute hooks
+    // Step 15: Execute hooks
     if (manifest.hooks?.postInstall) {
       Callbacks?.OnProgress?.('Hooks', 'Running postInstall hook...');
       await ExecuteHook(manifest.hooks.postInstall, context.RepoRoot);
     }
 
-    // Step 15: Finalize — set status to Active and record success history
-    Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
-    await SetAppStatus(context.ContextUser, createdAppId!, 'Active');
     await RecordInstallHistoryEntry(context.ContextUser, createdAppId!, 'Install', manifest, {
       Success: true,
       DurationSeconds: GetDurationSeconds(startTime),
@@ -417,21 +419,22 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
     }
 
-    // Step 8: Regenerate client imports
-    await HandleClientBootstrapRegeneration(context);
-
-    // Step 9: Execute hooks
-    if (manifest.hooks?.postUpgrade) {
-      Callbacks?.OnProgress?.('Hooks', 'Running postUpgrade hook...');
-      await ExecuteHook(manifest.hooks.postUpgrade, context.RepoRoot);
-    }
-
-    // Step 10: Update records
+    // Step 8: Update app record first (including Status: Active) so the
+    // bootstrap regen below reads the final status from the DB.
     await UpdateAppRecord(context.ContextUser, existingApp.ID, {
       Version: manifest.version,
       ManifestJSON: JSON.stringify(manifest),
       Status: 'Active',
     });
+
+    // Step 9: Regenerate client imports
+    await HandleClientBootstrapRegeneration(context);
+
+    // Step 10: Execute hooks
+    if (manifest.hooks?.postUpgrade) {
+      Callbacks?.OnProgress?.('Hooks', 'Running postUpgrade hook...');
+      await ExecuteHook(manifest.hooks.postUpgrade, context.RepoRoot);
+    }
 
     // Update dependency records to reflect new manifest
     if (manifest.dependencies) {
@@ -620,8 +623,8 @@ export async function DisableApp(appName: string, context: OrchestratorContext):
   }
 
   ToggleServerDynamicPackages(context.RepoRoot, appName, false);
-  await HandleClientBootstrapRegeneration(context);
   await SetAppStatus(context.ContextUser, app.ID, 'Disabled');
+  await HandleClientBootstrapRegeneration(context);
 
   return {
     Success: true,
@@ -644,8 +647,8 @@ export async function EnableApp(appName: string, context: OrchestratorContext): 
   }
 
   ToggleServerDynamicPackages(context.RepoRoot, appName, true);
-  await HandleClientBootstrapRegeneration(context);
   await SetAppStatus(context.ContextUser, app.ID, 'Active');
+  await HandleClientBootstrapRegeneration(context);
 
   return {
     Success: true,
