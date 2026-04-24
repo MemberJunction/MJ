@@ -131,7 +131,6 @@ export {
 } from './DashboardBrowser/dashboard-browser-resource.component';
 export {
   DashboardShareDialogComponent,
-  UserSharePermission,
   ShareDialogResult
 } from './DashboardBrowser/dashboard-share-dialog.component';
 
@@ -142,8 +141,19 @@ export { HomeDashboardComponent } from './Home/home-dashboard.component';
 // Application Roles
 export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from './ApplicationRoles/application-roles-resource.component';
 
-// Sharing Center (Phase 2a — unified permissions)
-export { SharingCenterResourceComponent, LoadSharingCenterResource } from './SharingCenter/sharing-center-resource.component';
+// Permissions admin — three independent resource tabs (Phase 2a/b/c — unified permissions)
+export {
+    PermissionsUserAccessResourceComponent,
+    LoadPermissionsUserAccessResource,
+} from './Permissions/user-access-resource.component';
+export {
+    PermissionsResourceAccessResourceComponent,
+    LoadPermissionsResourceAccessResource,
+} from './Permissions/resource-access-resource.component';
+export {
+    PermissionsAuditLogResourceComponent,
+    LoadPermissionsAuditLogResource,
+} from './Permissions/audit-log-resource.component';
 
 // API Keys
 export { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';

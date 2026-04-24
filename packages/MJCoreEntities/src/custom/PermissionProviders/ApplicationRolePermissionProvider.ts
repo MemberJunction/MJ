@@ -33,6 +33,10 @@ export class ApplicationRolePermissionProvider extends PermissionProviderBase {
     readonly SupportedActions: PermissionAction[] = ['Read', 'Admin'];
     readonly SupportsDeny = false;
 
+    override GetResourceTypes(): string[] {
+        return ['Applications'];
+    }
+
     async CheckPermission(
         user: UserInfo,
         resourceType: string,
@@ -69,7 +73,12 @@ export class ApplicationRolePermissionProvider extends PermissionProviderBase {
         if (resourceType !== 'Applications') return [];
         const actions = this.actionsForUserApp(user, resourceId);
         if (actions.length === 0) return [];
-        return [this.buildUserPermission(user, resourceId, actions)];
+
+        const app = new Metadata().Applications.find((a) => UUIDsEqual(a.ID, resourceId));
+        return [this.buildNormalizedPermission({
+            resourceType: 'Applications', resourceId, resourceName: app?.Name,
+            granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+        })];
     }
 
     async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
@@ -80,17 +89,10 @@ export class ApplicationRolePermissionProvider extends PermissionProviderBase {
         for (const app of md.Applications) {
             const actions = this.actionsForUserApp(user, app.ID);
             if (actions.length === 0) continue;
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Applications',
-                ResourceID: app.ID,
-                ResourceName: app.Name,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Applications', resourceId: app.ID, resourceName: app.Name,
+                granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+            }));
         }
         return results;
     }
@@ -109,40 +111,23 @@ export class ApplicationRolePermissionProvider extends PermissionProviderBase {
         // Open access: return a synthetic "Everyone" row so the Sharing Center
         // can visually distinguish unrestricted apps from explicitly-granted ones.
         if (appRoles.length === 0) {
-            return [
-                {
-                    DomainName: this.DomainName,
-                    ResourceType: 'Applications',
-                    ResourceID: app.ID,
-                    ResourceName: app.Name,
-                    GranteeType: 'Everyone',
-                    GranteeID: null,
-                    GranteeName: 'All authenticated users',
-                    Actions: ['Read'],
-                    Effect: 'Allow',
-                },
-            ];
+            return [this.buildNormalizedPermission({
+                resourceType: 'Applications', resourceId: app.ID, resourceName: app.Name,
+                granteeType: 'Everyone', granteeId: null, granteeName: 'All authenticated users',
+                actions: ['Read'],
+            })];
         }
 
         const results: NormalizedPermission[] = [];
         for (const ar of appRoles) {
-            const actions: PermissionAction[] = [];
-            if (ar.CanAccess) actions.push('Read');
-            if (ar.CanAdmin) actions.push('Admin');
+            const actions = this.boolsToActions({ Read: ar.CanAccess, Admin: ar.CanAdmin });
             if (actions.length === 0) continue;
 
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Applications',
-                ResourceID: app.ID,
-                ResourceName: app.Name,
-                GranteeType: 'Role',
-                GranteeID: ar.RoleID,
-                GranteeName: ar.Role,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: ar.ID,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Applications', resourceId: app.ID, resourceName: app.Name,
+                granteeType: 'Role', granteeId: ar.RoleID, granteeName: ar.Role, actions,
+                sourceRecordId: ar.ID,
+            }));
         }
         return results;
     }
@@ -153,10 +138,7 @@ export class ApplicationRolePermissionProvider extends PermissionProviderBase {
         );
 
         // Open access semantics (Phase 1): no rows = every authenticated user has Read.
-        if (appRoles.length === 0) {
-            return ['Read'];
-        }
-
+        if (appRoles.length === 0) return ['Read'];
         if (!user.UserRoles?.length) return [];
 
         let canAccess = false;
@@ -169,25 +151,6 @@ export class ApplicationRolePermissionProvider extends PermissionProviderBase {
                 }
             }
         }
-        const actions: PermissionAction[] = [];
-        if (canAccess) actions.push('Read');
-        if (canAdmin) actions.push('Admin');
-        return actions;
-    }
-
-    private buildUserPermission(user: UserInfo, applicationId: string, actions: PermissionAction[]): NormalizedPermission {
-        const md = new Metadata();
-        const app = md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
-        return {
-            DomainName: this.DomainName,
-            ResourceType: 'Applications',
-            ResourceID: applicationId,
-            ResourceName: app?.Name,
-            GranteeType: 'User',
-            GranteeID: user.ID,
-            GranteeName: user.Name,
-            Actions: actions,
-            Effect: 'Allow',
-        };
+        return this.boolsToActions({ Read: canAccess, Admin: canAdmin });
     }
 }

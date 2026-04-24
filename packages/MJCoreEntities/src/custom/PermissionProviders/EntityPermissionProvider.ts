@@ -28,6 +28,11 @@ export class EntityPermissionProvider extends PermissionProviderBase {
     readonly SupportedActions: PermissionAction[] = ['Read', 'Create', 'Update', 'Delete'];
     readonly SupportsDeny = true;
 
+    override GetResourceTypes(): string[] {
+        return new Metadata().Entities.map((e) => e.Name).sort((a, b) => a.localeCompare(b));
+    }
+
+
     async CheckPermission(
         user: UserInfo,
         resourceType: string,
@@ -60,23 +65,13 @@ export class EntityPermissionProvider extends PermissionProviderBase {
         const entity = md.EntityByName(resourceType);
         if (!entity) return [];
 
-        const perms = entity.GetUserPermisions(user);
-        const actions = this.resolveActions(perms);
+        const actions = this.resolveActions(entity.GetUserPermisions(user));
         if (actions.length === 0) return [];
 
-        return [
-            {
-                DomainName: this.DomainName,
-                ResourceType: resourceType,
-                ResourceID: null,
-                ResourceName: resourceType,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-            },
-        ];
+        return [this.buildNormalizedPermission({
+            resourceType, resourceId: null, resourceName: resourceType,
+            granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+        })];
     }
 
     async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
@@ -87,21 +82,12 @@ export class EntityPermissionProvider extends PermissionProviderBase {
 
         const results: NormalizedPermission[] = [];
         for (const entity of entities) {
-            const perms = entity.GetUserPermisions(user);
-            const actions = this.resolveActions(perms);
+            const actions = this.resolveActions(entity.GetUserPermisions(user));
             if (actions.length === 0) continue;
-
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: entity.Name,
-                ResourceID: null,
-                ResourceName: entity.Name,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: entity.Name, resourceId: null, resourceName: entity.Name,
+                granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+            }));
         }
         return results;
     }
@@ -115,21 +101,15 @@ export class EntityPermissionProvider extends PermissionProviderBase {
         for (const ep of entity.Permissions) {
             const actions = this.resolveActions(ep);
             if (actions.length === 0) continue;
-
             const role = md.Roles.find((r) => UUIDsEqual(r.ID, ep.RoleID));
             const isDeny = (ep.Type || 'Allow').trim().toLowerCase() === 'deny';
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: resourceType,
-                ResourceID: null,
-                ResourceName: resourceType,
-                GranteeType: 'Role',
-                GranteeID: ep.RoleID,
-                GranteeName: role?.Name ?? ep.RoleID,
-                Actions: actions,
-                Effect: isDeny ? 'Deny' : 'Allow',
-                SourceRecordID: ep.ID,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType, resourceId: null, resourceName: resourceType,
+                granteeType: 'Role', granteeId: ep.RoleID,
+                granteeName: role?.Name ?? ep.RoleID, actions,
+                effect: isDeny ? 'Deny' : 'Allow',
+                sourceRecordId: ep.ID,
+            }));
         }
         return results;
     }
@@ -153,11 +133,11 @@ export class EntityPermissionProvider extends PermissionProviderBase {
     }
 
     private resolveActions(perms: EntityUserPermissionInfo | EntityPermissionInfo): PermissionAction[] {
-        const actions: PermissionAction[] = [];
-        if (perms.CanRead) actions.push('Read');
-        if (perms.CanCreate) actions.push('Create');
-        if (perms.CanUpdate) actions.push('Update');
-        if (perms.CanDelete) actions.push('Delete');
-        return actions;
+        return this.boolsToActions({
+            Read: perms.CanRead,
+            Create: perms.CanCreate,
+            Update: perms.CanUpdate,
+            Delete: perms.CanDelete,
+        });
     }
 }

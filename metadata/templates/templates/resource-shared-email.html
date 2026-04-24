@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: #2196F3;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h2 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 600;
+        }
+        .header .icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .content p {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+        }
+        .resource-info {
+            background: #f9f9f9;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .resource-info .title {
+            font-weight: 600;
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .resource-info .meta {
+            color: #666;
+            font-size: 14px;
+        }
+        .resource-info .access {
+            color: #2196F3;
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 8px;
+        }
+        .button {
+            display: inline-block;
+            background: #2196F3;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 12px;
+            font-weight: 600;
+        }
+        .button:hover { background: #1976D2; }
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-top: 1px solid #eee;
+        }
+        .footer a {
+            color: #2196F3;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="icon">🔗</div>
+            <h2>{{ grantorName }} shared {{ resourceTypeLabel }} with you</h2>
+        </div>
+        <div class="content">
+            <p><strong>{{ grantorName }}</strong> shared a {{ resourceTypeLabel }} with you on MemberJunction.</p>
+
+            <div class="resource-info">
+                <div class="title">{{ resourceName }}</div>
+                <div class="meta">{{ resourceTypeLabel }}</div>
+                {% if actionsSummary %}
+                <div class="access">Access: {{ actionsSummary }}</div>
+                {% endif %}
+            </div>
+
+            {% if resourceUrl %}
+            <p>Click the button below to open it:</p>
+            <a href="{{ resourceUrl }}" class="button">Open {{ resourceTypeLabel }}</a>
+            {% endif %}
+        </div>
+        <div class="footer">
+            <p>This is an automated notification from MemberJunction</p>
+            <p>You can adjust how you receive sharing notifications in your <a href="#">preferences</a>.</p>
+        </div>
+    </div>
+</body>
+</html>

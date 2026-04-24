@@ -20,8 +20,32 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     };
 });
 
+const mockRunViewResult = { Success: true, Results: [] as unknown[], ErrorMessage: '' };
+
 vi.mock('@memberjunction/core', () => {
     const basePermissionProvider = class {};
+    class MockPermissionDeniedError extends Error {
+        DomainName: string;
+        ResourceType: string;
+        ResourceID: string | null;
+        Action: string;
+        Reason: string;
+        constructor(result: {
+            DomainName: string;
+            ResourceType: string;
+            ResourceID: string | null;
+            Action: string;
+            Reason: string;
+        }) {
+            super(`Permission denied: ${result.DomainName} / ${result.Action}`);
+            this.name = 'PermissionDeniedError';
+            this.DomainName = result.DomainName;
+            this.ResourceType = result.ResourceType;
+            this.ResourceID = result.ResourceID;
+            this.Action = result.Action;
+            this.Reason = result.Reason;
+        }
+    }
     return {
         BaseEngine: class MockBaseEngine {
             static getInstance<T>(): T {
@@ -41,7 +65,13 @@ vi.mock('@memberjunction/core', () => {
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         PermissionProviderBase: basePermissionProvider,
+        PermissionDeniedError: MockPermissionDeniedError,
         RegisterForStartup: () => () => {},
+        RunView: class MockRunView {
+            async RunView() {
+                return mockRunViewResult;
+            }
+        },
         UserInfo: class {},
     };
 });
@@ -274,6 +304,155 @@ describe('PermissionEngine', () => {
         it('returns undefined for an unregistered domain', () => {
             engine._SetProvidersForTesting(new Map());
             expect(engine.GetProvider('Missing')).toBeUndefined();
+        });
+    });
+
+    describe('AuthorizeOrThrow', () => {
+        it('resolves without throwing when the permission is allowed', async () => {
+            const provider = makeMockProvider({
+                DomainName: 'Entity Permissions',
+                CheckPermission: vi.fn(async () => ({
+                    Allowed: true,
+                    DomainName: 'Entity Permissions',
+                    Reason: 'granted',
+                })),
+            });
+            engine._SetProvidersForTesting(new Map([['Entity Permissions', provider]]));
+
+            await expect(
+                engine.AuthorizeOrThrow(MOCK_USER, 'Entity Permissions', 'Users', null, 'Read')
+            ).resolves.toBeUndefined();
+        });
+
+        it('throws PermissionDeniedError carrying the domain, action, and reason', async () => {
+            const provider = makeMockProvider({
+                DomainName: 'Dashboard Permissions',
+                CheckPermission: vi.fn(async () => ({
+                    Allowed: false,
+                    DomainName: 'Dashboard Permissions',
+                    Reason: 'User has no Share permission',
+                })),
+            });
+            engine._SetProvidersForTesting(new Map([['Dashboard Permissions', provider]]));
+
+            await expect(
+                engine.AuthorizeOrThrow(MOCK_USER, 'Dashboard Permissions', 'Dashboards', 'D1', 'Share')
+            ).rejects.toMatchObject({
+                name: 'PermissionDeniedError',
+                DomainName: 'Dashboard Permissions',
+                Action: 'Share',
+                ResourceType: 'Dashboards',
+                ResourceID: 'D1',
+                Reason: 'User has no Share permission',
+            });
+        });
+
+        it('throws when the domain is not registered', async () => {
+            engine._SetProvidersForTesting(new Map());
+            await expect(
+                engine.AuthorizeOrThrow(MOCK_USER, 'Nonexistent', 'x', null, 'Read')
+            ).rejects.toMatchObject({ name: 'PermissionDeniedError' });
+        });
+    });
+
+    describe('GetAuditTimeline', () => {
+        beforeEach(() => {
+            mockRunViewResult.Success = true;
+            mockRunViewResult.Results = [];
+            mockRunViewResult.ErrorMessage = '';
+        });
+
+        it('returns empty when RunView returns no rows', async () => {
+            mockRunViewResult.Results = [];
+            const entries = await engine.GetAuditTimeline({});
+            expect(entries).toEqual([]);
+        });
+
+        it('returns empty when RunView fails, without throwing', async () => {
+            mockRunViewResult.Success = false;
+            mockRunViewResult.ErrorMessage = 'boom';
+            const entries = await engine.GetAuditTimeline({});
+            expect(entries).toEqual([]);
+        });
+
+        it('maps RunView rows to PermissionAuditEntry shape and resolves domain name', async () => {
+            mockRunViewResult.Results = [
+                {
+                    ID: 'rc1',
+                    Entity: 'MJ: Dashboard Permissions',
+                    RecordID: 'perm-1',
+                    UserID: 'u1',
+                    User: 'Sarah',
+                    Type: 'Create',
+                    ChangedAt: new Date('2026-04-10T12:00:00Z'),
+                    ChangesDescription: 'Shared dashboard with John',
+                },
+                {
+                    ID: 'rc2',
+                    Entity: 'MJ: Entity Permissions',
+                    RecordID: 'perm-2',
+                    UserID: null,
+                    User: null,
+                    Type: 'Update',
+                    ChangedAt: new Date('2026-04-11T08:00:00Z'),
+                    ChangesDescription: null,
+                },
+            ];
+
+            const entries = await engine.GetAuditTimeline({});
+            expect(entries).toHaveLength(2);
+
+            expect(entries[0]).toMatchObject({
+                SourceRecordChangeID: 'rc1',
+                DomainName: 'Dashboard Permissions',
+                EntityName: 'MJ: Dashboard Permissions',
+                RecordID: 'perm-1',
+                ChangeType: 'Create',
+                ChangedByUserID: 'u1',
+                ChangedByUserName: 'Sarah',
+                Summary: 'Shared dashboard with John',
+            });
+            expect(entries[0].ChangedAt).toBeInstanceOf(Date);
+
+            expect(entries[1]).toMatchObject({
+                DomainName: 'Entity Permissions',
+                ChangedByUserID: null,
+                Summary: undefined,
+            });
+        });
+
+        it('falls back to the entity name when domain mapping is missing', async () => {
+            mockRunViewResult.Results = [
+                {
+                    ID: 'rc1',
+                    Entity: 'MJ: Something Unknown',
+                    RecordID: 'x',
+                    UserID: 'u1',
+                    User: 'Sarah',
+                    Type: 'Create',
+                    ChangedAt: new Date('2026-04-10T12:00:00Z'),
+                    ChangesDescription: null,
+                },
+            ];
+            const entries = await engine.GetAuditTimeline({});
+            expect(entries[0].DomainName).toBe('MJ: Something Unknown');
+        });
+
+        it('returns empty when filtering by a domain the engine does not know', async () => {
+            mockRunViewResult.Results = [
+                {
+                    ID: 'rc1',
+                    Entity: 'MJ: Entity Permissions',
+                    RecordID: 'x',
+                    UserID: 'u1',
+                    User: 'Sarah',
+                    Type: 'Create',
+                    ChangedAt: new Date(),
+                    ChangesDescription: null,
+                },
+            ];
+            const entries = await engine.GetAuditTimeline({ DomainName: 'Nonexistent Domain' });
+            expect(entries).toEqual([]);
         });
     });
 });

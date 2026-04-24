@@ -1,12 +1,10 @@
 import {
     GranteeType,
-    LogError,
     Metadata,
     NormalizedPermission,
     PermissionAction,
     PermissionCheckResult,
     PermissionProviderBase,
-    RunView,
     UserInfo,
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
@@ -35,6 +33,10 @@ export class QueryPermissionProvider extends PermissionProviderBase {
     readonly SupportedGranteeTypes: GranteeType[] = ['Role'];
     readonly SupportedActions: PermissionAction[] = ['Execute'];
     readonly SupportsDeny = false;
+
+    override GetResourceTypes(): string[] {
+        return ['Queries'];
+    }
 
     async CheckPermission(
         user: UserInfo,
@@ -75,18 +77,13 @@ export class QueryPermissionProvider extends PermissionProviderBase {
         const matchingRows = rows.filter((row) => userRoleIds.some((rid) => UUIDsEqual(row.RoleID, rid)));
         if (matchingRows.length === 0) return [];
 
-        const queryName = await this.fetchQueryName(resourceId);
-        return matchingRows.map((row) => ({
-            DomainName: this.DomainName,
-            ResourceType: 'Queries',
-            ResourceID: resourceId,
-            ResourceName: queryName ?? undefined,
-            GranteeType: 'User',
-            GranteeID: user.ID,
-            GranteeName: user.Name,
-            Actions: ['Execute'],
-            Effect: 'Allow',
-            SourceRecordID: row.ID,
+        const nameMap = await this.bulkLookupNames('Queries', [resourceId]);
+        const queryName = nameMap.get(resourceId);
+        return matchingRows.map((row) => this.buildNormalizedPermission({
+            resourceType: 'Queries', resourceId, resourceName: queryName,
+            granteeType: 'User', granteeId: user.ID, granteeName: user.Name,
+            actions: ['Execute'],
+            sourceRecordId: row.ID,
         }));
     }
 
@@ -96,37 +93,26 @@ export class QueryPermissionProvider extends PermissionProviderBase {
         const userRoleIds = (user.UserRoles ?? []).map((ur) => ur.RoleID);
         if (userRoleIds.length === 0) return [];
 
-        const rv = new RunView();
-        const filter = `RoleID IN (${userRoleIds.map((r) => `'${r}'`).join(',')})`;
-        const result = await rv.RunView<QueryPermissionRow>({
-            EntityName: 'MJ: Query Permissions',
-            ExtraFilter: filter,
-            Fields: ['ID', 'QueryID', 'RoleID', 'Query'],
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            LogError(`QueryPermissionProvider.GetUserResources: ${result.ErrorMessage}`);
-            return [];
-        }
+        const rows = await this.fetchRows<QueryPermissionRow>(
+            'MJ: Query Permissions',
+            `RoleID IN (${userRoleIds.map((r) => `'${r}'`).join(',')})`,
+            ['ID', 'QueryID', 'RoleID', 'Query'],
+            'GetUserResources'
+        );
 
         // Deduplicate: multiple roles may grant the same query.
         const seen = new Set<string>();
         const results: NormalizedPermission[] = [];
-        for (const row of result.Results ?? []) {
+        for (const row of rows) {
             if (seen.has(row.QueryID)) continue;
             seen.add(row.QueryID);
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Queries',
-                ResourceID: row.QueryID,
-                ResourceName: row.Query ?? undefined,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: ['Execute'],
-                Effect: 'Allow',
-                SourceRecordID: row.ID,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Queries', resourceId: row.QueryID,
+                resourceName: row.Query ?? undefined,
+                granteeType: 'User', granteeId: user.ID, granteeName: user.Name,
+                actions: ['Execute'],
+                sourceRecordId: row.ID,
+            }));
         }
         return results;
     }
@@ -138,49 +124,26 @@ export class QueryPermissionProvider extends PermissionProviderBase {
         if (rows.length === 0) return [];
 
         const md = new Metadata();
-        const queryName = await this.fetchQueryName(resourceId);
+        const nameMap = await this.bulkLookupNames('Queries', [resourceId]);
+        const queryName = nameMap.get(resourceId);
         return rows.map((row) => {
             const role = md.Roles.find((r) => UUIDsEqual(r.ID, row.RoleID));
-            return {
-                DomainName: this.DomainName,
-                ResourceType: 'Queries',
-                ResourceID: resourceId,
-                ResourceName: queryName ?? undefined,
-                GranteeType: 'Role' as const,
-                GranteeID: row.RoleID,
-                GranteeName: role?.Name ?? row.Role ?? undefined,
-                Actions: ['Execute' as const],
-                Effect: 'Allow' as const,
-                SourceRecordID: row.ID,
-            };
+            return this.buildNormalizedPermission({
+                resourceType: 'Queries', resourceId, resourceName: queryName,
+                granteeType: 'Role', granteeId: row.RoleID,
+                granteeName: role?.Name ?? row.Role ?? undefined,
+                actions: ['Execute'],
+                sourceRecordId: row.ID,
+            });
         });
     }
 
     private async fetchPermissionsForQuery(queryId: string): Promise<QueryPermissionRow[]> {
-        const rv = new RunView();
-        const result = await rv.RunView<QueryPermissionRow>({
-            EntityName: 'MJ: Query Permissions',
-            ExtraFilter: `QueryID='${queryId}'`,
-            Fields: ['ID', 'QueryID', 'RoleID', 'Role'],
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            LogError(`QueryPermissionProvider.fetchPermissionsForQuery: ${result.ErrorMessage}`);
-            return [];
-        }
-        return result.Results ?? [];
-    }
-
-    private async fetchQueryName(queryId: string): Promise<string | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<{ ID: string; Name: string | null }>({
-            EntityName: 'Queries',
-            ExtraFilter: `ID='${queryId}'`,
-            Fields: ['ID', 'Name'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        });
-        if (!result.Success) return null;
-        return result.Results?.[0]?.Name ?? null;
+        return this.fetchRows<QueryPermissionRow>(
+            'MJ: Query Permissions',
+            `QueryID='${queryId}'`,
+            ['ID', 'QueryID', 'RoleID', 'Role'],
+            'fetchPermissionsForQuery'
+        );
     }
 }

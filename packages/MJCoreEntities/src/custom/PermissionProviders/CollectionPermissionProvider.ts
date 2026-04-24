@@ -1,20 +1,19 @@
 import {
     GranteeType,
-    LogError,
     NormalizedPermission,
     PermissionAction,
     PermissionCheckResult,
     PermissionProviderBase,
-    RunView,
     UserInfo,
 } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 interface CollectionPermissionRow {
     ID: string;
     CollectionID: string;
     UserID: string;
     User?: string | null;
+    SharedByUserID?: string | null;
     CanRead: boolean;
     CanEdit: boolean;
     CanDelete: boolean;
@@ -47,6 +46,10 @@ export class CollectionPermissionProvider extends PermissionProviderBase {
     readonly SupportedActions: PermissionAction[] = ['Read', 'Update', 'Delete', 'Share'];
     readonly SupportsDeny = false;
 
+    override GetResourceTypes(): string[] {
+        return ['Collections'];
+    }
+
     async CheckPermission(
         user: UserInfo,
         _resourceType: string,
@@ -61,9 +64,8 @@ export class CollectionPermissionProvider extends PermissionProviderBase {
             };
         }
 
-        // Owner always has full access.
         const collection = await this.fetchCollection(resourceId);
-        if (collection?.OwnerID === user.ID) {
+        if (collection?.OwnerID && UUIDsEqual(collection.OwnerID, user.ID)) {
             return {
                 Allowed: true,
                 DomainName: this.DomainName,
@@ -87,20 +89,12 @@ export class CollectionPermissionProvider extends PermissionProviderBase {
         const collection = await this.fetchCollection(resourceId);
 
         // Owner path — synthetic full-access row
-        if (collection?.OwnerID === user.ID) {
-            return [
-                {
-                    DomainName: this.DomainName,
-                    ResourceType: 'Collections',
-                    ResourceID: resourceId,
-                    ResourceName: collection.Name ?? undefined,
-                    GranteeType: 'User',
-                    GranteeID: user.ID,
-                    GranteeName: user.Name,
-                    Actions: ['Read', 'Update', 'Delete', 'Share'],
-                    Effect: 'Allow',
-                },
-            ];
+        if (collection?.OwnerID && UUIDsEqual(collection.OwnerID, user.ID)) {
+            return [this.buildNormalizedPermission({
+                resourceType: 'Collections', resourceId, resourceName: collection.Name ?? undefined,
+                granteeType: 'User', granteeId: user.ID, granteeName: user.Name,
+                actions: ['Read', 'Update', 'Delete', 'Share'],
+            })];
         }
 
         const row = await this.fetchPermissionForUser(resourceId, user.ID);
@@ -108,88 +102,134 @@ export class CollectionPermissionProvider extends PermissionProviderBase {
         const actions = this.toActions(row);
         if (actions.length === 0) return [];
 
-        return [
-            {
-                DomainName: this.DomainName,
-                ResourceType: 'Collections',
-                ResourceID: resourceId,
-                ResourceName: collection?.Name ?? undefined,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: row.ID,
-            },
-        ];
+        return [this.buildNormalizedPermission({
+            resourceType: 'Collections', resourceId, resourceName: collection?.Name ?? undefined,
+            granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+            sourceRecordId: row.ID,
+        })];
     }
 
     async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
         if (resourceType && resourceType !== 'Collections') return [];
 
-        // Direct grants
-        const rv = new RunView();
-        const permsResult = await rv.RunView<CollectionPermissionRow>({
-            EntityName: 'MJ: Collection Permissions',
-            ExtraFilter: `UserID='${user.ID}'`,
-            Fields: ['ID', 'CollectionID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
-            ResultType: 'simple',
-        });
-        if (!permsResult.Success) {
-            LogError(`CollectionPermissionProvider.GetUserResources: ${permsResult.ErrorMessage}`);
-            return [];
-        }
-        const directRows = permsResult.Results ?? [];
-
-        // Owned collections
-        const ownedResult = await rv.RunView<CollectionRow>({
-            EntityName: 'MJ: Collections',
-            ExtraFilter: `OwnerID='${user.ID}'`,
-            Fields: ['ID', 'Name', 'OwnerID'],
-            ResultType: 'simple',
-        });
-        const ownedRows = ownedResult.Success ? ownedResult.Results ?? [] : [];
+        const directRows = await this.fetchRows<CollectionPermissionRow>(
+            'MJ: Collection Permissions',
+            `UserID='${user.ID}'`,
+            ['ID', 'CollectionID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+            'GetUserResources.direct'
+        );
+        const ownedRows = await this.fetchRows<CollectionRow>(
+            'MJ: Collections',
+            `OwnerID='${user.ID}'`,
+            ['ID', 'Name', 'OwnerID'],
+            'GetUserResources.owned'
+        );
 
         const allCollectionIds = new Set<string>([
             ...directRows.map((r) => r.CollectionID),
             ...ownedRows.map((c) => c.ID),
         ]);
-        const nameMap = await this.fetchCollectionNames(Array.from(allCollectionIds));
+        const nameMap = await this.bulkLookupNames('MJ: Collections', Array.from(allCollectionIds));
 
         const results: NormalizedPermission[] = [];
+        const ownedIds = new Set(ownedRows.map((c) => c.ID));
 
         // Owner rows first (take priority — synthetic full permissions)
-        const ownedIds = new Set(ownedRows.map((c) => c.ID));
         for (const c of ownedRows) {
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Collections',
-                ResourceID: c.ID,
-                ResourceName: c.Name ?? nameMap.get(c.ID),
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: ['Read', 'Update', 'Delete', 'Share'],
-                Effect: 'Allow',
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Collections', resourceId: c.ID,
+                resourceName: c.Name ?? nameMap.get(c.ID),
+                granteeType: 'User', granteeId: user.ID, granteeName: user.Name,
+                actions: ['Read', 'Update', 'Delete', 'Share'],
+            }));
         }
 
         for (const row of directRows) {
             if (ownedIds.has(row.CollectionID)) continue; // owner row supersedes direct grant
             const actions = this.toActions(row);
             if (actions.length === 0) continue;
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Collections',
-                ResourceID: row.CollectionID,
-                ResourceName: nameMap.get(row.CollectionID),
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: row.ID,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Collections', resourceId: row.CollectionID,
+                resourceName: nameMap.get(row.CollectionID),
+                granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+                sourceRecordId: row.ID,
+            }));
+        }
+        return results;
+    }
+
+    /**
+     * CollectionPermission rows where this user is the grantee AND someone else is
+     * the grantor. Excludes collections the user owns and rows they created themselves.
+     */
+    override async GetPermissionsSharedWithUser(grantee: UserInfo): Promise<NormalizedPermission[]> {
+        // Which collections does the grantee own? We'll exclude those from the result.
+        const ownedRows = await this.fetchRows<CollectionRow>(
+            'MJ: Collections',
+            `OwnerID='${grantee.ID}'`,
+            ['ID', 'Name', 'OwnerID'],
+            'GetPermissionsSharedWithUser.owned'
+        );
+        const ownedIds = new Set(ownedRows.map((c) => c.ID));
+
+        const permRows = await this.fetchRows<CollectionPermissionRow>(
+            'MJ: Collection Permissions',
+            `UserID='${grantee.ID}' AND (SharedByUserID IS NULL OR SharedByUserID <> '${grantee.ID}')`,
+            ['ID', 'CollectionID', 'UserID', 'User', 'SharedByUserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+            'GetPermissionsSharedWithUser'
+        );
+        const rows = permRows.filter((r) => !ownedIds.has(r.CollectionID));
+        if (rows.length === 0) return [];
+
+        const nameMap = await this.bulkLookupNames(
+            'MJ: Collections',
+            Array.from(new Set(rows.map((r) => r.CollectionID)))
+        );
+
+        const results: NormalizedPermission[] = [];
+        for (const row of rows) {
+            const actions = this.toActions(row);
+            if (actions.length === 0) continue;
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Collections', resourceId: row.CollectionID,
+                resourceName: nameMap.get(row.CollectionID),
+                granteeType: 'User', granteeId: grantee.ID, granteeName: grantee.Name, actions,
+                sourceRecordId: row.ID,
+            }));
+        }
+        return results;
+    }
+
+    /**
+     * CollectionPermission rows this user **explicitly** granted (`SharedByUserID = grantor`).
+     * Implicit owner-shares (SharedByUserID IS NULL) are excluded because the Sharing
+     * Center's revoke flow can only delete rows where the current user is the explicit
+     * grantor.
+     */
+    override async GetPermissionsGrantedByUser(grantor: UserInfo): Promise<NormalizedPermission[]> {
+        const rows = await this.fetchRows<CollectionPermissionRow>(
+            'MJ: Collection Permissions',
+            `SharedByUserID='${grantor.ID}'`,
+            ['ID', 'CollectionID', 'UserID', 'User', 'SharedByUserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+            'GetPermissionsGrantedByUser'
+        );
+        if (rows.length === 0) return [];
+
+        const nameMap = await this.bulkLookupNames(
+            'MJ: Collections',
+            Array.from(new Set(rows.map((r) => r.CollectionID)))
+        );
+
+        const results: NormalizedPermission[] = [];
+        for (const row of rows) {
+            const actions = this.toActions(row);
+            if (actions.length === 0) continue;
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Collections', resourceId: row.CollectionID,
+                resourceName: nameMap.get(row.CollectionID),
+                granteeType: 'User', granteeId: row.UserID, granteeName: row.User ?? undefined,
+                actions, sourceRecordId: row.ID,
+            }));
         }
         return results;
     }
@@ -201,104 +241,61 @@ export class CollectionPermissionProvider extends PermissionProviderBase {
         const results: NormalizedPermission[] = [];
 
         if (collection?.OwnerID) {
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Collections',
-                ResourceID: resourceId,
-                ResourceName: collection.Name ?? undefined,
-                GranteeType: 'User',
-                GranteeID: collection.OwnerID,
-                GranteeName: collection.Owner ?? undefined,
-                Actions: ['Read', 'Update', 'Delete', 'Share'],
-                Effect: 'Allow',
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Collections', resourceId, resourceName: collection.Name ?? undefined,
+                granteeType: 'User', granteeId: collection.OwnerID,
+                granteeName: collection.Owner ?? undefined,
+                actions: ['Read', 'Update', 'Delete', 'Share'],
+            }));
         }
 
-        const rv = new RunView();
-        const result = await rv.RunView<CollectionPermissionRow>({
-            EntityName: 'MJ: Collection Permissions',
-            ExtraFilter: `CollectionID='${resourceId}'`,
-            Fields: ['ID', 'CollectionID', 'UserID', 'User', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            LogError(`CollectionPermissionProvider.GetResourcePermissions: ${result.ErrorMessage}`);
-            return results;
-        }
+        const rows = await this.fetchRows<CollectionPermissionRow>(
+            'MJ: Collection Permissions',
+            `CollectionID='${resourceId}'`,
+            ['ID', 'CollectionID', 'UserID', 'User', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+            'GetResourcePermissions'
+        );
 
-        for (const row of result.Results ?? []) {
+        for (const row of rows) {
             const actions = this.toActions(row);
             if (actions.length === 0) continue;
-            if (collection?.OwnerID === row.UserID) continue; // already captured as owner
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Collections',
-                ResourceID: resourceId,
-                ResourceName: collection?.Name ?? undefined,
-                GranteeType: 'User',
-                GranteeID: row.UserID,
-                GranteeName: row.User ?? undefined,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: row.ID,
-            });
+            if (collection?.OwnerID && UUIDsEqual(collection.OwnerID, row.UserID)) continue; // already captured as owner
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Collections', resourceId, resourceName: collection?.Name ?? undefined,
+                granteeType: 'User', granteeId: row.UserID, granteeName: row.User ?? undefined,
+                actions, sourceRecordId: row.ID,
+            }));
         }
         return results;
     }
 
     private async fetchPermissionForUser(collectionId: string, userId: string): Promise<CollectionPermissionRow | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<CollectionPermissionRow>({
-            EntityName: 'MJ: Collection Permissions',
-            ExtraFilter: `CollectionID='${collectionId}' AND UserID='${userId}'`,
-            Fields: ['ID', 'CollectionID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            LogError(`CollectionPermissionProvider.fetchPermissionForUser: ${result.ErrorMessage}`);
-            return null;
-        }
-        return result.Results?.[0] ?? null;
+        const rows = await this.fetchRows<CollectionPermissionRow>(
+            'MJ: Collection Permissions',
+            `CollectionID='${collectionId}' AND UserID='${userId}'`,
+            ['ID', 'CollectionID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+            'fetchPermissionForUser'
+        );
+        return rows[0] ?? null;
     }
 
     private async fetchCollection(collectionId: string): Promise<CollectionRow | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<CollectionRow>({
-            EntityName: 'MJ: Collections',
-            ExtraFilter: `ID='${collectionId}'`,
-            Fields: ['ID', 'Name', 'OwnerID', 'Owner'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        });
-        return result.Success ? result.Results?.[0] ?? null : null;
-    }
-
-    private async fetchCollectionNames(ids: string[]): Promise<Map<string, string>> {
-        if (ids.length === 0) return new Map();
-        const rv = new RunView();
-        const filter = `ID IN (${ids.map((id) => `'${id}'`).join(',')})`;
-        const result = await rv.RunView<CollectionRow>({
-            EntityName: 'MJ: Collections',
-            ExtraFilter: filter,
-            Fields: ['ID', 'Name'],
-            ResultType: 'simple',
-        });
-        const map = new Map<string, string>();
-        if (!result.Success) return map;
-        for (const c of result.Results ?? []) {
-            if (c.Name) map.set(c.ID, c.Name);
-        }
-        return map;
+        const rows = await this.fetchRows<CollectionRow>(
+            'MJ: Collections',
+            `ID='${collectionId}'`,
+            ['ID', 'Name', 'OwnerID', 'Owner'],
+            'fetchCollection'
+        );
+        return rows[0] ?? null;
     }
 
     private toActions(row: CollectionPermissionRow | null | undefined): PermissionAction[] {
         if (!row) return [];
-        const out: PermissionAction[] = [];
-        if (row.CanRead) out.push('Read');
-        if (row.CanEdit) out.push('Update');
-        if (row.CanDelete) out.push('Delete');
-        if (row.CanShare) out.push('Share');
-        return out;
+        return this.boolsToActions({
+            Read: row.CanRead,
+            Update: row.CanEdit,
+            Delete: row.CanDelete,
+            Share: row.CanShare,
+        });
     }
 }

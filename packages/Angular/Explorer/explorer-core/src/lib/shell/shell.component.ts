@@ -22,6 +22,7 @@ import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
+import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
@@ -155,6 +156,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private cdr: ChangeDetectorRef,
     private userAvatarService: UserAvatarService,
     private settingsDialogService: SettingsDialogService,
+    private userSharingCenterDialogService: UserSharingCenterDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
@@ -2023,6 +2025,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       await new Promise<void>(resolve => setTimeout(resolve, 0));
       await this.handlePinToHome();
       this.hidePinProgress();
+      return;
+    }
+
+    if (result.message === 'sharing-center') {
+      this.userMenuVisible = false;
+      this.userSharingCenterDialogService.open(this.viewContainerRef);
       return;
     }
 

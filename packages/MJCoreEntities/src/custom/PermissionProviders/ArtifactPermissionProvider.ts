@@ -1,35 +1,26 @@
 import {
     GranteeType,
-    LogError,
     NormalizedPermission,
     PermissionAction,
     PermissionCheckResult,
     PermissionProviderBase,
-    RunView,
     UserInfo,
 } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
  * Raw shape of an `MJ: Artifact Permissions` row (narrowed for this provider's needs).
- * Keeping it as a simple local interface keeps the provider decoupled from any
- * BaseEntity overhead when we only need to read field values.
  */
 interface ArtifactPermissionRow {
     ID: string;
     ArtifactID: string;
     UserID: string;
     User?: string | null;
+    SharedByUserID?: string | null;
     CanRead: boolean;
     CanEdit: boolean;
     CanDelete: boolean;
     CanShare: boolean;
-}
-
-interface ArtifactRow {
-    ID: string;
-    Name?: string | null;
-    CollectionID?: string | null;
 }
 
 /**
@@ -51,6 +42,10 @@ export class ArtifactPermissionProvider extends PermissionProviderBase {
     readonly SupportedGranteeTypes: GranteeType[] = ['User'];
     readonly SupportedActions: PermissionAction[] = ['Read', 'Update', 'Delete', 'Share'];
     readonly SupportsDeny = false;
+
+    override GetResourceTypes(): string[] {
+        return ['Artifacts'];
+    }
 
     async CheckPermission(
         user: UserInfo,
@@ -83,60 +78,66 @@ export class ArtifactPermissionProvider extends PermissionProviderBase {
         const actions = this.toActions(row);
         if (actions.length === 0) return [];
 
-        const artifact = await this.fetchArtifact(resourceId);
-        return [
-            {
-                DomainName: this.DomainName,
-                ResourceType: 'Artifacts',
-                ResourceID: resourceId,
-                ResourceName: artifact?.Name ?? undefined,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: row.ID,
-            },
-        ];
+        const nameMap = await this.bulkLookupNames('MJ: Artifacts', [resourceId]);
+        return [this.buildNormalizedPermission({
+            resourceType: 'Artifacts', resourceId, resourceName: nameMap.get(resourceId),
+            granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+            sourceRecordId: row.ID,
+        })];
     }
 
     async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
         if (resourceType && resourceType !== 'Artifacts') return [];
+        const rows = await this.fetchRows<ArtifactPermissionRow>(
+            'MJ: Artifact Permissions',
+            `UserID='${user.ID}'`,
+            ['ID', 'ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+            'GetUserResources'
+        );
+        return this.expandRowsAsGrantee(rows, user, (r) => r.UserID);
+    }
 
-        const rv = new RunView();
-        const permsResult = await rv.RunView<ArtifactPermissionRow>({
-            EntityName: 'MJ: Artifact Permissions',
-            ExtraFilter: `UserID='${user.ID}'`,
-            Fields: ['ID', 'ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
-            ResultType: 'simple',
-        });
-        if (!permsResult.Success) {
-            LogError(`ArtifactPermissionProvider.GetUserResources: ${permsResult.ErrorMessage}`);
-            return [];
-        }
+    /**
+     * ArtifactPermission rows where this user is the grantee AND someone else
+     * is the grantor. Excludes rows the user created for themselves.
+     */
+    override async GetPermissionsSharedWithUser(grantee: UserInfo): Promise<NormalizedPermission[]> {
+        const rows = await this.fetchRows<ArtifactPermissionRow>(
+            'MJ: Artifact Permissions',
+            `UserID='${grantee.ID}' AND (SharedByUserID IS NULL OR SharedByUserID <> '${grantee.ID}')`,
+            ['ID', 'ArtifactID', 'UserID', 'User', 'SharedByUserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+            'GetPermissionsSharedWithUser'
+        );
+        return this.expandRowsAsGrantee(rows, grantee, (r) => r.UserID);
+    }
 
-        const rows = permsResult.Results ?? [];
+    /**
+     * All ArtifactPermission rows where this user is the SharedByUserID. Unlike
+     * Dashboards, Artifacts track the grantor explicitly — there's no implicit
+     * "owner without SharedByUserID" case in this table.
+     */
+    override async GetPermissionsGrantedByUser(grantor: UserInfo): Promise<NormalizedPermission[]> {
+        const rows = await this.fetchRows<ArtifactPermissionRow>(
+            'MJ: Artifact Permissions',
+            `SharedByUserID='${grantor.ID}'`,
+            ['ID', 'ArtifactID', 'UserID', 'User', 'SharedByUserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+            'GetPermissionsGrantedByUser'
+        );
         if (rows.length === 0) return [];
 
         const artifactIds = Array.from(new Set(rows.map((r) => r.ArtifactID)));
-        const nameMap = await this.fetchArtifactNames(artifactIds);
+        const nameMap = await this.bulkLookupNames('MJ: Artifacts', artifactIds);
 
         const results: NormalizedPermission[] = [];
         for (const row of rows) {
             const actions = this.toActions(row);
             if (actions.length === 0) continue;
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Artifacts',
-                ResourceID: row.ArtifactID,
-                ResourceName: nameMap.get(row.ArtifactID),
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: row.ID,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Artifacts', resourceId: row.ArtifactID,
+                resourceName: nameMap.get(row.ArtifactID),
+                granteeType: 'User', granteeId: row.UserID, granteeName: row.User ?? undefined,
+                actions, sourceRecordId: row.ID,
+            }));
         }
         return results;
     }
@@ -144,93 +145,73 @@ export class ArtifactPermissionProvider extends PermissionProviderBase {
     async GetResourcePermissions(resourceType: string, resourceId: string): Promise<NormalizedPermission[]> {
         if (resourceType !== 'Artifacts') return [];
 
-        const rv = new RunView();
-        const result = await rv.RunView<ArtifactPermissionRow>({
-            EntityName: 'MJ: Artifact Permissions',
-            ExtraFilter: `ArtifactID='${resourceId}'`,
-            Fields: ['ID', 'ArtifactID', 'UserID', 'User', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            LogError(`ArtifactPermissionProvider.GetResourcePermissions: ${result.ErrorMessage}`);
-            return [];
-        }
+        const rows = await this.fetchRows<ArtifactPermissionRow>(
+            'MJ: Artifact Permissions',
+            `ArtifactID='${resourceId}'`,
+            ['ID', 'ArtifactID', 'UserID', 'User', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+            'GetResourcePermissions'
+        );
+        if (rows.length === 0) return [];
 
-        const artifact = await this.fetchArtifact(resourceId);
+        const nameMap = await this.bulkLookupNames('MJ: Artifacts', [resourceId]);
+        const resourceName = nameMap.get(resourceId);
         const results: NormalizedPermission[] = [];
-        for (const row of result.Results ?? []) {
+        for (const row of rows) {
             const actions = this.toActions(row);
             if (actions.length === 0) continue;
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Artifacts',
-                ResourceID: resourceId,
-                ResourceName: artifact?.Name ?? undefined,
-                GranteeType: 'User',
-                GranteeID: row.UserID,
-                GranteeName: row.User ?? undefined,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: row.ID,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Artifacts', resourceId, resourceName,
+                granteeType: 'User', granteeId: row.UserID, granteeName: row.User ?? undefined,
+                actions, sourceRecordId: row.ID,
+            }));
+        }
+        return results;
+    }
+
+    /**
+     * Shared tail for `GetUserResources` and `GetPermissionsSharedWithUser` — both
+     * emit one row per permission keyed to a specific grantee. Caller passes a
+     * function to pluck the grantee ID since the column differs subtly across paths.
+     */
+    private async expandRowsAsGrantee(
+        rows: ArtifactPermissionRow[],
+        grantee: UserInfo,
+        _pluckGranteeId: (r: ArtifactPermissionRow) => string
+    ): Promise<NormalizedPermission[]> {
+        if (rows.length === 0) return [];
+        const artifactIds = Array.from(new Set(rows.map((r) => r.ArtifactID)));
+        const nameMap = await this.bulkLookupNames('MJ: Artifacts', artifactIds);
+        const results: NormalizedPermission[] = [];
+        for (const row of rows) {
+            const actions = this.toActions(row);
+            if (actions.length === 0) continue;
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Artifacts', resourceId: row.ArtifactID,
+                resourceName: nameMap.get(row.ArtifactID),
+                granteeType: 'User', granteeId: grantee.ID, granteeName: grantee.Name,
+                actions, sourceRecordId: row.ID,
+            }));
         }
         return results;
     }
 
     private async fetchPermissionForUser(artifactId: string, userId: string): Promise<ArtifactPermissionRow | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<ArtifactPermissionRow>({
-            EntityName: 'MJ: Artifact Permissions',
-            ExtraFilter: `ArtifactID='${artifactId}' AND UserID='${userId}'`,
-            Fields: ['ID', 'ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            LogError(`ArtifactPermissionProvider.fetchPermissionForUser: ${result.ErrorMessage}`);
-            return null;
-        }
-        return result.Results?.[0] ?? null;
-    }
-
-    private async fetchArtifact(artifactId: string): Promise<ArtifactRow | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<ArtifactRow>({
-            EntityName: 'MJ: Artifacts',
-            ExtraFilter: `ID='${artifactId}'`,
-            Fields: ['ID', 'Name', 'CollectionID'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        });
-        return result.Success ? result.Results?.[0] ?? null : null;
-    }
-
-    private async fetchArtifactNames(ids: string[]): Promise<Map<string, string>> {
-        if (ids.length === 0) return new Map();
-        const rv = new RunView();
-        const filter = `ID IN (${ids.map((id) => `'${id}'`).join(',')})`;
-        const result = await rv.RunView<ArtifactRow>({
-            EntityName: 'MJ: Artifacts',
-            ExtraFilter: filter,
-            Fields: ['ID', 'Name'],
-            ResultType: 'simple',
-        });
-        const map = new Map<string, string>();
-        if (!result.Success) return map;
-        for (const a of result.Results ?? []) {
-            if (a.Name) map.set(a.ID, a.Name);
-        }
-        return map;
+        const rows = await this.fetchRows<ArtifactPermissionRow>(
+            'MJ: Artifact Permissions',
+            `ArtifactID='${artifactId}' AND UserID='${userId}'`,
+            ['ID', 'ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+            'fetchPermissionForUser'
+        );
+        return rows[0] ?? null;
     }
 
     private toActions(row: ArtifactPermissionRow | null | undefined): PermissionAction[] {
         if (!row) return [];
-        const out: PermissionAction[] = [];
-        if (row.CanRead) out.push('Read');
-        if (row.CanEdit) out.push('Update');
-        if (row.CanDelete) out.push('Delete');
-        if (row.CanShare) out.push('Share');
-        return out;
+        return this.boolsToActions({
+            Read: row.CanRead,
+            Update: row.CanEdit,
+            Delete: row.CanDelete,
+            Share: row.CanShare,
+        });
     }
 }
-

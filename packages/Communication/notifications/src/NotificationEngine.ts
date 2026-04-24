@@ -287,12 +287,23 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     message.ContextData = params.templateData || {};
     message.Subject = params.title;
 
+    const fromAddress = message.From;
+    LogStatus(
+      `[NotificationEngine] Dispatching email for '${type.Name}' to ${user.Email} from ${fromAddress} ` +
+      `(template=${templateEntity.Name ?? emailTemplateId})`
+    );
+
     const sendResult = await commEngine.SendSingleMessage('SendGrid', 'Email', message, undefined, false);
 
     const success = sendResult?.Success === true;
 
     if (success) {
-      LogStatus(`Email sent successfully to ${user.Email} for notification type: ${type.Name}`);
+      LogStatus(`[NotificationEngine] Email sent successfully to ${user.Email} for notification type: ${type.Name}`);
+    } else {
+      LogError(
+        `[NotificationEngine] Email delivery failed for type '${type.Name}' to ${user.Email} from ${fromAddress}. ` +
+        `Provider reported: ${sendResult?.Error ?? '(no error message)'}`
+      );
     }
 
     return success;

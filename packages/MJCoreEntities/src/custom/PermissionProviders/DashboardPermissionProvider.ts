@@ -32,6 +32,10 @@ export class DashboardPermissionProvider extends PermissionProviderBase {
     readonly SupportedActions: PermissionAction[] = ['Read', 'Update', 'Delete', 'Share'];
     readonly SupportsDeny = false;
 
+    override GetResourceTypes(): string[] {
+        return ['Dashboards'];
+    }
+
     async CheckPermission(
         user: UserInfo,
         _resourceType: string,
@@ -61,8 +65,9 @@ export class DashboardPermissionProvider extends PermissionProviderBase {
         const perms = DashboardEngine.Instance.GetDashboardPermissions(resourceId, user.ID);
         const actions = this.resolveActions(perms);
         if (actions.length === 0) return [];
-
-        return [this.buildUserPermission(user, resourceId, perms, actions)];
+        return [this.buildDashboardPermission(resourceId, {
+            granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+        })];
     }
 
     async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
@@ -75,17 +80,81 @@ export class DashboardPermissionProvider extends PermissionProviderBase {
             const actions = this.resolveActions(perms);
             if (actions.length === 0) continue;
 
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Dashboards',
-                ResourceID: dashboard.ID,
-                ResourceName: dashboard.Name,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Dashboards', resourceId: dashboard.ID, resourceName: dashboard.Name,
+                granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+            }));
+        }
+        return results;
+    }
+
+    /**
+     * Dashboards shared with `grantee` by someone else. Excludes dashboards the
+     * user owns and excludes permission rows the user created themselves.
+     *
+     * Permission rows whose dashboard no longer exists in the engine cache are
+     * skipped — covers the window between a DB cascade delete (cleaning up
+     * DashboardPermission rows) and the engine cache being refreshed.
+     */
+    override async GetPermissionsSharedWithUser(grantee: UserInfo): Promise<NormalizedPermission[]> {
+        const engine = DashboardEngine.Instance;
+        const dashboardsById = new Map(engine.Dashboards.map((d) => [d.ID, d]));
+        const ownedDashboardIds = new Set(
+            engine.Dashboards
+                .filter((d) => d.UserID && UUIDsEqual(d.UserID, grantee.ID))
+                .map((d) => d.ID)
+        );
+
+        const results: NormalizedPermission[] = [];
+        for (const perm of engine.DashboardPermissions) {
+            if (!UUIDsEqual(perm.UserID, grantee.ID)) continue;
+            const dashboard = dashboardsById.get(perm.DashboardID);
+            if (!dashboard) continue;
+            if (ownedDashboardIds.has(perm.DashboardID)) continue;
+            if (perm.SharedByUserID && UUIDsEqual(perm.SharedByUserID, grantee.ID)) continue;
+
+            const actions = this.permRowActions(perm);
+            if (actions.length === 0) continue;
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Dashboards', resourceId: perm.DashboardID, resourceName: dashboard.Name,
+                granteeType: 'User', granteeId: grantee.ID, granteeName: grantee.Name, actions,
+                sourceRecordId: perm.ID,
+            }));
+        }
+        return results;
+    }
+
+    /**
+     * Every DashboardPermission row where this user is the effective grantor —
+     * either explicitly (`SharedByUserID === grantor.ID`) or implicitly (the user
+     * owns the dashboard and `SharedByUserID` is NULL — legacy shape from before
+     * the grantor column was captured).
+     */
+    override async GetPermissionsGrantedByUser(grantor: UserInfo): Promise<NormalizedPermission[]> {
+        const engine = DashboardEngine.Instance;
+        const dashboardsById = new Map(engine.Dashboards.map((d) => [d.ID, d]));
+        const ownedDashboardIds = new Set(
+            engine.Dashboards
+                .filter((d) => d.UserID && UUIDsEqual(d.UserID, grantor.ID))
+                .map((d) => d.ID)
+        );
+
+        const results: NormalizedPermission[] = [];
+        for (const perm of engine.DashboardPermissions) {
+            const dashboard = dashboardsById.get(perm.DashboardID);
+            if (!dashboard) continue;
+            const explicit = perm.SharedByUserID && UUIDsEqual(perm.SharedByUserID, grantor.ID);
+            const implicit = !perm.SharedByUserID && ownedDashboardIds.has(perm.DashboardID);
+            if (!explicit && !implicit) continue;
+            if (UUIDsEqual(perm.UserID, grantor.ID)) continue;
+
+            const actions = this.permRowActions(perm);
+            if (actions.length === 0) continue;
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Dashboards', resourceId: perm.DashboardID, resourceName: dashboard.Name,
+                granteeType: 'User', granteeId: perm.UserID, granteeName: perm.User, actions,
+                sourceRecordId: perm.ID,
+            }));
         }
         return results;
     }
@@ -98,41 +167,23 @@ export class DashboardPermissionProvider extends PermissionProviderBase {
         if (!dashboard) return [];
 
         const results: NormalizedPermission[] = [];
-
         if (dashboard.UserID) {
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Dashboards',
-                ResourceID: dashboard.ID,
-                ResourceName: dashboard.Name,
-                GranteeType: 'User',
-                GranteeID: dashboard.UserID,
-                GranteeName: dashboard.User,
-                Actions: ['Read', 'Update', 'Delete', 'Share'],
-                Effect: 'Allow',
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Dashboards', resourceId: dashboard.ID, resourceName: dashboard.Name,
+                granteeType: 'User', granteeId: dashboard.UserID, granteeName: dashboard.User,
+                actions: ['Read', 'Update', 'Delete', 'Share'],
+            }));
         }
 
         for (const perm of engine.DashboardPermissions.filter((p) => UUIDsEqual(p.DashboardID, resourceId))) {
-            const actions: PermissionAction[] = [];
-            if (perm.CanRead) actions.push('Read');
-            if (perm.CanEdit) actions.push('Update');
-            if (perm.CanDelete) actions.push('Delete');
-            if (perm.CanShare) actions.push('Share');
+            const actions = this.permRowActions(perm);
             if (actions.length === 0) continue;
 
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'Dashboards',
-                ResourceID: dashboard.ID,
-                ResourceName: dashboard.Name,
-                GranteeType: 'User',
-                GranteeID: perm.UserID,
-                GranteeName: perm.User,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: perm.ID,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'Dashboards', resourceId: dashboard.ID, resourceName: dashboard.Name,
+                granteeType: 'User', granteeId: perm.UserID, granteeName: perm.User, actions,
+                sourceRecordId: perm.ID,
+            }));
         }
         return results;
     }
@@ -153,31 +204,31 @@ export class DashboardPermissionProvider extends PermissionProviderBase {
     }
 
     private resolveActions(perms: DashboardUserPermissions): PermissionAction[] {
-        const actions: PermissionAction[] = [];
-        if (perms.CanRead) actions.push('Read');
-        if (perms.CanEdit) actions.push('Update');
-        if (perms.CanDelete) actions.push('Delete');
-        if (perms.CanShare) actions.push('Share');
-        return actions;
+        return this.boolsToActions({
+            Read: perms.CanRead,
+            Update: perms.CanEdit,
+            Delete: perms.CanDelete,
+            Share: perms.CanShare,
+        });
     }
 
-    private buildUserPermission(
-        user: UserInfo,
+    private permRowActions(perm: { CanRead: boolean; CanEdit: boolean; CanDelete: boolean; CanShare: boolean }): PermissionAction[] {
+        return this.boolsToActions({
+            Read: perm.CanRead,
+            Update: perm.CanEdit,
+            Delete: perm.CanDelete,
+            Share: perm.CanShare,
+        });
+    }
+
+    private buildDashboardPermission(
         dashboardId: string,
-        perms: DashboardUserPermissions,
-        actions: PermissionAction[]
+        args: { granteeType: GranteeType; granteeId: string | null; granteeName?: string; actions: PermissionAction[] }
     ): NormalizedPermission {
         const dashboard = DashboardEngine.Instance.Dashboards.find((d) => UUIDsEqual(d.ID, dashboardId));
-        return {
-            DomainName: this.DomainName,
-            ResourceType: 'Dashboards',
-            ResourceID: dashboardId,
-            ResourceName: dashboard?.Name,
-            GranteeType: 'User',
-            GranteeID: user.ID,
-            GranteeName: user.Name,
-            Actions: actions,
-            Effect: 'Allow',
-        };
+        return this.buildNormalizedPermission({
+            resourceType: 'Dashboards', resourceId: dashboardId, resourceName: dashboard?.Name,
+            ...args,
+        });
     }
 }

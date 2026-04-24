@@ -69,13 +69,6 @@
         "ResourceType": "Custom",
         "DriverClass": "ApplicationRolesResource",
         "isDefault": false
-      },
-      {
-        "Label": "Sharing Center",
-        "Icon": "fa-solid fa-share-nodes",
-        "ResourceType": "Custom",
-        "DriverClass": "SharingCenterResource",
-        "isDefault": false
       }
     ]
   },
@@ -86,7 +79,7 @@
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2026-04-22T02:24:08.530Z",
-    "checksum": "6f258185f892edb6945ed6f7b567ceb39300b20e76a8839d15bc182d5ba58385"
+    "lastModified": "2026-04-22T17:51:58.205Z",
+    "checksum": "e105cdc2029cf1b4fa459be7f9fc7fa77884619d298d8652a319d3c972ba23f7"
   }
 }

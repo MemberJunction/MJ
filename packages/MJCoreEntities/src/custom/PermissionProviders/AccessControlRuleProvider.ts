@@ -1,12 +1,10 @@
 import {
     GranteeType,
-    LogError,
     Metadata,
     NormalizedPermission,
     PermissionAction,
     PermissionCheckResult,
     PermissionProviderBase,
-    RunView,
     UserInfo,
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
@@ -17,6 +15,7 @@ interface AccessControlRuleRow {
     RecordID: string;
     GranteeType: 'Everyone' | 'Public' | 'Role' | 'User';
     GranteeID: string | null;
+    GrantedByUserID?: string | null;
     CanRead: boolean;
     CanCreate: boolean;
     CanUpdate: boolean;
@@ -25,6 +24,12 @@ interface AccessControlRuleRow {
     ExpiresAt: Date | string | null;
     Entity?: string | null;
 }
+
+/** Fields pulled for every `GetPermissionsGrantedByUser` / `GetPermissionsSharedWithUser` query. */
+const ACR_GRANT_FIELDS: string[] = [
+    'ID', 'EntityID', 'Entity', 'RecordID', 'GranteeType', 'GranteeID', 'GrantedByUserID',
+    'CanRead', 'CanCreate', 'CanUpdate', 'CanDelete', 'CanShare', 'ExpiresAt',
+];
 
 /**
  * Wraps `MJ: Access Control Rules` behind the unified {@link PermissionProviderBase} contract.
@@ -47,6 +52,10 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
     readonly SupportedActions: PermissionAction[] = ['Read', 'Create', 'Update', 'Delete', 'Share'];
     readonly SupportsDeny = false;
     readonly SupportsExpiration = true;
+
+    override GetResourceTypes(): string[] {
+        return new Metadata().Entities.map((e) => e.Name).sort((a, b) => a.localeCompare(b));
+    }
 
     async CheckPermission(
         user: UserInfo,
@@ -90,18 +99,10 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
         const actions = this.actionsForUser(user, rows);
         if (actions.length === 0) return [];
 
-        return [
-            {
-                DomainName: this.DomainName,
-                ResourceType: resourceType,
-                ResourceID: resourceId,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-            },
-        ];
+        return [this.buildNormalizedPermission({
+            resourceType, resourceId,
+            granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+        })];
     }
 
     async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
@@ -123,35 +124,17 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
             filter = `(${filter}) AND EntityID='${entityId}'`;
         }
 
-        const rv = new RunView();
-        const result = await rv.RunView<AccessControlRuleRow>({
-            EntityName: 'MJ: Access Control Rules',
-            ExtraFilter: filter,
-            Fields: [
-                'ID',
-                'EntityID',
-                'Entity',
-                'RecordID',
-                'GranteeType',
-                'GranteeID',
-                'CanRead',
-                'CanCreate',
-                'CanUpdate',
-                'CanDelete',
-                'CanShare',
-                'ExpiresAt',
-            ],
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            LogError(`AccessControlRuleProvider.GetUserResources: ${result.ErrorMessage}`);
-            return [];
-        }
+        const rows = await this.fetchRows<AccessControlRuleRow>(
+            'MJ: Access Control Rules',
+            filter,
+            ACR_GRANT_FIELDS.filter((f) => f !== 'GrantedByUserID'),
+            'GetUserResources'
+        );
 
         // Aggregate by (EntityID, RecordID) so overlapping User/Role/Everyone grants OR together
         type Bucket = { actions: Set<PermissionAction>; sourceIds: string[]; entityName: string | null };
         const buckets = new Map<string, Bucket>();
-        for (const row of result.Results ?? []) {
+        for (const row of rows) {
             const key = `${row.EntityID}|${row.RecordID}`;
             const bucket = buckets.get(key) ?? { actions: new Set(), sourceIds: [], entityName: row.Entity ?? null };
             for (const a of this.rowActions(row)) bucket.actions.add(a);
@@ -164,17 +147,13 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
         for (const [key, bucket] of buckets) {
             const [, recordId] = key.split('|');
             if (bucket.actions.size === 0) continue;
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: bucket.entityName ?? 'Unknown',
-                ResourceID: recordId,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: Array.from(bucket.actions),
-                Effect: 'Allow',
-                SourceRecordID: bucket.sourceIds.length === 1 ? bucket.sourceIds[0] : undefined,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: bucket.entityName ?? 'Unknown',
+                resourceId: recordId,
+                granteeType: 'User', granteeId: user.ID, granteeName: user.Name,
+                actions: Array.from(bucket.actions),
+                sourceRecordId: bucket.sourceIds.length === 1 ? bucket.sourceIds[0] : undefined,
+            }));
         }
         return results;
     }
@@ -184,31 +163,80 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
         if (!entityId) return [];
 
         const rows = await this.fetchActiveRules(entityId, resourceId);
-        const md = new Metadata();
         const results: NormalizedPermission[] = [];
         for (const row of rows) {
             const actions = this.rowActions(row);
             if (actions.length === 0) continue;
-            let granteeName: string | undefined;
-            if (row.GranteeType === 'Role' && row.GranteeID) {
-                granteeName = md.Roles.find((r) => UUIDsEqual(r.ID, row.GranteeID!))?.Name;
-            } else if (row.GranteeType === 'Everyone') {
-                granteeName = 'All authenticated users';
-            } else if (row.GranteeType === 'Public') {
-                granteeName = 'Unauthenticated public';
-            }
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: resourceType,
-                ResourceID: resourceId,
-                GranteeType: row.GranteeType as GranteeType,
-                GranteeID: row.GranteeID,
-                GranteeName: granteeName,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: row.ID,
-                ExpiresAt: row.ExpiresAt ? new Date(row.ExpiresAt) : undefined,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType, resourceId,
+                granteeType: row.GranteeType as GranteeType,
+                granteeId: row.GranteeID,
+                granteeName: this.resolveGranteeName(row),
+                actions,
+                sourceRecordId: row.ID,
+                expiresAt: row.ExpiresAt ? new Date(row.ExpiresAt) : undefined,
+            }));
+        }
+        return results;
+    }
+
+    /**
+     * ACRs where this user is the User-type grantee AND someone else issued the grant.
+     * Excludes rules the user created for themselves. Role/Everyone/Public grants don't
+     * belong in the personal "Shared with me" view — they're always aggregated, and there's
+     * no single recipient they were shared *with*. Only unexpired rules are returned.
+     */
+    override async GetPermissionsSharedWithUser(grantee: UserInfo): Promise<NormalizedPermission[]> {
+        const rows = await this.fetchRows<AccessControlRuleRow>(
+            'MJ: Access Control Rules',
+            `GranteeType='User' AND GranteeID='${grantee.ID}' ` +
+                `AND GrantedByUserID <> '${grantee.ID}' ` +
+                `AND (ExpiresAt IS NULL OR ExpiresAt > GETUTCDATE())`,
+            ACR_GRANT_FIELDS,
+            'GetPermissionsSharedWithUser'
+        );
+
+        const results: NormalizedPermission[] = [];
+        for (const row of rows) {
+            const actions = this.rowActions(row);
+            if (actions.length === 0) continue;
+            results.push(this.buildNormalizedPermission({
+                resourceType: row.Entity ?? 'Unknown',
+                resourceId: row.RecordID,
+                granteeType: 'User', granteeId: grantee.ID, granteeName: grantee.Name, actions,
+                sourceRecordId: row.ID,
+                expiresAt: row.ExpiresAt ? new Date(row.ExpiresAt) : undefined,
+            }));
+        }
+        return results;
+    }
+
+    /**
+     * Every ACR where this user is the grantor. Only unexpired rules are returned — an
+     * expired ACR can't be acted on, so surfacing it in "Shared by me" would be noise.
+     */
+    override async GetPermissionsGrantedByUser(grantor: UserInfo): Promise<NormalizedPermission[]> {
+        const rows = await this.fetchRows<AccessControlRuleRow>(
+            'MJ: Access Control Rules',
+            `GrantedByUserID='${grantor.ID}' AND (ExpiresAt IS NULL OR ExpiresAt > GETUTCDATE())`,
+            ACR_GRANT_FIELDS,
+            'GetPermissionsGrantedByUser'
+        );
+
+        const results: NormalizedPermission[] = [];
+        for (const row of rows) {
+            const actions = this.rowActions(row);
+            if (actions.length === 0) continue;
+            results.push(this.buildNormalizedPermission({
+                resourceType: row.Entity ?? 'Unknown',
+                resourceId: row.RecordID,
+                granteeType: row.GranteeType as GranteeType,
+                granteeId: row.GranteeID,
+                granteeName: this.resolveGranteeName(row),
+                actions,
+                sourceRecordId: row.ID,
+                expiresAt: row.ExpiresAt ? new Date(row.ExpiresAt) : undefined,
+            }));
         }
         return results;
     }
@@ -220,31 +248,26 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
     }
 
     private async fetchActiveRules(entityId: string, recordId: string): Promise<AccessControlRuleRow[]> {
-        const rv = new RunView();
-        const filter = `EntityID='${entityId}' AND RecordID='${recordId}' AND (ExpiresAt IS NULL OR ExpiresAt > GETUTCDATE())`;
-        const result = await rv.RunView<AccessControlRuleRow>({
-            EntityName: 'MJ: Access Control Rules',
-            ExtraFilter: filter,
-            Fields: [
-                'ID',
-                'EntityID',
-                'RecordID',
-                'GranteeType',
-                'GranteeID',
-                'CanRead',
-                'CanCreate',
-                'CanUpdate',
-                'CanDelete',
-                'CanShare',
-                'ExpiresAt',
-            ],
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            LogError(`AccessControlRuleProvider.fetchActiveRules: ${result.ErrorMessage}`);
-            return [];
+        return this.fetchRows<AccessControlRuleRow>(
+            'MJ: Access Control Rules',
+            `EntityID='${entityId}' AND RecordID='${recordId}' AND (ExpiresAt IS NULL OR ExpiresAt > GETUTCDATE())`,
+            ACR_GRANT_FIELDS.filter((f) => f !== 'GrantedByUserID' && f !== 'Entity'),
+            'fetchActiveRules'
+        );
+    }
+
+    private resolveGranteeName(row: AccessControlRuleRow): string | undefined {
+        switch (row.GranteeType) {
+            case 'Role':
+                if (!row.GranteeID) return undefined;
+                return new Metadata().Roles.find((r) => UUIDsEqual(r.ID, row.GranteeID!))?.Name;
+            case 'Everyone':
+                return 'All authenticated users';
+            case 'Public':
+                return 'Unauthenticated public';
+            default:
+                return undefined;
         }
-        return result.Results ?? [];
     }
 
     private actionsForUser(user: UserInfo, rows: AccessControlRuleRow[]): PermissionAction[] {
@@ -271,12 +294,12 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
     }
 
     private rowActions(row: AccessControlRuleRow): PermissionAction[] {
-        const out: PermissionAction[] = [];
-        if (row.CanRead) out.push('Read');
-        if (row.CanCreate) out.push('Create');
-        if (row.CanUpdate) out.push('Update');
-        if (row.CanDelete) out.push('Delete');
-        if (row.CanShare) out.push('Share');
-        return out;
+        return this.boolsToActions({
+            Read: row.CanRead,
+            Create: row.CanCreate,
+            Update: row.CanUpdate,
+            Delete: row.CanDelete,
+            Share: row.CanShare,
+        });
     }
 }

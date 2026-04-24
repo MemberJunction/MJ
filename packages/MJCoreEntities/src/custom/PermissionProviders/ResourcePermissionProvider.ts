@@ -31,6 +31,14 @@ export class ResourcePermissionProvider extends PermissionProviderBase {
     readonly SupportedActions: PermissionAction[] = ['Read', 'Update', 'Delete', 'Share', 'Admin'];
     readonly SupportsDeny = false;
 
+    override GetResourceTypes(): string[] {
+        // Live list from the MJ: Resource Types catalog. Sorted for stable UI output.
+        return ResourcePermissionEngine.Instance.ResourceTypes
+            .map((rt) => rt.Name)
+            .filter((name): name is string => !!name)
+            .sort((a, b) => a.localeCompare(b));
+    }
+
     async CheckPermission(
         user: UserInfo,
         resourceType: string,
@@ -73,18 +81,10 @@ export class ResourcePermissionProvider extends PermissionProviderBase {
         const actions = this.actionsForLevel(level);
         if (actions.length === 0) return [];
 
-        return [
-            {
-                DomainName: this.DomainName,
-                ResourceType: resourceType,
-                ResourceID: resourceId,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-            },
-        ];
+        return [this.buildNormalizedPermission({
+            resourceType, resourceId,
+            granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+        })];
     }
 
     async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
@@ -102,18 +102,14 @@ export class ResourcePermissionProvider extends PermissionProviderBase {
             const actions = this.actionsForLevel(p.PermissionLevel);
             if (actions.length === 0) continue;
             const rt = engine.ResourceTypes.find((r) => UUIDsEqual(r.ID, p.ResourceTypeID));
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: rt?.Name ?? p.ResourceTypeID,
-                ResourceID: p.ResourceRecordID,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: p.ID,
-                ExpiresAt: p.EndSharingAt ?? undefined,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: rt?.Name ?? p.ResourceTypeID,
+                resourceId: p.ResourceRecordID,
+                granteeType: 'User', granteeId: user.ID, granteeName: user.Name,
+                actions,
+                sourceRecordId: p.ID,
+                expiresAt: p.EndSharingAt ?? undefined,
+            }));
         }
         return results;
     }
@@ -139,18 +135,48 @@ export class ResourcePermissionProvider extends PermissionProviderBase {
                 granteeName = md.Roles.find((r) => UUIDsEqual(r.ID, p.RoleID))?.Name;
             }
 
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: resourceType,
-                ResourceID: resourceId,
-                GranteeType: isUser ? 'User' : 'Role',
-                GranteeID: granteeId,
-                GranteeName: granteeName,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: p.ID,
-                ExpiresAt: p.EndSharingAt ?? undefined,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType, resourceId,
+                granteeType: isUser ? 'User' : 'Role',
+                granteeId, granteeName, actions,
+                sourceRecordId: p.ID,
+                expiresAt: p.EndSharingAt ?? undefined,
+            }));
+        }
+        return results;
+    }
+
+    /**
+     * Rows granted directly by this user to *other* users. Uses the
+     * `SharedByUserID` column (added in migration
+     * `V202604231235__v5.29.x__ResourcePermission_SharedByUserID.sql`) so every
+     * resource type that writes through `MJ: Resource Permissions` surfaces
+     * correctly in the end-user Sharing Center's "Shared by me" tab.
+     *
+     * Only Approved, User-grantee rows are returned — pending requests
+     * (`Status === 'Requested'`) and Role grants don't belong in a personal
+     * sharing view.
+     */
+    override async GetPermissionsGrantedByUser(grantor: UserInfo): Promise<NormalizedPermission[]> {
+        const engine = ResourcePermissionEngine.Instance;
+        const results: NormalizedPermission[] = [];
+        for (const p of engine.Permissions ?? []) {
+            if (!p.SharedByUserID || !UUIDsEqual(p.SharedByUserID, grantor.ID)) continue;
+            if (p.Type !== 'User' || !p.UserID) continue;
+            if (p.Status !== 'Approved') continue;
+            if (UUIDsEqual(p.UserID, grantor.ID)) continue;
+
+            const actions = this.actionsForLevel(p.PermissionLevel);
+            if (actions.length === 0) continue;
+            const rt = engine.ResourceTypes.find((r) => UUIDsEqual(r.ID, p.ResourceTypeID));
+            results.push(this.buildNormalizedPermission({
+                resourceType: rt?.Name ?? p.ResourceTypeID,
+                resourceId: p.ResourceRecordID,
+                granteeType: 'User', granteeId: p.UserID, granteeName: p.User ?? undefined,
+                actions,
+                sourceRecordId: p.ID,
+                expiresAt: p.EndSharingAt ?? undefined,
+            }));
         }
         return results;
     }

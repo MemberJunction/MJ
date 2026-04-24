@@ -1,11 +1,9 @@
 import {
     GranteeType,
-    LogError,
     NormalizedPermission,
     PermissionAction,
     PermissionCheckResult,
     PermissionProviderBase,
-    RunView,
     UserInfo,
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
@@ -21,11 +19,6 @@ interface AIAgentPermissionRow {
     CanRun: boolean;
     CanEdit: boolean;
     CanDelete: boolean;
-}
-
-interface AIAgentRow {
-    ID: string;
-    Name: string | null;
 }
 
 /**
@@ -50,6 +43,10 @@ export class AIAgentPermissionProvider extends PermissionProviderBase {
     readonly SupportedGranteeTypes: GranteeType[] = ['User', 'Role'];
     readonly SupportedActions: PermissionAction[] = ['Read', 'Execute', 'Update', 'Delete'];
     readonly SupportsDeny = false;
+
+    override GetResourceTypes(): string[] {
+        return ['AI Agents'];
+    }
 
     async CheckPermission(
         user: UserInfo,
@@ -82,47 +79,31 @@ export class AIAgentPermissionProvider extends PermissionProviderBase {
         const actions = this.actionsForUser(user, rows);
         if (actions.length === 0) return [];
 
-        const agent = await this.fetchAgent(resourceId);
-        return [
-            {
-                DomainName: this.DomainName,
-                ResourceType: 'AI Agents',
-                ResourceID: resourceId,
-                ResourceName: agent?.Name ?? undefined,
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: actions,
-                Effect: 'Allow',
-            },
-        ];
+        const nameMap = await this.bulkLookupNames('MJ: AI Agents', [resourceId]);
+        return [this.buildNormalizedPermission({
+            resourceType: 'AI Agents', resourceId, resourceName: nameMap.get(resourceId),
+            granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
+        })];
     }
 
     async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
         if (resourceType && resourceType !== 'AI Agents') return [];
 
         const userRoleIds = (user.UserRoles ?? []).map((ur) => ur.RoleID);
-        const rv = new RunView();
-
-        // Load permissions where the user matches OR any of the user's roles match
         const userFilter = `UserID='${user.ID}'`;
         const roleFilter = userRoleIds.length ? `RoleID IN (${userRoleIds.map((r) => `'${r}'`).join(',')})` : null;
         const combinedFilter = roleFilter ? `(${userFilter}) OR (${roleFilter})` : userFilter;
 
-        const result = await rv.RunView<AIAgentPermissionRow>({
-            EntityName: 'MJ: AI Agent Permissions',
-            ExtraFilter: combinedFilter,
-            Fields: ['ID', 'AgentID', 'RoleID', 'UserID', 'CanView', 'CanRun', 'CanEdit', 'CanDelete'],
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            LogError(`AIAgentPermissionProvider.GetUserResources: ${result.ErrorMessage}`);
-            return [];
-        }
+        const rows = await this.fetchRows<AIAgentPermissionRow>(
+            'MJ: AI Agent Permissions',
+            combinedFilter,
+            ['ID', 'AgentID', 'RoleID', 'UserID', 'CanView', 'CanRun', 'CanEdit', 'CanDelete'],
+            'GetUserResources'
+        );
 
         // Group by agent and aggregate actions
         const byAgent = new Map<string, { actions: Set<PermissionAction>; sourceIds: string[] }>();
-        for (const row of result.Results ?? []) {
+        for (const row of rows) {
             const bucket = byAgent.get(row.AgentID) ?? { actions: new Set<PermissionAction>(), sourceIds: [] };
             for (const a of this.rowActions(row)) bucket.actions.add(a);
             bucket.sourceIds.push(row.ID);
@@ -130,23 +111,16 @@ export class AIAgentPermissionProvider extends PermissionProviderBase {
         }
         if (byAgent.size === 0) return [];
 
-        const nameMap = await this.fetchAgentNames(Array.from(byAgent.keys()));
-
+        const nameMap = await this.bulkLookupNames('MJ: AI Agents', Array.from(byAgent.keys()));
         const results: NormalizedPermission[] = [];
         for (const [agentId, { actions, sourceIds }] of byAgent) {
             if (actions.size === 0) continue;
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'AI Agents',
-                ResourceID: agentId,
-                ResourceName: nameMap.get(agentId),
-                GranteeType: 'User',
-                GranteeID: user.ID,
-                GranteeName: user.Name,
-                Actions: Array.from(actions),
-                Effect: 'Allow',
-                SourceRecordID: sourceIds.length === 1 ? sourceIds[0] : undefined,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'AI Agents', resourceId: agentId, resourceName: nameMap.get(agentId),
+                granteeType: 'User', granteeId: user.ID, granteeName: user.Name,
+                actions: Array.from(actions),
+                sourceRecordId: sourceIds.length === 1 ? sourceIds[0] : undefined,
+            }));
         }
         return results;
     }
@@ -154,83 +128,40 @@ export class AIAgentPermissionProvider extends PermissionProviderBase {
     async GetResourcePermissions(resourceType: string, resourceId: string): Promise<NormalizedPermission[]> {
         if (resourceType !== 'AI Agents') return [];
 
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentPermissionRow>({
-            EntityName: 'MJ: AI Agent Permissions',
-            ExtraFilter: `AgentID='${resourceId}'`,
-            Fields: ['ID', 'AgentID', 'RoleID', 'UserID', 'Role', 'User', 'CanView', 'CanRun', 'CanEdit', 'CanDelete'],
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            LogError(`AIAgentPermissionProvider.GetResourcePermissions: ${result.ErrorMessage}`);
-            return [];
-        }
+        const rows = await this.fetchRows<AIAgentPermissionRow>(
+            'MJ: AI Agent Permissions',
+            `AgentID='${resourceId}'`,
+            ['ID', 'AgentID', 'RoleID', 'UserID', 'Role', 'User', 'CanView', 'CanRun', 'CanEdit', 'CanDelete'],
+            'GetResourcePermissions'
+        );
+        if (rows.length === 0) return [];
 
-        const agent = await this.fetchAgent(resourceId);
+        const nameMap = await this.bulkLookupNames('MJ: AI Agents', [resourceId]);
+        const resourceName = nameMap.get(resourceId);
         const results: NormalizedPermission[] = [];
-        for (const row of result.Results ?? []) {
+        for (const row of rows) {
             const actions = this.rowActions(row);
             if (actions.length === 0) continue;
             const isUser = row.UserID != null;
-            results.push({
-                DomainName: this.DomainName,
-                ResourceType: 'AI Agents',
-                ResourceID: resourceId,
-                ResourceName: agent?.Name ?? undefined,
-                GranteeType: isUser ? 'User' : 'Role',
-                GranteeID: isUser ? row.UserID : row.RoleID,
-                GranteeName: isUser ? row.User ?? undefined : row.Role ?? undefined,
-                Actions: actions,
-                Effect: 'Allow',
-                SourceRecordID: row.ID,
-            });
+            results.push(this.buildNormalizedPermission({
+                resourceType: 'AI Agents', resourceId, resourceName,
+                granteeType: isUser ? 'User' : 'Role',
+                granteeId: isUser ? row.UserID : row.RoleID,
+                granteeName: isUser ? row.User ?? undefined : row.Role ?? undefined,
+                actions,
+                sourceRecordId: row.ID,
+            }));
         }
         return results;
     }
 
     private async fetchPermissionsForAgent(agentId: string): Promise<AIAgentPermissionRow[]> {
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentPermissionRow>({
-            EntityName: 'MJ: AI Agent Permissions',
-            ExtraFilter: `AgentID='${agentId}'`,
-            Fields: ['ID', 'AgentID', 'RoleID', 'UserID', 'CanView', 'CanRun', 'CanEdit', 'CanDelete'],
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            LogError(`AIAgentPermissionProvider.fetchPermissionsForAgent: ${result.ErrorMessage}`);
-            return [];
-        }
-        return result.Results ?? [];
-    }
-
-    private async fetchAgent(agentId: string): Promise<AIAgentRow | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentRow>({
-            EntityName: 'MJ: AI Agents',
-            ExtraFilter: `ID='${agentId}'`,
-            Fields: ['ID', 'Name'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        });
-        return result.Success ? result.Results?.[0] ?? null : null;
-    }
-
-    private async fetchAgentNames(ids: string[]): Promise<Map<string, string>> {
-        if (ids.length === 0) return new Map();
-        const rv = new RunView();
-        const filter = `ID IN (${ids.map((id) => `'${id}'`).join(',')})`;
-        const result = await rv.RunView<AIAgentRow>({
-            EntityName: 'MJ: AI Agents',
-            ExtraFilter: filter,
-            Fields: ['ID', 'Name'],
-            ResultType: 'simple',
-        });
-        const map = new Map<string, string>();
-        if (!result.Success) return map;
-        for (const r of result.Results ?? []) {
-            if (r.Name) map.set(r.ID, r.Name);
-        }
-        return map;
+        return this.fetchRows<AIAgentPermissionRow>(
+            'MJ: AI Agent Permissions',
+            `AgentID='${agentId}'`,
+            ['ID', 'AgentID', 'RoleID', 'UserID', 'CanView', 'CanRun', 'CanEdit', 'CanDelete'],
+            'fetchPermissionsForAgent'
+        );
     }
 
     private actionsForUser(user: UserInfo, rows: AIAgentPermissionRow[]): PermissionAction[] {
@@ -246,12 +177,11 @@ export class AIAgentPermissionProvider extends PermissionProviderBase {
     }
 
     private rowActions(row: AIAgentPermissionRow): PermissionAction[] {
-        const out: PermissionAction[] = [];
-        if (row.CanView) out.push('Read');
-        if (row.CanRun) out.push('Execute');
-        if (row.CanEdit) out.push('Update');
-        if (row.CanDelete) out.push('Delete');
-        return out;
+        return this.boolsToActions({
+            Read: row.CanView,
+            Execute: row.CanRun,
+            Update: row.CanEdit,
+            Delete: row.CanDelete,
+        });
     }
 }
-

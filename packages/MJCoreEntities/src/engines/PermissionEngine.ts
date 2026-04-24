@@ -6,14 +6,57 @@ import {
     LogStatus,
     NormalizedPermission,
     PermissionAction,
+    PermissionAuditEntry,
+    PermissionAuditFilter,
     PermissionCheckResult,
+    PermissionDeniedError,
     PermissionProviderBase,
     RegisterForStartup,
+    RunView,
     UserInfo,
 } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 
 import { MJPermissionDomainEntity } from '../generated/entity_subclasses';
+
+/**
+ * The permission-backing entity names we aggregate in `GetAuditTimeline`. Each entry
+ * pairs a `PermissionDomain.Name` with the physical entity whose RecordChange rows
+ * describe audit events. New providers added after Phase 2b should register here too.
+ */
+const DOMAIN_TO_AUDIT_ENTITIES: Record<string, string[]> = {
+    'Entity Permissions': ['MJ: Entity Permissions'],
+    'Application Roles': ['MJ: Application Roles'],
+    'Dashboard Permissions': ['MJ: Dashboard Permissions', 'MJ: Dashboard Category Permissions'],
+    'Resource Permissions': ['MJ: Resource Permissions'],
+    'Artifact Permissions': ['MJ: Artifact Permissions'],
+    'Collection Permissions': ['MJ: Collection Permissions'],
+    'AI Agent Permissions': ['MJ: AI Agent Permissions'],
+    'Query Permissions': ['MJ: Query Permissions'],
+    'Access Control Rules': ['MJ: Access Control Rules'],
+};
+
+/**
+ * Canonical Font Awesome class for each permission domain. Exported so the admin
+ * Permissions app and the end-user Sharing Center render the same glyph for each
+ * domain without drifting. Consumers should call
+ * {@link PermissionEngine.DomainIconFor} rather than reading the map directly so
+ * unknown domains get the lock fallback.
+ */
+export const PERMISSION_DOMAIN_ICONS: Record<string, string> = {
+    'Entity Permissions': 'fa-solid fa-database',
+    'Application Roles': 'fa-solid fa-shield-halved',
+    'Dashboard Permissions': 'fa-solid fa-chart-line',
+    'Resource Permissions': 'fa-solid fa-share-nodes',
+    'Artifact Permissions': 'fa-solid fa-file-lines',
+    'Collection Permissions': 'fa-solid fa-folder-open',
+    'AI Agent Permissions': 'fa-solid fa-robot',
+    'Query Permissions': 'fa-solid fa-magnifying-glass',
+    'Access Control Rules': 'fa-solid fa-lock',
+};
+
+/** Fallback icon used when a domain isn't in the catalog (e.g., a Phase-3 provider). */
+export const PERMISSION_DOMAIN_ICON_FALLBACK = 'fa-solid fa-lock';
 
 /**
  * PermissionEngine is the unified entry point for permission queries across every registered
@@ -140,6 +183,55 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
     }
 
     /**
+     * Aggregate every permission this user has granted to *other* users across all
+     * registered providers. Powers the end-user Sharing Center's "Shared by me" tab.
+     *
+     * Role-only providers (Entity Permissions, Application Roles, AI Agent Permissions,
+     * Query Permissions) contribute nothing — their base-class default returns `[]`.
+     * Providers are queried in parallel; failures are logged and skipped.
+     */
+    public async GetPermissionsGrantedByUser(grantor: UserInfo): Promise<NormalizedPermission[]> {
+        const providers = Array.from(this._providers.values());
+        const settled = await Promise.allSettled(providers.map((p) => p.GetPermissionsGrantedByUser(grantor)));
+
+        const results: NormalizedPermission[] = [];
+        settled.forEach((outcome, i) => {
+            const provider = providers[i];
+            if (outcome.status === 'fulfilled') {
+                if (outcome.value?.length) results.push(...outcome.value);
+            } else {
+                LogError(
+                    `PermissionEngine.GetPermissionsGrantedByUser: provider '${provider.DomainName}' threw: ${outcome.reason}`
+                );
+            }
+        });
+        return results;
+    }
+
+    /**
+     * Aggregate every permission where this user is the grantee AND someone else is the
+     * grantor — the "shared with me" view. Excludes self-owned resources and role-inherited
+     * access. Providers are queried in parallel; failures are logged and skipped.
+     */
+    public async GetPermissionsSharedWithUser(grantee: UserInfo): Promise<NormalizedPermission[]> {
+        const providers = Array.from(this._providers.values());
+        const settled = await Promise.allSettled(providers.map((p) => p.GetPermissionsSharedWithUser(grantee)));
+
+        const results: NormalizedPermission[] = [];
+        settled.forEach((outcome, i) => {
+            const provider = providers[i];
+            if (outcome.status === 'fulfilled') {
+                if (outcome.value?.length) results.push(...outcome.value);
+            } else {
+                LogError(
+                    `PermissionEngine.GetPermissionsSharedWithUser: provider '${provider.DomainName}' threw: ${outcome.reason}`
+                );
+            }
+        });
+        return results;
+    }
+
+    /**
      * Get every grantee's permissions on a specific resource within a domain.
      * Powers the Sharing Center "Resource Access Report" view.
      */
@@ -163,8 +255,143 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
         return this._providers.get(domainName);
     }
 
+    /**
+     * The resource type names supported by the given permission domain — sourced
+     * from the provider's `GetResourceTypes()`. Returns `[]` when the domain is
+     * unknown or the provider doesn't enumerate its types. Used by admin UIs
+     * (e.g., the Resource Access Report) to populate the Resource Type picker
+     * after a Domain is selected.
+     */
+    public GetResourceTypes(domainName: string): string[] {
+        return this._providers.get(domainName)?.GetResourceTypes() ?? [];
+    }
+
+    /**
+     * Font Awesome class for a permission domain, with a lock fallback for
+     * unknown domains. Drives the icon shown next to domain groups in both the
+     * admin Permissions app and the end-user Sharing Center.
+     */
+    public static DomainIconFor(domainName: string): string {
+        return PERMISSION_DOMAIN_ICONS[domainName] ?? PERMISSION_DOMAIN_ICON_FALLBACK;
+    }
+
     /** For unit tests: swap the provider map with a caller-supplied one. */
     public _SetProvidersForTesting(providers: Map<string, PermissionProviderBase>): void {
         this._providers = providers;
+    }
+
+    /**
+     * Convenience wrapper around {@link CheckPermission} that throws a typed
+     * {@link PermissionDeniedError} when the action is not permitted. Intended for
+     * programmatic callers — Actions, AI Agents, custom server code — that want
+     * "fail loudly on denial" semantics instead of branching on a boolean result.
+     *
+     * @example
+     * ```typescript
+     * await PermissionEngine.Instance.AuthorizeOrThrow(
+     *     user, 'Dashboard Permissions', 'Dashboards', dashboardId, 'Share'
+     * );
+     * // If we reach this line, the user can share the dashboard.
+     * ```
+     *
+     * @throws {@link PermissionDeniedError} when the provider returns `Allowed: false`
+     *         or when the domain is not registered.
+     */
+    public async AuthorizeOrThrow(
+        user: UserInfo,
+        domainName: string,
+        resourceType: string,
+        resourceId: string | null,
+        action: PermissionAction
+    ): Promise<void> {
+        const result = await this.CheckPermission(user, domainName, resourceType, resourceId, action);
+        if (!result.Allowed) {
+            throw new PermissionDeniedError({ ...result, ResourceType: resourceType, ResourceID: resourceId, Action: action });
+        }
+    }
+
+    /**
+     * Query RecordChange for audit events against every permission-backing entity.
+     * Supports filtering by domain, date range, changed-by user, or a specific
+     * record. Results are sorted newest-first and capped at `filter.MaxRows`
+     * (default 500).
+     *
+     * Relies on each permission entity having `TrackRecordChanges=1` in its
+     * Entity metadata row. Domains whose backing entities do not track changes
+     * contribute nothing to the timeline.
+     */
+    public async GetAuditTimeline(filter: PermissionAuditFilter = {}): Promise<PermissionAuditEntry[]> {
+        const targetEntities = this.resolveAuditEntityNames(filter.DomainName);
+        if (targetEntities.length === 0) return [];
+
+        const clauses: string[] = [
+            `Entity IN (${targetEntities.map((n) => `'${n.replace(/'/g, "''")}'`).join(',')})`,
+        ];
+        if (filter.StartDate) clauses.push(`ChangedAt >= '${filter.StartDate.toISOString()}'`);
+        if (filter.EndDate) clauses.push(`ChangedAt <= '${filter.EndDate.toISOString()}'`);
+        if (filter.ChangedByUserID) clauses.push(`UserID = '${filter.ChangedByUserID}'`);
+        if (filter.RecordID) clauses.push(`RecordID = '${filter.RecordID.replace(/'/g, "''")}'`);
+
+        const maxRows = filter.MaxRows ?? 500;
+        const rv = new RunView();
+        const result = await rv.RunView<{
+            ID: string;
+            Entity: string;
+            RecordID: string;
+            UserID: string | null;
+            User: string | null;
+            Type: 'Create' | 'Update' | 'Delete' | 'Snapshot';
+            ChangedAt: Date;
+            ChangesDescription: string | null;
+        }>({
+            EntityName: 'MJ: Record Changes',
+            ExtraFilter: clauses.join(' AND '),
+            OrderBy: 'ChangedAt DESC',
+            MaxRows: maxRows,
+            Fields: ['ID', 'Entity', 'RecordID', 'UserID', 'User', 'Type', 'ChangedAt', 'ChangesDescription'],
+            ResultType: 'simple',
+        });
+
+        if (!result.Success) {
+            LogError(`PermissionEngine.GetAuditTimeline: ${result.ErrorMessage}`);
+            return [];
+        }
+
+        return (result.Results ?? []).map((row) => ({
+            ChangedAt: new Date(row.ChangedAt),
+            ChangedByUserID: row.UserID,
+            ChangedByUserName: row.User ?? undefined,
+            DomainName: this.resolveDomainForEntity(row.Entity),
+            EntityName: row.Entity,
+            RecordID: row.RecordID,
+            ChangeType: row.Type,
+            Summary: row.ChangesDescription ?? undefined,
+            SourceRecordChangeID: row.ID,
+        }));
+    }
+
+    /**
+     * Map a domain-name filter to the set of backing entity names to query.
+     * When no filter is given, every known permission entity is included.
+     */
+    private resolveAuditEntityNames(domainName?: string): string[] {
+        if (domainName) return DOMAIN_TO_AUDIT_ENTITIES[domainName] ?? [];
+        const all: string[] = [];
+        for (const list of Object.values(DOMAIN_TO_AUDIT_ENTITIES)) {
+            all.push(...list);
+        }
+        return all;
+    }
+
+    /**
+     * Reverse lookup: given a backing entity name, return the owning domain.
+     * Falls back to the entity name itself when we can't resolve (e.g., a
+     * caller added a new permission entity to the map but no provider yet).
+     */
+    private resolveDomainForEntity(entityName: string): string {
+        for (const [domain, entities] of Object.entries(DOMAIN_TO_AUDIT_ENTITIES)) {
+            if (entities.includes(entityName)) return domain;
+        }
+        return entityName;
     }
 }
