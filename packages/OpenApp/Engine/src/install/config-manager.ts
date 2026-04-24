@@ -188,6 +188,14 @@ function EnsureDynamicPackagesSection(content: string): string {
  * Adds a single entry to the dynamicPackages.server array in the config string.
  */
 function AddEntryToServerArray(content: string, entry: DynamicPackageEntry): string {
+    // Skip if an entry with the same PackageName and AppName already exists
+    const existsPattern = new RegExp(
+        `PackageName:\\s*'${EscapeRegex(entry.PackageName)}'[^{}]*AppName:\\s*'${EscapeRegex(entry.AppName)}'`
+    );
+    if (existsPattern.test(content)) {
+        return content;
+    }
+
     // Find the server array
     const serverArrayMatch = content.match(/server:\s*\[/);
     if (!serverArrayMatch || serverArrayMatch.index === undefined) {
