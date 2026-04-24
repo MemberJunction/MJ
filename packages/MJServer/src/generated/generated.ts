@@ -20090,6 +20090,16 @@ export class MJArchiveConfigurationEntityResolver extends ResolverBase {
         return result;
     }
     
+    @Query(() => [MJArchiveConfigurationEntity_])
+    async AllMJArchiveConfigurationEntities(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Configuration Entities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurationEntities')}` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configuration Entities', userPayload, EntityPermissionType.Read, ' WHERE');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configuration Entities', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
     @Mutation(() => MJArchiveConfigurationEntity_)
     async CreateMJArchiveConfigurationEntity(
         @Arg('input', () => CreateMJArchiveConfigurationEntityInput) input: CreateMJArchiveConfigurationEntityInput,
@@ -20350,6 +20360,16 @@ export class MJArchiveConfigurationResolver extends ResolverBase {
         return result;
     }
     
+    @Query(() => [MJArchiveConfiguration_])
+    async AllMJArchiveConfigurations(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Configurations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurations')}` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configurations', userPayload, EntityPermissionType.Read, ' WHERE');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configurations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
     @FieldResolver(() => [MJArchiveConfigurationEntity_])
     async MJArchiveConfigurationEntities_ArchiveConfigurationIDArray(@Root() mjarchiveconfiguration_: MJArchiveConfiguration_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Archive Configuration Entities', userPayload);
@@ -20448,6 +20468,9 @@ export class MJArchiveRunDetail_ {
         
     @Field() 
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    ArchiveRun: Date;
         
     @Field() 
     @MaxLength(255)
@@ -20597,6 +20620,16 @@ export class MJArchiveRunDetailResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRunDetails')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Archive Run Details', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Query(() => [MJArchiveRunDetail_])
+    async AllMJArchiveRunDetails(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRunDetails')}` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Run Details', userPayload, EntityPermissionType.Read, ' WHERE');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Run Details', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
     
@@ -20841,6 +20874,16 @@ export class MJArchiveRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRuns')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Archive Runs', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Query(() => [MJArchiveRun_])
+    async AllMJArchiveRuns(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRuns')}` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Runs', userPayload, EntityPermissionType.Read, ' WHERE');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
     
@@ -21140,6 +21183,10 @@ export class MJArtifactType_ {
     @MaxLength(10)
     ContentCategory: string;
         
+    @Field({nullable: true, description: `Class name for the BaseArtifactToolLibrary subclass that provides type-specific artifact exploration tools for agents. Resolved via ClassFactory. When NULL, ArtifactToolManager uses name-based fallback resolution.`}) 
+    @MaxLength(100)
+    ToolLibraryClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
@@ -21200,6 +21247,9 @@ export class CreateMJArtifactTypeInput {
     @Field({ nullable: true })
     ContentCategory?: string;
 
+    @Field({ nullable: true })
+    ToolLibraryClass: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -21239,6 +21289,9 @@ export class UpdateMJArtifactTypeInput {
 
     @Field({ nullable: true })
     ContentCategory?: string;
+
+    @Field({ nullable: true })
+    ToolLibraryClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -53265,17 +53318,17 @@ export class MJMCPToolExecutionLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: MCP Tool Favorites
 //****************************************************************************
-@ObjectType({ description: `Per-user favorite marker for an MCP Server Tool. Lets users star tools for quick access in the MCP Dashboard and Test dialog.` })
+@ObjectType({ description: `Per-user favorite marker for an MCP Server Tool. Each row indicates the user has starred the referenced tool for quick access in the MCP Dashboard Tools tab and in the Test Tool dialog picker. Combined with UserID forms a unique pair so a user cannot favorite the same tool twice.` })
 export class MJMCPToolFavorite_ {
     @Field() 
     @MaxLength(36)
     ID: string;
         
-    @Field() 
+    @Field({description: `The user who starred this tool. Favorites are per-user; multiple users can favorite the same tool independently. References the MJ User table.`}) 
     @MaxLength(36)
     UserID: string;
         
-    @Field() 
+    @Field({description: `The MCP Server Tool that has been favorited. Combined with UserID this forms a unique constraint so a user cannot favorite the same tool twice.`}) 
     @MaxLength(36)
     MCPServerToolID: string;
         
@@ -53308,6 +53361,9 @@ export class CreateMJMCPToolFavoriteInput {
 
     @Field({ nullable: true })
     MCPServerToolID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -53327,6 +53383,9 @@ export class UpdateMJMCPToolFavoriteInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -66373,11 +66432,11 @@ export class MJTag_ {
     @Field(() => [MJTagCoOccurrence_])
     MJTagCoOccurrences_TagAIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
     
-    @Field(() => [MJTag_])
-    MJTags_MergedIntoTagIDArray: MJTag_[]; // Link to MJTags
-    
     @Field(() => [MJTagAuditLog_])
     MJTagAuditLogs_TagIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
+    
+    @Field(() => [MJTag_])
+    MJTags_MergedIntoTagIDArray: MJTag_[]; // Link to MJTags
     
 }
 
@@ -66562,16 +66621,6 @@ export class MJTagResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJTag_])
-    async MJTags_MergedIntoTagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Tags', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTags')} WHERE ${provider.QuoteIdentifier('MergedIntoTagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tags', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tags', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJTagAuditLog_])
     async MJTagAuditLogs_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
@@ -66579,6 +66628,16 @@ export class MJTagResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTag_])
+    async MJTags_MergedIntoTagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tags', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTags')} WHERE ${provider.QuoteIdentifier('MergedIntoTagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tags', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -74082,20 +74141,20 @@ export class MJUser_ {
     @Field(() => [MJContentItemDuplicate_])
     MJContentItemDuplicates_ResolvedByUserIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
     
-    @Field(() => [MJTagAuditLog_])
-    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
-    
     @Field(() => [MJContentProcessRun_])
     MJContentProcessRuns_StartedByUserIDArray: MJContentProcessRun_[]; // Link to MJContentProcessRuns
     
     @Field(() => [MJKnowledgeHubSavedSearch_])
     MJKnowledgeHubSavedSearches_UserIDArray: MJKnowledgeHubSavedSearch_[]; // Link to MJKnowledgeHubSavedSearches
     
-    @Field(() => [MJMCPToolFavorite_])
-    MJMCPToolFavorites_UserIDArray: MJMCPToolFavorite_[]; // Link to MJMCPToolFavorites
+    @Field(() => [MJTagAuditLog_])
+    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
     
     @Field(() => [MJArchiveConfiguration_])
     MJArchiveConfigurations_CreatedByUserIDArray: MJArchiveConfiguration_[]; // Link to MJArchiveConfigurations
+    
+    @Field(() => [MJMCPToolFavorite_])
+    MJMCPToolFavorites_UserIDArray: MJMCPToolFavorite_[]; // Link to MJMCPToolFavorites
     
     @Field(() => [MJResourcePermission_])
     MJResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
@@ -74957,16 +75016,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJTagAuditLog_])
-    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJContentProcessRun_])
     async MJContentProcessRuns_StartedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Process Runs', userPayload);
@@ -74987,13 +75036,13 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJMCPToolFavorite_])
-    async MJMCPToolFavorites_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: MCP Tool Favorites', userPayload);
+    @FieldResolver(() => [MJTagAuditLog_])
+    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPToolFavorites')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Tool Favorites', rows, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -75004,6 +75053,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurations')} WHERE ${provider.QuoteIdentifier('CreatedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configurations', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configurations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPToolFavorite_])
+    async MJMCPToolFavorites_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Tool Favorites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPToolFavorites')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Tool Favorites', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
