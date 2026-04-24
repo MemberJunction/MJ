@@ -10,9 +10,13 @@
  * platform monospace stack so they read as technical identifiers.
  */
 
+/* !important on display + direction keeps consumer classes (e.g. a host
+   `.something { display: block }`) from collapsing the flex layout — without
+   this the chrome + canvas-wrap stop being flex items and .erd-canvas-wrap's
+   `flex: 1` has no effect, causing the SVG to shrink to its min-height. */
 :host {
-  display: flex;
-  flex-direction: column;
+  display: flex !important;
+  flex-direction: column !important;
   height: 100%;
   width: 100%;
   overflow: hidden;
