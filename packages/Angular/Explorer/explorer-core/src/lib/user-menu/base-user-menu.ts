@@ -461,7 +461,6 @@ export class BaseUserMenu {
         };
     }
 
-<<<<<<< HEAD
     /**
      * Handle "Sharing Center" click — signals the shell to open the dialog.
      * The shell has access to `ViewContainerRef` and the dialog service; the
@@ -472,14 +471,15 @@ export class BaseUserMenu {
             success: true,
             closeMenu: true,
             message: 'sharing-center'
-=======
+        };
+    }
+
     /** Signal the shell to open the feedback dialog */
     protected async Handle_submit_feedback(): Promise<UserMenuActionResult> {
         return {
             success: true,
             closeMenu: true,
             message: 'submit-feedback'
->>>>>>> origin/next
         };
     }
 

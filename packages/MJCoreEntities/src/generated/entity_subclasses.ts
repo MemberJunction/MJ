@@ -738,10 +738,11 @@ export const MJActionSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.`),
-    RuntimeActionConfiguration: z.string().nullable().describe(`
+    RuntimeActionConfiguration: z.any().nullable().describe(`
         * * Field Name: RuntimeActionConfiguration
         * * Display Name: Runtime Configuration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJActionEntity_IRuntimeActionConfiguration
         * * Description: JSON blob holding configuration specific to Type='Runtime' actions: declarative permission scopes (allowedEntities, allowedActions, allowedAgents with id+name pairs), resource limits (maxMemoryMB, maxBridgeCalls), and sandbox options (additionalLibraries, debugMode). Evolvable — new keys can be introduced without schema changes. NULL for non-Runtime actions.`),
     MaxExecutionTimeMS: z.number().nullable().describe(`
         * * Field Name: MaxExecutionTimeMS
@@ -7453,7 +7454,7 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Description: The __mj_UpdatedAt timestamp of the record at the time of archiving, used for conflict detection during restore.`),
     IsRecordChangeArchive: z.boolean().describe(`
         * * Field Name: IsRecordChangeArchive
-        * * Display Name: Is Record Change Archive
+        * * Display Name: Is Record Change
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this detail row represents an archived Record Change entry rather than a primary entity record.`),
@@ -7469,7 +7470,7 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Default Value: getutcdate()`),
     ArchiveRun: z.date().describe(`
         * * Field Name: ArchiveRun
-        * * Display Name: Archive Run Timestamp
+        * * Display Name: Archive Run Date
         * * SQL Data Type: datetimeoffset`),
     Entity: z.string().describe(`
         * * Field Name: Entity
@@ -21280,7 +21281,7 @@ export const MJResourcePermissionSchema = z.object({
         * * Description: Reference to the type of resource being shared (View, Dashboard, Report, etc.)`),
     ResourceRecordID: z.string().describe(`
         * * Field Name: ResourceRecordID
-        * * Display Name: Resource Record ID
+        * * Display Name: Resource Record
         * * SQL Data Type: nvarchar(255)
         * * Description: ID of the specific resource being shared`),
     Type: z.union([z.literal('Role'), z.literal('User')]).describe(`
@@ -21294,22 +21295,22 @@ export const MJResourcePermissionSchema = z.object({
         * * Description: The level of sharing either Role or User`),
     StartSharingAt: z.date().nullable().describe(`
         * * Field Name: StartSharingAt
-        * * Display Name: Start Sharing At
+        * * Display Name: Start Date
         * * SQL Data Type: datetimeoffset
         * * Description: Optional: Date when sharing starts`),
     EndSharingAt: z.date().nullable().describe(`
         * * Field Name: EndSharingAt
-        * * Display Name: End Sharing At
+        * * Display Name: End Date
         * * SQL Data Type: datetimeoffset
         * * Description: Optional: Date when sharing ends`),
     RoleID: z.string().nullable().describe(`
         * * Field Name: RoleID
-        * * Display Name: Role ID
+        * * Display Name: Role
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     PermissionLevel: z.union([z.literal('Edit'), z.literal('Owner'), z.literal('View')]).nullable().describe(`
@@ -21356,11 +21357,11 @@ export const MJResourcePermissionSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     Role: z.string().nullable().describe(`
         * * Field Name: Role
-        * * Display Name: Role
+        * * Display Name: Role Name
         * * SQL Data Type: nvarchar(50)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     SharedByUser: z.string().nullable().describe(`
         * * Field Name: SharedByUser
@@ -27287,6 +27288,155 @@ export class MJActionResultCodeEntity extends BaseEntity<MJActionResultCodeEntit
 
 
 /**
+ * Configuration stored on Action.RuntimeActionConfiguration when Action.Type='Runtime'.
+ *
+ * Runtime actions are JavaScript payloads executed inside MJ's isolated-vm
+ * sandbox that call back to the host via a permissioned bridge (utilities
+ * object) to access metadata, views, queries, entity CRUD, other actions,
+ * agents, and AI capabilities.
+ *
+ * This configuration is the security and resource contract for a single
+ * Runtime action:
+ *  - What it is permitted to touch (permissions)
+ *  - How much it is allowed to consume (limits)
+ *  - What sandbox affordances it needs (sandbox)
+ *  - How it relates to prior versions of itself (version / previousVersionId)
+ *
+ * The JSON blob is evolvable — new optional keys can be added without a
+ * schema migration. Required keys MUST be marked required here and enforced
+ * at Save time (see the zod validator in @memberjunction/actions-base).
+ *
+ * Only applicable when Action.Type='Runtime'. NULL for Custom / Generated actions.
+ */
+export interface MJActionEntity_IRuntimeActionConfiguration {
+    /** Declarative permission scopes. The bridge validates every call against these. */
+    permissions: MJActionEntity_IRuntimeActionPermissions;
+
+    /** Resource limits (memory, bridge-call count). Defaults applied when omitted. */
+    limits?: MJActionEntity_IRuntimeActionLimits;
+
+    /** Sandbox options — additional libraries, debug mode, etc. */
+    sandbox?: MJActionEntity_IRuntimeActionSandboxOptions;
+
+    /** Semantic version of this action (e.g. "1.0.3"). Tracked in version history. */
+    version?: string;
+
+    /** ID of the previous Action record this version was derived from, if any. */
+    previousVersionId?: string;
+}
+
+/**
+ * Declarative permission scopes for a Runtime action. The bridge enforces
+ * each scope on every call — an attempt to touch an unlisted entity / action /
+ * agent throws a PermissionDenied error before the downstream operation runs.
+ *
+ * IDs are the source of truth; names are kept alongside for display, logging,
+ * and human review during the approval workflow.
+ *
+ * The `allowAnyEntity` / `allowAnyAction` / `allowAnyAgent` booleans are
+ * escape hatches for framework-shipped utility actions that must accept the
+ * target entity/action/agent as runtime input (e.g. a generic "data quality
+ * report" that can analyze any entity). They bypass the allowlist entirely
+ * for their namespace. The approval UI renders a prominent warning when any
+ * of them is set so a human reviewer sees the blast radius at approval time;
+ * agent-authored Runtime actions should enumerate specific references rather
+ * than set these flags.
+ */
+export interface MJActionEntity_IRuntimeActionPermissions {
+    /** Other actions this Runtime action can invoke via utilities.actions.Invoke */
+    allowedActions: MJActionEntity_IRuntimeActionReference[];
+
+    /** Agents this Runtime action can run via utilities.agents.Run */
+    allowedAgents: MJActionEntity_IRuntimeActionReference[];
+
+    /** Entities this Runtime action can read or mutate via utilities.rv / utilities.entity */
+    allowedEntities: MJActionEntity_IRuntimeActionReference[];
+
+    /**
+     * DANGEROUS ESCAPE HATCH. When true, allows access to ANY entity via
+     * `utilities.md.*`, `utilities.rv.*`, and `utilities.entity.*`, ignoring
+     * `allowedEntities`. Only set for framework-authored utility actions that
+     * accept the target entity as runtime input. Approval UI flags this.
+     */
+    allowAnyEntity?: boolean;
+
+    /**
+     * DANGEROUS ESCAPE HATCH. When true, allows invocation of ANY action via
+     * `utilities.actions.Invoke`, ignoring `allowedActions`. Only set for
+     * framework-authored orchestrators. Approval UI flags this.
+     */
+    allowAnyAction?: boolean;
+
+    /**
+     * DANGEROUS ESCAPE HATCH. When true, allows invocation of ANY agent via
+     * `utilities.agents.Run`, ignoring `allowedAgents`. Only set for
+     * framework-authored orchestrators. Approval UI flags this.
+     */
+    allowAnyAgent?: boolean;
+}
+
+/**
+ * Resource limits enforced per invocation. Host enforces memory via isolated-vm;
+ * bridge-call count is tracked on the host side and blocks once exceeded.
+ */
+export interface MJActionEntity_IRuntimeActionLimits {
+    /** Memory limit in MB. Default: 128. */
+    maxMemoryMB?: number;
+
+    /** Max bridge calls per single execution. Default: 100. Prevents runaway loops. */
+    maxBridgeCalls?: number;
+}
+
+/**
+ * Sandbox affordances the action needs beyond the default library set
+ * (lodash, date-fns, uuid, validator).
+ */
+export interface MJActionEntity_IRuntimeActionSandboxOptions {
+    /**
+     * Additional libraries beyond the default set. Must be in the approved
+     * registry in @memberjunction/action-runtime — arbitrary npm packages
+     * are not allowed. Currently approved opt-in libraries:
+     *   - mathjs (heavy math)
+     *   - papaparse (CSV parsing)
+     *   - cheerio (HTML parsing)
+     *   - marked (markdown parsing)
+     */
+    additionalLibraries?: MJActionEntity_IRuntimeLibraryReference[];
+
+    /** Enable verbose console output in the sandbox. Default false. */
+    debugMode?: boolean;
+}
+
+/**
+ * Stable reference to an entity / action / agent.
+ *
+ * `id` is authoritative (used for lookups and permission checks).
+ * `name` is kept so that the approval UI, logs, and diffs stay readable
+ * even when items are renamed — the UI should show the current name from
+ * the lookup and fall back to the stored one if the target is deleted.
+ */
+export interface MJActionEntity_IRuntimeActionReference {
+    /** UUID of the referenced item */
+    id: string;
+
+    /** Human-readable name at the time this configuration was authored */
+    name: string;
+}
+
+/**
+ * Reference to a sandbox library. Names must match the approved library
+ * registry in @memberjunction/action-runtime. Version is optional and only
+ * honored if multiple versions of the same library are registered.
+ */
+export interface MJActionEntity_IRuntimeLibraryReference {
+    /** Library name as used in require() / import (e.g. "papaparse") */
+    name: string;
+
+    /** Optional semver constraint. If omitted, uses the registry's default. */
+    version?: string;
+}
+
+/**
  * MJ: Actions - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Action
@@ -27683,6 +27833,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     * * Field Name: RuntimeActionConfiguration
     * * Display Name: Runtime Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJActionEntity_IRuntimeActionConfiguration
     * * Description: JSON blob holding configuration specific to Type='Runtime' actions: declarative permission scopes (allowedEntities, allowedActions, allowedAgents with id+name pairs), resource limits (maxMemoryMB, maxBridgeCalls), and sandbox options (additionalLibraries, debugMode). Evolvable — new keys can be introduced without schema changes. NULL for non-Runtime actions.
     */
     get RuntimeActionConfiguration(): string | null {
@@ -27690,6 +27841,27 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     }
     set RuntimeActionConfiguration(value: string | null) {
         this.Set('RuntimeActionConfiguration', value);
+    }
+
+    private _RuntimeActionConfigurationObject_cached: MJActionEntity_IRuntimeActionConfiguration | null | undefined = undefined;
+    private _RuntimeActionConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for RuntimeActionConfiguration — returns parsed JSON as MJActionEntity_IRuntimeActionConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get RuntimeActionConfigurationObject(): MJActionEntity_IRuntimeActionConfiguration | null {
+        const raw = this.RuntimeActionConfiguration;
+        if (raw !== this._RuntimeActionConfigurationObject_lastRaw) {
+            this._RuntimeActionConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._RuntimeActionConfigurationObject_lastRaw = raw;
+        }
+        return this._RuntimeActionConfigurationObject_cached!;
+    }
+    set RuntimeActionConfigurationObject(value: MJActionEntity_IRuntimeActionConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.RuntimeActionConfiguration = raw;
+        this._RuntimeActionConfigurationObject_cached = value;
+        this._RuntimeActionConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -45668,7 +45840,7 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
 
     /**
     * * Field Name: IsRecordChangeArchive
-    * * Display Name: Is Record Change Archive
+    * * Display Name: Is Record Change
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, this detail row represents an archived Record Change entry rather than a primary entity record.
@@ -45702,7 +45874,7 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
 
     /**
     * * Field Name: ArchiveRun
-    * * Display Name: Archive Run Timestamp
+    * * Display Name: Archive Run Date
     * * SQL Data Type: datetimeoffset
     */
     get ArchiveRun(): Date {
@@ -81286,7 +81458,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: ResourceRecordID
-    * * Display Name: Resource Record ID
+    * * Display Name: Resource Record
     * * SQL Data Type: nvarchar(255)
     * * Description: ID of the specific resource being shared
     */
@@ -81316,7 +81488,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: StartSharingAt
-    * * Display Name: Start Sharing At
+    * * Display Name: Start Date
     * * SQL Data Type: datetimeoffset
     * * Description: Optional: Date when sharing starts
     */
@@ -81329,7 +81501,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: EndSharingAt
-    * * Display Name: End Sharing At
+    * * Display Name: End Date
     * * SQL Data Type: datetimeoffset
     * * Description: Optional: Date when sharing ends
     */
@@ -81342,7 +81514,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: RoleID
-    * * Display Name: Role ID
+    * * Display Name: Role
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
     */
@@ -81355,7 +81527,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -81449,7 +81621,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: Role
-    * * Display Name: Role
+    * * Display Name: Role Name
     * * SQL Data Type: nvarchar(50)
     */
     get Role(): string | null {
@@ -81458,7 +81630,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
