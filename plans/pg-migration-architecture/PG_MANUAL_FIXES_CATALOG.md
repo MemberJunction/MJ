@@ -201,6 +201,12 @@ These do not block forward development against the committed migration files, bu
 **Required converter fix:** When `ALTER TABLE ADD COLUMN` is also referenced by an index or function emitted in the same file, hoist the column add to the top and place the FK constraint at the end (split the combined statement).
 **Status:** Open. Workaround: hand edit splits the column add (top of file) from the FK constraint (end of file).
 
+### F5. T-SQL `EXEC __mj.spCreate*` blocks not auto-converted (silent data loss)
+**Affected files:** `migrations-pg/v5/V202604201315__v5.29.x__Archive_Actions.pg.sql`, `migrations-pg/v5/V202604201325__v5.29.x__Archive_Scheduled_Job.pg.sql` (9 SKIPPED blocks across the two files)
+**What:** Migrations that seed reference data via the metadata-management sproc pattern — `IF NOT EXISTS ... BEGIN EXEC __mj.spCreateAction @ID=..., @Name=N'...' ... END` — are skipped by the converter with a `-- SKIPPED: EXEC block (auto-conversion not supported)` comment. The original T-SQL is copied as comments in the output. **The migration applies cleanly** (no SQL error) **but the seeded records are silently missing**. Runtime later tries to find the records (Action, ActionParam, ScheduledAction, etc.) and fails. This is more dangerous than F1–F4 because the failure surfaces at runtime, not at migration time.
+**Required converter fix:** Add a converter rule for the `IF NOT EXISTS ... EXEC __mj.sp{Create,Update,Delete}<Entity> @param=value, ...` pattern that emits the PG equivalent: `DO $$ DECLARE v_id UUID := '...'; BEGIN IF NOT EXISTS (SELECT 1 FROM __mj."Entity" WHERE ...) THEN INSERT INTO __mj."Entity" (...) VALUES (...); END IF; END $$;`. Direct INSERT is preferred over `PERFORM __mj.fn_create_<entity>(...)` because the `fn_create_*` functions are CodeGen-emitted and may not exist at the point a seeding migration runs.
+**Status:** Open. Workaround: hand-rewrite each `IF NOT EXISTS ... EXEC` block as a `DO $$ ... INSERT INTO ... END $$;` block. Replace `N'string'` → `'string'`, `1`/`0` → `TRUE`/`FALSE`, `@var` → `v_var`, and `BEGIN`/`END` → `THEN`/`END IF`.
+
 ---
 
 ## Category G: Hand-written PG-only files (no T-SQL source)
@@ -240,7 +246,7 @@ Out of the 90+ files in `migrations-pg/v5/`, only **9 files** require human atte
 
 | Kind | Count | Files |
 |---|---|---|
-| Auto-converted with patches (Category F) | 4 | B202602151200 (baseline), V202604090003 (geo), V202604131300 (allow-caching), V202604191500 (restore-lineage) |
+| Auto-converted with patches (Category F) | 6 | B202602151200 (baseline), V202604090003 (geo), V202604131300 (allow-caching), V202604191500 (restore-lineage), V202604201315 (archive-actions, EXEC blocks), V202604201325 (archive-scheduled-job, EXEC blocks) |
 | PG-only (Category G) | 5 | V202602151201, V202603011600, V202603111159, V202604090002, V202604220000 |
 
 The other ~81 files are pure converter output (with the cosmetic 22-line header) and require no manual work.
@@ -251,12 +257,13 @@ The other ~81 files are pure converter output (with the cosmetic 22-line header)
 
 | Priority | Item | Effort | Impact |
 |---|---|---|---|
-| 1 | B1, B4: Add roles + UQ_User_Email to PG baseline | Low (SQL only) | Eliminates 2 manual setup steps |
-| 2 | C1: Fix CodeGen bootstrap chicken-and-egg (vwEntityFields) | Medium (CodeGen source) | Fixes most empty-list Explorer issues |
-| 3 | F3: Converter — view-snapshot column staleness after ALTER TABLE | Medium (needs DROP/CREATE view emission or query rewrite) | Recurs on every column-add migration |
-| 4 | F1: Converter — baseline-aware sproc skip | Low (filename detection + restore old skip behavior) | Unblocks baseline regeneration |
-| 5 | C2: Multi-hop JOIN support in CodeGen | High (architecture) | Enables ~20 virtual columns across ~10 entities |
-| 6 | F4: Converter — column hoisting when referenced earlier in file | Medium (cross-section dependency check) | Narrow but real |
-| 7 | B5: Fix BaseViewGenerated default for PG installs | Low (data fix) | Prevents manual flag flipping |
-| 8 | F2: Converter — inline T-SQL TVF/scalar function rule | High (new converter rule) | Narrow (only geo functions today) |
-| 9 | E1: Automate two-pass workflow in CI | Medium (CI config) | Makes migration testing hands-off |
+| 1 | F5: Converter — `IF NOT EXISTS ... EXEC __mj.spCreate*` pattern → `DO $$ ... INSERT ... END $$;` | Medium (new converter rule) | **Silent data loss** — migrations apply cleanly but seed records are missing. Pattern recurs in any migration that seeds Action / ActionParam / ScheduledAction / etc. |
+| 2 | B1, B4: Add roles + UQ_User_Email to PG baseline | Low (SQL only) | Eliminates 2 manual setup steps |
+| 3 | C1: Fix CodeGen bootstrap chicken-and-egg (vwEntityFields) | Medium (CodeGen source) | Fixes most empty-list Explorer issues |
+| 4 | F3: Converter — view-snapshot column staleness after ALTER TABLE | Medium (needs DROP/CREATE view emission or query rewrite) | Recurs on every column-add migration |
+| 5 | F1: Converter — baseline-aware sproc skip | Low (filename detection + restore old skip behavior) | Unblocks baseline regeneration |
+| 6 | C2: Multi-hop JOIN support in CodeGen | High (architecture) | Enables ~20 virtual columns across ~10 entities |
+| 7 | F4: Converter — column hoisting when referenced earlier in file | Medium (cross-section dependency check) | Narrow but real |
+| 8 | B5: Fix BaseViewGenerated default for PG installs | Low (data fix) | Prevents manual flag flipping |
+| 9 | F2: Converter — inline T-SQL TVF/scalar function rule | High (new converter rule) | Narrow (only geo functions today) |
+| 10 | E1: Automate two-pass workflow in CI | Medium (CI config) | Makes migration testing hands-off |
