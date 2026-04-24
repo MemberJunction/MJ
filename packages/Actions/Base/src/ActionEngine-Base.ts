@@ -224,22 +224,37 @@ export class RunActionParams<TContext = any> {
    /**
     * Optional context object that provides runtime-specific information to the action.
     * This context is separate from the action parameters and is not stored in the database.
-    * 
+    *
     * Common use cases include:
     * - Environment-specific configuration (API endpoints, service URLs)
     * - Runtime credentials or authentication tokens
     * - User preferences or session information
     * - Feature flags or toggles
     * - Request-specific correlation IDs
-    * 
+    *
     * The context flows from agents to actions, maintaining consistency throughout
     * the execution hierarchy. Actions can use this context to adapt their behavior
     * based on runtime conditions without modifying their core parameter structure.
-    * 
+    *
     * Note: Avoid including sensitive data like passwords unless absolutely necessary,
     * as context may be passed through multiple execution layers.
     */
    public Context?: TContext;
+
+   /**
+    * Optional AbortSignal that is aborted when the action exceeds its wall-clock
+    * time budget (set via `Action.MaxExecutionTimeMS` or the engine default). Set
+    * automatically by `ActionEngine.RunAction()` — callers should not populate it
+    * directly. Long-running action implementations should poll this signal
+    * (e.g. between batches, between retries, inside tight loops) and return
+    * early with `ResultCode = 'TIMEOUT'` when it fires, so the enforcement is
+    * cooperative rather than ending the Node process.
+    *
+    * The engine also records the timeout on `AbortSignal.reason` as a string
+    * describing which side (action vs engine default) supplied the budget,
+    * which makes timeout-origin debugging straightforward.
+    */
+   public AbortSignal?: AbortSignal;
 };
  
 

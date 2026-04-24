@@ -158,16 +158,26 @@ export class FormStateService {
     }
 
     /**
-     * Set form width mode.
-     * @param entityName The entity name
-     * @param widthMode The width mode
+     * Whether this entity has had an EXPLICIT widthMode set via the toolbar
+     * width-toggle (and thus the user's choice should win over component
+     * defaults). Returns false for pre-existing persisted blobs that had a
+     * default `widthMode` serialized as a side effect of other state saves.
+     */
+    hasExplicitWidthMode(entityName: string): boolean {
+        return this.getCurrentState(entityName).widthModeExplicit === true;
+    }
+
+    /**
+     * Set form width mode. Marks the preference as explicit so it wins over
+     * any component-level default in `BaseFormComponent.getFormWidthMode`.
      */
     setWidthMode(entityName: string, widthMode: 'centered' | 'full-width'): void {
         const subject = this.getOrCreateSubject(entityName);
         const currentState = subject.value;
         const newState: FormState = {
             ...currentState,
-            widthMode
+            widthMode,
+            widthModeExplicit: true
         };
         subject.next(newState);
         this.queueSave(entityName);
@@ -404,7 +414,9 @@ export class FormStateService {
 
             if (setting?.Value) {
                 const savedState = JSON.parse(setting.Value) as Partial<FormState>;
-                // Merge with defaults to handle new properties
+                // Merge with defaults to handle new properties. `widthModeExplicit`
+                // rides along with the blob — pre-existing blobs won't have it,
+                // which is the desired behavior (component defaults win).
                 subject.next({ ...DEFAULT_FORM_STATE, ...savedState });
             } else {
                 // No saved state, use defaults

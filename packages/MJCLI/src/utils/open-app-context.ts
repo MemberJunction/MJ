@@ -157,6 +157,8 @@ export async function buildOrchestratorContext(
     // Zod infers object fields as optional; runtime schema validates they're present
     AdditionalTargets: config.openApps?.additionalTargets as Array<{ Path: string; Role: 'server' | 'client' }> | undefined,
     ClientBootstrapSubpath: config.openApps?.clientBootstrapSubpath,
+    MJCoreSchema: config.coreSchema ?? '__mj',
+    MigrationPlaceholders: config.openApps?.migrationPlaceholders,
     Callbacks: {
       OnProgress: (phase: string, message: string) => spinner?.start(`[${phase}] ${message}`),
       OnSuccess: (phase: string, message: string) => spinner?.succeed(`[${phase}] ${message}`),
@@ -196,6 +198,8 @@ interface OrchestratorContextShape {
   VersionStrategy?: 'semver' | 'catalog' | 'workspace' | 'auto';
   AdditionalTargets?: Array<{ Path: string; Role: 'server' | 'client' }>;
   ClientBootstrapSubpath?: string;
+  MJCoreSchema?: string;
+  MigrationPlaceholders?: Record<string, string>;
   Callbacks?: {
     OnProgress?: (phase: string, message: string) => void;
     OnSuccess?: (phase: string, message: string) => void;

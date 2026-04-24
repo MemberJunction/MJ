@@ -64,6 +64,10 @@ export interface OrchestratorContext {
   AdditionalTargets?: WorkspaceTarget[];
   /** File subpath within client workspace for bootstrap file (default: 'src/app/generated/open-app-bootstrap.generated.ts') */
   ClientBootstrapSubpath?: string;
+  /** MJ core schema name. Used to resolve `${mjSchema}` placeholder in app migrations. Defaults to '__mj'. */
+  MJCoreSchema?: string;
+  /** Extra user placeholders merged into the Skyway Placeholders map for migration SQL substitution. */
+  MigrationPlaceholders?: Record<string, string>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,7 +157,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     // Steps 6-7: Schema
     if (manifest.schema) {
-      const schemaResult = await HandleSchemaCreation(manifest, context, isReinstall);
+      const schemaResult = await HandleSchemaCreation(manifest, context, isReinstall, options.AllowDoubleUnderscoreSchema === true);
       if (!schemaResult.Success) {
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, schemaResult.ErrorMessage ?? 'Schema creation failed');
       }
@@ -164,7 +168,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     if (manifest.migrations && manifest.schema) {
       const migrationResult = await HandleMigrations(manifest, context);
       if (!migrationResult.Success) {
-        await CompensateSchemaOnFailure(manifest, context, schemaCreated, Callbacks);
+        await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Migration', startTime, migrationResult.ErrorMessage ?? 'Migration failed');
       }
     }
@@ -173,7 +177,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     Callbacks?.OnProgress?.('Record', 'Recording app installation...');
     const recordResult = await RecordInstallationAtomically(context.ContextUser, manifest, Callbacks);
     if (!recordResult.Success) {
-      await CompensateSchemaOnFailure(manifest, context, schemaCreated, Callbacks);
+      await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Record', startTime, recordResult.ErrorMessage ?? 'Failed to record installation');
     }
     createdAppId = recordResult.AppId;
@@ -197,18 +201,20 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
     }
 
-    // Step 13: Update client imports
+    // Step 13: Flip status to Active BEFORE regenerating the client bootstrap,
+    // so the regen reads the new status and emits enabled imports.
+    Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
+    await SetAppStatus(context.ContextUser, createdAppId!, 'Active');
+
+    // Step 14: Update client imports (reads current app status from DB)
     await HandleClientBootstrapRegeneration(context);
 
-    // Step 14: Execute hooks
+    // Step 15: Execute hooks
     if (manifest.hooks?.postInstall) {
       Callbacks?.OnProgress?.('Hooks', 'Running postInstall hook...');
       await ExecuteHook(manifest.hooks.postInstall, context.RepoRoot);
     }
 
-    // Step 15: Finalize — set status to Active and record success history
-    Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
-    await SetAppStatus(context.ContextUser, createdAppId!, 'Active');
     await RecordInstallHistoryEntry(context.ContextUser, createdAppId!, 'Install', manifest, {
       Success: true,
       DurationSeconds: GetDurationSeconds(startTime),
@@ -285,6 +291,7 @@ async function CompensateSchemaOnFailure(
   manifest: MJAppManifest,
   context: OrchestratorContext,
   schemaWasCreated: boolean,
+  allowDoubleUnderscore: boolean,
   callbacks?: AppInstallCallbacks,
 ): Promise<void> {
   if (!schemaWasCreated || !manifest.schema) {
@@ -292,7 +299,7 @@ async function CompensateSchemaOnFailure(
   }
   try {
     callbacks?.OnProgress?.('Rollback', `Rolling back: dropping schema '${manifest.schema.name}'...`);
-    await DropAppSchema(manifest.schema.name, context.DatabaseProvider);
+    await DropAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
     callbacks?.OnProgress?.('Rollback', `Schema '${manifest.schema.name}' dropped successfully`);
   } catch (rollbackError: unknown) {
     const msg = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
@@ -412,21 +419,22 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
     }
 
-    // Step 8: Regenerate client imports
-    await HandleClientBootstrapRegeneration(context);
-
-    // Step 9: Execute hooks
-    if (manifest.hooks?.postUpgrade) {
-      Callbacks?.OnProgress?.('Hooks', 'Running postUpgrade hook...');
-      await ExecuteHook(manifest.hooks.postUpgrade, context.RepoRoot);
-    }
-
-    // Step 10: Update records
+    // Step 8: Update app record first (including Status: Active) so the
+    // bootstrap regen below reads the final status from the DB.
     await UpdateAppRecord(context.ContextUser, existingApp.ID, {
       Version: manifest.version,
       ManifestJSON: JSON.stringify(manifest),
       Status: 'Active',
     });
+
+    // Step 9: Regenerate client imports
+    await HandleClientBootstrapRegeneration(context);
+
+    // Step 10: Execute hooks
+    if (manifest.hooks?.postUpgrade) {
+      Callbacks?.OnProgress?.('Hooks', 'Running postUpgrade hook...');
+      await ExecuteHook(manifest.hooks.postUpgrade, context.RepoRoot);
+    }
 
     // Update dependency records to reflect new manifest
     if (manifest.dependencies) {
@@ -552,7 +560,9 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     // Step 7: Drop schema (unless --keep-data)
     if (!options.KeepData && existingApp.SchemaName) {
       Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
-      const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider);
+      const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
+        allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+      });
       if (!dropResult.Success) {
         Callbacks?.OnWarn?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
       }
@@ -613,8 +623,8 @@ export async function DisableApp(appName: string, context: OrchestratorContext):
   }
 
   ToggleServerDynamicPackages(context.RepoRoot, appName, false);
-  await HandleClientBootstrapRegeneration(context);
   await SetAppStatus(context.ContextUser, app.ID, 'Disabled');
+  await HandleClientBootstrapRegeneration(context);
 
   return {
     Success: true,
@@ -637,8 +647,8 @@ export async function EnableApp(appName: string, context: OrchestratorContext): 
   }
 
   ToggleServerDynamicPackages(context.RepoRoot, appName, true);
-  await HandleClientBootstrapRegeneration(context);
   await SetAppStatus(context.ContextUser, app.ID, 'Active');
+  await HandleClientBootstrapRegeneration(context);
 
   return {
     Success: true,
@@ -728,7 +738,7 @@ async function InstallDependencies(
 /**
  * Handles schema creation for an app, including collision checks and reinstall reuse.
  */
-async function HandleSchemaCreation(manifest: MJAppManifest, context: OrchestratorContext, isReinstall: boolean = false): Promise<InternalResult> {
+async function HandleSchemaCreation(manifest: MJAppManifest, context: OrchestratorContext, isReinstall: boolean = false, allowDoubleUnderscore: boolean = false): Promise<InternalResult> {
   if (!manifest.schema) {
     return { Success: true };
   }
@@ -748,7 +758,7 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
 
   if (manifest.schema.createIfNotExists !== false) {
     context.Callbacks?.OnProgress?.('Schema', `Creating schema '${manifest.schema.name}'...`);
-    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider);
+    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
     return { Success: result.Success, ErrorMessage: result.ErrorMessage };
   }
 
@@ -779,6 +789,8 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
     MigrationsDir: tempDir,
     SchemaName: manifest.schema.name,
     DatabaseConfig: context.DatabaseConfig,
+    MJCoreSchema: context.MJCoreSchema,
+    ExtraPlaceholders: context.MigrationPlaceholders,
   });
 
   return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };

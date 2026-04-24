@@ -205,6 +205,22 @@ const cacheSettingsSchema = z.object({
   verboseLogging: z.boolean().optional().default(false),
 });
 
+const feedbackGithubSettingsSchema = z.object({
+  owner: z.string().optional(),
+  repo: z.string().optional(),
+  defaultLabels: z.array(z.string()).optional(),
+  categoryLabels: z.record(z.string()).optional(),
+  severityLabels: z.record(z.string()).optional(),
+  assignees: z.array(z.string()).optional(),
+});
+
+const feedbackSettingsSchema = z.object({
+  /** Org-level kill switch for the in-app feedback feature. Defaults to true (enabled). */
+  enabled: z.boolean().optional().default(true),
+  /** Optional GitHub-specific settings used by the feedback resolver. */
+  github: feedbackGithubSettingsSchema.optional(),
+});
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
@@ -220,6 +236,7 @@ const configInfoSchema = z.object({
   multiTenancy: multiTenancySchema.optional().default({}),
   serverExtensions: z.array(serverExtensionSchema).optional().default([]),
   cacheSettings: cacheSettingsSchema.optional().default({}),
+  feedbackSettings: feedbackSettingsSchema.optional().default({}),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -267,6 +284,8 @@ export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
 export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
 export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
+export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
+export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**

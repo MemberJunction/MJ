@@ -1,4 +1,5 @@
 import { Args, Command } from '@oclif/core';
+import { FindInstalledApp } from '@memberjunction/open-app-engine';
 import chalk from 'chalk';
 import { buildContextUser } from '../../utils/open-app-context.js';
 
@@ -26,7 +27,6 @@ export default class AppInfo extends Command {
     const { args } = await this.parse(AppInfo);
 
     try {
-      const { FindInstalledApp } = await import('@memberjunction/open-app-engine');
       const contextUser = await buildContextUser();
       const app = await FindInstalledApp(contextUser, args.name);
 

@@ -1,5 +1,72 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.29.0
+
+### Patch Changes
+
+- 5c7a57f: Add in-app feedback system with mj-dialog UI, GitHub App authentication for issue creation, and shell header integration. Feedback submissions create formatted GitHub issues with labels, severity, environment info, and browser details.
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+- Updated dependencies [98bad3a]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities-server@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-agent-manager@5.29.0
+  - @memberjunction/ai-agents@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/tag-engine-base@5.29.0
+  - @memberjunction/ai-recommendations-rex@5.29.0
+  - @memberjunction/ai-reranker@5.29.0
+  - @memberjunction/ai-vectors-pinecone@5.29.0
+  - @memberjunction/ai-vectors-qdrant@5.29.0
+  - @memberjunction/ai-vectors-pgvector@5.29.0
+  - @memberjunction/actions-apollo@5.29.0
+  - @memberjunction/actions-base@5.29.0
+  - @memberjunction/actions-bizapps-accounting@5.29.0
+  - @memberjunction/actions-bizapps-crm@5.29.0
+  - @memberjunction/actions-bizapps-formbuilders@5.29.0
+  - @memberjunction/actions-bizapps-lms@5.29.0
+  - @memberjunction/actions-bizapps-social@5.29.0
+  - @memberjunction/core-actions@5.29.0
+  - @memberjunction/actions@5.29.0
+  - @memberjunction/communication-types@5.29.0
+  - @memberjunction/content-autotagging@5.29.0
+  - @memberjunction/doc-utils@5.29.0
+  - @memberjunction/encryption@5.29.0
+  - @memberjunction/data-context-server@5.29.0
+  - @memberjunction/queue@5.29.0
+  - @memberjunction/storage@5.29.0
+  - @memberjunction/scheduling-actions@5.29.0
+  - @memberjunction/scheduling-engine-base@5.29.0
+  - @memberjunction/scheduling-engine@5.29.0
+  - @memberjunction/search-engine@5.29.0
+  - @memberjunction/templates@5.29.0
+  - @memberjunction/testing-engine@5.29.0
+  - @memberjunction/ai-provider-bundle@5.29.0
+  - @memberjunction/ai-anthropic@5.29.0
+  - @memberjunction/ai-azure@5.29.0
+  - @memberjunction/ai-bedrock@5.29.0
+  - @memberjunction/ai-betty-bot@5.29.0
+  - @memberjunction/ai-blackforestlabs@5.29.0
+  - @memberjunction/ai-cerebras@5.29.0
+  - @memberjunction/ai-cohere@5.29.0
+  - @memberjunction/ai-elevenlabs@5.29.0
+  - @memberjunction/ai-fireworks@5.29.0
+  - @memberjunction/ai-gemini@5.29.0
+  - @memberjunction/ai-groq@5.29.0
+  - @memberjunction/ai-heygen@5.29.0
+  - @memberjunction/ai-lmstudio@5.29.0
+  - @memberjunction/ai-local-embeddings@5.29.0
+  - @memberjunction/ai-minimax@5.29.0
+  - @memberjunction/ai-mistral@5.29.0
+  - @memberjunction/ai-ollama@5.29.0
+  - @memberjunction/ai-openai@5.29.0
+  - @memberjunction/ai-openrouter@5.29.0
+  - @memberjunction/ai-vertex@5.29.0
+  - @memberjunction/ai-zhipu@5.29.0
+  - @memberjunction/ai-xai@5.29.0
+
 ## 5.28.0
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # @memberjunction/ng-record-tags
 
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/ng-versions@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/ng-word-cloud@5.29.0
+  - @memberjunction/global@5.29.0
+
 ## 5.28.0
 
 ### Patch Changes

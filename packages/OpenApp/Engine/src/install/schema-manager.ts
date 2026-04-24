@@ -32,12 +32,27 @@ export interface SchemaOperationResult {
 }
 
 /**
+ * Options for schema-name validation.
+ */
+export interface ValidateSchemaNameOptions {
+  /**
+   * Allow schema names starting with `__`. Exact-match reserved names (e.g. `__mj`, `dbo`)
+   * remain blocked regardless of this flag. Dangerous; MJ-internal apps only.
+   */
+  allowDoubleUnderscore?: boolean;
+}
+
+/**
  * Validates that a schema name is allowed (not reserved, no double underscores).
  *
  * @param schemaName - The schema name to validate
+ * @param options - Optional overrides; see {@link ValidateSchemaNameOptions}
  * @returns Validation result
  */
-export function ValidateSchemaName(schemaName: string): SchemaOperationResult {
+export function ValidateSchemaName(
+  schemaName: string,
+  options: ValidateSchemaNameOptions = {}
+): SchemaOperationResult {
   if (RESERVED_SCHEMAS.has(schemaName)) {
     return {
       Success: false,
@@ -45,7 +60,7 @@ export function ValidateSchemaName(schemaName: string): SchemaOperationResult {
     };
   }
 
-  if (schemaName.startsWith('__')) {
+  if (!options.allowDoubleUnderscore && schemaName.startsWith('__')) {
     return {
       Success: false,
       ErrorMessage: `Schema names starting with '__' are reserved for MJ internals`
@@ -81,9 +96,10 @@ export async function SchemaExists(
  */
 export async function CreateAppSchema(
   schemaName: string,
-  provider: DatabaseProviderBase
+  provider: DatabaseProviderBase,
+  options: ValidateSchemaNameOptions = {}
 ): Promise<SchemaOperationResult> {
-  const validation = ValidateSchemaName(schemaName);
+  const validation = ValidateSchemaName(schemaName, options);
   if (!validation.Success) {
     return validation;
   }
@@ -118,9 +134,10 @@ export async function CreateAppSchema(
  */
 export async function DropAppSchema(
   schemaName: string,
-  provider: DatabaseProviderBase
+  provider: DatabaseProviderBase,
+  options: ValidateSchemaNameOptions = {}
 ): Promise<SchemaOperationResult> {
-  const validation = ValidateSchemaName(schemaName);
+  const validation = ValidateSchemaName(schemaName, options);
   if (!validation.Success) {
     return validation;
   }

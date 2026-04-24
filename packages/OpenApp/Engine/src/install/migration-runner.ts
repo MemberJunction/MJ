@@ -34,7 +34,12 @@ interface SkywayConfig {
 
 /** Minimal interface for the Skyway instance returned at runtime. */
 interface SkywayInstance {
-    Migrate(): Promise<{ MigrationsApplied: number; Details: { Success: boolean; Migration: { Filename: string } }[] }>;
+    Migrate(): Promise<{
+        Success: boolean;
+        MigrationsApplied: number;
+        ErrorMessage?: string;
+        Details: { Success: boolean; Migration: { Filename: string } }[];
+    }>;
     Close(): Promise<void>;
 }
 
@@ -50,6 +55,10 @@ export interface MigrationRunOptions {
     DatabaseConfig: SkywayDatabaseConfig;
     /** Enable verbose output */
     Verbose?: boolean;
+    /** MJ core schema (used to resolve ${mjSchema} placeholder in migrations). Defaults to '__mj'. */
+    MJCoreSchema?: string;
+    /** Extra user placeholders merged into Skyway's Placeholders map. Overrides built-ins on key collision. */
+    ExtraPlaceholders?: Record<string, string>;
 }
 
 /**
@@ -107,7 +116,7 @@ export interface MigrationRunResult {
  * @returns Migration result with applied file count
  */
 export async function RunAppMigrations(options: MigrationRunOptions): Promise<MigrationRunResult> {
-    const { MigrationsDir, SchemaName, DatabaseConfig, Verbose } = options;
+    const { MigrationsDir, SchemaName, DatabaseConfig, Verbose, MJCoreSchema, ExtraPlaceholders } = options;
 
     let skyway: SkywayInstance | undefined;
 
@@ -116,7 +125,7 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         // @memberjunction/skyway-core is published as a dependency.
         const skywayModuleId = '@memberjunction/skyway-core';
         const { Skyway } = await import(skywayModuleId);
-        const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig);
+        const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders);
 
         if (Verbose) {
             console.log(`Running Skyway migrations for schema '${SchemaName}'`);
@@ -132,9 +141,12 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             .map((d: { Migration: { Filename: string } }) => d.Migration.Filename);
 
         return {
-            Success: true,
+            Success: result.Success,
             MigrationsApplied: result.MigrationsApplied,
             AppliedFiles: appliedFiles,
+            ErrorMessage: result.Success
+                ? undefined
+                : `Migration failed for schema '${SchemaName}': ${result.ErrorMessage ?? 'unknown error'}`,
         };
     }
     catch (error: unknown) {
@@ -159,7 +171,9 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
 function BuildSkywayConfig(
     migrationsDir: string,
     schemaName: string,
-    dbConfig: SkywayDatabaseConfig
+    dbConfig: SkywayDatabaseConfig,
+    mjCoreSchema?: string,
+    extraPlaceholders?: Record<string, string>
 ): SkywayConfig {
     const absoluteDir = path.isAbsolute(migrationsDir)
         ? migrationsDir
@@ -191,6 +205,8 @@ function BuildSkywayConfig(
         },
         Placeholders: {
             'flyway:defaultSchema': schemaName,
+            mjSchema: mjCoreSchema ?? '__mj',
+            ...(extraPlaceholders ?? {}),
         },
     };
 }

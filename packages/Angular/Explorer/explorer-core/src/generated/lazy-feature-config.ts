@@ -28,7 +28,7 @@ const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjun
 // --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (1 entries) ---
 const loadComponentStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/component-studio-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (13 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (12 entries) ---
 const loadCoreDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/core-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./credentials-dashboards.module (6 entries) ---
@@ -45,6 +45,9 @@ const loadListsDashboardsModule = featureLoader(() => import('@memberjunction/ng
 
 // --- @memberjunction/ng-dashboards → ./mcp.module (2 entries) ---
 const loadMcpModule = featureLoader(() => import('@memberjunction/ng-dashboards/mcp.module'));
+
+// --- @memberjunction/ng-dashboards → ./module (2 entries) ---
+const loadModule = featureLoader(() => import('@memberjunction/ng-dashboards/module'));
 
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
 const loadSchedulingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/scheduling-dashboards.module'));
@@ -110,7 +113,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::DashboardBrowserResource': loadCoreDashboardsModule,
   'BaseResourceComponent::HomeDashboard': loadCoreDashboardsModule,
   'BaseResourceComponent::QueryBrowserResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::SharingCenterResource': loadCoreDashboardsModule,
   'BaseResourceComponent::SystemDiagnosticsResource': loadCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryDiffResource': loadCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryGraphResource': loadCoreDashboardsModule,
@@ -147,6 +149,10 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseDashboard::MCPDashboard': loadMcpModule,
   'BaseResourceComponent::MCPResource': loadMcpModule,
 
+  // @memberjunction/ng-dashboards → ./module
+  'BaseResourceComponent::ArchiveConfigResource': loadModule,
+  'BaseResourceComponent::ArchiveRunsResource': loadModule,
+
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadSchedulingDashboardsModule,
   'BaseResourceComponent::SchedulingActivityResource': loadSchedulingDashboardsModule,
@@ -177,4 +183,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 79;
+export const LAZY_FEATURE_CONFIG_COUNT = 80;

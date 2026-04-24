@@ -1,5 +1,58 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.29.0
+
+### Patch Changes
+
+- 5c7a57f: Add in-app feedback system with mj-dialog UI, GitHub App authentication for issue creation, and shell header integration. Feedback submissions create formatted GitHub issues with labels, severity, environment info, and browser details.
+- Updated dependencies [e77233c]
+- Updated dependencies [5c7a57f]
+- Updated dependencies [e02e24e]
+- Updated dependencies [5585961]
+- Updated dependencies [7006276]
+- Updated dependencies [90a0fec]
+- Updated dependencies [98bad3a]
+  - @memberjunction/ng-ai-test-harness@5.29.0
+  - @memberjunction/ng-feedback@5.29.0
+  - @memberjunction/core@5.29.0
+  - @memberjunction/ng-dashboards@5.29.0
+  - @memberjunction/ng-file-storage@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ng-conversations@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/ng-auth-services@5.29.0
+  - @memberjunction/ng-base-application@5.29.0
+  - @memberjunction/ng-entity-form-dialog@5.29.0
+  - @memberjunction/ng-entity-permissions@5.29.0
+  - @memberjunction/ng-explorer-settings@5.29.0
+  - @memberjunction/ng-list-detail-grid@5.29.0
+  - @memberjunction/ng-shared@5.29.0
+  - @memberjunction/ng-artifacts@5.29.0
+  - @memberjunction/ng-base-forms@5.29.0
+  - @memberjunction/ng-container-directives@5.29.0
+  - @memberjunction/ng-dashboard-viewer@5.29.0
+  - @memberjunction/ng-entity-viewer@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/ng-query-viewer@5.29.0
+  - @memberjunction/ng-record-changes@5.29.0
+  - @memberjunction/ng-record-selector@5.29.0
+  - @memberjunction/ng-record-tags@5.29.0
+  - @memberjunction/ng-resource-permissions@5.29.0
+  - @memberjunction/ng-search@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/ng-user-avatar@5.29.0
+  - @memberjunction/communication-types@5.29.0
+  - @memberjunction/entity-communications-client@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/templates-base-types@5.29.0
+  - @memberjunction/ng-export-service@5.29.0
+  - @memberjunction/ng-generic-dialog@5.29.0
+  - @memberjunction/ng-ui-components@5.29.0
+  - @memberjunction/ng-word-cloud@5.29.0
+  - @memberjunction/export-engine@5.29.0
+  - @memberjunction/global@5.29.0
+
 ## 5.28.0
 
 ### Patch Changes
