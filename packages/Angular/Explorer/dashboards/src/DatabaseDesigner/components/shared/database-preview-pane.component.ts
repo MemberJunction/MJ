@@ -17,6 +17,7 @@
 import {
     Component, Input, ChangeDetectionStrategy, ChangeDetectorRef, inject,
 } from '@angular/core';
+import { Metadata } from '@memberjunction/core';
 import type { ERDNode, ERDField } from '@memberjunction/ng-entity-relationship-diagram';
 import type { ColumnSpec, EntityTableSpec, ForeignKeySpec } from '../../database-designer.types.js';
 
@@ -84,10 +85,57 @@ export class DatabasePreviewPaneComponent {
     // ─── Derivation ────────────────────────────────────────────────────────
 
     private recompute(): void {
-        this.ErdNodes = DatabasePreviewPaneComponent.BuildErdNodes(this._tableDefinition);
+        const enrichments = this.resolveSatelliteFields(this._tableDefinition.ForeignKeys ?? []);
+        this.ErdNodes = DatabasePreviewPaneComponent.BuildErdNodes(this._tableDefinition, enrichments);
         this.SqlText = DatabasePreviewPaneComponent.BuildSqlText(this._tableDefinition, this._isAlter);
         this.FocusNodeId = DatabasePreviewPaneComponent.BuildFocusId(this._tableDefinition);
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Look up each FK target in MJ metadata and return PK + name-field rows per
+     * satellite node.  Falls back to a minimal single-column stub when the
+     * referenced table isn't a known MJ entity.
+     */
+    private resolveSatelliteFields(foreignKeys: ForeignKeySpec[]): Map<string, ERDField[]> {
+        const md = new Metadata();
+        const result = new Map<string, ERDField[]>();
+        const seen = new Set<string>();
+
+        for (const fk of foreignKeys) {
+            const satId = DatabasePreviewPaneComponent.MakeSatelliteId(fk);
+            if (seen.has(satId)) continue;
+            seen.add(satId);
+
+            const entity = md.Entities.find(e =>
+                e.SchemaName === fk.ReferencedSchema && e.BaseTable === fk.ReferencedTable);
+            if (!entity) continue;
+
+            const fields: ERDField[] = [];
+            const refField = entity.Fields.find(f => f.Name === fk.ReferencedColumn);
+            if (refField) {
+                fields.push({
+                    id: `${satId}:${refField.Name}`,
+                    name: refField.Name,
+                    type: refField.SQLFullType,
+                    isPrimaryKey: refField.IsPrimaryKey,
+                });
+            }
+
+            const nameField = entity.Fields.find(f => f.IsNameField && f.Name !== fk.ReferencedColumn);
+            if (nameField) {
+                fields.push({
+                    id: `${satId}:${nameField.Name}`,
+                    name: nameField.Name,
+                    type: nameField.SQLFullType,
+                    isPrimaryKey: false,
+                });
+            }
+
+            if (fields.length > 0) result.set(satId, fields);
+        }
+
+        return result;
     }
 
     // ─── Pure builders (exposed for unit testing) ──────────────────────────
@@ -98,8 +146,16 @@ export class DatabasePreviewPaneComponent {
         return name ? `focus:${name}` : null;
     }
 
-    /** ERD node list: one focus node + one satellite per distinct FK target. */
-    public static BuildErdNodes(spec: Partial<EntityTableSpec>): ERDNode[] {
+    /**
+     * ERD node list: one focus node + one satellite per distinct FK target.
+     * `satelliteEnrichments` — optional PK + name-field rows per satellite,
+     * keyed by `MakeSatelliteId(fk)`.  When absent, satellites render a
+     * minimal single-column stub.
+     */
+    public static BuildErdNodes(
+        spec: Partial<EntityTableSpec>,
+        satelliteEnrichments?: Map<string, ERDField[]>,
+    ): ERDNode[] {
         const tableName = spec.TableName || spec.EntityName || 'NewEntity';
         const schemaName = spec.SchemaName || '__mj_UDT';
         const focusId = `focus:${tableName}`;
@@ -116,7 +172,7 @@ export class DatabasePreviewPaneComponent {
             fields: focusFields,
         };
 
-        return [focusNode, ...this.BuildSatelliteNodes(spec.ForeignKeys ?? [])];
+        return [focusNode, ...this.BuildSatelliteNodes(spec.ForeignKeys ?? [], satelliteEnrichments)];
     }
 
     /**
@@ -203,27 +259,41 @@ export class DatabasePreviewPaneComponent {
         }
     }
 
-    /** One satellite node per distinct FK target (dedupes on schema+table). */
-    public static BuildSatelliteNodes(foreignKeys: ForeignKeySpec[]): ERDNode[] {
+    /**
+     * One satellite node per distinct FK target (dedupes on schema+table).
+     * When `enrichments` provides rows for a satellite id, those rows (PK +
+     * name field, resolved from MJ metadata) are used instead of the minimal
+     * single-column stub.
+     */
+    public static BuildSatelliteNodes(
+        foreignKeys: ForeignKeySpec[],
+        enrichments?: Map<string, ERDField[]>,
+    ): ERDNode[] {
         const seen = new Set<string>();
         const satelliteNodes: ERDNode[] = [];
         for (const fk of foreignKeys) {
+            // Skip in-progress rows where the target hasn't been picked yet.
+            if (!fk.ReferencedSchema || !fk.ReferencedTable) continue;
             const satId = this.MakeSatelliteId(fk);
             if (seen.has(satId)) continue;
             seen.add(satId);
+
+            const enriched = enrichments?.get(satId);
+            const fields: ERDField[] = enriched && enriched.length > 0 ? enriched : [
+                {
+                    id: `${satId}:${fk.ReferencedColumn}`,
+                    name: fk.ReferencedColumn,
+                    type: 'uniqueidentifier',
+                    isPrimaryKey: true,
+                },
+            ];
+
             satelliteNodes.push({
                 id: satId,
                 name: fk.ReferencedTable,
                 schemaName: fk.ReferencedSchema,
                 baseTable: fk.ReferencedTable,
-                fields: [
-                    {
-                        id: `${satId}:${fk.ReferencedColumn}`,
-                        name: fk.ReferencedColumn,
-                        type: 'uniqueidentifier',
-                        isPrimaryKey: true,
-                    },
-                ],
+                fields,
             });
         }
         return satelliteNodes;

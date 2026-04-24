@@ -159,12 +159,15 @@ export class StepRelationshipsComponent {
     public AddRelationship(): void {
         const schemas = this.AvailableSchemas;
         const defaultSchema = schemas.includes('__mj_UDT') ? '__mj_UDT' : (schemas[0] ?? '');
-        const firstUuid = this.UuidColumns[0]?.Name ?? '';
 
+        // ColumnName defaults to empty so OnTableChange auto-names a unique
+        // column from the target table ("User" → "UserID", "Role" → "RoleID").
+        // Pre-filling with an existing UUID column would make two relationships
+        // collide on the same source column.
         this.rows = [
             ...this.rows,
             {
-                ColumnName: firstUuid,
+                ColumnName: '',
                 ReferencedSchema: defaultSchema,
                 ReferencedTable: '',
                 ReferencedColumn: 'ID',

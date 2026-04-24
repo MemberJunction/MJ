@@ -24,6 +24,12 @@ vi.mock('@angular/core', () => ({
   inject: () => ({ markForCheck() {}, detectChanges() {} }),
 }));
 
+// Mock @memberjunction/core — the component imports Metadata for satellite
+// enrichment, but the pure static builders tested here don't touch it.
+vi.mock('@memberjunction/core', () => ({
+  Metadata: class { Entities: unknown[] = []; },
+}));
+
 import { DatabasePreviewPaneComponent } from '../DatabaseDesigner/components/shared/database-preview-pane.component';
 import type { EntityTableSpec, ColumnSpec, ForeignKeySpec } from '../DatabaseDesigner/database-designer.types';
 
@@ -121,6 +127,28 @@ describe('DatabasePreviewPaneComponent — pure builders', () => {
             expect(synth).toBeDefined();
             expect(synth?.type).toBe('uniqueidentifier');
             expect(synth?.relatedNodeId).toBe('ref:crm.Customers');
+        });
+
+        it('uses enriched satellite fields when the enrichment map has a match', () => {
+            const spec: Partial<EntityTableSpec> = {
+                TableName: 'Orders', EntityName: 'Orders', SchemaName: '__mj_UDT',
+                ForeignKeys: [
+                    { ColumnName: 'CustomerID', ReferencedSchema: 'crm', ReferencedTable: 'Customers', ReferencedColumn: 'ID', IsSoft: true },
+                ],
+            };
+            const enrichments = new Map<string, ReturnType<typeof DatabasePreviewPaneComponent.BuildErdNodes>[number]['fields']>([
+                ['ref:crm.Customers', [
+                    { id: 'ref:crm.Customers:ID',   name: 'ID',   type: 'uniqueidentifier', isPrimaryKey: true },
+                    { id: 'ref:crm.Customers:Name', name: 'Name', type: 'nvarchar(255)',    isPrimaryKey: false },
+                ]],
+            ]);
+
+            const nodes = DatabasePreviewPaneComponent.BuildErdNodes(spec, enrichments);
+            const satellite = nodes.find(n => n.id === 'ref:crm.Customers');
+            expect(satellite).toBeDefined();
+            expect(satellite?.fields).toHaveLength(2);
+            expect(satellite?.fields.map(f => f.name)).toEqual(['ID', 'Name']);
+            expect(satellite?.fields[1].type).toBe('nvarchar(255)');
         });
 
         it('dedupes satellite nodes for multiple FKs pointing at the same table', () => {
