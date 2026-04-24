@@ -197,6 +197,12 @@
                 </div>
               </foreignObject>
             }
+
+            <!-- Outline frame — drawn last so the focus/neighbour stroke
+                 sits above the header instead of being clipped by it. -->
+            <rect class="erd-node-frame"
+              [attr.width]="node.width" [attr.height]="node.height"
+              x="0" y="0" rx="8" />
           </g>
         }
       </g>

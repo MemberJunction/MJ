@@ -287,16 +287,24 @@
 
 .erd-node-body {
   fill: var(--mj-bg-surface);
-  stroke: var(--mj-border-default);
-  stroke-width: 1;
 }
 
-.erd-node-focus .erd-node-body {
+/* Outline rendered as a separate rect on top of the header so the focus
+   stroke is visible all the way around the card (otherwise the header
+   fill clips the top edge of the body's stroke). */
+.erd-node-frame {
+  fill: none;
+  stroke: var(--mj-border-default);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.erd-node-focus .erd-node-frame {
   stroke: var(--mj-brand-primary);
   stroke-width: 2;
 }
 
-.erd-node-neighbour .erd-node-body {
+.erd-node-neighbour .erd-node-frame {
   stroke-width: 1.5;
 }
 
