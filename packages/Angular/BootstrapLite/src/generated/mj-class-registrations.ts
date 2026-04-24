@@ -41,9 +41,13 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (320 classes)
+// @memberjunction/core-entities (330 classes)
 import {
+    AIAgentPermissionProvider,
+    AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
+    ArtifactPermissionProvider,
+    CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
     MJAIActionEntity,
@@ -104,6 +108,7 @@ import {
     MJAPIKeyUsageLogEntity,
     MJAPIScopeEntity,
     MJAccessControlRuleEntity,
+    MJAccessControlRuleEntityExtended,
     MJActionAuthorizationEntity,
     MJActionCategoryEntity,
     MJActionContextEntity,
@@ -124,6 +129,7 @@ import {
     MJArchiveRunEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
+    MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
     MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
@@ -135,6 +141,7 @@ import {
     MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
+    MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
     MJCommunicationProviderEntity,
@@ -175,6 +182,7 @@ import {
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
+    MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
     MJCountryEntity,
@@ -188,6 +196,7 @@ import {
     MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
+    MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
     MJDataContextEntity,
@@ -367,6 +376,7 @@ import {
     MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    QueryPermissionProvider,
     ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
@@ -468,7 +478,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
     MJCommunicationProviderEntityExtended,
+    AIAgentPermissionProvider,
+    AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
+    ArtifactPermissionProvider,
+    CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
     MJAIActionEntity,
@@ -529,6 +543,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAPIKeyUsageLogEntity,
     MJAPIScopeEntity,
     MJAccessControlRuleEntity,
+    MJAccessControlRuleEntityExtended,
     MJActionAuthorizationEntity,
     MJActionCategoryEntity,
     MJActionContextEntity,
@@ -549,6 +564,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJArchiveRunEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
+    MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
     MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
@@ -560,6 +576,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
+    MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
     MJCommunicationProviderEntity,
@@ -600,6 +617,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
+    MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
     MJCountryEntity,
@@ -613,6 +631,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
+    MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
     MJDataContextEntity,
@@ -792,6 +811,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    QueryPermissionProvider,
     ResourcePermissionProvider,
     MJEntityCommunicationMessageTypeEntityExtended,
     CodeArtifactViewerComponent,
@@ -849,7 +869,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 384;
+export const CLASS_REGISTRATIONS_COUNT = 394;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
