@@ -661,4 +661,31 @@ export abstract class CodeGenDatabaseProvider {
      * @returns True if execution succeeded, false otherwise.
      */
     abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;
+
+    /**
+     * Optional — dialect-specific fast path for regenerating a single entity's
+     * base view with recovery logic.
+     *
+     * When provided, the orchestration layer (sql.ts regenerateFailedBaseViews)
+     * will route regeneration through this method instead of the generic
+     * write-temp-file-and-shell-out path. Implementations can add capture/
+     * recovery behavior around the `CREATE OR REPLACE VIEW` — e.g. PG's 42P16
+     * capture-and-restore fallback that preserves dependent views, functions,
+     * grants, comments, and ownership across the unavoidable DROP CASCADE.
+     *
+     * @param entity The entity whose base view is being regenerated.
+     * @param viewSQL The full output of generateBaseView for this entity.
+     * @param willRegenerate Optional set of `"schema.viewName"` strings for
+     *                       views the caller will regenerate later in the same
+     *                       run — implementations may skip restoring those
+     *                       dependents since CodeGen will recreate them.
+     * @throws Error on failure — callers should treat this identically to any
+     *               other per-entity regeneration failure (collected into the
+     *               batch summary, halts the install in strict mode).
+     */
+    regenerateBaseView?(
+        entity: EntityInfo,
+        viewSQL: string,
+        willRegenerate?: Set<string>
+    ): Promise<void>;
 }

@@ -12,6 +12,7 @@ import { logError, logWarning } from '../../../Misc/status_logging';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import * as fs from 'fs';
 import path from 'path';
+import { executeWithFallback } from './viewFallback';
 
 const pgDialect = new PostgreSQLDialect();
 
@@ -1153,6 +1154,59 @@ ORDER BY ordinal_position`;
         } catch (e) {
             logError(`[CodeGen] Failed to execute SQL file ${absoluteFilePath}: ${e instanceof Error ? e.message : e}`);
             return false;
+        } finally {
+            try { await client.end(); } catch { /* best-effort cleanup */ }
+        }
+    }
+
+    /**
+     * PG-specific base-view regeneration with 42P16 recovery.
+     *
+     * Runs the provided `CREATE OR REPLACE VIEW` SQL through `executeWithFallback`
+     * on a dedicated connection: happy path issues the CREATE OR REPLACE directly,
+     * and only on SQLSTATE 42P16 does the capture/drop/recreate/restore dance fire
+     * inside a transaction that preserves every dependent view, function, grant,
+     * comment, and owner. See `viewFallback.ts` for the contract.
+     *
+     * `willRegenerate` is passed through so dependents CodeGen is about to rebuild
+     * in the same run are skipped at restore time (avoids restoring a stale
+     * captured definition against a newly-regenerated target).
+     */
+    override async regenerateBaseView(
+        entity: EntityInfo,
+        viewSQL: string,
+        willRegenerate?: Set<string>
+    ): Promise<void> {
+        const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
+        const pgPort = Number(process.env.PG_PORT ?? configInfo.dbPort ?? 5432);
+        const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
+        const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
+        const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
+
+        if (!pgUser || !pgPassword || !pgDatabase) {
+            throw new Error(
+                'PostgreSQL user, password, and database must be provided in the configuration or environment variables'
+            );
+        }
+
+        const pgModule = await import('pg');
+        const client = new pgModule.default.Client({
+            host: pgHost,
+            port: pgPort,
+            user: pgUser,
+            password: pgPassword,
+            database: pgDatabase,
+        });
+
+        await client.connect();
+        try {
+            await executeWithFallback({
+                client,
+                schema: entity.SchemaName,
+                viewName: entity.BaseView,
+                createOrReplaceSQL: viewSQL,
+                willRegenerate,
+            });
         } finally {
             try { await client.end(); } catch { /* best-effort cleanup */ }
         }

@@ -299,6 +299,13 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
    const sqlCodeGen = new SQLCodeGenBase();
    const failures: Array<{ entity: EntityInfo; error: unknown }> = [];
 
+   // Build the will-regenerate set once for the whole batch. Dialect-specific
+   // regeneration paths (like the PG 42P16 fallback) use this to avoid
+   // restoring dependents that CodeGen is about to rebuild with a fresh
+   // definition — the stale captured definition could otherwise be
+   // incompatible with the newly-regenerated target.
+   const willRegenerate = new Set(entities.map(e => `${e.SchemaName}.${e.BaseView}`));
+
    for (const entity of entities) {
      try {
        logMessage(`Regenerating base view for ${entity.Name}...`, 'Info');
@@ -306,8 +313,14 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
        // Generate the new view definition using the CodeGen approach
        const viewSQL = await sqlCodeGen.generateBaseView(ds, entity);
 
-       // Execute the new view definition
-       await this.executeSQLScript(ds, viewSQL, false);
+       // Route through the provider's dialect-specific fast path when present
+       // (PG overrides with capture/drop/recreate/restore recovery); fall back
+       // to the generic executeSQLScript path for dialects that don't override.
+       if (this.dbProvider.regenerateBaseView) {
+         await this.dbProvider.regenerateBaseView(entity, viewSQL, willRegenerate);
+       } else {
+         await this.executeSQLScript(ds, viewSQL, false);
+       }
 
        logMessage(`Successfully regenerated base view for ${entity.Name}`, 'Info');
      } catch (e) {
