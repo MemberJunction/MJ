@@ -58,6 +58,8 @@ export interface InstallOptions {
     Version?: string;
     /** Enable verbose output */
     Verbose?: boolean;
+    /** Allow schema names starting with '__'. Dangerous; MJ-internal apps only. */
+    AllowDoubleUnderscoreSchema?: boolean;
 }
 
 /**
@@ -70,6 +72,8 @@ export interface UpgradeOptions {
     Version?: string;
     /** Enable verbose output */
     Verbose?: boolean;
+    /** Allow schema names starting with '__'. Dangerous; MJ-internal apps only. */
+    AllowDoubleUnderscoreSchema?: boolean;
 }
 
 /**

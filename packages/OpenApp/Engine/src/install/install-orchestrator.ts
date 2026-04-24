@@ -153,7 +153,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     // Steps 6-7: Schema
     if (manifest.schema) {
-      const schemaResult = await HandleSchemaCreation(manifest, context, isReinstall);
+      const schemaResult = await HandleSchemaCreation(manifest, context, isReinstall, options.AllowDoubleUnderscoreSchema === true);
       if (!schemaResult.Success) {
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, schemaResult.ErrorMessage ?? 'Schema creation failed');
       }
@@ -728,7 +728,7 @@ async function InstallDependencies(
 /**
  * Handles schema creation for an app, including collision checks and reinstall reuse.
  */
-async function HandleSchemaCreation(manifest: MJAppManifest, context: OrchestratorContext, isReinstall: boolean = false): Promise<InternalResult> {
+async function HandleSchemaCreation(manifest: MJAppManifest, context: OrchestratorContext, isReinstall: boolean = false, allowDoubleUnderscore: boolean = false): Promise<InternalResult> {
   if (!manifest.schema) {
     return { Success: true };
   }
@@ -748,7 +748,7 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
 
   if (manifest.schema.createIfNotExists !== false) {
     context.Callbacks?.OnProgress?.('Schema', `Creating schema '${manifest.schema.name}'...`);
-    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider);
+    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
     return { Success: result.Success, ErrorMessage: result.ErrorMessage };
   }
 

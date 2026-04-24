@@ -30,6 +30,10 @@ export default class AppInstall extends Command {
   static flags = {
     version: Flags.string({ description: 'Specific version to install (default: latest)' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
+    'dangerously-ignore-dbl-underscore-schema-rule': Flags.boolean({
+      hidden: true,
+      default: false,
+    }),
   };
 
   async run(): Promise<void> {
@@ -40,7 +44,12 @@ export default class AppInstall extends Command {
       const context = await buildOrchestratorContext(this, flags.verbose);
 
       const result = await InstallApp(
-        { Source: args.source, Version: flags.version, Verbose: flags.verbose },
+        {
+          Source: args.source,
+          Version: flags.version,
+          Verbose: flags.verbose,
+          AllowDoubleUnderscoreSchema: flags['dangerously-ignore-dbl-underscore-schema-rule'],
+        },
         context
       );
 
