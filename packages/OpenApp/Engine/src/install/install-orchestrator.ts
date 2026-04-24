@@ -203,10 +203,19 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     // Steps 10-11: Packages
     const pkgResult = await HandlePackageInstallation(manifest, context, effectivePackageVersion, effectiveVersionStrategy);
+    let npmInstallWarning: string | undefined;
     if (!pkgResult.Success) {
-      await SetAppStatus(context.ContextUser, createdAppId!, 'Error');
-      await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Packages', pkgResult.ErrorMessage ?? 'Package installation failed', startTime);
-      return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, pkgResult.ErrorMessage ?? 'Package installation failed');
+      if (pkgResult.PackageJsonUpdated) {
+        // package.json was updated successfully but `npm install` failed (e.g., missing npm auth).
+        // Continue with the rest of the install — the user can run `npm install` manually once
+        // they fix their npm credentials.
+        npmInstallWarning = pkgResult.ErrorMessage;
+        Callbacks?.OnWarn?.('Packages', `npm install failed — package.json entries were added but dependencies were not resolved. Run 'npm install' manually after fixing npm auth.\n  Detail: ${pkgResult.ErrorMessage}`);
+      } else {
+        await SetAppStatus(context.ContextUser, createdAppId!, 'Error');
+        await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Packages', pkgResult.ErrorMessage ?? 'Package installation failed', startTime);
+        return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, pkgResult.ErrorMessage ?? 'Package installation failed');
+      }
     }
 
     // Step 12: Update server config
@@ -241,13 +250,18 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     Callbacks?.OnSuccess?.('Install', `Successfully installed ${manifest.name} v${manifest.version}`);
 
+    const baseSummary = 'App installed successfully. Restart MJAPI and rebuild MJExplorer to activate.';
+    const summary = npmInstallWarning
+      ? `${baseSummary}\n\n⚠ npm install failed — package.json and config files were updated but dependencies were not installed. Log in to npm ('npm login') or configure your .npmrc, then run 'npm install' to complete the setup.`
+      : baseSummary;
+
     return {
       Success: true,
       Action: 'Install',
       AppName: manifest.name,
       Version: manifest.version,
       DurationSeconds: GetDurationSeconds(startTime),
-      Summary: 'App installed successfully. Restart MJAPI and rebuild MJExplorer to activate.',
+      Summary: summary,
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
@@ -700,6 +714,8 @@ interface InternalResult {
   ErrorMessage?: string;
   AppId?: string;
   DepsToInstall?: Array<{ AppName: string; Repository: string; VersionRange: string }>;
+  /** True when package.json was updated but npm install failed (e.g., auth issue) */
+  PackageJsonUpdated?: boolean;
 }
 
 /**
@@ -861,7 +877,10 @@ async function HandlePackageInstallation(
 
   context.Callbacks?.OnProgress?.('Packages', 'Running package install...');
   const installResult = RunPackageInstall(context.RepoRoot, undefined, manifest.packages.registry, context.PackageManager);
-  return { Success: installResult.Success, ErrorMessage: installResult.ErrorMessage };
+  if (!installResult.Success) {
+    return { Success: false, PackageJsonUpdated: true, ErrorMessage: installResult.ErrorMessage };
+  }
+  return { Success: true };
 }
 
 /**
