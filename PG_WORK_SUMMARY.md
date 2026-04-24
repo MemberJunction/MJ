@@ -131,7 +131,7 @@ Ran Skyway's `PostgresProvider` end-to-end against a real PG database:
 - Connection, migration scanning, history table management all work correctly
 - Applied 26 migrations successfully with proper checksum tracking
 - Clean error reporting on failures
-- Validates the Phase A Skyway work (separate repo: `C:\Dev\MJ\skyway\skyway`, branch `feature/multi-db-provider-support`)
+- Validates the Phase A Skyway work (separate repo, branch `feature/multi-db-provider-support`)
 
 ### SQL Server vs PG Comparison
 
@@ -271,7 +271,7 @@ This is the "make `mj migrate` actually finish" commit. Multiple converter rules
 
 | File | What it does |
 |---|---|
-| `SKYWAY_WORK_SUMMARY.md` | **NEW.** Companion summary for the Skyway PG provider work (sibling repo `C:\Dev\MJ\skyway\skyway`, branch `feature/multi-db-provider-support`). |
+| `SKYWAY_WORK_SUMMARY.md` | **NEW.** Companion summary for the Skyway PG provider work (sibling Skyway repo, branch `feature/multi-db-provider-support`). |
 | `packages/PostgreSQLDataProvider/src/PostgreSQLDataProvider.ts` | `getCRUDFunctionName` now returns `fn_create_<snake_table>` to match what CodeGen actually emits on PG (was using `spCreate*` which only exists on SQL Server). Unblocks Workspace creation and any runtime Save() through the PG path. |
 | `packages/SQLConverter/src/rules/AlterTableRule.ts` | Multi-column ALTER TABLE handling tightened. Improved DEFERRABLE INITIALLY DEFERRED placement on inline FKs. |
 | `packages/SQLConverter/src/rules/ViewRule.ts` | Heavy rewrite (+131/-?). View creation with proper column-list handling, CHECK OPTION conversion, schema-qualified DROP VIEW IF EXISTS injection where SQL Server uses CREATE OR ALTER. |

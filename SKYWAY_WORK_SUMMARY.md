@@ -1,6 +1,6 @@
 # Skyway Multi-Database Provider — Work Summary
 
-**Repo:** `C:\Dev\MJ\skyway\skyway` (external, published to npm)
+**Repo:** external Skyway repo (published to npm as `@memberjunction/skyway-*`)
 **Branch:** `feature/multi-db-provider-support`
 **Commit:** `59daf5d` — "made skyway able to target sql server and PostgreSQL from same core engine"
 **Total:** 23 files, +1,967 / -1,172 lines (excluding package-lock.json)

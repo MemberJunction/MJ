@@ -2,29 +2,39 @@
 /**
  * PG Fresh Install via Skyway + Local Tooling Pipeline
  *
- * Goal: stand up a working MJAPI + Explorer on a brand-new PG database, using
- * ONLY code from our two active branches:
- *   - Skyway `feature/multi-db-provider-support` (local, not yet on npm)
- *   - MJ tooling branch `claude/study-pg-migrations-tooling-OUKTx`
+ * Goal: stand up a working MJAPI + Explorer on a brand-new PG database using
+ * local Skyway builds (the PG provider) + the MJ PG migration file set.
  *
- * This validates both (a) the Skyway 0.6.x provider system and (b) the PG
- * migration file set we currently have committed + the 5 new untracked
- * v5.27/v5.28 files.
- *
- * Steps:
- *   1. Create fresh PG DB `mj_pg_skyway`
- *   2. Scaffold target dir from existing sqlserver-install
+ * Pipeline:
+ *   1. Create fresh PG DB
+ *   2. Scaffold target dir from an existing sqlserver-install template
  *   3. Write PG-specific configs (.env, mj.config.cjs, environment.ts)
- *   4. npm install (gets published 5.28.0 packages)
+ *   4. npm install against the target dir
  *   5. Patch node_modules with local Skyway + MJ builds
- *   6. Apply migrations via `mj migrate` (not raw SQL)
+ *   6. Apply migrations via `mj migrate`
  *   7. Build Generated* packages
  *   8. Run `mj codegen`
- *   9. Start MJAPI, verify it boots
- *   10. Start MJExplorer, verify it boots
+ *   9. Verify DB state (table/view/function counts)
+ *   10. Seed a reviewer User row for MSAL/Auth0 first-login resolution
  *
- * Each step prints ✓ or ✗. On failure, the script stops at the first problem
- * so we can see what broke without wasting time on later steps.
+ * Each step prints ✓ or ✗. On failure the script stops at the first problem.
+ *
+ * Required env vars (no defaults — fail loudly if missing):
+ *   SKYWAY_ROOT             Path to your local Skyway checkout
+ *   SOURCE_INSTALL          Path to an existing sqlserver-install dir used as the skeleton
+ *   TARGET_DIR              Path where the fresh PG install is created (will be wiped)
+ *   PG_ADMIN_PASSWORD       Password for the admin PG user that creates/drops the DB
+ *   MJ_BASE_ENCRYPTION_KEY  Base64-encoded 32-byte key for MJAPI symmetric encryption
+ *   WEB_CLIENT_ID           Azure AD / Auth0 app-registration GUID
+ *   TENANT_ID               Azure AD tenant GUID
+ *
+ * Optional env vars (with defaults):
+ *   MJ_ROOT                 Defaults to the repo containing this script
+ *   PG_HOST (localhost), PG_PORT (5432), PG_ADMIN_USER (postgres)
+ *   PG_INSTALL_DB_NAME      Defaults to mj_pg_install
+ *   MJ_API_PORT (4005), MJ_EXPLORER_PORT (4202)
+ *   REVIEWER_EMAIL / REVIEWER_FIRST_NAME / REVIEWER_LAST_NAME
+ *                           User row seeded in Step 10 (defaults are placeholders)
  */
 
 import { Pool } from 'pg';
@@ -34,17 +44,46 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MJ_ROOT = 'C:/Dev/MJ/MJ';
-const SKYWAY_ROOT = 'C:/Dev/MJ/skyway/skyway';
-const SOURCE_INSTALL = 'C:/Dev/mj-testing/sqlserver-install'; // template for skeleton
-const TARGET_DIR = 'C:/Dev/mj-testing/pg-skyway-install';
-const DB_NAME = 'mj_pg_skyway';
-const MJ_API_PORT = 4005; // avoid collisions with killed 4002/4003/4004
-const MJ_EXPLORER_PORT = 4202;
+
+// Required env vars. Fail loudly if any is missing rather than silently using a
+// placeholder. See the README / DEV_ON_PG_GUIDE for suggested values.
+function requireEnv(name, hint) {
+    const v = process.env[name];
+    if (!v) {
+        console.error(`✗ Missing required env var ${name}.${hint ? ' ' + hint : ''}`);
+        console.error(`  Set it in your shell or .env before running this script.`);
+        process.exit(1);
+    }
+    return v;
+}
+
+// Paths — default MJ_ROOT to the repo containing this script; override others via env.
+const MJ_ROOT        = process.env.MJ_ROOT        || dirname(__dirname);
+const SKYWAY_ROOT    = requireEnv('SKYWAY_ROOT',    'Path to your local Skyway checkout (the sibling repo).');
+const SOURCE_INSTALL = requireEnv('SOURCE_INSTALL', 'Path to a pre-scaffolded sqlserver-install dir used as the skeleton template.');
+const TARGET_DIR     = requireEnv('TARGET_DIR',     'Target directory where the fresh PG install will be created (will be wiped).');
+
+const DB_NAME           = process.env.PG_INSTALL_DB_NAME   || 'mj_pg_install';
+const MJ_API_PORT       = parseInt(process.env.MJ_API_PORT      || '4005', 10);
+const MJ_EXPLORER_PORT  = parseInt(process.env.MJ_EXPLORER_PORT || '4202', 10);
+
+// PG admin credentials — required, never defaulted.
 const PG_ADMIN = {
-    host: 'localhost', port: 5432,
-    user: 'postgres', password: 'z2qXgNvvstcc',
+    host:     process.env.PG_HOST || 'localhost',
+    port:     parseInt(process.env.PG_PORT || '5432', 10),
+    user:     process.env.PG_ADMIN_USER     || 'postgres',
+    password: requireEnv('PG_ADMIN_PASSWORD', 'Password for the PG admin user that will create/drop the install DB.'),
 };
+
+// Auth + encryption secrets — required, never defaulted. Each consumer provides their own.
+const MJ_BASE_ENCRYPTION_KEY = requireEnv('MJ_BASE_ENCRYPTION_KEY', 'Base64-encoded 32-byte key used by MJAPI for symmetric encryption.');
+const WEB_CLIENT_ID          = requireEnv('WEB_CLIENT_ID',          'Azure AD / Auth0 client registration GUID for your org.');
+const TENANT_ID              = requireEnv('TENANT_ID',              'Azure AD tenant GUID for your org.');
+
+// Reviewer identity — used in Step 10 to seed a user row for MSAL/Auth0 first-login resolution.
+const REVIEWER_EMAIL      = process.env.REVIEWER_EMAIL      || 'reviewer@example.com';
+const REVIEWER_FIRST_NAME = process.env.REVIEWER_FIRST_NAME || 'Reviewer';
+const REVIEWER_LAST_NAME  = process.env.REVIEWER_LAST_NAME  || 'Account';
 
 const step = (n, msg) => console.log(`\n━━━ Step ${n}: ${msg} ━━━`);
 const ok = (msg) => console.log(`  ✓ ${msg}`);
@@ -115,33 +154,33 @@ function step3_configFiles() {
     step(3, 'Write PG config files');
     const envContent = `#PG Fresh Install via Skyway
 DB_TYPE=postgresql
-DB_HOST=localhost
-DB_PORT=5432
+DB_HOST=${PG_ADMIN.host}
+DB_PORT=${PG_ADMIN.port}
 DB_DATABASE=${DB_NAME}
-DB_USERNAME=postgres
+DB_USERNAME=${PG_ADMIN.user}
 DB_PASSWORD=${PG_ADMIN.password}
-CODEGEN_DB_USERNAME=postgres
+CODEGEN_DB_USERNAME=${PG_ADMIN.user}
 CODEGEN_DB_PASSWORD=${PG_ADMIN.password}
 DB_TRUST_SERVER_CERTIFICATE=1
 
-PG_HOST=localhost
-PG_PORT=5432
+PG_HOST=${PG_ADMIN.host}
+PG_PORT=${PG_ADMIN.port}
 PG_DATABASE=${DB_NAME}
-PG_USERNAME=postgres
+PG_USERNAME=${PG_ADMIN.user}
 PG_PASSWORD=${PG_ADMIN.password}
 
 OUTPUT_CODE='${DB_NAME}'
 MJ_CORE_SCHEMA='__mj'
-MJ_BASE_ENCRYPTION_KEY='bfwbbOVPXhFkOypm6dnNp28IU2MiC+HGxjm6tx0sSVQ='
+MJ_BASE_ENCRYPTION_KEY='${MJ_BASE_ENCRYPTION_KEY}'
 GRAPHQL_PORT=${MJ_API_PORT}
 
 UPDATE_USER_CACHE_WHEN_NOT_FOUND=1
 UPDATE_USER_CACHE_WHEN_NOT_FOUND_DELAY=5000
 
-WEB_CLIENT_ID=7e6e6ecf-66ff-4733-9c60-1e6def949897
-TENANT_ID=ff10ade7-5d03-40a9-be28-cb7ab99670b1
+WEB_CLIENT_ID=${WEB_CLIENT_ID}
+TENANT_ID=${TENANT_ID}
 
-AUTH0_CLIENT_ID=7e6e6ecf-66ff-4733-9c60-1e6def949897
+AUTH0_CLIENT_ID=${WEB_CLIENT_ID}
 AUTH0_CLIENT_SECRET=
 AUTH0_DOMAIN=
 
@@ -350,18 +389,15 @@ async function step9_verifyDB() {
 // Override via env: REVIEWER_EMAIL / REVIEWER_FIRST_NAME / REVIEWER_LAST_NAME.
 async function step10_seedReviewerUser() {
     step(10, 'Seed reviewer User row for MSAL auth');
-    const email = process.env.REVIEWER_EMAIL || 'josue.garcia@bluecypress.io';
-    const firstName = process.env.REVIEWER_FIRST_NAME || 'Josue';
-    const lastName = process.env.REVIEWER_LAST_NAME || 'Garcia';
     const pool = new Pool({ ...PG_ADMIN, database: DB_NAME, max: 1 });
     try {
         const res = await pool.query(
             `UPDATE __mj."User" SET "Email" = $1, "FirstName" = $2, "LastName" = $3
              WHERE "Email" = 'not.set@nowhere.com' RETURNING "ID", "Email"`,
-            [email, firstName, lastName]
+            [REVIEWER_EMAIL, REVIEWER_FIRST_NAME, REVIEWER_LAST_NAME]
         );
         if (res.rowCount === 1) {
-            ok(`Updated placeholder User → ${email}`);
+            ok(`Updated placeholder User → ${REVIEWER_EMAIL}`);
         } else {
             warn(`No placeholder User found; auth may require manual User seeding`);
         }
