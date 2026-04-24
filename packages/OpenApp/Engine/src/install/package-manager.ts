@@ -19,11 +19,12 @@ export type PackageManagerType = 'npm' | 'pnpm' | 'yarn';
 /**
  * Strategy for writing dependency versions into package.json.
  * - 'semver': Standard `^version` range (works everywhere)
+ * - 'exact': Exact version pin with no range prefix (e.g., '1.0.7')
  * - 'catalog': pnpm `catalog:` protocol (requires pnpm-workspace.yaml catalog)
  * - 'workspace': pnpm/yarn `workspace:*` protocol (for local packages)
  * - 'auto': Detects from environment — uses 'catalog' if pnpm + catalog exists, else 'semver'
  */
-export type VersionStrategy = 'semver' | 'catalog' | 'workspace' | 'auto';
+export type VersionStrategy = 'semver' | 'exact' | 'catalog' | 'workspace' | 'auto';
 
 const DEFAULT_SERVER_PATH = 'packages/MJAPI';
 const DEFAULT_CLIENT_PATH = 'packages/MJExplorer';
@@ -266,6 +267,8 @@ function resolveVersionString(options: PackageManagerOptions): string {
   const strategy = options.VersionStrategy ?? 'auto';
 
   switch (strategy) {
+    case 'exact':
+      return options.Version;
     case 'catalog':
       return 'catalog:';
     case 'workspace':

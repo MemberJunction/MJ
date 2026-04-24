@@ -46,6 +46,8 @@ export type { VersionCheckResult } from './dependency/version-checker.js';
 export {
     FetchManifestFromGitHub,
     ListGitHubReleases,
+    ListGitHubTags,
+    ValidateGitHubTag,
     DownloadMigrations,
     GetLatestVersion,
     ParseGitHubUrl

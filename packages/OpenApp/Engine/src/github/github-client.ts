@@ -255,6 +255,8 @@ export async function DownloadMigrations(
 
 /**
  * Fetches the latest release version for a repository.
+ * Falls back to listing tags if no GitHub Releases exist (common for repos
+ * that only push semver tags without creating formal releases).
  *
  * @param repoUrl - GitHub repository URL
  * @param options - GitHub client options
@@ -264,10 +266,116 @@ export async function GetLatestVersion(
     repoUrl: string,
     options: GitHubClientOptions
 ): Promise<string | null> {
+    // Try GitHub Releases first
     const releases = await ListGitHubReleases(repoUrl, options);
     const stable = releases.find(r => !r.PreRelease && !r.Draft);
-    if (!stable) {
-        return null;
+    if (stable) {
+        return stable.TagName.replace(/^v/, '');
     }
-    return stable.TagName.replace(/^v/, '');
+
+    // Fall back to tags (sorted by semver descending)
+    const tags = await ListGitHubTags(repoUrl, options);
+    if (tags.length > 0) {
+        return tags[0].replace(/^v/, '');
+    }
+
+    return null;
+}
+
+/**
+ * Lists semver tags for a GitHub repository, sorted by version descending.
+ * Only returns tags matching the `v{major}.{minor}.{patch}` pattern.
+ *
+ * @param repoUrl - GitHub repository URL
+ * @param options - GitHub client options
+ * @returns Sorted tag names (e.g., ['v1.0.7', 'v1.0.6', ...])
+ */
+export async function ListGitHubTags(
+    repoUrl: string,
+    options: GitHubClientOptions
+): Promise<string[]> {
+    const parsed = ParseGitHubUrl(repoUrl);
+    if (!parsed) {
+        return [];
+    }
+
+    const apiUrl = `https://api.github.com/repos/${parsed.Owner}/${parsed.Repo}/tags?per_page=100`;
+
+    try {
+        const response = await fetch(apiUrl, {
+            headers: BuildHeaders(options.Token)
+        });
+
+        if (!response.ok) {
+            return [];
+        }
+
+        const tags = await response.json() as Array<{ name: string }>;
+        const semverPattern = /^v?\d+\.\d+\.\d+(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?$/;
+
+        return tags
+            .map(t => t.name)
+            .filter(name => semverPattern.test(name))
+            .sort((a, b) => compareSemver(b, a));
+    }
+    catch {
+        return [];
+    }
+}
+
+/**
+ * Validates that a specific version tag exists in a GitHub repository.
+ *
+ * @param repoUrl - GitHub repository URL
+ * @param version - Version to check (e.g., '1.0.7' — will be normalized to 'v1.0.7')
+ * @param options - GitHub client options
+ * @returns Whether the tag exists, with an error message if not
+ */
+export async function ValidateGitHubTag(
+    repoUrl: string,
+    version: string,
+    options: GitHubClientOptions
+): Promise<{ Exists: boolean; ErrorMessage?: string }> {
+    const parsed = ParseGitHubUrl(repoUrl);
+    if (!parsed) {
+        return { Exists: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
+    }
+
+    const tag = `v${version.replace(/^v/, '')}`;
+    const apiUrl = `https://api.github.com/repos/${parsed.Owner}/${parsed.Repo}/git/ref/tags/${tag}`;
+
+    try {
+        const response = await fetch(apiUrl, {
+            headers: BuildHeaders(options.Token)
+        });
+
+        if (response.ok) {
+            return { Exists: true };
+        }
+
+        if (response.status === 404) {
+            return { Exists: false, ErrorMessage: `Tag '${tag}' not found in ${parsed.Owner}/${parsed.Repo}. Available versions can be checked at ${repoUrl}/tags` };
+        }
+
+        return { Exists: false, ErrorMessage: `GitHub API error checking tag '${tag}': ${response.status} ${response.statusText}` };
+    }
+    catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { Exists: false, ErrorMessage: `Failed to validate tag '${tag}': ${message}` };
+    }
+}
+
+/**
+ * Compares two semver version strings (with optional 'v' prefix).
+ * Returns negative if a < b, positive if a > b, zero if equal.
+ */
+function compareSemver(a: string, b: string): number {
+    const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
+    const pa = parse(a);
+    const pb = parse(b);
+    for (let i = 0; i < 3; i++) {
+        const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+        if (diff !== 0) return diff;
+    }
+    return 0;
 }
