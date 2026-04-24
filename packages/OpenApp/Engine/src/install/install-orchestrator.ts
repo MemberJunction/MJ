@@ -16,7 +16,7 @@ import type { InstalledAppMap, DependencyNode, DependencyValue } from '../depend
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ValidateGitHubTag, type GitHubClientOptions } from '../github/github-client.js';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunPackageInstall, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
@@ -447,10 +447,16 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     const effectiveUpgradeVersion = explicitUpgradeVersion ? targetVersion.replace(/^v/, '') : manifest.version;
     const effectiveUpgradeStrategy: VersionStrategy | undefined = explicitUpgradeVersion ? 'exact' : context.VersionStrategy;
     const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy);
+    let npmInstallWarning: string | undefined;
     if (!pkgResult.Success) {
-      await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Packages', pkgResult.ErrorMessage ?? 'Package update failed', startTime, previousVersion);
-      await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
-      return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Packages', startTime, pkgResult.ErrorMessage ?? 'Package update failed');
+      if (pkgResult.PackageJsonUpdated) {
+        npmInstallWarning = pkgResult.ErrorMessage;
+        Callbacks?.OnWarn?.('Packages', `npm install failed — package.json entries were updated but dependencies were not resolved. Run 'npm install' manually after fixing npm auth.\n  Detail: ${pkgResult.ErrorMessage}`);
+      } else {
+        await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Packages', pkgResult.ErrorMessage ?? 'Package update failed', startTime, previousVersion);
+        await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Packages', startTime, pkgResult.ErrorMessage ?? 'Package update failed');
+      }
     }
 
     // Step 7: Update server config if changed
@@ -495,13 +501,18 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     Callbacks?.OnSuccess?.('Upgrade', `Successfully upgraded ${options.AppName} to v${manifest.version}`);
 
+    const baseSummary = `Upgraded from ${previousVersion} to ${manifest.version}. Restart MJAPI and rebuild MJExplorer.`;
+    const summary = npmInstallWarning
+      ? `${baseSummary}\n\n⚠ npm install failed — package.json and config files were updated but dependencies were not installed. Log in to npm ('npm login') or configure your .npmrc, then run 'npm install' to complete the setup.`
+      : baseSummary;
+
     return {
       Success: true,
       Action: 'Upgrade',
       AppName: options.AppName,
       Version: manifest.version,
       DurationSeconds: GetDurationSeconds(startTime),
-      Summary: `Upgraded from ${previousVersion} to ${manifest.version}. Restart MJAPI and rebuild MJExplorer.`,
+      Summary: summary,
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
@@ -873,6 +884,18 @@ async function HandlePackageInstallation(
 
   if (!addResult.Success) {
     return { Success: false, ErrorMessage: addResult.ErrorMessage };
+  }
+
+  // If the manifest declares a package prefix, bump ALL matching dependencies
+  // across the workspace (not just the manifest-declared ones). This handles
+  // consumer-added packages like bcsaas-settings, bcsaas-credentials, etc.
+  const prefix = manifest.packages.prefix;
+  if (prefix) {
+    const bareVersion = packageVersion ?? manifest.version;
+    const updatedCount = BumpPrefixedDependencies(context.RepoRoot, prefix, bareVersion);
+    if (updatedCount > 0) {
+      context.Callbacks?.OnProgress?.('Packages', `Bumped ${updatedCount} workspace package.json file(s) with prefix '${prefix}' to ${bareVersion}`);
+    }
   }
 
   context.Callbacks?.OnProgress?.('Packages', 'Running package install...');

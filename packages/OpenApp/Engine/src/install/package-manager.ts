@@ -8,7 +8,7 @@
  * Layout-agnostic: supports configurable workspace paths and multiple targets.
  * Version-agnostic: supports semver ranges, pnpm catalog:, and workspace:*.
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import type { ManifestPackageEntry } from '../manifest/manifest-schema.js';
@@ -325,4 +325,94 @@ function RemoveDependenciesFromPackageJson(pkgJsonPath: string, packages: Manife
   }
 
   writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n', 'utf-8');
+}
+
+/**
+ * Bumps all dependencies matching a package prefix across every package.json in the workspace.
+ * This ensures that consumer-added packages (not declared in the manifest) are also updated
+ * during install/upgrade when an explicit version is requested.
+ *
+ * Preserves existing range prefixes: if a dependency is currently "^1.0.6", it becomes
+ * "^1.0.7" (not "1.0.7"). Same for ~ and other semver range prefixes.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param prefix - npm package prefix to match (e.g., '@bluecypress/bcsaas-')
+ * @param bareVersion - The bare version number without range prefix (e.g., '1.0.7')
+ * @returns Number of package.json files that were updated
+ */
+export function BumpPrefixedDependencies(repoRoot: string, prefix: string, bareVersion: string): number {
+  const packageJsonFiles = findWorkspacePackageJsonFiles(repoRoot);
+  let updatedCount = 0;
+
+  for (const pkgJsonPath of packageJsonFiles) {
+    const content = readFileSync(pkgJsonPath, 'utf-8');
+    const pkgJson: {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    } = JSON.parse(content);
+
+    let fileChanged = false;
+
+    for (const section of [pkgJson.dependencies, pkgJson.devDependencies]) {
+      if (!section) continue;
+      for (const depName of Object.keys(section)) {
+        if (!depName.startsWith(prefix)) continue;
+
+        const currentValue = section[depName];
+        // Extract existing range prefix (^, ~, >=, etc.) and preserve it
+        const rangePrefix = currentValue.match(/^([^\d]*)/)?.[1] ?? '';
+        const newValue = `${rangePrefix}${bareVersion}`;
+
+        if (currentValue !== newValue) {
+          section[depName] = newValue;
+          fileChanged = true;
+        }
+      }
+    }
+
+    if (fileChanged) {
+      writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n', 'utf-8');
+      updatedCount++;
+    }
+  }
+
+  return updatedCount;
+}
+
+/**
+ * Finds all package.json files in a monorepo workspace, excluding node_modules and dist.
+ */
+function findWorkspacePackageJsonFiles(repoRoot: string): string[] {
+  const results: string[] = [];
+  const rootPkg = resolve(repoRoot, 'package.json');
+  if (existsSync(rootPkg)) {
+    results.push(rootPkg);
+  }
+
+  // Read workspace globs from root package.json
+  try {
+    const rootContent: { workspaces?: string[] | { packages?: string[] } } =
+      JSON.parse(readFileSync(rootPkg, 'utf-8'));
+    const globs = Array.isArray(rootContent.workspaces)
+      ? rootContent.workspaces
+      : rootContent.workspaces?.packages ?? [];
+
+    for (const glob of globs) {
+      // Support simple globs like "packages/*" and "apps/*"
+      const baseDir = resolve(repoRoot, glob.replace(/\/?\*.*$/, ''));
+      if (!existsSync(baseDir)) continue;
+
+      const entries: string[] = readdirSync(baseDir);
+      for (const entry of entries) {
+        const pkgPath = resolve(baseDir, entry, 'package.json');
+        if (existsSync(pkgPath)) {
+          results.push(pkgPath);
+        }
+      }
+    }
+  } catch {
+    // If we can't read workspaces, just return the root
+  }
+
+  return results;
 }
