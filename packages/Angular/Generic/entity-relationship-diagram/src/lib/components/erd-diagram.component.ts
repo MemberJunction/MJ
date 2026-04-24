@@ -57,7 +57,6 @@ import {
     type LaidOutEdge,
     type LaidOutBand,
 } from '../layout/compute-erd-layout';
-import { schemaHueColor, schemaBandFill } from '../layout/schema-hue';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Internal view-model types
@@ -67,7 +66,6 @@ interface SchemaChip {
     name: string;
     count: number;
     active: boolean;
-    color: string;
 }
 
 interface FocusReference {
@@ -81,9 +79,6 @@ interface Transform {
     y: number;
     k: number;
 }
-
-/** Light / dark visual theme.  Derived from the host's effective `color-scheme`. */
-type ErdTheme = 'light' | 'dark';
 
 @Component({
     standalone: false,
@@ -152,9 +147,6 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     /** Node currently being hovered (for highlight preview). */
     public hoverNodeId: string | null = null;
 
-    /** Current visual theme — computed from the host's effective `color-scheme`. */
-    public theme: ErdTheme = 'light';
-
     /** Cached layout — recomputed when nodes, filter, search or expansion changes. */
     public layout: ErdLayout = { nodes: [], edges: [], bands: [], totalWidth: 0, totalHeight: 0 };
 
@@ -178,11 +170,9 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     public panning = false;
     private panStart: { x: number; y: number } | null = null;
 
-    private themeObserver?: MutationObserver;
     private resizeObserver?: ResizeObserver;
 
     @HostBinding('class.erd-root') readonly rootClass = true;
-    @HostBinding('attr.data-theme') get themeAttr(): string { return this.theme; }
 
     // ─── LIFECYCLE ────────────────────────────────────────────────────────
 
@@ -205,15 +195,12 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     }
 
     public ngAfterViewInit(): void {
-        this.theme = this.detectTheme();
-        this.themeObserver = this.watchThemeChanges();
         this.resizeObserver = this.watchResize();
         this.recompute();
         queueMicrotask(() => this.fitToView());
     }
 
     public ngOnDestroy(): void {
-        this.themeObserver?.disconnect();
         this.resizeObserver?.disconnect();
     }
 
@@ -262,7 +249,6 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
                 name,
                 count,
                 active: this.activeSchemas ? this.activeSchemas.has(name) : true,
-                color: schemaHueColor(name, this.theme),
             }));
     }
 
@@ -274,34 +260,6 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     private updateSelectedEntity(): void {
         const id = this.focusNodeId ?? this.selectedNodeId;
         this.selectedEntity = id ? this.nodes.find(n => n.id === id) ?? null : null;
-    }
-
-    // ─── THEME DETECTION ──────────────────────────────────────────────────
-
-    /**
-     * Detect theme from the host's computed `color-scheme` property.  The MJ
-     * app toggles `data-theme="dark"` at the `<body>` which sets
-     * `color-scheme: dark` via `_tokens.scss`.
-     */
-    private detectTheme(): ErdTheme {
-        if (typeof window === 'undefined') return 'light';
-        const el: HTMLElement = this.host.nativeElement;
-        const scheme = window.getComputedStyle(el).colorScheme || '';
-        return scheme.includes('dark') ? 'dark' : 'light';
-    }
-
-    private watchThemeChanges(): MutationObserver {
-        const observer = new MutationObserver(() => {
-            const next = this.detectTheme();
-            if (next !== this.theme) {
-                this.theme = next;
-                this.schemaChips = this.buildSchemaChips();
-                this.cdr.markForCheck();
-            }
-        });
-        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
-        observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme', 'class'] });
-        return observer;
     }
 
     private watchResize(): ResizeObserver {
@@ -569,16 +527,6 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     /** Whether an edge should appear dimmed. */
     public isEdgeDimmed(edge: LaidOutEdge): boolean {
         return !!this.highlightSet && !this.isEdgeActive(edge);
-    }
-
-    /** Schema accent color (used for chip dot and node left rail). */
-    public schemaColor(schemaName: string): string {
-        return schemaHueColor(schemaName || '_', this.theme);
-    }
-
-    /** Schema band fill color. */
-    public bandFill(schemaName: string): string {
-        return schemaBandFill(schemaName || '_', this.theme);
     }
 
     /**
