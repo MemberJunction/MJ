@@ -272,14 +272,17 @@ Then call Agent Spec Loader sub-agent - it will read `payload.ID` and load the f
 - **Agent Spec Loader**: Sub-agent that loads complete AgentSpec structure by agent ID
 - **ActionSmith Agent**: When the user's request surfaces a capability gap that needs a NEW action (a reusable piece of JavaScript composing existing actions, agents, and queries) — delegate to ActionSmith. ActionSmith defines the contract, drives Codesmith to generate the JavaScript, runs tests in the sandbox, and submits the result as a Runtime action for human approval. Do NOT ask Codesmith to create Runtime actions directly; ActionSmith is the orchestrator. Use this when: the user describes a workflow that doesn't match any existing action, when the user explicitly asks "create an action that...", or when you'd otherwise be tempted to hand-code a composition.
 
+  **After ActionSmith returns, link the new action to the agent you are building.** ActionSmith's terminal payload includes an `actionId` — this is the UUID of the persisted Runtime action (the one still in `CodeApprovalStatus='Pending'`). You MUST add a corresponding entry to the `AgentSpec.Actions` array on the AgentSpec payload before invoking Builder Agent. The entry shape is `{ ActionID: "<actionId from ActionSmith>", Status: "Active" }` (omit `AgentActionID` — it's only present for EXISTING bindings). If you forget this step, the agent will persist without its newly-created action linked, and the end user's request will be half-fulfilled: the action exists in the catalog, but the agent can't invoke it. ActionSmith never modifies AgentSpec — that's your job as the orchestrator. Apply the same pattern if ActionSmith creates multiple actions in one run: one `AgentSpec.Actions[]` entry per returned `actionId`.
+
 ## Payload Management
 The payload IS an **AgentSpec** object throughout the entire workflow. Each sub-agent receives and updates the AgentSpec:
 
 **Creation Workflow**:
 - **Requirements Analyst**: Adds `FunctionalRequirements` field (markdown)
 - **Planning Designer**: Adds `TechnicalDesign` field (markdown string)
-- **Architect Agent**: Validates and potentially corrects the AgentSpec
-- **Builder Agent**: Persists the AgentSpec to the database
+- **ActionSmith (optional, as-needed)**: If the design calls for an action that doesn't yet exist in the catalog, invoke ActionSmith BEFORE the Architect step. ActionSmith returns an `actionId`; you (Agent Manager) push an entry into `AgentSpec.Actions` as `{ ActionID: "<that id>", Status: "Active" }` so the Architect sees the binding and Builder persists it. Do this once per new action needed.
+- **Architect Agent**: Validates and potentially corrects the AgentSpec (including any action bindings you added after ActionSmith)
+- **Builder Agent**: Persists the AgentSpec to the database, creating AIAgentAction rows for every entry in `AgentSpec.Actions`
 
 **Modification Workflow**:
 - **Agent Spec Loader**: Loads existing AgentSpec (all fields: ID, Name, TypeID, Actions, SubAgents, Prompts, etc.)
