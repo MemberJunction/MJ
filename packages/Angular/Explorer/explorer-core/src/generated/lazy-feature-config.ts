@@ -152,8 +152,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   // @memberjunction/ng-dashboards → ./module
   'BaseResourceComponent::ArchiveConfigResource': loadModule,
   'BaseResourceComponent::ArchiveRunsResource': loadModule,
-
-  // @memberjunction/ng-dashboards → ./module
   'BaseResourceComponent::DatabaseDesignerDashboard': loadModule,
 
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
@@ -186,4 +184,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 80;
+export const LAZY_FEATURE_CONFIG_COUNT = 81;

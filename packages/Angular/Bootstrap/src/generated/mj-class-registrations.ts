@@ -282,7 +282,6 @@ import {
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
-    MJRSUAuditLogEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -427,7 +426,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (71 classes)
+// @memberjunction/ng-dashboards (72 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -789,7 +788,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
-    MJRSUAuditLogEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -1005,7 +1003,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 461;
+export const CLASS_REGISTRATIONS_COUNT = 462;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
