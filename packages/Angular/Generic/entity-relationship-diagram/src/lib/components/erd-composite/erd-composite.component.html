@@ -19,6 +19,23 @@
       <!-- ERD Diagram (Center) -->
       <as-split-area [size]="selectedEntity ? 60 : (filterPanelVisible ? 80 : 100)">
         <div class="erd-pane-container">
+
+          <!-- Re-open tab for the filter panel when hidden. -->
+          @if (!filterPanelVisible) {
+            <button
+              type="button"
+              mjButton
+              variant="secondary"
+              size="sm"
+              class="filter-panel-reopen"
+              (click)="onToggleFilterPanel()"
+              title="Show filters"
+              aria-label="Show filter panel">
+              <i class="fa-solid fa-filter" aria-hidden="true"></i>
+              Filters
+            </button>
+          }
+
           <mj-entity-erd
             [entities]="filteredEntities"
             [allEntities]="entities"
