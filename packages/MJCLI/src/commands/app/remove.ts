@@ -1,4 +1,5 @@
 import { Args, Command, Flags } from '@oclif/core';
+import { RemoveApp } from '@memberjunction/open-app-engine';
 import { confirm } from '@inquirer/prompts';
 import ora from 'ora-classic';
 import chalk from 'chalk';
@@ -50,7 +51,6 @@ export default class AppRemove extends Command {
     }
 
     try {
-      const { RemoveApp } = await import('@memberjunction/open-app-engine');
       const context = await buildOrchestratorContext(this, flags.verbose);
 
       const result = await RemoveApp(

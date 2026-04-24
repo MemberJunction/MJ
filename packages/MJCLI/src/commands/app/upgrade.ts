@@ -1,4 +1,5 @@
 import { Args, Command, Flags } from '@oclif/core';
+import { UpgradeApp } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { buildOrchestratorContext } from '../../utils/open-app-context.js';
@@ -34,7 +35,6 @@ export default class AppUpgrade extends Command {
     const spinner = ora();
 
     try {
-      const { UpgradeApp } = await import('@memberjunction/open-app-engine');
       const context = await buildOrchestratorContext(this, flags.verbose);
 
       const result = await UpgradeApp(
