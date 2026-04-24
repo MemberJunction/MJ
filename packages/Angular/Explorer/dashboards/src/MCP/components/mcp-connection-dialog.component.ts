@@ -103,7 +103,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
                 Name: this.connection.Name,
                 Description: this.connection.Description ?? '',
                 CompanyID: this.connection.CompanyID ?? '',
-                CredentialID: '',  // Would need to load from entity
+                CredentialID: this.connection.CredentialID ?? '',
                 AutoSyncTools: this.connection.AutoSyncTools,
                 LogToolCalls: this.connection.LogToolCalls,
                 LogInputParameters: true,

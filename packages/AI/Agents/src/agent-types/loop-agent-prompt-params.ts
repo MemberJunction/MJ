@@ -81,6 +81,13 @@ export interface ResponseTypeInclusionRules {
      * @default true
      */
     scratchpad?: boolean;
+
+    /**
+     * Include artifactToolCalls field in the response interface.
+     * Auto-aligns with includeArtifactToolsDocs unless explicitly set.
+     * @default true
+     */
+    artifactToolCalls?: boolean;
 }
 
 /**
@@ -93,7 +100,8 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     commands: true,
     forEach: true,
     while: true,
-    scratchpad: true
+    scratchpad: true,
+    artifactToolCalls: true
 };
 
 /**
@@ -253,6 +261,15 @@ export interface LoopAgentTypePromptParams {
      */
     scratchpadMaxTasks?: number;
 
+    /**
+     * Include artifact tools documentation and artifact manifest in the prompt.
+     * Artifact tools allow agents to explore input artifacts on demand.
+     * Only emitted when artifacts are present in the run.
+     * Disable for agents that never work with artifacts.
+     * @default true
+     */
+    includeArtifactToolsDocs?: boolean;
+
     // === Content Limiting ===
 
     /**
@@ -292,6 +309,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeDateTimeInPrompt: true,
     includeScratchpadDocs: true,
     scratchpadMaxTasks: 50,
+    includeArtifactToolsDocs: true,
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1
 };

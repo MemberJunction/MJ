@@ -58,6 +58,7 @@
       "ParentID": null,
       "ContentType": "application/json",
       "DriverClass": "JsonArtifactViewerPlugin",
+      "ToolLibraryClass": "JSONToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-solid fa-brackets-curly"
     },
@@ -65,8 +66,8 @@
       "ID": "AE674C7E-EA0D-49EA-89E4-0649F5EB20D4"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.068Z",
-      "checksum": "87fceb45ecff1546283bee889edcafaeceb0d7157e8df4896b9f51e64111888c"
+      "lastModified": "2026-04-22T21:08:13.520Z",
+      "checksum": "78a8f24102836fb7e6261ae4fa5a6796379f59394f0d8205f92f60a071731e45"
     }
   },
   {
@@ -275,6 +276,7 @@
       "ParentID": null,
       "ContentType": "text/markdown",
       "DriverClass": "MarkdownArtifactViewerPlugin",
+      "ToolLibraryClass": "TextToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-brands fa-markdown"
     },
@@ -282,8 +284,8 @@
       "ID": "5E5883C2-0185-4E1E-8A1C-F514DBF52DB7"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.166Z",
-      "checksum": "b1d34a4978d255c81efddf3acf653b6cfa9a0c2e8d24014e696d57dedc9296f2"
+      "lastModified": "2026-04-22T21:08:13.615Z",
+      "checksum": "0e36ff1c9eab065ac76d09b68b9c48026c021e26506baace990c82286f879924"
     }
   },
   {
@@ -294,6 +296,7 @@
       "ContentType": "application/pdf",
       "ContentCategory": "File",
       "DriverClass": "PdfArtifactViewerPlugin",
+      "ToolLibraryClass": "PDFToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-file-pdf"
     },
@@ -301,8 +304,8 @@
       "ID": "95B9A870-76A8-47FF-A44E-06784380490B"
     },
     "sync": {
-      "lastModified": "2026-04-06T22:35:44.296Z",
-      "checksum": "d97d2721b43a27556c2690d6b407f8dea340bd6f8021fa0e6603e7b3e377a35f"
+      "lastModified": "2026-04-22T21:08:13.631Z",
+      "checksum": "e8a15a2bf676ce68298679613fc0607f6262e8c3159ab53d205dd70a2be52eda"
     }
   },
   {
@@ -313,6 +316,7 @@
       "ContentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "ContentCategory": "File",
       "DriverClass": "XlsxArtifactViewerPlugin",
+      "ToolLibraryClass": "ExcelToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-file-excel"
     },
@@ -320,8 +324,8 @@
       "ID": "E197541F-484B-4462-8160-70993E18CEF6"
     },
     "sync": {
-      "lastModified": "2026-04-06T22:35:44.313Z",
-      "checksum": "73959d32da058c06c3bc93df597651da9defd003c09e3923b77e8456eb71e3c6"
+      "lastModified": "2026-04-22T21:08:13.647Z",
+      "checksum": "9fd246c12453c6a4dde992ece729a1df8567376ae1d64fa0cd1be379893ac103"
     }
   },
   {
@@ -332,6 +336,7 @@
       "ContentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "ContentCategory": "File",
       "DriverClass": "DocxArtifactViewerPlugin",
+      "ToolLibraryClass": "DocxToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-file-word"
     },
@@ -339,8 +344,8 @@
       "ID": "CDF6218A-8250-437E-9074-EC1900D093A2"
     },
     "sync": {
-      "lastModified": "2026-04-06T22:35:44.329Z",
-      "checksum": "b6fb6be302c15f5a8e23584c600622290b02f35bc3fa626b291db454a9593f8c"
+      "lastModified": "2026-04-22T21:08:13.659Z",
+      "checksum": "49fa6d211b6734bdb91f53912f888db7b799ead37dd09dbea946483861f0b858"
     }
   }
 ]

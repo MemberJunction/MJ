@@ -1,5 +1,26 @@
 # @memberjunction/ng-ai-test-harness
 
+## 5.29.0
+
+### Patch Changes
+
+- e77233c: Migrate AI Execution Monitor and node components to MJ semantic design tokens so the panel renders correctly in dark mode. Replaces hardcoded hex values (`#fff`, `#f8f9fa`, `#1a1a1a`, `#2196f3`, `#e0e0e0`, etc.) and legacy `--mj-blue` / `--gray-*` references with `--mj-bg-*`, `--mj-text-*`, `--mj-border-*`, `--mj-brand-primary`, and `--mj-status-*` tokens.
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/ng-shared@5.29.0
+  - @memberjunction/ng-code-editor@5.29.0
+  - @memberjunction/ng-container-directives@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/ai@5.29.0
+  - @memberjunction/ng-ui-components@5.29.0
+  - @memberjunction/global@5.29.0
+
 ## 5.28.0
 
 ### Patch Changes

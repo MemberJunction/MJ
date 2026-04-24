@@ -568,12 +568,11 @@ WHERE m.Region = '{{ Region }}'
             expect(finalSQL).not.toContain('WHERE');
             expect(finalSQL).toContain('SELECT m.ID, m.Name');
         });
-        it('should escape {{query:"..."}} in comments when outer query has UsesTemplate=true and no composition', () => {
-            // This is the exact bug scenario: a query with UsesTemplate=true has a
-            // {{query:"..."}} composition example in a SQL comment. There are no actual
-            // composition tokens (they're inside comments), so composition is skipped.
-            // Without the fix, Nunjucks chokes on the unescaped {{ in the comment.
-            const queryID = 'comment-esc-1';
+        it('should strip comments containing {{query:"..."}} before Nunjucks processes templates', () => {
+            // A query with UsesTemplate=true has a {{query:"..."}} example in a SQL comment.
+            // Comments are stripped before Nunjucks, so the {{ in the comment never
+            // reaches the template evaluator. Template tokens in code resolve normally.
+            const queryID = 'comment-strip-1';
             const query = makeQueryInfo({
                 ID: queryID,
                 Name: 'Tags For Entity Record',
@@ -608,16 +607,18 @@ AND ti.RecordID = {{ recordID | sqlString }}`,
                 mockUser
             );
 
-            // Should succeed without throwing "expected variable end"
-            // The comment {{ should be escaped, but the parameter {{ should be resolved
+            // Template tokens resolved
             expect(finalSQL).toContain("'Members'");
             expect(finalSQL).toContain("'42'");
             expect(finalSQL).not.toContain('{{ entityName');
             expect(finalSQL).not.toContain('{{ recordID');
+            // Comments stripped — no comment text in output
+            expect(finalSQL).not.toContain('Reusable composable query');
+            expect(finalSQL).not.toContain('{{query:');
         });
 
-        it('should escape {{ }} in block comments when outer query has UsesTemplate=true', () => {
-            const queryID = 'comment-esc-2';
+        it('should strip block comments containing {{ }} before Nunjucks', () => {
+            const queryID = 'comment-strip-2';
             const query = makeQueryInfo({
                 ID: queryID,
                 Name: 'Block Comment Query',
@@ -646,13 +647,13 @@ SELECT * FROM Users WHERE Name = {{ userName | sqlString }}`,
             );
 
             expect(finalSQL).toContain("'Alice'");
-            // Block comment {{ should be escaped
-            expect(finalSQL).not.toMatch(/\/\*.*\{\{query:/);
+            // Block comment stripped entirely
+            expect(finalSQL).not.toContain('demonstrates');
+            expect(finalSQL).not.toMatch(/\{\{query:/);
         });
 
-        it('should not corrupt non-comment template tokens when escaping comments', () => {
-            // Ensure that escaping only targets comments, not actual template expressions
-            const queryID = 'comment-esc-3';
+        it('should strip comments but preserve template tokens in code', () => {
+            const queryID = 'comment-strip-3';
             const query = makeQueryInfo({
                 ID: queryID,
                 Name: 'Mixed Query',
@@ -683,8 +684,9 @@ SELECT * FROM Users WHERE Status = {{ status | sqlString }} AND Name = {{ name |
 
             expect(finalSQL).toContain("'Active'");
             expect(finalSQL).toContain("'Bob'");
-            // Comment should be escaped
-            expect(finalSQL).toMatch(/-- Uses \{ \{someParam\} \}/);
+            // Comment stripped, not escaped
+            expect(finalSQL).not.toContain('Uses {{someParam}}');
+            expect(finalSQL).not.toContain('-- Uses');
         });
     });
 

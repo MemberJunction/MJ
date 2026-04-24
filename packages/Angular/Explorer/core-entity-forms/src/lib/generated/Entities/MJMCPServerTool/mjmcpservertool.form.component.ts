@@ -21,6 +21,7 @@ export class MJMCPServerToolFormComponent extends BaseFormComponent {
             { sectionKey: 'automation', sectionName: 'Automation', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJMCPServerConnectionTools', sectionName: 'MCP Server Connection Tools', isExpanded: false },
+            { sectionKey: 'mJMCPToolFavorites', sectionName: 'MCP Tool Favorites', isExpanded: false },
             { sectionKey: 'mJMCPToolExecutionLogs', sectionName: 'MCP Tool Execution Logs', isExpanded: false }
         ]);
     }
