@@ -167,28 +167,41 @@ export class RuntimeActionExecutor extends BaseSingleton<RuntimeActionExecutor> 
     }
 
     /**
-     * Wraps the user-authored code so its return value ends up in the
-     * sandbox's `output` variable — which is how CodeExecutionService
-     * surfaces results back to the host. User code is expected to be the
-     * body of a function that can `return` a value.
+     * Wraps the user-authored code so its side-effects on `output` are
+     * captured by the worker's outer wrapper — which reads `output` at
+     * the end of the program and surfaces it via `globalThis._output`.
      *
-     * IMPORTANT: The worker's outer wrapper already looks like:
+     * The worker's outer wrapper looks like:
      *   (async function() { let output; ${params.code}; globalThis._output = output; })();
-     * It does NOT await arbitrary expressions in `${params.code}`. If we wrap
-     * our own async IIFE here, the outer wrapper captures `output` before
-     * our IIFE resolves and the caller sees `undefined`. So we produce a
-     * single statement — an awaited call to an inline async function —
-     * which the worker's wrapper DOES await correctly because the whole
-     * block is inside an async IIFE that does sequential statements.
+     *
+     * User code assigns to `output` (either directly via `output = {...}`
+     * or through `return` — see below). That assignment reaches the outer
+     * `let output` via closure, which is what the worker surfaces.
+     *
+     * Historical bug: we used to wrap as `output = await (async function...)(input);`.
+     * The outer assignment overwrote the closed-over `output` with the inner
+     * async function's return value — which was `undefined` whenever the user
+     * code assigned to `output` and fell off the end (the documented pattern).
+     * Every sandbox execution silently returned undefined, breaking every test
+     * case that asserted on output fields.
+     *
+     * Current wrapping: the inner IIFE's return value is captured and, if
+     * defined, assigned to `output` — this supports both `return value`
+     * and `output = value` idioms. Bare assignments to `output` inside the
+     * IIFE still work via closure; explicit `return` takes precedence if
+     * both are used (so callers can switch styles without breakage).
      *
      * Libraries are accessed via `require()` inside user code (lodash,
      * date-fns, mathjs, papaparse, uuid, validator are on the allowlist).
      */
     private wrapUserCode(userCode: string): string {
         return [
-            'output = await (async function(input) {',
+            '{',
+            '  const __runtimeReturn = await (async function(input) {',
             userCode,
-            '})(input);'
+            '  })(input);',
+            '  if (typeof __runtimeReturn !== "undefined") output = __runtimeReturn;',
+            '}'
         ].join('\n');
     }
 

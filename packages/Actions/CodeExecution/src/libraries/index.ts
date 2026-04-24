@@ -57,7 +57,7 @@ export function getLibrarySource(moduleName: string): string | null {
 
     switch (moduleName) {
         case 'lodash':
-            return getLodashSource();
+            return getBundledLodashSource();
         case 'date-fns':
             return getDateFnsSource();
         case 'mathjs':
@@ -470,6 +470,39 @@ function getValidatorSource(): string {
     return validator;
 })()
     `.trim();
+}
+
+/**
+ * Load the bundled full lodash UMD build (~73KB). We used to hand-roll
+ * a tiny subset here, but the subset was missing the most foundational
+ * helpers (`map`, `filter`, `forEach`, `reduce`, `find`, `some`, `every`,
+ * `keys`, `values`, `each`, `includes`) — so any Runtime action that
+ * called `_.map(...)` crashed with "_.map is not a function". The inline
+ * subset stays in this file below as `getLodashSource()` for reference /
+ * fallback only; it is no longer wired up.
+ *
+ * Lodash's UMD epilogue looks for `module.exports` before falling back to
+ * a global. We provide a shim `module` and return `module.exports` so the
+ * sandbox gets the full lodash object exactly as `require('lodash')` would
+ * hand back in node.
+ */
+function getBundledLodashSource(): string {
+    const libPath = path.join(__dirname, 'bundled-libs', 'lodash.js');
+    const source = fs.readFileSync(libPath, 'utf8');
+    // Lodash's UMD defines `ue` (the module-exports branch it actually writes
+    // to) as `ee && typeof module == "object" && ... && module`, where
+    // `ee = typeof exports == "object" && exports && ...`. So it short-circuits
+    // to the global branch (`re._=be`, synthesized root) if `exports` is
+    // undefined in scope — even when `module` is present. Both shims are
+    // required, and they must share storage (`const exports = module.exports`)
+    // so whichever path lodash picks, `module.exports` ends up holding the
+    // real lodash object.
+    return `(function() {
+        const module = { exports: {} };
+        const exports = module.exports;
+        ${source}
+        return module.exports;
+    })()`;
 }
 
 /**

@@ -29,11 +29,18 @@ export class TestRuntimeActionAction extends BaseAction {
             const actionName = this.getStringParam(params, 'actionname');
             const inlineCode = this.getStringParam(params, 'code');
             const inlineConfig = this.getObjectParam(params, 'configuration');
-            const testCases = (this.getObjectParam(params, 'testcases') as TestCase[] | null) ?? [];
+            const suppliedCases = (this.getObjectParam(params, 'testcases') as TestCase[] | null) ?? [];
 
-            if (testCases.length === 0) {
-                return fail('MISSING_TEST_CASES', 'At least one test case is required.');
-            }
+            // If the caller didn't supply any test cases, we still run ONE
+            // smoke test with empty inputs. This proves the action loads,
+            // compiles, and executes without throwing — the bare minimum
+            // you want to know before persisting it. Callers that want real
+            // assertions supply cases with `expectedOutput`; callers that
+            // just want "did it blow up?" can skip cases entirely.
+            const testCases: TestCase[] = suppliedCases.length > 0
+                ? suppliedCases
+                : [{ name: 'smoke-test (no inputs)', input: {} }];
+            const smokeOnly = suppliedCases.length === 0;
 
             // Resolve the action record to use.
             let actionRecord: MJActionEntity | null = null;
@@ -89,11 +96,22 @@ export class TestRuntimeActionAction extends BaseAction {
             this.setOutputParam(params, 'PassedCount', passCount);
             this.setOutputParam(params, 'FailedCount', results.length - passCount);
             this.setOutputParam(params, 'AllPassed', passCount === results.length);
+            this.setOutputParam(params, 'SmokeTestOnly', smokeOnly);
+
+            const allPassed = passCount === results.length;
+            const resultCode = allPassed
+                ? (smokeOnly ? 'SMOKE_PASSED' : 'ALL_PASSED')
+                : (smokeOnly ? 'SMOKE_FAILED' : 'SOME_FAILED');
+            const message = smokeOnly
+                ? (allPassed
+                    ? 'Smoke test passed — action loaded and executed without throwing. No test cases supplied, so behavior was not asserted.'
+                    : `Smoke test failed: ${results[0]?.message ?? 'action failed on empty-input execution.'}`)
+                : `${passCount}/${results.length} test cases passed.`;
 
             return {
                 Success: true,
-                ResultCode: passCount === results.length ? 'ALL_PASSED' : 'SOME_FAILED',
-                Message: `${passCount}/${results.length} test cases passed.`,
+                ResultCode: resultCode,
+                Message: message,
                 Params: params.Params
             };
         } catch (error) {

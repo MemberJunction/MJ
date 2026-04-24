@@ -119,7 +119,14 @@ export class ActionSmithAgent extends BaseAgent {
             return base;
         }
 
-        const payload = (nextStep.newPayload ?? currentPayload) as ActionSmithPayload;
+        // Coalesce through empty-object fallback so subsequent `payload.X`
+        // field accesses don't throw when the LLM emits a step before any
+        // payload has been populated (e.g., early Chat step with no
+        // `newPayload` AND no parent currentPayload yet). Hitting an
+        // undefined here bubbles up as a generic "Cannot read properties
+        // of undefined (reading 'code')" error that surfaces as a failed
+        // prompt step — stalling the whole run.
+        const payload = (nextStep.newPayload ?? currentPayload ?? {}) as ActionSmithPayload;
         const hasCode = !!payload.code?.trim();
         const hasActionId = !!payload.actionId;
         // Legit structured interaction — the LLM built an actual form, not a
@@ -257,7 +264,14 @@ export class ActionSmithAgent extends BaseAgent {
             return base;
         }
 
-        const payload = (nextStep.newPayload ?? currentPayload) as ActionSmithPayload;
+        // Coalesce through empty-object fallback so subsequent `payload.X`
+        // field accesses don't throw when the LLM emits a step before any
+        // payload has been populated (e.g., early Chat step with no
+        // `newPayload` AND no parent currentPayload yet). Hitting an
+        // undefined here bubbles up as a generic "Cannot read properties
+        // of undefined (reading 'code')" error that surfaces as a failed
+        // prompt step — stalling the whole run.
+        const payload = (nextStep.newPayload ?? currentPayload ?? {}) as ActionSmithPayload;
 
         // 2. Structured completeness check with specific retry guidance.
         const missing = this.checkRequiredFields(payload);
