@@ -1,8 +1,8 @@
 # PostgreSQL Manual Fixes Catalog
 
-Every manual fix, workaround, and configuration change applied during the PG dev-on-PG validation session (April 13–16, 2026). This is the source-of-truth reference for what a PG install requires beyond running `mj migrate`.
+Every manual fix, workaround, and configuration change ever applied to get a PG install end-to-end. This is the source-of-truth reference for what a PG install requires beyond running `mj migrate`, and the to-do list for closing the remaining converter gaps.
 
-Each fix is categorized by whether it should be automated in the pipeline, included in the baseline, or remains a developer responsibility.
+Each fix is categorized by whether it should be automated in the pipeline, included in the baseline, or remains a developer responsibility. Status reflects what is currently shipping versus what is still outstanding.
 
 ---
 
@@ -43,18 +43,16 @@ Each fix is categorized by whether it should be automated in the pipeline, inclu
 
 ### B2. `spGetPrimaryKeyForTable` function
 **What:** CodeGen calls this during entity validation. Exists on SQL Server but was never ported to PG baseline.
-**Manual fix applied:** Created PG version in `scripts/pg-bootstrap-helpers.sql`.
-**Where it should live:** PG baseline migration.
-**Status:** Not yet in baseline.
+**Pipeline fix:** **DONE** — included in the dedicated `.pg-only.sql` sproc-port migration (`V202604220000__v5.28.x__Port_Missing_CodeGen_Sprocs.pg-only.sql`). Covered by integration tests in `packages/CodeGenLib/src/__tests__/integration/pg-codegen-sprocs.integration.test.ts`.
+**Status:** ✅ Shipped.
 
-### B3. 5 CodeGen helper stored procedures
-**What:** `spUpdateExistingEntitiesFromSchema`, `spUpdateExistingEntityFieldsFromSchema`, `spSetDefaultColumnWidthWhereNeeded`, `spUpdateSchemaInfoFromDatabase`, `spDeleteUnneededEntityFields`. All called by CodeGen during metadata management. All exist on SQL Server but never ported to PG.
-**Manual fix applied:** Created simplified PG versions in `scripts/pg-bootstrap-helpers.sql`.
-**Where it should live:** PG baseline migration or converter should convert them from the T-SQL baseline.
-**Status:** Not yet in baseline. Simplified stubs — may need enhancement for full feature parity.
+### B3. CodeGen helper stored procedures (7 total)
+**What:** `spUpdateExistingEntitiesFromSchema`, `spUpdateExistingEntityFieldsFromSchema`, `spSetDefaultColumnWidthWhereNeeded`, `spUpdateSchemaInfoFromDatabase`, `spDeleteUnneededEntityFields`, `spUpdateEntityFieldRelatedEntityNameFieldMap`, `spDeleteUnneededEntityFields`. All called by CodeGen during metadata management. All exist on SQL Server but cannot be auto-translated by the converter (they rely on `sys.*` joins, `STRING_SPLIT`, `IIF`, table variables, `SELECT ... INTO`).
+**Pipeline fix:** **DONE** — hand-ported to plpgsql in the same `.pg-only.sql` migration as B2. The PG ports also fix a pre-existing arity bug in `spUpdateEntityFieldRelatedEntityNameFieldMap`.
+**Status:** ✅ Shipped. 15 integration tests prove correctness against a real PG instance.
 
 ### B4. `UQ_User_Email` unique index
-**What:** SQL Server baseline has a unique index on `User.Email`. PG baseline doesn't. Without it, every Auth0 login creates a duplicate user row (coworker documented 20+ duplicates for a single user).
+**What:** SQL Server baseline has a unique index on `User.Email`. PG baseline doesn't. Without it, every auth provider login can create a duplicate user row.
 **Manual fix applied:** `CREATE UNIQUE INDEX IF NOT EXISTS "UQ_User_Email" ON __mj."User" ("Email")`.
 **Where it should live:** PG baseline migration.
 **Status:** Not yet in baseline.
@@ -81,23 +79,53 @@ Each fix is categorized by whether it should be automated in the pipeline, inclu
 **Manual fix applied:** None — these columns remain missing.
 **Status:** Not fixable without CodeGen source enhancement. Tracked as task #52.
 
-### C3. `DROP VIEW CASCADE` needed before `CREATE OR REPLACE VIEW`
-**What:** PG's `CREATE OR REPLACE VIEW` cannot change column order or remove columns from an existing view. When CodeGen tries to regenerate a view with different columns (e.g., after adding JOINs), PG silently rejects it or errors. CodeGen needs to `DROP VIEW IF EXISTS ... CASCADE` first.
-**Manual fix applied:** Manually dropped views before CodeGen runs.
-**Impact of CASCADE:** Drops dependent functions (`fn_create_*`, `fn_update_*`, `fn_delete_*` that RETURN SETOF the view). CodeGen must regenerate those too.
-**Status:** Known issue (coworker report #36). Needs PostgreSQLCodeGenProvider to emit DROP VIEW CASCADE before CREATE OR REPLACE VIEW.
+### C3. View regeneration when column shape changes (PG `42P16`)
+**What:** PG's `CREATE OR REPLACE VIEW` cannot change column order or remove columns from an existing view; it raises `SQLSTATE 42P16` (`invalid_table_definition`). A naive `DROP VIEW ... CASCADE` solves the parse problem but silently nukes dependent views, functions, and grants.
+**Pipeline fix:** **DONE** — `PostgreSQLCodeGenProvider.regenerateBaseView` now uses a fallback orchestrator that:
+1. Tries `CREATE OR REPLACE VIEW` first (non-destructive happy path).
+2. On 42P16, captures dependent views, functions, grants, and the COMMENT via `pg_depend`/`pg_rewrite`/`information_schema` queries.
+3. Drops with CASCADE, recreates the target with the new shape, then restores all dependents in reverse order.
+4. Skips restoring dependents that the same CodeGen run will recreate later (`willRegenerate` set), preventing churn.
 
-### C4. `LENGTH` keyword not in `_SQL_KEYWORDS` set (published 5.24.0)
-**What:** The published 5.24.0 npm package's `PostgreSQLCodeGenProvider` doesn't include `LENGTH` in the SQL keywords set. CodeGen's `processWord` method quotes it as `"LENGTH"` → PG function call fails.
-**Manual fix applied:** Patched `node_modules/@memberjunction/codegen-lib/.../PostgreSQLCodeGenProvider.js` to add `'LENGTH'` to the set.
-**Source fix:** **DONE** in this PR — `LENGTH`, `LEFT`, `RIGHT`, `POSITION`, `OVERLAY`, `EXTRACT`, `GREATEST`, `LEAST` added to `_SQL_KEYWORDS`.
-**Status:** ✅ Fixed in source (not yet published to npm).
+A `ViewFallbackRestoreError` with phase discriminant (`capture` / `drop` / `recreate` / `restore-views` / `restore-functions` / `restore-grants` / `restore-metadata`) makes any restoration failure visible and scoped.
+
+Covered by 33 integration tests across `pg-view-regen.integration.test.ts`, `pg-view-dependency-capture.integration.test.ts`, and `pg-view-fallback.integration.test.ts`.
+**Status:** ✅ Shipped.
+
+### C4. `LENGTH` keyword not in `_SQL_KEYWORDS` set
+**What:** Older `PostgreSQLCodeGenProvider` did not include `LENGTH` in the SQL keywords set. CodeGen's `processWord` method quoted it as `"LENGTH"` → PG function call fails.
+**Source fix:** **DONE** — `LENGTH`, `LEFT`, `RIGHT`, `POSITION`, `OVERLAY`, `EXTRACT`, `GREATEST`, `LEAST` added to `_SQL_KEYWORDS`.
+**Status:** ✅ Shipped.
 
 ### C5. `quoteFieldNamesInToken` quotes function calls as column names
-**What:** The `PostgreSQLDataProvider`'s quoting regex matches entity field names (like `Length`) against function calls (`LENGTH(...)`) and quotes them — `"Length"(...)` is not a valid PG function call.
-**Manual fix applied:** Patched `node_modules/@memberjunction/postgresql-dataprovider/.../PostgreSQLDataProvider.js` to add negative lookahead `(?!\s*\()`.
-**Source fix:** Not yet applied to the `postgresql-dataprovider` package source. Our fix is only in `PostgreSQLCodeGenProvider`'s `_SQL_KEYWORDS` set.
-**Status:** Needs source fix in `@memberjunction/postgresql-dataprovider`.
+**What:** `PostgreSQLDataProvider`'s quoting regex matched entity field names (like `Length`) against function calls (`LENGTH(...)`) and quoted them — `"Length"(...)` is not a valid PG function call.
+**Source fix:** Negative lookahead `(?!\s*\()` added to the regex in `PostgreSQLDataProvider`.
+**Status:** ✅ Shipped.
+
+### C6. CRUD function naming alignment
+**What:** Runtime `PostgreSQLDataProvider` was looking up `spCreate*`/`spUpdate*` (T-SQL naming), but CodeGen on PG actually emits `fn_create_*`/`fn_update_*`/`fn_delete_*`. Result: every Save() through the PG path failed with "function does not exist".
+**Source fix:** `getCRUDFunctionName` in `PostgreSQLDataProvider` now returns `fn_create_<snake_table>` (and the matching update/delete forms).
+**Status:** ✅ Shipped.
+
+### C7. CodeGen silently swallowed PG shell-execution failures
+**What:** `executeSQLFileViaShell` always returned `true` even when `psql` exited non-zero. CodeGen marched on with broken state (missing functions, missing grants).
+**Source fix:** Shell return codes now propagate; per-entity SQL generators check the return value and surface failures.
+**Status:** ✅ Shipped.
+
+### C8. Per-entity CodeGen aborted on first error inside the entity batch
+**What:** CodeGen-per-entity SQL was a single batch (view + CRUD functions + grants). PG's simple-query protocol aborts the whole batch on the first error, so a view failure left CRUD functions and grants for that entity uncreated.
+**Source fix:** `PostgreSQLCodeGenProvider.executeEntityPhased` runs the three pieces as separate phases. Phase 1 (view) uses the C3 fallback orchestrator. Phase 2 (CRUD) only runs if phase 1 succeeded. Phase 3 (grants) only runs if phase 2 succeeded. Each phase failure is reported separately and scoped to the affected entity.
+**Status:** ✅ Shipped. 2 integration tests prove the gating behavior.
+
+### C9. Strict mode for CodeGen view regeneration
+**What:** Failures during view regeneration were logged but CodeGen continued. CI had no way to assert "all views must regenerate cleanly".
+**Source fix:** `regenerateFailedBaseViews` collects per-entity failures, logs a batch summary, and throws when `MJ_CODEGEN_STRICT_VIEW_REGEN=true`. CI sets this flag; local dev defaults to non-strict.
+**Status:** ✅ Shipped.
+
+### C10. Pagination math wrong on PG (silently worked on SQL Server)
+**What:** `GenericDatabaseProvider` pagination math used SQL Server's `OFFSET ... FETCH NEXT` semantics implicitly. PG's `LIMIT ... OFFSET` returned wrong rows when MaxRows was zero or undefined. Affected every paginated list view in Explorer when running against PG.
+**Source fix:** Explicit MaxRows-zero/undefined handling + 9 unit tests.
+**Status:** ✅ Shipped.
 
 ---
 
@@ -140,20 +168,47 @@ excludeSchemas: ['sys', 'staging'],  // NOT ['sys', 'staging', '__mj']
 ### E1. Stored proc signature mismatch on batch migration
 **What:** Metadata_Sync migrations call `fn_create_*`/`fn_update_*` with parameters for columns added by earlier DDL migrations in the same batch. The PG functions don't include those parameters until CodeGen regenerates them.
 **Workflow fix:** Run migrations in two passes: `mj migrate` (DDL) → `mj codegen` → `mj migrate` (sync).
-**Automation path:** Phase C CI can automate the two-pass pattern. Alternatively, Fix 2 (convert proc calls → direct INSERT) would eliminate the dependency.
-**Status:** Documented in TESTING_GUIDE.md and DEV_ON_PG_GUIDE.md. 8 of 41 new migrations are affected.
+**Automation path:** CI workflow can automate the two-pass pattern. Alternatively, converting proc calls → direct INSERT would eliminate the dependency.
+**Status:** Documented in DEV_ON_PG_GUIDE.md. Affects ~8 migrations across the v5 series.
 
 ---
 
-## Priority ranking for pipeline automation
+## Category F: Open converter gaps (surface only on full clean-slate regeneration)
+
+These do not block forward development against the committed migration files, but they prevent a true "delete everything and regenerate" workflow. Each was discovered by snapshotting the working `migrations-pg/v5/` set, regenerating from T-SQL via `mj migrate convert`, and diffing the output.
+
+### F1. Baseline `spCreate*` / `spUpdate*` referencing views not created in the baseline
+**What:** The T-SQL baseline contains `CREATE PROCEDURE spCreateEntityBehaviorType` (and similar) whose body references `vwEntityBehaviorTypes` — but neither the table nor the view is created in the baseline. SQL Server tolerates this via deferred name resolution; PG raises `type "__mj.vwEntityBehaviorTypes" does not exist` at function-creation time, blocking the install at the first migration.
+**Required converter fix:** When converting a baseline file (filename starts with `B`), `ProcedureToFunctionRule` should restore its previous behavior of skipping sprocs whose `RETURNS SETOF` view is not also created in the same file. The current "always emit" behavior is correct for incremental migrations (the view exists in DB by then) but wrong for the baseline.
+**Status:** Open. Diagnosis captured in `PG_CLEAN_SLATE_REGEN_REPORT.md`. Workaround: keep the existing committed `migrations-pg/v5/` files (which have these sprocs already skipped from a prior conversion run).
+
+### F2. Inline T-SQL TVF/scalar function syntax not converted
+**What:** The geo-functions migration contains T-SQL inline scalar (`fn_MJ_GeoDistance`) and table-valued (`fn_MJ_GeoRecordsNear`) functions whose auto-converted output emits invalid plpgsql: `DECLARE x FLOAT = ...` (T-SQL inline-init syntax), `ATN2` instead of `ATAN2`, `RETURNS TABLE AS RETURN (...)` (not a valid PG ITVF pattern), and a single `$` delimiter instead of `$$`.
+**Required converter fix:** Add a converter rule for inline scalar/TVF functions emitting valid plpgsql (variable initialization split into `DECLARE` block + assignment, ATN2→ATAN2, proper `RETURNS TABLE` with embedded `RETURN QUERY`, `$$` delimiter).
+**Status:** Open. Workaround: hand-written PG version exists in a sibling `.pg-only.sql` migration that runs first; the auto-converted definitions are omitted in the committed file.
+
+### F3. View column-snapshot stale after `ALTER TABLE ADD COLUMN`
+**What:** After a migration adds a column to a table, downstream queries in the same migration that reference the table's view (`vw<EntityName>s`) fail because the view's `SELECT *` was snapshotted at view-creation time and doesn't include the new column. PG views materialize column lists; SQL Server views don't.
+**Required converter fix:** Either (a) rewrite downstream queries to read from the base table directly, or (b) emit `DROP VIEW`/`CREATE VIEW` for the affected views before the dependent SELECT runs. The latter is safer and matches what CodeGen does post-migration.
+**Status:** Open. Workaround: manual fix in committed migration files queries the base table.
+
+### F4. `ALTER TABLE ADD COLUMN` with inline FK placed too late in file
+**What:** When the converter sees `ALTER TABLE ... ADD COLUMN ... CONSTRAINT FK_... REFERENCES ...`, it places the entire statement in the FK/CHECK section that runs after indexes and functions. But indexes and functions emitted earlier in the same file may reference the new column.
+**Required converter fix:** When `ALTER TABLE ADD COLUMN` is also referenced by an index or function emitted in the same file, hoist the column add to the top and place the FK constraint at the end (split the combined statement).
+**Status:** Open. Workaround: manual split in committed migration files.
+
+---
+
+## Priority ranking for remaining work
 
 | Priority | Item | Effort | Impact |
 |---|---|---|---|
-| 1 | B1–B4: Add roles, helper procs, unique index to PG baseline | Low (SQL only) | Eliminates 4 manual setup steps |
+| 1 | B1, B4: Add roles + UQ_User_Email to PG baseline | Low (SQL only) | Eliminates 2 manual setup steps |
 | 2 | C1: Fix CodeGen bootstrap chicken-and-egg (vwEntityFields) | Medium (CodeGen source) | Fixes most empty-list Explorer issues |
-| 3 | A1: Fix converter data-value quote contamination | Medium (InsertRule) | Prevents auth failures on fresh install |
-| 4 | C3: Add DROP VIEW CASCADE to CodeGen PG provider | Low (1-line per view) | Prevents stale views after schema changes |
-| 5 | C5: Fix DataProvider quoteFieldNamesInToken regex | Low (source fix) | Prevents runtime query failures |
-| 6 | C2: Multi-hop JOIN support in CodeGen | High (architecture) | Enables ~20 virtual columns across ~10 entities |
+| 3 | F3: Converter — view-snapshot column staleness after ALTER TABLE | Medium (needs DROP/CREATE view emission or query rewrite) | Recurs on every column-add migration |
+| 4 | F1: Converter — baseline-aware sproc skip | Low (filename detection + restore old skip behavior) | Unblocks baseline regeneration |
+| 5 | C2: Multi-hop JOIN support in CodeGen | High (architecture) | Enables ~20 virtual columns across ~10 entities |
+| 6 | F4: Converter — column hoisting when referenced earlier in file | Medium (cross-section dependency check) | Narrow but real |
 | 7 | B5: Fix BaseViewGenerated default for PG installs | Low (data fix) | Prevents manual flag flipping |
-| 8 | E1: Automate two-pass workflow in Phase C CI | Medium (CI config) | Makes migration testing hands-off |
+| 8 | F2: Converter — inline T-SQL TVF/scalar function rule | High (new converter rule) | Narrow (only geo functions today) |
+| 9 | E1: Automate two-pass workflow in CI | Medium (CI config) | Makes migration testing hands-off |

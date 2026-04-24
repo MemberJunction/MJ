@@ -73,13 +73,17 @@ mj codegen
 ```
 
 CodeGen's PG path emits:
-- PG `CREATE OR REPLACE VIEW` statements for each entity (`vw{EntityName}s`)
-- `fn_create_*`, `fn_update_*`, `fn_delete_*` PL/pgSQL functions (equivalent to T-SQL sp{Create|Update|Delete}{Entity})
+- PG `CREATE OR REPLACE VIEW` statements for each entity (`vw{EntityName}s`) — non-destructive by default
+- `fn_create_*`, `fn_update_*`, `fn_delete_*` PL/pgSQL functions (equivalent to T-SQL sp{Create|Update|Delete}{Entity}). Runtime `PostgreSQLDataProvider` resolves these via `getCRUDFunctionName` returning `fn_create_<snake_table>`.
 - `__mj_CreatedAt`/`__mj_UpdatedAt` triggers
 - FK-column indexes
 - `GRANT` statements wrapped in `DO $$ … EXCEPTION WHEN OTHERS THEN NULL; END $$` for install tolerance
 
-The generated SQL is written to a timestamped file and applied to the database in the same run.
+The generated SQL is written to a timestamped file and applied to the database in the same run. Each entity is executed in three phases — view → CRUD functions → grants — with phase gating: a phase failure short-circuits later phases for that entity but does not affect other entities.
+
+When a view's column shape changes (added/removed/retyped column), PG's `CREATE OR REPLACE VIEW` raises `SQLSTATE 42P16`. CodeGen handles this transparently: it captures dependent views, functions, grants, and the COMMENT, drops with CASCADE, recreates the target, then restores the dependents. If any restoration fails, you get a `ViewFallbackRestoreError` with the exact phase that failed (`capture` / `drop` / `recreate` / `restore-views` / `restore-functions` / `restore-grants` / `restore-metadata`).
+
+For CI runs, set `MJ_CODEGEN_STRICT_VIEW_REGEN=true` to make any view regeneration failure a hard error. Local dev defaults to non-strict — failures are summarized but don't halt the run.
 
 ## 5. Seed metadata
 
@@ -136,9 +140,15 @@ Override the platform with `--platform sqlserver` if you want to scaffold the T-
 |---|---|---|
 | `mj migrate` can't find `PostgresProvider` | Missing workspace dep | Ensure `@memberjunction/skyway-postgres` is installed at the MJCLI package level |
 | `mj sync push` fails with `System user not found` | UserCache not populated | Verify `__mj.vwUsers` / `__mj.vwUserRoles` exist and `System` user has Developer role |
-| Migration #37/#39 sequence conflict | Known upstream T-SQL source bug | Temporary — see tracking issue; does not affect downstream PG-native migrations |
+| EntityField Sequence collision | Two migrations inserting at same Sequence for same entity | Auto-resolved by `SequenceDeduplicator` rule during `mj migrate convert` |
+| `function fn_create_<table> does not exist` at runtime | CodeGen has not been run, or the function name in PG snake_case doesn't match | Run `mj codegen` to regenerate the CRUD functions; `PostgreSQLDataProvider.getCRUDFunctionName` resolves the PG snake_case name |
+| `ViewFallbackRestoreError: phase=restore-functions` | Dependent function recreation failed during 42P16 fallback | Inspect the captured DDL in the error payload; usually indicates the dependent function references columns the regenerated view no longer has |
+| `column "X" does not exist` during CodeGen | View's column snapshot is stale relative to the underlying table | Run `mj codegen` again; the second pass regenerates the view with the new column |
 | Explorer shows stale metadata after dialect switch | Browser cache | Clear cache or incognito window; UUID case differs between platforms |
+| Pagination on Explorer shows wrong rows | Old build of `@memberjunction/generic-database-provider` with SQL Server-implicit pagination math | Update to current version; PG `LIMIT/OFFSET` semantics are now explicit |
 
 ## Validation artifacts
 
 - `scripts/validate-pg-codegen.mjs` — Provider-level PG syntax check for `PostgreSQLCodeGenProvider` (26 generation + 3 execution tests). Run against a local `mj_pg_codegen_test` DB to verify the CodeGen provider produces PG that actually parses and executes.
+- `scripts/pg-install-fresh.mjs` — Full install pipeline: drop DB → migrate → CodeGen → seed → ready for `npm start`. Use this to reproduce the end-to-end flow on demand.
+- `packages/CodeGenLib/src/__tests__/integration/` — 59+ integration tests covering CodeGen sprocs, view regeneration safety, `pg_depend`/`pg_rewrite` capture functions, the fallback orchestrator, and phased execution. Gated on `MJ_TEST_PG_URL`; run locally to audit any change to the PG CodeGen provider.
