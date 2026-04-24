@@ -26,7 +26,35 @@ graph TD
 - **OpenAI-compatible** — inherits chat, streaming, JSON mode, and parameter handling from `OpenAILLM`
 - **Any GGUF model** — run whatever you loaded into `llama-server` (Qwen3, Llama 3.x, DeepSeek-R1, Phi, Gemma, etc.)
 - **No API key required by default** — a placeholder is supplied; pass a real key if you started `llama-server --api-key <key>`
-- **Configurable endpoint** — defaults to `http://localhost:8080/v1` but accepts any host/port
+- **Configurable endpoint** — defaults to `http://localhost:8080/v1` but accepts any host/port via constructor args or env vars
+
+## Environment variables
+
+The endpoint and API key can be overridden without changing code. Precedence is **constructor argument → env var → hardcoded default**.
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `LLAMACPP_BASE_URL` | Full endpoint URL. Wins over host/port if set. | — |
+| `LLAMACPP_HOST` | Host component. Combined with port to build the URL. | `localhost` |
+| `LLAMACPP_PORT` | Port component. | `8080` |
+| `LLAMACPP_API_KEY` | API key for `llama-server --api-key` setups. | placeholder |
+
+Examples:
+
+```bash
+# Point every LlamaCppLLM instance at a different port
+export LLAMACPP_PORT=9090
+
+# Point at a box elsewhere on the LAN
+export LLAMACPP_HOST=10.0.0.5
+export LLAMACPP_PORT=8080
+
+# Full URL override (e.g. a reverse-proxied endpoint)
+export LLAMACPP_BASE_URL=https://llama.internal.example.com/v1
+
+# Authenticated llama-server
+export LLAMACPP_API_KEY=my-secret
+```
 
 ## Installation
 

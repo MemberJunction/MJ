@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
@@ -38,15 +38,30 @@ vi.mock('@memberjunction/ai-openai', () => {
 
 import { LlamaCppLLM, DEFAULT_LLAMA_CPP_URL } from '../models/llama-cpp';
 
+const readField = (instance: LlamaCppLLM, key: string): unknown =>
+  (instance as unknown as Record<string, unknown>)[key];
+
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
 /* ------------------------------------------------------------------ */
 describe('LlamaCppLLM', () => {
-  let llm: LlamaCppLLM;
+  const envKeys = ['LLAMACPP_BASE_URL', 'LLAMACPP_HOST', 'LLAMACPP_PORT', 'LLAMACPP_API_KEY'] as const;
+  const originalEnv: Record<string, string | undefined> = {};
 
   beforeEach(() => {
     vi.clearAllMocks();
-    llm = new LlamaCppLLM();
+    // Snapshot and clear the env vars so each test starts clean.
+    for (const key of envKeys) {
+      originalEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
+
+  afterEach(() => {
+    for (const key of envKeys) {
+      if (originalEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = originalEnv[key];
+    }
   });
 
   /* ---- Constants ---- */
@@ -56,51 +71,111 @@ describe('LlamaCppLLM', () => {
     });
   });
 
-  /* ---- Constructor ---- */
-  describe('constructor', () => {
-    it('should create an instance without arguments', () => {
-      expect(llm).toBeInstanceOf(LlamaCppLLM);
+  /* ---- Constructor (no env, no args) ---- */
+  describe('constructor with no args and no env', () => {
+    it('should create an instance', () => {
+      expect(new LlamaCppLLM()).toBeInstanceOf(LlamaCppLLM);
     });
 
     it('should default base URL to the local llama-server endpoint', () => {
-      expect((llm as unknown as Record<string, unknown>)['_baseUrl']).toBe(DEFAULT_LLAMA_CPP_URL);
+      expect(readField(new LlamaCppLLM(), '_baseUrl')).toBe(DEFAULT_LLAMA_CPP_URL);
     });
 
-    it('should use a placeholder API key when none is provided', () => {
-      expect((llm as unknown as Record<string, unknown>)['_apiKey']).toBe('llama-cpp-no-auth');
+    it('should use a placeholder API key', () => {
+      expect(readField(new LlamaCppLLM(), '_apiKey')).toBe('llama-cpp-no-auth');
     });
 
     it('should use a placeholder API key when an empty string is provided', () => {
-      const instance = new LlamaCppLLM('');
-      expect((instance as unknown as Record<string, unknown>)['_apiKey']).toBe('llama-cpp-no-auth');
+      expect(readField(new LlamaCppLLM(''), '_apiKey')).toBe('llama-cpp-no-auth');
     });
+  });
 
-    it('should forward a caller-supplied API key (for --api-key llama-server mode)', () => {
-      const instance = new LlamaCppLLM('secret-token');
-      expect((instance as unknown as Record<string, unknown>)['_apiKey']).toBe('secret-token');
+  /* ---- Explicit constructor arguments ---- */
+  describe('explicit constructor arguments', () => {
+    it('should forward a caller-supplied API key', () => {
+      expect(readField(new LlamaCppLLM('secret-token'), '_apiKey')).toBe('secret-token');
     });
 
     it('should accept a custom base URL', () => {
-      const instance = new LlamaCppLLM(undefined, 'http://192.168.1.10:8000/v1');
-      expect((instance as unknown as Record<string, unknown>)['_baseUrl']).toBe('http://192.168.1.10:8000/v1');
+      const inst = new LlamaCppLLM(undefined, 'http://192.168.1.10:8000/v1');
+      expect(readField(inst, '_baseUrl')).toBe('http://192.168.1.10:8000/v1');
     });
 
     it('should fall back to the default base URL when an empty string is provided', () => {
-      const instance = new LlamaCppLLM('key', '');
-      expect((instance as unknown as Record<string, unknown>)['_baseUrl']).toBe(DEFAULT_LLAMA_CPP_URL);
+      const inst = new LlamaCppLLM('key', '');
+      expect(readField(inst, '_baseUrl')).toBe(DEFAULT_LLAMA_CPP_URL);
     });
 
     it('should accept both a custom key and custom URL together', () => {
-      const instance = new LlamaCppLLM('my-key', 'http://remote-host:9090/v1');
-      expect((instance as unknown as Record<string, unknown>)['_apiKey']).toBe('my-key');
-      expect((instance as unknown as Record<string, unknown>)['_baseUrl']).toBe('http://remote-host:9090/v1');
+      const inst = new LlamaCppLLM('my-key', 'http://remote-host:9090/v1');
+      expect(readField(inst, '_apiKey')).toBe('my-key');
+      expect(readField(inst, '_baseUrl')).toBe('http://remote-host:9090/v1');
+    });
+  });
+
+  /* ---- Environment variable overrides ---- */
+  describe('env var overrides', () => {
+    it('LLAMACPP_BASE_URL should override the default when no constructor arg is given', () => {
+      process.env.LLAMACPP_BASE_URL = 'http://my-box:7000/v1';
+      expect(readField(new LlamaCppLLM(), '_baseUrl')).toBe('http://my-box:7000/v1');
+    });
+
+    it('LLAMACPP_HOST alone should produce the expected URL', () => {
+      process.env.LLAMACPP_HOST = 'inference.lan';
+      expect(readField(new LlamaCppLLM(), '_baseUrl')).toBe('http://inference.lan:8080/v1');
+    });
+
+    it('LLAMACPP_PORT alone should produce the expected URL', () => {
+      process.env.LLAMACPP_PORT = '9999';
+      expect(readField(new LlamaCppLLM(), '_baseUrl')).toBe('http://localhost:9999/v1');
+    });
+
+    it('LLAMACPP_HOST and LLAMACPP_PORT together should produce the expected URL', () => {
+      process.env.LLAMACPP_HOST = '10.0.0.5';
+      process.env.LLAMACPP_PORT = '8000';
+      expect(readField(new LlamaCppLLM(), '_baseUrl')).toBe('http://10.0.0.5:8000/v1');
+    });
+
+    it('LLAMACPP_BASE_URL should take precedence over LLAMACPP_HOST/LLAMACPP_PORT', () => {
+      process.env.LLAMACPP_BASE_URL = 'http://override:1234/v1';
+      process.env.LLAMACPP_HOST = 'ignored';
+      process.env.LLAMACPP_PORT = '9999';
+      expect(readField(new LlamaCppLLM(), '_baseUrl')).toBe('http://override:1234/v1');
+    });
+
+    it('constructor baseUrl argument should take precedence over env vars', () => {
+      process.env.LLAMACPP_BASE_URL = 'http://env-url:7000/v1';
+      const inst = new LlamaCppLLM(undefined, 'http://explicit:5555/v1');
+      expect(readField(inst, '_baseUrl')).toBe('http://explicit:5555/v1');
+    });
+
+    it('empty env vars should be treated as unset and fall back to defaults', () => {
+      process.env.LLAMACPP_BASE_URL = '';
+      process.env.LLAMACPP_HOST = '';
+      process.env.LLAMACPP_PORT = '';
+      expect(readField(new LlamaCppLLM(), '_baseUrl')).toBe(DEFAULT_LLAMA_CPP_URL);
+    });
+
+    it('LLAMACPP_API_KEY should supply the key when no constructor arg is given', () => {
+      process.env.LLAMACPP_API_KEY = 'env-secret';
+      expect(readField(new LlamaCppLLM(), '_apiKey')).toBe('env-secret');
+    });
+
+    it('constructor apiKey argument should take precedence over LLAMACPP_API_KEY', () => {
+      process.env.LLAMACPP_API_KEY = 'env-secret';
+      expect(readField(new LlamaCppLLM('explicit-key'), '_apiKey')).toBe('explicit-key');
+    });
+
+    it('empty LLAMACPP_API_KEY should fall back to the placeholder', () => {
+      process.env.LLAMACPP_API_KEY = '';
+      expect(readField(new LlamaCppLLM(), '_apiKey')).toBe('llama-cpp-no-auth');
     });
   });
 
   /* ---- Inheritance ---- */
   describe('inheritance', () => {
     it('should inherit SupportsStreaming from OpenAILLM', () => {
-      expect(llm.SupportsStreaming).toBe(true);
+      expect(new LlamaCppLLM().SupportsStreaming).toBe(true);
     });
   });
 });
