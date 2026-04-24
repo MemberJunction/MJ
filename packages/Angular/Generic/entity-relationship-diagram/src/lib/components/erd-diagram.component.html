@@ -156,12 +156,14 @@
               x="4" y="0"
               [attr.width]="node.width - 4" height="36"
               rx="6" />
-            <text class="erd-node-name" x="14" y="22">{{ node.name }}</text>
-            @if (node.customData && $any(node.customData).rows != null) {
-              <text class="erd-node-rows" [attr.x]="node.width - 12" y="22" text-anchor="end">
-                {{ formatCount($any(node.customData).rows) }}
-              </text>
-            }
+            <foreignObject x="14" y="8" [attr.width]="node.width - 28" height="22">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="erd-node-header-content">
+                <span class="erd-node-name" [title]="node.name">{{ node.name }}</span>
+                @if (node.customData && $any(node.customData).rows != null) {
+                  <span class="erd-node-rows">{{ formatCount($any(node.customData).rows) }}</span>
+                }
+              </div>
+            </foreignObject>
 
             <!-- Separator -->
             <line class="erd-node-separator"
@@ -169,38 +171,36 @@
 
             <!-- Fields -->
             @for (field of node.visibleFields; track trackByField($index, field); let i = $index) {
-              <g class="erd-field" [attr.transform]="'translate(0 ' + (36 + i * 22) + ')'">
-                @if (field.isPrimaryKey) {
-                  <rect class="erd-field-key-bg erd-field-key-pk" x="8" y="4" width="22" height="14" rx="3" />
-                  <text class="erd-field-key erd-field-key-pk" x="19" y="14" text-anchor="middle">PK</text>
-                } @else if (field.relatedNodeId) {
-                  <rect class="erd-field-key-bg erd-field-key-fk" x="8" y="4" width="22" height="14" rx="3" />
-                  <text class="erd-field-key erd-field-key-fk" x="19" y="14" text-anchor="middle">FK</text>
-                }
-                <text class="erd-field-name"
-                  [attr.x]="(field.isPrimaryKey || field.relatedNodeId) ? 36 : 14"
-                  y="15">
-                  {{ field.name }}
-                </text>
-                @if (field.type) {
-                  <text class="erd-field-type" [attr.x]="node.width - 12" y="15" text-anchor="end">
-                    {{ field.type }}
-                  </text>
-                }
-              </g>
+              <foreignObject x="0" [attr.y]="36 + i * 22" [attr.width]="node.width" height="22">
+                <div xmlns="http://www.w3.org/1999/xhtml"
+                     class="erd-field-row"
+                     [class.erd-field-pk]="field.isPrimaryKey"
+                     [class.erd-field-fk]="!field.isPrimaryKey && field.relatedNodeId">
+                  @if (field.isPrimaryKey) {
+                    <span class="erd-field-chip erd-field-chip-pk">PK</span>
+                  } @else if (field.relatedNodeId) {
+                    <span class="erd-field-chip erd-field-chip-fk">FK</span>
+                  }
+                  <span class="erd-field-name" [title]="field.name">{{ field.name }}</span>
+                  @if (field.type) {
+                    <span class="erd-field-type" [title]="field.type">{{ field.type }}</span>
+                  }
+                </div>
+              </foreignObject>
             }
 
             <!-- +N more toggle -->
             @if (node.hasMore) {
-              <g class="erd-field-more"
-                [attr.transform]="'translate(0 ' + (36 + node.visibleFields.length * 22 + 6) + ')'"
+              <foreignObject
+                x="4"
+                [attr.y]="36 + node.visibleFields.length * 22 + 6"
+                [attr.width]="node.width - 8"
+                height="14"
                 (click)="onToggleExpand(node.id, $event)">
-                <rect class="erd-field-more-bg" x="4" y="0" [attr.width]="node.width - 8" height="14" rx="3" />
-                <text class="erd-field-more-text"
-                  [attr.x]="node.width / 2" y="10" text-anchor="middle">
+                <div xmlns="http://www.w3.org/1999/xhtml" class="erd-field-more">
                   + {{ node.fields.length - node.visibleFields.length }} more fields
-                </text>
-              </g>
+                </div>
+              </foreignObject>
             }
           </g>
         }

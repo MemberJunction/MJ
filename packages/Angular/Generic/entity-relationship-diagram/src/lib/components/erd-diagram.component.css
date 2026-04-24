@@ -304,78 +304,114 @@
   fill: var(--mj-bg-surface-card);
 }
 
-.erd-node-name {
-  font-family: var(--erd-mono);
-  font-size: 13px;
-  font-weight: 600;
-  fill: var(--mj-text-primary);
-}
-
-.erd-node-rows {
-  font-family: var(--erd-mono);
-  font-size: 10px;
-  fill: var(--mj-text-muted);
-}
-
 .erd-node-separator {
   stroke: var(--mj-border-default);
   stroke-width: 1;
 }
 
-/* Field rows */
-.erd-field-key-bg.erd-field-key-pk {
-  fill: color-mix(in srgb, var(--mj-status-warning) 20%, var(--mj-bg-surface));
+/* Header content (foreignObject) — entity name + row count on one line */
+.erd-node-header-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--erd-mono);
+  line-height: 22px;
+  height: 22px;
+  color: var(--mj-text-primary);
 }
 
-.erd-field-key.erd-field-key-pk {
-  fill: var(--mj-status-warning-text, var(--mj-status-warning));
+.erd-node-name {
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.erd-node-rows {
+  font-size: 10px;
+  color: var(--mj-text-muted);
+  flex-shrink: 0;
+}
+
+/* Field row (foreignObject) — chip + name + type, all on one line */
+.erd-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  padding: 0 12px 0 8px;
   font-family: var(--erd-mono);
+  line-height: 22px;
+  box-sizing: border-box;
+}
+
+.erd-field-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 14px;
+  border-radius: 3px;
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.05em;
+  line-height: 1;
 }
 
-.erd-field-key-bg.erd-field-key-fk {
-  fill: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
+.erd-field-chip-pk {
+  background: color-mix(in srgb, var(--mj-status-warning) 20%, var(--mj-bg-surface));
+  color: var(--mj-status-warning-text, var(--mj-status-warning));
 }
 
-.erd-field-key.erd-field-key-fk {
-  fill: var(--mj-brand-primary);
-  font-family: var(--erd-mono);
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+.erd-field-chip-fk {
+  background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 .erd-field-name {
-  font-family: var(--erd-mono);
+  flex: 1;
+  min-width: 0;
   font-size: 11px;
-  fill: var(--mj-text-primary);
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .erd-field-type {
-  font-family: var(--erd-mono);
+  flex-shrink: 0;
   font-size: 10px;
-  fill: var(--mj-text-muted);
+  color: var(--mj-text-muted);
+  /* Cap very long type strings so the field name still has room */
+  max-width: 45%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* +N more toggle (foreignObject) */
 .erd-field-more {
-  cursor: pointer;
-}
-
-.erd-field-more-bg {
-  fill: var(--mj-bg-surface-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--mj-bg-surface-card);
   opacity: 0.7;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
   transition: opacity .1s;
 }
 
-.erd-field-more:hover .erd-field-more-bg { opacity: 1; }
-
-.erd-field-more-text {
-  font-size: 9px;
-  font-weight: 500;
-  fill: var(--mj-text-secondary);
-}
+.erd-field-more:hover { opacity: 1; }
 
 /* ═══ FOCUS CARD ══════════════════════════════════════════════════════ */
 
