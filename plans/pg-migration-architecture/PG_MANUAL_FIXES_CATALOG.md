@@ -178,24 +178,72 @@ excludeSchemas: ['sys', 'staging'],  // NOT ['sys', 'staging', '__mj']
 These do not block forward development against the committed migration files, but they prevent a true "delete everything and regenerate" workflow. Each was discovered by snapshotting the working `migrations-pg/v5/` set, regenerating from T-SQL via `mj migrate convert`, and diffing the output.
 
 ### F1. Baseline `spCreate*` / `spUpdate*` referencing views not created in the baseline
+**Affected file:** `migrations-pg/v5/B202602151200__v5.0__Baseline.pg.sql`
 **What:** The T-SQL baseline contains `CREATE PROCEDURE spCreateEntityBehaviorType` (and similar) whose body references `vwEntityBehaviorTypes` — but neither the table nor the view is created in the baseline. SQL Server tolerates this via deferred name resolution; PG raises `type "__mj.vwEntityBehaviorTypes" does not exist` at function-creation time, blocking the install at the first migration.
 **Required converter fix:** When converting a baseline file (filename starts with `B`), `ProcedureToFunctionRule` should restore its previous behavior of skipping sprocs whose `RETURNS SETOF` view is not also created in the same file. The current "always emit" behavior is correct for incremental migrations (the view exists in DB by then) but wrong for the baseline.
-**Status:** Open. Diagnosis captured in `PG_CLEAN_SLATE_REGEN_REPORT.md`. Workaround: keep the existing committed `migrations-pg/v5/` files (which have these sprocs already skipped from a prior conversion run).
+**Status:** Open. Diagnosis captured in `PG_CLEAN_SLATE_REGEN_REPORT.md`. Workaround: keep the existing committed `migrations-pg/v5/` files (which have these sprocs already skipped from a prior conversion run with the comment `-- SKIPPED: References view ... not created in this file`).
 
 ### F2. Inline T-SQL TVF/scalar function syntax not converted
+**Affected file:** `migrations-pg/v5/V202604090003__v5.25.x__Geo_Features_Tables_And_Functions.pg.sql`
 **What:** The geo-functions migration contains T-SQL inline scalar (`fn_MJ_GeoDistance`) and table-valued (`fn_MJ_GeoRecordsNear`) functions whose auto-converted output emits invalid plpgsql: `DECLARE x FLOAT = ...` (T-SQL inline-init syntax), `ATN2` instead of `ATAN2`, `RETURNS TABLE AS RETURN (...)` (not a valid PG ITVF pattern), and a single `$` delimiter instead of `$$`.
 **Required converter fix:** Add a converter rule for inline scalar/TVF functions emitting valid plpgsql (variable initialization split into `DECLARE` block + assignment, ATN2→ATAN2, proper `RETURNS TABLE` with embedded `RETURN QUERY`, `$$` delimiter).
-**Status:** Open. Workaround: hand-written PG version exists in a sibling `.pg-only.sql` migration that runs first; the auto-converted definitions are omitted in the committed file.
+**Status:** Open. Workaround: hand-written PG version lives in `migrations-pg/v5/V202604090002__v5.25.x__Geo_Functions.pg.sql` (runs first because of earlier timestamp); the auto-converted definitions are omitted from V202604090003 with an explanatory comment.
 
 ### F3. View column-snapshot stale after `ALTER TABLE ADD COLUMN`
-**What:** After a migration adds a column to a table, downstream queries in the same migration that reference the table's view (`vw<EntityName>s`) fail because the view's `SELECT *` was snapshotted at view-creation time and doesn't include the new column. PG views materialize column lists; SQL Server views don't.
+**Affected file:** `migrations-pg/v5/V202604131300__v5.26.x__Add_AllowCaching_And_DetectExternalChanges_To_Entity.pg.sql`
+**What:** After a migration adds a column to a table, downstream queries in the same migration that reference the table's view (`vw<EntityName>s`) fail because the view's `SELECT *` was snapshotted at view-creation time and doesn't include the new column. PG views materialize column lists; SQL Server views don't. In this case `ALTER TABLE Entity ADD COLUMN DetectExternalChanges` is followed by a SELECT against `vwEntities` that references the new column.
 **Required converter fix:** Either (a) rewrite downstream queries to read from the base table directly, or (b) emit `DROP VIEW`/`CREATE VIEW` for the affected views before the dependent SELECT runs. The latter is safer and matches what CodeGen does post-migration.
-**Status:** Open. Workaround: manual fix in committed migration files queries the base table.
+**Status:** Open. Workaround: hand edit queries `__mj.Entity` and `__mj.EntityField` directly instead of `vwEntities`/`vwEntityFields`.
 
 ### F4. `ALTER TABLE ADD COLUMN` with inline FK placed too late in file
-**What:** When the converter sees `ALTER TABLE ... ADD COLUMN ... CONSTRAINT FK_... REFERENCES ...`, it places the entire statement in the FK/CHECK section that runs after indexes and functions. But indexes and functions emitted earlier in the same file may reference the new column.
+**Affected file:** `migrations-pg/v5/V202604191500__v5.28.x__Add_Restore_Lineage_To_RecordChange.pg.sql`
+**What:** When the converter sees `ALTER TABLE ... ADD COLUMN ... CONSTRAINT FK_... REFERENCES ...`, it places the entire statement in the FK/CHECK section that runs after indexes and functions. But indexes and functions emitted earlier in the same file may reference the new column. In this case `RestoredFromID` is referenced by an index and a function that the converter emits before the column add.
 **Required converter fix:** When `ALTER TABLE ADD COLUMN` is also referenced by an index or function emitted in the same file, hoist the column add to the top and place the FK constraint at the end (split the combined statement).
-**Status:** Open. Workaround: manual split in committed migration files.
+**Status:** Open. Workaround: hand edit splits the column add (top of file) from the FK constraint (end of file).
+
+---
+
+## Category G: Hand-written PG-only files (no T-SQL source)
+
+These files exist only in PG form — there is no T-SQL counterpart to convert. They were authored directly because the underlying need is either PG-specific or relies on T-SQL constructs the converter has no rule for. Filename suffix `.pg-only.sql` (or `.pg.sql` where a PG-only function lives alongside a converted file).
+
+### G1. PG-only platform-variant columns
+**File:** `migrations-pg/v5/V202602151201__v5.0.x__Add_PlatformVariants_Columns.pg-only.sql`
+**What:** Adds columns required by the PG migration architecture itself.
+**Why hand-written:** Feature exists only in the PG path; nothing to convert.
+
+### G2. PG view-recovery patches
+**File:** `migrations-pg/v5/V202603011600__v5.5.x__Create_Missing_Views.pg-only.sql`
+**What:** Recreates views that were lost during earlier `DROP VIEW ... CASCADE` runs.
+**Why hand-written:** Predates the 42P16 fallback orchestrator (Category C3). Now that CodeGen captures and restores dependents safely, future column-shape changes should not produce this kind of damage. The file is kept for any historical install that experienced it.
+
+### G3. PG name-quoting cleanup
+**File:** `migrations-pg/v5/V202603111159__v5.11.x__Fix_EntityField_Quoted_Names.pg-only.sql`
+**What:** Cleans up `EntityField` rows whose names contained literal quote characters from an earlier converter bug (Category A1).
+**Why hand-written:** Data fix specific to installations that ran the older converter; no T-SQL equivalent because SQL Server never had the same data corruption path.
+
+### G4. Hand-written PG geo functions
+**File:** `migrations-pg/v5/V202604090002__v5.25.x__Geo_Functions.pg.sql`
+**What:** PG implementation of `fn_MJ_GeoDistance` and `fn_MJ_GeoRecordsNear`.
+**Why hand-written:** Pairs with F2 — the converter cannot translate the T-SQL inline TVF/scalar definitions in V202604090003. This file runs first (earlier timestamp) and provides the working PG versions.
+
+### G5. CodeGen sproc port
+**File:** `migrations-pg/v5/V202604220000__v5.28.x__Port_Missing_CodeGen_Sprocs.pg-only.sql`
+**What:** Hand-port of 7 baseline CodeGen sprocs: `spGetPrimaryKeyForTable`, `spSetDefaultColumnWidthWhereNeeded`, `spUpdateEntityFieldRelatedEntityNameFieldMap` (also fixes a pre-existing arity bug in the T-SQL version), `spUpdateExistingEntitiesFromSchema`, `spUpdateExistingEntityFieldsFromSchema`, `spUpdateSchemaInfoFromDatabase`, `spDeleteUnneededEntityFields`.
+**Why hand-written:** The T-SQL versions use SQL Server features the converter has no rule for: `sys.*` catalog joins, `STRING_SPLIT`, `IIF`, table variables, tempdb temp tables, `SELECT ... INTO`. Each had to be reimplemented in plpgsql by a human. Covered by 15 integration tests in `packages/CodeGenLib/src/__tests__/integration/pg-codegen-sprocs.integration.test.ts`.
+
+---
+
+## Summary: human-touch surface
+
+Out of the 90+ files in `migrations-pg/v5/`, only **9 files** require human attention:
+
+| Kind | Count | Files |
+|---|---|---|
+| Auto-converted with patches (Category F) | 4 | B202602151200 (baseline), V202604090003 (geo), V202604131300 (allow-caching), V202604191500 (restore-lineage) |
+| PG-only (Category G) | 5 | V202602151201, V202603011600, V202603111159, V202604090002, V202604220000 |
+
+The other ~81 files are pure converter output (with the cosmetic 22-line header) and require no manual work.
 
 ---
 
