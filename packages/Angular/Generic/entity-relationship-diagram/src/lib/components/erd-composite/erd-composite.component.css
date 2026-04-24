@@ -33,17 +33,6 @@
   overflow: hidden;
 }
 
-/* Floating "Filters" tab shown when the filter panel is collapsed — the
-   close button on the panel has no counterpart otherwise, so the user
-   had no way to bring the panel back. */
-.filter-panel-reopen {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 5;
-  box-shadow: var(--mj-shadow-sm);
-}
-
 /* Floating Details Panel - MD3 Styled */
 .floating-details-panel {
   position: absolute;
