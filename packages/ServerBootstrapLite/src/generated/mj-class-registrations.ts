@@ -360,9 +360,10 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-actions (112 classes)
+// @memberjunction/core-actions (113 classes)
 import {
     APIRateLimiterAction,
+    ActionSmithAgent,
     AddDocumentContentAction,
     AddRecordsToListAction,
     AggregateDataAction,
@@ -1086,6 +1087,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     xAILLM,
     ZhipuLLM,
     APIRateLimiterAction,
+    ActionSmithAgent,
     AddDocumentContentAction,
     AddRecordsToListAction,
     AggregateDataAction,
@@ -1565,7 +1567,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 667;
+export const CLASS_REGISTRATIONS_COUNT = 668;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -421,9 +421,10 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
-// @memberjunction/core-actions (112 classes)
+// @memberjunction/core-actions (113 classes)
 import {
     APIRateLimiterAction,
+    ActionSmithAgent,
     AddDocumentContentAction,
     AddRecordsToListAction,
     AggregateDataAction,
@@ -1220,6 +1221,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AutotagRSSFeed,
     AutotagWebsite,
     APIRateLimiterAction,
+    ActionSmithAgent,
     AddDocumentContentAction,
     AddRecordsToListAction,
     AggregateDataAction,
@@ -1723,7 +1725,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 712;
+export const CLASS_REGISTRATIONS_COUNT = 713;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

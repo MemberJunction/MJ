@@ -64,9 +64,17 @@ export class CreateRuntimeActionAction extends BaseAction {
             }
 
             const md = new Metadata();
-            const action = await md.GetEntityObject<MJActionEntity>('Actions', params.ContextUser);
+            // Entity is registered as 'MJ: Actions' (see entity_subclasses.ts —
+            // newer MJ core entities use the 'MJ: ' prefix). Passing 'Actions'
+            // silently returned null, so every Create Runtime Action call
+            // failed with "Could not instantiate Actions entity" — this
+            // permanently blocked ActionSmith from persisting any action.
+            const action = await md.GetEntityObject<MJActionEntity>('MJ: Actions', params.ContextUser);
             if (!action) {
-                return fail('ENTITY_LOAD_FAILED', 'Could not instantiate Actions entity.');
+                return fail(
+                    'ENTITY_LOAD_FAILED',
+                    'Could not instantiate MJ: Actions entity. Check that the entity exists and the context user has permission.'
+                );
             }
             action.NewRecord();
             action.Name = name;

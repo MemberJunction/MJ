@@ -51,6 +51,17 @@ export class TestRuntimeActionAction extends BaseAction {
                     inlineCode,
                     inlineConfig as Record<string, unknown>
                 );
+                if (!actionRecord) {
+                    // Hit only when `GetEntityObject('MJ: Actions')` returns
+                    // null — entity name mismatch or permission issue — so
+                    // surface it as ACTION_NOT_FOUND instead of letting a null
+                    // MJActionEntity slip into ActionEngine.RunAction and blow
+                    // up on `params.Action.MaxExecutionTimeMS`.
+                    return fail(
+                        'ACTION_NOT_FOUND',
+                        'Failed to construct ephemeral MJ: Actions entity for the supplied Code + Configuration.'
+                    );
+                }
             } else {
                 return fail(
                     'MISSING_INPUTS',
@@ -125,7 +136,10 @@ export class TestRuntimeActionAction extends BaseAction {
         config: Record<string, unknown>
     ): Promise<MJActionEntity | null> {
         const md = new Metadata();
-        const entity = await md.GetEntityObject<MJActionEntity>('Actions', params.ContextUser);
+        // Entity is registered as 'MJ: Actions' (see entity_subclasses.ts —
+        // all newer MJ core entities use the 'MJ: ' prefix). Passing 'Actions'
+        // silently returned null, which then crashed ActionEngine downstream.
+        const entity = await md.GetEntityObject<MJActionEntity>('MJ: Actions', params.ContextUser);
         if (!entity) return null;
         entity.NewRecord();
         entity.Name = 'Runtime Action Test (ephemeral)';
@@ -173,9 +187,15 @@ export class TestRuntimeActionAction extends BaseAction {
 
         // Pass condition:
         //   - action ran with Success=true
-        //   - AND (if expectedOutput provided) the outputs deep-equal it
+        //   - AND (if expectedOutput provided) the actual output matches the
+        //     expected shape as a SUBSET — every key declared in expectedOutput
+        //     must be present in the actual output with an equal value, but
+        //     extra keys in the actual output are allowed. This lets callers
+        //     assert on the fields they care about (result codes, known
+        //     values) without having to enumerate every dynamic field
+        //     (counts, IDs, timestamps) in their test declaration.
         const expectedPasses = tc.expectedOutput
-            ? deepEqual(outputs, tc.expectedOutput)
+            ? matchesExpected(outputs, tc.expectedOutput)
             : true;
         const passed = result.Success && expectedPasses;
 
@@ -256,28 +276,60 @@ function fail(resultCode: string, message: string): ActionResultSimple {
  * plain objects, arrays, and primitives. Not intended for class instances
  * (which shouldn't cross the sandbox boundary anyway).
  */
-function deepEqual(a: unknown, b: unknown): boolean {
-    if (a === b) return true;
-    if (a == null || b == null) return false;
-    if (typeof a !== typeof b) return false;
-    if (typeof a !== 'object') return a === b;
-    if (Array.isArray(a) !== Array.isArray(b)) return false;
-    if (Array.isArray(a) && Array.isArray(b)) {
-        if (a.length !== b.length) return false;
-        for (let i = 0; i < a.length; i++) {
-            if (!deepEqual(a[i], b[i])) return false;
+/**
+ * Subset-match semantics for test-case assertions. The `actual` output from
+ * the Runtime action must CONTAIN every key declared in `expected` with an
+ * equal value — extra keys in `actual` are permitted and ignored. Arrays
+ * still require element-for-element match (same length, matching items in
+ * order) so callers can meaningfully assert "returns N items" or "third item
+ * is X".
+ *
+ * This is the semantics used by every mature testing framework — Jest's
+ * `expect.objectContaining`, Chai's `containSubset`, etc. Strict exact-equal
+ * was the previous behavior and made assertions impractical for actions
+ * that return dynamic fields (counts, IDs, timestamps, live view rows):
+ * every such field would have to be enumerated in `expectedOutput`, and if
+ * you couldn't predict its value, you had to drop `expectedOutput` entirely
+ * and fall back to "didn't throw" which is not a test.
+ *
+ * Null/undefined handling:
+ *   - `expected: null` matches only `actual === null`
+ *   - `expected: undefined` is treated as "don't care" — passes regardless
+ *     (so callers can use `{ foo: undefined }` to skip a field if they want)
+ */
+function matchesExpected(actual: unknown, expected: unknown): boolean {
+    // Trivial equality fast-path.
+    if (expected === actual) return true;
+
+    // undefined in expected means "don't care" — always pass.
+    if (expected === undefined) return true;
+
+    // null in expected means "must be exactly null".
+    if (expected === null) return actual === null;
+
+    // Primitive expected value — must strict-equal actual.
+    if (typeof expected !== 'object') return expected === actual;
+
+    // If actual is null/undefined but expected is an object, fail.
+    if (actual == null || typeof actual !== 'object') return false;
+
+    // Arrays: element-wise match, same length.
+    if (Array.isArray(expected)) {
+        if (!Array.isArray(actual)) return false;
+        if (expected.length !== actual.length) return false;
+        for (let i = 0; i < expected.length; i++) {
+            if (!matchesExpected(actual[i], expected[i])) return false;
         }
         return true;
     }
-    const aKeys = Object.keys(a as Record<string, unknown>).sort();
-    const bKeys = Object.keys(b as Record<string, unknown>).sort();
-    if (aKeys.length !== bKeys.length) return false;
-    for (let i = 0; i < aKeys.length; i++) {
-        if (aKeys[i] !== bKeys[i]) return false;
-        if (!deepEqual(
-            (a as Record<string, unknown>)[aKeys[i]],
-            (b as Record<string, unknown>)[bKeys[i]]
-        )) return false;
+    if (Array.isArray(actual)) return false;
+
+    // Plain object: every key in expected must match in actual. Extras in
+    // actual are OK — that's the subset semantic.
+    const expObj = expected as Record<string, unknown>;
+    const actObj = actual as Record<string, unknown>;
+    for (const key of Object.keys(expObj)) {
+        if (!matchesExpected(actObj[key], expObj[key])) return false;
     }
     return true;
 }
