@@ -63,6 +63,24 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      * Generates a PostgreSQL `CREATE OR REPLACE VIEW` statement for an entity's base view.
      * Includes all base table columns, parent/related field joins, and root field lateral
      * joins. Applies a soft-delete `WHERE` filter when the entity uses soft deletes.
+     *
+     * **Non-destructive strategy.** Historically this method emitted
+     * `DROP VIEW IF EXISTS ... CASCADE;` before the CREATE, which let it handle every
+     * column-signature change — but also silently destroyed any dependent view, function,
+     * trigger, or GRANT on the view. When a later statement (or subsequent entity in the
+     * same run) failed, half the database's objects could be gone with no error surfaced.
+     *
+     * We now emit just `CREATE OR REPLACE VIEW`, which PostgreSQL accepts when the new
+     * column list is a prefix of the existing one plus optional trailing additions. Any
+     * incompatible change (rename, reorder, type change, removed column) fails with
+     * SQLSTATE `42P16 invalid_table_definition`. That error is intentionally allowed to
+     * propagate up through `executeSQLFileViaShell` → the per-entity batch loop → and is
+     * surfaced as a real regeneration failure. A follow-up pass will add a capture-drop-
+     * restore fallback for 42P16 that preserves dependents via `pg_depend` and
+     * `pg_get_viewdef` / `pg_get_functiondef`. Until that lands, 42P16 on PG is loud and
+     * actionable instead of silent and destructive.
+     *
+     * Permissions are handled separately by sql_codegen.ts via generateViewPermissions().
      */
     generateBaseView(context: BaseViewGenerationContext): string {
         const { entity } = context;
@@ -74,11 +92,6 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         const fromParts = this.buildBaseViewFromParts(context, entity, alias);
         const quotedView = pgDialect.QuoteSchema(entity.SchemaName, viewName);
 
-        // PostgreSQL's CREATE OR REPLACE VIEW cannot change column order, remove columns,
-        // or add columns in non-trailing positions. DROP VIEW CASCADE first to allow full
-        // regeneration. CASCADE drops dependent functions (fn_create_*, fn_update_*, fn_delete_*)
-        // which CodeGen regenerates in the same run.
-        // Permissions are handled separately by sql_codegen.ts via generateViewPermissions()
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -86,7 +99,6 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 -----               BASE TABLE:  ${entity.BaseTable}
 -----               PRIMARY KEY: ${entity.PrimaryKeys.map((pk: EntityFieldInfo) => pk.Name).join(', ')}
 ------------------------------------------------------------
-DROP VIEW IF EXISTS ${quotedView} CASCADE;
 CREATE OR REPLACE VIEW ${quotedView}
 AS
 SELECT

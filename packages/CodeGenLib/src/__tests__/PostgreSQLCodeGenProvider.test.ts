@@ -192,6 +192,28 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('r."CategoryName"');
             expect(sql).toContain('LEFT OUTER JOIN');
         });
+
+        it('should NOT emit DROP VIEW (non-destructive strategy)', () => {
+            // Regression guard — base view generation must never silently DROP
+            // existing views because CASCADE wipes dependent views/functions/grants
+            // and the 42P16 recovery path hasn't landed yet. If someone
+            // accidentally reintroduces the DROP, this test fails and forces a
+            // review before dependent-object loss can ship again.
+            const entity = createMockEntity();
+            const context: BaseViewGenerationContext = {
+                entity,
+                relatedFieldsSelect: '',
+                relatedFieldsJoins: '',
+                parentFieldsSelect: '',
+                parentJoins: '',
+                rootFieldsSelect: '',
+                rootJoins: '',
+            };
+
+            const sql = provider.generateBaseView(context);
+            expect(sql).not.toMatch(/\bDROP\s+VIEW\b/i);
+            expect(sql).not.toMatch(/\bCASCADE\b/i);
+        });
     });
 
     describe('generateCRUDCreate', () => {
