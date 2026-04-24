@@ -6,6 +6,7 @@ import {
     BaseViewGenerationContext,
     CascadeDeleteContext,
     FullTextSearchResult,
+    PhasedExecutionResult,
 } from '../../codeGenDatabaseProvider';
 import { configInfo } from '../../../Config/config';
 import { logError, logWarning } from '../../../Misc/status_logging';
@@ -1207,6 +1208,105 @@ ORDER BY ordinal_position`;
                 createOrReplaceSQL: viewSQL,
                 willRegenerate,
             });
+        } finally {
+            try { await client.end(); } catch { /* best-effort cleanup */ }
+        }
+    }
+
+    /**
+     * Phased per-entity execution for PG. Runs view → CRUD functions → view
+     * permissions against the target DB, guaranteeing phase 2 is skipped if
+     * phase 1 failed (so we never leave `fn_create_*` functions pointing at
+     * a missing or stale view's rowtype).
+     *
+     * Phase 1 routes through `executeWithFallback` so a 42P16 triggers the
+     * capture/drop/recreate/restore flow rather than blowing up. Phase 2 runs
+     * each CRUD function's CREATE individually — we do NOT concatenate them
+     * because node-pg's simple query protocol would then abort the whole
+     * batch on the first failure; running them separately gives a per-routine
+     * error signal. Phase 3 applies view-level GRANTs.
+     */
+    override async executeEntityPhased(opts: {
+        entity: EntityInfo;
+        viewSQL: string;
+        crudCreateSQL: string;
+        crudUpdateSQL: string;
+        crudDeleteSQL: string;
+        viewPermSQL: string;
+        willRegenerate?: Set<string>;
+    }): Promise<PhasedExecutionResult> {
+        const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
+        const pgPort = Number(process.env.PG_PORT ?? configInfo.dbPort ?? 5432);
+        const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
+        const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
+        const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
+
+        if (!pgUser || !pgPassword || !pgDatabase) {
+            throw new Error(
+                'PostgreSQL user, password, and database must be provided in the configuration or environment variables'
+            );
+        }
+
+        const pgModule = await import('pg');
+        const client = new pgModule.default.Client({
+            host: pgHost,
+            port: pgPort,
+            user: pgUser,
+            password: pgPassword,
+            database: pgDatabase,
+        });
+
+        await client.connect();
+        try {
+            // ── Phase 1: base view (fallback-aware for 42P16) ────────────
+            if (opts.viewSQL && opts.viewSQL.trim()) {
+                try {
+                    await executeWithFallback({
+                        client,
+                        schema: opts.entity.SchemaName,
+                        viewName: opts.entity.BaseView,
+                        createOrReplaceSQL: opts.viewSQL,
+                        willRegenerate: opts.willRegenerate,
+                    });
+                } catch (e) {
+                    return {
+                        success: false,
+                        phase: 'view',
+                        error: e instanceof Error ? e : new Error(String(e)),
+                    };
+                }
+            }
+
+            // ── Phase 2: CRUD functions (skipped if phase 1 failed) ──────
+            // Run each CREATE FUNCTION separately so per-function errors
+            // don't abort the others via simple-query-protocol semantics.
+            for (const crudSQL of [opts.crudCreateSQL, opts.crudUpdateSQL, opts.crudDeleteSQL]) {
+                if (!crudSQL || !crudSQL.trim()) continue;
+                try {
+                    await client.query(crudSQL);
+                } catch (e) {
+                    return {
+                        success: false,
+                        phase: 'functions',
+                        error: e instanceof Error ? e : new Error(String(e)),
+                    };
+                }
+            }
+
+            // ── Phase 3: view permissions ────────────────────────────────
+            if (opts.viewPermSQL && opts.viewPermSQL.trim()) {
+                try {
+                    await client.query(opts.viewPermSQL);
+                } catch (e) {
+                    return {
+                        success: false,
+                        phase: 'permissions',
+                        error: e instanceof Error ? e : new Error(String(e)),
+                    };
+                }
+            }
+
+            return { success: true, phase: null };
         } finally {
             try { await client.end(); } catch { /* best-effort cleanup */ }
         }

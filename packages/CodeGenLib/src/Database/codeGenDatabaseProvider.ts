@@ -688,4 +688,50 @@ export abstract class CodeGenDatabaseProvider {
         viewSQL: string,
         willRegenerate?: Set<string>
     ): Promise<void>;
+
+    /**
+     * Optional — dialect-specific phased execution of a single entity's full
+     * CodeGen SQL package (view, CRUD functions, permissions) for the main
+     * per-entity run path.
+     *
+     * Default path concatenates all the SQL and hands it to the shell executor,
+     * which runs it as a single multi-statement query. When any statement
+     * fails, pg's simple-query protocol aborts the rest of the batch — so a
+     * view that fails 42P16 silently blocks the CREATE FUNCTIONs that follow
+     * for the same entity.
+     *
+     * Providers that implement this method run the pieces in separate phases
+     * so a failure in phase 1 prevents phase 2 from producing functions that
+     * reference a missing or stale view. PG's implementation additionally
+     * routes the view phase through the 42P16 capture/restore fallback.
+     *
+     * Phasing contract:
+     *   Phase 1 = view DDL (viewSQL) — may invoke provider-specific recovery.
+     *   Phase 2 = CRUD function DDL — ONLY runs if phase 1 succeeded.
+     *   Phase 3 = view permissions (viewPermSQL) — runs only if phase 2 succeeded.
+     * The `success`/`phase` pair in the result identifies exactly where things
+     * fell over so the caller doesn't have to bisect.
+     */
+    executeEntityPhased?(opts: {
+        entity: EntityInfo;
+        viewSQL: string;
+        crudCreateSQL: string;
+        crudUpdateSQL: string;
+        crudDeleteSQL: string;
+        viewPermSQL: string;
+        willRegenerate?: Set<string>;
+    }): Promise<PhasedExecutionResult>;
+}
+
+/**
+ * Result of a phased per-entity SQL execution. Reports which phase (if any)
+ * failed so the caller can aggregate a per-entity diagnostic without bisecting.
+ */
+export interface PhasedExecutionResult {
+    /** True only when every requested phase succeeded. */
+    success: boolean;
+    /** Which phase failed. Null when `success` is true. */
+    phase: 'view' | 'functions' | 'permissions' | null;
+    /** Underlying error when `success` is false. */
+    error?: Error;
 }
