@@ -287,6 +287,23 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   @Input() ShowPager: boolean = false;
 
   /**
+   * Whether to render the Recycle Bin chip in the toolbar. The chip
+   * auto-hides itself when the entity has no deleted records, doesn't
+   * track changes, or the user lacks Delete permission — so it stays
+   * out of the way on entities where it's not relevant.
+   * @default true
+   */
+  @Input() ShowRecycleBin: boolean = true;
+
+  /**
+   * Convenience accessor for the resolved entity name. Returns null when
+   * the entity hasn't been resolved yet (e.g., before data loads).
+   */
+  public get entityInfoName(): string | null {
+    return this._entityInfo?.Name ?? null;
+  }
+
+  /**
    * Current page number for the shared pager (1-based).
    * Set by parent when using external data with server-side paging.
    */

@@ -1,5 +1,76 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-vectors-pinecone@5.29.0
+  - @memberjunction/ai-vector-sync@5.29.0
+  - @memberjunction/actions-apollo@5.29.0
+  - @memberjunction/actions-content-autotag@5.29.0
+  - @memberjunction/actions@5.29.0
+  - @memberjunction/scheduled-actions@5.29.0
+  - @memberjunction/sqlserver-dataprovider@5.29.0
+  - @memberjunction/ai@5.29.0
+  - @memberjunction/ai-mistral@5.29.0
+  - @memberjunction/ai-openai@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-vector-sync@5.28.0
+  - @memberjunction/actions@5.28.0
+  - @memberjunction/ai-vectors-pinecone@5.28.0
+  - @memberjunction/actions-apollo@5.28.0
+  - @memberjunction/actions-content-autotag@5.28.0
+  - @memberjunction/scheduled-actions@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/ai-mistral@5.28.0
+  - @memberjunction/ai-openai@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.27.1
+- @memberjunction/ai-mistral@5.27.1
+- @memberjunction/ai-openai@5.27.1
+- @memberjunction/ai-vectors-pinecone@5.27.1
+- @memberjunction/ai-vector-sync@5.27.1
+- @memberjunction/actions-apollo@5.27.1
+- @memberjunction/actions-content-autotag@5.27.1
+- @memberjunction/actions@5.27.1
+- @memberjunction/scheduled-actions@5.27.1
+- @memberjunction/core@5.27.1
+- @memberjunction/core-entities@5.27.1
+- @memberjunction/sqlserver-dataprovider@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/actions-content-autotag@5.27.0
+- @memberjunction/sqlserver-dataprovider@5.27.0
+- @memberjunction/scheduled-actions@5.27.0
+- @memberjunction/ai@5.27.0
+- @memberjunction/ai-mistral@5.27.0
+- @memberjunction/ai-openai@5.27.0
+- @memberjunction/ai-vectors-pinecone@5.27.0
+- @memberjunction/ai-vector-sync@5.27.0
+- @memberjunction/actions-apollo@5.27.0
+- @memberjunction/actions@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

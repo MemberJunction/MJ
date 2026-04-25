@@ -55,7 +55,7 @@ interface EmbeddingModelInfo {
 interface DocumentSuggestionResult {
     template: string;
     selectedFields: string[];
-    selectedRelationships: { name: string; fields: string[] }[];
+    selectedRelationships?: { name: string; fields: string[] }[];
     potentialMatchThreshold: number;
     absoluteMatchThreshold: number;
     reasoning: string;

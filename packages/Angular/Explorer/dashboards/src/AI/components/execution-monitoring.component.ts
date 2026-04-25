@@ -15,7 +15,6 @@ import { HeatmapData } from './charts/performance-heatmap.component';
 import { RunView, CompositeKey } from '@memberjunction/core';
 import { ResourceData } from "@memberjunction/core-entities";
 import { MJAIPromptRunEntityExtended, MJAIAgentRunEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
-import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
 export interface DrillDownTab {
@@ -64,7 +63,7 @@ export interface ExecutionMonitoringState {
  * AI Monitor Resource - displays AI execution monitoring and analytics
  * Extends BaseResourceComponent to work with the resource type system
  */
-@RegisterClass(BaseResourceComponent, 'AIMonitorResource')
+// @RegisterClass removed — AIOverviewHubComponent now registers as 'AIMonitorResource'
 @Component({
   standalone: false,
   selector: 'app-execution-monitoring',

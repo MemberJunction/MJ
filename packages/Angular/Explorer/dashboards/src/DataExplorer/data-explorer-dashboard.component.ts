@@ -926,6 +926,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // state would leak into the new entity's query (e.g., ORDER BY FirstName on Groups)
     this.selectedViewEntity = null;
     this.selectedEntity = entity;
+    this.reconcileViewModeForEntity(entity);
     // Load user's saved default grid state for this entity (if any)
     // This ensures formatting and column settings persist across sessions
     this.currentGridState = this.loadUserDefaultGridState();
@@ -942,8 +943,25 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (this.state.selectedEntityName !== this.selectedEntity?.Name) {
       this.resetRecordCounts();
       this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
+      this.reconcileViewModeForEntity(this.selectedEntity);
       // Load user's saved default grid state for this entity (if any)
       this.currentGridState = this.loadUserDefaultGridState();
+    }
+  }
+
+  /**
+   * Reset viewMode to 'grid' if the current mode isn't supported by the given entity
+   * (e.g., switching to an entity without geocoding while viewMode is 'map').
+   */
+  private reconcileViewModeForEntity(entity: EntityInfo | null): void {
+    if (!entity) return;
+    const mode = this.state.viewMode;
+    const hasDateFields = entity.Fields.some(f => f.TSType === EntityFieldTSType.Date);
+    const modeUnsupported =
+      (mode === 'map' && !entity.SupportsGeoCoding) ||
+      (mode === 'timeline' && !hasDateFields);
+    if (modeUnsupported) {
+      this.stateService.setViewMode('grid');
     }
   }
 

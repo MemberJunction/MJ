@@ -1,5 +1,54 @@
 # Change Log - @memberjunction/external-change-detection
 
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/sql-dialect@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/encryption@5.29.0
+  - @memberjunction/sqlserver-dataprovider@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/encryption@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/global@5.28.0
+  - @memberjunction/sql-dialect@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/encryption@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/sqlserver-dataprovider@5.27.1
+  - @memberjunction/sql-dialect@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- 1d9aa53: Fix double-encryption of fields with Encrypt=1 during External Change Detection replay. buildEntityFromRow now decrypts $ENC$ values before loading into the replay entity so Save() re-encrypts plaintext instead of wrapping already-encrypted ciphertext. Adds a new @memberjunction/encryption dependency (was already transitively available). Fixes #2367.
+  - @memberjunction/sqlserver-dataprovider@5.27.0
+  - @memberjunction/encryption@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/sql-dialect@5.27.0
+
 ## 5.26.0
 
 ### Minor Changes

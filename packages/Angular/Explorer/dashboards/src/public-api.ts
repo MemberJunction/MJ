@@ -27,7 +27,26 @@ export {
   AgentRequestsResourceComponent,
   AutotaggingPipelineResourceComponent,
   VectorManagementResourceComponent,
-  DuplicateDetectionResourceComponent
+  DuplicateDetectionResourceComponent,
+  AIAnalyticsResourceComponent,
+  LoadAIAnalyticsResource,
+  AnalyticsFilterBarComponent,
+  AIOverviewHubComponent,
+  LoadAIOverviewHub,
+  AnalyticsExecutiveSummaryComponent,
+  LoadAnalyticsExecutiveSummary,
+  AnalyticsPromptRunsComponent,
+  LoadAnalyticsPromptRuns,
+  AnalyticsAgentRunsComponent,
+  LoadAnalyticsAgentRuns,
+  AnalyticsModelPerformanceComponent,
+  LoadAnalyticsModelPerformance,
+  AnalyticsCostBudgetComponent,
+  LoadAnalyticsCostBudget,
+  AnalyticsErrorAnalysisComponent,
+  LoadAnalyticsErrorAnalysis,
+  AnalyticsUsagePatternsComponent,
+  LoadAnalyticsUsagePatterns
 } from './AI/index';
 
 // Knowledge Hub components
@@ -44,6 +63,16 @@ export {
   AnalyticsResourceComponent,
   LoadAnalyticsResource
 } from './KnowledgeHub/components/analytics/analytics-resource.component';
+
+// Archiving components
+export {
+  ArchiveConfigResourceComponent,
+  LoadArchiveConfigResource
+} from './Archiving/components/archive-config-resource.component';
+export {
+  ArchiveRunsResourceComponent,
+  LoadArchiveRunsResource
+} from './Archiving/components/archive-runs-resource.component';
 
 // Export Actions components as resources (BaseResourceComponent-based)
 export {
@@ -157,3 +186,4 @@ export * from './data-explorer-dashboards.module';
 export * from './lists-dashboards.module';
 export * from './component-studio-dashboards.module';
 export * from './shared/shared-dashboard-widgets.module';
+export * from './archiving-dashboards.module';

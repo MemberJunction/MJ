@@ -9,7 +9,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -56,8 +56,8 @@
       "ID": "38129618-88C2-470F-9A32-A631AFB4371E"
     },
     "sync": {
-      "lastModified": "2026-04-09T02:10:23.268Z",
-      "checksum": "88b072a7e055459addb09975b39cd876acdb758cf8e5117f410a146aeda91b59"
+      "lastModified": "2026-04-20T14:29:26.467Z",
+      "checksum": "f46bc4354b586b82f4566ff3a045325cbbe613b902e08f5843bb1eba654a4099"
     }
   },
   {
@@ -70,7 +70,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -117,8 +117,8 @@
       "ID": "14BFD6A6-57E0-4A5B-9AE0-579123DA495B"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:39.728Z",
-      "checksum": "c1b12c67131d82280aea7e4442d089f962b270e9b057ae0d77c60fc898a3e3c7"
+      "lastModified": "2026-04-20T14:29:26.489Z",
+      "checksum": "5a20c07093e3075207749ca31474df154c8ac24ed0a1f0f8f3465d344f55af58"
     }
   },
   {
@@ -131,7 +131,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -178,8 +178,8 @@
       "ID": "DF15BA1D-59E2-4FE1-9469-DE6290C14B62"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:39.736Z",
-      "checksum": "ac1033b5f82a6fe7d1c762193aa84cbad434f4be42b9449ce7c24e9d75f01db1"
+      "lastModified": "2026-04-20T14:29:26.511Z",
+      "checksum": "00681320a0f04cebe8f473cd089b2f5951f7e2a290593f15fec37457852ef3c0"
     }
   },
   {
@@ -192,7 +192,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -239,8 +239,8 @@
       "ID": "078FC278-15E6-4264-82C7-EE19EB79100E"
     },
     "sync": {
-      "lastModified": "2026-04-09T19:02:10.482Z",
-      "checksum": "8edeed8cae93cbf0b6270dfb92ec3220242d1dfcd99eb43401c91b338eec72cd"
+      "lastModified": "2026-04-20T14:29:26.533Z",
+      "checksum": "1265d6e1a3d6697c728e85caa4a7427b0b2948e0a61103d264dadfa7f1499199"
     }
   },
   {
@@ -253,7 +253,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -300,69 +300,8 @@
       "ID": "084F28BE-2F7E-406D-B80B-20B8EDB88950"
     },
     "sync": {
-      "lastModified": "2026-04-09T15:59:13.349Z",
-      "checksum": "6532e30a34fd633ce054789092ba344e84f86861e5ca792aef638071f5775e60"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Memory Manager - Detect Contradictions",
-      "Description": "Evaluates pairs of semantically similar notes for contradictions using entity-attribute-value triple extraction. Determines which note is authoritative based on recency, importance, and access count.",
-      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/memory-manager/detect-contradictions.md",
-      "Status": "Active",
-      "ResponseFormat": "JSON",
-      "AssistantPrefill": "```json",
-      "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
-      "SelectionStrategy": "Specific",
-      "PowerPreference": "Highest",
-      "ParallelizationMode": "None",
-      "MaxRetries": 1,
-      "PromptRole": "System",
-      "PromptPosition": "First",
-      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
-    },
-    "relatedEntities": {
-      "MJ: AI Prompt Models": [
-        {
-          "fields": {
-            "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 1
-          },
-          "primaryKey": {
-            "ID": "2638B515-4D51-451F-84C6-78117527B783"
-          },
-          "sync": {
-            "lastModified": "2026-04-01T19:18:29.234Z",
-            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
-          }
-        },
-        {
-          "fields": {
-            "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 2
-          },
-          "primaryKey": {
-            "ID": "4D114E73-12C0-4BB7-9AAE-25051B013FD3"
-          },
-          "sync": {
-            "lastModified": "2026-04-01T19:18:29.250Z",
-            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "F15359CC-B3C6-44D6-B4CA-7665E955B959"
-    },
-    "sync": {
-      "lastModified": "2026-04-09T16:10:53.458Z",
-      "checksum": "b151d9703a837691b7eabeaa8a9c0f9a894829ba598cce50e09f43caaf1a7837"
+      "lastModified": "2026-04-20T14:29:26.550Z",
+      "checksum": "fad5f0c7d91d880303318336644e93fed5a17697e86d908f81f743a96f23fb19"
     }
   }
 ]
