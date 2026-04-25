@@ -7454,7 +7454,7 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Description: The __mj_UpdatedAt timestamp of the record at the time of archiving, used for conflict detection during restore.`),
     IsRecordChangeArchive: z.boolean().describe(`
         * * Field Name: IsRecordChangeArchive
-        * * Display Name: Is Record Change
+        * * Display Name: Is Record Change Archive
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this detail row represents an archived Record Change entry rather than a primary entity record.`),
@@ -7470,7 +7470,7 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Default Value: getutcdate()`),
     ArchiveRun: z.date().describe(`
         * * Field Name: ArchiveRun
-        * * Display Name: Archive Run Date
+        * * Display Name: Archive Run Timestamp
         * * SQL Data Type: datetimeoffset`),
     Entity: z.string().describe(`
         * * Field Name: Entity
@@ -15524,19 +15524,19 @@ export const MJEntityPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(250)`),
     CreateRLSFilter: z.string().nullable().describe(`
         * * Field Name: CreateRLSFilter
-        * * Display Name: Create Filter
+        * * Display Name: Create Filter SQL
         * * SQL Data Type: nvarchar(100)`),
     ReadRLSFilter: z.string().nullable().describe(`
         * * Field Name: ReadRLSFilter
-        * * Display Name: Read Filter
+        * * Display Name: Read Filter SQL
         * * SQL Data Type: nvarchar(100)`),
     UpdateRLSFilter: z.string().nullable().describe(`
         * * Field Name: UpdateRLSFilter
-        * * Display Name: Update Filter
+        * * Display Name: Update Filter SQL
         * * SQL Data Type: nvarchar(100)`),
     DeleteRLSFilter: z.string().nullable().describe(`
         * * Field Name: DeleteRLSFilter
-        * * Display Name: Delete Filter
+        * * Display Name: Delete Filter SQL
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -19064,7 +19064,7 @@ export const MJPermissionDomainSchema = z.object({
         * * Description: When true, this provider resolves permissions hierarchically (e.g., category-level grants cascade to items within the category).`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When false, the PermissionEngine skips loading this provider at startup. Use to temporarily disable a provider without removing its record.`),
@@ -21281,12 +21281,12 @@ export const MJResourcePermissionSchema = z.object({
         * * Description: Reference to the type of resource being shared (View, Dashboard, Report, etc.)`),
     ResourceRecordID: z.string().describe(`
         * * Field Name: ResourceRecordID
-        * * Display Name: Resource Record
+        * * Display Name: Resource Record ID
         * * SQL Data Type: nvarchar(255)
         * * Description: ID of the specific resource being shared`),
     Type: z.union([z.literal('Role'), z.literal('User')]).describe(`
         * * Field Name: Type
-        * * Display Name: Sharing Type
+        * * Display Name: Recipient Type
         * * SQL Data Type: nvarchar(10)
     * * Value List Type: List
     * * Possible Values 
@@ -21305,12 +21305,12 @@ export const MJResourcePermissionSchema = z.object({
         * * Description: Optional: Date when sharing ends`),
     RoleID: z.string().nullable().describe(`
         * * Field Name: RoleID
-        * * Display Name: Role
+        * * Display Name: Role ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     PermissionLevel: z.union([z.literal('Edit'), z.literal('Owner'), z.literal('View')]).nullable().describe(`
@@ -21357,11 +21357,11 @@ export const MJResourcePermissionSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     Role: z.string().nullable().describe(`
         * * Field Name: Role
-        * * Display Name: Role Name
+        * * Display Name: Role
         * * SQL Data Type: nvarchar(50)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     SharedByUser: z.string().nullable().describe(`
         * * Field Name: SharedByUser
@@ -45840,7 +45840,7 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
 
     /**
     * * Field Name: IsRecordChangeArchive
-    * * Display Name: Is Record Change
+    * * Display Name: Is Record Change Archive
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, this detail row represents an archived Record Change entry rather than a primary entity record.
@@ -45874,7 +45874,7 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
 
     /**
     * * Field Name: ArchiveRun
-    * * Display Name: Archive Run Date
+    * * Display Name: Archive Run Timestamp
     * * SQL Data Type: datetimeoffset
     */
     get ArchiveRun(): Date {
@@ -66511,7 +66511,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: CreateRLSFilter
-    * * Display Name: Create Filter
+    * * Display Name: Create Filter SQL
     * * SQL Data Type: nvarchar(100)
     */
     get CreateRLSFilter(): string | null {
@@ -66520,7 +66520,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: ReadRLSFilter
-    * * Display Name: Read Filter
+    * * Display Name: Read Filter SQL
     * * SQL Data Type: nvarchar(100)
     */
     get ReadRLSFilter(): string | null {
@@ -66529,7 +66529,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: UpdateRLSFilter
-    * * Display Name: Update Filter
+    * * Display Name: Update Filter SQL
     * * SQL Data Type: nvarchar(100)
     */
     get UpdateRLSFilter(): string | null {
@@ -66538,7 +66538,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: DeleteRLSFilter
-    * * Display Name: Delete Filter
+    * * Display Name: Delete Filter SQL
     * * SQL Data Type: nvarchar(100)
     */
     get DeleteRLSFilter(): string | null {
@@ -75694,7 +75694,7 @@ export class MJPermissionDomainEntity extends BaseEntity<MJPermissionDomainEntit
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When false, the PermissionEngine skips loading this provider at startup. Use to temporarily disable a provider without removing its record.
@@ -81458,7 +81458,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: ResourceRecordID
-    * * Display Name: Resource Record
+    * * Display Name: Resource Record ID
     * * SQL Data Type: nvarchar(255)
     * * Description: ID of the specific resource being shared
     */
@@ -81471,7 +81471,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: Type
-    * * Display Name: Sharing Type
+    * * Display Name: Recipient Type
     * * SQL Data Type: nvarchar(10)
     * * Value List Type: List
     * * Possible Values 
@@ -81514,7 +81514,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: RoleID
-    * * Display Name: Role
+    * * Display Name: Role ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
     */
@@ -81527,7 +81527,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -81621,7 +81621,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: Role
-    * * Display Name: Role Name
+    * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
     get Role(): string | null {
@@ -81630,7 +81630,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {

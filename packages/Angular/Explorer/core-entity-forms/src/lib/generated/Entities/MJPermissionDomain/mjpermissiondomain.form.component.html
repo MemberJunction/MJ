@@ -12,7 +12,7 @@
     <mj-collapsible-panel
         SectionKey="domainConfiguration"
         SectionName="Domain Configuration"
-        Icon="fa fa-sliders-h"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -34,23 +34,7 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="IsActive"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DisplayOrder"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Icon"
+            FieldName="ProviderClassName"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -58,21 +42,13 @@
 
     </mj-collapsible-panel>
 
-    <!-- Implementation Details Section -->
+    <!-- Capability Settings Section -->
     <mj-collapsible-panel
-        SectionKey="implementationDetails"
-        SectionName="Implementation Details"
-        Icon="fa fa-code"
+        SectionKey="capabilitySettings"
+        SectionName="Capability Settings"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ProviderClassName"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -89,16 +65,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Feature Support Section -->
-    <mj-collapsible-panel
-        SectionKey="featureSupport"
-        SectionName="Feature Support"
-        Icon="fa fa-check-circle"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -126,11 +92,45 @@
 
     </mj-collapsible-panel>
 
+    <!-- UI and Status Section -->
+    <mj-collapsible-panel
+        SectionKey="uIAndStatus"
+        SectionName="UI and Status"
+        Icon="fa fa-desktop"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IsActive"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DisplayOrder"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Icon"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

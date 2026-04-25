@@ -1,11 +1,15 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
 import { MJDialogRef, MJDialogService } from '@memberjunction/ng-ui-components';
 
-import { UserSharingCenterComponent } from '../../sharing-center/user-sharing-center.component';
+import { SharingCenterDialogHostComponent } from './sharing-center-dialog-host.component';
 
 /**
  * Opens the end-user Sharing Center in an MJ dialog. Mirrors the pattern used
  * by {@link SettingsDialogService} — single instance at a time, reset on close.
+ *
+ * The dialog hosts {@link SharingCenterDialogHostComponent}, an Explorer-side
+ * wrapper that bridges the Generic `UserSharingCenterComponent` (from
+ * `@memberjunction/ng-resource-permissions`) to Explorer's `NavigationService`.
  */
 @Injectable({ providedIn: 'root' })
 export class UserSharingCenterDialogService {
@@ -17,7 +21,7 @@ export class UserSharingCenterDialogService {
         if (this.dialogRef) return;
 
         this.dialogRef = this.dialogService.open({
-            content: UserSharingCenterComponent,
+            content: SharingCenterDialogHostComponent,
             title: 'Sharing Center',
             width: 720,
             height: 560,

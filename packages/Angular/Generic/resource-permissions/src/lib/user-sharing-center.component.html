@@ -15,9 +15,11 @@
             Shared by me
         </button>
         <div class="spacer"></div>
-        <button class="close" (click)="OnClose()" title="Close">
-            <i class="fa-solid fa-xmark"></i>
-        </button>
+        @if (ShowCloseButton) {
+            <button class="close" (click)="OnClose()" title="Close">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        }
     </div>
 
     @if (ErrorMessage) {
