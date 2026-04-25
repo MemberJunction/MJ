@@ -2327,13 +2327,19 @@ export class ManageMetadataBase {
    /**
     * Resolves a list of entity names to their UUIDs via the live Metadata cache.
     * Names that don't resolve are dropped silently — they may be entities that have
-    * been queued for creation but aren't yet in the metadata. The caller treats
-    * "no IDs resolved" the same as "unscoped" rather than as an error so a stale
-    * name in `_modifiedEntityList` can't break Pass 2.
+    * been queued for creation but aren't yet in the metadata.
     *
-    * Guards against empty / whitespace / non-string entries because `_newEntityList`
-    * and `_modifiedEntityList` can pick those up from result-set rows whose EntityName
-    * column is null. EntityByName throws on those, so we filter them out up front.
+    * Two safety properties:
+    *
+    * 1. `new Metadata()` is constructed OUTSIDE the per-name try/catch so a
+    *    metadata-load failure (e.g., refresh failed upstream) surfaces as an error
+    *    instead of being silently treated as "no entities resolved" — which would
+    *    misleadingly degrade Pass 2 to an unscoped full scan.
+    * 2. The try/catch is narrowly scoped to `EntityByName` because that method throws
+    *    on null/empty names (`_newEntityList` and `_modifiedEntityList` can pick those
+    *    up from result-set rows whose EntityName column is null). The pre-filter on
+    *    string type + trim covers the common case; the catch is a safety net for any
+    *    other lookup failure (e.g., name shape we didn't anticipate).
     */
    protected resolveEntityNamesToIDs(entityNames: string[]): string[] {
       const md = new Metadata();
@@ -2344,7 +2350,7 @@ export class ManageMetadataBase {
             const entity = md.EntityByName(name);
             if (entity?.ID) ids.push(entity.ID);
          } catch {
-            // Stale or invalid names can't break Pass 2 — fall through and skip
+            // Single bad name shouldn't break Pass 2 — skip and continue
          }
       }
       return ids;
@@ -2370,10 +2376,19 @@ export class ManageMetadataBase {
          return true;
       }
 
-      // Resolve entity names → IDs once up front so SP wrappers can receive UUIDs directly
-      const scopedEntityIDs: string[] | undefined = entityFilter
-         ? this.resolveEntityNamesToIDs(entityFilter)
-         : undefined;
+      // Resolve entity names → IDs once up front so SP wrappers can receive UUIDs directly.
+      // If a non-empty filter resolved to zero IDs (e.g., all names were stale/invalid),
+      // fast-exit too — falling through with `scopedEntityIDs = []` would degrade to an
+      // unscoped full scan, which is worse than the original intent. Treating "filter
+      // provided but nothing resolved" as a no-op is the correct behavior.
+      let scopedEntityIDs: string[] | undefined;
+      if (entityFilter) {
+         scopedEntityIDs = this.resolveEntityNamesToIDs(entityFilter);
+         if (scopedEntityIDs.length === 0) {
+            logStatus(`      manageEntityFields: entityFilter (${entityFilter.length} names) resolved to 0 IDs — skipping Pass 2`);
+            return true;
+         }
+      }
 
       if (!skipCreatedAtUpdatedAtDeletedAtFieldValidation) {
          if (!await this.ensureCreatedAtUpdatedAtFieldsExist(pool, excludeSchemas) ||
