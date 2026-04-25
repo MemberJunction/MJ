@@ -117,6 +117,25 @@
                                             <i class="fa-solid fa-circle-check"></i> Active
                                         </span>
                                     </div>
+                                    <div class="provider-credential-row">
+                                        <label class="provider-credential-label">
+                                            <i class="fa-solid fa-key"></i> API Credential
+                                        </label>
+                                        <div class="provider-credential-picker">
+                                            <select class="provider-credential-select"
+                                                    [(ngModel)]="provider.CredentialID"
+                                                    (change)="SaveProviderCredential(provider)"
+                                                    [disabled]="IsSavingCredential">
+                                                <option [ngValue]="null">None (use environment variable)</option>
+                                                @for (cred of AvailableCredentials; track cred.ID) {
+                                                    <option [ngValue]="cred.ID">{{ cred.Name }}</option>
+                                                }
+                                            </select>
+                                            @if (IsSavingCredential) {
+                                                <i class="fa-solid fa-spinner fa-spin provider-credential-spinner"></i>
+                                            }
+                                        </div>
+                                    </div>
                                 }
                             </div>
                         }

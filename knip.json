@@ -14,6 +14,12 @@
     "typescript",
     "@angular/compiler",
     "@angular/compiler-cli",
-    "sass"
-  ]
+    "sass",
+    "jasmine-core",
+    "karma-chrome-launcher",
+    "karma-coverage",
+    "karma-jasmine",
+    "karma-jasmine-html-reporter"
+  ],
+  "vitest": false
 }

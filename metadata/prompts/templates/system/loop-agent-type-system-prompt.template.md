@@ -28,6 +28,10 @@ interface LoopAgentResponse {
     /** Private working memory — notes and task tracking. Processed inline, zero turn cost */
     scratchpad?: AgentScratchpad;
 {% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.artifactToolCalls != false and _ARTIFACT_MANIFEST %}
+    /** Explore artifacts via tools. Specify artifactId (A, B, etc.), tool name, and input params. Results appear next turn. */
+    artifactToolCalls?: Array<{ artifactId: string; tool: string; input: Record<string, unknown> }>;
+{% endif %}
     /** Internal reasoning for debugging */
     reasoning?: string;
     /** Confidence level (0.0-1.0) */
@@ -433,6 +437,7 @@ After completing work, use `actionableCommands` for navigation buttons and `auto
 {% endif %}
 
 # **CRITICAL**
+- Your **entire** response must be only JSON with no leading or trailing characters!
 - Must adhere to [LoopAgentResponse](#response-format)
 {% if __agentTypePromptParams.includeResponseFormDocs != false %}- Use `responseForm` when you need user input (replaces old suggestedResponses pattern){% endif %}
 {% if __agentTypePromptParams.includeCommandDocs != false %}- Use `actionableCommands` to provide navigation buttons after completing work
@@ -507,6 +512,16 @@ Actions are **server-side tools** — they run on the server with direct access 
 Execute multiple in parallel if independent. Retry failed actions up to 3x with adjusted parameters.
 {{ actionDetails | safe }}
 {%- endif -%}
+
+{% if actionDetails and 'Create Document' in actionDetails %}
+### Document Creation Workflow
+When creating PDF, Word, or Excel documents, you **MUST** follow this exact 3-step sequence:
+1. **Create Document** — creates a handle for the new document
+2. **Add Document Content** — adds content sections using the handle
+3. **Finalize Document** — renders the document to a file and saves it to storage
+
+**CRITICAL**: You must ALWAYS call **Finalize Document** after adding content. Without finalization, the document is never created. Never return Success after Add Document Content — always continue to Finalize Document as the next step.
+{%- endif %}
 {%- endif %}
 
 {% if clientToolDetails %}
@@ -555,4 +570,20 @@ Your private working memory. Manage via `scratchpad` in your response.
 
 ### Tasks ({{ _SCRATCHPAD_TASK_SUMMARY }})
 {{ _SCRATCHPAD_TASKS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includeArtifactToolsDocs != false and _ARTIFACT_MANIFEST %}
+## Artifact Tools
+Explore artifacts attached to this conversation using `artifactToolCalls` in your response.
+Each call specifies an artifact ID (A, B, C, etc.), a tool name, and input parameters.
+Results appear in the next turn. Multiple calls can be batched in one response.
+
+{{ _ARTIFACT_MANIFEST | safe }}
+
+{{ _ARTIFACT_TOOLS | safe }}
+
+{% if _ARTIFACT_TOOL_RESULTS %}
+### Previous Results
+{{ _ARTIFACT_TOOL_RESULTS | safe }}
+{% endif %}
 {% endif %}

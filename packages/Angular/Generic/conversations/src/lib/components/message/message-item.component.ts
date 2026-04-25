@@ -22,6 +22,7 @@ import { MentionAutocompleteService } from '../../services/mention-autocomplete.
 import { SuggestedResponse } from '../../models/conversation-state.model';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BadgeTextForAttachment } from '../../util/attachment-badge';
 
 /**
  * Represents an attachment on a message for display
@@ -36,6 +37,14 @@ export interface MessageAttachment {
   height?: number;
   thumbnailUrl?: string;
   contentUrl?: string;
+  /** Source of the attachment: 'upload' for chat uploads, 'artifact' for artifact picker */
+  source?: 'upload' | 'artifact';
+  /** For source='artifact': the underlying MJArtifact.ID so clicks can open the viewer. */
+  artifactId?: string;
+  /** For source='artifact': the underlying MJArtifactVersion.ID. */
+  artifactVersionId?: string;
+  /** For source='artifact': resolved MJArtifactType.Name, e.g. "Data Snapshot". Drives the type badge. */
+  artifactTypeName?: string;
 }
 
 /**
@@ -91,12 +100,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _previousMessageStatus: 'Complete' | 'In-Progress' | 'Error' | undefined = undefined;
 
   /**
-   * Cached CSS class string for the message container. Updated explicitly in
-   * ngDoCheck to avoid ExpressionChangedAfterItHasBeenCheckedError — a getter
-   * would recompute between Angular's check and verify passes when message.Status
-   * changes mid-cycle (e.g., from a WebSocket update).
+   * Cached values updated in ngDoCheck so they stay stable through Angular's
+   * dev-mode verify pass. The underlying message entity properties (Status,
+   * Message) can mutate between the check and verify passes (e.g., from
+   * WebSocket streaming updates), which causes ExpressionChangedAfterItHasBeenCheckedError
+   * if templates read the live properties directly.
    */
   private _messageClasses: string = 'message-item';
+  private _stableDisplayMessage: string = '';
+  private _stableIsInProgressAIMessage: boolean = false;
 
   // Agent run details
   public isAgentDetailsExpanded: boolean = false;
@@ -156,8 +168,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // Update previous status for next check
     this._previousMessageStatus = currentStatus;
 
-    // Rebuild cached class string so it's stable during Angular's check/verify cycle
+    // Rebuild cached values so they're stable during Angular's check/verify cycle.
+    // ngDoCheck runs once per CD pass but NOT during the dev-mode verify pass, so
+    // snapshotting here produces values that don't change between the two reads.
     this._messageClasses = this.buildMessageClasses();
+    this._stableIsInProgressAIMessage = this.isAIMessage && currentStatus === 'In-Progress';
+    this._stableDisplayMessage = this.computeDisplayMessage();
   }
 
   ngAfterViewInit() {
@@ -353,6 +369,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get displayMessage(): string {
+    return this._stableDisplayMessage;
+  }
+
+  /**
+   * Computes the display message from the current message text. Called from
+   * ngDoCheck to snapshot the value; templates read _stableDisplayMessage.
+   */
+  private computeDisplayMessage(): string {
     let text = this.message.Message || '';
 
     // For Sage, only show the delegation line (starts with emoji)
@@ -363,7 +387,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     }
 
-    // Use cached result if message text hasn't changed
+    // Use cached result if message text hasn't changed (avoids re-parsing mentions)
     if (this._cachedMessageText === text && this._cachedDisplayMessage) {
       return this._cachedDisplayMessage;
     }
@@ -534,7 +558,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get isInProgressAIMessage(): boolean {
-    return this.isAIMessage && this.message.Status === 'In-Progress';
+    return this._stableIsInProgressAIMessage;
   }
 
   public get isAgentRunActive(): boolean {
@@ -933,6 +957,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  /** Compact UPPERCASE badge label (artifact-type name wins over file extension). */
+  public badgeTextFor(attachment: MessageAttachment): string {
+    return BadgeTextForAttachment(attachment);
   }
 
   /**

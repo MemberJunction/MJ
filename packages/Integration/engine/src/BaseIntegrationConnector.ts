@@ -85,6 +85,8 @@ export interface FetchContext {
     CurrentOffset?: number;
     /** Current cursor for cursor-based pagination. Passed by engine on subsequent calls. */
     CurrentCursor?: string;
+    /** Optional list of source field names to request from the external API. When provided, the connector should limit the returned fields to this set. */
+    RequestedSourceFields?: string[];
 }
 
 /** Result of a FetchChanges call, containing a batch of records */

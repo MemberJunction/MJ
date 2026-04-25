@@ -27,6 +27,7 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIModelModalityEntity,
          MJAIClientToolDefinitionEntity,
          MJAIAgentClientToolEntity,
+         MJAIAgentCategoryEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
@@ -110,6 +111,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _modelModalities: MJAIModelModalityEntity[] = [];
     private _clientToolDefinitions: MJAIClientToolDefinitionEntity[] = [];
     private _agentClientTools: MJAIAgentClientToolEntity[] = [];
+    private _agentCategories: MJAIAgentCategoryEntity[] = [];
 
     /**
      * Cache for configuration inheritance chains.
@@ -288,6 +290,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentClientTools',
                 EntityName: 'MJ: AI Agent Client Tools',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentCategories',
+                EntityName: 'MJ: AI Agent Categories',
                 CacheLocal: true
             }
         ];
@@ -478,6 +485,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get AgentTypes(): MJAIAgentTypeEntity[] {
         return this._agentTypes;
+    }
+
+    /** All agent categories, cached during Config(). Used for hierarchical resolution of
+     *  assignment strategies and default storage accounts (category → parent → root). */
+    public get AgentCategories(): MJAIAgentCategoryEntity[] {
+        return this._agentCategories;
     }
 
     public GetAgentByName(agentName: string): MJAIAgentEntityExtended {

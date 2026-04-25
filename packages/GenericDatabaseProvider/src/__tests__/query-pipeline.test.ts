@@ -568,6 +568,126 @@ WHERE m.Region = '{{ Region }}'
             expect(finalSQL).not.toContain('WHERE');
             expect(finalSQL).toContain('SELECT m.ID, m.Name');
         });
+        it('should strip comments containing {{query:"..."}} before Nunjucks processes templates', () => {
+            // A query with UsesTemplate=true has a {{query:"..."}} example in a SQL comment.
+            // Comments are stripped before Nunjucks, so the {{ in the comment never
+            // reaches the template evaluator. Template tokens in code resolve normally.
+            const queryID = 'comment-strip-1';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Tags For Entity Record',
+                SQL: `-- Reusable composable query: Returns all active tags for a given entity record.
+-- Compose via {{query:"MJ/Tags/Tags For Entity Record"}} and join on RecordID.
+-- Parameters: entityName, recordID
+SELECT t.ID AS TagID, t.Name AS TagName
+FROM vwTaggedItems ti
+INNER JOIN vwTags t ON ti.TagID = t.ID
+WHERE ti.Entity = {{ entityName | sqlString }}
+AND ti.RecordID = {{ recordID | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'entityName', Type: 'string', IsRequired: true },
+                    { QueryID: queryID, Name: 'recordID', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { entityName: 'Members', recordID: '42' },
+                mockUser
+            );
+
+            // Template tokens resolved
+            expect(finalSQL).toContain("'Members'");
+            expect(finalSQL).toContain("'42'");
+            expect(finalSQL).not.toContain('{{ entityName');
+            expect(finalSQL).not.toContain('{{ recordID');
+            // Comments stripped — no comment text in output
+            expect(finalSQL).not.toContain('Reusable composable query');
+            expect(finalSQL).not.toContain('{{query:');
+        });
+
+        it('should strip block comments containing {{ }} before Nunjucks', () => {
+            const queryID = 'comment-strip-2';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Block Comment Query',
+                SQL: `/* This query demonstrates {{query:"Category/Some Query"}} syntax */
+SELECT * FROM Users WHERE Name = {{ userName | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'userName', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { userName: 'Alice' },
+                mockUser
+            );
+
+            expect(finalSQL).toContain("'Alice'");
+            // Block comment stripped entirely
+            expect(finalSQL).not.toContain('demonstrates');
+            expect(finalSQL).not.toMatch(/\{\{query:/);
+        });
+
+        it('should strip comments but preserve template tokens in code', () => {
+            const queryID = 'comment-strip-3';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Mixed Query',
+                SQL: `-- Uses {{someParam}} in a comment
+SELECT * FROM Users WHERE Status = {{ status | sqlString }} AND Name = {{ name | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'status', Type: 'string', IsRequired: true },
+                    { QueryID: queryID, Name: 'name', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { status: 'Active', name: 'Bob' },
+                mockUser
+            );
+
+            expect(finalSQL).toContain("'Active'");
+            expect(finalSQL).toContain("'Bob'");
+            // Comment stripped, not escaped
+            expect(finalSQL).not.toContain('Uses {{someParam}}');
+            expect(finalSQL).not.toContain('-- Uses');
+        });
     });
 
     // ================================================================

@@ -8,15 +8,19 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { Observable } from 'rxjs';
 
 /**
  * Status indicating why a user can or cannot access an application.
  * - 'installed_active': User has UserApplication record with IsActive=true
  * - 'installed_inactive': User has UserApplication record with IsActive=false
  * - 'not_installed': User has no UserApplication record for this app
+ * - 'not_authorized': User's roles do not grant access to the application
  */
-export type UserApplicationAccessStatus = 'installed_active' | 'installed_inactive' | 'not_installed';
+export type UserApplicationAccessStatus = 'installed_active' | 'installed_inactive' | 'not_installed' | 'not_authorized';
+
 import {
+  MJApplicationRoleEntity,
   MJUserNotificationEntity,
   MJUserNotificationTypeEntity,
   MJWorkspaceEntity,
@@ -70,6 +74,8 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   private _NotificationTypes: MJUserNotificationTypeEntity[] = [];
   // User notification preferences (user-specific)
   private _UserNotificationPreferences: MJUserNotificationPreferenceEntity[] = [];
+  // Application role assignments (global - not user-specific)
+  private _applicationRoles: MJApplicationRoleEntity[] = [];
 
   // Track the user ID we loaded data for
   private _loadedForUserId: string | null = null;
@@ -180,10 +186,47 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         PropertyName: '_UserNotificationPreferences',
         CacheLocal: true,
       },
+      {
+        Type: 'entity',
+        EntityName: 'MJ: Application Roles',
+        PropertyName: '_applicationRoles',
+        CacheLocal: true,
+      },
     ];
 
     await super.Load(configs, provider, forceRefresh, contextUser);
     this._loadedForUserId = userId;
+  }
+
+  // ========================================================================
+  // OBSERVABLE ACCESSORS
+  // ========================================================================
+
+  /**
+   * Observable stream of the notifications cache array. Emits the current array on subscribe
+   * and re-emits whenever the cache is mutated (save, delete, remote-invalidate, refresh).
+   *
+   * Emits the raw unfiltered cache (all users). Consumers that need per-user filtering should
+   * `pipe(map(...))` — the public {@link UserNotifications} getter applies the current-user filter.
+   */
+  public get UserNotifications$(): Observable<MJUserNotificationEntity[]> {
+    return this.ObserveProperty<MJUserNotificationEntity>('_UserNotifications');
+  }
+
+  /**
+   * Observable stream of the user favorites cache array. Emits the current array on subscribe
+   * and re-emits whenever the cache is mutated.
+   */
+  public get UserFavorites$(): Observable<MJUserFavoriteEntity[]> {
+    return this.ObserveProperty<MJUserFavoriteEntity>('_UserFavorites');
+  }
+
+  /**
+   * Observable stream of the user applications cache array. Emits the current array on subscribe
+   * and re-emits whenever the cache is mutated.
+   */
+  public get UserApplications$(): Observable<MJUserApplicationEntity[]> {
+    return this.ObserveProperty<MJUserApplicationEntity>('_UserApplications');
   }
 
   // ========================================================================
@@ -611,10 +654,17 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
 
   /**
    * Check the user's access status for an application.
+   * First checks role-based authorization (ApplicationRole records), then installation status.
    * @param applicationId - The application ID to check
    * @returns The user's access status for this application
    */
   public CheckUserApplicationAccess(applicationId: string): UserApplicationAccessStatus {
+    // Step 1: Check role-based authorization first
+    if (!this.UserHasApplicationAccess(applicationId)) {
+      return 'not_authorized';
+    }
+
+    // Step 2: Then check installation status (existing logic)
     const userApp = this.GetUserApplicationByAppId(applicationId);
 
     if (!userApp) {
@@ -622,6 +672,52 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     }
 
     return userApp.IsActive ? 'installed_active' : 'installed_inactive';
+  }
+
+  /**
+   * Checks if the current user's roles grant access to the application.
+   * If no ApplicationRole records exist for the app, access is open (backwards compatible).
+   * If records exist, user must have at least one role with CanAccess=1.
+   */
+  public UserHasApplicationAccess(applicationId: string): boolean {
+    const appRoles = this._applicationRoles.filter(
+      ar => UUIDsEqual(ar.ApplicationID, applicationId)
+    );
+
+    // No role records = open access (backwards compatible)
+    if (appRoles.length === 0) return true;
+
+    // Check if any of the user's roles have CanAccess=1
+    const md = new Metadata();
+    const user = md.CurrentUser;
+    if (!user || !user.UserRoles) return false;
+
+    return user.UserRoles.some(ur =>
+      appRoles.some(ar =>
+        UUIDsEqual(ar.RoleID, ur.RoleID) && ar.CanAccess
+      )
+    );
+  }
+
+  /**
+   * Checks if the current user can administer a specific application.
+   * Requires an explicit ApplicationRole record with CanAdmin=1.
+   */
+  public UserCanAdminApplication(applicationId: string): boolean {
+    const appRoles = this._applicationRoles.filter(
+      ar => UUIDsEqual(ar.ApplicationID, applicationId)
+    );
+    if (appRoles.length === 0) return false; // No admin without explicit grant
+
+    const md = new Metadata();
+    const user = md.CurrentUser;
+    if (!user || !user.UserRoles) return false;
+
+    return user.UserRoles.some(ur =>
+      appRoles.some(ar =>
+        UUIDsEqual(ar.RoleID, ur.RoleID) && ar.CanAdmin
+      )
+    );
   }
 
   /**

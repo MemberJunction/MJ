@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 
@@ -129,6 +130,15 @@ export class HtmlArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     this.htmlContent = content;
     this.safeHtmlContent = this.sanitizer.sanitize(1, this.htmlContent) || '';
+  }
+
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    const content = this.getRawContent();
+    if (!content) return null;
+    const snap = new DataSnapshot();
+    snap.title = this.getDisplayTitle() ?? undefined;
+    snap.custom = { content };
+    return snap;
   }
 
   onCopy(): void {

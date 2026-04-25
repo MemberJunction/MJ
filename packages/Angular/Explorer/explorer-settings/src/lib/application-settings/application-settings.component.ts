@@ -71,7 +71,7 @@ export class ApplicationSettingsComponent implements OnInit {
       const rv = new RunView();
 
       // Load all system apps from ApplicationManager
-      const systemApps = this.appManager.GetAllSystemApps();
+      const systemApps = this.appManager.GetAuthorizedSystemApps();
 
       // Load user's UserApplication records
       const userAppsResult = await rv.RunView<MJUserApplicationEntity>({

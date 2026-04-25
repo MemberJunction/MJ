@@ -20,7 +20,14 @@ DB_HOST, DB_DATABASE, CODEGEN_DB_USERNAME, CODEGEN_DB_PASSWORD.
 
 Use --skipdb to skip all database operations (metadata sync, SQL object
 generation) and only regenerate TypeScript, Angular, and GraphQL output from
-existing metadata.`;
+existing metadata.
+
+Use --skipfiles to skip all file-generation operations (TypeScript entities,
+Angular components, GraphQL resolvers, action subclasses, DB schema JSON) and
+only run database-side operations (metadata sync, SQL object generation,
+permissions, custom SQL scripts).
+
+--skipdb and --skipfiles are independent and can be combined in any mix.`;
 
   static examples = [
     {
@@ -31,11 +38,18 @@ existing metadata.`;
       command: '<%= config.bin %> <%= command.id %> --skipdb',
       description: 'Regenerate code files without touching the database',
     },
+    {
+      command: '<%= config.bin %> <%= command.id %> --skipfiles',
+      description: 'Run database-side operations only, without regenerating any code files',
+    },
   ];
 
   static flags = {
     skipdb: Flags.boolean({
       description: 'Skip database operations (metadata sync, SQL generation). Only regenerate TypeScript entities, Angular components, and GraphQL resolvers from existing metadata.',
+    }),
+    skipfiles: Flags.boolean({
+      description: 'Skip file-generation operations (TypeScript entities, Angular components, GraphQL resolvers, action subclasses, DB schema JSON). Only run database-side operations.',
     }),
   };
 
@@ -56,7 +70,7 @@ existing metadata.`;
     // Initialize configuration
     initializeConfig(process.cwd());
 
-    // Call the function with the determined argument
-    runMemberJunctionCodeGeneration(this.flags.skipDb);
+    // Call the function with the determined arguments
+    runMemberJunctionCodeGeneration(this.flags.skipdb, this.flags.skipfiles);
   }
 }

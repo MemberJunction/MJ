@@ -1,8 +1,8 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { RunView, UserInfo } from "@memberjunction/core";
+import { UserInfo } from "@memberjunction/core";
 import { MJFileStorageAccountEntity, MJFileStorageProviderEntity } from "@memberjunction/core-entities";
-import { FileStorageBase, initializeDriverWithAccountCredentials } from "@memberjunction/storage";
+import { FileStorageBase, FileStorageEngine } from "@memberjunction/storage";
 
 /**
  * Abstract base class for file storage operations.
@@ -15,64 +15,35 @@ import { FileStorageBase, initializeDriverWithAccountCredentials } from "@member
 export abstract class BaseFileStorageAction extends BaseAction {
 
     /**
-     * Get storage account entity by name
+     * Get storage account entity by name using cached metadata.
      * @param accountName - Name of the storage account
-     * @param contextUser - User context for the operation
      * @returns MJFileStorageAccountEntity or null if not found
      */
-    protected async getStorageAccount(accountName: string, contextUser: UserInfo): Promise<MJFileStorageAccountEntity | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<MJFileStorageAccountEntity>({
-            EntityName: 'MJ: File Storage Accounts',
-            ExtraFilter: `Name='${accountName.replace(/'/g, "''")}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (result.Success && result.Results && result.Results.length > 0) {
-            return result.Results[0];
-        }
-
-        return null;
+    protected getStorageAccount(accountName: string): MJFileStorageAccountEntity | null {
+        return FileStorageEngine.Instance.GetAccountByName(accountName) ?? null;
     }
 
     /**
-     * Get storage provider entity by ID
+     * Get storage provider entity by ID using cached metadata.
      * @param providerId - ID of the storage provider
-     * @param contextUser - User context for the operation
      * @returns MJFileStorageProviderEntity or null if not found
      */
-    protected async getStorageProviderById(providerId: string, contextUser: UserInfo): Promise<MJFileStorageProviderEntity | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<MJFileStorageProviderEntity>({
-            EntityName: 'MJ: File Storage Providers',
-            ExtraFilter: `ID='${providerId}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (result.Success && result.Results && result.Results.length > 0) {
-            return result.Results[0];
-        }
-
-        return null;
+    protected getStorageProviderById(providerId: string): MJFileStorageProviderEntity | null {
+        return FileStorageEngine.Instance.GetProviderById(providerId) ?? null;
     }
 
     /**
-     * Initialize storage driver using the enterprise credential model
+     * Initialize storage driver using the enterprise credential model via FileStorageEngine.
      * @param accountEntity - MJFileStorageAccountEntity to initialize
-     * @param providerEntity - MJFileStorageProviderEntity for the account
      * @param contextUser - User context for credential access
      * @returns Initialized FileStorageBase driver
      */
     protected async initializeDriver(
         accountEntity: MJFileStorageAccountEntity,
-        providerEntity: MJFileStorageProviderEntity,
         contextUser: UserInfo
     ): Promise<FileStorageBase> {
-        return initializeDriverWithAccountCredentials({
-            accountEntity,
-            providerEntity,
-            contextUser
-        });
+        await FileStorageEngine.Instance.Config(false, contextUser);
+        return FileStorageEngine.Instance.GetDriver(accountEntity.ID, contextUser);
     }
 
     /**
@@ -89,21 +60,21 @@ export abstract class BaseFileStorageAction extends BaseAction {
             };
         }
 
-        const account = await this.getStorageAccount(accountName, params.ContextUser);
+        const account = this.getStorageAccount(accountName);
         if (!account) {
             return {
                 error: this.createErrorResult(`Storage account '${accountName}' not found`, "ACCOUNT_NOT_FOUND")
             };
         }
 
-        const provider = await this.getStorageProviderById(account.ProviderID, params.ContextUser);
+        const provider = this.getStorageProviderById(account.ProviderID);
         if (!provider) {
             return {
                 error: this.createErrorResult(`Storage provider not found for account '${accountName}'`, "PROVIDER_NOT_FOUND")
             };
         }
 
-        const driver = await this.initializeDriver(account, provider, params.ContextUser);
+        const driver = await this.initializeDriver(account, params.ContextUser);
         return { driver };
     }
 

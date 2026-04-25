@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/core';
-import { MJFileEntity, MJFileSchema, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+import { MJFileEntity, MJFileSchema, MJFileStorageProviderEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 
 import { z } from 'zod';
@@ -35,8 +35,8 @@ const FileFieldsFragment = gql`
 
 const FileUploadMutation = gql`
   ${FileFieldsFragment}
-  mutation CreateMJFile($input: CreateMJFileInput!) {
-    CreateMJFile(input: $input) {
+  mutation CreateFile($input: CreateMJFileInput!) {
+    CreateFile(input: $input) {
       NameExists
       UploadUrl
       File {
@@ -47,14 +47,14 @@ const FileUploadMutation = gql`
 `;
 
 const FileUploadMutationSchema = z.object({
-  CreateMJFile: z.object({
+  CreateFile: z.object({
     NameExists: z.boolean(),
     UploadUrl: z.string(),
     File: MJFileSchema.omit({ __mj_CreatedAt: true, __mj_UpdatedAt: true }).passthrough(),
   }),
 });
 
-type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateMJFile']['File'];
+type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateFile']['File'];
 type UploadTuple = [FileSelectInfo, ApiFile, string];
 
 @Component({
@@ -85,9 +85,11 @@ export class FileUploadComponent implements OnInit {
   }
 
   async Refresh() {
-    const rv = new RunView();
-    const viewResults = await rv.RunView({ EntityName: 'MJ: File Storage Providers', ExtraFilter: 'IsActive = 1', OrderBy: 'Priority DESC' });
-    const provider: MJFileStorageProviderEntity | undefined = viewResults.Results[0];
+    await FileStorageEngineBase.Instance.Config(false);
+    const activeProviders = FileStorageEngineBase.Instance.Providers
+      .filter(p => p.IsActive)
+      .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+    const provider: MJFileStorageProviderEntity | undefined = activeProviders[0];
     if (typeof provider?.ID === 'string') {
       this.defaultProviderID = provider.ID;
     }
@@ -158,7 +160,7 @@ export class FileUploadComponent implements OnInit {
       // make sure the response is correct
       const parsedResult = FileUploadMutationSchema.safeParse(result);
       if (parsedResult.success) {
-        const { File, UploadUrl, NameExists } = parsedResult.data.CreateMJFile;
+        const { File, UploadUrl, NameExists } = parsedResult.data.CreateFile;
         const uploadTuple: UploadTuple = [file, File, UploadUrl];
 
         // Confirm we want to overwrite

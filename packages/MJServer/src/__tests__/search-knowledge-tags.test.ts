@@ -108,7 +108,7 @@ function createMockSearchResult(overrides: Record<string, unknown> = {}) {
         ],
         TotalCount: 1,
         ElapsedMs: 42,
-        SourceCounts: { vector: 0, fulltext: 0, entity: 1, storage: 0 },
+        SourceCounts: { Vector: 0, FullText: 0, Entity: 1, Storage: 0 },
         ...overrides
     };
 }
@@ -190,7 +190,7 @@ describe('SearchKnowledgeResolver', () => {
         it('should map source counts correctly', async () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValueOnce(createMockSearchResult({
-                SourceCounts: { vector: 5, fulltext: 3, entity: 10, storage: 0 }
+                SourceCounts: { Vector: 5, FullText: 3, Entity: 10, Storage: 0 }
             }));
 
             const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, fakeContext as never);

@@ -10,7 +10,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewEncapsulation } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { BaseEntity, CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
@@ -321,12 +321,16 @@ type FormMode = 'none' | 'add-source' | 'edit-source' | 'add-type' | 'edit-type'
     encapsulation: ViewEncapsulation.None
 })
 export class AutotaggingPipelineResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
     private cdr = inject(ChangeDetectorRef);
-    private navigationService = inject(NavigationService);
+    protected override navigationService = inject(NavigationService);
 
     // ── Global state ──
     public IsLoading = true;
+
+    // ── Accurate total counts from TotalRowCount (not capped by MaxRows) ──
+    private totalContentItemCount = 0;
+    private totalContentTagCount = 0;
 
     // ── Tab state ──
     public ActiveTab: TabName = 'pipeline';
@@ -547,6 +551,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     private tagsRaw: Record<string, unknown>[] = [];
     private taggedItemsRaw: Record<string, unknown>[] = [];
     private tagAuditLogsRaw: Record<string, unknown>[] = [];
+    /** Cached per-tag aggregates from server-side SQL (weights + counts) */
+    private tagAggregateWeights = new Map<string, number>();
+    private tagAggregateCounts = new Map<string, number>();
 
     // ── Slide-in form ──
     public FormMode: FormMode = 'none';
@@ -618,6 +625,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public MoveNewParentID: string | null = null;
     /** The node currently being moved */
     private moveTargetNode: TaxTreeNode | null = null;
+
+    // ── Merge Into dialog state ──
+    public ShowMergeIntoDialog = false;
+    public MergeSourceTag: TaxTreeNode | null = null;
+    public MergeTargetID: string | null = null;
+    public MergeTargetData: { ID: string; Label: string }[] = [];
 
     // ── Treemap drill-in state ──
     /** Whether the treemap drill-in panel is visible */
@@ -889,6 +902,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             BranchForeignKey: 'VendorID',
         },
     };
+    /** Branch config filtered to only vendors that have at least one embedding model */
+    public EmbeddingVendorBranch: TreeBranchConfig = {
+        EntityName: 'MJ: AI Vendors',
+        DisplayField: 'Name',
+        IDField: 'ID',
+        DefaultIcon: 'fa-solid fa-building',
+        OrderBy: 'Name ASC',
+        ExtraFilter: `ID IN (SELECT mv.VendorID FROM [__mj].vwAIModelVendors mv JOIN [__mj].vwAIModels m ON mv.ModelID = m.ID WHERE m.AIModelType = 'Embeddings')`,
+    };
     public EmbeddingModelsLeaf: TreeLeafConfig = {
         EntityName: 'MJ: AI Models',
         ParentField: '',
@@ -980,6 +1002,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -1107,7 +1130,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 { EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: 200, ResultType: 'simple', Fields: ['ID', 'Name', 'ContentSourceID', 'ContentSourceTypeID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'Text', 'Checksum', 'EntityRecordDocumentID', '__mj_CreatedAt', '__mj_UpdatedAt'] },
                 { EntityName: 'MJ: Content Process Runs', OrderBy: 'StartTime DESC', MaxRows: 100, ResultType: 'simple' },
-                { EntityName: 'MJ: Content Item Tags', ResultType: 'simple', Fields: ['ID', 'ItemID', 'Tag', 'Weight', '__mj_CreatedAt'] },
+                { EntityName: 'MJ: Content Item Tags', ResultType: 'simple', Fields: ['ID', 'ItemID', 'Item', 'Tag', 'TagID', 'Weight', '__mj_CreatedAt'] },
                 { EntityName: 'MJ: Content Source Types', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Types', ResultType: 'simple' }
             ]);
@@ -1118,6 +1141,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             this.contentTagsRaw = tagsResult.Success ? tagsResult.Results : [];
             this.contentSourceTypesRaw = sourceTypesResult.Success ? sourceTypesResult.Results : [];
             this.contentTypesRaw = contentTypesResult.Success ? contentTypesResult.Results : [];
+
+            // Use TotalRowCount for accurate KPI/badge counts (the Results arrays are
+            // capped by MaxRows for feed display, but TotalRowCount reflects the full DB count)
+            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount : 0;
+            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
 
             // Load ScheduledAction entities referenced by sources so cron descriptions are available
             await this.loadScheduledActionsForSources();
@@ -1138,15 +1166,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             { Tab: 'pipeline', Icon: 'fa-solid fa-gauge-high', Label: 'Pipeline', BadgeText: this.IsRunning ? 'Live' : '', BadgeClass: 'nav-badge-live' },
             { Tab: 'sources', Icon: 'fa-solid fa-database', Label: 'Sources', BadgeText: String(this.contentSourcesRaw.length), BadgeClass: '' },
             { Tab: 'types', Icon: 'fa-solid fa-sliders', Label: 'Content Types', BadgeText: String(this.contentTypesRaw.length), BadgeClass: '' },
-            { Tab: 'tags', Icon: 'fa-solid fa-tag', Label: 'Tag Library', BadgeText: String(this.contentTagsRaw.length), BadgeClass: '' },
+            { Tab: 'tags', Icon: 'fa-solid fa-tag', Label: 'Tag Library', BadgeText: String(this.totalContentTagCount), BadgeClass: '' },
             { Tab: 'taxonomy', Icon: 'fa-solid fa-sitemap', Label: 'Taxonomy', BadgeText: String(this.tagsRaw.length || ''), BadgeClass: '' },
         ];
     }
 
     private buildKPIMetrics(): void {
         const sourceCount = this.contentSourcesRaw.length;
-        const itemCount = this.contentItemsRaw.length;
-        const tagCount = this.contentTagsRaw.length;
+        const itemCount = this.totalContentItemCount;
+        const tagCount = this.totalContentTagCount;
         const errorCount = this.contentRunsRaw.filter(r => (r['Status'] as string)?.toLowerCase() === 'error' || (r['Status'] as string)?.toLowerCase() === 'failed').length;
 
         this.KPIMetrics = [
@@ -1185,10 +1213,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private buildSourceMinis(): void {
-        const itemCountBySource = this.countItemsBySource();
+        // When items are capped by MaxRows, countItemsBySource() undercounts.
+        // For a single source, use the accurate totalContentItemCount instead.
+        const singleSource = this.contentSourcesRaw.length === 1;
+        const itemCountBySource = singleSource ? null : this.countItemsBySource();
         this.SourceMinis = this.contentSourcesRaw.map(source => {
             const id = source['ID'] as string;
-            const itemCount = itemCountBySource.get(id) ?? 0;
+            const itemCount = singleSource ? this.totalContentItemCount : (itemCountBySource!.get(id) ?? 0);
             const typeName = (source['ContentSourceType'] as string) ?? 'Unknown';
             return {
                 ID: id,
@@ -1253,14 +1284,17 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private buildSourceCards(): void {
-        const itemCountBySource = this.countItemsBySource();
-        const tagCountBySource = this.countTagsBySource();
+        // When there's a single source, use the accurate total counts from TotalRowCount
+        // instead of counting from the capped contentItemsRaw/contentTagsRaw arrays.
+        const singleSource = this.contentSourcesRaw.length === 1;
+        const itemCountBySource = singleSource ? null : this.countItemsBySource();
+        const tagCountBySource = singleSource ? null : this.countTagsBySource();
         const lastRunBySource = this.getLastRunBySource();
 
         this.SourceCards = this.contentSourcesRaw.map(source => {
             const id = source['ID'] as string;
-            const itemCount = itemCountBySource.get(id) ?? 0;
-            const tagCount = tagCountBySource.get(id) ?? 0;
+            const itemCount = singleSource ? this.totalContentItemCount : (itemCountBySource!.get(id) ?? 0);
+            const tagCount = singleSource ? this.totalContentTagCount : (tagCountBySource!.get(id) ?? 0);
             const avgTags = itemCount > 0 ? (tagCount / itemCount).toFixed(1) : '0';
             const lastRun = lastRunBySource.get(id);
             const typeName = (source['ContentSourceType'] as string) ?? 'Unknown';
@@ -1348,7 +1382,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     private buildContentTypeCards(): void {
         const sourcesUsingByType = this.countSourcesByContentType();
-        const itemsByType = this.countItemsByContentType();
+        // When items are capped by MaxRows, countItemsByContentType undercounts.
+        // For a single content type, use the accurate totalContentItemCount.
+        const singleType = this.contentTypesRaw.length === 1;
+        const itemsByType = singleType ? null : this.countItemsByContentType();
 
         this.ContentTypeCards = this.contentTypesRaw.map(ct => {
             const id = ct['ID'] as string;
@@ -1364,7 +1401,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 MinTags: minTags,
                 MaxTags: maxTags,
                 SourcesUsing: sourcesUsingByType.get(id) ?? 0,
-                ItemsTagged: itemsByType.get(id) ?? 0,
+                ItemsTagged: singleType ? this.totalContentItemCount : (itemsByType!.get(id) ?? 0),
                 RangeLeftPct: Math.round((minTags / range) * 100),
                 RangeRightPct: Math.round(100 - (maxTags / range) * 100),
                 EmbeddingModelID: (ct['EmbeddingModelID'] as string) ?? '',
@@ -1538,9 +1575,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const endTime = run['EndTime'] as string | null;
             const duration = this.computeDuration(startTime, endTime);
             const processedItems = run['ProcessedItems'] as number | null;
+            const errorCount = run['ErrorCount'] as number | null;
             const statusLower = status.toLowerCase();
             const isFailed = statusLower === 'error' || statusLower === 'failed';
             const isRunning = statusLower === 'running' || statusLower === 'processing';
+            const hasErrors = (errorCount ?? 0) > 0;
 
             return {
                 ID: run['ID'] as string,
@@ -1551,8 +1590,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 Duration: duration,
                 Items: processedItems != null ? this.formatNumber(processedItems) : '\u2014',
                 Tags: '\u2014',
-                Errors: isFailed ? status : '0',
-                ErrorClass: isFailed ? 'run-error-text' : ''
+                Errors: hasErrors ? this.formatNumber(errorCount!) : (isFailed ? status : '0'),
+                ErrorClass: isFailed || hasErrors ? 'run-error-text' : ''
             };
         });
     }
@@ -2541,7 +2580,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         }
         const result = new Map<string, string>();
         for (const [tag, sourceCounts] of tagSourceCounts) {
-            let maxSource = '';
+            let maxSource = 'Unknown';
             let maxCount = 0;
             for (const [source, count] of sourceCounts) {
                 if (count > maxCount) { maxSource = source; maxCount = count; }
@@ -3131,9 +3170,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const endTime = run['EndTime'] as string | null;
             const duration = this.computeDuration(startTime, endTime);
             const processedItems = run['ProcessedItems'] as number | null;
+            const errorCount = run['ErrorCount'] as number | null;
             const statusLower = status.toLowerCase();
             const isFailed = statusLower === 'error' || statusLower === 'failed';
             const isRunning = statusLower === 'running' || statusLower === 'processing';
+            const hasErrors = (errorCount ?? 0) > 0;
 
             return {
                 ID: run['ID'] as string,
@@ -3144,8 +3185,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 Duration: duration,
                 Items: processedItems != null ? this.formatNumber(processedItems) : '\u2014',
                 Tags: '\u2014',
-                Errors: isFailed ? status : '0',
-                ErrorClass: isFailed ? 'run-error-text' : ''
+                Errors: hasErrors ? this.formatNumber(errorCount!) : (isFailed ? status : '0'),
+                ErrorClass: isFailed || hasErrors ? 'run-error-text' : ''
             };
         });
     }
@@ -3193,6 +3234,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             // Also ensure content item tags are loaded for cross-referencing
             await this.ensureBaseDataLoaded();
 
+            // Load per-tag aggregates (weights + counts) via server-side SQL
+            await this.loadTagAggregates();
+
             this.buildTaxTree();
             this.buildTaxDuplicates();
             this.buildTaxOrphans();
@@ -3212,11 +3256,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      */
     private buildTaxTree(): void {
         const tagMap = new Map<string, TaxTreeNode>();
-        const tagItemCounts = this.countItemsByTag();
-        const tagAvgWeights = this.computeTagAvgWeights();
+        const tagItemCounts = this.tagAggregateCounts;
+        const tagAvgWeights = this.tagAggregateWeights;
 
-        // Create flat node list from raw tags
-        for (const tag of this.tagsRaw) {
+        // Create flat node list from raw tags (exclude merged/soft-deleted tags)
+        const activeTags = this.tagsRaw.filter(t => (t['Status'] as string)?.toLowerCase() !== 'merged');
+        for (const tag of activeTags) {
             const id = tag['ID'] as string;
             const normalizedId = NormalizeUUID(id);
             const name = (tag['Name'] as string) ?? 'Unnamed';
@@ -3343,26 +3388,35 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     /**
-     * Computes the average weight per tag from Content Item Tags.
-     * Uses NormalizeUUID for cross-platform UUID case consistency.
+     * Loads per-tag average weights and item counts via a server-side SQL aggregation.
+     * This avoids loading all 17K+ TaggedItem rows to the browser.
      */
-    private computeTagAvgWeights(): Map<string, number> {
-        const sums = new Map<string, number>();
-        const counts = new Map<string, number>();
-        for (const cit of this.contentTagsRaw) {
-            const tagId = cit['TagID'] as string;
-            const w = Number(cit['Weight'] ?? 0.5);
-            if (tagId) {
-                const key = NormalizeUUID(tagId);
-                sums.set(key, (sums.get(key) ?? 0) + w);
-                counts.set(key, (counts.get(key) ?? 0) + 1);
+    /**
+     * Loads per-tag average weights and item counts via the "Tag Aggregates" saved query.
+     * This runs a SQL GROUP BY on the server, avoiding loading 17K+ TaggedItem rows to the browser.
+     */
+    private async loadTagAggregates(): Promise<void> {
+        this.tagAggregateWeights.clear();
+        this.tagAggregateCounts.clear();
+        try {
+            const rq = new RunQuery();
+            const result = await rq.RunQuery({
+                QueryName: 'Tag Aggregates',
+                CategoryPath: '/MJ/Tags'
+            });
+            if (result.Success) {
+                for (const row of result.Results) {
+                    const tagId = row['TagID'] as string;
+                    if (tagId) {
+                        const key = NormalizeUUID(tagId);
+                        this.tagAggregateWeights.set(key, Number(row['AvgWeight'] ?? 0));
+                        this.tagAggregateCounts.set(key, Number(row['ItemCount'] ?? 0));
+                    }
+                }
             }
+        } catch (error) {
+            console.error('[Autotagging] Error loading tag aggregates:', error);
         }
-        const avgs = new Map<string, number>();
-        for (const [t, sum] of sums) {
-            avgs.set(t, Math.round((sum / (counts.get(t) ?? 1)) * 100) / 100);
-        }
-        return avgs;
     }
 
     public ToggleTaxNode(node: TaxTreeNode): void {
@@ -3427,30 +3481,19 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private loadRecentItemsForTag(node: TaxTreeNode): void {
-        // Find content item tags that reference this tag's ID
-        const recentItems: { Name: string; Weight: number; Date: string; Icon: string }[] = [];
+        // Find content item tags that reference this tag's ID.
+        // Use the 'Item' view field (ContentItem name) directly from the tag record
+        // instead of looking up from the capped contentItemsRaw array.
         const matchingTags = this.contentTagsRaw.filter(cit =>
             UUIDsEqual(cit['TagID'] as string, node.ID)
         ).slice(0, 5);
 
-        for (const cit of matchingTags) {
-            const itemId = cit['ItemID'] as string;
-            const item = this.contentItemsRaw.find(i => (i['ID'] as string) === itemId);
-            const itemName = item ? ((item['Name'] as string) ?? 'Unnamed Item') : 'Unknown Item';
-            const sourceType = item ? ((item['ContentSourceType'] as string) ?? '') : '';
-            const icon = sourceType.toLowerCase().includes('web') ? 'fa-solid fa-globe'
-                : sourceType.toLowerCase().includes('rss') ? 'fa-solid fa-rss'
-                : 'fa-solid fa-file-lines';
-
-            recentItems.push({
-                Name: itemName,
-                Weight: Number(cit['Weight'] ?? 0.5),
-                Date: this.formatShortDate((cit['__mj_CreatedAt'] as string) ?? ''),
-                Icon: icon
-            });
-        }
-
-        this.TaxRecentItems = recentItems;
+        this.TaxRecentItems = matchingTags.map(cit => ({
+            Name: (cit['Item'] as string) ?? 'Unnamed Item',
+            Weight: Number(cit['Weight'] ?? 0.5),
+            Date: this.formatShortDate((cit['__mj_CreatedAt'] as string) ?? ''),
+            Icon: 'fa-solid fa-file-lines'
+        }));
     }
 
     // ── Tag Operations ──
@@ -3736,7 +3779,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
     }
 
+    public IsMerging = false;
+
     public async MergeTags(sourceTagId: string, targetTagId: string, sourceName: string, targetName: string): Promise<void> {
+        if (this.IsMerging) return; // Prevent duplicate calls from button spam
+        this.IsMerging = true;
+        this.cdr.detectChanges();
+
         try {
             // Re-parent tagged items from source to target
             const itemsToMove = this.taggedItemsRaw.filter(ti => (ti['TagID'] as string) === sourceTagId);
@@ -3757,7 +3806,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 await entity.Save();
             }
 
-            // Delete source tag
+            // Clean up co-occurrence records before delete (FK constraint)
+            await this.cleanupTagReferences(sourceTagId);
+
+            // Delete source tag (original behavior — hard delete)
             const sourceEntity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
             await sourceEntity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceTagId }]));
             await sourceEntity.Delete();
@@ -3768,6 +3820,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             MJNotificationService.Instance.CreateSimpleNotification(`Merge error: ${msg}`, 'error', 4000);
+        } finally {
+            this.IsMerging = false;
+            this.cdr.detectChanges();
         }
     }
 
@@ -3798,10 +3853,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Duplicates ──
 
     private buildTaxDuplicates(): void {
-        const tags = this.tagsRaw.map(t => ({
-            ID: t['ID'] as string,
-            Name: (t['Name'] as string) ?? ''
-        }));
+        const tags = this.tagsRaw
+            .filter(t => (t['Status'] as string)?.toLowerCase() !== 'merged')
+            .map(t => ({
+                ID: t['ID'] as string,
+                Name: (t['Name'] as string) ?? ''
+            }));
 
         const pairs: TaxDuplicatePair[] = [];
 
@@ -3971,8 +4028,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Uses NormalizeUUID for consistent cross-platform UUID comparisons.
      */
     private buildTaxOrphans(): void {
-        const tagItemCounts = this.countItemsByTag();
-        const tagAvgWeights = this.computeTagAvgWeights();
+        const tagItemCounts = this.tagAggregateCounts;
+        const tagAvgWeights = this.tagAggregateWeights;
         const hasChildren = new Set<string>();
         for (const t of this.tagsRaw) {
             const pid = t['ParentID'] as string;
@@ -3983,7 +4040,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             .filter(t => {
                 const normalizedId = NormalizeUUID(t['ID'] as string);
                 const parentId = t['ParentID'] as string | null;
+                const status = (t['Status'] as string)?.toLowerCase();
                 const itemCount = tagItemCounts.get(normalizedId) ?? 0;
+                // Skip merged tags — they're soft-deleted
+                if (status === 'merged') return false;
                 // Orphan: no parent, no children, and zero connections
                 return !parentId && !hasChildren.has(normalizedId) && itemCount === 0;
             })
@@ -4018,12 +4078,31 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
     }
 
+    /**
+     * Clean up TagCoOccurrence records that reference a tag before deleting it.
+     * Without this, the FK constraint on TagCoOccurrence blocks the delete.
+     */
+    private async cleanupTagReferences(tagId: string): Promise<void> {
+        const rv = new RunView();
+        const coOccResult = await rv.RunView<BaseEntity>({
+            EntityName: 'MJ: Tag Co Occurrences',
+            ExtraFilter: `TagAID='${tagId}' OR TagBID='${tagId}'`,
+            ResultType: 'entity_object'
+        });
+        if (coOccResult.Success) {
+            for (const coOcc of coOccResult.Results) {
+                await coOcc.Delete();
+            }
+        }
+    }
+
     public DeleteOrphan(orphan: TaxOrphanCard): void {
         this.OpenConfirmDialog(
             'Delete Orphan Tag',
             `Delete orphan tag "${orphan.Name}"?`,
             async () => {
                 try {
+                    await this.cleanupTagReferences(orphan.ID);
                     const md = new Metadata();
                     const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
                     await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
@@ -4055,6 +4134,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 let deletedCount = 0;
                 for (const orphan of selected) {
                     try {
+                        await this.cleanupTagReferences(orphan.ID);
                         const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
                         await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
                         if (await entity.Delete()) {
@@ -4500,6 +4580,54 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.moveTargetNode = null;
         this.MoveNewParentID = null;
         this.cdr.detectChanges();
+    }
+
+    // ── Merge Into Dialog ──
+
+    public OpenMergeIntoDialog(node: TaxTreeNode): void {
+        this.MergeSourceTag = node;
+        this.MergeTargetID = null;
+        this.MergeTargetData = this.GetMergeTargetOptions().map(o => ({
+            ID: o.ID,
+            Label: `${'  '.repeat(o.Depth)}${o.Name} (${o.ItemCount})`
+        }));
+        this.ShowMergeIntoDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    public OnMergeTargetSelected(value: unknown): void {
+        this.MergeTargetID = value != null ? String(value) : null;
+    }
+
+    public CloseMergeIntoDialog(): void {
+        this.ShowMergeIntoDialog = false;
+        this.MergeSourceTag = null;
+        this.MergeTargetID = null;
+        this.cdr.detectChanges();
+    }
+
+    /** Returns flat list of tags eligible as merge targets (excludes the source tag) */
+    public GetMergeTargetOptions(): { ID: string; Name: string; Depth: number; ItemCount: number }[] {
+        if (!this.MergeSourceTag) return [];
+        const sourceNormalized = NormalizeUUID(this.MergeSourceTag.ID);
+
+        return this.TaxFlatNodes
+            .filter(n => NormalizeUUID(n.ID) !== sourceNormalized)
+            .map(n => ({ ID: n.ID, Name: n.Name, Depth: n.Depth, ItemCount: n.ItemCount }));
+    }
+
+    public async ExecuteMergeInto(): Promise<void> {
+        if (!this.MergeSourceTag || !this.MergeTargetID) return;
+        const targetNode = this.TaxFlatNodes.find(n => UUIDsEqual(n.ID, this.MergeTargetID!));
+        const targetName = targetNode?.Name ?? 'Unknown';
+        const sourceName = this.MergeSourceTag.Name;
+        const sourceId = this.MergeSourceTag.ID;
+        const targetId = this.MergeTargetID;
+
+        this.ShowMergeIntoDialog = false;
+        await this.MergeTags(sourceId, targetId, sourceName, targetName);
+        this.MergeSourceTag = null;
+        this.MergeTargetID = null;
     }
 
     // ── Treemap Drill-In ──

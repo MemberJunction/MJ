@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -44,6 +44,8 @@ import {
     ActionChange,
     ActionChangeScope,
     MediaOutput,
+    FileOutputRef,
+    ParseFileOutputRef,
     SecondaryScopeConfig,
     SecondaryScopeValue,
     AgentResponseForm,
@@ -58,6 +60,7 @@ import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
+import { ArtifactToolManager, ArtifactToolCall, InputArtifact } from './ArtifactToolManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
@@ -263,6 +266,19 @@ export class BaseAgent {
      */
     private _feedbackRequestId: string | null = null;
 
+    private _resolvedStorageAccountId: string | null = null;
+
+    /**
+     * The resolved FileStorageAccount ID for this agent run. Set during Execute()
+     * via the hierarchical resolution chain (Runtime → Agent → Category → Type → fallback).
+     * Included in the ExecuteAgentResult so AgentRunner can route file artifact uploads.
+     *
+     * Subclasses can read this to customize storage behavior based on the resolved account.
+     */
+    protected get ResolvedStorageAccountId(): string | null {
+        return this._resolvedStorageAccountId;
+    }
+
     /**
      * Access the current run for the agent
      */
@@ -359,6 +375,28 @@ export class BaseAgent {
      * @private
      */
     private static readonly LARGE_BINARY_THRESHOLD = 10000;
+
+    /**
+     * Inspects a set of action output params for any value matching the FileOutputRef shape
+     * (an object with `fileName`, `mimeType`, and either `fileData` or `fileId`).
+     * Returns all matching FileOutputRef values found across all output params.
+     *
+     * Detection is shape-based, not name-based — actions can name their file output
+     * parameter anything and it will still be detected.
+     *
+     * @param outputParams - The output parameters from an action result
+     * @private
+     * @since 5.22.0
+     */
+    private detectFileOutputs(outputParams: ActionParam[]): FileOutputRef[] {
+        const results: FileOutputRef[] = [];
+        for (const param of outputParams) {
+            if (param.Value == null) continue;
+            const ref = ParseFileOutputRef(param.Value);
+            if (ref) results.push(ref);
+        }
+        return results;
+    }
 
     /**
      * Intercepts large media content in action results and replaces with placeholder references.
@@ -671,6 +709,15 @@ export class BaseAgent {
      */
     private _mediaOutputs: MediaOutput[] = [];
 
+    /**
+     * Accumulated file outputs (PDF, Excel, Word, etc.) produced by file-generation actions.
+     * Detected from the FileOutput output param after each action executes.
+     * Returned in ExecuteAgentResult.fileOutputs for processing by AgentRunner into MJ: Artifacts.
+     * @private
+     * @since 5.22.0
+     */
+    private _fileOutputs: FileOutputRef[] = [];
+
 
     /**
      * Payload manager for handling payload access control.
@@ -685,6 +732,12 @@ export class BaseAgent {
      * @since 2.46.0
      */
     private _scratchpadManager: ScratchpadManager = new ScratchpadManager();
+
+    /**
+     * Manages artifact tools for the current agent run.
+     * Allows agents to explore input artifacts on demand.
+     */
+    private _artifactToolManager: ArtifactToolManager = new ArtifactToolManager();
 
     /**
      * Effective actions available to this agent after applying actionChanges.
@@ -1018,10 +1071,63 @@ export class BaseAgent {
      * });
      * ```
      */
+    /**
+     * Engine-default wall-clock timeout applied to any agent run whose
+     * `ExecuteAgentParams.maxExecutionTimeMs` is not set. Sub-classes can
+     * override to globally change the default. Intentionally generous
+     * (2 hours) — tighten per-run for interactive scenarios.
+     */
+    protected get DefaultAgentTimeoutMS(): number {
+        return 2 * 60 * 60 * 1000;
+    }
+
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         // Capture per-request provider for the duration of this execution so all entity
         // saves go through the isolated provider, never the global singleton's transaction.
         this._activeProvider = params.provider || Metadata.Provider;
+
+        // =====================================================================================
+        // UNIVERSAL WALL-CLOCK TIMEOUT
+        //
+        // We chain any caller-supplied `cancellationToken` with an internal
+        // AbortController that fires after `maxExecutionTimeMs` (falling back
+        // to `DefaultAgentTimeoutMS`). The chained signal replaces
+        // `params.cancellationToken` for the duration of the run, so every
+        // existing cancellation check in the body of Execute sees the merged
+        // abort condition — whether it came from the caller, the timeout, or
+        // both.
+        //
+        // Actions invoked from this agent carry their own AbortSignal on
+        // `RunActionParams.AbortSignal` (see ActionEngine.RunAction) and are
+        // unaffected by this wrapper — their timeout budget is independent.
+        // =====================================================================================
+        const agentTimeoutMS = params.maxExecutionTimeMs ?? this.DefaultAgentTimeoutMS;
+        const upstreamToken = params.cancellationToken;
+        const timeoutController = new AbortController();
+        const relayUpstreamAbort = () => {
+            if (!timeoutController.signal.aborted) {
+                timeoutController.abort(upstreamToken?.reason ?? 'upstream cancellation');
+            }
+        };
+        if (upstreamToken) {
+            if (upstreamToken.aborted) {
+                relayUpstreamAbort();
+            } else {
+                upstreamToken.addEventListener('abort', relayUpstreamAbort, { once: true });
+            }
+        }
+        const timeoutId = setTimeout(() => {
+            if (!timeoutController.signal.aborted) {
+                timeoutController.abort(
+                    `Agent '${params.agent.Name}' exceeded maxExecutionTimeMs (${agentTimeoutMS}ms)`
+                );
+            }
+        }, agentTimeoutMS);
+        // Route the merged signal back through `params` so the existing body of
+        // Execute (and downstream sub-agent invocations that propagate
+        // `cancellationToken`) observe it.
+        params.cancellationToken = timeoutController.signal;
+
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
 
@@ -1068,8 +1174,18 @@ export class BaseAgent {
                 this.convertUIMarkupInMessages(wrappedParams.conversationMessages);
             }
 
-            // Reset scratchpad for each new execution (ephemeral per run)
+            // Reset scratchpad and artifact tools for each new execution (ephemeral per run)
             this._scratchpadManager.Clear();
+            this._artifactToolManager.Clear();
+
+            // Initialize artifact tools with any input artifacts from the conversation
+            const inputArtifacts = (wrappedParams.data as Record<string, unknown>)?.__inputArtifacts as InputArtifact[] | undefined;
+            if (inputArtifacts?.length) {
+                this._artifactToolManager.Initialize(inputArtifacts);
+                this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
+            } else {
+                this.logStatus(`[ArtifactTools] No input artifacts found for this run`, true, params);
+            }
 
             // Initialize starting payload — must complete before AgentRun creation since the
             // run record stores the starting payload snapshot.
@@ -1134,6 +1250,9 @@ export class BaseAgent {
             this._dynamicActionLimits = {};
             this._mediaOutputs = [];
             this._messageLifecycleCallback = params.onMessageLifecycle;
+
+            // Resolve storage account for file artifacts
+            this._resolvedStorageAccountId = await this.getStorageAccountID(wrappedParams);
 
             // Check for cancellation after Phase 1
             if (params.cancellationToken?.aborted) {
@@ -1253,8 +1372,12 @@ export class BaseAgent {
         } catch (error) {
             // Check if error is due to cancellation
             if (params.cancellationToken?.aborted || error.message === 'Cancelled during execution') {
-                this.logStatus(`⚠️ Agent '${params.agent.Name}' execution cancelled: ${error.message}`, true, params);
-                return await this.createCancelledResult(error.message || 'Cancelled due to error during execution', params.contextUser);
+                const reason =
+                    typeof timeoutController.signal.reason === 'string'
+                        ? timeoutController.signal.reason
+                        : error.message;
+                this.logStatus(`⚠️ Agent '${params.agent.Name}' execution cancelled: ${reason}`, true, params);
+                return await this.createCancelledResult(reason || 'Cancelled due to error during execution', params.contextUser);
             }
             this.logError(error, {
                 agent: params.agent,
@@ -1262,14 +1385,25 @@ export class BaseAgent {
                 severity: 'critical'
             });
             return await this.createFailureResult(error.message, params.contextUser);
+        } finally {
+            // Release timeout / upstream-abort listeners so we don't leak
+            // handles when the run completes (success, failure, or cancel).
+            clearTimeout(timeoutId);
+            if (upstreamToken) {
+                upstreamToken.removeEventListener('abort', relayUpstreamAbort);
+            }
+            // Restore the caller's original cancellationToken on `params` so
+            // consumers that re-read `params` after the call see what they
+            // passed in, not our chained signal.
+            params.cancellationToken = upstreamToken;
         }
     }
 
     /**
      * Sub-classes can override this method to perform any specialized initialization
-     * @param params 
+     * @param params
      */
-    protected async initializeStartingPayload<P = any>(params: ExecuteAgentParams<any, P>): Promise<void> { 
+    protected async initializeStartingPayload<P = any>(params: ExecuteAgentParams<any, P>): Promise<void> {
         // the base class doesn't do anything here, this allows sub-classes
         // to do specialized initialization of the starting payload
     }
@@ -1927,6 +2061,27 @@ export class BaseAgent {
                 promptParams.data['_SCRATCHPAD_NOTES'] = this._scratchpadManager.GetNotes() || '_(no notes yet)_';
                 promptParams.data['_SCRATCHPAD_TASKS'] = this._scratchpadManager.ToPromptString();
                 promptParams.data['_SCRATCHPAD_TASK_SUMMARY'] = this._scratchpadManager.GetTaskSummary();
+            }
+
+            // Inject artifact tools template variables if enabled and artifacts are present
+            const artifactToolsEnabled = agentTypePromptParams?.includeArtifactToolsDocs !== false;
+            if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
+                promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
+                promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
+                promptParams.data['_ARTIFACT_TOOL_RESULTS'] = this._artifactToolManager.GetPendingResults();
+                promptParams.data['_ARTIFACT_TOOL_SUMMARY'] = this._artifactToolManager.GetSummary();
+                this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
+            } else if (this._artifactToolManager.HasArtifacts()) {
+                this.logStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`, true, params);
+            }
+
+            // Pass file artifacts as candidate native file inputs.
+            // The AIPromptRunner will check these against the resolved driver's
+            // FileCapabilities and attach qualifying files as native content blocks.
+            // When the driver doesn't support a file type, the runner falls back to
+            // the pre-extracted TextContent on each candidate.
+            if (this._artifactToolManager.HasArtifacts()) {
+                promptParams.nativeFileInputs = await this._artifactToolManager.GetNativeFileInputCandidates();
             }
         }
 
@@ -2888,14 +3043,38 @@ export class BaseAgent {
         errorMessage: string,
         config?: AgentConfiguration
     ): { isConfigError: boolean; detailedMessage: string } {
+        // Extract the property name from the error up front — used by the
+        // narrowed classifier below to decide whether this is a genuine config
+        // issue or a generic runtime exception that should bubble up normally.
+        const propertyMatch = errorMessage.match(/reading '(\w+)'/i);
+        const accessedProperty = propertyMatch ? propertyMatch[1].toLowerCase() : '';
+
+        // Only `.map/.x on undefined` errors that reference config-related
+        // properties are treated as configuration errors. Generic runtime
+        // errors (e.g. a tool handler crashing on `rows.map`) should not
+        // terminate the run as "unrecoverable config issue" — they should
+        // fail the step and let the agent try to recover.
+        const CONFIG_RELATED_PROPERTIES = new Set([
+            'prompt', 'childprompt', 'systemprompt', 'prompts',
+            'agent', 'agents', 'agenttype', 'agenttypes',
+            'model', 'models', 'vendor', 'vendors',
+            'template', 'templates',
+        ]);
+        const isConfigRelatedProperty = accessedProperty !== ''
+            && CONFIG_RELATED_PROPERTIES.has(accessedProperty);
+
         // Check for common configuration error patterns
         const configErrorPatterns = [
             {
-                pattern: /cannot read propert(y|ies) of (undefined|null)/i,
+                // Only match when the accessed property is config-related.
+                // Without this guard, any runtime `.map on undefined` (e.g.
+                // in an artifact tool handler) gets misclassified as a fatal
+                // configuration error and the agent run terminates.
+                pattern: isConfigRelatedProperty
+                    ? /cannot read propert(y|ies) of (undefined|null)/i
+                    : /__NEVER_MATCH_GENERIC_UNDEFINED_ACCESS__/,
                 getMessage: () => {
-                    // Try to extract what property was being accessed
-                    const propertyMatch = errorMessage.match(/reading '(\w+)'/i);
-                    const property = propertyMatch ? propertyMatch[1] : 'unknown property';
+                    const property = accessedProperty || 'unknown property';
 
                     let details = `Attempted to access property '${property}' on an undefined or null object.`;
 
@@ -3880,7 +4059,8 @@ The context is now within limits. Please retry your request with the recovered c
             { docsFlag: 'includeCommandDocs', responseTypeKey: 'commands' },
             { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
             { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' },
-            { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' }
+            { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' },
+            { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' }
         ];
 
         for (const { docsFlag, responseTypeKey } of alignmentMappings) {
@@ -3960,7 +4140,12 @@ The context is now within limits. Please retry your request with the recovered c
                 Value: value,
                 Type: 'Input' as const
             }));
-            
+
+            // Build action context: preserve the agent's context and inject resolved storage account ID
+            const actionContext = this._resolvedStorageAccountId
+                ? { ...(typeof params.context === 'object' && params.context ? params.context : {}), __resolvedStorageAccountId: this._resolvedStorageAccountId }
+                : params.context;
+
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({
                 Action: actionEntity,
@@ -3968,7 +4153,7 @@ The context is now within limits. Please retry your request with the recovered c
                 ContextUser: contextUser,
                 Filters: [],
                 SkipActionLog: false,
-                Context: params.context // pass along our context to actions so they can use it however they need
+                Context: actionContext
             });
             
             if (result.Success) {
@@ -5713,6 +5898,16 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
+            // Execute artifact tool calls if provided (zero turn cost — processed inline)
+            const artifactToolCalls = initialNextStep.artifactToolCalls as ArtifactToolCall[] | undefined;
+            const artifactToolsExecutedThisTurn = !!(artifactToolCalls?.length);
+            if (artifactToolsExecutedThisTurn) {
+                this.logStatus(`[ArtifactTools] LLM requested ${artifactToolCalls!.length} tool call(s): ${artifactToolCalls!.map(c => `${c.artifactId}.${c.tool}`).join(', ')}`, true, params);
+                await this._artifactToolManager.ExecuteToolCalls(artifactToolCalls!);
+            } else if (this._artifactToolManager.HasArtifacts()) {
+                this.logStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`, true, params);
+            }
+
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if
             // validation fails
             const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
@@ -5736,6 +5931,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // Include scratchpad snapshot after changes for audit/training data
                 ...(this._scratchpadManager.HasContent() && {
                     scratchpad: this._scratchpadManager.ToJSON()
+                }),
+                // Include artifact tools snapshot for audit/training data
+                ...(this._artifactToolManager.HasArtifacts() && {
+                    artifactTools: this._artifactToolManager.ToJSON()
                 }),
                 // Include memory attribution for observability
                 // This tracks which notes/examples were injected and influenced this step
@@ -5775,6 +5974,15 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Return based on next step
             if (updatedNextStep.step === 'Chat') {
+                // If artifact tools were called THIS turn, don't terminate yet — the LLM
+                // needs one more turn to see the results and incorporate them into its response.
+                // Without this, the tool results are wasted because the run exits before
+                // the LLM ever sees them.
+                if (artifactToolsExecutedThisTurn && this._artifactToolManager.HasArtifacts()) {
+                    this.logStatus(`[ArtifactTools] Chat step included tool calls — forcing one more turn so LLM can use results`, true, params);
+                    return { ...updatedNextStep, terminate: false, step: 'Retry' as BaseAgentNextStep<P>['step'] };
+                }
+
                 // For root agents, create a persistent AIAgentRequest so the request is
                 // tracked in the dashboard and can be responded to outside a conversation.
                 // This is done here because Chat decisions from executePromptStep terminate
@@ -6181,6 +6389,12 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
+            // Merge sub-agent's file outputs into parent's array for unified artifact creation.
+            if (subAgentResult.fileOutputs?.length) {
+                this._fileOutputs.push(...subAgentResult.fileOutputs);
+                this.logStatus(`📄 Collected ${subAgentResult.fileOutputs.length} file output(s) from sub-agent '${subAgentRequest.name}'`, true);
+            }
+
             // Determine if we should terminate after sub-agent
             const shouldTerminate = subAgentRequest.terminateAfter;
             
@@ -6505,6 +6719,12 @@ The context is now within limits. Please retry your request with the recovered c
                 if (refCount > 0) {
                     this.logStatus(`📦 Collected ${refCount} media reference(s) from related sub-agent '${subAgentRequest.name}'`, true);
                 }
+            }
+
+            // Merge sub-agent's file outputs into parent's array for unified artifact creation.
+            if (subAgentResult.fileOutputs?.length) {
+                this._fileOutputs.push(...subAgentResult.fileOutputs);
+                this.logStatus(`📄 Collected ${subAgentResult.fileOutputs.length} file output(s) from related sub-agent '${subAgentRequest.name}'`, true);
             }
 
             let mergedPayload = previousDecision.newPayload; // Start with parent's payload
@@ -7115,6 +7335,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // Pass actionEntity for generic ValueType=MediaOutput detection from metadata
                 const sanitizedParams = this.interceptLargeBinaryContent(outputParams, result.actionEntity);
 
+                // Collect file outputs (PDF, Excel, Word, etc.) for post-run artifact processing
+                const fileOutputs = this.detectFileOutputs(outputParams);
+                this._fileOutputs.push(...fileOutputs);
+
                 return {
                     actionName: result.action.name,
                     success: result.success,
@@ -7587,11 +7811,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Walks up the agent's category hierarchy looking for an AssignmentStrategy.
-     * Loads categories via RunView and caches them for the duration of this run.
-     * @private
+     * Uses AIEngine.Instance.AgentCategories (cached during engine Config).
      */
-    private _categoryCache: Array<{ ID: string; ParentID: string | null; AssignmentStrategy: string | null }> | null = null;
-
     private async resolveCategoryAssignmentStrategy(
         params: ExecuteAgentParams
     ): Promise<AgentRequestAssignmentStrategy | null> {
@@ -7599,23 +7820,14 @@ The context is now within limits. Please retry your request with the recovered c
         if (!categoryId) return null;
 
         try {
-            // Load all categories if not cached
-            if (!this._categoryCache) {
-                const rv = new RunView();
-                const result = await rv.RunView<{ ID: string; ParentID: string | null; AssignmentStrategy: string | null }>({
-                    EntityName: 'MJ: AI Agent Categories',
-                    Fields: ['ID', 'ParentID', 'AssignmentStrategy'],
-                    ResultType: 'simple'
-                }, params.contextUser);
-                this._categoryCache = result.Success ? result.Results : [];
-            }
+            const categories = AIEngine.Instance.AgentCategories;
 
             // Walk up the tree from the agent's category to the root
             let currentId: string | null = categoryId;
             const visited = new Set<string>(); // prevent infinite loops
             while (currentId && !visited.has(currentId)) {
                 visited.add(currentId);
-                const cat = this._categoryCache.find(c => UUIDsEqual(c.ID, currentId));
+                const cat = categories.find(c => UUIDsEqual(c.ID, currentId));
                 if (!cat) break;
 
                 const strategy = parseAssignmentStrategy(cat.AssignmentStrategy);
@@ -7628,6 +7840,98 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return null;
+    }
+
+
+    /**
+     * Resolves the file storage account ID for this agent's file artifacts.
+     *
+     * Resolution chain (first non-null wins):
+     * 1. Runtime override (`params.override?.storageAccountId`)
+     * 2. Agent-level (`params.agent.DefaultStorageAccountID`)
+     * 3. Category hierarchy — walks up the agent's category tree via `ParentID`
+     * 4. Agent Type-level (`agentType.DefaultStorageAccountID`)
+     * 5. System fallback — single active storage account, if only one exists
+     *
+     * This method is `protected` so subclasses can override the resolution logic
+     * for custom storage routing (e.g., routing by file type or tenant).
+     *
+     * @param params - The current agent execution parameters
+     * @returns The resolved FileStorageAccount ID, or null if none configured
+     */
+    protected async getStorageAccountID(params: ExecuteAgentParams): Promise<string | null> {
+        // 1. Runtime override — highest priority
+        if (params.override?.storageAccountId) {
+            return params.override.storageAccountId;
+        }
+
+        // 2. Agent-level override
+        if (params.agent.DefaultStorageAccountID) {
+            return params.agent.DefaultStorageAccountID;
+        }
+
+        // 3. Category tree walk
+        const categoryId = params.agent.CategoryID;
+        if (categoryId) {
+            try {
+                const categories = AIEngine.Instance.AgentCategories;
+
+                let currentId: string | null = categoryId;
+                const visited = new Set<string>();
+                while (currentId && !visited.has(currentId)) {
+                    visited.add(currentId);
+                    const cat = categories.find(c => UUIDsEqual(c.ID, currentId));
+                    if (!cat) break;
+                    if (cat.DefaultStorageAccountID) return cat.DefaultStorageAccountID;
+                    currentId = cat.ParentID;
+                }
+            } catch (error) {
+                LogError(`Error resolving category storage account: ${(error as Error).message}`);
+            }
+        }
+
+        // 4. Agent Type-level default
+        const agentTypeId = params.agent.TypeID;
+        if (agentTypeId) {
+            const agentType = AIEngine.Instance.AgentTypes.find(
+                at => UUIDsEqual(at.ID, agentTypeId)
+            );
+            if (agentType?.DefaultStorageAccountID) {
+                return agentType.DefaultStorageAccountID;
+            }
+        }
+
+        // 5. System fallback — use cached metadata (already loaded during engine Config)
+        const activeAccounts = FileStorageEngineBase.Instance.AccountsWithProviders
+            .filter(a => a.provider.IsActive);
+
+        if (activeAccounts.length === 0) {
+            // No storage configured — return null, inline base64 fallback handles it downstream
+            return null;
+        }
+
+        if (activeAccounts.length === 1) {
+            return activeAccounts[0].account.ID;
+        }
+
+        // 2+ active accounts but nothing configured at any level
+        const agentName = params.agent.Name || params.agent.ID;
+        const typeName = params.agent.TypeID
+            ? AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID))?.Name || params.agent.TypeID
+            : 'unknown';
+        const categoryName = params.agent.CategoryID
+            ? AIEngine.Instance.AgentCategories.find(c => UUIDsEqual(c.ID, params.agent.CategoryID))?.Name || params.agent.CategoryID
+            : 'none';
+        const accountNames = activeAccounts.map(a => `'${a.account.Name}' (${a.provider.Name})`).join(', ');
+
+        throw new Error(
+            `Multiple active file storage accounts detected (${accountNames}) but no DefaultStorageAccountID is configured ` +
+            `for agent '${agentName}', category '${categoryName}', or agent type '${typeName}'.\n` +
+            `To fix: Set DefaultStorageAccountID on one of the following (in order of priority):\n` +
+            `  1. Agent '${agentName}' — for this specific agent\n` +
+            `  2. Agent Category '${categoryName}' — for all agents in this category\n` +
+            `  3. Agent Type '${typeName}' — for all agents of this type`
+        );
     }
 
     /**
@@ -8733,7 +9037,9 @@ The context is now within limits. Please retry your request with the recovered c
                 ? this._injectedMemory
                 : undefined,
             mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
-            feedbackRequestId: this._feedbackRequestId || undefined
+            fileOutputs: this._fileOutputs.length > 0 ? this._fileOutputs : undefined,
+            feedbackRequestId: this._feedbackRequestId || undefined,
+            resolvedStorageAccountId: this._resolvedStorageAccountId || undefined
         };
     }
 

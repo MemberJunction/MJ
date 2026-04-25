@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Record Changes Restore — UX Mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #f5f7fa;
+    --bg-surface: #ffffff;
+    --bg-surface-card: #f8f9fb;
+    --bg-surface-sunken: #f1f5f9;
+    --bg-surface-hover: #f4f6fa;
+    --bg-overlay: rgba(15, 23, 42, 0.55);
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --text-disabled: #94a3b8;
+    --text-inverse: #ffffff;
+    --border-default: #e2e8f0;
+    --border-subtle: #eef2f6;
+    --border-strong: #cbd5e1;
+    --brand-primary: #264FAF;
+    --brand-primary-hover: #1e3f8c;
+    --brand-tint: #eaf0fb;
+    --status-success: #16a34a;
+    --status-success-bg: #ecfdf5;
+    --status-success-border: #bbf7d0;
+    --status-warning: #ea580c;
+    --status-warning-bg: #fff7ed;
+    --status-warning-border: #fed7aa;
+    --status-warning-text: #9a3412;
+    --status-error: #dc2626;
+    --status-error-bg: #fef2f2;
+    --status-error-border: #fecaca;
+    --status-error-text: #991b1b;
+    --status-info: #2563eb;
+    --status-info-bg: #eff6ff;
+    --status-info-border: #bfdbfe;
+    --status-restore: #7c3aed;
+    --status-restore-bg: #f5f3ff;
+    --status-restore-border: #ddd6fe;
+    --status-restore-text: #5b21b6;
+    --shadow-sm: 0 1px 2px rgba(15,23,42,.06);
+    --shadow-md: 0 4px 12px rgba(15,23,42,.10);
+    --shadow-lg: 0 14px 40px rgba(15,23,42,.20);
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg-page);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ─── Page chrome ─── */
+  .page-header {
+    background: linear-gradient(135deg, #264FAF 0%, #5b21b6 100%);
+    color: white;
+    padding: 36px 48px 32px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .page-header h1 {
+    margin: 0 0 6px;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+  }
+  .page-header .subtitle {
+    margin: 0;
+    opacity: .85;
+    font-size: 14px;
+  }
+  .toc {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 18px;
+  }
+  .toc a {
+    color: white;
+    background: rgba(255,255,255,.12);
+    padding: 6px 12px;
+    border-radius: 18px;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid rgba(255,255,255,.18);
+  }
+  .toc a:hover { background: rgba(255,255,255,.22); }
+
+  .screen {
+    max-width: 1320px;
+    margin: 56px auto;
+    padding: 0 48px;
+  }
+  .screen-header {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 4px;
+  }
+  .screen-num {
+    background: var(--brand-primary);
+    color: white;
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .screen h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+  }
+  .screen-desc {
+    color: var(--text-secondary);
+    margin: 4px 0 22px 44px;
+    max-width: 820px;
+  }
+
+  /* ─── Frame to simulate the panel ─── */
+  .frame {
+    background: var(--bg-surface);
+    border-radius: 14px;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-default);
+    overflow: hidden;
+  }
+  .frame-toolbar {
+    background: var(--bg-surface-card);
+    border-bottom: 1px solid var(--border-default);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .frame-toolbar .dots {
+    display: flex; gap: 6px;
+  }
+  .frame-toolbar .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #e2e8f0;
+  }
+
+  /* ============================================================
+     SCREEN 1 — Timeline with new restore action
+     ============================================================ */
+  .panel {
+    width: 580px;
+    margin-left: auto;
+    background: var(--bg-surface);
+    border-left: 1px solid var(--border-default);
+    box-shadow: -4px 0 14px rgba(15,23,42,.06);
+    min-height: 760px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-title {
+    font-weight: 600;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .panel-title i { color: var(--brand-primary); }
+  .icon-btn {
+    width: 30px; height: 30px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+
+  .panel-body { padding: 18px 20px; }
+
+  .page-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .page-title { font-size: 18px; font-weight: 600; margin: 0 0 2px; }
+  .page-subtitle { color: var(--text-muted); font-size: 13px; }
+  .header-meta-right {
+    text-align: right;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .entity-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--brand-tint);
+    color: var(--brand-primary);
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .search-wrap {
+    position: relative;
+    flex: 1 1 200px;
+  }
+  .search-wrap i {
+    position: absolute;
+    left: 11px; top: 50%; transform: translateY(-50%);
+    color: var(--text-disabled);
+    font-size: 12px;
+  }
+  .search-wrap input {
+    width: 100%;
+    padding: 7px 12px 7px 30px;
+    border: 1px solid var(--border-default);
+    border-radius: 7px;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: white;
+  }
+  .filter-pill {
+    background: white;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    padding: 6px 11px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+  .filter-pill.active {
+    background: var(--brand-primary);
+    color: white;
+    border-color: var(--brand-primary);
+  }
+  .filter-pill.restore-pill {
+    background: var(--status-restore-bg);
+    color: var(--status-restore-text);
+    border-color: var(--status-restore-border);
+  }
+  .filter-pill.restore-pill.active {
+    background: var(--status-restore);
+    color: white;
+    border-color: var(--status-restore);
+  }
+
+  .date-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin: 18px 0 10px;
+  }
+
+  .change-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: border-color .15s;
+  }
+  .change-card:hover { border-color: var(--border-strong); }
+  .change-card.expanded { border-color: var(--brand-primary); box-shadow: var(--shadow-sm); }
+  .change-card.type-update { border-left: 3px solid var(--status-info); }
+  .change-card.type-create { border-left: 3px solid var(--status-success); }
+  .change-card.type-delete { border-left: 3px solid var(--status-error); }
+  .change-card.type-snapshot { border-left: 3px solid var(--text-muted); }
+  .change-card.type-restore { border-left: 3px solid var(--status-restore); }
+
+  .card-header {
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    gap: 10px;
+  }
+  .card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
+  .type-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--bg-surface-sunken);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .change-card.type-update .type-badge { background: var(--status-info-bg); color: var(--status-info); }
+  .change-card.type-create .type-badge { background: var(--status-success-bg); color: var(--status-success); }
+  .change-card.type-delete .type-badge { background: var(--status-error-bg); color: var(--status-error); }
+  .change-card.type-restore .type-badge { background: var(--status-restore-bg); color: var(--status-restore-text); }
+  .card-summary {
+    color: var(--text-primary);
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .avatar {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--brand-primary);
+    color: white;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700;
+  }
+  .avatar.user-other { background: #0d9488; }
+  .avatar.user-third { background: #b45309; }
+
+  .card-body {
+    padding: 0 14px 14px;
+    border-top: 1px solid var(--border-subtle);
+    margin-top: 2px;
+    padding-top: 12px;
+    background: var(--bg-surface-card);
+  }
+
+  .restored-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--status-restore-bg);
+    color: var(--status-restore-text);
+    border: 1px solid var(--status-restore-border);
+    padding: 3px 9px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-left: 6px;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .restored-chip:hover {
+    background: #ede9fe;
+    border-color: #c4b5fd;
+  }
+  .restored-chip i { font-size: 10px; }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 14px;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--border-subtle);
+    font-size: 12px;
+  }
+  .field-row:last-child { border-bottom: none; }
+  .field-label {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .field-values {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .val-old {
+    color: var(--status-error-text);
+    background: var(--status-error-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-decoration: line-through;
+    text-decoration-color: rgba(220,38,38,.4);
+  }
+  .val-new {
+    color: var(--status-success);
+    background: var(--status-success-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .val-arrow { color: var(--text-disabled); font-size: 10px; }
+
+  .restore-action {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    justify-content: flex-end;
+  }
+  .restore-btn {
+    background: white;
+    color: var(--brand-primary);
+    border: 1px solid var(--brand-primary);
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .restore-btn:hover {
+    background: var(--brand-primary);
+    color: white;
+  }
+  .restore-btn.recreate {
+    color: var(--status-success);
+    border-color: var(--status-success);
+  }
+  .restore-btn.recreate:hover {
+    background: var(--status-success);
+    color: white;
+  }
+
+  .deletion-note {
+    background: var(--status-error-bg);
+    color: var(--status-error-text);
+    border: 1px solid var(--status-error-border);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ============================================================
+     SCREEN 3 — Restore confirm modal
+     ============================================================ */
+  .modal-stage {
+    position: relative;
+    background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%);
+    padding: 40px;
+    min-height: 760px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .modal-bg-shimmer {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at top left, rgba(38,79,175,.18), transparent 50%),
+      radial-gradient(ellipse at bottom right, rgba(124,58,237,.15), transparent 50%);
+  }
+  .modal {
+    position: relative;
+    background: var(--bg-surface);
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    width: 760px;
+    max-width: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    max-height: 700px;
+  }
+  .modal-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .modal-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .modal-title i {
+    color: var(--status-restore);
+    margin-right: 8px;
+  }
+  .modal-subtitle {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .modal-version-meta {
+    background: var(--brand-tint);
+    color: var(--brand-primary);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    text-align: right;
+    line-height: 1.5;
+    flex-shrink: 0;
+  }
+  .modal-version-meta strong {
+    display: block;
+    color: var(--brand-primary-hover);
+    font-size: 13px;
+  }
+
+  .modal-warning-banner {
+    margin: 0;
+    padding: 10px 22px;
+    background: var(--status-warning-bg);
+    border-bottom: 1px solid var(--status-warning-border);
+    color: var(--status-warning-text);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .modal-body {
+    overflow-y: auto;
+    padding: 0;
+    flex: 1;
+  }
+  .diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .diff-table thead th {
+    text-align: left;
+    padding: 11px 18px;
+    background: var(--bg-surface-card);
+    border-bottom: 1px solid var(--border-default);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .diff-table thead th:first-child { width: 40px; }
+  .diff-table thead th:nth-child(2) { width: 180px; }
+  .diff-table thead th:last-child { width: 36px; }
+  .diff-table tbody td {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: top;
+  }
+  .diff-table tbody tr.unchanged td {
+    color: var(--text-disabled);
+    background: var(--bg-surface-sunken);
+  }
+  .field-name {
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .field-name .field-tech {
+    display: block;
+    color: var(--text-disabled);
+    font-size: 11px;
+    font-weight: 400;
+    font-family: ui-monospace, monospace;
+  }
+  .current-cell, .restore-cell {
+    font-family: -apple-system, sans-serif;
+    word-break: break-word;
+  }
+  .current-cell {
+    color: var(--text-secondary);
+  }
+  .restore-cell {
+    color: var(--text-primary);
+    font-weight: 500;
+    background: linear-gradient(90deg, var(--status-restore-bg), transparent);
+  }
+  .restore-cell.empty, .current-cell.empty {
+    color: var(--text-disabled);
+    font-style: italic;
+  }
+  .checkbox {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 4px;
+    background: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .checkbox.checked {
+    background: var(--brand-primary);
+    border-color: var(--brand-primary);
+    color: white;
+  }
+  .checkbox.checked i { font-size: 10px; }
+  .checkbox.disabled {
+    background: var(--bg-surface-sunken);
+    border-color: var(--border-default);
+    cursor: not-allowed;
+  }
+  .indicator-cell { text-align: right; }
+  .indicator-cell .changed-flag {
+    color: var(--status-warning);
+  }
+  .indicator-cell .ok-flag {
+    color: var(--text-disabled);
+  }
+  .indicator-cell .warn-flag {
+    color: var(--status-error);
+  }
+
+  .unchanged-disclosure {
+    padding: 10px 18px;
+    background: var(--bg-surface-card);
+    color: var(--text-muted);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .unchanged-disclosure:hover { color: var(--text-primary); }
+
+  .reason-section {
+    padding: 14px 18px;
+    background: var(--bg-surface-card);
+    border-top: 1px solid var(--border-subtle);
+  }
+  .reason-section label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 5px;
+  }
+  .reason-section .optional {
+    color: var(--text-disabled);
+    font-weight: 400;
+    margin-left: 4px;
+  }
+  .reason-section textarea {
+    width: 100%;
+    border: 1px solid var(--border-default);
+    border-radius: 7px;
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text-primary);
+    resize: vertical;
+    min-height: 50px;
+  }
+  .reason-section textarea:focus {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: -1px;
+    border-color: var(--brand-primary);
+  }
+
+  .modal-footer {
+    padding: 14px 22px;
+    border-top: 1px solid var(--border-default);
+    background: var(--bg-surface);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .modal-footer-info {
+    color: var(--text-muted);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .modal-footer-info i { color: var(--brand-primary); }
+  .modal-footer-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .btn-primary {
+    background: var(--brand-primary);
+    color: white;
+    border: 1px solid var(--brand-primary);
+    padding: 9px 18px;
+    border-radius: 7px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .btn-primary:hover { background: var(--brand-primary-hover); }
+  .btn-secondary {
+    background: white;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-default);
+    padding: 9px 18px;
+    border-radius: 7px;
+    font-weight: 500;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .btn-secondary:hover {
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
+  }
+
+  /* ============================================================
+     SCREEN 4 — Entity grid with Recycle Bin chip
+     ============================================================ */
+  .grid-frame {
+    background: var(--bg-surface);
+    border-radius: 10px;
+    border: 1px solid var(--border-default);
+    overflow: hidden;
+  }
+  .grid-toolbar {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .grid-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-right: auto;
+  }
+  .grid-title i { color: var(--brand-primary); margin-right: 7px; }
+  .toolbar-btn {
+    background: white;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .toolbar-btn:hover { background: var(--bg-surface-hover); }
+  .toolbar-btn.primary {
+    background: var(--brand-primary);
+    color: white;
+    border-color: var(--brand-primary);
+  }
+  .toolbar-btn.recycle {
+    background: var(--status-restore-bg);
+    color: var(--status-restore-text);
+    border-color: var(--status-restore-border);
+    position: relative;
+  }
+  .toolbar-btn.recycle:hover {
+    background: #ede9fe;
+  }
+  .toolbar-btn .count-badge {
+    background: var(--status-restore);
+    color: white;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 7px;
+    margin-left: 4px;
+  }
+  .grid-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .grid-table thead th {
+    text-align: left;
+    padding: 10px 18px;
+    background: var(--bg-surface-card);
+    border-bottom: 1px solid var(--border-default);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .grid-table tbody td {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .grid-table tbody tr:hover { background: var(--bg-surface-hover); }
+  .grid-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--status-success-bg);
+    color: var(--status-success);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  /* ============================================================
+     SCREEN 5 — Recycle Bin view
+     ============================================================ */
+  .recycle-header {
+    background: linear-gradient(135deg, var(--status-restore-bg) 0%, white 60%);
+    padding: 22px 24px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .recycle-header h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .recycle-header h3 i { color: var(--status-restore); }
+  .recycle-header .desc {
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .recycle-list {
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .recycle-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 14px;
+    align-items: center;
+  }
+  .recycle-card:hover { border-color: var(--border-strong); }
+  .recycle-info { min-width: 0; }
+  .recycle-name {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+  }
+  .recycle-fields {
+    color: var(--text-muted);
+    font-size: 12px;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .recycle-fields span strong {
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+  .recycle-meta {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .recycle-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  /* ============================================================
+     SCREEN 6 — Re-create from snapshot dialog
+     ============================================================ */
+  .recreate-modal {
+    width: 560px;
+    background: var(--bg-surface);
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+  .recreate-header {
+    background: linear-gradient(135deg, var(--status-success-bg), white);
+    padding: 20px 22px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .recreate-header h4 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .recreate-header h4 i { color: var(--status-success); }
+  .recreate-header p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .recreate-body {
+    padding: 18px 22px;
+    background: var(--bg-surface);
+  }
+  .conflict-callout {
+    background: var(--status-warning-bg);
+    border: 1px solid var(--status-warning-border);
+    color: var(--status-warning-text);
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-bottom: 14px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .conflict-callout i {
+    margin-top: 2px;
+  }
+  .preview-list {
+    background: var(--bg-surface-card);
+    border-radius: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-default);
+  }
+  .preview-list .preview-row {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 14px;
+    padding: 5px 0;
+    font-size: 12px;
+  }
+  .preview-list .preview-row .pl-label {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .preview-list .preview-row .pl-val {
+    color: var(--text-primary);
+    word-break: break-word;
+  }
+
+  /* small helpers */
+  .legend {
+    margin: 14px 0 0 44px;
+    background: var(--bg-surface);
+    border: 1px dashed var(--border-default);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    max-width: 820px;
+  }
+  .legend strong { color: var(--text-primary); }
+
+  .footer {
+    text-align: center;
+    color: var(--text-disabled);
+    font-size: 12px;
+    padding: 32px 0 60px;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1><i class="fa-solid fa-clock-rotate-left"></i>&nbsp; Record Changes — Restore Prior Version</h1>
+  <p class="subtitle">UX mockup for the proposed restore feature. Six scenes, top to bottom — open in a browser and scroll.</p>
+  <div class="toc">
+    <a href="#s1">1 · Timeline (improved)</a>
+    <a href="#s2">2 · Restored-from chip</a>
+    <a href="#s3">3 · Restore confirm modal</a>
+    <a href="#s4">4 · Recycle Bin entry point</a>
+    <a href="#s5">5 · Recycle Bin view</a>
+    <a href="#s6">6 · Re-create from snapshot</a>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════
+     SCREEN 1 — Timeline with restore on every change type
+     ════════════════════════════════════════════════════ -->
+<section class="screen" id="s1">
+  <div class="screen-header">
+    <span class="screen-num">1</span>
+    <h2>Timeline — restore action on every change type</h2>
+  </div>
+  <p class="screen-desc">
+    The slide-out panel today hides the restore button on Create / Delete / Snapshot rows. The proposed UX shows a restore action (relabeled appropriately) on every row, and adds a <strong>Restored</strong> filter pill alongside the existing type filters.
+  </p>
+
+  <div class="frame">
+    <div class="frame-toolbar">
+      <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      <span>MJ Explorer · Customers · ACME Holdings, Inc. · Record Changes</span>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><i class="fa-solid fa-clock-rotate-left"></i> Record Changes History</div>
+        <button class="icon-btn"><i class="fa-solid fa-times"></i></button>
+      </div>
+
+      <div class="panel-body">
+        <div class="page-title-row">
+          <div>
+            <div class="page-title">Change History</div>
+            <div class="page-subtitle">Customer · ACME Holdings, Inc.</div>
+          </div>
+          <div class="header-meta-right">
+            <div class="entity-badge"><i class="fa-solid fa-database"></i> Customers</div>
+            <div>14 changes · 3 contributors</div>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <div class="search-wrap">
+            <i class="fa-solid fa-search"></i>
+            <input type="text" placeholder="Search changes…">
+          </div>
+          <span class="filter-pill active"><i class="fa-solid fa-layer-group"></i> All</span>
+          <span class="filter-pill"><i class="fa-solid fa-pen"></i> Updates</span>
+          <span class="filter-pill"><i class="fa-solid fa-plus"></i> Creates</span>
+          <span class="filter-pill"><i class="fa-solid fa-trash"></i> Deletes</span>
+          <span class="filter-pill restore-pill"><i class="fa-solid fa-clock-rotate-left"></i> Restored</span>
+        </div>
+
+        <div class="date-label">Today — Apr 19, 2026</div>
+
+        <div class="change-card type-update expanded">
+          <div class="card-header">
+            <div class="card-header-left">
+              <span class="type-badge">Update</span>
+              <span class="card-summary">Annual Revenue and Industry changed</span>
+            </div>
+            <div class="card-meta">
+              <div class="avatar">AM</div>
+              <span>2:14 PM</span>
+              <i class="fa-solid fa-chevron-up"></i>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="field-row">
+              <div class="field-label">Annual Revenue</div>
+              <div class="field-values">
+                <span class="val-old">$12,400,000</span>
+                <i class="fa-solid fa-arrow-right val-arrow"></i>
+                <span class="val-new">$15,200,000</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field-label">Industry</div>
+              <div class="field-values">
+                <span class="val-old">Manufacturing</span>
+                <i class="fa-solid fa-arrow-right val-arrow"></i>
+                <span class="val-new">Aerospace</span>
+              </div>
+            </div>
+            <div class="restore-action">
+              <button class="restore-btn">
+                <i class="fa-solid fa-clock-rotate-left"></i> Restore record to this version
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="change-card type-update">
+          <div class="card-header">
+            <div class="card-header-left">
+              <span class="type-badge">Update</span>
+              <span class="card-summary">Description and Owner changed</span>
+            </div>
+            <div class="card-meta">
+              <div class="avatar user-other">SK</div>
+              <span>11:42 AM</span>
+              <i class="fa-solid fa-chevron-down"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="date-label">Yesterday — Apr 18, 2026</div>
+
+        <div class="change-card type-snapshot">
+          <div class="card-header">
+            <div class="card-header-left">
+              <span class="type-badge" style="background:#f1f5f9; color:#475569;">Snapshot</span>
+              <span class="card-summary">Pre-Q2 review snapshot</span>
+            </div>
+            <div class="card-meta">
+              <div class="avatar user-third">JR</div>
+              <span>5:01 PM</span>
+              <i class="fa-solid fa-chevron-down"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="date-label">Apr 12, 2026</div>
+
+        <div class="change-card type-create">
+          <div class="card-header">
+            <div class="card-header-left">
+              <span class="type-badge">Created</span>
+              <span class="card-summary">Record created</span>
+            </div>
+            <div class="card-meta">
+              <div class="avatar user-other">SK</div>
+              <span>9:18 AM</span>
+              <i class="fa-solid fa-chevron-down"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>What's new here:</strong> the violet <em>Restored</em> filter pill, and the restore button label changed from <em>"Restore Previous Values"</em> to <em>"Restore record to this version"</em> — reflecting that the action now applies the full snapshot, not a single delta.
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════
+     SCREEN 2 — Restored-from chip in the timeline
+     ════════════════════════════════════════════════════ -->
+<section class="screen" id="s2">
+  <div class="screen-header">
+    <span class="screen-num">2</span>
+    <h2>Restored-from lineage chip</h2>
+  </div>
+  <p class="screen-desc">
+    When a change row has <code>RestoredFromID</code> populated (i.e., it was created by a restore), a violet chip identifies the source version. Clicking the chip jumps to and highlights the source row in the same timeline.
+  </p>
+
+  <div class="frame">
+    <div class="frame-toolbar">
+      <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      <span>MJ Explorer · Customers · ACME Holdings, Inc. · Record Changes</span>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><i class="fa-solid fa-clock-rotate-left"></i> Record Changes History</div>
+        <button class="icon-btn"><i class="fa-solid fa-times"></i></button>
+      </div>
+      <div class="panel-body">
+        <div class="date-label">Today — Apr 19, 2026</div>
+
+        <div class="change-card type-restore expanded">
+          <div class="card-header">
+            <div class="card-header-left">
+              <span class="type-badge">Restore</span>
+              <span class="card-summary">Restored to Apr 12 version</span>
+              <a class="restored-chip" title="Jump to source version">
+                <i class="fa-solid fa-link"></i> Restored from Apr 12, 2026 9:18 AM by Sarah K.
+              </a>
+            </div>
+            <div class="card-meta">
+              <div class="avatar">AM</div>
+              <span>2:48 PM</span>
+              <i class="fa-solid fa-chevron-up"></i>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="field-row">
+              <div class="field-label">Annual Revenue</div>
+              <div class="field-values">
+                <span class="val-old">$15,200,000</span>
+                <i class="fa-solid fa-arrow-right val-arrow"></i>
+                <span class="val-new">$8,500,000</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field-label">Industry</div>
+              <div class="field-values">
+                <span class="val-old">Aerospace</span>
+                <i class="fa-solid fa-arrow-right val-arrow"></i>
+                <span class="val-new">Manufacturing</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field-label">Description</div>
+              <div class="field-values">
+                <span class="val-old">Aerospace components manufacturer based in Wichita…</span>
+                <i class="fa-solid fa-arrow-right val-arrow"></i>
+                <span class="val-new">Family-owned manufacturing company.</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field-label" style="color:var(--status-restore-text)">Reason</div>
+              <div class="field-values" style="color:var(--text-secondary); font-style:italic;">
+                "Q2 numbers were entered against the wrong record — reverting and re-entering against ACME Aerospace LLC instead."
+              </div>
+            </div>
+            <div class="restore-action">
+              <button class="restore-btn">
+                <i class="fa-solid fa-clock-rotate-left"></i> Restore record to this version
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="change-card type-update">
+          <div class="card-header">
+            <div class="card-header-left">
+              <span class="type-badge">Update</span>
+              <span class="card-summary">Annual Revenue and Industry changed</span>
+            </div>
+            <div class="card-meta">
+              <div class="avatar">AM</div>
+              <span>2:14 PM</span>
+              <i class="fa-solid fa-chevron-down"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="change-card type-update" style="background: linear-gradient(90deg, var(--status-restore-bg), white); border-color: var(--status-restore);">
+          <div class="card-header">
+            <div class="card-header-left">
+              <span class="type-badge">Update</span>
+              <span class="card-summary">Description and Owner changed</span>
+              <span style="font-size:10px; color:var(--status-restore-text); background: var(--status-restore-bg); padding: 2px 8px; border-radius: 10px; margin-left:6px;">
+                <i class="fa-solid fa-bullseye"></i> Restore source
+              </span>
+            </div>
+            <div class="card-meta">
+              <div class="avatar user-other">SK</div>
+              <span>Apr 12 · 9:18 AM</span>
+              <i class="fa-solid fa-chevron-down"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>Audit story:</strong> any reviewer can see the chain — this row was a restore, here's the source, here's the reason. The source row gets highlighted to make the lineage visually obvious.
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════
+     SCREEN 3 — Restore confirm modal
+     ════════════════════════════════════════════════════ -->
+<section class="screen" id="s3">
+  <div class="screen-header">
+    <span class="screen-num">3</span>
+    <h2>Restore confirm modal — full-record diff with field opt-out</h2>
+  </div>
+  <p class="screen-desc">
+    Compares the live record to the chosen snapshot field-by-field. Pre-checked rows = fields that will change. Each row has a checkbox so the user can <em>partially</em> restore (e.g., revert the description but keep the new status). Unchanged fields collapse into a disclosure to keep the diff focused.
+  </p>
+
+  <div class="modal-stage">
+    <div class="modal-bg-shimmer"></div>
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title"><i class="fa-solid fa-clock-rotate-left"></i> Restore record to this version</h3>
+          <div class="modal-subtitle">Customer · ACME Holdings, Inc.</div>
+        </div>
+        <div class="modal-version-meta">
+          <strong>Apr 12, 2026 · 9:18 AM</strong>
+          by Sarah K.<br>
+          (initial creation)
+        </div>
+      </div>
+
+      <div class="modal-warning-banner">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span><strong>Owner</strong> field references a user who no longer exists. Will be set to NULL.</span>
+      </div>
+
+      <div class="modal-body">
+        <table class="diff-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Field</th>
+              <th>Current Value</th>
+              <th>Restore To</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="checkbox checked"><i class="fa-solid fa-check"></i></span></td>
+              <td class="field-name">Annual Revenue<span class="field-tech">AnnualRevenue</span></td>
+              <td class="current-cell">$15,200,000</td>
+              <td class="restore-cell">$8,500,000</td>
+              <td class="indicator-cell"><i class="fa-solid fa-circle-exclamation changed-flag" title="Will change"></i></td>
+            </tr>
+            <tr>
+              <td><span class="checkbox checked"><i class="fa-solid fa-check"></i></span></td>
+              <td class="field-name">Industry<span class="field-tech">Industry</span></td>
+              <td class="current-cell">Aerospace</td>
+              <td class="restore-cell">Manufacturing</td>
+              <td class="indicator-cell"><i class="fa-solid fa-circle-exclamation changed-flag"></i></td>
+            </tr>
+            <tr>
+              <td><span class="checkbox checked"><i class="fa-solid fa-check"></i></span></td>
+              <td class="field-name">Description<span class="field-tech">Description</span></td>
+              <td class="current-cell">Aerospace components manufacturer based in Wichita, Kansas. Acquired Pinnacle Holdings in Q1.</td>
+              <td class="restore-cell">Family-owned manufacturing company.</td>
+              <td class="indicator-cell"><i class="fa-solid fa-circle-exclamation changed-flag"></i></td>
+            </tr>
+            <tr>
+              <td><span class="checkbox"></span></td>
+              <td class="field-name">Status<span class="field-tech">Status</span></td>
+              <td class="current-cell">Active Customer</td>
+              <td class="restore-cell">Prospect</td>
+              <td class="indicator-cell"><i class="fa-solid fa-circle-exclamation changed-flag"></i></td>
+            </tr>
+            <tr>
+              <td><span class="checkbox checked"><i class="fa-solid fa-check"></i></span></td>
+              <td class="field-name">Owner<span class="field-tech">OwnerUserID</span></td>
+              <td class="current-cell">Amith N.</td>
+              <td class="restore-cell empty">⚠ User no longer exists — will be NULL</td>
+              <td class="indicator-cell"><i class="fa-solid fa-triangle-exclamation warn-flag"></i></td>
+            </tr>
+            <tr>
+              <td><span class="checkbox checked"><i class="fa-solid fa-check"></i></span></td>
+              <td class="field-name">Phone<span class="field-tech">Phone</span></td>
+              <td class="current-cell">+1 (316) 555-0142</td>
+              <td class="restore-cell empty">(empty)</td>
+              <td class="indicator-cell"><i class="fa-solid fa-circle-exclamation changed-flag"></i></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="unchanged-disclosure">
+          <i class="fa-solid fa-chevron-right"></i>
+          <span>12 unchanged fields will not be modified</span>
+        </div>
+        <div class="reason-section">
+          <label>Reason for restore <span class="optional">(optional)</span></label>
+          <textarea placeholder="e.g., Q2 numbers entered against wrong record — reverting and re-entering against ACME Aerospace LLC.">Q2 numbers were entered against the wrong record — reverting and re-entering against ACME Aerospace LLC instead.</textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="modal-footer-info">
+          <i class="fa-solid fa-shield-halved"></i>
+          A snapshot of the current state is saved automatically before the restore.
+        </div>
+        <div class="modal-footer-actions">
+          <button class="btn-primary"><i class="fa-solid fa-rotate-left"></i> Restore (5 fields)</button>
+          <button class="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>Three subtle but important details:</strong> ① the live record is re-read on confirm so concurrent edits are caught; ② the count on the primary button updates as checkboxes toggle; ③ FK targets that no longer exist surface a warning row instead of failing silently at save time.
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════
+     SCREEN 4 — Recycle Bin entry point on the entity grid
+     ════════════════════════════════════════════════════ -->
+<section class="screen" id="s4">
+  <div class="screen-header">
+    <span class="screen-num">4</span>
+    <h2>Un-delete entry point — Recycle Bin chip on entity grid</h2>
+  </div>
+  <p class="screen-desc">
+    Hard-deleted records aren't visible in the live grid, so the user needs an entry point. Proposed: a small violet chip in the grid header, visible only when the entity has <code>TrackRecordChanges = 1</code> AND the user has <code>CanCreate</code>. Soft-deletes don't need this — the standard restore flow on the soft-deleted record handles them.
+  </p>
+
+  <div class="frame">
+    <div class="frame-toolbar">
+      <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      <span>MJ Explorer · Customers</span>
+    </div>
+    <div class="grid-frame">
+      <div class="grid-toolbar">
+        <div class="grid-title"><i class="fa-solid fa-database"></i> Customers</div>
+        <button class="toolbar-btn primary"><i class="fa-solid fa-plus"></i> New Customer</button>
+        <button class="toolbar-btn"><i class="fa-solid fa-filter"></i> Filters</button>
+        <button class="toolbar-btn"><i class="fa-solid fa-file-export"></i> Export</button>
+        <button class="toolbar-btn recycle">
+          <i class="fa-solid fa-trash-can-arrow-up"></i> Recycle Bin
+          <span class="count-badge">12</span>
+        </button>
+      </div>
+      <table class="grid-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Industry</th>
+            <th>Annual Revenue</th>
+            <th>Owner</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>ACME Holdings, Inc.</td><td>Aerospace</td><td>$15,200,000</td><td>Amith N.</td><td><span class="grid-status">Active</span></td></tr>
+          <tr><td>Brightline Logistics</td><td>Logistics</td><td>$4,800,000</td><td>Sarah K.</td><td><span class="grid-status">Active</span></td></tr>
+          <tr><td>Cedarcrest Capital Partners</td><td>Finance</td><td>$22,400,000</td><td>James R.</td><td><span class="grid-status">Active</span></td></tr>
+          <tr><td>Delta Forge Industrial</td><td>Manufacturing</td><td>$9,600,000</td><td>Sarah K.</td><td><span class="grid-status">Active</span></td></tr>
+          <tr><td>Evergreen Bio Sciences</td><td>Biotech</td><td>$3,100,000</td><td>Amith N.</td><td><span class="grid-status">Active</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>Visibility rules:</strong> chip appears only when (a) <code>Entity.TrackRecordChanges = 1</code>, (b) user has <code>CanCreate</code>, and (c) at least one historical <code>RecordChange</code> with <code>Type='Delete'</code> exists. Count is the number of distinct deleted records.
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════
+     SCREEN 5 — Recycle Bin view
+     ════════════════════════════════════════════════════ -->
+<section class="screen" id="s5">
+  <div class="screen-header">
+    <span class="screen-num">5</span>
+    <h2>Recycle Bin view</h2>
+  </div>
+  <p class="screen-desc">
+    Each card represents the most recent <code>Delete</code> change for a unique <code>RecordID</code>, with key identifying fields parsed from the <code>FullRecordJSON</code> snapshot. <strong>[Restore]</strong> opens the re-create dialog (next screen). <strong>[View history]</strong> drops the user into the full timeline for that deleted record.
+  </p>
+
+  <div class="frame">
+    <div class="frame-toolbar">
+      <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      <span>MJ Explorer · Customers · Recycle Bin</span>
+    </div>
+    <div class="grid-frame">
+      <div class="recycle-header">
+        <h3><i class="fa-solid fa-trash-can-arrow-up"></i> Recycle Bin · Customers</h3>
+        <div class="desc">12 records have been deleted from this entity. Restore re-creates the record using its snapshot at the time of deletion.</div>
+      </div>
+      <div class="recycle-list">
+
+        <div class="recycle-card">
+          <div class="recycle-info">
+            <div class="recycle-name">Northpoint Solar Co.</div>
+            <div class="recycle-fields">
+              <span><strong>Industry:</strong> Energy</span>
+              <span><strong>Annual Revenue:</strong> $6,200,000</span>
+              <span><strong>Owner:</strong> James R.</span>
+            </div>
+            <div class="recycle-meta">
+              <i class="fa-solid fa-trash"></i>
+              Deleted Apr 14, 2026 · 4:22 PM by Sarah K.
+            </div>
+          </div>
+          <div class="recycle-actions">
+            <button class="btn-secondary" style="font-size:12px; padding:7px 12px;"><i class="fa-solid fa-clock-rotate-left"></i> View history</button>
+            <button class="restore-btn recreate"><i class="fa-solid fa-rotate-left"></i> Restore</button>
+          </div>
+        </div>
+
+        <div class="recycle-card">
+          <div class="recycle-info">
+            <div class="recycle-name">Quartzfield Materials LLC</div>
+            <div class="recycle-fields">
+              <span><strong>Industry:</strong> Manufacturing</span>
+              <span><strong>Annual Revenue:</strong> $1,850,000</span>
+              <span><strong>Owner:</strong> Amith N.</span>
+            </div>
+            <div class="recycle-meta">
+              <i class="fa-solid fa-trash"></i>
+              Deleted Apr 11, 2026 · 10:08 AM by Amith N.
+            </div>
+          </div>
+          <div class="recycle-actions">
+            <button class="btn-secondary" style="font-size:12px; padding:7px 12px;"><i class="fa-solid fa-clock-rotate-left"></i> View history</button>
+            <button class="restore-btn recreate"><i class="fa-solid fa-rotate-left"></i> Restore</button>
+          </div>
+        </div>
+
+        <div class="recycle-card">
+          <div class="recycle-info">
+            <div class="recycle-name">Vellum Print &amp; Publishing</div>
+            <div class="recycle-fields">
+              <span><strong>Industry:</strong> Media</span>
+              <span><strong>Annual Revenue:</strong> $740,000</span>
+              <span><strong>Owner:</strong> Sarah K.</span>
+            </div>
+            <div class="recycle-meta">
+              <i class="fa-solid fa-trash"></i>
+              Deleted Apr 8, 2026 · 1:55 PM by James R.
+            </div>
+          </div>
+          <div class="recycle-actions">
+            <button class="btn-secondary" style="font-size:12px; padding:7px 12px;"><i class="fa-solid fa-clock-rotate-left"></i> View history</button>
+            <button class="restore-btn recreate"><i class="fa-solid fa-rotate-left"></i> Restore</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>What identifies each card?</strong> The first <em>NameField</em> on the entity (or the first non-PK string field as fallback) plus up to three "interesting" fields chosen heuristically from <code>FullRecordJSON</code> (currency, FK display fields, status). All sourced from the snapshot — no live read needed.
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════
+     SCREEN 6 — Re-create from snapshot dialog
+     ════════════════════════════════════════════════════ -->
+<section class="screen" id="s6">
+  <div class="screen-header">
+    <span class="screen-num">6</span>
+    <h2>Re-create from snapshot — un-delete dialog</h2>
+  </div>
+  <p class="screen-desc">
+    The un-delete path is an <em>insert</em>, so there's no current-vs-snapshot diff — the live record is gone. Instead, we show the snapshot the new record will be created with, plus a PK-collision warning if a record with the same ID already exists.
+  </p>
+
+  <div class="modal-stage">
+    <div class="modal-bg-shimmer"></div>
+    <div class="recreate-modal">
+      <div class="recreate-header">
+        <h4><i class="fa-solid fa-rotate-left"></i> Re-create from snapshot</h4>
+        <p>Northpoint Solar Co. · originally deleted Apr 14, 2026</p>
+      </div>
+      <div class="recreate-body">
+        <div class="conflict-callout">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <div>
+            <strong>No primary key conflict</strong> — the original ID is available, so the record will be re-created with its original identifier. Foreign keys from other tables that still point at this ID will be reconnected automatically.
+          </div>
+        </div>
+
+        <div class="preview-list">
+          <div class="preview-row"><div class="pl-label">Name</div><div class="pl-val">Northpoint Solar Co.</div></div>
+          <div class="preview-row"><div class="pl-label">Industry</div><div class="pl-val">Energy</div></div>
+          <div class="preview-row"><div class="pl-label">Annual Revenue</div><div class="pl-val">$6,200,000</div></div>
+          <div class="preview-row"><div class="pl-label">Owner</div><div class="pl-val">James R.</div></div>
+          <div class="preview-row"><div class="pl-label">Status</div><div class="pl-val">Active Customer</div></div>
+          <div class="preview-row"><div class="pl-label">Phone</div><div class="pl-val">+1 (303) 555-0188</div></div>
+          <div class="preview-row"><div class="pl-label">Founded</div><div class="pl-val">2014-06-12</div></div>
+        </div>
+
+        <div class="reason-section" style="background:white; padding-left:0; padding-right:0; margin-top:16px;">
+          <label>Reason for restore <span class="optional">(optional)</span></label>
+          <textarea placeholder="Why are you restoring this record?"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="modal-footer-info">
+          <i class="fa-solid fa-circle-info"></i>
+          A new "Created" entry will be added to this record's history, linked back to the original deletion.
+        </div>
+        <div class="modal-footer-actions">
+          <button class="btn-primary"><i class="fa-solid fa-rotate-left"></i> Re-create</button>
+          <button class="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>If the original ID is taken</strong> (rare — usually means someone re-created the record manually after the delete), the callout flips to a red conflict warning with two choices: <em>Open existing record</em> or <em>Cancel</em>. Re-creating with a different ID would orphan all the FKs, so we don't offer that.
+  </div>
+</section>
+
+<div class="footer">
+  Mockup · MemberJunction · April 2026 · <a href="plan.md" style="color:var(--brand-primary);">plan.md</a>
+</div>
+
+</body>
+</html>

@@ -155,6 +155,30 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
   ```
 - **Known weak singletons** that need migration: ~26 classes across the codebase including `GraphQLDataProvider`, `UserCache`, `StartupManager`, `RunQuerySQLFilterManager`, `QueueManager`, `SQLExpressionValidator`, `WarningManager`, `AuthProviderFactory`, `MCPClientManager`, `AgentDataPreloader`, and Angular/React services. See GitHub issue tracking this migration.
 
+### 8. NO DYNAMIC `import()` UNLESS NARROWLY JUSTIFIED
+- **Default to static `import ... from '...'` at the top of the file.** Never use `await import('pkg')` or `import('pkg')` inside a function body as a shortcut.
+- **Why**: Dynamic imports hide the dependency from npm, bundlers, and readers. This caused a real shipping bug: MJCLI's `mj app *` commands dynamic-imported `@memberjunction/open-app-engine`, which was never declared in MJCLI's `package.json` — `npm install -g @memberjunction/cli` worked but every `mj app` invocation crashed with `ERR_MODULE_NOT_FOUND` in production. Static imports would have failed the TypeScript build immediately.
+- **Additional problems with dynamic imports**:
+  - Break tree-shaking and bundle analysis
+  - Defeat IDE "Find References" / rename refactors
+  - Obscure circular dependencies (make them silent instead of loud)
+  - Turn compile-time errors into runtime errors
+  - Create confusion about when a module actually loads
+
+#### The ONLY acceptable reasons for dynamic `import()`
+1. **Angular lazy-loaded routes / `loadComponent()`** — framework-required for code splitting.
+2. **Optional peer dependencies** — e.g. cloud SDKs (`@aws-sdk/client-kms`, `@azure/keyvault-keys`) loaded only when that provider is configured. Must be declared in `optionalDependencies` or `peerDependenciesMeta`.
+3. **Genuine bundle-size deferral** — a single heavy module (e.g. `xlsx` in MJExportEngine) loaded only on the code path that needs it, where loading it eagerly measurably hurts startup. Rare.
+4. **Breaking a hard circular dependency** — last resort after you've tried restructuring. Add a comment explaining the cycle and why it can't be untangled.
+5. **Runtime plugin discovery from config/glob** — loading user-supplied resolver/middleware modules whose paths aren't known at build time.
+
+**If your reason isn't on this list, use a static import.** "It's only used in one method" is not a reason. "The package is big" is not a reason unless you've measured the startup cost. "It avoids a dependency declaration" is the exact bug we're trying to prevent.
+
+#### When you do need a dynamic import
+- Add a comment explaining *which* category above it falls under and why a static import won't work.
+- **Still declare the package in `dependencies`** (or `optionalDependencies` / `peerDependencies`). Dynamic import does not exempt you from the dep graph.
+- Prefer a single top-of-module dynamic load behind a memoized promise over repeated `await import()` inside every method.
+
 ---
 
 ## 📚 Development Guides
@@ -722,6 +746,7 @@ Key principles:
 - **Auto-cache**: Small (≤250 rows), unfiltered, unsorted results are automatically cached on the server because they can be safely maintained in-place via upsert/remove
 - **Filtered/sorted caches are invalidated (not updated)** on entity changes — we can't evaluate SQL predicates in JS, so the safe approach is to blow away the cache entry and let it repopulate on next request
 - **ResultType is excluded from cache fingerprints** — cache stores plain JSON regardless; transformation to BaseEntity objects happens post-cache
+- **`BypassCache: true`** — per-query escape hatch that skips all server-side caching (both read and write). Use for maintenance actions, scheduled jobs, or any query that needs true DB state after direct SQL operations that bypassed `BaseEntity.Save()`
 
 ### Batch Database Operations
 - Use `RunViews` (plural) instead of multiple `RunView` calls
@@ -1246,6 +1271,43 @@ try {
 }
 ```
 
+### BaseEntity Save/Delete Error Handling
+**Critical**: `BaseEntity.Save()` and `BaseEntity.Delete()` do NOT throw exceptions on failure. They return `boolean` — `true` on success, `false` on failure. Error details are available via `entity.LatestResult.CompleteMessage` which combines all error info into a single string.
+
+```typescript
+// ✅ CORRECT — Always check the return value
+const saved = await entity.Save();
+if (!saved) {
+    LogError(`Save failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    return; // Handle the failure
+}
+
+// ✅ CORRECT — Same pattern for Delete
+const deleted = await entity.Delete();
+if (!deleted) {
+    LogError(`Delete failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+}
+
+// ❌ WRONG — Don't ignore the return value
+await entity.Save(); // Silent failure — you'll never know it failed
+
+// ❌ WRONG — Don't use try/catch for Save/Delete failures
+try {
+    await entity.Save();
+} catch (error) {
+    // This won't catch Save failures! Save returns false, it doesn't throw.
+}
+
+// ❌ WRONG — Don't use LatestResult.Message, use CompleteMessage
+LogError(`Error: ${entity.LatestResult?.Message}`); // Incomplete info
+```
+
+**Rules:**
+- **Always** check the boolean return value of `Save()` and `Delete()`
+- **Always** use `LatestResult?.CompleteMessage` (not `.Message`) for error details — `CompleteMessage` combines all error info
+- **Never** wrap `Save()`/`Delete()` in try/catch expecting them to throw on business logic failures
+- Save/Delete CAN still throw for infrastructure errors (network, connection), but logical failures (validation, permissions, FK violations) return `false`
+
 ### Key Benefits of This Pattern
 - **Type Safety**: Generic method provides full TypeScript typing
 - **Performance**: `ResultType: 'entity_object'` eliminates manual conversion loops
@@ -1549,10 +1611,13 @@ export class EntityFormComponentExtended extends EntityFormComponent {
 
 **Why this works**: The `@RegisterClass` system uses registration order for priority. Since your custom form imports and extends the generated form, it creates a dependency that ensures it compiles AFTER the generated form, giving it higher priority.
 
+**Toolbar pattern**: Entity forms must wrap their content in `<mj-record-form-container>` — NOT `<mj-form-toolbar>` directly. The container owns the panels that the History / Tags / Add-to-List buttons open; a raw toolbar only emits events and those features silently break without the container to handle them. See the toolbar section in the Angular guide below for the exact pattern.
+
 **See [packages/Angular/CLAUDE.md](packages/Angular/CLAUDE.md)** for complete custom form documentation including:
 - Full checklist for creating custom forms
 - Module registration requirements
 - Tree-shaking prevention patterns
+- **Toolbar pattern — `<mj-record-form-container>` vs. `<mj-form-toolbar>`**
 - Examples of existing custom forms
 
 ## Metadata Files and mj-sync

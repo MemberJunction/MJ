@@ -254,6 +254,10 @@ export class SQLServerDialect extends SQLDialect {
         return false;
     }
 
+    get DefaultPagingOrderBy(): string {
+        return '(SELECT NULL)';
+    }
+
     // ─── Data Types ──────────────────────────────────────────────────
 
     get TypeMap(): DataTypeMap {

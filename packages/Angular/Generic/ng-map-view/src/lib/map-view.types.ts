@@ -12,7 +12,6 @@ export type ChoroplethGroupBy = 'country' | 'state_province';
  * Map display state persisted in UserView.DisplayState JSON.
  */
 export interface MapDisplayState {
-    RenderMode: MapRenderMode;
     ZoomLevel?: number;
     CenterLat?: number;
     CenterLng?: number;

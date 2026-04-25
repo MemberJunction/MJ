@@ -155,8 +155,8 @@ export interface ExecutionStats {
             display: flex;
             flex-direction: column;
             flex: 1;
-            background: #fff;
-            border: 1px solid #e0e0e0;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
             border-radius: 8px;
             overflow: hidden;
         }
@@ -164,8 +164,8 @@ export interface ExecutionStats {
         /* Header */
         .monitor-header {
             padding: 16px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
+            background: var(--mj-bg-surface-card);
+            border-bottom: 1px solid var(--mj-border-default);
         }
 
         .header-title {
@@ -174,12 +174,12 @@ export interface ExecutionStats {
             gap: 8px;
             font-size: 16px;
             font-weight: 600;
-            color: #1a1a1a;
+            color: var(--mj-text-primary);
             margin-bottom: 8px;
         }
 
         .header-title i {
-            color: #2196f3;
+            color: var(--mj-brand-primary);
         }
 
         .live-indicator {
@@ -187,8 +187,8 @@ export interface ExecutionStats {
             align-items: center;
             gap: 6px;
             padding: 4px 8px;
-            background: #ff4444;
-            color: white;
+            background: var(--mj-status-error);
+            color: var(--mj-text-inverse);
             border-radius: 4px;
             font-size: 11px;
             font-weight: 600;
@@ -215,7 +215,7 @@ export interface ExecutionStats {
             align-items: center;
             gap: 8px;
             font-size: 13px;
-            color: #666;
+            color: var(--mj-text-secondary);
         }
 
         .status-label {
@@ -223,11 +223,11 @@ export interface ExecutionStats {
         }
 
         .agent-path {
-            color: #999;
+            color: var(--mj-text-muted);
         }
 
         .step-name {
-            color: #1a1a1a;
+            color: var(--mj-text-primary);
             font-weight: 500;
         }
 
@@ -250,7 +250,7 @@ export interface ExecutionStats {
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: #999;
+            color: var(--mj-text-muted);
             text-align: center;
         }
 
@@ -273,8 +273,8 @@ export interface ExecutionStats {
         /* Footer */
         .monitor-footer {
             padding: 16px;
-            background: #f8f9fa;
-            border-top: 1px solid #e0e0e0;
+            background: var(--mj-bg-surface-card);
+            border-top: 1px solid var(--mj-border-default);
         }
 
         .stats-grid {
@@ -291,7 +291,7 @@ export interface ExecutionStats {
         .stat-label {
             display: block;
             font-size: 11px;
-            color: #666;
+            color: var(--mj-text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 4px;
@@ -301,11 +301,11 @@ export interface ExecutionStats {
             display: block;
             font-size: 16px;
             font-weight: 600;
-            color: #1a1a1a;
+            color: var(--mj-text-primary);
         }
 
         .failed-count {
-            color: #f44336;
+            color: var(--mj-status-error);
             font-size: 12px;
             font-weight: normal;
         }
@@ -320,17 +320,17 @@ export interface ExecutionStats {
         .type-badge {
             display: inline-block;
             padding: 4px 8px;
-            background: #e3f2fd;
-            color: #1976d2;
+            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+            color: var(--mj-brand-primary);
             border-radius: 4px;
             font-size: 12px;
             font-weight: 500;
         }
-        
+
         /* View Run Button */
         .view-run-btn {
-            background: #2196f3;
-            color: white;
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
             border: none;
             padding: 6px 12px;
             border-radius: 4px;
@@ -343,9 +343,9 @@ export interface ExecutionStats {
             transition: all 0.2s ease;
             margin-left: auto;
         }
-        
+
         .view-run-btn:hover {
-            background: #1976d2;
+            background: var(--mj-brand-primary-hover);
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }

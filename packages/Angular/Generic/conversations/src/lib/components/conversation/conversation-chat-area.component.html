@@ -81,6 +81,10 @@
           [showSidebarToggle]="showSidebarToggle"
           [overlayMode]="overlayMode"
           [greeting]="emptyStateGreeting"
+          [enableAttachments]="enableAttachments"
+          [maxAttachments]="maxAttachments"
+          [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+          [acceptedFileTypes]="acceptedFileTypes"
           (sidebarToggleClicked)="sidebarToggleClicked.emit()"
           (messageSent)="onEmptyStateMessageSent($event)">
         </mj-conversation-empty-state>
@@ -200,7 +204,8 @@
           (shareRequested)="onArtifactShareRequested($event)"
           (maximizeToggled)="toggleMaximizeArtifactPane()"
           (openEntityRecord)="onOpenEntityRecord($event)"
-          (navigationRequest)="onNavigationRequest($event)">
+          (navigationRequest)="onNavigationRequest($event)"
+          (analyzeRequested)="OnAnalyzeArtifact($event)">
         </mj-artifact-viewer-panel>
       </div>
     }
@@ -369,8 +374,8 @@
 <!-- Test Feedback Dialog -->
 @if (testFeedbackDialogData) {
   <mj-test-feedback-dialog
-    [visible]="showTestFeedbackDialog"
     [data]="testFeedbackDialogData"
+    [visible]="showTestFeedbackDialog"
     (closed)="onTestFeedbackDialogClosed($event)">
   </mj-test-feedback-dialog>
 }

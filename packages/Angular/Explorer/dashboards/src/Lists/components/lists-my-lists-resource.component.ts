@@ -1268,7 +1268,7 @@ interface CategoryNode {
   encapsulation: ViewEncapsulation.None
 })
 export class ListsMyListsResource extends BaseResourceComponent implements OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   isLoading = true;
   searchTerm = '';
@@ -1346,11 +1346,13 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   }
 
   async ngOnInit() {
+    super.ngOnInit();
     await this.loadData();
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }

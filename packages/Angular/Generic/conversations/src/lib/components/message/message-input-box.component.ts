@@ -46,6 +46,7 @@ export class MessageInputBoxComponent {
   @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
   @Output() attachmentError = new EventEmitter<string>();
   @Output() attachmentClicked = new EventEmitter<PendingAttachment>();
+  @Output() artifactPickerRequested = new EventEmitter<void>();
 
   get canSend(): boolean {
     const hasText = this.value.trim().length > 0;
@@ -180,5 +181,28 @@ export class MessageInputBoxComponent {
    */
   openFilePicker(): void {
     this.mentionEditor?.openFilePicker();
+  }
+
+  /**
+   * Open artifact picker - emits event for parent to handle.
+   *
+   * TODO (2026-04-15): no consumer currently handles `artifactPickerRequested`.
+   * The prior handler was removed by commit 0a4612abf1 and the orphaned
+   * template was cleaned up in 7a063fc12a. The template button is disabled
+   * to signal the gap. See message-input-box.component.html for the TODO
+   * describing the suggested picker implementation.
+   */
+  openArtifactPicker(): void {
+    this.artifactPickerRequested.emit();
+  }
+
+  /**
+   * Add an artifact as a pending attachment (called by parent after artifact selection)
+   */
+  AddArtifactAttachment(artifact: {
+    fileID: string; fileName: string; mimeType: string;
+    sizeBytes: number; artifactVersionId?: string;
+  }): void {
+    this.mentionEditor?.AddArtifactAttachment(artifact);
   }
 }

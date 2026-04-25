@@ -397,15 +397,16 @@
                     <i class="fa-solid fa-chevron-down entity-picker-arrow"></i>
                   </button>
                   @if (ShowEntityPicker) {
-                    <div class="entity-picker-dropdown">
+                    <div class="entity-picker-dropdown" (mousedown)="$event.stopPropagation()">
                       <div class="entity-picker-search">
                         <i class="fa-solid fa-search"></i>
-                        <input type="text"
+                        <input #entitySearchInput
+                               type="text"
                                class="entity-picker-search-input"
                                placeholder="Filter entities..."
                                [(ngModel)]="EntitySearchText"
                                (input)="FilterEntities()"
-                               autofocus />
+                               (keydown)="OnEntityPickerKeyDown($event)" />
                       </div>
                       <div class="entity-picker-list">
                         @for (group of FilteredEntityGroups; track group.SchemaName) {
@@ -417,6 +418,7 @@
                             @for (entity of group.Entities; track entity.ID) {
                               <button class="entity-picker-item"
                                       [class.entity-picker-item-selected]="entity.Name === SuggestEntityName"
+                                      [class.entity-picker-item-focused]="FlatFilteredEntities[SelectedEntityIndex]?.ID === entity.ID"
                                       (click)="SelectEntity(entity.Name)">
                                 <i class="fa-solid fa-table"></i>
                                 {{ entity.Name }}
@@ -495,7 +497,7 @@
                   }
                 </div>
               </div>
-              @if (SuggestionResult.selectedRelationships.length > 0) {
+              @if ((SuggestionResult.selectedRelationships?.length ?? 0) > 0) {
                 <div class="result-section">
                   <h4 class="result-heading">Related Entities</h4>
                   @for (rel of SuggestionResult.selectedRelationships; track rel.name) {
