@@ -709,7 +709,8 @@ declarations: [
     MJOpenAppFormComponent,
     MJOutputDeliveryTypeFormComponent,
     MJOutputFormatTypeFormComponent,
-    MJOutputTriggerTypeFormComponent],
+    MJOutputTriggerTypeFormComponent,
+    MJProjectFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -726,7 +727,6 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
-    MJProjectFormComponent,
     MJPublicLinkFormComponent,
     MJQueryFormComponent,
     MJQueryCategoryFormComponent,
@@ -745,7 +745,8 @@ declarations: [
     MJRecommendationFormComponent,
     MJRecordChangeReplayRunFormComponent,
     MJRecordChangeFormComponent,
-    MJRecordGeoCodeFormComponent],
+    MJRecordGeoCodeFormComponent,
+    MJRecordLinkFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -762,7 +763,6 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
-    MJRecordLinkFormComponent,
     MJRecordMergeDeletionLogFormComponent,
     MJRecordMergeLogFormComponent,
     MJReportCategoryFormComponent,
@@ -781,7 +781,8 @@ declarations: [
     MJScheduledJobTypeFormComponent,
     MJScheduledJobFormComponent,
     MJSchemaInfoFormComponent,
-    MJSearchProviderFormComponent],
+    MJSearchProviderFormComponent,
+    MJSkillFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -798,7 +799,6 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
-    MJSkillFormComponent,
     MJSQLDialectFormComponent,
     MJStateProvinceFormComponent,
     MJTagAuditLogFormComponent,
@@ -817,7 +817,8 @@ declarations: [
     MJTestRunFeedbackFormComponent,
     MJTestRunOutputTypeFormComponent,
     MJTestRunOutputFormComponent,
-    MJTestRunFormComponent],
+    MJTestRunFormComponent,
+    MJTestSuiteRunFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -834,7 +835,6 @@ export class GeneratedForms_SubModule_13 { }
 
 @NgModule({
 declarations: [
-    MJTestSuiteRunFormComponent,
     MJTestSuiteTestFormComponent,
     MJTestSuiteFormComponent,
     MJTestTypeFormComponent,
@@ -853,7 +853,8 @@ declarations: [
     MJUserViewRunFormComponent,
     MJUserViewFormComponent,
     MJUserFormComponent,
-    MJVectorDatabaseFormComponent],
+    MJVectorDatabaseFormComponent,
+    MJVectorIndexFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -870,7 +871,6 @@ export class GeneratedForms_SubModule_14 { }
 
 @NgModule({
 declarations: [
-    MJVectorIndexFormComponent,
     MJVersionInstallationFormComponent,
     MJVersionLabelItemFormComponent,
     MJVersionLabelRestoreFormComponent,

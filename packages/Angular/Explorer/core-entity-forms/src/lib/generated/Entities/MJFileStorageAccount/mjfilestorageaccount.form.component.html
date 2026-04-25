@@ -100,31 +100,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AI Agent Types Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentTypes"
-        SectionName="AI Agent Types"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentTypes')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Types','DefaultStorageAccountID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Types')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentTypes')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentTypes', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Archive Configurations Section -->
     <mj-collapsible-panel
         SectionKey="mJArchiveConfigurations"
@@ -144,6 +119,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArchiveConfigurations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Types Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentTypes"
+        SectionName="AI Agent Types"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentTypes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Types','DefaultStorageAccountID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Types')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentTypes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
