@@ -144,14 +144,15 @@ Each object supports: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRo
               if (t.isObjectExpression(path.node.arguments[0])) {
                 hasValidFirstParam = true;
                 configs = [path.node.arguments[0]];
+              } else if (t.isIdentifier(path.node.arguments[0])) {
+                // Variable reference — allow it, can't statically validate
+                hasValidFirstParam = true;
               } else {
                 const argType = t.isStringLiteral(path.node.arguments[0])
                   ? 'string'
                   : t.isArrayExpression(path.node.arguments[0])
                     ? 'array'
-                    : t.isIdentifier(path.node.arguments[0])
-                      ? 'identifier'
-                      : 'non-object';
+                    : 'non-object';
                 violations.push({
                   rule: 'runview-runquery-valid-properties',
                   severity: 'critical',
@@ -397,9 +398,11 @@ Use: RunQuery({
               code: `RunQuery()`,
               suggestion: defaultSuggestion,
             });
+          } else if (t.isIdentifier(path.node.arguments[0])) {
+            // Variable reference — allow it, can't statically validate
           } else if (!t.isObjectExpression(path.node.arguments[0])) {
-            // First parameter is not an object
-            const argType = t.isStringLiteral(path.node.arguments[0]) ? 'string' : t.isIdentifier(path.node.arguments[0]) ? 'identifier' : 'non-object';
+            // First parameter is not an object (string, number, boolean, etc.)
+            const argType = t.isStringLiteral(path.node.arguments[0]) ? 'string' : 'non-object';
             violations.push({
               rule: 'runview-runquery-valid-properties',
               severity: 'critical',
