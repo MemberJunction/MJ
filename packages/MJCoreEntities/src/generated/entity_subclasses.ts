@@ -7407,7 +7407,7 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Description: Foreign key to the parent ArchiveRun.`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity Record
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Foreign key to the Entity this record belongs to.`),
@@ -7468,9 +7468,13 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ArchiveRun: z.date().describe(`
+        * * Field Name: ArchiveRun
+        * * Display Name: Archive Run Timestamp
+        * * SQL Data Type: datetimeoffset`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Type
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -45619,7 +45623,7 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity Record
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Foreign key to the Entity this record belongs to.
@@ -45763,8 +45767,17 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
     }
 
     /**
+    * * Field Name: ArchiveRun
+    * * Display Name: Archive Run Timestamp
+    * * SQL Data Type: datetimeoffset
+    */
+    get ArchiveRun(): Date {
+        return this.Get('ArchiveRun');
+    }
+
+    /**
     * * Field Name: Entity
-    * * Display Name: Entity Type
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
