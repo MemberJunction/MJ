@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Barbados",
+      "Code": "BB",
+      "ISO3166_2": "BB-BB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Barbados"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BB"
+    },
+    "primaryKey": {
+      "ID": "A6ABE99D-1D02-4906-9A34-C2149F9ADAE1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.638Z",
+      "checksum": "98ad8856fb32db624ccdeefd082ef26114ef300fe594a4e59c43db0c2a432cf5"
+    }
+  }
+]

@@ -46,6 +46,13 @@ export * from './lib/duplicate-view-dialog/duplicate-view-dialog.component';
 // Shared View Warning Dialog (warning when saving shared views)
 export * from './lib/shared-view-warning-dialog/shared-view-warning-dialog.component';
 
+// Recycle Bin (slide-in for hard-deleted records, gated on entity Delete permission)
+export * from './lib/recycle-bin/recycle-bin.component';
+export * from './lib/recycle-bin/recycle-bin-chip.component';
+export * from './lib/recycle-bin/events/recycle-bin-events';
+
 // Utilities
 export * from './lib/utils/highlight.util';
 export * from './lib/utils/record.util';
+// Geo support exports
+export const ENTITY_VIEWER_GEO_VERSION = 1;

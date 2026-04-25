@@ -62,19 +62,11 @@
 
   <!-- Main Content with Splitter -->
   <div class="main-content" >
-    <kendo-splitter 
-      class="main-splitter"
-      orientation="horizontal"
-      (layoutChange)="onMainSplitterChange($event)"
-      >
-      
+    <as-split direction="horizontal" class="main-splitter">
+
       <!-- Filter Panel (Left) -->
-      <kendo-splitter-pane 
-        [size]="filterPanelVisible ? '320px' : '0px'"
-        [collapsible]="false"
-        [resizable]="filterPanelVisible"
-        [scrollable]="false"
-        [hidden]="!filterPanelVisible">
+      @if (filterPanelVisible) {
+      <as-split-area [size]="20" [minSize]="15" [maxSize]="30">
         <mj-agent-filter-panel
           [agents]="agents"
           [filteredAgents]="filteredAgents"
@@ -84,12 +76,11 @@
           (resetFilters)="onResetFilters()"
           (closePanel)="toggleFilterPanel()">
         </mj-agent-filter-panel>
-      </kendo-splitter-pane>
-      
+      </as-split-area>
+      }
+
       <!-- Agents List Panel -->
-      <kendo-splitter-pane
-        [resizable]="true"
-        [scrollable]="true">
+      <as-split-area>
         <div class="agents-content">
           <!-- Loading State -->
           @if (isLoading) {
@@ -212,116 +203,24 @@
                 </div>
               }
               
-              <!-- Tree View (Mac Finder style) -->
+              <!-- Tree View (mj-tree component) -->
               @if (viewMode === 'tree') {
                 <div class="agents-tree">
-                  @for (node of categoryTree; track node.Category.ID) {
-                    @if (hasVisibleContent(node)) {
-                      <ng-container *ngTemplateOutlet="categoryNodeTpl; context: { $implicit: node, depth: 0 }"></ng-container>
-                    }
-                  }
-
-                  <!-- Uncategorized agents -->
-                  @if (uncategorizedAgents.length > 0) {
-                    <div class="tree-category-group">
-                      <div class="tree-category-header depth-0">
-                        <i class="fa-solid fa-folder-open tree-folder-icon"></i>
-                        <span class="tree-category-name">Uncategorized</span>
-                        <span class="tree-category-count">{{ uncategorizedAgents.length }}</span>
-                      </div>
-                      <div class="tree-agent-list">
-                        @for (agent of uncategorizedAgents; track agent.ID) {
-                          <div class="tree-agent-row" (click)="showAgentDetails(agent)">
-                            <div class="tree-agent-icon" [style.background-color]="getAgentIconColor(agent)">
-                              @if (hasLogoURL(agent)) {
-                                <img [src]="agent.LogoURL" [alt]="agent.Name + ' logo'" class="tree-agent-logo">
-                              } @else {
-                                <i [class]="getAgentIcon(agent)"></i>
-                              }
-                            </div>
-                            <div class="tree-agent-info">
-                              <span class="tree-agent-name">{{ agent.Name }}</span>
-                              <span class="tree-agent-type">{{ getAgentTypeName(agent) }}</span>
-                            </div>
-                            <span class="tree-agent-status" [class]="'status-' + (agent.Status || 'unknown').toLowerCase()">
-                              {{ agent.Status }}
-                            </span>
-                            @if (agent.Status === 'Active' && UserCanReadAgents) {
-                              <button
-                                type="button"
-                                class="action-btn-small primary"
-                                (click)="runAgent(agent); $event.stopPropagation()"
-                                title="Run Agent">
-                                <i class="fa-solid fa-play"></i>
-                              </button>
-                            }
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  }
+                  <mj-tree
+                    [BranchConfig]="CategoryBranchConfig"
+                    [LeafConfig]="AgentLeafConfig"
+                    [SelectionMode]="'single'"
+                    [SelectableTypes]="'leaf'"
+                    [ShowDescriptions]="true"
+                    [ShowBadges]="true"
+                    [ShowExpandCollapseAll]="true"
+                    [EmptyMessage]="'No agents found'"
+                    [EmptyIcon]="'fa-solid fa-robot'"
+                    (AfterNodeClick)="onTreeNodeClick($event)"
+                    (AfterNodeDoubleClick)="onTreeNodeDoubleClick($event)">
+                  </mj-tree>
                 </div>
               }
-
-              <!-- Recursive category node template -->
-              <ng-template #categoryNodeTpl let-node let-depth="depth">
-                <div class="tree-category-group">
-                  <div class="tree-category-header" [class]="'depth-' + depth" (click)="toggleCategoryNode(node)">
-                    <i class="fa-solid tree-chevron"
-                       [class.fa-chevron-right]="!node.Expanded"
-                       [class.fa-chevron-down]="node.Expanded"></i>
-                    <i class="fa-solid tree-folder-icon"
-                       [class.fa-folder]="!node.Expanded"
-                       [class.fa-folder-open]="node.Expanded"></i>
-                    <span class="tree-category-name">{{ node.Category.Name }}</span>
-                    <span class="tree-category-count">{{ getAgentCount(node) }}</span>
-                  </div>
-
-                  @if (node.Expanded) {
-                    <!-- Agents directly in this category -->
-                    @if (node.Agents.length > 0) {
-                      <div class="tree-agent-list" [style.padding-left.px]="(depth + 1) * 24">
-                        @for (agent of node.Agents; track agent.ID) {
-                          <div class="tree-agent-row" (click)="showAgentDetails(agent)">
-                            <div class="tree-agent-icon" [style.background-color]="getAgentIconColor(agent)">
-                              @if (hasLogoURL(agent)) {
-                                <img [src]="agent.LogoURL" [alt]="agent.Name + ' logo'" class="tree-agent-logo">
-                              } @else {
-                                <i [class]="getAgentIcon(agent)"></i>
-                              }
-                            </div>
-                            <div class="tree-agent-info">
-                              <span class="tree-agent-name">{{ agent.Name }}</span>
-                              <span class="tree-agent-type">{{ getAgentTypeName(agent) }}</span>
-                            </div>
-                            <span class="tree-agent-status" [class]="'status-' + (agent.Status || 'unknown').toLowerCase()">
-                              {{ agent.Status }}
-                            </span>
-                            @if (agent.Status === 'Active' && UserCanReadAgents) {
-                              <button
-                                type="button"
-                                class="action-btn-small primary"
-                                (click)="runAgent(agent); $event.stopPropagation()"
-                                title="Run Agent">
-                                <i class="fa-solid fa-play"></i>
-                              </button>
-                            }
-                          </div>
-                        }
-                      </div>
-                    }
-
-                    <!-- Child categories -->
-                    @for (child of node.Children; track child.Category.ID) {
-                      @if (hasVisibleContent(child)) {
-                        <div [style.padding-left.px]="(depth + 1) * 24">
-                          <ng-container *ngTemplateOutlet="categoryNodeTpl; context: { $implicit: child, depth: depth + 1 }"></ng-container>
-                        </div>
-                      }
-                    }
-                  }
-                </div>
-              </ng-template>
 
               <!-- List View -->
               @if (viewMode === 'list') {
@@ -410,8 +309,8 @@
             }
           }
         </div>
-      </kendo-splitter-pane>
-    </kendo-splitter>
+      </as-split-area>
+    </as-split>
   </div>
 
   <!-- Detail Panel Overlay -->

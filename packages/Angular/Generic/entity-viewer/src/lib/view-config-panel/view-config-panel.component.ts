@@ -4,12 +4,12 @@ import {
   MJUserViewEntityExtended,
   ViewColumnInfo,
   ViewGridState,
-  ViewGridColumnSetting,
-  ColumnFormat,
-  ColumnTextStyle,
-  ColumnConditionalRule,
-  ViewGridAggregatesConfig,
-  ViewGridAggregate,
+  MJUserViewEntity_IGridColumnSetting as ViewGridColumnSetting,
+  MJUserViewEntity_IColumnFormat as ColumnFormat,
+  MJUserViewEntity_IColumnTextStyle as ColumnTextStyle,
+  MJUserViewEntity_IColumnConditionalRule as ColumnConditionalRule,
+  MJUserViewEntity_IGridAggregatesConfig as ViewGridAggregatesConfig,
+  MJUserViewEntity_IGridAggregate as ViewGridAggregate,
   DEFAULT_AGGREGATE_DISPLAY,
   UserInfoEngine
 } from '@memberjunction/core-entities';

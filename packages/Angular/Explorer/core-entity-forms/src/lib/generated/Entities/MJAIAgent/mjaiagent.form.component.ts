@@ -36,6 +36,7 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentPermissions', sectionName: 'AI Agent Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentDataSources', sectionName: 'AI Agent Data Sources', isExpanded: false },
             { sectionKey: 'mJAIAgentModalities', sectionName: 'AI Agent Modalities', isExpanded: false },
+            { sectionKey: 'mJAIAgentClientTools', sectionName: 'AI Agent Client Tools', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AIAgent Notes', isExpanded: false },
             { sectionKey: 'mJAIAgentPrompts', sectionName: 'AI Agent Prompts', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
@@ -47,7 +48,8 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
-            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
+            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
+            { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false }
         ]);
     }
 }

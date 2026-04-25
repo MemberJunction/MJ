@@ -2,13 +2,13 @@ import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, injec
 import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJAIAgentNoteEntity, MJAIAgentPromptEntity, MJAIAgentTypeEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
 import { RegisterClass, MJGlobal , UUIDsEqual } from '@memberjunction/global';
-import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, BaseFormSectionComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIAgentFormComponent } from '../../generated/Entities/MJAIAgent/mjaiagent.form.component';
-import { DialogService } from '@progress/kendo-angular-dialog';
+import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AIAgentManagementService } from './ai-agent-management.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
@@ -75,6 +75,12 @@ export interface UnifiedSubAgent {
 export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent implements OnDestroy {
     /** The AI Agent entity being edited */
     public record!: MJAIAgentEntityExtended;
+
+    /** Toolbar config — hide right-hand section controls since this form has a custom layout */
+    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** Custom-layout AI Agent form looks best full-width on first open. */
+    public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
     
     /** Subject for managing component lifecycle and cleaning up subscriptions */
     private destroy$ = new Subject<void>();
@@ -340,8 +346,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 height: 600
             });
 
-            const promptSelector = dialogRef.content.instance;
-            
+            const promptSelector = dialogRef.Content!.instance as unknown as PromptSelectorDialogComponent;
+
             // Configure the prompt selector for single selection
             promptSelector.config = {
                 title: 'Select Context Compression Prompt',
@@ -556,7 +562,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
     // Dependency injection using inject() function
     private sharedService = inject(SharedService);
-    private dialogService = inject(DialogService);
+    private dialogService = inject(MJDialogService);
     private viewContainerRef = inject(ViewContainerRef);
     private agentManagementService = inject(AIAgentManagementService);
     private testHarnessService = inject(AITestHarnessDialogService);
@@ -2048,8 +2054,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         });
 
         try {
-            const result = await firstValueFrom(confirmDialog.result);
-            if (result && (result as any).text === 'Remove') {
+            const result = await firstValueFrom(confirmDialog.Result);
+            if (result && typeof result === 'object' && 'text' in result && (result as Record<string, unknown>)['text'] === 'Remove') {
                 try {
                     // Check if this is a pending add (not yet in database)
                     const pendingAddIndex = this.PendingRecords.findIndex(
@@ -2232,8 +2238,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         });
 
         try {
-            const result = await firstValueFrom(confirmDialog.result);
-            if (result && (result as any).text === 'Remove') {
+            const result = await firstValueFrom(confirmDialog.Result);
+            if (result && typeof result === 'object' && 'text' in result && (result as Record<string, unknown>)['text'] === 'Remove') {
                 try {
                     // Check if this is a pending add (not yet in database)
                     const pendingAddIndex = this.PendingRecords.findIndex(
@@ -2372,8 +2378,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         });
 
         try {
-            const result = await firstValueFrom(confirmDialog.result);
-            if (result && (result as any).text === 'Unlink') {
+            const result = await firstValueFrom(confirmDialog.Result);
+            if (result && typeof result === 'object' && 'text' in result && (result as Record<string, unknown>)['text'] === 'Unlink') {
                 try {
                     const success = await item.relationship.Delete();
                     if (success) {
@@ -2454,8 +2460,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         });
 
         try {
-            const result = await firstValueFrom(confirmDialog.result);
-            if (result && (result as any).text === 'Remove') {
+            const result = await firstValueFrom(confirmDialog.Result);
+            if (result && typeof result === 'object' && 'text' in result && (result as Record<string, unknown>)['text'] === 'Remove') {
                 try {
                 // Check if this is a pending add (not yet in database)
                 const pendingAddIndex = this.PendingRecords.findIndex(

@@ -27,19 +27,52 @@ export {
   AgentRequestsResourceComponent,
   AutotaggingPipelineResourceComponent,
   VectorManagementResourceComponent,
-  DuplicateDetectionResourceComponent
+  DuplicateDetectionResourceComponent,
+  AIAnalyticsResourceComponent,
+  LoadAIAnalyticsResource,
+  AnalyticsFilterBarComponent,
+  AIOverviewHubComponent,
+  LoadAIOverviewHub,
+  AnalyticsExecutiveSummaryComponent,
+  LoadAnalyticsExecutiveSummary,
+  AnalyticsPromptRunsComponent,
+  LoadAnalyticsPromptRuns,
+  AnalyticsAgentRunsComponent,
+  LoadAnalyticsAgentRuns,
+  AnalyticsModelPerformanceComponent,
+  LoadAnalyticsModelPerformance,
+  AnalyticsCostBudgetComponent,
+  LoadAnalyticsCostBudget,
+  AnalyticsErrorAnalysisComponent,
+  LoadAnalyticsErrorAnalysis,
+  AnalyticsUsagePatternsComponent,
+  LoadAnalyticsUsagePatterns
 } from './AI/index';
 
 // Knowledge Hub components
-export {
-  KnowledgeSearchResourceComponent,
-  LoadKnowledgeSearchResource
-} from './KnowledgeHub/components/search/knowledge-search-resource.component';
 export {
   KnowledgeConfigResourceComponent,
   LoadKnowledgeConfigResource
 } from './KnowledgeHub/components/config/knowledge-config-resource.component';
 export { SearchResultDetailComponent } from './KnowledgeHub/components/results-detail/search-result-detail.component';
+export {
+  ClusterVisualizationResourceComponent,
+  LoadClusterVisualizationResource
+} from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
+export {
+  AnalyticsResourceComponent,
+  LoadAnalyticsResource
+} from './KnowledgeHub/components/analytics/analytics-resource.component';
+
+// Archiving components
+export {
+  ArchiveConfigResourceComponent,
+  LoadArchiveConfigResource
+} from './Archiving/components/archive-config-resource.component';
+export {
+  ArchiveRunsResourceComponent,
+  LoadArchiveRunsResource
+} from './Archiving/components/archive-runs-resource.component';
 
 // Export Actions components as resources (BaseResourceComponent-based)
 export {
@@ -116,6 +149,9 @@ export {
 export { HomeApplication } from './Home/home-application';
 export { HomeDashboardComponent } from './Home/home-dashboard.component';
 
+// Application Roles
+export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from './ApplicationRoles/application-roles-resource.component';
+
 // API Keys
 export { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
 export { APIKeyCreateDialogComponent, APIKeyCreateResult } from './APIKeys/api-key-create-dialog.component';
@@ -150,3 +186,4 @@ export * from './data-explorer-dashboards.module';
 export * from './lists-dashboards.module';
 export * from './component-studio-dashboards.module';
 export * from './shared/shared-dashboard-widgets.module';
+export * from './archiving-dashboards.module';

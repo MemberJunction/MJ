@@ -1,0 +1,86 @@
+[
+  {
+    "fields": {
+      "Name": "Hhohho",
+      "Code": "HH",
+      "ISO3166_2": "SZ-HH",
+      "Latitude": -26.0265,
+      "Longitude": 31.322,
+      "BoundaryGeoJSON": "@file:by-country/SZ/boundaries/SZ-HH.geojson",
+      "CommonAliases": [
+        "Hhohho"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SZ"
+    },
+    "primaryKey": {
+      "ID": "93394586-6A93-4C0F-9B6F-584E916CB0A6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.448Z",
+      "checksum": "380a3cd13df13b6ffc7eaa388dd9d8ebe74310ce748b130afdb41eda262affb2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lubombo",
+      "Code": "LU",
+      "ISO3166_2": "SZ-LU",
+      "Latitude": -26.5247,
+      "Longitude": 31.8026,
+      "BoundaryGeoJSON": "@file:by-country/SZ/boundaries/SZ-LU.geojson",
+      "CommonAliases": [
+        "Lubombo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SZ"
+    },
+    "primaryKey": {
+      "ID": "1F809259-7DAE-43B1-B603-82CBAE2DE978"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.465Z",
+      "checksum": "898b6e52ff81f0cf2b71269e8eb6373a5efaa4da4ebbd01f74fbe093b2b4c30d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manzini",
+      "Code": "MA",
+      "ISO3166_2": "SZ-MA",
+      "Latitude": -26.6342,
+      "Longitude": 31.2402,
+      "BoundaryGeoJSON": "@file:by-country/SZ/boundaries/SZ-MA.geojson",
+      "CommonAliases": [
+        "Manzini"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SZ"
+    },
+    "primaryKey": {
+      "ID": "149E397A-99A4-4746-929E-5BC660ED1141"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.481Z",
+      "checksum": "a4d2b64030724032d62c3931325f755d6e19739f1752e6b76ec504e1b2947465"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shiselweni",
+      "Code": "SH",
+      "ISO3166_2": "SZ-SH",
+      "Latitude": -27.0243,
+      "Longitude": 31.4265,
+      "BoundaryGeoJSON": "@file:by-country/SZ/boundaries/SZ-SH.geojson",
+      "CommonAliases": [
+        "Shiselweni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SZ"
+    },
+    "primaryKey": {
+      "ID": "E623A685-0FEA-4B2F-92FA-DD04436D4DB6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.496Z",
+      "checksum": "86b2187b4698f8945ee948c770073e81813afdbe320fce53161d0ee960c242d2"
+    }
+  }
+]

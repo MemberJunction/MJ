@@ -33,8 +33,19 @@ export class SearchFilterComponent {
     /** Whether the filter panel is collapsible */
     @Input() Collapsible = true;
 
+    /** Whether to show the min relevance slider */
+    @Input() ShowRelevanceSlider = true;
+
+    /** Current minimum score as a percentage (0-100) */
+    @Input() MinScorePercent = 0;
+
+    /** The MinScore that was last sent to the server (for visual indicator) */
+    @Input() ServerMinScorePercent = 0;
+
     @Output() FilterChanged = new EventEmitter<SearchFilterChangeEvent>();
     @Output() FiltersCleared = new EventEmitter<void>();
+    @Output() CloseRequested = new EventEmitter<void>();
+    @Output() MinScoreChanged = new EventEmitter<number>();
 
     /** Collapsed state per category */
     public CollapsedCategories = new Set<string>();
@@ -90,5 +101,46 @@ export class SearchFilterComponent {
         this.ActiveFilters = {};
         this.FiltersCleared.emit();
         this.cdr.detectChanges();
+    }
+
+    /** Select all options in a category, or clear all if already all selected */
+    public SelectAll(category: string): void {
+        const filter = this.Filters.find(f => f.Category === category);
+        if (!filter) return;
+
+        const current = this.ActiveFilters[category] ?? [];
+        if (current.length === filter.Options.length) {
+            // All selected → clear
+            this.ActiveFilters[category] = [];
+        } else {
+            // Select all
+            this.ActiveFilters[category] = filter.Options.map(o => o.Value);
+        }
+        this.FilterChanged.emit({ Category: category, SelectedValues: this.ActiveFilters[category] });
+        this.cdr.detectChanges();
+    }
+
+    /** Check if all options in a category are selected */
+    public IsAllSelected(category: string): boolean {
+        const filter = this.Filters.find(f => f.Category === category);
+        if (!filter) return false;
+        const selection = this.ActiveFilters[category] ?? [];
+        return selection.length === filter.Options.length;
+    }
+
+    /** Handle relevance slider drag (preview only — updates display without triggering search) */
+    public OnMinScorePreview(value: string): void {
+        this.MinScorePercent = parseInt(value, 10);
+    }
+
+    /** Handle relevance slider release — commits the value and triggers re-query if needed */
+    public OnMinScoreCommit(): void {
+        this.MinScoreChanged.emit(this.MinScorePercent);
+    }
+
+    /** Handle relevance slider change (legacy — used when input event fires) */
+    public OnMinScoreChange(value: string): void {
+        this.MinScorePercent = parseInt(value, 10);
+        this.MinScoreChanged.emit(this.MinScorePercent);
     }
 }

@@ -1,5 +1,64 @@
 # @memberjunction/ng-agent-client
 
+## 5.29.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.29.0
+- @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.28.0
+- @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ai-agent-client@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.27.0
+- @memberjunction/global@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.26.0
+- @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.25.0
+- @memberjunction/global@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.24.0
+- @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ai-agent-client@5.23.0
+
 ## 5.22.0
 
 ### Minor Changes

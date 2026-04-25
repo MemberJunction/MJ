@@ -10,9 +10,9 @@ import { Component, Output, EventEmitter, Input, ChangeDetectorRef, ElementRef, 
  *      Your content goes in here
  *   </div>
  *   <div custom-actions>
- *     <button kendoButton (click)="customOkClick()" themeColor="primary">Custom OK</button>
- *     <button kendoButton (click)="customCancelClick()">Custom Cancel</button>
- *     <button kendoButton (click)="additionalAction()">Additional Action</button>
+ *     <button mjButton variant="primary" (click)="customOkClick()">Custom OK</button>
+ *     <button mjButton (click)="customCancelClick()">Custom Cancel</button>
+ *     <button mjButton (click)="additionalAction()">Additional Action</button>
  *   </div>
  * </mj-generic-dialog>
  */

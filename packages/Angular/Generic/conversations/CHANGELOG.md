@@ -1,5 +1,234 @@
 # @memberjunction/ng-conversations
 
+## 5.29.0
+
+### Patch Changes
+
+- 98bad3a: Auto-populate ContentSizeBytes on artifact version saves; redesign non-image attachement tiles with type badge and restore click-to-open/download behavior
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-agent-client@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/ng-testing@5.29.0
+  - @memberjunction/ng-artifacts@5.29.0
+  - @memberjunction/ng-base-types@5.29.0
+  - @memberjunction/ng-code-editor@5.29.0
+  - @memberjunction/ng-container-directives@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/ng-tasks@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/ng-agent-client@5.29.0
+  - @memberjunction/ng-forms@5.29.0
+  - @memberjunction/ai@5.29.0
+  - @memberjunction/ng-markdown@5.29.0
+  - @memberjunction/ng-ui-components@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-testing@5.28.0
+  - @memberjunction/ai-agent-client@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/ng-artifacts@5.28.0
+  - @memberjunction/ng-base-types@5.28.0
+  - @memberjunction/ng-code-editor@5.28.0
+  - @memberjunction/ng-container-directives@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/ng-tasks@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/ng-agent-client@5.28.0
+  - @memberjunction/ng-forms@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/ng-markdown@5.28.0
+  - @memberjunction/ng-ui-components@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ai-agent-client@5.27.1
+  - @memberjunction/ai-engine-base@5.27.1
+  - @memberjunction/ai@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/ng-testing@5.27.1
+  - @memberjunction/ng-agent-client@5.27.1
+  - @memberjunction/ng-artifacts@5.27.1
+  - @memberjunction/ng-base-types@5.27.1
+  - @memberjunction/ng-code-editor@5.27.1
+  - @memberjunction/ng-container-directives@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/ng-tasks@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/ng-forms@5.27.1
+  - @memberjunction/ng-markdown@5.27.1
+  - @memberjunction/ng-ui-components@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- 4357090: Repair three query composition pipeline regressions surfaced by Skip-Brain, clear test feedback dialog state when switching conversations, strip tag IDs from taxonomy context injected into LLM prompts, exclude in-progress runs from last-run-date lookups, and replace direct UUID equality checks with `UUIDsEqual()` in the AI analytics dashboards to comply with the cross-platform UUID compliance test.
+  - @memberjunction/ng-artifacts@5.27.0
+  - @memberjunction/ai-agent-client@5.27.0
+  - @memberjunction/ai-engine-base@5.27.0
+  - @memberjunction/ai@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/ng-testing@5.27.0
+  - @memberjunction/ng-agent-client@5.27.0
+  - @memberjunction/ng-base-types@5.27.0
+  - @memberjunction/ng-code-editor@5.27.0
+  - @memberjunction/ng-container-directives@5.27.0
+  - @memberjunction/ng-forms@5.27.0
+  - @memberjunction/ng-markdown@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/ng-tasks@5.27.0
+  - @memberjunction/ng-ui-components@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/ng-code-editor@5.26.0
+  - @memberjunction/ng-shared-generic@5.26.0
+  - @memberjunction/ng-tasks@5.26.0
+  - @memberjunction/ng-ui-components@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-engine-base@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/ng-testing@5.26.0
+  - @memberjunction/ng-artifacts@5.26.0
+  - @memberjunction/ng-base-types@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/graphql-dataprovider@5.26.0
+  - @memberjunction/ng-forms@5.26.0
+  - @memberjunction/ai-agent-client@5.26.0
+  - @memberjunction/ng-container-directives@5.26.0
+  - @memberjunction/ng-agent-client@5.26.0
+  - @memberjunction/ai@5.26.0
+  - @memberjunction/ng-markdown@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Minor Changes
+
+- 008a62d: Add file based artifact I/O
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/ng-artifacts@5.25.0
+  - @memberjunction/ai-agent-client@5.25.0
+  - @memberjunction/ai-engine-base@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/ng-testing@5.25.0
+  - @memberjunction/ng-base-types@5.25.0
+  - @memberjunction/ng-code-editor@5.25.0
+  - @memberjunction/ng-container-directives@5.25.0
+  - @memberjunction/ng-notifications@5.25.0
+  - @memberjunction/ng-shared-generic@5.25.0
+  - @memberjunction/ng-tasks@5.25.0
+  - @memberjunction/ng-agent-client@5.25.0
+  - @memberjunction/ng-forms@5.25.0
+  - @memberjunction/ai@5.25.0
+  - @memberjunction/ng-markdown@5.25.0
+  - @memberjunction/ng-ui-components@5.25.0
+  - @memberjunction/global@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/graphql-dataprovider@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/ng-artifacts@5.24.0
+  - @memberjunction/ai-engine-base@5.24.0
+  - @memberjunction/ng-forms@5.24.0
+  - @memberjunction/ng-tasks@5.24.0
+  - @memberjunction/ai-agent-client@5.24.0
+  - @memberjunction/ng-testing@5.24.0
+  - @memberjunction/ng-notifications@5.24.0
+  - @memberjunction/ng-base-types@5.24.0
+  - @memberjunction/ng-code-editor@5.24.0
+  - @memberjunction/ng-container-directives@5.24.0
+  - @memberjunction/ng-shared-generic@5.24.0
+  - @memberjunction/ng-agent-client@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/ng-markdown@5.24.0
+  - @memberjunction/ng-ui-components@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [58af481]
+- Updated dependencies [fb0c69f]
+- Updated dependencies [1d1e02e]
+- Updated dependencies [c17be20]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ng-artifacts@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ng-ui-components@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/ai-agent-client@5.23.0
+  - @memberjunction/ai-engine-base@5.23.0
+  - @memberjunction/ng-testing@5.23.0
+  - @memberjunction/ng-base-types@5.23.0
+  - @memberjunction/ng-code-editor@5.23.0
+  - @memberjunction/ng-container-directives@5.23.0
+  - @memberjunction/ng-notifications@5.23.0
+  - @memberjunction/ng-shared-generic@5.23.0
+  - @memberjunction/ng-tasks@5.23.0
+  - @memberjunction/ai@5.23.0
+  - @memberjunction/ng-agent-client@5.23.0
+  - @memberjunction/ng-forms@5.23.0
+  - @memberjunction/ng-markdown@5.23.0
+
 ## 5.22.0
 
 ### Minor Changes

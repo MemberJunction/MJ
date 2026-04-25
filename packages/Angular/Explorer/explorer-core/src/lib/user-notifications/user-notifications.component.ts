@@ -1,8 +1,7 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { MJConversationDetailEntity, MJConversationEntity, MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { Metadata, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
-import { Router } from '@angular/router';
+import { Metadata, TransactionGroupBase, TransactionVariable, CompositeKey } from '@memberjunction/core';
 import { SafeJSONParse , UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
@@ -66,7 +65,6 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
 
   constructor (
     public sharedService: SharedService,
-    private router: Router,
     private navigationService: NavigationService,
     private appManager: ApplicationManager
   ) {}
@@ -357,14 +355,46 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
         return;
       }
 
-      const info = this.notificationUrl(notification);
-      if (info.queryString && info.queryString.trim().length > 0) {
-        const fullUrl = `${info.urlParts.join('/')}${info.queryString ? '?' + info.queryString : ''}`;
-        this.router.navigateByUrl(fullUrl);
+      this.navigateToResource(notification);
+    }
+  }
+
+  /**
+   * Navigate to a resource-based notification using NavigationService methods.
+   * Routes to the correct resource based on the notification's ResourceType.
+   */
+  private navigateToResource(notification: MJUserNotificationEntity): void {
+    if (!notification.ResourceRecordID || !notification.ResourceTypeID) return;
+
+    const rt = this.sharedService.ResourceTypeByID(notification.ResourceTypeID);
+    if (!rt) return;
+
+    const recordId = notification.ResourceRecordID.toString();
+    const rtName = rt.Name.trim().toLowerCase();
+
+    switch (rtName) {
+      case 'records': {
+        const config = SafeJSONParse<RecordResourceConfig>(notification.ResourceConfiguration || '');
+        if (config?.Entity) {
+          const key = new CompositeKey();
+          key.SimpleLoadFromURLSegment(recordId);
+          this.navigationService.OpenEntityRecord(config.Entity, key);
+        }
+        break;
       }
-      else {
-        this.router.navigate(info.urlParts);
-      }
+      case 'user views':
+      case 'mj: user views':
+        this.navigationService.OpenView(recordId, 'View');
+        break;
+      case 'dashboards':
+        this.navigationService.OpenDashboard(recordId, 'Dashboard');
+        break;
+      case 'reports':
+        this.navigationService.OpenReport(recordId, 'Report');
+        break;
+      default:
+        console.warn(`[UserNotifications] Unhandled resource type for navigation: ${rt.Name}`);
+        break;
     }
   }
 

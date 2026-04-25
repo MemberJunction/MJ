@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Niue",
+      "Code": "NU",
+      "ISO3166_2": "NU-NU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Niue"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NU"
+    },
+    "primaryKey": {
+      "ID": "B685597D-F57E-47B8-8B87-8CFD2D5CCEC5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.992Z",
+      "checksum": "7bae987ee92ae29afe97eb26e1c8d54088a344554df067b9227eff40291d5e62"
+    }
+  }
+]

@@ -78,7 +78,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   public viewMode: 'grid' | 'list' = 'list';
   public showMobileFilters = false;
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {

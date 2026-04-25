@@ -86,6 +86,8 @@ export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
  */
 export class PotentialDuplicate extends CompositeKey {
     ProbabilityScore: number;
+    /** Full vector metadata snapshot from the vector DB (Name, Description, EntityIcon, etc.) */
+    VectorMetadata?: Record<string, string>;
 }
 
 /**
@@ -109,15 +111,31 @@ export interface DuplicateDetectionOptions {
     KeywordSearchWeight?: number;
     /** Enable incremental mode — only check records not in a completed prior run (default: false) */
     IncrementalOnly?: boolean;
+    /**
+     * Re-vectorize records before detection (default: false).
+     * When false, assumes vectors already exist in the index from a prior sync.
+     * Set to true to force a fresh vectorization pass before running detection.
+     */
+    Revectorize?: boolean;
     /** Progress callback invoked at natural milestones during detection */
     OnProgress?: (progress: DuplicateDetectionProgress) => void;
+    /**
+     * Override the entity document's PotentialMatchThreshold for this run.
+     * Value between 0 and 1 (e.g., 0.30 = 30%). If omitted, uses the entity document's value.
+     */
+    PotentialMatchThreshold?: number;
+    /**
+     * Override the entity document's AbsoluteMatchThreshold for this run.
+     * Value between 0 and 1. If omitted, uses the entity document's value.
+     */
+    AbsoluteMatchThreshold?: number;
 }
 
 /**
  * Progress information emitted during long-running duplicate detection operations.
  */
 export interface DuplicateDetectionProgress {
-    Phase: 'Vectorizing' | 'Embedding' | 'Querying' | 'Matching' | 'Merging';
+    Phase: 'Vectorizing' | 'Loading' | 'Embedding' | 'Querying' | 'Matching' | 'Merging';
     TotalRecords: number;
     ProcessedRecords: number;
     MatchesFound: number;
@@ -132,12 +150,16 @@ export interface DuplicateDetectionProgress {
 export class PotentialDuplicateRequest {
     /** The ID of the entity the record belongs to */
     EntityID: string;
-    /** The ID of the List entity to use for batch detection */
-    ListID: string;
+    /** The ID of the List entity to use for batch detection (optional — if omitted, records are loaded directly from the entity) */
+    ListID?: string;
     /** The Primary Key values of each record being checked for duplicates */
     RecordIDs: CompositeKey[];
     /** The ID of the entity document defining the vectorization template */
     EntityDocumentID?: string;
+    /** Optional saved view ID — run this view to determine which records to check */
+    ViewID?: string;
+    /** Optional SQL filter applied to the entity to determine which records to check */
+    ExtraFilter?: string;
     /** Minimum score to consider a record a potential duplicate */
     ProbabilityScore?: number;
     /** Detection options controlling retrieval, scoring, and behavior */

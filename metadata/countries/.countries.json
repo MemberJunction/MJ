@@ -1,0 +1,4752 @@
+[
+  {
+    "fields": {
+      "Name": "Afghanistan",
+      "ISO2": "AF",
+      "ISO3": "AFG",
+      "NumericCode": 4,
+      "Latitude": 33,
+      "Longitude": 65,
+      "BoundaryGeoJSON": "@file:boundaries/AF.geojson",
+      "CommonAliases": "[\"Islamic Republic of Afghanistan\", \"Af\\u0121\\u0101nist\\u0101n\", \"Afghanistan\", \"AF\"]"
+    },
+    "primaryKey": {
+      "ID": "A18658CB-C991-4722-9ED4-24F44074015E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:20.992Z",
+      "checksum": "f662d7bdfba83b59275ab8126587e706e03970c4e1ec16d623e0bfa6ce91a20c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Albania",
+      "ISO2": "AL",
+      "ISO3": "ALB",
+      "NumericCode": 8,
+      "Latitude": 41,
+      "Longitude": 20,
+      "BoundaryGeoJSON": "@file:boundaries/AL.geojson",
+      "CommonAliases": "[\"Shqipnia\", \"AL\", \"Shqip\\u00ebria\", \"Albania\", \"Republic of Albania\", \"Shqip\\u00ebri\"]"
+    },
+    "primaryKey": {
+      "ID": "ECA369CF-160C-427E-9606-C66EB57BF810"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.007Z",
+      "checksum": "26bd45a3bbd1bb46828bbe4c07a978bf5c2150bd6694d68ac0f20cb4a5a9bfe9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Algeria",
+      "ISO2": "DZ",
+      "ISO3": "DZA",
+      "NumericCode": 12,
+      "Latitude": 28,
+      "Longitude": 3,
+      "BoundaryGeoJSON": "@file:boundaries/DZ.geojson",
+      "CommonAliases": "[\"Dzayer\", \"People's Democratic Republic of Algeria\", \"Algeria\", \"DZ\", \"Alg\\u00e9rie\"]"
+    },
+    "primaryKey": {
+      "ID": "64B24E06-55CF-4E1B-AD37-679038A4565E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.023Z",
+      "checksum": "496a44ddae159e4d7e0c2a782b1c07280c71aaaaec473f9d3c45a2de0d9b2336"
+    }
+  },
+  {
+    "fields": {
+      "Name": "American Samoa",
+      "ISO2": "AS",
+      "ISO3": "ASM",
+      "NumericCode": 16,
+      "Latitude": -14.3333,
+      "Longitude": -170,
+      "BoundaryGeoJSON": "@file:boundaries/AS.geojson",
+      "CommonAliases": "[\"Amerika S\\u0101moa\", \"Amelika S\\u0101moa\", \"American Samoa\", \"AS\", \"S\\u0101moa Amelika\"]"
+    },
+    "primaryKey": {
+      "ID": "184BC5EC-50E7-4003-919B-6770D02D3B2B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.039Z",
+      "checksum": "4ff9d56291c5e84d56cb417d0b97d7e4b1dfa69115fc055de9db8a49dfefb78c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Andorra",
+      "ISO2": "AD",
+      "ISO3": "AND",
+      "NumericCode": 20,
+      "Latitude": 42.5,
+      "Longitude": 1.5,
+      "BoundaryGeoJSON": "@file:boundaries/AD.geojson",
+      "CommonAliases": "[\"Principality of Andorra\", \"Andorra\", \"Principat d'Andorra\", \"AD\"]"
+    },
+    "primaryKey": {
+      "ID": "56EC90B7-B48E-4F6C-93FE-8DC51F7F3C67"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.054Z",
+      "checksum": "a50d9e3e3b8e8a6b356a134b493a4de11d062b4b991418de59e0ddce8f7e946f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Angola",
+      "ISO2": "AO",
+      "ISO3": "AGO",
+      "NumericCode": 24,
+      "Latitude": -12.5,
+      "Longitude": 18.5,
+      "BoundaryGeoJSON": "@file:boundaries/AO.geojson",
+      "CommonAliases": "[\"AO\", \"Republic of Angola\", \"Angola\", \"\\u0281\\u025bpublika de an'\\u0261\\u0254la\", \"Rep\\u00fablica de Angola\"]"
+    },
+    "primaryKey": {
+      "ID": "F573FFA3-8C9F-45FE-85A7-9E1B77222DCE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.070Z",
+      "checksum": "e9337fed020f419f0d3651c26c5be6000167fae4fd0c4f916098846aae911635"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Anguilla",
+      "ISO2": "AI",
+      "ISO3": "AIA",
+      "NumericCode": 660,
+      "Latitude": 18.25,
+      "Longitude": -63.1667,
+      "BoundaryGeoJSON": "@file:boundaries/AI.geojson",
+      "CommonAliases": "[\"Anguilla\", \"AI\"]"
+    },
+    "primaryKey": {
+      "ID": "02246270-9783-4304-B21D-B5336BE6922E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.084Z",
+      "checksum": "6d028d3ecb3c170e69653397000845c6f462559c5c2e31d2b0d2678fdb5505e9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Antarctica",
+      "ISO2": "AQ",
+      "ISO3": "ATA",
+      "NumericCode": 10,
+      "Latitude": -90,
+      "Longitude": 0,
+      "BoundaryGeoJSON": "@file:boundaries/AQ.geojson",
+      "CommonAliases": "[\"AQ\", \"Antarctica\"]"
+    },
+    "primaryKey": {
+      "ID": "D23358CF-E16B-4E4C-85A9-472AF000DCEC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.107Z",
+      "checksum": "db1d4e3e0005d80f87466e6bc30ec00e4f0cf58a43136e391aaff1174f8d6142"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Antigua and Barbuda",
+      "ISO2": "AG",
+      "ISO3": "ATG",
+      "NumericCode": 28,
+      "Latitude": 17.05,
+      "Longitude": -61.8,
+      "BoundaryGeoJSON": "@file:boundaries/AG.geojson",
+      "CommonAliases": "[\"AG\", \"Antigua and Barbuda\"]"
+    },
+    "primaryKey": {
+      "ID": "29CC7E69-3AA0-4F56-9FBF-F631F31A149E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.122Z",
+      "checksum": "989832ee4ece94b5fbb612892b756ad236d7f54d862c06ca394b654b539b1815"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Argentina",
+      "ISO2": "AR",
+      "ISO3": "ARG",
+      "NumericCode": 32,
+      "Latitude": -34,
+      "Longitude": -64,
+      "BoundaryGeoJSON": "@file:boundaries/AR.geojson",
+      "CommonAliases": "[\"Argentina\", \"Argentine Republic\", \"AR\", \"Rep\\u00fablica Argentina\"]"
+    },
+    "primaryKey": {
+      "ID": "41C8A39D-EB65-4C3A-A3D3-442AA4544824"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.138Z",
+      "checksum": "cfdc918d0d5f95c91f0ff79f212f87c33a83e090b81ade8e472809b8b0bacba0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Armenia",
+      "ISO2": "AM",
+      "ISO3": "ARM",
+      "NumericCode": 51,
+      "Latitude": 40,
+      "Longitude": 45,
+      "BoundaryGeoJSON": "@file:boundaries/AM.geojson",
+      "CommonAliases": "[\"Republic of Armenia\", \"AM\", \"Hayastan\", \"Armenia\", \"\\u0540\\u0561\\u0575\\u0561\\u057d\\u057f\\u0561\\u0576\\u056b \\u0540\\u0561\\u0576\\u0580\\u0561\\u057a\\u0565\\u057f\\u0578\\u0582\\u0569\\u0575\\u0578\\u0582\\u0576\"]"
+    },
+    "primaryKey": {
+      "ID": "3009BF2A-D89B-421B-BF47-342E439DE4AC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.179Z",
+      "checksum": "9e86dede251cab70c13947f9c84e34ec821ebfb4f5345241137ab001b6d02c6a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aruba",
+      "ISO2": "AW",
+      "ISO3": "ABW",
+      "NumericCode": 533,
+      "Latitude": 12.5,
+      "Longitude": -69.9667,
+      "BoundaryGeoJSON": "@file:boundaries/AW.geojson",
+      "CommonAliases": "[\"Aruba\", \"AW\"]"
+    },
+    "primaryKey": {
+      "ID": "55D267A5-A8C8-4EB8-AACD-280DA9AFB03D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.195Z",
+      "checksum": "aec6191cd0a8e5140a42437a9e6d804052738a24a70bbcb44d2a7ebf6c547259"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Australia",
+      "ISO2": "AU",
+      "ISO3": "AUS",
+      "NumericCode": 36,
+      "Latitude": -27,
+      "Longitude": 133,
+      "BoundaryGeoJSON": "@file:boundaries/AU.geojson",
+      "CommonAliases": "[\"Australia\", \"Commonwealth of Australia\", \"AU\"]"
+    },
+    "primaryKey": {
+      "ID": "0EC1596E-1E10-409C-A246-1B798E290EC8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.213Z",
+      "checksum": "32866457a9260ae9242ce886d9d4f41876a688e772b92113a4a31aca6539a5df"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Austria",
+      "ISO2": "AT",
+      "ISO3": "AUT",
+      "NumericCode": 40,
+      "Latitude": 47.3333,
+      "Longitude": 13.3333,
+      "BoundaryGeoJSON": "@file:boundaries/AT.geojson",
+      "CommonAliases": "[\"Austria\", \"Osterreich\", \"Republic of Austria\", \"AT\", \"Oesterreich\"]"
+    },
+    "primaryKey": {
+      "ID": "CEF05405-AFD5-4EE9-8431-6F044097E412"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.231Z",
+      "checksum": "aa577fbbbe0e41ce3a781a2ed030df39f06c8a96d2f67e929ab8b15799176467"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Azerbaijan",
+      "ISO2": "AZ",
+      "ISO3": "AZE",
+      "NumericCode": 31,
+      "Latitude": 40.5,
+      "Longitude": 47.5,
+      "BoundaryGeoJSON": "@file:boundaries/AZ.geojson",
+      "CommonAliases": "[\"Republic of Azerbaijan\", \"Az\\u0259rbaycan Respublikas\\u0131\", \"Azerbaijan\", \"AZ\"]"
+    },
+    "primaryKey": {
+      "ID": "D4386231-B2F6-4F3E-BED7-5F0D26839475"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.247Z",
+      "checksum": "23fca753934de861c420fad9a9bf7d65bf780ff1fc90cd6312a5ad7fe645d11d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bahamas",
+      "ISO2": "BS",
+      "ISO3": "BHS",
+      "NumericCode": 44,
+      "Latitude": 25.0343,
+      "Longitude": -77.3963,
+      "BoundaryGeoJSON": "@file:boundaries/BS.geojson",
+      "CommonAliases": "[\"Bahamas\", \"Commonwealth of the Bahamas\", \"BS\"]"
+    },
+    "primaryKey": {
+      "ID": "8DE9449F-A927-42E1-8A95-AC9A8FDE7CCC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.261Z",
+      "checksum": "98e963f1e320e2f1183ee19cff2f2f7b74daca76881a8f805ae40dad39888395"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bahrain",
+      "ISO2": "BH",
+      "ISO3": "BHR",
+      "NumericCode": 48,
+      "Latitude": 26,
+      "Longitude": 50.55,
+      "BoundaryGeoJSON": "@file:boundaries/BH.geojson",
+      "CommonAliases": "[\"Bahrain\", \"Kingdom of Bahrain\", \"Mamlakat al-Ba\\u1e25rayn\", \"BH\"]"
+    },
+    "primaryKey": {
+      "ID": "15CA03FB-AEB6-4AB5-994F-1D24CE09C44B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.277Z",
+      "checksum": "560e219ce30fc5eba8c9c1b88ba1976f8dc075f596db4054d8df512820373cf8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bangladesh",
+      "ISO2": "BD",
+      "ISO3": "BGD",
+      "NumericCode": 50,
+      "Latitude": 24,
+      "Longitude": 90,
+      "BoundaryGeoJSON": "@file:boundaries/BD.geojson",
+      "CommonAliases": "[\"BD\", \"G\\u00f4n\\u00f4pr\\u00f4jat\\u00f4ntri Bangladesh\", \"People's Republic of Bangladesh\", \"Bangladesh\"]"
+    },
+    "primaryKey": {
+      "ID": "25D17F72-FDD5-490E-A798-EA9CCA20ADA1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.292Z",
+      "checksum": "fc717b6f3cea96711814a984b7c40040b1c07b1e64b04861c9826c3c88dc0693"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Barbados",
+      "ISO2": "BB",
+      "ISO3": "BRB",
+      "NumericCode": 52,
+      "Latitude": 13.1667,
+      "Longitude": -59.5333,
+      "BoundaryGeoJSON": "@file:boundaries/BB.geojson",
+      "CommonAliases": "[\"Barbados\", \"BB\"]"
+    },
+    "primaryKey": {
+      "ID": "4DC7D3CF-CD3A-464E-9E08-375CB0A6ECC5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.307Z",
+      "checksum": "75bc36eeb93ebf27758082ddb0e56aac8a5ec38ef416eddbf1153fb25ea91f9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Belarus",
+      "ISO2": "BY",
+      "ISO3": "BLR",
+      "NumericCode": 112,
+      "Latitude": 53,
+      "Longitude": 28,
+      "BoundaryGeoJSON": "@file:boundaries/BY.geojson",
+      "CommonAliases": "[\"\\u0420\\u0435\\u0441\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u0411\\u0435\\u043b\\u043e\\u0440\\u0443\\u0441\\u0441\\u0438\\u044f\", \"Republic of Belarus\", \"BY\", \"Belarus\", \"Bielaru\\u015b\", \"\\u0411\\u0435\\u043b\\u043e\\u0440\\u0443\\u0441\\u0441\\u0438\\u044f\"]"
+    },
+    "primaryKey": {
+      "ID": "3D01E615-9A7A-4F02-8050-F8A6FA77B043"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.320Z",
+      "checksum": "2162ec1b0282c0dd074d4364b87c40f83f21c8d5b8c73488e571cc22489f5e30"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Belgium",
+      "ISO2": "BE",
+      "ISO3": "BEL",
+      "NumericCode": 56,
+      "Latitude": 50.8333,
+      "Longitude": 4,
+      "BoundaryGeoJSON": "@file:boundaries/BE.geojson",
+      "CommonAliases": "[\"Belgien\", \"K\\u00f6nigreich Belgien\", \"Royaume de Belgique\", \"Belgique\", \"Belgi\\u00eb\", \"BE\", \"Belgie\", \"Koninkrijk Belgi\\u00eb\", \"Belgium\", \"Kingdom of Belgium\"]"
+    },
+    "primaryKey": {
+      "ID": "A7A86FA2-A50C-407A-8590-B7D298FF9CCF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.359Z",
+      "checksum": "26122af9075868f0ffd5bacaa93cd943818bcdafcc0db40fabbee59b33602fb3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Belize",
+      "ISO2": "BZ",
+      "ISO3": "BLZ",
+      "NumericCode": 84,
+      "Latitude": 17.25,
+      "Longitude": -88.75,
+      "BoundaryGeoJSON": "@file:boundaries/BZ.geojson",
+      "CommonAliases": "[\"Belize\", \"BZ\"]"
+    },
+    "primaryKey": {
+      "ID": "F8B1ECC0-2949-402F-BDE6-8886D0EBC837"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.377Z",
+      "checksum": "b47864ab4b83ed4529efbc096f6fb5fcc4b0210efeb31e568e44dfba8f6f1d6a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Benin",
+      "ISO2": "BJ",
+      "ISO3": "BEN",
+      "NumericCode": 204,
+      "Latitude": 9.5,
+      "Longitude": 2.25,
+      "BoundaryGeoJSON": "@file:boundaries/BJ.geojson",
+      "CommonAliases": "[\"Republic of Benin\", \"R\\u00e9publique du B\\u00e9nin\", \"Benin\", \"BJ\"]"
+    },
+    "primaryKey": {
+      "ID": "884224F2-BBE2-442E-8885-5A42476B95F6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.392Z",
+      "checksum": "842d41e14b07819be71548f03b0f3ee40d7a6bb0131e919f719dee6ef97d485f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bermuda",
+      "ISO2": "BM",
+      "ISO3": "BMU",
+      "NumericCode": 60,
+      "Latitude": 32.3333,
+      "Longitude": -64.75,
+      "BoundaryGeoJSON": "@file:boundaries/BM.geojson",
+      "CommonAliases": "[\"The Bermudas\", \"BM\", \"Somers Isles\", \"The Islands of Bermuda\", \"Bermuda\"]"
+    },
+    "primaryKey": {
+      "ID": "262621F2-AF14-4193-B5C8-39DA69E5D185"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.405Z",
+      "checksum": "45aa12bfbb69aff889521432e2c05f43ce6c024c0756cf2913049896426919f5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bhutan",
+      "ISO2": "BT",
+      "ISO3": "BTN",
+      "NumericCode": 64,
+      "Latitude": 27.5,
+      "Longitude": 90.5,
+      "BoundaryGeoJSON": "@file:boundaries/BT.geojson",
+      "CommonAliases": "[\"BT\", \"Bhutan\", \"Kingdom of Bhutan\"]"
+    },
+    "primaryKey": {
+      "ID": "F08A7DA0-C686-47A7-B172-867B519FC747"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.419Z",
+      "checksum": "41e3fa52d457594ddcdbbaba8d83f2fb44a517ca2873d44fe807b51a6e8effca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bolivia",
+      "ISO2": "BO",
+      "ISO3": "BOL",
+      "NumericCode": 68,
+      "Latitude": -17,
+      "Longitude": -65,
+      "BoundaryGeoJSON": "@file:boundaries/BO.geojson",
+      "CommonAliases": "[\"Bolivia\", \"Plurinational State of Bolivia\", \"Estado Plurinacional de Bolivia\", \"Wuliwya\", \"BO\", \"Buliwya\", \"Bolivia, Plurinational State of\", \"Buliwya Mamallaqta\", \"Tet\\u00e3 Vol\\u00edvia\", \"Wuliwya Suyu\"]"
+    },
+    "primaryKey": {
+      "ID": "4F52E358-5F2E-4C68-B9D2-715D47360F0C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.435Z",
+      "checksum": "0a9e0671615981ba467ef9f8733aae671c8122d8e1dac0fec4d26b4fd0fbd94b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bosnia and Herzegovina",
+      "ISO2": "BA",
+      "ISO3": "BIH",
+      "NumericCode": 70,
+      "Latitude": 44,
+      "Longitude": 18,
+      "BoundaryGeoJSON": "@file:boundaries/BA.geojson",
+      "CommonAliases": "[\"BA\", \"\\u0411\\u043e\\u0441\\u043d\\u0430 \\u0438 \\u0425\\u0435\\u0440\\u0446\\u0435\\u0433\\u043e\\u0432\\u0438\\u043d\\u0430\", \"Bosnia and Herzegovina\", \"Bosnia-Herzegovina\"]"
+    },
+    "primaryKey": {
+      "ID": "96FA0D99-A738-4DB0-B50E-C0CB68EC98BB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.451Z",
+      "checksum": "fb8dc6b622a0914c0c35507df7cc06530d593e24f9dbff8be21d734947e7de9f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Botswana",
+      "ISO2": "BW",
+      "ISO3": "BWA",
+      "NumericCode": 72,
+      "Latitude": -22,
+      "Longitude": 24,
+      "BoundaryGeoJSON": "@file:boundaries/BW.geojson",
+      "CommonAliases": "[\"Republic of Botswana\", \"BW\", \"Lefatshe la Botswana\", \"Botswana\"]"
+    },
+    "primaryKey": {
+      "ID": "B7DF27EB-5DD4-4852-B8BB-B3273489EF18"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.465Z",
+      "checksum": "84b7e969bfe666910c0684d34eb8fafd5cc2008664f6141227359deb26ecee77"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bouvet Island",
+      "ISO2": "BV",
+      "ISO3": "BVT",
+      "NumericCode": 74,
+      "Latitude": -54.4208,
+      "Longitude": 3.3464,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bouvet\\u00f8ya\", \"Bouvet-\\u00f8ya\", \"BV\", \"Bouvet Island\"]"
+    },
+    "primaryKey": {
+      "ID": "734B2C58-4718-4A19-82C0-EDFB07056D12"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.481Z",
+      "checksum": "750beca9990d10a8ba6180be8610d8ef6bbabccb221da71a0103a706f61b1502"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brazil",
+      "ISO2": "BR",
+      "ISO3": "BRA",
+      "NumericCode": 76,
+      "Latitude": -10,
+      "Longitude": -55,
+      "BoundaryGeoJSON": "@file:boundaries/BR.geojson",
+      "CommonAliases": "[\"Federative Republic of Brazil\", \"BR\", \"Brasil\", \"Brazil\", \"Rep\\u00fablica Federativa do Brasil\"]"
+    },
+    "primaryKey": {
+      "ID": "2B5C6776-C91B-480C-A274-D38744183784"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.498Z",
+      "checksum": "8d5d6834c1470f44fb57e45577c59f69e31c1e849c1a4b6ee3f6cd00f4f2fd85"
+    }
+  },
+  {
+    "fields": {
+      "Name": "British Indian Ocean Territory",
+      "ISO2": "IO",
+      "ISO3": "IOT",
+      "NumericCode": 86,
+      "Latitude": -6,
+      "Longitude": 71.5,
+      "BoundaryGeoJSON": "@file:boundaries/IO.geojson",
+      "CommonAliases": "[\"IO\", \"British Indian Ocean Territory\"]"
+    },
+    "primaryKey": {
+      "ID": "0EDE9BFC-C755-4AE5-A8C0-0A477598634D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.543Z",
+      "checksum": "7ca69ae3a0b58560e77a723814fc91709d7c9366e914ae0ff069357fa01af792"
+    }
+  },
+  {
+    "fields": {
+      "Name": "British Virgin Islands",
+      "ISO2": "VG",
+      "ISO3": "VGB",
+      "NumericCode": 92,
+      "Latitude": 18.4314,
+      "Longitude": -64.6231,
+      "BoundaryGeoJSON": "@file:boundaries/VG.geojson",
+      "CommonAliases": "[\"VG\", \"British Virgin Islands\", \"Virgin Islands, British\", \"Virgin Islands\"]"
+    },
+    "primaryKey": {
+      "ID": "17302998-C76C-4ABB-8363-CE033900C743"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.559Z",
+      "checksum": "eaf7090902e2c9db87af2b6ce121ea9721ad175c43d91586bd6034a95f8f7fe5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brunei",
+      "ISO2": "BN",
+      "ISO3": "BRN",
+      "NumericCode": 96,
+      "Latitude": 4.5,
+      "Longitude": 114.6667,
+      "BoundaryGeoJSON": "@file:boundaries/BN.geojson",
+      "CommonAliases": "[\"Nation of Brunei, Abode of Peace\", \"Brunei\", \"BN\", \"Brunei Darussalam\", \"the Abode of Peace\", \"Nation of Brunei\"]"
+    },
+    "primaryKey": {
+      "ID": "3343BE1B-3719-4174-A5F8-EBF4A95F1584"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.575Z",
+      "checksum": "84a617639ed69998e762f0265ee193e1b0edf8f6e80ccb0503f2aaba0f501614"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bulgaria",
+      "ISO2": "BG",
+      "ISO3": "BGR",
+      "NumericCode": 100,
+      "Latitude": 43,
+      "Longitude": 25,
+      "BoundaryGeoJSON": "@file:boundaries/BG.geojson",
+      "CommonAliases": "[\"Republic of Bulgaria\", \"Bulgaria\", \"\\u0420\\u0435\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u0411\\u044a\\u043b\\u0433\\u0430\\u0440\\u0438\\u044f\", \"BG\"]"
+    },
+    "primaryKey": {
+      "ID": "4EDB3A97-2D15-42CA-95D2-EF65CF71F734"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.593Z",
+      "checksum": "284e4d56cc80d65f016b5f7f7451dbdae08bf05fc2b88fbe2f287d5263cd5e04"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Burkina Faso",
+      "ISO2": "BF",
+      "ISO3": "BFA",
+      "NumericCode": 854,
+      "Latitude": 13,
+      "Longitude": -2,
+      "BoundaryGeoJSON": "@file:boundaries/BF.geojson",
+      "CommonAliases": "[\"Burkina Faso\", \"BF\"]"
+    },
+    "primaryKey": {
+      "ID": "D9B032FB-B699-496D-979B-E45432612593"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.610Z",
+      "checksum": "a1057b44f8603e4e8bbc4e58086254d8f7cbbde7eed0d5db8e6d96618928927e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Burundi",
+      "ISO2": "BI",
+      "ISO3": "BDI",
+      "NumericCode": 108,
+      "Latitude": -3.5,
+      "Longitude": 30,
+      "BoundaryGeoJSON": "@file:boundaries/BI.geojson",
+      "CommonAliases": "[\"Republika y'Uburundi\", \"Republic of Burundi\", \"Burundi\", \"BI\", \"R\\u00e9publique du Burundi\"]"
+    },
+    "primaryKey": {
+      "ID": "7945BBEB-E786-4975-928A-6818489BDD2E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.626Z",
+      "checksum": "49f017de580d3e51f2e78d2bc337b4fbdd6c9d836208263ed2d34deb249bf856"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cambodia",
+      "ISO2": "KH",
+      "ISO3": "KHM",
+      "NumericCode": 116,
+      "Latitude": 13,
+      "Longitude": 105,
+      "BoundaryGeoJSON": "@file:boundaries/KH.geojson",
+      "CommonAliases": "[\"Cambodia\", \"Kingdom of Cambodia\", \"KH\"]"
+    },
+    "primaryKey": {
+      "ID": "ACEB6DA4-81DF-4B59-A048-18A16B9E890F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.642Z",
+      "checksum": "2fa928b51ba082e00e3a94a080b09ac852c70c8c28c392ce542f263b202ed18e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cameroon",
+      "ISO2": "CM",
+      "ISO3": "CMR",
+      "NumericCode": 120,
+      "Latitude": 6,
+      "Longitude": 12,
+      "BoundaryGeoJSON": "@file:boundaries/CM.geojson",
+      "CommonAliases": "[\"CM\", \"R\\u00e9publique du Cameroun\", \"Republic of Cameroon\", \"Cameroon\"]"
+    },
+    "primaryKey": {
+      "ID": "2755876D-2F60-4616-9D9A-542C806288D9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.662Z",
+      "checksum": "9f00ecd7910c1ddb2f9deb2a8780971ae57c926b19885eb7b456fb75d27f8d6a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Canada",
+      "ISO2": "CA",
+      "ISO3": "CAN",
+      "NumericCode": 124,
+      "Latitude": 60,
+      "Longitude": -95,
+      "BoundaryGeoJSON": "@file:boundaries/CA.geojson",
+      "CommonAliases": "[\"Canada\", \"CA\"]"
+    },
+    "primaryKey": {
+      "ID": "1A8A2C20-F1B3-49C3-9B1F-40CF89E9D2DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.703Z",
+      "checksum": "45f0f25703d3ea44309193cf6839d419719aa7e1c9e59f7def5452725de3971d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cape Verde",
+      "ISO2": "CV",
+      "ISO3": "CPV",
+      "NumericCode": 132,
+      "Latitude": 16.5388,
+      "Longitude": -23.0418,
+      "BoundaryGeoJSON": "@file:boundaries/CV.geojson",
+      "CommonAliases": "[\"CV\", \"Republic of Cabo Verde\", \"Cape Verde\", \"Rep\\u00fablica de Cabo Verde\"]"
+    },
+    "primaryKey": {
+      "ID": "43CDDCF9-FEB1-49FB-A232-ECA9B2774C5B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.717Z",
+      "checksum": "924013dd12779d3efb1914f508a7c149cb578d02f1ac82d903c0f56bdd68fc5a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Caribbean Netherlands",
+      "ISO2": "BQ",
+      "ISO3": "BES",
+      "NumericCode": 535,
+      "Latitude": 12.18,
+      "Longitude": -68.25,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"BES islands\", \"Caribbean Netherlands\", \"Bonaire, Sint Eustatius and Saba\"]"
+    },
+    "primaryKey": {
+      "ID": "796C257A-C06B-41DA-A286-448ED7198D7F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.759Z",
+      "checksum": "47f85e3703de9f5c6b7983a0dea61b67058c157bb1184d03349001563c0545e5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cayman Islands",
+      "ISO2": "KY",
+      "ISO3": "CYM",
+      "NumericCode": 136,
+      "Latitude": 19.3133,
+      "Longitude": -81.2546,
+      "BoundaryGeoJSON": "@file:boundaries/KY.geojson",
+      "CommonAliases": "[\"KY\", \"Cayman Islands\"]"
+    },
+    "primaryKey": {
+      "ID": "7C76DD76-57DA-4B69-8E6D-00A83836AADE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.774Z",
+      "checksum": "3fcc5e560fe83c29c9c2eb02f2dbbcb42434fac8a981d4c106294a05c1bf35b8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Central African Republic",
+      "ISO2": "CF",
+      "ISO3": "CAF",
+      "NumericCode": 140,
+      "Latitude": 7,
+      "Longitude": 21,
+      "BoundaryGeoJSON": "@file:boundaries/CF.geojson",
+      "CommonAliases": "[\"CF\", \"Central African Republic\", \"R\\u00e9publique centrafricaine\"]"
+    },
+    "primaryKey": {
+      "ID": "33EF0AF6-5739-4157-9808-C593CEE5FEBA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.791Z",
+      "checksum": "f9ce14d77e2c4bbe72fb930e1ae64d54e18739d93c0ef4fd7bac5c56d18a1e92"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chad",
+      "ISO2": "TD",
+      "ISO3": "TCD",
+      "NumericCode": 148,
+      "Latitude": 15,
+      "Longitude": 19,
+      "BoundaryGeoJSON": "@file:boundaries/TD.geojson",
+      "CommonAliases": "[\"TD\", \"Chad\", \"R\\u00e9publique du Tchad\", \"Tchad\", \"Republic of Chad\"]"
+    },
+    "primaryKey": {
+      "ID": "BF07CC68-CA29-4251-B52A-54A3FB6F74F7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.810Z",
+      "checksum": "3714ff053659302523a2c7c7a27dc6f430ad85ae5b25fd904abdf1fe400740a8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chile",
+      "ISO2": "CL",
+      "ISO3": "CHL",
+      "NumericCode": 152,
+      "Latitude": -30,
+      "Longitude": -71,
+      "BoundaryGeoJSON": "@file:boundaries/CL.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica de Chile\", \"CL\", \"Chile\", \"Republic of Chile\"]"
+    },
+    "primaryKey": {
+      "ID": "403DFB66-FEAB-4A94-BE8E-9C2FDFE16CBF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.830Z",
+      "checksum": "14d195db9b2cf03eca0b5ae507cf77ffc9c482d604f51b6a8258b85c2c3d4e72"
+    }
+  },
+  {
+    "fields": {
+      "Name": "China",
+      "ISO2": "CN",
+      "ISO3": "CHN",
+      "NumericCode": 156,
+      "Latitude": 35,
+      "Longitude": 105,
+      "BoundaryGeoJSON": "@file:boundaries/CN.geojson",
+      "CommonAliases": "[\"People's Republic of China\", \"Zhonghua\", \"Zh\\u014dnghu\\u00e1 R\\u00e9nm\\u00edn G\\u00f2ngh\\u00e9gu\\u00f3\", \"Zhongguo\", \"Zh\\u014dnggu\\u00f3\", \"China\", \"CN\", \"\\u4e2d\\u534e\\u4eba\\u6c11\\u5171\\u548c\\u56fd\"]"
+    },
+    "primaryKey": {
+      "ID": "9BA6B99D-1B54-4EB1-BA4E-23EA288A2DE8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.851Z",
+      "checksum": "2e3e0b9437e3fd5da9ddffc79fd08d92ece94c54103f9fcb4128331decd78bb3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Christmas Island",
+      "ISO2": "CX",
+      "ISO3": "CXR",
+      "NumericCode": 162,
+      "Latitude": -10.5,
+      "Longitude": 105.6667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Christmas Island\", \"Territory of Christmas Island\", \"CX\"]"
+    },
+    "primaryKey": {
+      "ID": "13317DD1-0578-4894-847D-58A1F1F23896"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.867Z",
+      "checksum": "e150d9d923ee64460f79ae2b365b4e3589f816863591d7621eec6943429bba4c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cocos (Keeling) Islands",
+      "ISO2": "CC",
+      "ISO3": "CCK",
+      "NumericCode": 166,
+      "Latitude": -12.1642,
+      "Longitude": 96.871,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Keeling Islands\", \"Territory of the Cocos (Keeling) Islands\", \"Cocos (Keeling) Islands\", \"Cocos Islands\", \"CC\"]"
+    },
+    "primaryKey": {
+      "ID": "E7126C64-934B-4D6D-8BDC-6B8C1884BF8C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.882Z",
+      "checksum": "ded634410a7683d75d5fa5dd076e6e3b2b5eb1f12b9056fb6d1ca7609cf002f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Colombia",
+      "ISO2": "CO",
+      "ISO3": "COL",
+      "NumericCode": 170,
+      "Latitude": 4,
+      "Longitude": -72,
+      "BoundaryGeoJSON": "@file:boundaries/CO.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica de Colombia\", \"Republic of Colombia\", \"Colombia\", \"CO\"]"
+    },
+    "primaryKey": {
+      "ID": "E7483585-BD53-485C-803C-D2089D2D4793"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.900Z",
+      "checksum": "d375eb3718a0fe4b71981971200b702dc0f8e2f5d4f27ff61448c3cd997c555e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Comoros",
+      "ISO2": "KM",
+      "ISO3": "COM",
+      "NumericCode": 174,
+      "Latitude": -12.1667,
+      "Longitude": 44.25,
+      "BoundaryGeoJSON": "@file:boundaries/KM.geojson",
+      "CommonAliases": "[\"Union of the Comoros\", \"Union des Comores\", \"Comoros\", \"al-Itti\\u1e25\\u0101d al-Qumur\\u012b\", \"KM\", \"Udzima wa Komori\"]"
+    },
+    "primaryKey": {
+      "ID": "02424E51-A200-4DF0-A5AE-2AB96A593A23"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.913Z",
+      "checksum": "017ab6035997a8d8e94bff74fbb9eadfa863fafd0c31033a6378c989bc1108a8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cook Islands",
+      "ISO2": "CK",
+      "ISO3": "COK",
+      "NumericCode": 184,
+      "Latitude": -21.2333,
+      "Longitude": -159.7667,
+      "BoundaryGeoJSON": "@file:boundaries/CK.geojson",
+      "CommonAliases": "[\"CK\", \"Cook Islands\", \"K\\u016bki '\\u0100irani\"]"
+    },
+    "primaryKey": {
+      "ID": "86B03943-EB4D-442E-93B1-DDA507F0AF66"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.957Z",
+      "checksum": "726f57b13070885da258dfebcb8afa1da88b1c7582db62928e40b54ac18a440c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Costa Rica",
+      "ISO2": "CR",
+      "ISO3": "CRI",
+      "NumericCode": 188,
+      "Latitude": 10,
+      "Longitude": -84,
+      "BoundaryGeoJSON": "@file:boundaries/CR.geojson",
+      "CommonAliases": "[\"Costa Rica\", \"Rep\\u00fablica de Costa Rica\", \"Republic of Costa Rica\", \"CR\"]"
+    },
+    "primaryKey": {
+      "ID": "835F3100-AC54-4F53-84BB-7A2F7CC375BC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.973Z",
+      "checksum": "55a290c0a74f148c721d925a64b60e7b9aefcdb54f0a97708649257a1503c469"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Croatia",
+      "ISO2": "HR",
+      "ISO3": "HRV",
+      "NumericCode": 191,
+      "Latitude": 45.1667,
+      "Longitude": 15.5,
+      "BoundaryGeoJSON": "@file:boundaries/HR.geojson",
+      "CommonAliases": "[\"HR\", \"Hrvatska\", \"Croatia\", \"Republika Hrvatska\", \"Republic of Croatia\"]"
+    },
+    "primaryKey": {
+      "ID": "E9444386-3347-4D03-ADD7-3641D0BAC99E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:21.990Z",
+      "checksum": "243cd0ce1a3f731f1691d98d51325fd7eb59daa889c0ab9a4ce8f507f390b88d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cuba",
+      "ISO2": "CU",
+      "ISO3": "CUB",
+      "NumericCode": 192,
+      "Latitude": 21.5,
+      "Longitude": -80,
+      "BoundaryGeoJSON": "@file:boundaries/CU.geojson",
+      "CommonAliases": "[\"Cuba\", \"Rep\\u00fablica de Cuba\", \"CU\", \"Republic of Cuba\"]"
+    },
+    "primaryKey": {
+      "ID": "9CF954C1-1C4E-4DA1-BD4C-7E5D39BBFAA1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.007Z",
+      "checksum": "61eb2fe8fb1fde6598f9b094cdd27fba6739cc538edce53d46460357e9156646"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Curaçao",
+      "ISO2": "CW",
+      "ISO3": "CUW",
+      "NumericCode": 531,
+      "Latitude": 12.1167,
+      "Longitude": -68.9333,
+      "BoundaryGeoJSON": "@file:boundaries/CW.geojson",
+      "CommonAliases": "[\"Cura\\u00e7ao\", \"Land Cura\\u00e7ao\", \"CW\", \"Country of Cura\\u00e7ao\", \"K\\u00f2rsou\", \"Curacao\", \"Pais K\\u00f2rsou\"]"
+    },
+    "primaryKey": {
+      "ID": "CB794F02-D5E5-4A06-A5BE-B794B1728F1D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.025Z",
+      "checksum": "cf802c52a7e6abb26235e09174624ee429332d3d4289d06e7c539ad255881838"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cyprus",
+      "ISO2": "CY",
+      "ISO3": "CYP",
+      "NumericCode": 196,
+      "Latitude": 35,
+      "Longitude": 33,
+      "BoundaryGeoJSON": "@file:boundaries/CY.geojson",
+      "CommonAliases": "[\"K\\u0131br\\u0131s\", \"\\u039a\\u03c5\\u03c0\\u03c1\\u03b9\\u03b1\\u03ba\\u03ae \\u0394\\u03b7\\u03bc\\u03bf\\u03ba\\u03c1\\u03b1\\u03c4\\u03af\\u03b1\", \"Cyprus\", \"K\\u00fdpros\", \"K\\u0131br\\u0131s Cumhuriyeti\", \"CY\", \"Republic of Cyprus\"]"
+    },
+    "primaryKey": {
+      "ID": "156FD4DD-CDC6-4911-8ADE-1F3BB887F226"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.041Z",
+      "checksum": "54ad741866e49112a2b71d7d13b1f4666d8f3a40753e283ac231b5943b08bd3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Czechia",
+      "ISO2": "CZ",
+      "ISO3": "CZE",
+      "NumericCode": 203,
+      "Latitude": 49.75,
+      "Longitude": 15.5,
+      "BoundaryGeoJSON": "@file:boundaries/CZ.geojson",
+      "CommonAliases": "[\"Czechia\", \"Czech Republic\", \"\\u010cesko\", \"\\u010cesk\\u00e1 republika\", \"CZ\"]"
+    },
+    "primaryKey": {
+      "ID": "8D613C0A-6054-4F4F-9553-B026A98F35A0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.057Z",
+      "checksum": "5d53cde2f33b197dc331af111f87745ec3703cc9faf4d7f369f4665d994473b1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DR Congo",
+      "ISO2": "CD",
+      "ISO3": "COD",
+      "NumericCode": 180,
+      "Latitude": 0,
+      "Longitude": 25,
+      "BoundaryGeoJSON": "@file:boundaries/CD.geojson",
+      "CommonAliases": "[\"Congo-Kinshasa\", \"CD\", \"DRC\", \"DR Congo\", \"Congo, the Democratic Republic of the\", \"Democratic Republic of the Congo\"]"
+    },
+    "primaryKey": {
+      "ID": "86714287-255B-483E-8216-8B8170BE451C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.074Z",
+      "checksum": "9b42e2f063910e1715709e41704d1d25dfad9d61502b640a41e7bbaade39be2e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Denmark",
+      "ISO2": "DK",
+      "ISO3": "DNK",
+      "NumericCode": 208,
+      "Latitude": 56,
+      "Longitude": 10,
+      "BoundaryGeoJSON": "@file:boundaries/DK.geojson",
+      "CommonAliases": "[\"DK\", \"Kongeriget Danmark\", \"Kingdom of Denmark\", \"Denmark\", \"Danmark\"]"
+    },
+    "primaryKey": {
+      "ID": "903883A9-147C-44F6-BA29-9FF5E6480F0E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.091Z",
+      "checksum": "50cb09559c4160efa706e6025386be7143dbeaaeae34f35119b1f7d2f1488b95"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Djibouti",
+      "ISO2": "DJ",
+      "ISO3": "DJI",
+      "NumericCode": 262,
+      "Latitude": 11.5,
+      "Longitude": 43,
+      "BoundaryGeoJSON": "@file:boundaries/DJ.geojson",
+      "CommonAliases": "[\"Jamhuuriyadda Jabuuti\", \"Gabuutih Ummuuno\", \"Djibouti\", \"DJ\", \"Gabuuti\", \"Republic of Djibouti\", \"Jabuuti\", \"R\\u00e9publique de Djibouti\"]"
+    },
+    "primaryKey": {
+      "ID": "072B8437-332F-46FF-B34D-EEE76C43DFC4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.104Z",
+      "checksum": "47e9280ad5a0733253063c3110e9abdc3bd681f69114b2e6d306360501cf0644"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dominica",
+      "ISO2": "DM",
+      "ISO3": "DMA",
+      "NumericCode": 212,
+      "Latitude": 15.4167,
+      "Longitude": -61.3333,
+      "BoundaryGeoJSON": "@file:boundaries/DM.geojson",
+      "CommonAliases": "[\"Commonwealth of Dominica\", \"Dominique\", \"Wai\\u2018tu kubuli\", \"DM\", \"Dominica\"]"
+    },
+    "primaryKey": {
+      "ID": "0643F9A5-60BD-4598-A853-06AAA8459929"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.146Z",
+      "checksum": "e03eeb2da9c006a9f9e67f8fa4f79ad99b8cb757aeca9ad4ffda007581bb38dc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dominican Republic",
+      "ISO2": "DO",
+      "ISO3": "DOM",
+      "NumericCode": 214,
+      "Latitude": 19,
+      "Longitude": -70.6667,
+      "BoundaryGeoJSON": "@file:boundaries/DO.geojson",
+      "CommonAliases": "[\"DO\", \"Dominican Republic\"]"
+    },
+    "primaryKey": {
+      "ID": "38B011B8-C802-46AE-93FA-D1CA25C1A5FA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.163Z",
+      "checksum": "346eae0799ecc7c6ac2e8074d67eb820f971e5da7099bef4241613ac88176585"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ecuador",
+      "ISO2": "EC",
+      "ISO3": "ECU",
+      "NumericCode": 218,
+      "Latitude": -2,
+      "Longitude": -77.5,
+      "BoundaryGeoJSON": "@file:boundaries/EC.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica del Ecuador\", \"EC\", \"Republic of Ecuador\", \"Ecuador\"]"
+    },
+    "primaryKey": {
+      "ID": "DA331111-F644-48AE-BE23-84E05DDC474B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.180Z",
+      "checksum": "82e1b771482460ba42f8ec64e7176d74f7b26438251e2cdb07f85410c5104bb7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Egypt",
+      "ISO2": "EG",
+      "ISO3": "EGY",
+      "NumericCode": 818,
+      "Latitude": 27,
+      "Longitude": 30,
+      "BoundaryGeoJSON": "@file:boundaries/EG.geojson",
+      "CommonAliases": "[\"Egypt\", \"EG\", \"Arab Republic of Egypt\"]"
+    },
+    "primaryKey": {
+      "ID": "968F303C-6EF2-4F80-998A-E3B55B3794DF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.197Z",
+      "checksum": "950f186f9229d9ac17a7c66f7ed9729e240dc620aecd89e22bbc288986005128"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Salvador",
+      "ISO2": "SV",
+      "ISO3": "SLV",
+      "NumericCode": 222,
+      "Latitude": 13.8333,
+      "Longitude": -88.9167,
+      "BoundaryGeoJSON": "@file:boundaries/SV.geojson",
+      "CommonAliases": "[\"SV\", \"El Salvador\", \"Rep\\u00fablica de El Salvador\", \"Republic of El Salvador\"]"
+    },
+    "primaryKey": {
+      "ID": "F68DBE1D-961E-4788-9A79-1A9C2FFE5631"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.212Z",
+      "checksum": "52c63131cd1249b735eb52a90d82c91e9a3bc35257631a29bdc9ffc73f337047"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Equatorial Guinea",
+      "ISO2": "GQ",
+      "ISO3": "GNQ",
+      "NumericCode": 226,
+      "Latitude": 2,
+      "Longitude": 10,
+      "BoundaryGeoJSON": "@file:boundaries/GQ.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica da Guin\\u00e9 Equatorial\", \"Equatorial Guinea\", \"Republic of Equatorial Guinea\", \"GQ\", \"R\\u00e9publique de Guin\\u00e9e \\u00e9quatoriale\", \"Rep\\u00fablica de Guinea Ecuatorial\"]"
+    },
+    "primaryKey": {
+      "ID": "1F828D59-8687-48C1-8EFB-EFC952D6E64C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.230Z",
+      "checksum": "485cff8d2413115f8b838913a8d4c6f8efd7907e6d1d0d7564e39196ec5b995b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eritrea",
+      "ISO2": "ER",
+      "ISO3": "ERI",
+      "NumericCode": 232,
+      "Latitude": 15,
+      "Longitude": 39,
+      "BoundaryGeoJSON": "@file:boundaries/ER.geojson",
+      "CommonAliases": "[\"Eritrea\", \"\\u02beErtr\\u0101\", \"State of Eritrea\", \"ER\", \"Dawlat Iritriy\\u00e1\", \"\\u1203\\u1308\\u1228 \\u12a4\\u122d\\u1275\\u122b\", \"Iritriy\\u0101\"]"
+    },
+    "primaryKey": {
+      "ID": "5C9072C4-27C3-4763-BE1B-A66DC7D5FC18"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.246Z",
+      "checksum": "7dec0718cf471312aa201317b49806e65cfbeed1fef4cd57ef5352deaddbbdc9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Estonia",
+      "ISO2": "EE",
+      "ISO3": "EST",
+      "NumericCode": 233,
+      "Latitude": 59,
+      "Longitude": 26,
+      "BoundaryGeoJSON": "@file:boundaries/EE.geojson",
+      "CommonAliases": "[\"Estonia\", \"Eesti\", \"Republic of Estonia\", \"EE\", \"Eesti Vabariik\"]"
+    },
+    "primaryKey": {
+      "ID": "94C172B5-2182-4D0D-B764-1C5932F55C4E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.263Z",
+      "checksum": "368c7229861fc755080161157c4bc9a0d40fe492127382d0d11e2e14c71dd21f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eswatini",
+      "ISO2": "SZ",
+      "ISO3": "SWZ",
+      "NumericCode": 748,
+      "Latitude": -26.5,
+      "Longitude": 31.5,
+      "BoundaryGeoJSON": "@file:boundaries/SZ.geojson",
+      "CommonAliases": "[\"Ngwane\", \"Kingdom of Eswatini\", \"Eswatini\", \"weSwatini\", \"Umbuso weSwatini\", \"Swatini\", \"SZ\", \"Swaziland\"]"
+    },
+    "primaryKey": {
+      "ID": "6A852751-15CE-4304-A2D5-ECBD213A282F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.278Z",
+      "checksum": "54132b6fa0c09aaf1aca20eee52d141cd036a50c4dc822aa8b7930e2c0a71fbe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ethiopia",
+      "ISO2": "ET",
+      "ISO3": "ETH",
+      "NumericCode": 231,
+      "Latitude": 8,
+      "Longitude": 38,
+      "BoundaryGeoJSON": "@file:boundaries/ET.geojson",
+      "CommonAliases": "[\"ET\", \"\\u02be\\u012aty\\u014d\\u1e57\\u1e57y\\u0101\", \"Federal Democratic Republic of Ethiopia\", \"Ethiopia\", \"\\u12e8\\u12a2\\u1275\\u12ee\\u1335\\u12eb \\u134c\\u12f4\\u122b\\u120b\\u12ca \\u12f2\\u121e\\u12ad\\u122b\\u1232\\u12eb\\u12ca \\u122a\\u1350\\u1265\\u120a\\u12ad\"]"
+    },
+    "primaryKey": {
+      "ID": "DF9E98CD-8D15-4E75-87E0-8F2447A4A1FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.292Z",
+      "checksum": "123c2e50eeca210c2dcb23f08dfe010bee60b11cbab9f3822c4d69bc2e5e4944"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Falkland Islands",
+      "ISO2": "FK",
+      "ISO3": "FLK",
+      "NumericCode": 238,
+      "Latitude": -51.75,
+      "Longitude": -59,
+      "BoundaryGeoJSON": "@file:boundaries/FK.geojson",
+      "CommonAliases": "[\"Falkland Islands\", \"FK\", \"Islas Malvinas\", \"Falkland Islands (Malvinas)\"]"
+    },
+    "primaryKey": {
+      "ID": "EFC971F5-D59D-4CB1-9691-93D5B66D5ACC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.338Z",
+      "checksum": "e35ec391ff5928d4abeaefc8196d322194cab573759e2827e0fb080b13d6c918"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Faroe Islands",
+      "ISO2": "FO",
+      "ISO3": "FRO",
+      "NumericCode": 234,
+      "Latitude": 62,
+      "Longitude": -7,
+      "BoundaryGeoJSON": "@file:boundaries/FO.geojson",
+      "CommonAliases": "[\"F\\u00f8royar\", \"Faroe Islands\", \"F\\u00e6r\\u00f8erne\", \"FO\"]"
+    },
+    "primaryKey": {
+      "ID": "8BA559D4-AC38-4FDF-959E-56C26B85AB4D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.354Z",
+      "checksum": "4ba34527f6d482ab87f1dcec63d815cc2cdcf789180078e16097cea70d86243b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fiji",
+      "ISO2": "FJ",
+      "ISO3": "FJI",
+      "NumericCode": 242,
+      "Latitude": -17.7134,
+      "Longitude": 178.065,
+      "BoundaryGeoJSON": "@file:boundaries/FJ.geojson",
+      "CommonAliases": "[\"Viti\", \"FJ\", \"Fij\\u012b Ga\\u1e47ar\\u0101jya\", \"Republic of Fiji\", \"Matanitu ko Viti\", \"Fiji\"]"
+    },
+    "primaryKey": {
+      "ID": "D5AB5AF7-9354-4E23-B73E-2891B6F4BDE0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.371Z",
+      "checksum": "d1991a74cd5d378ffeb702b4f6659a8899928c3b2f882096bcf82e4774d6d557"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Finland",
+      "ISO2": "FI",
+      "ISO3": "FIN",
+      "NumericCode": 246,
+      "Latitude": 64,
+      "Longitude": 26,
+      "BoundaryGeoJSON": "@file:boundaries/FI.geojson",
+      "CommonAliases": "[\"Finland\", \"FI\", \"Suomen tasavalta\", \"Suomi\", \"Republic of Finland\", \"Republiken Finland\"]"
+    },
+    "primaryKey": {
+      "ID": "D699FA41-36AD-4C94-9B9D-80D724885E36"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.388Z",
+      "checksum": "17d62e2178d259a0ba24f7786466b625218dc36119ca7ac75f9bc4aa780d33f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "France",
+      "ISO2": "FR",
+      "ISO3": "FRA",
+      "NumericCode": 250,
+      "Latitude": 46,
+      "Longitude": 2,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"French Republic\", \"France\", \"FR\", \"R\\u00e9publique fran\\u00e7aise\"]"
+    },
+    "primaryKey": {
+      "ID": "A473CEE9-4BFF-44DB-94F1-85BAEA71502B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.404Z",
+      "checksum": "ff6932b14e0122dcb2fca05e86958516789a3a7361eacfd6bd574edbf2c97160"
+    }
+  },
+  {
+    "fields": {
+      "Name": "French Guiana",
+      "ISO2": "GF",
+      "ISO3": "GUF",
+      "NumericCode": 254,
+      "Latitude": 4,
+      "Longitude": -53,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Guiana\", \"French Guiana\", \"Guyane\", \"GF\"]"
+    },
+    "primaryKey": {
+      "ID": "6A97D7F3-D864-4A94-8D61-F39442F4627C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.420Z",
+      "checksum": "45632e86dfc210dc016c5734aeff022a64fa4ac595a57cc03947b154e68dcaee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "French Polynesia",
+      "ISO2": "PF",
+      "ISO3": "PYF",
+      "NumericCode": 258,
+      "Latitude": -17.6797,
+      "Longitude": -149.4068,
+      "BoundaryGeoJSON": "@file:boundaries/PF.geojson",
+      "CommonAliases": "[\"French Polynesia\", \"Polyn\\u00e9sie fran\\u00e7aise\", \"PF\", \"P\\u014dr\\u012bnetia Far\\u0101ni\"]"
+    },
+    "primaryKey": {
+      "ID": "B76BB0C7-F747-4664-BF59-8B00921F68A0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.439Z",
+      "checksum": "ea56234b7fc13a5a605785b3087ffd824663b6d4d502d54636a6ff38216bbdaf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "French Southern and Antarctic Lands",
+      "ISO2": "TF",
+      "ISO3": "ATF",
+      "NumericCode": 260,
+      "Latitude": -49.25,
+      "Longitude": 69.167,
+      "BoundaryGeoJSON": "@file:boundaries/TF.geojson",
+      "CommonAliases": "[\"TF\", \"French Southern Territories\", \"French Southern and Antarctic Lands\", \"Territory of the French Southern and Antarctic Lands\"]"
+    },
+    "primaryKey": {
+      "ID": "9880457D-9617-4D40-9596-497F2FCC7189"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.455Z",
+      "checksum": "25aff9e252a42147605b38c84d7208778f4aad3f5adfc7f21a1188ee66380fda"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gabon",
+      "ISO2": "GA",
+      "ISO3": "GAB",
+      "NumericCode": 266,
+      "Latitude": -1,
+      "Longitude": 11.75,
+      "BoundaryGeoJSON": "@file:boundaries/GA.geojson",
+      "CommonAliases": "[\"Gabonese Republic\", \"Gabon\", \"GA\", \"R\\u00e9publique Gabonaise\"]"
+    },
+    "primaryKey": {
+      "ID": "4C65566E-C7BF-467A-B5CF-C04DC0CD2199"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.472Z",
+      "checksum": "db7b1020d6b5986b27df930b38a9839253b77c685e0afd4fe9f3b6db4bce248d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gambia",
+      "ISO2": "GM",
+      "ISO3": "GMB",
+      "NumericCode": 270,
+      "Latitude": 13.4667,
+      "Longitude": -16.5667,
+      "BoundaryGeoJSON": "@file:boundaries/GM.geojson",
+      "CommonAliases": "[\"GM\", \"Republic of the Gambia\", \"Gambia\"]"
+    },
+    "primaryKey": {
+      "ID": "8B3B14EC-9DE0-4B91-9BFB-163DA4656B34"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.485Z",
+      "checksum": "0bb0909ca307a95b40d5fed40bb043c76dc3e7ca8f68ed7c80e902e7cbdf3532"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Georgia",
+      "ISO2": "GE",
+      "ISO3": "GEO",
+      "NumericCode": 268,
+      "Latitude": 42,
+      "Longitude": 43.5,
+      "BoundaryGeoJSON": "@file:boundaries/GE.geojson",
+      "CommonAliases": "[\"GE\", \"Georgia\", \"Sakartvelo\"]"
+    },
+    "primaryKey": {
+      "ID": "59AFC598-4570-44D5-92D5-A1750D9FEEB6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.530Z",
+      "checksum": "635e1769308f67be4a330bb6559c845cf20e089717f3b63e7753092d2d08dcca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Germany",
+      "ISO2": "DE",
+      "ISO3": "DEU",
+      "NumericCode": 276,
+      "Latitude": 51,
+      "Longitude": 9,
+      "BoundaryGeoJSON": "@file:boundaries/DE.geojson",
+      "CommonAliases": "[\"Germany\", \"Federal Republic of Germany\", \"Bundesrepublik Deutschland\", \"DE\"]"
+    },
+    "primaryKey": {
+      "ID": "4BDDEBD1-7FBE-4D3E-A91D-65C2EA0EE44D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.548Z",
+      "checksum": "d97c76ceaf50e18bef1e9d6e77a83f6e323bb7279d136bf7b17d3d9d621c05da"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ghana",
+      "ISO2": "GH",
+      "ISO3": "GHA",
+      "NumericCode": 288,
+      "Latitude": 8,
+      "Longitude": -2,
+      "BoundaryGeoJSON": "@file:boundaries/GH.geojson",
+      "CommonAliases": "[\"GH\", \"Republic of Ghana\", \"Ghana\"]"
+    },
+    "primaryKey": {
+      "ID": "AE68358E-BFD3-4A8E-9EFD-78C378C47082"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.565Z",
+      "checksum": "a6f1a650e7cb92b8854739c46782fac3bccc0b42b90c7a4847b75c98b128eb6a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gibraltar",
+      "ISO2": "GI",
+      "ISO3": "GIB",
+      "NumericCode": 292,
+      "Latitude": 36.1333,
+      "Longitude": -5.35,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gibraltar\", \"GI\"]"
+    },
+    "primaryKey": {
+      "ID": "1E9C7923-A875-4B55-BAE1-71E3E9E0E644"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.582Z",
+      "checksum": "4afe6c11f6b572b19f469621ed0d988c9f90c6015a881818dc46380cc89785e6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Greece",
+      "ISO2": "GR",
+      "ISO3": "GRC",
+      "NumericCode": 300,
+      "Latitude": 39,
+      "Longitude": 22,
+      "BoundaryGeoJSON": "@file:boundaries/GR.geojson",
+      "CommonAliases": "[\"GR\", \"Ell\\u00e1da\", \"Hellenic Republic\", \"\\u0395\\u03bb\\u03bb\\u03b7\\u03bd\\u03b9\\u03ba\\u03ae \\u0394\\u03b7\\u03bc\\u03bf\\u03ba\\u03c1\\u03b1\\u03c4\\u03af\\u03b1\", \"Greece\"]"
+    },
+    "primaryKey": {
+      "ID": "3D1B69D4-5065-490A-99AA-4EA3394A32D8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.600Z",
+      "checksum": "a99847c592c244c0189562afc54dace7ca8fd7d89d4899c02698f1d039b68653"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Greenland",
+      "ISO2": "GL",
+      "ISO3": "GRL",
+      "NumericCode": 304,
+      "Latitude": 72,
+      "Longitude": -40,
+      "BoundaryGeoJSON": "@file:boundaries/GL.geojson",
+      "CommonAliases": "[\"Greenland\", \"GL\", \"Gr\\u00f8nland\"]"
+    },
+    "primaryKey": {
+      "ID": "520FC614-1203-420B-8D9C-589CB9D98D68"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.619Z",
+      "checksum": "12425768240b5234d3452aefd56740777b33358724ff5ca4bdf70379fa02f5b3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grenada",
+      "ISO2": "GD",
+      "ISO3": "GRD",
+      "NumericCode": 308,
+      "Latitude": 12.1167,
+      "Longitude": -61.6667,
+      "BoundaryGeoJSON": "@file:boundaries/GD.geojson",
+      "CommonAliases": "[\"Grenada\", \"GD\"]"
+    },
+    "primaryKey": {
+      "ID": "DD905E5D-89FA-42F8-AAB8-1F87645D616B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.636Z",
+      "checksum": "e2defadad2d4cd7fa35c90c5102995e09956bf612f115cae08bb7f3adf4f4f20"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guadeloupe",
+      "ISO2": "GP",
+      "ISO3": "GLP",
+      "NumericCode": 312,
+      "Latitude": 16.25,
+      "Longitude": -61.5833,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gwadloup\", \"Guadeloupe\", \"GP\"]"
+    },
+    "primaryKey": {
+      "ID": "771F8B80-5016-4826-BD1E-E9FCEC51A3CF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.654Z",
+      "checksum": "164e6f26664a9492b6df053abb20ef68206719e106357280cf08fdb9d1f53bd5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guam",
+      "ISO2": "GU",
+      "ISO3": "GUM",
+      "NumericCode": 316,
+      "Latitude": 13.4667,
+      "Longitude": 144.7833,
+      "BoundaryGeoJSON": "@file:boundaries/GU.geojson",
+      "CommonAliases": "[\"GU\", \"Gu\\u00e5h\\u00e5n\", \"Guam\"]"
+    },
+    "primaryKey": {
+      "ID": "58607398-4B23-4B14-87D5-57C457D40B65"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.671Z",
+      "checksum": "3c5e4a0f869617542daeb05ae6e1c4e1239e2054ad7ee24360eeedcc8061cf82"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guatemala",
+      "ISO2": "GT",
+      "ISO3": "GTM",
+      "NumericCode": 320,
+      "Latitude": 15.5,
+      "Longitude": -90.25,
+      "BoundaryGeoJSON": "@file:boundaries/GT.geojson",
+      "CommonAliases": "[\"GT\", \"Republic of Guatemala\", \"Guatemala\"]"
+    },
+    "primaryKey": {
+      "ID": "59BF8789-DB33-40A7-89C8-0120A7E4AEAD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.684Z",
+      "checksum": "7a6af0e3a8dfa352b1bd3b79f7ac512e5da4f72738a5c05a92c4e7dd30f8b840"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guernsey",
+      "ISO2": "GG",
+      "ISO3": "GGY",
+      "NumericCode": 831,
+      "Latitude": 49.4667,
+      "Longitude": -2.5833,
+      "BoundaryGeoJSON": "@file:boundaries/GG.geojson",
+      "CommonAliases": "[\"Guernsey\", \"GG\", \"Bailliage de Guernesey\", \"Bailiwick of Guernsey\"]"
+    },
+    "primaryKey": {
+      "ID": "522882C1-7A04-411C-B979-79F6E51D55B0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.725Z",
+      "checksum": "a8e8a2fcf0723009af579c9d4a26cf661fe29792e5e0a19d152eeb158e3d092d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guinea",
+      "ISO2": "GN",
+      "ISO3": "GIN",
+      "NumericCode": 324,
+      "Latitude": 11,
+      "Longitude": -10,
+      "BoundaryGeoJSON": "@file:boundaries/GN.geojson",
+      "CommonAliases": "[\"GN\", \"Guinea\", \"Republic of Guinea\", \"R\\u00e9publique de Guin\\u00e9e\"]"
+    },
+    "primaryKey": {
+      "ID": "0BC03549-778E-43DE-8295-BADAF2572C7A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.743Z",
+      "checksum": "caabf6f5fa578b8a2c471b49015b845787e27cf765c96ff6ac6b15b4fd70550f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guinea-Bissau",
+      "ISO2": "GW",
+      "ISO3": "GNB",
+      "NumericCode": 624,
+      "Latitude": 12,
+      "Longitude": -15,
+      "BoundaryGeoJSON": "@file:boundaries/GW.geojson",
+      "CommonAliases": "[\"Guinea-Bissau\", \"Rep\\u00fablica da Guin\\u00e9-Bissau\", \"GW\", \"Republic of Guinea-Bissau\"]"
+    },
+    "primaryKey": {
+      "ID": "EA05E0AC-193E-421E-A253-6B8B251DEB1B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.760Z",
+      "checksum": "a0b4959dd7b5df06d50824524305521786cda9b3497e05b800d7cf23108a03ce"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guyana",
+      "ISO2": "GY",
+      "ISO3": "GUY",
+      "NumericCode": 328,
+      "Latitude": 5,
+      "Longitude": -59,
+      "BoundaryGeoJSON": "@file:boundaries/GY.geojson",
+      "CommonAliases": "[\"Co-operative Republic of Guyana\", \"Guyana\", \"GY\"]"
+    },
+    "primaryKey": {
+      "ID": "CAC07DDC-4060-470A-BBEA-D1825EBB4189"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.777Z",
+      "checksum": "74552bf30d95284a71d560bf4b5cc55f1541c625272f128f8ee08c3f86d8699a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haiti",
+      "ISO2": "HT",
+      "ISO3": "HTI",
+      "NumericCode": 332,
+      "Latitude": 19,
+      "Longitude": -72.4167,
+      "BoundaryGeoJSON": "@file:boundaries/HT.geojson",
+      "CommonAliases": "[\"Republic of Haiti\", \"R\\u00e9publique d'Ha\\u00efti\", \"HT\", \"Repiblik Ayiti\", \"Haiti\"]"
+    },
+    "primaryKey": {
+      "ID": "A2C73252-1373-4023-9D12-04B1B2A86F14"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.792Z",
+      "checksum": "7d19eee91ad8b8a05cd674cf2d6ba7bed0ff15277ae4eb8053b28d1aa3a0f932"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Heard Island and McDonald Islands",
+      "ISO2": "HM",
+      "ISO3": "HMD",
+      "NumericCode": 334,
+      "Latitude": -53.0818,
+      "Longitude": 73.5042,
+      "BoundaryGeoJSON": "@file:boundaries/HM.geojson",
+      "CommonAliases": "[\"Heard Island and McDonald Islands\", \"HM\"]"
+    },
+    "primaryKey": {
+      "ID": "87569EFF-5B5E-4EE3-AEE1-756479573B88"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.807Z",
+      "checksum": "c7c8229072d286eacd9f173622aac6d50e521b9647250b3270096544335cd405"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Honduras",
+      "ISO2": "HN",
+      "ISO3": "HND",
+      "NumericCode": 340,
+      "Latitude": 15,
+      "Longitude": -86.5,
+      "BoundaryGeoJSON": "@file:boundaries/HN.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica de Honduras\", \"HN\", \"Republic of Honduras\", \"Honduras\"]"
+    },
+    "primaryKey": {
+      "ID": "66B6EF02-AEA3-491D-917F-CAF54104E899"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.823Z",
+      "checksum": "b2cad0bf1776e58b9d85c2629b2bcad7fa4ce310124231ef2c0a831304950f51"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hong Kong",
+      "ISO2": "HK",
+      "ISO3": "HKG",
+      "NumericCode": 344,
+      "Latitude": 22.267,
+      "Longitude": 114.188,
+      "BoundaryGeoJSON": "@file:boundaries/HK.geojson",
+      "CommonAliases": "[\"Hong Kong Special Administrative Region of the People's Republic of China\", \"HK\", \"Hong Kong\"]"
+    },
+    "primaryKey": {
+      "ID": "13A02D98-3F78-4F7D-89C1-CB818F60E44F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.837Z",
+      "checksum": "36d127395bee9f80619485aaa479607174e4f322db02e70ad39436106a46bfb6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hungary",
+      "ISO2": "HU",
+      "ISO3": "HUN",
+      "NumericCode": 348,
+      "Latitude": 47,
+      "Longitude": 20,
+      "BoundaryGeoJSON": "@file:boundaries/HU.geojson",
+      "CommonAliases": "[\"HU\", \"Hungary\"]"
+    },
+    "primaryKey": {
+      "ID": "F84BAE7F-E509-4981-8B9E-742163AA1E7D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.853Z",
+      "checksum": "aaeb60ece02ebcfedd9dcde5b45204f36c3ba7e57fa4733297212f2a11914f86"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Iceland",
+      "ISO2": "IS",
+      "ISO3": "ISL",
+      "NumericCode": 352,
+      "Latitude": 65,
+      "Longitude": -18,
+      "BoundaryGeoJSON": "@file:boundaries/IS.geojson",
+      "CommonAliases": "[\"Island\", \"L\\u00fd\\u00f0veldi\\u00f0 \\u00cdsland\", \"IS\", \"Republic of Iceland\", \"Iceland\"]"
+    },
+    "primaryKey": {
+      "ID": "578EF4C5-BCB8-4226-934A-BCF425E88113"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.867Z",
+      "checksum": "54e24b556faa8f301162041a5e964887014605cf10bc9f17d1b63e34c6210100"
+    }
+  },
+  {
+    "fields": {
+      "Name": "India",
+      "ISO2": "IN",
+      "ISO3": "IND",
+      "NumericCode": 356,
+      "Latitude": 20,
+      "Longitude": 77,
+      "BoundaryGeoJSON": "@file:boundaries/IN.geojson",
+      "CommonAliases": "[\"Bharat Ganrajya\", \"Republic of India\", \"India\", \"Bh\\u0101rat\", \"\\u0b87\\u0ba8\\u0bcd\\u0ba4\\u0bbf\\u0baf\\u0bbe\", \"IN\"]"
+    },
+    "primaryKey": {
+      "ID": "56E2C1AE-B0BC-4B62-A7DE-192E2157BBB4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.907Z",
+      "checksum": "716fc8e7b1122125615506f28a12e82f73dab0dc24e2b4a26b9b8298ec841d2a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Indonesia",
+      "ISO2": "ID",
+      "ISO3": "IDN",
+      "NumericCode": 360,
+      "Latitude": -5,
+      "Longitude": 120,
+      "BoundaryGeoJSON": "@file:boundaries/ID.geojson",
+      "CommonAliases": "[\"Republik Indonesia\", \"Republic of Indonesia\", \"Indonesia\", \"ID\"]"
+    },
+    "primaryKey": {
+      "ID": "745B7D1B-9DA5-40F7-8C13-B83F21D24AD6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.928Z",
+      "checksum": "a470172d7ae57abe183d58da09b223830928c391318741971ef7119440b7fb0a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Iran",
+      "ISO2": "IR",
+      "ISO3": "IRN",
+      "NumericCode": 364,
+      "Latitude": 32,
+      "Longitude": 53,
+      "BoundaryGeoJSON": "@file:boundaries/IR.geojson",
+      "CommonAliases": "[\"Jomhuri-ye Esl\\u0101mi-ye Ir\\u0101n\", \"IR\", \"Iran, Islamic Republic of\", \"Islamic Republic of Iran\", \"Iran\"]"
+    },
+    "primaryKey": {
+      "ID": "E6208BB9-E1FA-4DB8-A13E-B0721E1B7013"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.943Z",
+      "checksum": "4787f4c07ed3d78774c69d4775a30bc802e021ac108b32a276d090b397b4c066"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Iraq",
+      "ISO2": "IQ",
+      "ISO3": "IRQ",
+      "NumericCode": 368,
+      "Latitude": 33,
+      "Longitude": 44,
+      "BoundaryGeoJSON": "@file:boundaries/IQ.geojson",
+      "CommonAliases": "[\"Iraq\", \"Republic of Iraq\", \"Jumh\\u016briyyat al-\\u2018Ir\\u0101q\", \"IQ\"]"
+    },
+    "primaryKey": {
+      "ID": "E947828C-5AB5-432E-8467-90CD6EFE8DB5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.958Z",
+      "checksum": "a2bb9719d1d20f750f0e9b1a3646c79c49b6175fa9b3f00fe7461375624a7d5c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ireland",
+      "ISO2": "IE",
+      "ISO3": "IRL",
+      "NumericCode": 372,
+      "Latitude": 53,
+      "Longitude": -8,
+      "BoundaryGeoJSON": "@file:boundaries/IE.geojson",
+      "CommonAliases": "[\"IE\", \"Poblacht na h\\u00c9ireann\", \"\\u00c9ire\", \"Republic of Ireland\", \"Ireland\"]"
+    },
+    "primaryKey": {
+      "ID": "4CC34370-DAF9-4D46-8083-EDEDFEC022F7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.974Z",
+      "checksum": "2f1583c3778f799f0bfebf1660f9ef24671668b8b22d0de38b1adb033e777dfc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Isle of Man",
+      "ISO2": "IM",
+      "ISO3": "IMN",
+      "NumericCode": 833,
+      "Latitude": 54.25,
+      "Longitude": -4.5,
+      "BoundaryGeoJSON": "@file:boundaries/IM.geojson",
+      "CommonAliases": "[\"IM\", \"Mann\", \"Ellan Vannin\", \"Mannin\", \"Isle of Man\"]"
+    },
+    "primaryKey": {
+      "ID": "D5A09B78-F568-4B15-8960-039F905DE247"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:22.988Z",
+      "checksum": "d637e93a5825705a991f6e1c8fca43228dfd0740636221a61fb8895b9f44ccc3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Israel",
+      "ISO2": "IL",
+      "ISO3": "ISR",
+      "NumericCode": 376,
+      "Latitude": 31.47,
+      "Longitude": 35.13,
+      "BoundaryGeoJSON": "@file:boundaries/IL.geojson",
+      "CommonAliases": "[\"Israel\", \"State of Israel\", \"Med\\u012bnat Yisr\\u0101'el\", \"IL\"]"
+    },
+    "primaryKey": {
+      "ID": "DE522BD4-1F80-401C-8299-C7F616692682"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.004Z",
+      "checksum": "6e925fb1568df323ad44c9ea466b9ebbc8f8533867d851651a50822d7c65da50"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Italy",
+      "ISO2": "IT",
+      "ISO3": "ITA",
+      "NumericCode": 380,
+      "Latitude": 42.8333,
+      "Longitude": 12.8333,
+      "BoundaryGeoJSON": "@file:boundaries/IT.geojson",
+      "CommonAliases": "[\"Italian Republic\", \"IT\", \"Repubblica italiana\", \"Italy\"]"
+    },
+    "primaryKey": {
+      "ID": "72A9907A-D175-47CF-9062-94A6EF8F65D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.021Z",
+      "checksum": "cdfdc5a6acc278f420e9bf303516069ef3d4b50faf82ec768804965860ebc4aa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ivory Coast",
+      "ISO2": "CI",
+      "ISO3": "CIV",
+      "NumericCode": 384,
+      "Latitude": 8,
+      "Longitude": -5,
+      "BoundaryGeoJSON": "@file:boundaries/CI.geojson",
+      "CommonAliases": "[\"R\\u00e9publique de C\\u00f4te d'Ivoire\", \"Ivory Coast\", \"Republic of C\\u00f4te d'Ivoire\", \"C\\u00f4te d'Ivoire\", \"CI\"]"
+    },
+    "primaryKey": {
+      "ID": "E044EF04-86D3-45C9-B7F7-F2A0FB1C56FD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.038Z",
+      "checksum": "e53e156754eb0e1290bcff6c0248b9ef29f0c0bea991c6bb96a688c6e9d246cc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jamaica",
+      "ISO2": "JM",
+      "ISO3": "JAM",
+      "NumericCode": 388,
+      "Latitude": 18.25,
+      "Longitude": -77.5,
+      "BoundaryGeoJSON": "@file:boundaries/JM.geojson",
+      "CommonAliases": "[\"Jamaica\", \"JM\"]"
+    },
+    "primaryKey": {
+      "ID": "27B94DDC-D3A0-449D-AC9A-A1D4566A4A1E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.053Z",
+      "checksum": "e89db92f1510f37abb849b2bd68147caf41378faaff043a4d7016a2191c973bb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Japan",
+      "ISO2": "JP",
+      "ISO3": "JPN",
+      "NumericCode": 392,
+      "Latitude": 36,
+      "Longitude": 138,
+      "BoundaryGeoJSON": "@file:boundaries/JP.geojson",
+      "CommonAliases": "[\"Japan\", \"Nihon\", \"Nippon\", \"JP\"]"
+    },
+    "primaryKey": {
+      "ID": "D5EDAE16-D59B-4203-856A-78C376971CFD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.094Z",
+      "checksum": "db2574181dc98f8868e394ac9b3134da8ade81b45c6f327fcd8166cd2e544d74"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jersey",
+      "ISO2": "JE",
+      "ISO3": "JEY",
+      "NumericCode": 832,
+      "Latitude": 49.25,
+      "Longitude": -2.1667,
+      "BoundaryGeoJSON": "@file:boundaries/JE.geojson",
+      "CommonAliases": "[\"Jersey\", \"Bailiwick of Jersey\", \"JE\", \"Bailliage de Jersey\", \"Bailliage d\\u00e9 J\\u00e8rri\"]"
+    },
+    "primaryKey": {
+      "ID": "95327112-31C7-446D-90EE-A5E5570B6C60"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.110Z",
+      "checksum": "ca0dd43cbd224b436860a7154a0654acb38148327316cea365c0638fcf4b4025"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jordan",
+      "ISO2": "JO",
+      "ISO3": "JOR",
+      "NumericCode": 400,
+      "Latitude": 31,
+      "Longitude": 36,
+      "BoundaryGeoJSON": "@file:boundaries/JO.geojson",
+      "CommonAliases": "[\"Hashemite Kingdom of Jordan\", \"al-Mamlakah al-Urdun\\u012byah al-H\\u0101shim\\u012byah\", \"JO\", \"Jordan\"]"
+    },
+    "primaryKey": {
+      "ID": "094EE15D-BBAB-4E08-85A4-A1CFB1FDFAC2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.126Z",
+      "checksum": "e601d36a7f515d206bd2abe637edc939ec233d18753808025843a71c39483df1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kazakhstan",
+      "ISO2": "KZ",
+      "ISO3": "KAZ",
+      "NumericCode": 398,
+      "Latitude": 48.0196,
+      "Longitude": 66.9237,
+      "BoundaryGeoJSON": "@file:boundaries/KZ.geojson",
+      "CommonAliases": "[\"\\u049a\\u0430\\u0437\\u0430\\u049b\\u0441\\u0442\\u0430\\u043d \\u0420\\u0435\\u0441\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430\\u0441\\u044b\", \"Respublika Kazakhstan\", \"Republic of Kazakhstan\", \"\\u0420\\u0435\\u0441\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u041a\\u0430\\u0437\\u0430\\u0445\\u0441\\u0442\\u0430\\u043d\", \"KZ\", \"\\u041a\\u0430\\u0437\\u0430\\u0445\\u0441\\u0442\\u0430\\u043d\", \"Qazaqstan Respubl\\u00efkas\\u0131\", \"Qazaqstan\", \"Kazakhstan\"]"
+    },
+    "primaryKey": {
+      "ID": "4E63D3C1-7F44-4F06-9438-E87E5BA2DA78"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.145Z",
+      "checksum": "055d7af43915922a3e4117596c387c0bf4e733bd85960476d5d8a17a01d1004a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kenya",
+      "ISO2": "KE",
+      "ISO3": "KEN",
+      "NumericCode": 404,
+      "Latitude": 1,
+      "Longitude": 38,
+      "BoundaryGeoJSON": "@file:boundaries/KE.geojson",
+      "CommonAliases": "[\"Jamhuri ya Kenya\", \"KE\", \"Kenya\", \"Republic of Kenya\"]"
+    },
+    "primaryKey": {
+      "ID": "3C917276-FA73-4AB0-870C-2504D4A12697"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.161Z",
+      "checksum": "06a76dd0bd1d20768b5b4c74272401d23d4fa9f17454a6eb5c5a0449741f7828"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kiribati",
+      "ISO2": "KI",
+      "ISO3": "KIR",
+      "NumericCode": 296,
+      "Latitude": 1.4167,
+      "Longitude": 173,
+      "BoundaryGeoJSON": "@file:boundaries/KI.geojson",
+      "CommonAliases": "[\"Ribaberiki Kiribati\", \"Independent and Sovereign Republic of Kiribati\", \"Kiribati\", \"KI\", \"Republic of Kiribati\"]"
+    },
+    "primaryKey": {
+      "ID": "24339E1B-9D6E-41C8-A9E2-4A24847BD8BC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.177Z",
+      "checksum": "1f157e4e727063e33c7cfb281c22314c751f4ff3c9baa7d186e4b75649c995ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kosovo",
+      "ISO2": "XK",
+      "ISO3": "UNK",
+      "NumericCode": null,
+      "Latitude": 42.6667,
+      "Longitude": 21.1667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u0420\\u0435\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u041a\\u043e\\u0441\\u043e\\u0432\\u043e\", \"Republic of Kosovo\", \"XK\", \"Kosovo\"]"
+    },
+    "primaryKey": {
+      "ID": "C4DD3469-6B28-4D1E-800D-31B6B03A07A6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.193Z",
+      "checksum": "619366e25f8610d84231645ec706f4ee683cd8448b3e95367b5d78f9c20fb2d1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kuwait",
+      "ISO2": "KW",
+      "ISO3": "KWT",
+      "NumericCode": 414,
+      "Latitude": 29.5,
+      "Longitude": 45.75,
+      "BoundaryGeoJSON": "@file:boundaries/KW.geojson",
+      "CommonAliases": "[\"Dawlat al-Kuwait\", \"State of Kuwait\", \"KW\", \"Kuwait\"]"
+    },
+    "primaryKey": {
+      "ID": "B54917CC-B6B3-469E-8DC0-F801BE57A3D7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.209Z",
+      "checksum": "764f47590019eb92a797bcf6226e869e1473146a1e9f9ef83d2b1c131d0593f8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kyrgyzstan",
+      "ISO2": "KG",
+      "ISO3": "KGZ",
+      "NumericCode": 417,
+      "Latitude": 41,
+      "Longitude": 75,
+      "BoundaryGeoJSON": "@file:boundaries/KG.geojson",
+      "CommonAliases": "[\"Kyrgyz Republic\", \"KG\", \"Kyrgyzstan\", \"\\u041a\\u044b\\u0440\\u0433\\u044b\\u0437 \\u0420\\u0435\\u0441\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430\\u0441\\u044b\", \"Kyrgyz Respublikasy\", \"\\u041a\\u0438\\u0440\\u0433\\u0438\\u0437\\u0438\\u044f\"]"
+    },
+    "primaryKey": {
+      "ID": "2495DC79-694A-4ADB-B40F-8C99F6547FE8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.227Z",
+      "checksum": "626a19534d2eb2134630c4890c256a83b98dda4e55b1bf7106046136d2b28c6b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Laos",
+      "ISO2": "LA",
+      "ISO3": "LAO",
+      "NumericCode": 418,
+      "Latitude": 18,
+      "Longitude": 105,
+      "BoundaryGeoJSON": "@file:boundaries/LA.geojson",
+      "CommonAliases": "[\"Sathalanalat Paxathipatai Paxaxon Lao\", \"Lao\", \"Lao People's Democratic Republic\", \"Laos\", \"LA\"]"
+    },
+    "primaryKey": {
+      "ID": "B266C787-375D-4CE3-BF88-D3822DFA36E8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.241Z",
+      "checksum": "bcd769328354ac4878df906472f9b49eca3e29e3d97b974bff196f60caa47319"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Latvia",
+      "ISO2": "LV",
+      "ISO3": "LVA",
+      "NumericCode": 428,
+      "Latitude": 57,
+      "Longitude": 25,
+      "BoundaryGeoJSON": "@file:boundaries/LV.geojson",
+      "CommonAliases": "[\"Republic of Latvia\", \"Latvijas Republika\", \"Latvia\", \"LV\"]"
+    },
+    "primaryKey": {
+      "ID": "A42755B3-0B6B-461D-8277-941B27ED7786"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.283Z",
+      "checksum": "35d6429aacb1cbaeddbec5d12a3adf07b6ba3e2008d4f19a6982e37dd92e5f3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lebanon",
+      "ISO2": "LB",
+      "ISO3": "LBN",
+      "NumericCode": 422,
+      "Latitude": 33.8333,
+      "Longitude": 35.8333,
+      "BoundaryGeoJSON": "@file:boundaries/LB.geojson",
+      "CommonAliases": "[\"LB\", \"Lebanese Republic\", \"Al-Jumh\\u016br\\u012byah Al-Libn\\u0101n\\u012byah\", \"Lebanon\"]"
+    },
+    "primaryKey": {
+      "ID": "8AF9791C-66F0-438D-AC1D-11CA83C028D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.300Z",
+      "checksum": "760a8a29c39c80171e00f7b1fd1dda54c109324bc461c732d180a874ac8d6a7a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lesotho",
+      "ISO2": "LS",
+      "ISO3": "LSO",
+      "NumericCode": 426,
+      "Latitude": -29.5,
+      "Longitude": 28.5,
+      "BoundaryGeoJSON": "@file:boundaries/LS.geojson",
+      "CommonAliases": "[\"Lesotho\", \"Kingdom of Lesotho\", \"Muso oa Lesotho\", \"LS\"]"
+    },
+    "primaryKey": {
+      "ID": "5941BFED-29EA-453C-8F88-6AE25D031E96"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.315Z",
+      "checksum": "c5c4c6a885eb9c0b36f3be66bd60b96e085f074c77398cd2eabcc19e4fef34b5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Liberia",
+      "ISO2": "LR",
+      "ISO3": "LBR",
+      "NumericCode": 430,
+      "Latitude": 6.5,
+      "Longitude": -9.5,
+      "BoundaryGeoJSON": "@file:boundaries/LR.geojson",
+      "CommonAliases": "[\"LR\", \"Liberia\", \"Republic of Liberia\"]"
+    },
+    "primaryKey": {
+      "ID": "FC8D49CC-EBCA-4A5C-A6AE-620DEDF6D7D1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.332Z",
+      "checksum": "3fccb82e5c0ea3331c45841318a930b0a63c470df9720542356795464e402313"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Libya",
+      "ISO2": "LY",
+      "ISO3": "LBY",
+      "NumericCode": 434,
+      "Latitude": 25,
+      "Longitude": 17,
+      "BoundaryGeoJSON": "@file:boundaries/LY.geojson",
+      "CommonAliases": "[\"Dawlat Libya\", \"State of Libya\", \"LY\", \"Libya\"]"
+    },
+    "primaryKey": {
+      "ID": "CBEEAF2B-9F01-492B-9120-EF2FEFB7D103"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.348Z",
+      "checksum": "bce75d8696977bf912a573e03912524c62e746aa91872a1a24384afc68d4533d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Liechtenstein",
+      "ISO2": "LI",
+      "ISO3": "LIE",
+      "NumericCode": 438,
+      "Latitude": 47.2667,
+      "Longitude": 9.5333,
+      "BoundaryGeoJSON": "@file:boundaries/LI.geojson",
+      "CommonAliases": "[\"Principality of Liechtenstein\", \"LI\", \"F\\u00fcrstentum Liechtenstein\", \"Liechtenstein\"]"
+    },
+    "primaryKey": {
+      "ID": "CEB7E0C1-32EF-48F0-B2AA-302D7C7C0FF0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.363Z",
+      "checksum": "09717dc27ab954cb727a5d4473e362482b5ff23fdb7315ed0ed61ab76db6170b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lithuania",
+      "ISO2": "LT",
+      "ISO3": "LTU",
+      "NumericCode": 440,
+      "Latitude": 56,
+      "Longitude": 24,
+      "BoundaryGeoJSON": "@file:boundaries/LT.geojson",
+      "CommonAliases": "[\"Republic of Lithuania\", \"Lietuvos Respublika\", \"Lithuania\", \"LT\"]"
+    },
+    "primaryKey": {
+      "ID": "BF3E85C2-834D-4709-BF63-F48F6E8FF79D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.379Z",
+      "checksum": "87648492a0f07e6977846be0cf14b5e9ff51d11b4812fcbd6ff09ff8c0352d45"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Luxembourg",
+      "ISO2": "LU",
+      "ISO3": "LUX",
+      "NumericCode": 442,
+      "Latitude": 49.75,
+      "Longitude": 6.1667,
+      "BoundaryGeoJSON": "@file:boundaries/LU.geojson",
+      "CommonAliases": "[\"Grand Duchy of Luxembourg\", \"Grand-Duch\\u00e9 de Luxembourg\", \"Groussherzogtum L\\u00ebtzebuerg\", \"Luxembourg\", \"LU\", \"Gro\\u00dfherzogtum Luxemburg\"]"
+    },
+    "primaryKey": {
+      "ID": "A62A68A1-06F1-4843-912F-C7644F3970FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.396Z",
+      "checksum": "abcd7e9312253f5039a583df55fc5613226ff12be34312c5f8fd94288f100446"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Macau",
+      "ISO2": "MO",
+      "ISO3": "MAC",
+      "NumericCode": 446,
+      "Latitude": 22.1667,
+      "Longitude": 113.55,
+      "BoundaryGeoJSON": "@file:boundaries/MO.geojson",
+      "CommonAliases": "[\"Regi\\u00e3o Administrativa Especial de Macau da Rep\\u00fablica Popular da China\", \"MO\", \"\\u6fb3\\u95e8\", \"Macao\", \"Macao Special Administrative Region of the People's Republic of China\", \"Macau\", \"\\u4e2d\\u83ef\\u4eba\\u6c11\\u5171\\u548c\\u570b\\u6fb3\\u9580\\u7279\\u5225\\u884c\\u653f\\u5340\"]"
+    },
+    "primaryKey": {
+      "ID": "601135E4-5C5E-4BE5-A2B0-2EE8C7F7FCAA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.412Z",
+      "checksum": "a6bcad274aab745a3afce9cd000779cdbd87c1d72effaafaacdfc766f854d9fd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madagascar",
+      "ISO2": "MG",
+      "ISO3": "MDG",
+      "NumericCode": 450,
+      "Latitude": -20,
+      "Longitude": 47,
+      "BoundaryGeoJSON": "@file:boundaries/MG.geojson",
+      "CommonAliases": "[\"R\\u00e9publique de Madagascar\", \"Republic of Madagascar\", \"MG\", \"Repoblikan'i Madagasikara\", \"Madagascar\"]"
+    },
+    "primaryKey": {
+      "ID": "45EB8B3A-E045-442A-B81B-532A49FB5B9D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.426Z",
+      "checksum": "d2d790df0922d6096abae6b8183a337b1a0f9fdd7f706d90e3a03dfe4eb7da87"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Malawi",
+      "ISO2": "MW",
+      "ISO3": "MWI",
+      "NumericCode": 454,
+      "Latitude": -13.5,
+      "Longitude": 34,
+      "BoundaryGeoJSON": "@file:boundaries/MW.geojson",
+      "CommonAliases": "[\"Republic of Malawi\", \"Malawi\", \"MW\"]"
+    },
+    "primaryKey": {
+      "ID": "E3F1B8D2-C36E-4C0A-9BEE-925CEA3A121D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.472Z",
+      "checksum": "93b210ed8ef6988d85e99f01299261d849b89bb5b3aa9dbd3e38573ed40e6d53"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Malaysia",
+      "ISO2": "MY",
+      "ISO3": "MYS",
+      "NumericCode": 458,
+      "Latitude": 2.5,
+      "Longitude": 112.5,
+      "BoundaryGeoJSON": "@file:boundaries/MY.geojson",
+      "CommonAliases": "[\"MY\", \"Malaysia\"]"
+    },
+    "primaryKey": {
+      "ID": "34BCFE54-EE7D-411D-94D5-30881F549167"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.490Z",
+      "checksum": "ad2e7f4cdea8f2dce632e1ec3e8283100f36afec539b74c2c009755a820b4f24"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maldives",
+      "ISO2": "MV",
+      "ISO3": "MDV",
+      "NumericCode": 462,
+      "Latitude": 3.25,
+      "Longitude": 73,
+      "BoundaryGeoJSON": "@file:boundaries/MV.geojson",
+      "CommonAliases": "[\"Republic of the Maldives\", \"Dhivehi Raajjeyge Jumhooriyya\", \"Maldives\", \"MV\", \"Maldive Islands\"]"
+    },
+    "primaryKey": {
+      "ID": "B436E27B-3CE0-4EB5-8208-0EB689637928"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.505Z",
+      "checksum": "db7e89a7d1cfd4ee28784510dae2690eb9f23e107764820caedb3b625db5b753"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mali",
+      "ISO2": "ML",
+      "ISO3": "MLI",
+      "NumericCode": 466,
+      "Latitude": 17,
+      "Longitude": -4,
+      "BoundaryGeoJSON": "@file:boundaries/ML.geojson",
+      "CommonAliases": "[\"ML\", \"Mali\", \"R\\u00e9publique du Mali\", \"Republic of Mali\"]"
+    },
+    "primaryKey": {
+      "ID": "A435AEB2-3E53-4BFB-A6A1-26C0343AFA4C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.522Z",
+      "checksum": "0c53891c185c3edce7ebc1ef6318e72120a657a019e556a343af931fca06dd8e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Malta",
+      "ISO2": "MT",
+      "ISO3": "MLT",
+      "NumericCode": 470,
+      "Latitude": 35.9375,
+      "Longitude": 14.3754,
+      "BoundaryGeoJSON": "@file:boundaries/MT.geojson",
+      "CommonAliases": "[\"Repubblika ta' Malta\", \"Republic of Malta\", \"MT\", \"Malta\"]"
+    },
+    "primaryKey": {
+      "ID": "64F9D185-8D71-496F-A934-CB52FC61E89C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.538Z",
+      "checksum": "e09c3828ffa54f9dd3ca256ec2d8a909ddcd2a8e5149324ccdd73fad322dc041"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marshall Islands",
+      "ISO2": "MH",
+      "ISO3": "MHL",
+      "NumericCode": 584,
+      "Latitude": 9,
+      "Longitude": 168,
+      "BoundaryGeoJSON": "@file:boundaries/MH.geojson",
+      "CommonAliases": "[\"Republic of the Marshall Islands\", \"MH\", \"Marshall Islands\", \"Aolep\\u0101n Aor\\u014dkin M\\u0327aje\\u013c\"]"
+    },
+    "primaryKey": {
+      "ID": "F38215C4-9E0F-450B-A157-FE138F9B251F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.554Z",
+      "checksum": "fefa033ec5a13e33a4494eb22987004adfe6ed809d19be397921fc57fd6d5c41"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Martinique",
+      "ISO2": "MQ",
+      "ISO3": "MTQ",
+      "NumericCode": 474,
+      "Latitude": 14.6667,
+      "Longitude": -61,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Martinique\", \"MQ\"]"
+    },
+    "primaryKey": {
+      "ID": "AA02FEB2-77FA-449E-BA16-7FBD99F11A89"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.570Z",
+      "checksum": "ca209be8badf71d087e2e31972a21452313ad0a211416d6e7378e373063fcfb2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mauritania",
+      "ISO2": "MR",
+      "ISO3": "MRT",
+      "NumericCode": 478,
+      "Latitude": 20,
+      "Longitude": -12,
+      "BoundaryGeoJSON": "@file:boundaries/MR.geojson",
+      "CommonAliases": "[\"al-Jumh\\u016briyyah al-\\u02beIsl\\u0101miyyah al-M\\u016br\\u012bt\\u0101niyyah\", \"MR\", \"Islamic Republic of Mauritania\", \"Mauritania\"]"
+    },
+    "primaryKey": {
+      "ID": "C53A4410-1AAD-46BA-AB57-8079F2246144"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.588Z",
+      "checksum": "e1bb6605e8988d3190a9cc083276ca9241d05b0df60e65bb9eb1f2e7143c581d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mauritius",
+      "ISO2": "MU",
+      "ISO3": "MUS",
+      "NumericCode": 480,
+      "Latitude": -20.2833,
+      "Longitude": 57.55,
+      "BoundaryGeoJSON": "@file:boundaries/MU.geojson",
+      "CommonAliases": "[\"R\\u00e9publique de Maurice\", \"Mauritius\", \"MU\", \"Republic of Mauritius\"]"
+    },
+    "primaryKey": {
+      "ID": "1E707066-5730-4CFA-95C1-4E2A8F97DE52"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.603Z",
+      "checksum": "31307c230888a0fd15e1943c26f3abe939df089811a81fb9e61a182bb1afd77e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mayotte",
+      "ISO2": "YT",
+      "ISO3": "MYT",
+      "NumericCode": 175,
+      "Latitude": -12.8333,
+      "Longitude": 45.1667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"YT\", \"Mayotte\", \"Department of Mayotte\", \"D\\u00e9partement de Mayotte\"]"
+    },
+    "primaryKey": {
+      "ID": "A74B98B9-ED75-46F9-8A32-EE67F4AEB472"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.616Z",
+      "checksum": "ba66e30e137bc99fa7b1a52eafa8b1bd6c2f8d38cd4cedce871d339c0b49577c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mexico",
+      "ISO2": "MX",
+      "ISO3": "MEX",
+      "NumericCode": 484,
+      "Latitude": 23,
+      "Longitude": -102,
+      "BoundaryGeoJSON": "@file:boundaries/MX.geojson",
+      "CommonAliases": "[\"MX\", \"Mexicanos\", \"United Mexican States\", \"Mexico\", \"Estados Unidos Mexicanos\"]"
+    },
+    "primaryKey": {
+      "ID": "AB8CFFB1-0324-466A-B2AD-44FF57208D1E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.662Z",
+      "checksum": "e0b12f5bef90d26b8532bf1c0630f3d806819868b053a3e5a891ae8142eb6142"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Micronesia",
+      "ISO2": "FM",
+      "ISO3": "FSM",
+      "NumericCode": 583,
+      "Latitude": 6.9167,
+      "Longitude": 158.25,
+      "BoundaryGeoJSON": "@file:boundaries/FM.geojson",
+      "CommonAliases": "[\"Micronesia, Federated States of\", \"FM\", \"Micronesia\", \"Federated States of Micronesia\"]"
+    },
+    "primaryKey": {
+      "ID": "B49FFB26-4925-400F-BB0A-7F1BB58F41B8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.678Z",
+      "checksum": "6697706d235652e26eb8c775af4cf89700631a5628a016afa43b63ddc959312a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moldova",
+      "ISO2": "MD",
+      "ISO3": "MDA",
+      "NumericCode": 498,
+      "Latitude": 47,
+      "Longitude": 29,
+      "BoundaryGeoJSON": "@file:boundaries/MD.geojson",
+      "CommonAliases": "[\"MD\", \"Republic of Moldova\", \"Moldova\", \"Moldova, Republic of\", \"Republica Moldova\"]"
+    },
+    "primaryKey": {
+      "ID": "75983A5C-447C-4961-B4EE-0FCB102F84CA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.693Z",
+      "checksum": "eb0268e7888d0c3cc9ecda007756231007c3f62a7aab9fc429ff38d19dcd24f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Monaco",
+      "ISO2": "MC",
+      "ISO3": "MCO",
+      "NumericCode": 492,
+      "Latitude": 43.7333,
+      "Longitude": 7.4,
+      "BoundaryGeoJSON": "@file:boundaries/MC.geojson",
+      "CommonAliases": "[\"Monaco\", \"Principality of Monaco\", \"Principaut\\u00e9 de Monaco\", \"MC\"]"
+    },
+    "primaryKey": {
+      "ID": "0718C37A-9D9C-429C-A259-980EEAAE6881"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.710Z",
+      "checksum": "95ba4a63c56f888df0e046c80ac2f69f99e853484d9da16b351c984cd88fa7a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mongolia",
+      "ISO2": "MN",
+      "ISO3": "MNG",
+      "NumericCode": 496,
+      "Latitude": 46,
+      "Longitude": 105,
+      "BoundaryGeoJSON": "@file:boundaries/MN.geojson",
+      "CommonAliases": "[\"Mongolia\", \"MN\"]"
+    },
+    "primaryKey": {
+      "ID": "1834145F-84DC-4635-8FA9-B808736B4C45"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.728Z",
+      "checksum": "5828bf5f6c070f017305eeecc9860bb676bf18234952ee1221ad08b746ded5fd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Montenegro",
+      "ISO2": "ME",
+      "ISO3": "MNE",
+      "NumericCode": 499,
+      "Latitude": 42.5,
+      "Longitude": 19.3,
+      "BoundaryGeoJSON": "@file:boundaries/ME.geojson",
+      "CommonAliases": "[\"ME\", \"Montenegro\", \"Crna Gora\"]"
+    },
+    "primaryKey": {
+      "ID": "453E4418-1558-454C-B63F-D58295470A5A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.744Z",
+      "checksum": "e89be3d1ead6027254fdbd45275ec3837ea6b22f0973ba673443becf075d05de"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Montserrat",
+      "ISO2": "MS",
+      "ISO3": "MSR",
+      "NumericCode": 500,
+      "Latitude": 16.75,
+      "Longitude": -62.2,
+      "BoundaryGeoJSON": "@file:boundaries/MS.geojson",
+      "CommonAliases": "[\"MS\", \"Montserrat\"]"
+    },
+    "primaryKey": {
+      "ID": "36445009-C930-448E-BB5D-34505D596A9E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.760Z",
+      "checksum": "b7fa49e574fb842fb506642a0a8534cb95dcd81b12fd3d18fe8ce88b97b4f99f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Morocco",
+      "ISO2": "MA",
+      "ISO3": "MAR",
+      "NumericCode": 504,
+      "Latitude": 32,
+      "Longitude": -5,
+      "BoundaryGeoJSON": "@file:boundaries/MA.geojson",
+      "CommonAliases": "[\"Morocco\", \"MA\", \"Al-Mamlakah al-Ma\\u0121ribiyah\", \"Kingdom of Morocco\"]"
+    },
+    "primaryKey": {
+      "ID": "D838F201-49DA-43BC-9AF9-2CF7618E6DBD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.779Z",
+      "checksum": "65004ce990ddb50841279a549ac7159f6b89fb74e0b600a7eea314125032966e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mozambique",
+      "ISO2": "MZ",
+      "ISO3": "MOZ",
+      "NumericCode": 508,
+      "Latitude": -18.25,
+      "Longitude": 35,
+      "BoundaryGeoJSON": "@file:boundaries/MZ.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica de Mo\\u00e7ambique\", \"Mozambique\", \"Republic of Mozambique\", \"MZ\"]"
+    },
+    "primaryKey": {
+      "ID": "BA63EA81-49A0-4C97-848E-9DE1EF5D7308"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.797Z",
+      "checksum": "8c5d71e69c4c9ef738e01d027f562f7215cb2652c04d1cee999bd44d1edfc30f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Myanmar",
+      "ISO2": "MM",
+      "ISO3": "MMR",
+      "NumericCode": 104,
+      "Latitude": 22,
+      "Longitude": 98,
+      "BoundaryGeoJSON": "@file:boundaries/MM.geojson",
+      "CommonAliases": "[\"MM\", \"Pyidaunzu Thanm\\u0103da My\\u0103ma Nainngandaw\", \"Republic of the Union of Myanmar\", \"Myanmar\", \"Burma\"]"
+    },
+    "primaryKey": {
+      "ID": "EDC51E50-DEC6-44D3-B067-26A08566D464"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.811Z",
+      "checksum": "9f733dd4abbed160faeceec27290a7f627bb66eae85d04120b2c150f69243c58"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Namibia",
+      "ISO2": "NA",
+      "ISO3": "NAM",
+      "NumericCode": 516,
+      "Latitude": -22,
+      "Longitude": 17,
+      "BoundaryGeoJSON": "@file:boundaries/NA.geojson",
+      "CommonAliases": "[\"Republic of Namibia\", \"Namibi\\u00eb\", \"NA\", \"Namibia\"]"
+    },
+    "primaryKey": {
+      "ID": "BE1AEBD1-C055-4CF6-8AEF-95A78D61B6DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.853Z",
+      "checksum": "d801152a6f663a7a39604675212b4bbaaf90b0a56e34316baa7dac4ecc1466f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nauru",
+      "ISO2": "NR",
+      "ISO3": "NRU",
+      "NumericCode": 520,
+      "Latitude": -0.5333,
+      "Longitude": 166.9167,
+      "BoundaryGeoJSON": "@file:boundaries/NR.geojson",
+      "CommonAliases": "[\"Naoero\", \"Nauru\", \"NR\", \"Pleasant Island\", \"Republic of Nauru\", \"Ripublik Naoero\"]"
+    },
+    "primaryKey": {
+      "ID": "FA48BE9A-DD1F-4D17-A599-E426644A682A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.868Z",
+      "checksum": "339fa830bbea845440cff0c23adec2f3d69d002863676ae873457c1f4a4e004f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nepal",
+      "ISO2": "NP",
+      "ISO3": "NPL",
+      "NumericCode": 524,
+      "Latitude": 28,
+      "Longitude": 84,
+      "BoundaryGeoJSON": "@file:boundaries/NP.geojson",
+      "CommonAliases": "[\"Federal Democratic Republic of Nepal\", \"Lokt\\u0101ntrik Ganatantra Nep\\u0101l\", \"NP\", \"Nepal\"]"
+    },
+    "primaryKey": {
+      "ID": "AFD1B85D-91A2-4426-9507-E07123ADF9AB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.886Z",
+      "checksum": "51ed3140316bceb11ca4605729f00edd2c8cd54f60166a47b11171d3c6f4ee16"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Netherlands",
+      "ISO2": "NL",
+      "ISO3": "NLD",
+      "NumericCode": 528,
+      "Latitude": 52.5,
+      "Longitude": 5.75,
+      "BoundaryGeoJSON": "@file:boundaries/NL.geojson",
+      "CommonAliases": "[\"Kingdom of the Netherlands\", \"NL\", \"The Netherlands\", \"Holland\", \"Nederland\", \"Netherlands\"]"
+    },
+    "primaryKey": {
+      "ID": "D19C84E4-A470-4FB6-B5DB-573048ED49F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.902Z",
+      "checksum": "be3e584c7f491e9ab1247771db328f1c92b363c71f032994064be6e9e5ef3efb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "New Caledonia",
+      "ISO2": "NC",
+      "ISO3": "NCL",
+      "NumericCode": 540,
+      "Latitude": -21.5,
+      "Longitude": 165.5,
+      "BoundaryGeoJSON": "@file:boundaries/NC.geojson",
+      "CommonAliases": "[\"NC\", \"New Caledonia\"]"
+    },
+    "primaryKey": {
+      "ID": "E1E96B69-B5A9-42CB-BF0C-5D9B5CE24207"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.917Z",
+      "checksum": "df5a503cda0e5c91d84764e5467fdece2b8b11b0109e1cc7afe3d23706d49bb2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "New Zealand",
+      "ISO2": "NZ",
+      "ISO3": "NZL",
+      "NumericCode": 554,
+      "Latitude": -41,
+      "Longitude": 174,
+      "BoundaryGeoJSON": "@file:boundaries/NZ.geojson",
+      "CommonAliases": "[\"NZ\", \"New Zealand\", \"Aotearoa\"]"
+    },
+    "primaryKey": {
+      "ID": "1A48B9FD-8952-43AE-95CC-66A5212747A6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.936Z",
+      "checksum": "cfe6540a7a6cbda8f87575a5436f1195e8a4b0f218af6785eb3a58391e03e166"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nicaragua",
+      "ISO2": "NI",
+      "ISO3": "NIC",
+      "NumericCode": 558,
+      "Latitude": 13,
+      "Longitude": -85,
+      "BoundaryGeoJSON": "@file:boundaries/NI.geojson",
+      "CommonAliases": "[\"Nicaragua\", \"Rep\\u00fablica de Nicaragua\", \"NI\", \"Republic of Nicaragua\"]"
+    },
+    "primaryKey": {
+      "ID": "3FC0D111-86DE-4FBC-8719-B8D10A22C70C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.952Z",
+      "checksum": "b5f2a390da8175d4cf6a09271d6ff109ddef08254bc8d929f7e0391f1cbf4d25"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Niger",
+      "ISO2": "NE",
+      "ISO3": "NER",
+      "NumericCode": 562,
+      "Latitude": 16,
+      "Longitude": 8,
+      "BoundaryGeoJSON": "@file:boundaries/NE.geojson",
+      "CommonAliases": "[\"Niger\", \"Nijar\", \"NE\", \"Republic of Niger\"]"
+    },
+    "primaryKey": {
+      "ID": "A8E82FBE-4FA1-44BC-AEC2-7BBC9DA2AD2B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.969Z",
+      "checksum": "3fa161d993c646afd644470abb2a0f8864ebd52eb8d96e90099964142de90973"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nigeria",
+      "ISO2": "NG",
+      "ISO3": "NGA",
+      "NumericCode": 566,
+      "Latitude": 10,
+      "Longitude": 8,
+      "BoundaryGeoJSON": "@file:boundaries/NG.geojson",
+      "CommonAliases": "[\"Nigeria\", \"Federal Republic of Nigeria\", \"Nijeriya\", \"Na\\u00edj\\u00edr\\u00ed\\u00e0\", \"NG\"]"
+    },
+    "primaryKey": {
+      "ID": "97DC785C-65B6-4FB6-BF6B-17AD77E2248D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.986Z",
+      "checksum": "23e4f8475ac050f9333fae7eac01581e4950d2cf9312150e607dbfbd696b68b3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Niue",
+      "ISO2": "NU",
+      "ISO3": "NIU",
+      "NumericCode": 570,
+      "Latitude": -19.0333,
+      "Longitude": -169.8667,
+      "BoundaryGeoJSON": "@file:boundaries/NU.geojson",
+      "CommonAliases": "[\"NU\", \"Niue\"]"
+    },
+    "primaryKey": {
+      "ID": "2FE8AE83-8524-4C1C-8BA7-0759EB4596BD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:23.999Z",
+      "checksum": "e13ddeb1b86b825a1a15c832cc09c3f741521c63a4fb40737a8c808df7e012e0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Norfolk Island",
+      "ISO2": "NF",
+      "ISO3": "NFK",
+      "NumericCode": 574,
+      "Latitude": -29.0333,
+      "Longitude": 167.95,
+      "BoundaryGeoJSON": "@file:boundaries/NF.geojson",
+      "CommonAliases": "[\"NF\", \"Norfolk Island\", \"Territory of Norfolk Island\", \"Teratri of Norf'k Ailen\"]"
+    },
+    "primaryKey": {
+      "ID": "0CCABAF2-CB43-42DA-BD9A-5C9A73D16AD2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.045Z",
+      "checksum": "8d68375113f8b3e0ae5ff938e7c4324b1a564811154de7582818105cf861ef97"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Korea",
+      "ISO2": "KP",
+      "ISO3": "PRK",
+      "NumericCode": 408,
+      "Latitude": 40,
+      "Longitude": 127,
+      "BoundaryGeoJSON": "@file:boundaries/KP.geojson",
+      "CommonAliases": "[\"KP\", \"DPRK\", \"Chos\\u014fn Minjuju\\u016di Inmin Konghwaguk\", \"\\ubd81\\uc870\\uc120\", \"Korea, Democratic People's Republic of\", \"\\uc870\\uc120\\ubbfc\\uc8fc\\uc8fc\\uc758\\uc778\\ubbfc\\uacf5\\ud654\\uad6d\", \"Democratic People's Republic of Korea\", \"\\ubd81\\ud55c\", \"North Korea\"]"
+    },
+    "primaryKey": {
+      "ID": "C47A329D-C649-4053-9CD9-F8C2CD769B99"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.061Z",
+      "checksum": "e26b89e346a497d94ab4458f0fb53f939bf5a677e08f324d5dcd4e0f7d37d3b6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Macedonia",
+      "ISO2": "MK",
+      "ISO3": "MKD",
+      "NumericCode": 807,
+      "Latitude": 41.8333,
+      "Longitude": 22,
+      "BoundaryGeoJSON": "@file:boundaries/MK.geojson",
+      "CommonAliases": "[\"Macedonia, The Former Yugoslav Republic of\", \"Republic of North Macedonia\", \"North Macedonia\", \"The former Yugoslav Republic of Macedonia\", \"\\u0420\\u0435\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u0421\\u0435\\u0432\\u0435\\u0440\\u043d\\u0430 \\u041c\\u0430\\u043a\\u0435\\u0434\\u043e\\u043d\\u0438\\u0458\\u0430\", \"MK\"]"
+    },
+    "primaryKey": {
+      "ID": "1F049B65-B010-4101-802F-F79CE1EC8C05"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.077Z",
+      "checksum": "5b149ea24c64bf5e10a5cd6673db315dab3959b81086bec6e815a31fd726e934"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northern Mariana Islands",
+      "ISO2": "MP",
+      "ISO3": "MNP",
+      "NumericCode": 580,
+      "Latitude": 15.2,
+      "Longitude": 145.75,
+      "BoundaryGeoJSON": "@file:boundaries/MP.geojson",
+      "CommonAliases": "[\"Northern Mariana Islands\", \"Commonwealth of the Northern Mariana Islands\", \"Sankattan Siha Na Islas Mari\\u00e5nas\", \"MP\"]"
+    },
+    "primaryKey": {
+      "ID": "F2FB0D44-9E48-452D-B3D0-836790268BFC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.095Z",
+      "checksum": "71f8f2aeca53e998c792a5a566b8f21fcc385a0f60f423d1c1ba4b4e1f9f327b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Norway",
+      "ISO2": "NO",
+      "ISO3": "NOR",
+      "NumericCode": 578,
+      "Latitude": 62,
+      "Longitude": 10,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kingdom of Norway\", \"NO\", \"Kongeriket Noreg\", \"Noreg\", \"Norway\", \"Kongeriket Norge\", \"Norge\"]"
+    },
+    "primaryKey": {
+      "ID": "A63CA6B5-97A7-4C32-B070-B70CA4283DC2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.113Z",
+      "checksum": "400ccbc84bda9993e4111e2274550d2974903cc6021390be91dea9852b0f4f79"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oman",
+      "ISO2": "OM",
+      "ISO3": "OMN",
+      "NumericCode": 512,
+      "Latitude": 21,
+      "Longitude": 57,
+      "BoundaryGeoJSON": "@file:boundaries/OM.geojson",
+      "CommonAliases": "[\"Oman\", \"Sal\\u1e6danat \\u02bbUm\\u0101n\", \"OM\", \"Sultanate of Oman\"]"
+    },
+    "primaryKey": {
+      "ID": "43D60834-3BA4-4FB1-B5D8-0FF5E216DADB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.132Z",
+      "checksum": "60d36ee4ee42ca7a42d281214ec8860354744fc2cd1d9067f1b8cc6f2a0cfeb4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pakistan",
+      "ISO2": "PK",
+      "ISO3": "PAK",
+      "NumericCode": 586,
+      "Latitude": 30,
+      "Longitude": 70,
+      "BoundaryGeoJSON": "@file:boundaries/PK.geojson",
+      "CommonAliases": "[\"Islamic Republic of Pakistan\", \"PK\", \"Isl\\u0101m\\u012b Jumh\\u016briya'eh P\\u0101kist\\u0101n\", \"Pakistan\", \"P\\u0101kist\\u0101n\"]"
+    },
+    "primaryKey": {
+      "ID": "4477AA19-2C7A-417C-85E9-6B8AFFCD1CAF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.150Z",
+      "checksum": "72c5615c342a01d718dc6b34f08400fe3e018e0fea3e749708f089e0c5fa92e1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Palau",
+      "ISO2": "PW",
+      "ISO3": "PLW",
+      "NumericCode": 585,
+      "Latitude": 7.5,
+      "Longitude": 134.5,
+      "BoundaryGeoJSON": "@file:boundaries/PW.geojson",
+      "CommonAliases": "[\"Palau\", \"PW\", \"Beluu er a Belau\", \"Republic of Palau\"]"
+    },
+    "primaryKey": {
+      "ID": "8D4B93D5-8244-43CB-83F1-E065DF4EEF41"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.165Z",
+      "checksum": "ddc07e44d88e4bdaf78d305d912a4c0ecdd58fb0cce415cbc05a1004a8aa2445"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Palestine",
+      "ISO2": "PS",
+      "ISO3": "PSE",
+      "NumericCode": 275,
+      "Latitude": 31.9,
+      "Longitude": 35.2,
+      "BoundaryGeoJSON": "@file:boundaries/PS.geojson",
+      "CommonAliases": "[\"Palestine, State of\", \"State of Palestine\", \"PS\", \"Palestine\", \"Dawlat Filas\\u1e6din\"]"
+    },
+    "primaryKey": {
+      "ID": "E5774B3F-717B-4A6B-9923-B741CB5B0127"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.181Z",
+      "checksum": "167702be4bfafccd23ad2ea5a66d3210582c3d6008f32f6acfa0ad37a7489bfa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Panama",
+      "ISO2": "PA",
+      "ISO3": "PAN",
+      "NumericCode": 591,
+      "Latitude": 9,
+      "Longitude": -80,
+      "BoundaryGeoJSON": "@file:boundaries/PA.geojson",
+      "CommonAliases": "[\"Panama\", \"PA\", \"Rep\\u00fablica de Panam\\u00e1\", \"Republic of Panama\"]"
+    },
+    "primaryKey": {
+      "ID": "100DBA71-66DA-4F0A-9C01-FE6FB3AB7D8E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.195Z",
+      "checksum": "8c2f3b94fa909f5ac9ad2640dee0161aa54cc0461b25b0388401fb82d78c59a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Papua New Guinea",
+      "ISO2": "PG",
+      "ISO3": "PNG",
+      "NumericCode": 598,
+      "Latitude": -6,
+      "Longitude": 147,
+      "BoundaryGeoJSON": "@file:boundaries/PG.geojson",
+      "CommonAliases": "[\"Papua New Guinea\", \"PG\", \"Independen Stet bilong Papua Niugini\", \"Independent State of Papua New Guinea\"]"
+    },
+    "primaryKey": {
+      "ID": "567CFF7C-AA4B-498B-B0E9-3CE067440834"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.236Z",
+      "checksum": "c6c8cdc7628cf0b8e6b4aeb8f4a61e18ae25bbf8abf82b4de1720a2d5da3b97d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Paraguay",
+      "ISO2": "PY",
+      "ISO3": "PRY",
+      "NumericCode": 600,
+      "Latitude": -23,
+      "Longitude": -58,
+      "BoundaryGeoJSON": "@file:boundaries/PY.geojson",
+      "CommonAliases": "[\"PY\", \"Rep\\u00fablica del Paraguay\", \"Tet\\u00e3 Paragu\\u00e1i\", \"Republic of Paraguay\", \"Paraguay\"]"
+    },
+    "primaryKey": {
+      "ID": "2A3346E4-7966-420D-94F2-FC0A45DB9FCD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.252Z",
+      "checksum": "7ceac7c1fb9b92306550c23b0cdfef6179eb8b093f8cf0280dbeb6d82017255e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Peru",
+      "ISO2": "PE",
+      "ISO3": "PER",
+      "NumericCode": 604,
+      "Latitude": -10,
+      "Longitude": -76,
+      "BoundaryGeoJSON": "@file:boundaries/PE.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica del Per\\u00fa\", \"Republic of Peru\", \"Peru\", \"PE\"]"
+    },
+    "primaryKey": {
+      "ID": "DF58C5BC-EFB4-48F9-A0D6-24A1C520CEB5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.269Z",
+      "checksum": "259cb3a06c9ae114289336dc8bcb6e0362ce3f398e79dd50692ca85491dae9fa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Philippines",
+      "ISO2": "PH",
+      "ISO3": "PHL",
+      "NumericCode": 608,
+      "Latitude": 13,
+      "Longitude": 122,
+      "BoundaryGeoJSON": "@file:boundaries/PH.geojson",
+      "CommonAliases": "[\"PH\", \"Rep\\u00fablika ng Pilipinas\", \"Philippines\", \"Republic of the Philippines\"]"
+    },
+    "primaryKey": {
+      "ID": "D2FF8E55-9A50-43E9-A648-B8348F8C249C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.288Z",
+      "checksum": "5435389977d11a0db753e1fa9512bced07e98434181baf0557fa7f6f280ecf41"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pitcairn Islands",
+      "ISO2": "PN",
+      "ISO3": "PCN",
+      "NumericCode": 612,
+      "Latitude": -25.0667,
+      "Longitude": -130.1,
+      "BoundaryGeoJSON": "@file:boundaries/PN.geojson",
+      "CommonAliases": "[\"Pitcairn Henderson Ducie and Oeno Islands\", \"PN\", \"Pitcairn Group of Islands\", \"Pitcairn Islands\", \"Pitcairn\"]"
+    },
+    "primaryKey": {
+      "ID": "EE2BFD78-8696-43FA-8620-49F5CFA7609A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.306Z",
+      "checksum": "1dbb99e63be5142c84253a781827919fc60a4838498edba2891a10a092993e5e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Poland",
+      "ISO2": "PL",
+      "ISO3": "POL",
+      "NumericCode": 616,
+      "Latitude": 52,
+      "Longitude": 20,
+      "BoundaryGeoJSON": "@file:boundaries/PL.geojson",
+      "CommonAliases": "[\"Republic of Poland\", \"PL\", \"Rzeczpospolita Polska\", \"Poland\"]"
+    },
+    "primaryKey": {
+      "ID": "71794462-2D0A-46AC-869F-521FE44C9936"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.322Z",
+      "checksum": "0cef332166b075454cf203d715c6dfa15831ae13f6b7c42643eb5dd5db3f8aeb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Portugal",
+      "ISO2": "PT",
+      "ISO3": "PRT",
+      "NumericCode": 620,
+      "Latitude": 39.5,
+      "Longitude": -8,
+      "BoundaryGeoJSON": "@file:boundaries/PT.geojson",
+      "CommonAliases": "[\"Portugal\", \"Portuguese Republic\", \"Portuguesa\", \"PT\", \"Rep\\u00fablica Portuguesa\"]"
+    },
+    "primaryKey": {
+      "ID": "C1BBBD23-2419-4FA9-B619-5F364DFE0584"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.339Z",
+      "checksum": "5c45a6f08cc40b881307d77f878dc4c1b7b55b073fb011f7af3e07246edda0b2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Puerto Rico",
+      "ISO2": "PR",
+      "ISO3": "PRI",
+      "NumericCode": 630,
+      "Latitude": 18.25,
+      "Longitude": -66.5,
+      "BoundaryGeoJSON": "@file:boundaries/PR.geojson",
+      "CommonAliases": "[\"PR\", \"Commonwealth of Puerto Rico\", \"Estado Libre Asociado de Puerto Rico\", \"Puerto Rico\"]"
+    },
+    "primaryKey": {
+      "ID": "55160DDB-0951-4FFC-A098-3FEB289C0CB9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.354Z",
+      "checksum": "0d96b8afcafdc97f7ef7288af0ae0d4b4c1693b3bc4f24414b2a0c2a84125d3e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qatar",
+      "ISO2": "QA",
+      "ISO3": "QAT",
+      "NumericCode": 634,
+      "Latitude": 25.5,
+      "Longitude": 51.25,
+      "BoundaryGeoJSON": "@file:boundaries/QA.geojson",
+      "CommonAliases": "[\"QA\", \"Qatar\", \"State of Qatar\", \"Dawlat Qa\\u1e6dar\"]"
+    },
+    "primaryKey": {
+      "ID": "A50CD4F6-F807-42C1-AEDD-99F03E3E51CF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.370Z",
+      "checksum": "b878c941cd793e9a33e8145c16919f2e2e214507cde05f3890a7867626da454d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Republic of the Congo",
+      "ISO2": "CG",
+      "ISO3": "COG",
+      "NumericCode": 178,
+      "Latitude": -1,
+      "Longitude": 15,
+      "BoundaryGeoJSON": "@file:boundaries/CG.geojson",
+      "CommonAliases": "[\"Republic of the Congo\", \"Congo-Brazzaville\", \"CG\", \"Congo\"]"
+    },
+    "primaryKey": {
+      "ID": "BCFCFBAF-E34B-4B02-8CCC-2FE5CAFC19B8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.384Z",
+      "checksum": "0b4470d9b8301a238c7b1a6ffbb0d486339432eb937409d33963e744b2a2aba7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Romania",
+      "ISO2": "RO",
+      "ISO3": "ROU",
+      "NumericCode": 642,
+      "Latitude": 46,
+      "Longitude": 25,
+      "BoundaryGeoJSON": "@file:boundaries/RO.geojson",
+      "CommonAliases": "[\"Romania\", \"RO\", \"Rom\\u00e2nia\", \"Rumania\", \"Roumania\"]"
+    },
+    "primaryKey": {
+      "ID": "8BE74531-2746-447F-B8EB-F87EFC0EA24A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.426Z",
+      "checksum": "599cf3741f6f4b317bd08859be61c7a24449afa5649d3efc1afb51862d6f0b9e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Russia",
+      "ISO2": "RU",
+      "ISO3": "RUS",
+      "NumericCode": 643,
+      "Latitude": 60,
+      "Longitude": 100,
+      "BoundaryGeoJSON": "@file:boundaries/RU.geojson",
+      "CommonAliases": "[\"Russian Federation\", \"\\u0420\\u043e\\u0441\\u0441\\u0438\\u0439\\u0441\\u043a\\u0430\\u044f \\u0424\\u0435\\u0434\\u0435\\u0440\\u0430\\u0446\\u0438\\u044f\", \"Russia\", \"RU\"]"
+    },
+    "primaryKey": {
+      "ID": "38E9E1BC-F196-44F0-9529-7283478C1604"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.458Z",
+      "checksum": "870184346c67af33172fcbf4e1d114efb1646f4d71ec493e52ba68fa6acb2fb2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rwanda",
+      "ISO2": "RW",
+      "ISO3": "RWA",
+      "NumericCode": 646,
+      "Latitude": -2,
+      "Longitude": 30,
+      "BoundaryGeoJSON": "@file:boundaries/RW.geojson",
+      "CommonAliases": "[\"RW\", \"Republic of Rwanda\", \"Repubulika y'u Rwanda\", \"Rwanda\", \"R\\u00e9publique du Rwanda\"]"
+    },
+    "primaryKey": {
+      "ID": "62707284-7EBA-428B-9C05-5B34A038F67A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.475Z",
+      "checksum": "f6f7bdbb9af087d74583d2a76478f8159d043547facaac1b8b27cb13fd7892c9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Réunion",
+      "ISO2": "RE",
+      "ISO3": "REU",
+      "NumericCode": 638,
+      "Latitude": -21.15,
+      "Longitude": 55.5,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Reunion\", \"R\\u00e9union\", \"RE\", \"R\\u00e9union Island\"]"
+    },
+    "primaryKey": {
+      "ID": "573ACB1D-ACF2-4004-8727-99698BFD83C5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.492Z",
+      "checksum": "3b3b95035f5a39565b8f1d5334904fd5244cafc0b695b10d23bd3e32814fd016"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Barthélemy",
+      "ISO2": "BL",
+      "ISO3": "BLM",
+      "NumericCode": 652,
+      "Latitude": 18.5,
+      "Longitude": -63.4167,
+      "BoundaryGeoJSON": "@file:boundaries/BL.geojson",
+      "CommonAliases": "[\"Saint Barth\\u00e9lemy\", \"BL\", \"Collectivit\\u00e9 de Saint-Barth\\u00e9lemy\", \"St. Barthelemy\", \"Collectivity of Saint Barth\\u00e9lemy\"]"
+    },
+    "primaryKey": {
+      "ID": "8678AC0E-8E8C-49E2-BFCD-DF2E5B2DD683"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.508Z",
+      "checksum": "0fa9b99d8e297105f2960da77b4f2332e14a0ca635109ce4267e10a725813700"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Helena, Ascension and Tristan da Cunha",
+      "ISO2": "SH",
+      "ISO3": "SHN",
+      "NumericCode": 654,
+      "Latitude": -15.95,
+      "Longitude": -5.72,
+      "BoundaryGeoJSON": "@file:boundaries/SH.geojson",
+      "CommonAliases": "[\"Saint Helena, Ascension and Tristan da Cunha\", \"Saint Helena\", \"St. Helena, Ascension and Tristan da Cunha\"]"
+    },
+    "primaryKey": {
+      "ID": "D602CB03-865A-4EDE-A51D-47774C4CD7F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.528Z",
+      "checksum": "ea94ffe5cc724317fa447ad72d4b8de1c5cc648b9324804ed9e99bce1f82f1ac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Kitts and Nevis",
+      "ISO2": "KN",
+      "ISO3": "KNA",
+      "NumericCode": 659,
+      "Latitude": 17.3333,
+      "Longitude": -62.75,
+      "BoundaryGeoJSON": "@file:boundaries/KN.geojson",
+      "CommonAliases": "[\"Saint Kitts and Nevis\", \"Federation of Saint Christopher and Nevis\", \"KN\"]"
+    },
+    "primaryKey": {
+      "ID": "2655CA95-85A8-4EB3-AD31-BFD5D90279C5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.543Z",
+      "checksum": "9b5e7e9eefa0597664d1f679366b65b556111a150c8855c7db2a1dd8bf6227b9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Lucia",
+      "ISO2": "LC",
+      "ISO3": "LCA",
+      "NumericCode": 662,
+      "Latitude": 13.8833,
+      "Longitude": -60.9667,
+      "BoundaryGeoJSON": "@file:boundaries/LC.geojson",
+      "CommonAliases": "[\"Saint Lucia\", \"LC\"]"
+    },
+    "primaryKey": {
+      "ID": "4F4B44FD-806C-4EB5-8E48-1CB054FD2885"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.559Z",
+      "checksum": "3c969244af32a3d4e20b9b2274d6984a5dbb594fca1778c0e65138d5d9bfcc7f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Martin",
+      "ISO2": "MF",
+      "ISO3": "MAF",
+      "NumericCode": 663,
+      "Latitude": 18.0708,
+      "Longitude": -63.0501,
+      "BoundaryGeoJSON": "@file:boundaries/MF.geojson",
+      "CommonAliases": "[\"Collectivit\\u00e9 de Saint-Martin\", \"Saint Martin (French part)\", \"Collectivity of Saint Martin\", \"Saint Martin\", \"MF\"]"
+    },
+    "primaryKey": {
+      "ID": "AAE59249-A76E-49AD-A67C-41E7BE8DD5F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.575Z",
+      "checksum": "44a7c60df0892417b9711c2f52855951d82f69bd2de88ce9a0479fa9051e5919"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Pierre and Miquelon",
+      "ISO2": "PM",
+      "ISO3": "SPM",
+      "NumericCode": 666,
+      "Latitude": 46.8333,
+      "Longitude": -56.3333,
+      "BoundaryGeoJSON": "@file:boundaries/PM.geojson",
+      "CommonAliases": "[\"PM\", \"Collectivit\\u00e9 territoriale de Saint-Pierre-et-Miquelon\", \"Saint Pierre and Miquelon\"]"
+    },
+    "primaryKey": {
+      "ID": "2AFECA1E-0421-4D16-9B6F-5C800F04881B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.587Z",
+      "checksum": "fe291100106e8eb1f4848a4db9597b70bf34399464f213b93de55366ed5f0eb3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Vincent and the Grenadines",
+      "ISO2": "VC",
+      "ISO3": "VCT",
+      "NumericCode": 670,
+      "Latitude": 13.25,
+      "Longitude": -61.2,
+      "BoundaryGeoJSON": "@file:boundaries/VC.geojson",
+      "CommonAliases": "[\"Saint Vincent and the Grenadines\", \"VC\"]"
+    },
+    "primaryKey": {
+      "ID": "26024D52-8812-4FF4-9092-C9A96FC75F6A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.626Z",
+      "checksum": "6b9d0cc821bbbe64900418aa639dfe3923aaf555d146201a38743ba4165b4b9b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Samoa",
+      "ISO2": "WS",
+      "ISO3": "WSM",
+      "NumericCode": 882,
+      "Latitude": -13.5833,
+      "Longitude": -172.3333,
+      "BoundaryGeoJSON": "@file:boundaries/WS.geojson",
+      "CommonAliases": "[\"Samoa\", \"WS\", \"Independent State of Samoa\", \"Malo Sa\\u02bboloto Tuto\\u02bbatasi o S\\u0101moa\"]"
+    },
+    "primaryKey": {
+      "ID": "64C63993-999B-42E9-9DA6-0F64C33CA8B1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.641Z",
+      "checksum": "bee6413c13b5c87e6345e840e62fe55dee169fd6c142c6c69c4026aced7b7eab"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Marino",
+      "ISO2": "SM",
+      "ISO3": "SMR",
+      "NumericCode": 674,
+      "Latitude": 43.7667,
+      "Longitude": 12.4167,
+      "BoundaryGeoJSON": "@file:boundaries/SM.geojson",
+      "CommonAliases": "[\"San Marino\", \"Repubblica di San Marino\", \"SM\", \"Republic of San Marino\"]"
+    },
+    "primaryKey": {
+      "ID": "84C94E2F-9CD8-490A-944D-D0014F311EA6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.658Z",
+      "checksum": "8c7ba5f7125a3f977b5b80cc5aa511fa78b47bc6ebc770ed87b149a3adc74b26"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saudi Arabia",
+      "ISO2": "SA",
+      "ISO3": "SAU",
+      "NumericCode": 682,
+      "Latitude": 25,
+      "Longitude": 45,
+      "BoundaryGeoJSON": "@file:boundaries/SA.geojson",
+      "CommonAliases": "[\"SA\", \"Al-Mamlakah al-\\u2018Arabiyyah as-Su\\u2018\\u016bdiyyah\", \"Saudi Arabia\", \"Kingdom of Saudi Arabia\", \"Saudi\"]"
+    },
+    "primaryKey": {
+      "ID": "781DCDF4-CBCE-4CEF-BF26-C8EC1F48EFF6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.675Z",
+      "checksum": "16bb8c1ad644ff92ee8b758517419b29d2e8a0e4f1ef679cdbde2b16e39bd0aa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Senegal",
+      "ISO2": "SN",
+      "ISO3": "SEN",
+      "NumericCode": 686,
+      "Latitude": 14,
+      "Longitude": -14,
+      "BoundaryGeoJSON": "@file:boundaries/SN.geojson",
+      "CommonAliases": "[\"SN\", \"R\\u00e9publique du S\\u00e9n\\u00e9gal\", \"Republic of Senegal\", \"Senegal\"]"
+    },
+    "primaryKey": {
+      "ID": "6EE01572-7978-4286-B9FC-D724E4CFA373"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.693Z",
+      "checksum": "4f47fd57558bc88578752f7116bf7c70908e647e4ebe5068f0a423c4477bd529"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Serbia",
+      "ISO2": "RS",
+      "ISO3": "SRB",
+      "NumericCode": 688,
+      "Latitude": 44,
+      "Longitude": 21,
+      "BoundaryGeoJSON": "@file:boundaries/RS.geojson",
+      "CommonAliases": "[\"Republika Srbija\", \"\\u0420\\u0435\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u0421\\u0440\\u0431\\u0438\\u0458\\u0430\", \"Srbija\", \"Serbia\", \"RS\", \"Republic of Serbia\"]"
+    },
+    "primaryKey": {
+      "ID": "09C9F07D-2BBB-435A-ACF7-57CF64D0629E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.709Z",
+      "checksum": "30084b3fdcd48bf5c148da373f7ddf3416792583721330d9ba02474e15b603e3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Seychelles",
+      "ISO2": "SC",
+      "ISO3": "SYC",
+      "NumericCode": 690,
+      "Latitude": -4.5833,
+      "Longitude": 55.6667,
+      "BoundaryGeoJSON": "@file:boundaries/SC.geojson",
+      "CommonAliases": "[\"Repiblik Sesel\", \"Seychelles\", \"Republic of Seychelles\", \"R\\u00e9publique des Seychelles\", \"SC\"]"
+    },
+    "primaryKey": {
+      "ID": "8644DEEB-F80F-4113-B1DA-CD9B8A96F8D9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.726Z",
+      "checksum": "a300cbe9a643edf9390aac28942920c4bcbf9cd748fa8d5f20e29621665b7220"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sierra Leone",
+      "ISO2": "SL",
+      "ISO3": "SLE",
+      "NumericCode": 694,
+      "Latitude": 8.5,
+      "Longitude": -11.5,
+      "BoundaryGeoJSON": "@file:boundaries/SL.geojson",
+      "CommonAliases": "[\"Sierra Leone\", \"Republic of Sierra Leone\", \"SL\"]"
+    },
+    "primaryKey": {
+      "ID": "A68C3284-A1B2-4DE6-816E-9C969FAB26C1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.741Z",
+      "checksum": "7c7f275692c472acaf76cf1994bae8ebc919f978c19aceca96af31287eef1633"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Singapore",
+      "ISO2": "SG",
+      "ISO3": "SGP",
+      "NumericCode": 702,
+      "Latitude": 1.3667,
+      "Longitude": 103.8,
+      "BoundaryGeoJSON": "@file:boundaries/SG.geojson",
+      "CommonAliases": "[\"Singapore\", \"Republic of Singapore\", \"\\u65b0\\u52a0\\u5761\\u5171\\u548c\\u56fd\", \"SG\", \"Singapura\", \"Republik Singapura\"]"
+    },
+    "primaryKey": {
+      "ID": "7CFC569A-ACD7-44A6-8C7E-686F019018B6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.756Z",
+      "checksum": "eaaa569d61deb170b79f63c93c05a51e0f184a94a77347f219e0c817057e15ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sint Maarten",
+      "ISO2": "SX",
+      "ISO3": "SXM",
+      "NumericCode": 534,
+      "Latitude": 18.0333,
+      "Longitude": -63.05,
+      "BoundaryGeoJSON": "@file:boundaries/SX.geojson",
+      "CommonAliases": "[\"Sint Maarten (Dutch part)\", \"Sint Maarten\", \"SX\"]"
+    },
+    "primaryKey": {
+      "ID": "84711BAA-2862-4A29-AB0B-D78218DC4065"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.770Z",
+      "checksum": "e9fc95e94d3538f59fe71a58dab396ef9646dbed45a9294a56b4ffe1f8f88912"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Slovakia",
+      "ISO2": "SK",
+      "ISO3": "SVK",
+      "NumericCode": 703,
+      "Latitude": 48.6667,
+      "Longitude": 19.5,
+      "BoundaryGeoJSON": "@file:boundaries/SK.geojson",
+      "CommonAliases": "[\"Slovensk\\u00e1 republika\", \"SK\", \"Slovak Republic\", \"Slovakia\"]"
+    },
+    "primaryKey": {
+      "ID": "A29874CF-3EB2-408A-A6F9-A59860C68B03"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.811Z",
+      "checksum": "fb1a5b7049ccf53e0f40c490dc3158c4de175efee423c545660d239969570e20"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Slovenia",
+      "ISO2": "SI",
+      "ISO3": "SVN",
+      "NumericCode": 705,
+      "Latitude": 46.1167,
+      "Longitude": 14.8167,
+      "BoundaryGeoJSON": "@file:boundaries/SI.geojson",
+      "CommonAliases": "[\"Slovenia\", \"Republic of Slovenia\", \"Republika Slovenija\", \"SI\"]"
+    },
+    "primaryKey": {
+      "ID": "D7C92FC6-F906-47F7-A376-AE56FF20E861"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.825Z",
+      "checksum": "60d5e8c08a014dc45e6f5bd87b0037c3f9d565c0e15724e7959032d9ff72d8d9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Solomon Islands",
+      "ISO2": "SB",
+      "ISO3": "SLB",
+      "NumericCode": 90,
+      "Latitude": -8,
+      "Longitude": 159,
+      "BoundaryGeoJSON": "@file:boundaries/SB.geojson",
+      "CommonAliases": "[\"SB\", \"Solomon Islands\"]"
+    },
+    "primaryKey": {
+      "ID": "0EAC03F5-767D-4C33-9355-FECAFF977737"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.842Z",
+      "checksum": "6afa973765933b17c69ecb34ccae59606b8ff1d9d4448d8ac4a1c1773de707ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Somalia",
+      "ISO2": "SO",
+      "ISO3": "SOM",
+      "NumericCode": 706,
+      "Latitude": 10,
+      "Longitude": 49,
+      "BoundaryGeoJSON": "@file:boundaries/SO.geojson",
+      "CommonAliases": "[\"Jamhuuriyadda Federaalka Soomaaliya\", \"Somalia\", \"Federal Republic of Somalia\", \"SO\", \"a\\u1e63-\\u1e62\\u016bm\\u0101l\", \"Jumh\\u016briyyat a\\u1e63-\\u1e62\\u016bm\\u0101l al-Fider\\u0101liyya\"]"
+    },
+    "primaryKey": {
+      "ID": "5425BA65-AD7C-4BF9-982F-4A419AA692E0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.859Z",
+      "checksum": "7d34a101daf4b99c35559d92f7ff3000ecaf9bc7cb925f074723b53378a6ff1b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Africa",
+      "ISO2": "ZA",
+      "ISO3": "ZAF",
+      "NumericCode": 710,
+      "Latitude": -29,
+      "Longitude": 24,
+      "BoundaryGeoJSON": "@file:boundaries/ZA.geojson",
+      "CommonAliases": "[\"South Africa\", \"RSA\", \"ZA\", \"Suid-Afrika\", \"Republic of South Africa\"]"
+    },
+    "primaryKey": {
+      "ID": "4406F2CD-BF14-40E1-8B6F-B2C8A1AD94E8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.876Z",
+      "checksum": "fba85050e0cf4072b3cba035ba1c70523aae7d54881d5befaa8af7f7edcff2df"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Georgia",
+      "ISO2": "GS",
+      "ISO3": "SGS",
+      "NumericCode": 239,
+      "Latitude": -54.5,
+      "Longitude": -37,
+      "BoundaryGeoJSON": "@file:boundaries/GS.geojson",
+      "CommonAliases": "[\"South Georgia and the South Sandwich Islands\", \"South Georgia\", \"GS\"]"
+    },
+    "primaryKey": {
+      "ID": "5AECB257-8819-43A8-9EEB-37C941C2756A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.891Z",
+      "checksum": "eed4ae856bc9c7423a66e783e646d9755c092155d6d0916e8f8a7fd529007eea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Korea",
+      "ISO2": "KR",
+      "ISO3": "KOR",
+      "NumericCode": 410,
+      "Latitude": 37,
+      "Longitude": 127.5,
+      "BoundaryGeoJSON": "@file:boundaries/KR.geojson",
+      "CommonAliases": "[\"Korea, Republic of\", \"\\ub0a8\\ud55c\", \"\\ub0a8\\uc870\\uc120\", \"Republic of Korea\", \"KR\", \"South Korea\"]"
+    },
+    "primaryKey": {
+      "ID": "078ADE2D-D0EF-4B3C-A98F-26E11EC5F8E0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.908Z",
+      "checksum": "413953c2185cb93260d24818410409a8d744dc361b70f3f64734e2430226c897"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Sudan",
+      "ISO2": "SS",
+      "ISO3": "SSD",
+      "NumericCode": 728,
+      "Latitude": 7,
+      "Longitude": 30,
+      "BoundaryGeoJSON": "@file:boundaries/SS.geojson",
+      "CommonAliases": "[\"Republic of South Sudan\", \"South Sudan\", \"SS\"]"
+    },
+    "primaryKey": {
+      "ID": "92E4E8D2-F5FB-45C0-9F98-64F235E5838A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.928Z",
+      "checksum": "1576ecebdf0e9a9f3c5d146f2c28e2ba3c60a004d32a39ce66d3c90684ecc112"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Spain",
+      "ISO2": "ES",
+      "ISO3": "ESP",
+      "NumericCode": 724,
+      "Latitude": 40,
+      "Longitude": -4,
+      "BoundaryGeoJSON": "@file:boundaries/ES.geojson",
+      "CommonAliases": "[\"ES\", \"Spain\", \"Kingdom of Spain\", \"Reino de Espa\\u00f1a\"]"
+    },
+    "primaryKey": {
+      "ID": "07C1A35A-ACA6-4635-AB40-968AB9B2041F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.945Z",
+      "checksum": "7c1b9376a090f2e5dd5ac3e01b6fa6a716fa910c8e2e221906ff710f70eef714"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sri Lanka",
+      "ISO2": "LK",
+      "ISO3": "LKA",
+      "NumericCode": 144,
+      "Latitude": 7,
+      "Longitude": 81,
+      "BoundaryGeoJSON": "@file:boundaries/LK.geojson",
+      "CommonAliases": "[\"Democratic Socialist Republic of Sri Lanka\", \"LK\", \"Sri Lanka\", \"ila\\u1e45kai\"]"
+    },
+    "primaryKey": {
+      "ID": "4114C1E8-817E-4345-A1E4-DDE7307D4683"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:24.959Z",
+      "checksum": "a0c81f561040e591a0636c35c09ed09eab374c4c4ec735a65dd2adb8342c8f79"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sudan",
+      "ISO2": "SD",
+      "ISO3": "SDN",
+      "NumericCode": 729,
+      "Latitude": 15,
+      "Longitude": 30,
+      "BoundaryGeoJSON": "@file:boundaries/SD.geojson",
+      "CommonAliases": "[\"Jumh\\u016br\\u012byat as-S\\u016bd\\u0101n\", \"Republic of the Sudan\", \"Sudan\", \"SD\"]"
+    },
+    "primaryKey": {
+      "ID": "F45FBCF4-3665-46E4-AB05-0AD268EFD5E9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.005Z",
+      "checksum": "a4ce24cbd3355ba67b63d82a775d70e24bf10792907a464dd681e6f0243bd752"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Suriname",
+      "ISO2": "SR",
+      "ISO3": "SUR",
+      "NumericCode": 740,
+      "Latitude": 4,
+      "Longitude": -56,
+      "BoundaryGeoJSON": "@file:boundaries/SR.geojson",
+      "CommonAliases": "[\"Suriname\", \"SR\", \"Sranangron\", \"Republiek Suriname\", \"Republic of Suriname\", \"Sarnam\"]"
+    },
+    "primaryKey": {
+      "ID": "FA265089-6810-41B0-9BEC-43E7E60FB851"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.022Z",
+      "checksum": "d30161966393b9fcc97c256cee298262e2a77298f541efa5c45850dc041b6ab1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Svalbard and Jan Mayen",
+      "ISO2": "SJ",
+      "ISO3": "SJM",
+      "NumericCode": 744,
+      "Latitude": 78,
+      "Longitude": 20,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Svalbard and Jan Mayen Islands\", \"Svalbard og Jan Mayen\", \"SJ\", \"Svalbard and Jan Mayen\"]"
+    },
+    "primaryKey": {
+      "ID": "9BBB29B9-C43E-43BD-A418-EFD2EC0EC081"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.038Z",
+      "checksum": "4fb2b9706c28bb47cb77eb0befa4b066c7e665f7e9116a9a71190f0e15946212"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sweden",
+      "ISO2": "SE",
+      "ISO3": "SWE",
+      "NumericCode": 752,
+      "Latitude": 62,
+      "Longitude": 15,
+      "BoundaryGeoJSON": "@file:boundaries/SE.geojson",
+      "CommonAliases": "[\"Konungariket Sverige\", \"Sweden\", \"SE\", \"Kingdom of Sweden\"]"
+    },
+    "primaryKey": {
+      "ID": "7E7B9145-AF86-4B6D-AD11-464E2733D179"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.057Z",
+      "checksum": "3aa627b4d078630405e691cbb52984143a850215c4a428e385ea43cf4b56e661"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Switzerland",
+      "ISO2": "CH",
+      "ISO3": "CHE",
+      "NumericCode": 756,
+      "Latitude": 47,
+      "Longitude": 8,
+      "BoundaryGeoJSON": "@file:boundaries/CH.geojson",
+      "CommonAliases": "[\"Swiss Confederation\", \"Schweiz\", \"Svizra\", \"Svizzera\", \"Suisse\", \"CH\", \"Switzerland\"]"
+    },
+    "primaryKey": {
+      "ID": "CF164B1B-F0E6-422B-94CF-28E2D79ABD6F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.073Z",
+      "checksum": "c34c5f97d7db61f05387e4f529d2e92c9ce735bc70294ab181632e7c8a570a92"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Syria",
+      "ISO2": "SY",
+      "ISO3": "SYR",
+      "NumericCode": 760,
+      "Latitude": 35,
+      "Longitude": 38,
+      "BoundaryGeoJSON": "@file:boundaries/SY.geojson",
+      "CommonAliases": "[\"Syrian Arab Republic\", \"Al-Jumh\\u016br\\u012byah Al-\\u02bbArab\\u012byah As-S\\u016br\\u012byah\", \"SY\", \"Syria\"]"
+    },
+    "primaryKey": {
+      "ID": "171DFC9A-E8ED-4D3B-A258-FDD93FB74729"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.092Z",
+      "checksum": "95a8db00524d6bbe4c41fdb4e3772fcee1cb8a1e613f481cda610bbd8d12bf61"
+    }
+  },
+  {
+    "fields": {
+      "Name": "São Tomé and Príncipe",
+      "ISO2": "ST",
+      "ISO3": "STP",
+      "NumericCode": 678,
+      "Latitude": 1,
+      "Longitude": 7,
+      "BoundaryGeoJSON": "@file:boundaries/ST.geojson",
+      "CommonAliases": "[\"S\\u00e3o Tom\\u00e9 and Pr\\u00edncipe\", \"Sao Tome and Principe\", \"Democratic Republic of S\\u00e3o Tom\\u00e9 and Pr\\u00edncipe\", \"ST\", \"Rep\\u00fablica Democr\\u00e1tica de S\\u00e3o Tom\\u00e9 e Pr\\u00edncipe\"]"
+    },
+    "primaryKey": {
+      "ID": "D53A6538-B933-49BF-8B5C-65A2544DB039"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.109Z",
+      "checksum": "cacb77d8d04c49a86553801a88fc4f82919c1ee8e23b47aa2fcf780358965776"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taiwan",
+      "ISO2": "TW",
+      "ISO3": "TWN",
+      "NumericCode": 158,
+      "Latitude": 23.5,
+      "Longitude": 121,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u4e2d\\u83ef\\u6c11\\u570b\", \"Taiwan\", \"TW\", \"Zh\\u014dnghu\\u00e1 M\\u00edngu\\u00f3\", \"T\\u00e1iw\\u0101n\", \"Republic of China\", \"Chinese Taipei\", \"Republic of China (Taiwan)\"]"
+    },
+    "primaryKey": {
+      "ID": "A934A25E-3183-4DC8-89B7-710B24A3F7DE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.126Z",
+      "checksum": "5900aa3429ed6a8345ba4ef27e399a2766edd222d44eddc726b2c773ed3f0158"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tajikistan",
+      "ISO2": "TJ",
+      "ISO3": "TJK",
+      "NumericCode": 762,
+      "Latitude": 39,
+      "Longitude": 71,
+      "BoundaryGeoJSON": "@file:boundaries/TJ.geojson",
+      "CommonAliases": "[\"\\u04b6\\u0443\\u043c\\u04b3\\u0443\\u0440\\u0438\\u0438 \\u0422\\u043e\\u04b7\\u0438\\u043a\\u0438\\u0441\\u0442\\u043e\\u043d\", \"To\\u00e7ikiston\", \"Tajikistan\", \"Republic of Tajikistan\", \"\\u00c7umhuriyi To\\u00e7ikiston\", \"TJ\"]"
+    },
+    "primaryKey": {
+      "ID": "4B19D3D3-5F76-4BD6-9C9B-FD612246AC4E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.145Z",
+      "checksum": "d27d5bd81f1576f2fd596391339509550ad71a62c28da1d2c10352a94d4cb188"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tanzania",
+      "ISO2": "TZ",
+      "ISO3": "TZA",
+      "NumericCode": 834,
+      "Latitude": -6,
+      "Longitude": 35,
+      "BoundaryGeoJSON": "@file:boundaries/TZ.geojson",
+      "CommonAliases": "[\"Jamhuri ya Muungano wa Tanzania\", \"United Republic of Tanzania\", \"Tanzania, United Republic of\", \"Tanzania\", \"TZ\"]"
+    },
+    "primaryKey": {
+      "ID": "0826A736-07CA-4AC7-AAF5-74AE133FFAD1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.159Z",
+      "checksum": "5fcfd91b4dbb70d037c2d42413e626384b6f06593083975af9fad0a9887a97e5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thailand",
+      "ISO2": "TH",
+      "ISO3": "THA",
+      "NumericCode": 764,
+      "Latitude": 15,
+      "Longitude": 100,
+      "BoundaryGeoJSON": "@file:boundaries/TH.geojson",
+      "CommonAliases": "[\"Ratcha Anachak Thai\", \"Thailand\", \"Prathet\", \"Kingdom of Thailand\", \"TH\", \"\\u0e23\\u0e32\\u0e0a\\u0e2d\\u0e32\\u0e13\\u0e32\\u0e08\\u0e31\\u0e01\\u0e23\\u0e44\\u0e17\\u0e22\", \"Thai\"]"
+    },
+    "primaryKey": {
+      "ID": "06750B5B-0E85-4387-8A1D-7091376D7E19"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.205Z",
+      "checksum": "20141d08c0a365da622bcde40c83adb07cf77784ec182e943c9007ee2b3db75b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Timor-Leste",
+      "ISO2": "TL",
+      "ISO3": "TLS",
+      "NumericCode": 626,
+      "Latitude": -8.8333,
+      "Longitude": 125.9167,
+      "BoundaryGeoJSON": "@file:boundaries/TL.geojson",
+      "CommonAliases": "[\"Tim\\u00f3r Lorosa'e\", \"Timor-Leste\", \"Timor Lorosae\", \"East Timor\", \"TL\", \"Rep\\u00fablica Democr\\u00e1tica de Timor-Leste\", \"Democratic Republic of Timor-Leste\", \"Rep\\u00fablika Demokr\\u00e1tika Tim\\u00f3r-Leste\"]"
+    },
+    "primaryKey": {
+      "ID": "DB489B4E-44E0-4EC3-9F46-163DB3D4E67F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.219Z",
+      "checksum": "a579e2f56f02572b64a2703e3277dc5e38825e429a523353817422ca1ad9c5c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Togo",
+      "ISO2": "TG",
+      "ISO3": "TGO",
+      "NumericCode": 768,
+      "Latitude": 8,
+      "Longitude": 1.1667,
+      "BoundaryGeoJSON": "@file:boundaries/TG.geojson",
+      "CommonAliases": "[\"Togo\", \"Togolese\", \"Togolese Republic\", \"R\\u00e9publique Togolaise\", \"TG\"]"
+    },
+    "primaryKey": {
+      "ID": "68FE1685-24D3-4F07-9D63-368AF2D1595B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.235Z",
+      "checksum": "eafb0062e7c1f096e3549715fc95ba15ccb70a01eafb6117782571bcbf9e13da"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tokelau",
+      "ISO2": "TK",
+      "ISO3": "TKL",
+      "NumericCode": 772,
+      "Latitude": -9,
+      "Longitude": -172,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tokelau\", \"TK\"]"
+    },
+    "primaryKey": {
+      "ID": "189A0DB4-5CFF-4B2F-A7A0-9D16A8C7C509"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.252Z",
+      "checksum": "880c23ccc334a05e225bed6f19538cdb1cbf288e3615c87639eeec3ce71a3730"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tonga",
+      "ISO2": "TO",
+      "ISO3": "TON",
+      "NumericCode": 776,
+      "Latitude": -20,
+      "Longitude": -175,
+      "BoundaryGeoJSON": "@file:boundaries/TO.geojson",
+      "CommonAliases": "[\"TO\", \"Kingdom of Tonga\", \"Tonga\"]"
+    },
+    "primaryKey": {
+      "ID": "09A4600A-1339-49CF-8076-5FA0A9A352C1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.269Z",
+      "checksum": "195210fbb6134a528ed8519383a9aeb4704deca7347b633d14d3b0b31e5f2ef9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trinidad and Tobago",
+      "ISO2": "TT",
+      "ISO3": "TTO",
+      "NumericCode": 780,
+      "Latitude": 10.6918,
+      "Longitude": -61.2225,
+      "BoundaryGeoJSON": "@file:boundaries/TT.geojson",
+      "CommonAliases": "[\"TT\", \"Trinidad and Tobago\", \"Republic of Trinidad and Tobago\"]"
+    },
+    "primaryKey": {
+      "ID": "F07E40D9-A115-4776-BEB9-349CE2CCF461"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.286Z",
+      "checksum": "07d35219c347191f7c2690243d150621eb303bfbc065c89669449e8647d964d4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tunisia",
+      "ISO2": "TN",
+      "ISO3": "TUN",
+      "NumericCode": 788,
+      "Latitude": 34,
+      "Longitude": 9,
+      "BoundaryGeoJSON": "@file:boundaries/TN.geojson",
+      "CommonAliases": "[\"Tunisian Republic\", \"al-Jumh\\u016briyyah at-T\\u016bnisiyyah\", \"TN\", \"Republic of Tunisia\", \"Tunisia\"]"
+    },
+    "primaryKey": {
+      "ID": "A80D9B46-8FBE-4D29-B965-DCBE3FC6FA76"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.302Z",
+      "checksum": "9d12ef31a60218bfcf175c28af0009fc6afeb53359f2c7eb37106b5804cad2f0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Turkey",
+      "ISO2": "TR",
+      "ISO3": "TUR",
+      "NumericCode": 792,
+      "Latitude": 39,
+      "Longitude": 35,
+      "BoundaryGeoJSON": "@file:boundaries/TR.geojson",
+      "CommonAliases": "[\"Turkiye\", \"T\\u00fcrkiye Cumhuriyeti\", \"TR\", \"Turkey\", \"Republic of Turkey\"]"
+    },
+    "primaryKey": {
+      "ID": "E0F5C5DF-968B-4A21-B607-458DD9B7D94A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.320Z",
+      "checksum": "e5c196af8f9b2113fcd8d39073445fb283ba8dbeebe170fb04d8c233f2355add"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Turkmenistan",
+      "ISO2": "TM",
+      "ISO3": "TKM",
+      "NumericCode": 795,
+      "Latitude": 40,
+      "Longitude": 60,
+      "BoundaryGeoJSON": "@file:boundaries/TM.geojson",
+      "CommonAliases": "[\"Turkmenistan\", \"TM\"]"
+    },
+    "primaryKey": {
+      "ID": "7A8A697C-AA18-43CD-B660-7BE39D7A5791"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.337Z",
+      "checksum": "82ccc4c7c47ded6f072a7825e7e2cf573bce85bf0c9e8391350530e620db2ef4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Turks and Caicos Islands",
+      "ISO2": "TC",
+      "ISO3": "TCA",
+      "NumericCode": 796,
+      "Latitude": 21.75,
+      "Longitude": -71.5833,
+      "BoundaryGeoJSON": "@file:boundaries/TC.geojson",
+      "CommonAliases": "[\"TC\", \"Turks and Caicos Islands\"]"
+    },
+    "primaryKey": {
+      "ID": "74E70206-875D-49D6-B118-CD3034300DEE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.353Z",
+      "checksum": "9cecccec7216e9d77c7f08dce016288404e8d36dbe7a6790e5d25924c2c2e29b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tuvalu",
+      "ISO2": "TV",
+      "ISO3": "TUV",
+      "NumericCode": 798,
+      "Latitude": -8,
+      "Longitude": 178,
+      "BoundaryGeoJSON": "@file:boundaries/TV.geojson",
+      "CommonAliases": "[\"Tuvalu\", \"TV\"]"
+    },
+    "primaryKey": {
+      "ID": "EED9BD08-7670-443C-9846-10FD90DC9CCC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.395Z",
+      "checksum": "96387f0b35f6916f069b3c006204b94898334a773940023dccc16d628be4f722"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uganda",
+      "ISO2": "UG",
+      "ISO3": "UGA",
+      "NumericCode": 800,
+      "Latitude": 1,
+      "Longitude": 32,
+      "BoundaryGeoJSON": "@file:boundaries/UG.geojson",
+      "CommonAliases": "[\"Jamhuri ya Uganda\", \"Uganda\", \"UG\", \"Republic of Uganda\"]"
+    },
+    "primaryKey": {
+      "ID": "DA3BD0D8-581E-445C-8F48-81FCE73AC782"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.411Z",
+      "checksum": "ccf9ed7a2a67340f118d0da5ecbc6a655711ed3eba2e61d8ada3e4484d25d978"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ukraine",
+      "ISO2": "UA",
+      "ISO3": "UKR",
+      "NumericCode": 804,
+      "Latitude": 49,
+      "Longitude": 32,
+      "BoundaryGeoJSON": "@file:boundaries/UA.geojson",
+      "CommonAliases": "[\"Ukrayina\", \"UA\", \"Ukraine\"]"
+    },
+    "primaryKey": {
+      "ID": "69E5A3E2-E88D-4E08-9959-72DBACD9D128"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.429Z",
+      "checksum": "11be9235faca3be9f584cc8550af416f734cc028942e7c846de6db15ebc2c042"
+    }
+  },
+  {
+    "fields": {
+      "Name": "United Arab Emirates",
+      "ISO2": "AE",
+      "ISO3": "ARE",
+      "NumericCode": 784,
+      "Latitude": 24,
+      "Longitude": 54,
+      "BoundaryGeoJSON": "@file:boundaries/AE.geojson",
+      "CommonAliases": "[\"Emirates\", \"United Arab Emirates\", \"UAE\", \"AE\"]"
+    },
+    "primaryKey": {
+      "ID": "47577EEF-3036-4647-9FF7-18FC95D79CF9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.445Z",
+      "checksum": "e1562251fc6445256aa2f7b6b057e20be1d8c869cec0b2cbe636bad6f406de19"
+    }
+  },
+  {
+    "fields": {
+      "Name": "United Kingdom",
+      "ISO2": "GB",
+      "ISO3": "GBR",
+      "NumericCode": 826,
+      "Latitude": 54,
+      "Longitude": -2,
+      "BoundaryGeoJSON": "@file:boundaries/GB.geojson",
+      "CommonAliases": "[\"GB\", \"Great Britain\", \"United Kingdom\", \"UK\", \"United Kingdom of Great Britain and Northern Ireland\"]"
+    },
+    "primaryKey": {
+      "ID": "C3083D88-9147-4A4F-B177-056429AC9A3B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.464Z",
+      "checksum": "07d21b1d0e3c059dde7bee0402ed7817b515dc22a6b86e1c92a892da0d790a8f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "United States",
+      "ISO2": "US",
+      "ISO3": "USA",
+      "NumericCode": 840,
+      "Latitude": 38,
+      "Longitude": -97,
+      "BoundaryGeoJSON": "@file:boundaries/US.geojson",
+      "CommonAliases": "[\"US\", \"USA\", \"United States\", \"United States of America\"]"
+    },
+    "primaryKey": {
+      "ID": "0F8A0597-279C-45F7-A7AE-012BB8800DA4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.494Z",
+      "checksum": "9370391b1d51e0f3480939570a1ba2a1dca6420973a133b8926f0b58864a036d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "United States Minor Outlying Islands",
+      "ISO2": "UM",
+      "ISO3": "UMI",
+      "NumericCode": 581,
+      "Latitude": 19.3,
+      "Longitude": 166.6333,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"United States Minor Outlying Islands\", \"UM\"]"
+    },
+    "primaryKey": {
+      "ID": "D20619DF-201D-4B94-91CC-4CB18B915FFB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.510Z",
+      "checksum": "92d84908028d972a6ff2412a7a8b5f94afd78c02a2e5548ffb79f69cd4bd59d5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "United States Virgin Islands",
+      "ISO2": "VI",
+      "ISO3": "VIR",
+      "NumericCode": 850,
+      "Latitude": 18.35,
+      "Longitude": -64.9333,
+      "BoundaryGeoJSON": "@file:boundaries/VI.geojson",
+      "CommonAliases": "[\"Virgin Islands of the United States\", \"United States Virgin Islands\", \"Virgin Islands, U.S.\", \"VI\"]"
+    },
+    "primaryKey": {
+      "ID": "B390948F-A415-4C7C-BF68-53499EDD7270"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.526Z",
+      "checksum": "dca0b378b4bcd9473c16e9de7c6f0620dfb00bfda626209c47d2b79262bbb2df"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uruguay",
+      "ISO2": "UY",
+      "ISO3": "URY",
+      "NumericCode": 858,
+      "Latitude": -33,
+      "Longitude": -56,
+      "BoundaryGeoJSON": "@file:boundaries/UY.geojson",
+      "CommonAliases": "[\"UY\", \"Rep\\u00fablica Oriental del Uruguay\", \"Oriental Republic of Uruguay\", \"Uruguay\"]"
+    },
+    "primaryKey": {
+      "ID": "4A9F7324-AFD4-4A95-A23E-06C619829676"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.543Z",
+      "checksum": "8be227240e4c81e085801bcb9cbab0926b97f273bb0b4f1fb0f310720fe623a5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uzbekistan",
+      "ISO2": "UZ",
+      "ISO3": "UZB",
+      "NumericCode": 860,
+      "Latitude": 41,
+      "Longitude": 64,
+      "BoundaryGeoJSON": "@file:boundaries/UZ.geojson",
+      "CommonAliases": "[\"\\u040e\\u0437\\u0431\\u0435\\u043a\\u0438\\u0441\\u0442\\u043e\\u043d \\u0420\\u0435\\u0441\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430\\u0441\\u0438\", \"Republic of Uzbekistan\", \"Uzbekistan\", \"O\\u2018zbekiston Respublikasi\", \"UZ\"]"
+    },
+    "primaryKey": {
+      "ID": "0CE61B1A-2B44-419C-B2B3-A6FF67D391DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.557Z",
+      "checksum": "4c3dd48003611129ace77142f0d8dea99384f1bddfb3da1563c4efb0aa6222a8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vanuatu",
+      "ISO2": "VU",
+      "ISO3": "VUT",
+      "NumericCode": 548,
+      "Latitude": -16,
+      "Longitude": 167,
+      "BoundaryGeoJSON": "@file:boundaries/VU.geojson",
+      "CommonAliases": "[\"R\\u00e9publique de Vanuatu\", \"Vanuatu\", \"Republic of Vanuatu\", \"VU\", \"Ripablik blong Vanuatu\"]"
+    },
+    "primaryKey": {
+      "ID": "866F667D-0554-408A-918C-73399652F110"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.616Z",
+      "checksum": "34a0abb0dd03fb02f5405bdb9826ef3413c4cbfee12680a881611a36d5b8e096"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vatican City",
+      "ISO2": "VA",
+      "ISO3": "VAT",
+      "NumericCode": 336,
+      "Latitude": 41.9,
+      "Longitude": 12.45,
+      "BoundaryGeoJSON": "@file:boundaries/VA.geojson",
+      "CommonAliases": "[\"Vatican City\", \"Holy See (Vatican City State)\", \"VA\", \"Vatican City State\", \"Stato della Citt\\u00e0 del Vaticano\"]"
+    },
+    "primaryKey": {
+      "ID": "5CFE7879-642A-48B7-B281-36C5B358A372"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.634Z",
+      "checksum": "9c96320c78f90e6a875fa039d8b55bec0b094aa235caa019ce3a1b88cc100fff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Venezuela",
+      "ISO2": "VE",
+      "ISO3": "VEN",
+      "NumericCode": 862,
+      "Latitude": 8,
+      "Longitude": -66,
+      "BoundaryGeoJSON": "@file:boundaries/VE.geojson",
+      "CommonAliases": "[\"Bolivarian Republic of Venezuela\", \"Rep\\u00fablica Bolivariana de Venezuela\", \"Venezuela\", \"Venezuela, Bolivarian Republic of\", \"VE\"]"
+    },
+    "primaryKey": {
+      "ID": "DB39C284-1AEC-4A13-8C5E-B0609AA68BC3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.651Z",
+      "checksum": "9a4f6fc4020795e68defb5a64be0b3496595c88936e10eacd1b4ad6bd0289100"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vietnam",
+      "ISO2": "VN",
+      "ISO3": "VNM",
+      "NumericCode": 704,
+      "Latitude": 16.1667,
+      "Longitude": 107.8333,
+      "BoundaryGeoJSON": "@file:boundaries/VN.geojson",
+      "CommonAliases": "[\"Viet Nam\", \"Socialist Republic of Vietnam\", \"C\\u1ed9ng h\\u00f2a X\\u00e3 h\\u1ed9i ch\\u1ee7 ngh\\u0129a Vi\\u1ec7t Nam\", \"Vietnam\", \"VN\"]"
+    },
+    "primaryKey": {
+      "ID": "911FCC66-024F-4A66-BA50-CF7014C077AF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.668Z",
+      "checksum": "12107f02ac7f9d6edd39a4a960c9914558f800885f608f2aa34b1a08b7c7131b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wallis and Futuna",
+      "ISO2": "WF",
+      "ISO3": "WLF",
+      "NumericCode": 876,
+      "Latitude": -13.3,
+      "Longitude": -176.2,
+      "BoundaryGeoJSON": "@file:boundaries/WF.geojson",
+      "CommonAliases": "[\"Territory of the Wallis and Futuna Islands\", \"WF\", \"Wallis and Futuna\", \"Territoire des \\u00eeles Wallis et Futuna\"]"
+    },
+    "primaryKey": {
+      "ID": "EB857D92-4F19-4F16-BF80-BB91852A0D08"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.682Z",
+      "checksum": "ff3e8ba2ca8f441fdac28a6fc319b74c3279a3d88a1783a93efc63334d1fd22b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western Sahara",
+      "ISO2": "EH",
+      "ISO3": "ESH",
+      "NumericCode": 732,
+      "Latitude": 24.5,
+      "Longitude": -13,
+      "BoundaryGeoJSON": "@file:boundaries/EH.geojson",
+      "CommonAliases": "[\"EH\", \"Sahrawi Arab Democratic Republic\", \"Western Sahara\", \"Tane\\u1e93roft Tutrimt\"]"
+    },
+    "primaryKey": {
+      "ID": "342AFA1E-4955-492E-B2F7-A558AC59C08B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.696Z",
+      "checksum": "b5e171c3d2b3547c6fdc63bdb70310afc8b158bb275867813e56aebb990e9d6b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yemen",
+      "ISO2": "YE",
+      "ISO3": "YEM",
+      "NumericCode": 887,
+      "Latitude": 15,
+      "Longitude": 48,
+      "BoundaryGeoJSON": "@file:boundaries/YE.geojson",
+      "CommonAliases": "[\"al-Jumh\\u016briyyah al-Yamaniyyah\", \"Republic of Yemen\", \"Yemeni Republic\", \"YE\", \"Yemen\"]"
+    },
+    "primaryKey": {
+      "ID": "6958BF39-7FB2-47C8-8258-DD95A6E93B75"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.713Z",
+      "checksum": "781e5e247c561747a7fb0b06984c4ec7de711e6c29f433d5b7e6a9afd06d7aa9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zambia",
+      "ISO2": "ZM",
+      "ISO3": "ZMB",
+      "NumericCode": 894,
+      "Latitude": -15,
+      "Longitude": 30,
+      "BoundaryGeoJSON": "@file:boundaries/ZM.geojson",
+      "CommonAliases": "[\"Zambia\", \"ZM\", \"Republic of Zambia\"]"
+    },
+    "primaryKey": {
+      "ID": "69FEB9A7-1B43-41BF-8F86-2FCD7DD927B8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.728Z",
+      "checksum": "5db1f37500266110502a6421e814c7652e1db7fd7d506d4c842803128dd799f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zimbabwe",
+      "ISO2": "ZW",
+      "ISO3": "ZWE",
+      "NumericCode": 716,
+      "Latitude": -20,
+      "Longitude": 30,
+      "BoundaryGeoJSON": "@file:boundaries/ZW.geojson",
+      "CommonAliases": "[\"Republic of Zimbabwe\", \"Zimbabwe\", \"ZW\"]"
+    },
+    "primaryKey": {
+      "ID": "87A9E187-817E-432D-AF21-64E78D9B4562"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.743Z",
+      "checksum": "192bdde0611f32e2ca9d6ffa2f805f927730fb50a496f3d85ca259746a962caf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Åland Islands",
+      "ISO2": "AX",
+      "ISO3": "ALA",
+      "NumericCode": 248,
+      "Latitude": 60.1167,
+      "Longitude": 19.9,
+      "BoundaryGeoJSON": "@file:boundaries/AX.geojson",
+      "CommonAliases": "[\"Aaland\", \"\\u00c5land Islands\", \"Aland\", \"Ahvenanmaa\", \"AX\"]"
+    },
+    "primaryKey": {
+      "ID": "A939B8B7-EC59-4F01-BB2B-CE4C5DF4F7E2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.756Z",
+      "checksum": "95169083bf251f89138172b0e885e9308e64d59f04ac13d69a4720171e296345"
+    }
+  }
+]

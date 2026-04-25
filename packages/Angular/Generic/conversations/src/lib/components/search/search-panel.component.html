@@ -96,20 +96,16 @@
 
       <!-- Date Range Filter -->
       <div class="date-filter">
-        <kendo-daterange>
-          <kendo-dateinput
-            kendoDateRangeStartInput
-            [(value)]="dateRange.start"
-            (valueChange)="onDateRangeChange()"
-            placeholder="From"
-          ></kendo-dateinput>
-          <kendo-dateinput
-            kendoDateRangeEndInput
-            [(value)]="dateRange.end"
-            (valueChange)="onDateRangeChange()"
-            placeholder="To"
-          ></kendo-dateinput>
-        </kendo-daterange>
+        <mj-datepicker
+          [(ngModel)]="dateRange.start"
+          (ngModelChange)="onDateRangeChange()"
+          Placeholder="From"
+        ></mj-datepicker>
+        <mj-datepicker
+          [(ngModel)]="dateRange.end"
+          (ngModelChange)="onDateRangeChange()"
+          Placeholder="To"
+        ></mj-datepicker>
         @if (dateRange.start || dateRange.end) {
           <button
             type="button"

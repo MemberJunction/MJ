@@ -218,15 +218,15 @@ interface EntityOption {
                 <span class="region-count">{{selectedRegion.size}} records</span>
               </div>
               <div class="region-actions">
-                <button class="action-btn primary" (click)="createListFromSelection()">
+                <button mjButton variant="primary" (click)="createListFromSelection()">
                   <i class="fa-solid fa-plus"></i>
                   Create New List
                 </button>
-                <button class="action-btn" (click)="addToExistingList()">
+                <button mjButton (click)="addToExistingList()">
                   <i class="fa-solid fa-folder-plus"></i>
                   Add to List
                 </button>
-                <button class="action-btn" (click)="exportToExcel()">
+                <button mjButton (click)="exportToExcel()">
                   <i class="fa-solid fa-file-excel"></i>
                   Export
                 </button>
@@ -267,11 +267,11 @@ interface EntityOption {
                 <span class="result-count">{{lastOperationResult.resultCount}} records</span>
               </div>
               <div class="region-actions">
-                <button class="action-btn primary" (click)="createListFromResult()">
+                <button mjButton variant="primary" (click)="createListFromResult()">
                   <i class="fa-solid fa-plus"></i>
                   Create New List
                 </button>
-                <button class="action-btn" (click)="addResultToExistingList()">
+                <button mjButton (click)="addResultToExistingList()">
                   <i class="fa-solid fa-folder-plus"></i>
                   Add to List
                 </button>
@@ -1288,7 +1288,7 @@ interface EntityOption {
   encapsulation: ViewEncapsulation.None
 })
 export class ListsOperationsResource extends BaseResourceComponent implements OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   maxLists = 4;
   selectedLists: ListSelection[] = [];
@@ -1346,12 +1346,14 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   }
 
   async ngOnInit() {
+    super.ngOnInit();
     await this.loadAvailableLists();
     await this.loadSavedState();
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
 

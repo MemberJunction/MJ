@@ -117,6 +117,25 @@
                                             <i class="fa-solid fa-circle-check"></i> Active
                                         </span>
                                     </div>
+                                    <div class="provider-credential-row">
+                                        <label class="provider-credential-label">
+                                            <i class="fa-solid fa-key"></i> API Credential
+                                        </label>
+                                        <div class="provider-credential-picker">
+                                            <select class="provider-credential-select"
+                                                    [(ngModel)]="provider.CredentialID"
+                                                    (change)="SaveProviderCredential(provider)"
+                                                    [disabled]="IsSavingCredential">
+                                                <option [ngValue]="null">None (use environment variable)</option>
+                                                @for (cred of AvailableCredentials; track cred.ID) {
+                                                    <option [ngValue]="cred.ID">{{ cred.Name }}</option>
+                                                }
+                                            </select>
+                                            @if (IsSavingCredential) {
+                                                <i class="fa-solid fa-spinner fa-spin provider-credential-spinner"></i>
+                                            }
+                                        </div>
+                                    </div>
                                 }
                             </div>
                         }
@@ -392,6 +411,17 @@
                             </div>
                             <input type="range" [(ngModel)]="ThresholdSettings.AutotagConfidence" (input)="OnSettingChanged()" class="config-slider" min="0.3" max="1" step="0.01" />
                         </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Scheduling Section -->
+            @if (ActiveSection === 'scheduling') {
+                <div class="config-section-content">
+                    <h2 class="config-section-title"><i class="fa-solid fa-clock"></i> Scheduling</h2>
+                    <p class="config-section-desc">Manage automated pipeline schedules for content classification and vector sync. Create schedules here or manage all schedules in the dedicated Scheduling app.</p>
+                    <div style="margin-top: 16px;">
+                        <app-scheduling-resource></app-scheduling-resource>
                     </div>
                 </div>
             }

@@ -2,6 +2,11 @@
 
 These packages comprise the **MJExplorer** application, MemberJunction's primary Angular-based UI for browsing, editing, and managing data. They are published individually under the `@memberjunction` npm scope and consumed together by the MJExplorer host application.
 
+## Guides
+
+- **[Navigation & Routing Guide](/guides/NAVIGATION_AND_ROUTING_GUIDE.md)** — How navigation, URL sync, back/forward, and query param sub-navigation work in MJ Explorer
+- **[Dashboard Best Practices](/guides/DASHBOARD_BEST_PRACTICES.md)** — Architecture patterns for building dashboards
+
 ## Packages
 
 ### Core / Shell
@@ -13,7 +18,6 @@ Foundational packages that provide the application shell, routing, authenticatio
 | [explorer-app](./explorer-app/) | `@memberjunction/ng-explorer-app` | Complete branded entry point for Explorer-style applications |
 | [explorer-core](./explorer-core/) | `@memberjunction/ng-explorer-core` | Core Explorer framework: application shell, routing, resource containers, and navigation |
 | [explorer-modules](./explorer-modules/) | `@memberjunction/ng-explorer-modules` | Consolidated Explorer NgModule bundle that re-exports all Explorer feature modules |
-| [kendo-modules](./kendo-modules/) | `@memberjunction/ng-kendo-modules` | Consolidated Kendo UI NgModule bundle for shared Kendo component imports |
 | [base-application](./base-application/) | `@memberjunction/ng-base-application` | BaseApplication class system for app-centric navigation |
 | [auth-services](./auth-services/) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, and Okta provider support |
 | [shared](./shared/) | `@memberjunction/ng-shared` | Shared Explorer utilities, base components, services, and events used across Explorer packages |

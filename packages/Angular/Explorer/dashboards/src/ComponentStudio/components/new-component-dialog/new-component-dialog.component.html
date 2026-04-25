@@ -1,5 +1,5 @@
 @if (Visible) {
-  <kendo-dialog [title]="'Create New Component'" (close)="OnCancel()" [width]="520" [minWidth]="400">
+  <mj-dialog [Visible]="true" Title="Create New Component" (Close)="OnCancel()" [Width]="520" [MinWidth]="400">
     <form [formGroup]="form">
       <div class="dialog-form">
         <!-- Name field (required) -->
@@ -62,11 +62,11 @@
       </div>
     </form>
 
-    <kendo-dialog-actions>
-      <button kendoButton (click)="OnCreate()" [themeColor]="'primary'" [disabled]="!form.valid">
+    <mj-dialog-actions>
+      <button mjButton variant="primary" (click)="OnCreate()" [disabled]="!form.valid">
         <span class="fa-solid fa-plus"></span> Create
       </button>
-      <button kendoButton (click)="OnCancel()">Cancel</button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+      <button mjButton (click)="OnCancel()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
 }

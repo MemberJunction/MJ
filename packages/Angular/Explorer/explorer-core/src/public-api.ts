@@ -2,7 +2,6 @@
  * Public API Surface 
  */
 
-export * from './lib/generic/form-toolbar';
 export * from './lib/generic/resource-container-component';
 
 export * from './lib/resource-wrappers/dashboard-resource.component'
@@ -40,6 +39,10 @@ export * from './lib/resource-wrappers/query-resource.component'
 // Validation services
 export * from './lib/services/system-validation.service'
 export * from './lib/services/startup-validation.service'
+
+// Server connectivity
+export * from './lib/services/server-connectivity.service'
+export * from './lib/server-connectivity/server-connectivity-banner.component'
 
 // Lazy loading infrastructure
 export * from './lib/services/lazy-module-registry'

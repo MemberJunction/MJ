@@ -63,6 +63,8 @@ const dynamicPackageEntrySchema = z.object({
 const openAppsConfigSchema = z.object({
   github: z.object({
     token: z.string().optional(),
+    /** Per-repository token overrides keyed by GitHub repo URL */
+    tokens: z.record(z.string(), z.string().optional()).optional(),
   }).optional(),
   registries: z.array(z.object({
     name: z.string(),
@@ -89,6 +91,8 @@ const openAppsConfigSchema = z.object({
   })).optional(),
   /** File subpath within client workspace for bootstrap file */
   clientBootstrapSubpath: z.string().optional(),
+  /** Extra placeholders merged into migration SQL substitution (e.g. { mjSchema: '__mj' }) */
+  migrationPlaceholders: z.record(z.string(), z.string()).optional(),
 }).optional();
 
 // Schema for dynamic packages section

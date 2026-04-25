@@ -1,5 +1,179 @@
 # Change Log - @memberjunction/cli
 
+## 5.29.0
+
+### Patch Changes
+
+- bc0b6b3: feat(codegen): add `--skipfiles` flag for DB-only CodeGen runs
+
+  Adds the inverse of the existing `--skipdb` flag so CodeGen's database and file-generation phases can be driven independently:
+  - `mj codegen` → DB writes + file generation (existing default)
+  - `mj codegen --skipdb` → file generation only (existing)
+  - `mj codegen --skipfiles` → DB writes only (new)
+  - `mj codegen --skipdb --skipfiles` → both phases skipped (valid combination)
+
+  Useful for migration-dependent DB touch-ups, CI pipelines that only need SPs/views/permissions refreshed, and reset-and-rebuild scenarios where re-running file generation would conflict with stub files already on disk.
+
+  Also adds `skip_file_generation` (default `false`) to the CodeGen default settings, mirroring the existing `skip_database_generation` config key — so the behavior can be controlled from `mj.config.cjs` as well as the CLI.
+
+  Also fixes a pre-existing CLI bug: the `codegen` command was reading `this.flags.skipDb` (camelCase), which did not match the flag key `skipdb`, so `--skipdb` was always being passed as `undefined` from the CLI layer. Corrected to `this.flags.skipdb`.
+
+  Closes #2440
+
+- Updated dependencies [5c7a57f]
+- Updated dependencies [e02e24e]
+- Updated dependencies [bc0b6b3]
+  - @memberjunction/server-bootstrap-lite@5.29.0
+  - @memberjunction/core@5.29.0
+  - @memberjunction/codegen-lib@5.29.0
+  - @memberjunction/db-auto-doc@5.29.0
+  - @memberjunction/metadata-sync@5.29.0
+  - @memberjunction/ai-cli@5.29.0
+  - @memberjunction/query-gen@5.29.0
+  - @memberjunction/sqlserver-dataprovider@5.29.0
+  - @memberjunction/testing-cli@5.29.0
+  - @memberjunction/sql-converter@5.29.0
+  - @memberjunction/config@5.29.0
+  - @memberjunction/installer@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [0779734]
+- Updated dependencies [1d62875]
+- Updated dependencies [115e4da]
+  - @memberjunction/codegen-lib@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/ai-cli@5.28.0
+  - @memberjunction/query-gen@5.28.0
+  - @memberjunction/db-auto-doc@5.28.0
+  - @memberjunction/metadata-sync@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/server-bootstrap-lite@5.28.0
+  - @memberjunction/testing-cli@5.28.0
+  - @memberjunction/config@5.28.0
+  - @memberjunction/installer@5.28.0
+  - @memberjunction/sql-converter@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@5.27.1
+- @memberjunction/db-auto-doc@5.27.1
+- @memberjunction/core@5.27.1
+- @memberjunction/metadata-sync@5.27.1
+- @memberjunction/query-gen@5.27.1
+- @memberjunction/sqlserver-dataprovider@5.27.1
+- @memberjunction/testing-cli@5.27.1
+- @memberjunction/server-bootstrap-lite@5.27.1
+- @memberjunction/ai-cli@5.27.1
+- @memberjunction/config@5.27.1
+- @memberjunction/installer@5.27.1
+- @memberjunction/sql-converter@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/server-bootstrap-lite@5.27.0
+- @memberjunction/metadata-sync@5.27.0
+- @memberjunction/sqlserver-dataprovider@5.27.0
+- @memberjunction/ai-cli@5.27.0
+- @memberjunction/codegen-lib@5.27.0
+- @memberjunction/db-auto-doc@5.27.0
+- @memberjunction/query-gen@5.27.0
+- @memberjunction/testing-cli@5.27.0
+- @memberjunction/config@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/installer@5.27.0
+- @memberjunction/sql-converter@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/server-bootstrap-lite@5.26.0
+  - @memberjunction/codegen-lib@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-cli@5.26.0
+  - @memberjunction/metadata-sync@5.26.0
+  - @memberjunction/query-gen@5.26.0
+  - @memberjunction/sqlserver-dataprovider@5.26.0
+  - @memberjunction/testing-cli@5.26.0
+  - @memberjunction/db-auto-doc@5.26.0
+  - @memberjunction/config@5.26.0
+  - @memberjunction/installer@5.26.0
+  - @memberjunction/sql-converter@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- f322a53: Add dual-mode installer supporting both distribution and monorepo installation methods.
+- Updated dependencies [fc8cd52]
+- Updated dependencies [4f8e980]
+- Updated dependencies [f322a53]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/server-bootstrap-lite@5.25.0
+  - @memberjunction/codegen-lib@5.25.0
+  - @memberjunction/installer@5.25.0
+  - @memberjunction/ai-cli@5.25.0
+  - @memberjunction/db-auto-doc@5.25.0
+  - @memberjunction/metadata-sync@5.25.0
+  - @memberjunction/query-gen@5.25.0
+  - @memberjunction/sqlserver-dataprovider@5.25.0
+  - @memberjunction/testing-cli@5.25.0
+  - @memberjunction/config@5.25.0
+  - @memberjunction/sql-converter@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/codegen-lib@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/server-bootstrap-lite@5.24.0
+  - @memberjunction/ai-cli@5.24.0
+  - @memberjunction/query-gen@5.24.0
+  - @memberjunction/sqlserver-dataprovider@5.24.0
+  - @memberjunction/metadata-sync@5.24.0
+  - @memberjunction/db-auto-doc@5.24.0
+  - @memberjunction/testing-cli@5.24.0
+  - @memberjunction/config@5.24.0
+  - @memberjunction/installer@5.24.0
+  - @memberjunction/sql-converter@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- b589bef: Switch installer from distribution bootstrap ZIP to full monorepo source download. The installer now downloads the complete MemberJunction repository via GitHub's codeload CDN (not rate-limited) instead of the smaller bootstrap distribution ZIP.
+- Updated dependencies [247df16]
+- Updated dependencies [37dc301]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [b589bef]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/metadata-sync@5.23.0
+  - @memberjunction/codegen-lib@5.23.0
+  - @memberjunction/sqlserver-dataprovider@5.23.0
+  - @memberjunction/installer@5.23.0
+  - @memberjunction/ai-cli@5.23.0
+  - @memberjunction/db-auto-doc@5.23.0
+  - @memberjunction/query-gen@5.23.0
+  - @memberjunction/server-bootstrap-lite@5.23.0
+  - @memberjunction/testing-cli@5.23.0
+  - @memberjunction/config@5.23.0
+  - @memberjunction/sql-converter@5.23.0
+
 ## 5.22.0
 
 ### Patch Changes

@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "Banjul",
+      "Code": "B",
+      "ISO3166_2": "GM-B",
+      "Latitude": 13.4063,
+      "Longitude": -16.6831,
+      "BoundaryGeoJSON": "@file:by-country/GM/boundaries/GM-B.geojson",
+      "CommonAliases": [
+        "Banjul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GM"
+    },
+    "primaryKey": {
+      "ID": "F8737D4E-F24F-40F0-ACB8-442BC28445EC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.102Z",
+      "checksum": "fd41d3fa81b76a49b57879079c4bd7f8ffb7197a5d9ef737e366698fe240ca0f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lower River",
+      "Code": "L",
+      "ISO3166_2": "GM-L",
+      "Latitude": 13.4062,
+      "Longitude": -15.7046,
+      "BoundaryGeoJSON": "@file:by-country/GM/boundaries/GM-L.geojson",
+      "CommonAliases": [
+        "Lower River"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GM"
+    },
+    "primaryKey": {
+      "ID": "AD8EC892-9B4C-432B-9A9D-FEDC504F37A2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.116Z",
+      "checksum": "5797f73ffbedd5cf154d527c79c01b2cc8424b17be9841d8e7219bedaebbcbb4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MacCarthy Island",
+      "Code": "M",
+      "ISO3166_2": "GM-M",
+      "Latitude": 13.637,
+      "Longitude": -14.9804,
+      "BoundaryGeoJSON": "@file:by-country/GM/boundaries/GM-M.geojson",
+      "CommonAliases": [
+        "MacCarthy Island"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GM"
+    },
+    "primaryKey": {
+      "ID": "CE5030AC-B7D2-48F0-BF8F-7E3F90F34E44"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.130Z",
+      "checksum": "97773a9cac9c5241f6177ba75afea1cfc9d4a50aec0d679eff997ddcb5d41e68"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Bank",
+      "Code": "N",
+      "ISO3166_2": "GM-N",
+      "Latitude": 13.5236,
+      "Longitude": -15.9799,
+      "BoundaryGeoJSON": "@file:by-country/GM/boundaries/GM-N.geojson",
+      "CommonAliases": [
+        "North Bank"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GM"
+    },
+    "primaryKey": {
+      "ID": "AC6A621B-4AD7-4F6D-9784-B42880711AA3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.144Z",
+      "checksum": "bc9ebb96625d06dcd507f264a7910fc7d6c4860287a78f324f7bbfec52c6dda7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Upper River",
+      "Code": "U",
+      "ISO3166_2": "GM-U",
+      "Latitude": 13.3797,
+      "Longitude": -14.1857,
+      "BoundaryGeoJSON": "@file:by-country/GM/boundaries/GM-U.geojson",
+      "CommonAliases": [
+        "Upper River"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GM"
+    },
+    "primaryKey": {
+      "ID": "EA2EFE19-B384-4416-8775-5B036F8B3582"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.168Z",
+      "checksum": "2a044bc84a4c815208238006678d07400f24338687ff14ec6978b47b2372af18"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western",
+      "Code": "W",
+      "ISO3166_2": "GM-W",
+      "Latitude": 13.2212,
+      "Longitude": -16.3138,
+      "BoundaryGeoJSON": "@file:by-country/GM/boundaries/GM-W.geojson",
+      "CommonAliases": [
+        "Western"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GM"
+    },
+    "primaryKey": {
+      "ID": "E70564A9-EE26-4FF8-8DA6-CCAB0EB97FC0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.185Z",
+      "checksum": "0efa2a6c136b0175a8b9126ded662c31d51de104a41ea14aece8e083ecedeef1"
+    }
+  }
+]

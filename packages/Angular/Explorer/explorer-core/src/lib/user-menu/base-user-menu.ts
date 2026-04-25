@@ -5,7 +5,8 @@ import {
     UserMenuContext,
     UserMenuActionResult,
     UserMenuOptions,
-    UserMenuDivider
+    UserMenuDivider,
+    UserDisplayInfo
 } from './user-menu.types';
 
 /**
@@ -144,6 +145,17 @@ export class BaseUserMenu {
                 enabled: true,
                 tooltip: 'Pin the current resource to your Home dashboard'
             },
+            {
+                id: 'submit-feedback',
+                label: 'Submit Feedback',
+                icon: 'fa-solid fa-comment-dots',
+                group: 'primary',
+                order: 25,
+                developerOnly: false,
+                visible: this._context?.feedbackEnabled !== false,
+                enabled: true,
+                tooltip: 'Report a bug or request a feature'
+            },
 
             // === DEVELOPER GROUP (Only visible to developers) ===
             {
@@ -224,7 +236,7 @@ export class BaseUserMenu {
         const elements: UserMenuElement[] = [];
 
         // Define group order
-        const groupOrder = ['primary', 'developer', 'system', 'danger'];
+        const groupOrder = this.GetGroupOrder();
         const sortedGroupKeys = Object.keys(groups).sort((a, b) => {
             const aIndex = groupOrder.indexOf(a);
             const bIndex = groupOrder.indexOf(b);
@@ -256,6 +268,14 @@ export class BaseUserMenu {
 
         // Check item's own visible flag
         return item.visible;
+    }
+
+    /**
+     * Get the ordered list of group names for menu rendering.
+     * Override to insert custom groups (e.g., 'organization' before 'primary').
+     */
+    protected GetGroupOrder(): string[] {
+        return ['primary', 'developer', 'system', 'danger'];
     }
 
     /**
@@ -430,6 +450,15 @@ export class BaseUserMenu {
         };
     }
 
+    /** Signal the shell to open the feedback dialog */
+    protected async Handle_submit_feedback(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'submit-feedback'
+        };
+    }
+
     // ========================================
     // THEME HELPERS
     // ========================================
@@ -494,7 +523,7 @@ export class BaseUserMenu {
     /**
      * Get user display information for menu header
      */
-    public GetUserDisplayInfo(): { name: string; email: string; avatarUrl: string | null; initials: string } {
+    public GetUserDisplayInfo(): UserDisplayInfo {
         const user = this._context?.userEntity;
         const name = user?.Name || this._context?.user?.Name || 'User';
         const email = user?.Email || '';

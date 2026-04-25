@@ -229,8 +229,8 @@ If Step 1 found a match >= 0.6, use **Run Stored Query** or composition SQL per 
 - **Get the schema from entity metadata**: Each entity has a `SchemaName` property (returned by **Get Entity Details**). Many entities use `__mj`, but entities can live in **any schema** (e.g., `dbo`, `sales`, `hr`, `custom`). **Never assume `__mj`** — always check.
 - **Never** use raw table names — always use views
 - Use proper JOINs, WHERE clauses, and aggregations
-- For parameters, use Nunjucks syntax: `{{paramName}}`
-- For optional parameters: `{% if paramName %}AND Field = '{{paramName}}'{% endif %}`
+- For parameters, use Nunjucks syntax: `{% raw %}{{paramName}}{% endraw %}`
+- For optional parameters: `{% raw %}{% if paramName %}AND Field = '{{paramName}}'{% endif %}{% endraw %}`
 - Name parameters descriptively: `startDate`, `customerStatus`, `minOrderTotal`
 
 ### 5. Test the Query
@@ -242,11 +242,15 @@ If Step 1 found a match >= 0.6, use **Run Stored Query** or composition SQL per 
 
 ### 6. Return Results as Payload
 
-Return your response in this exact structure (note: the DataArtifactSpec goes inside `payloadChangeRequest.replaceElements`):
+Return your response in this exact structure (note: the DataArtifactSpec goes inside `payloadChangeRequest.replaceElements`).
 
 **CRITICAL — String Formatting:**
 - **Use real newlines** in `plan`, `metadata.sql`, and all multi-line string values. Do NOT use `\n` escape sequences — they render as literal backslash-n in the UI instead of line breaks.
 - Your response is already JSON — the transport layer handles escaping. Just write natural multi-line strings.
+
+#### Single-Query Results (one dataset)
+
+For simple queries that produce one result set, use the flat format with root-level `columns` and `rows`:
 
 ```json
 {
@@ -256,33 +260,33 @@ Return your response in this exact structure (note: the DataArtifactSpec goes in
     "replaceElements": {
       "source": "query",
       "title": "Descriptive Title of What This Query Shows",
-      "plan": "## Approach\n\n(see plan template in Step 2 — include Overview, Query Logic, Data Sources, Relationships, Filters)",
+      "plan": "## Approach\n\n(see plan template in Step 2)",
       "columns": [
         {
           "field": "AgentID",
-          "headerName": "Agent ID",
+          "displayName": "Agent ID",
           "sourceEntity": "AI Agents",
           "sourceFieldName": "ID",
           "sqlBaseType": "uniqueidentifier"
         },
         {
           "field": "AgentName",
-          "headerName": "Agent",
+          "displayName": "Agent",
           "sourceEntity": "AI Agents",
           "sourceFieldName": "Name",
           "sqlBaseType": "nvarchar"
         },
         {
           "field": "TotalRuns",
-          "headerName": "Total Runs",
+          "displayName": "Total Runs",
           "isComputed": true,
           "isSummary": true,
           "sqlBaseType": "int"
         }
       ],
       "rows": [
-        { "ColumnName1": "value1", "ColumnName2": 42 },
-        { "ColumnName1": "value2", "ColumnName2": 17 }
+        { "AgentName": "Query Builder", "TotalRuns": 22 },
+        { "AgentName": "Skip", "TotalRuns": 17 }
       ],
       "metadata": {
         "sql": "SELECT a.Name AS AgentName, COUNT(r.ID) AS TotalRuns FROM [__mj].vwAIAgents a INNER JOIN [__mj].vwAIAgentRuns r ON r.AgentID = a.ID GROUP BY a.Name ORDER BY TotalRuns DESC",
@@ -291,26 +295,97 @@ Return your response in this exact structure (note: the DataArtifactSpec goes in
       }
     }
   },
-  "nextStep": {
-    "type": "Chat"
-  }
+  "nextStep": { "type": "Chat" }
 }
 ```
 
-**Field requirements:**
-- `source`: Always `"query"`
+#### Multi-Query Results (dashboard-style, multiple datasets)
+
+When the user's request requires multiple queries (e.g., "show me a sales dashboard", "compare revenue vs costs", "break down by region AND by product"), use the `tables` array. Each table is a named dataset with its own columns, rows, and metadata. The viewer renders these as tabs the user can switch between.
+
+```json
+{
+  "taskComplete": false,
+  "message": "Built a 3-table sales dashboard: customer revenue, monthly trends, and product mix.",
+  "payloadChangeRequest": {
+    "replaceElements": {
+      "title": "Sales Dashboard Q4",
+      "plan": "## Approach\n\n1. Customer revenue from Orders joined to Customers\n2. Monthly aggregation\n3. Product breakdown",
+      "interpretation": "Q4 total revenue is $263K. West region leads at $136K. SaaS product line grew 28% YoY while hardware declined 3%.",
+      "computations": [
+        { "name": "Total Revenue", "type": "sum", "field": "Revenue", "table": "customers", "value": 263500, "formattedValue": "$263,500" }
+      ],
+      "tables": [
+        {
+          "name": "customers",
+          "description": "Top customers by revenue",
+          "source": "query",
+          "columns": [
+            { "field": "Name", "displayName": "Customer", "sourceEntity": "Customers", "sourceFieldName": "Name", "sqlBaseType": "nvarchar" },
+            { "field": "Revenue", "displayName": "Revenue", "isSummary": true, "sqlBaseType": "money" }
+          ],
+          "rows": [
+            { "Name": "Acme Corp", "Revenue": 91000 },
+            { "Name": "Globex Inc", "Revenue": 62000 }
+          ],
+          "metadata": {
+            "sql": "SELECT c.Name, SUM(o.Amount) AS Revenue FROM ...",
+            "rowCount": 2,
+            "executionTimeMs": 30
+          }
+        },
+        {
+          "name": "monthly_revenue",
+          "description": "Revenue by month",
+          "source": "query",
+          "columns": [
+            { "field": "Month", "displayName": "Month", "sqlBaseType": "nvarchar" },
+            { "field": "Revenue", "displayName": "Revenue", "isSummary": true, "sqlBaseType": "money" }
+          ],
+          "rows": [
+            { "Month": "October", "Revenue": 85000 },
+            { "Month": "November", "Revenue": 92000 }
+          ],
+          "metadata": {
+            "sql": "SELECT FORMAT(OrderDate, 'MMMM') AS Month, SUM(Amount) AS Revenue FROM ...",
+            "rowCount": 2,
+            "executionTimeMs": 25
+          }
+        }
+      ]
+    }
+  },
+  "nextStep": { "type": "Chat" }
+}
+```
+
+**When to use multi-table:**
+- User asks for a "dashboard", "breakdown", or "comparison" that needs multiple perspectives
+- The request naturally decomposes into 2+ distinct queries (e.g., "revenue by region AND by product")
+- You're running multiple queries anyway — combine them into one artifact instead of picking one
+
+**When to use single-table:**
+- Simple "show me X" or "list Y" requests that produce one result set
+- The answer is one query
+
+#### Multi-table specific fields
+
+- `tables`: Array of named datasets. Each has its own `name`, `description`, `source`, `columns`, `rows`, `metadata`
+- `interpretation`: A narrative summary of what the data means. Rendered in a dedicated "Interpretation" tab. Include key insights, patterns, and numbers.
+- `computations`: Cross-table or per-table aggregations shown as chips above the grid. Each has `name`, `type` (sum/avg/count/min/max), `field`, `table`, `value`, `formattedValue`.
+- Table `name`: Short identifier used as tab label (e.g., `"customers"`, `"monthly_revenue"`). Use snake_case.
+- Table `description`: Human-readable tooltip for the tab.
+
+**Field requirements (both formats):**
 - `title`: Clear, business-friendly description of the query results
-- `plan`: **ALWAYS include this field.** Use the plan template from Step 2 (Overview → Query Logic flowchart → Data Sources → Relationships ERD → Filters & Conditions). Even for simple queries, include the plan. It renders in a dedicated "Plan" tab.
-- `columns`: Array of ALL columns with enriched metadata (see Column Metadata below)
-- `rows`: The actual result data, using the same field names as in `columns`.
+- `plan`: **ALWAYS include this field.** Use the plan template from Step 2. It renders in a dedicated "Plan" tab.
+- `columns[].displayName`: Human-readable column header (replaces the older `headerName` — use `displayName` for all new artifacts)
 - `metadata.sql`: The SQL in **composition form** — always use `{% raw %}{{query:"CategoryPath/QueryName"}}{% endraw %}` references, never expanded SQL. This preserves the live reference when the query is saved.
   - **Ran a stored query directly?** → `metadata.sql` should be: `{% raw %}SELECT * FROM {{query:"CategoryPath/QueryName"}}{% endraw %}`
-  - **Composed from a stored query?** → `metadata.sql` should keep the `{% raw %}{{query:"..."}}{% endraw %}` macro as-is (e.g., `{% raw %}SELECT base.*, extra FROM {{query:"Demos/AI Agent Run Summary"}} base JOIN ...{% endraw %}`)
+  - **Composed from a stored query?** → `metadata.sql` should keep the `{% raw %}{{query:"..."}}{% endraw %}` macro as-is
   - **Wrote fresh SQL (no catalog match)?** → `metadata.sql` is just the raw SQL you wrote
 - `metadata.rowCount`: Number of rows returned
 - `metadata.executionTimeMs`: Execution time from the action result
-
-The `replaceElements` object should have these keys: `source`, `title`, `plan`, `columns`, `rows`, `metadata`.
 
 #### Column Metadata
 
@@ -318,7 +393,7 @@ Each column object in the `columns` array **MUST** include enriched metadata. Th
 
 **Required fields for every column:**
 - `field`: The SQL alias (matches keys in `rows`)
-- `headerName`: Human-readable display label
+- `displayName`: Human-readable display label
 - `sqlBaseType`: SQL data type — `int`, `nvarchar`, `uniqueidentifier`, `datetime`, `decimal`, `bit`, `money`, `float`, `bigint`
 
 **Entity linking fields** (include ONLY for direct, non-aggregated column references):
@@ -560,3 +635,5 @@ Use **Search Query Catalog** with a natural language description of what data yo
 {% else %}
 No reusable queries are currently available. Proceed with writing fresh SQL.
 {% endif %}
+
+{@include ../_includes/geo-context.md}

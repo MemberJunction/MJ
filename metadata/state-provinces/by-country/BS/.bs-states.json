@@ -1,0 +1,443 @@
+[
+  {
+    "fields": {
+      "Name": "Acklins and Crooked Islands",
+      "Code": "AC",
+      "ISO3166_2": "BS-AC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Acklins and Crooked Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "A0F8D829-C09E-4990-850E-BD14662A20D2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.347Z",
+      "checksum": "71fa1f8c6687b7f8eae87a6478980f5879ba906934edd0603689572846e22bcc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bimini",
+      "Code": "BI",
+      "ISO3166_2": "BS-BI",
+      "Latitude": 25.7074,
+      "Longitude": -79.2811,
+      "BoundaryGeoJSON": "@file:by-country/BS/boundaries/BS-BI.geojson",
+      "CommonAliases": [
+        "Bimini"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "AF5C7368-6DEE-4FFF-9475-1B39FF1012E5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.364Z",
+      "checksum": "01e3dcad00315530e652bc36edd9f10d4f5a78dceed1f1c9b4d918ab26203a87"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cat Island",
+      "Code": "CI",
+      "ISO3166_2": "BS-CI",
+      "Latitude": 24.2583,
+      "Longitude": -75.3894,
+      "BoundaryGeoJSON": "@file:by-country/BS/boundaries/BS-CI.geojson",
+      "CommonAliases": [
+        "Cat Island"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "87C83ACB-F92B-4F89-88B7-79692EC891BD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.382Z",
+      "checksum": "a6fbe6242f523249b6af5886ee128cde11816bed4d9e4877e38624d1e46b5ce7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Exuma",
+      "Code": "EX",
+      "ISO3166_2": "BS-EX",
+      "Latitude": 23.5855,
+      "Longitude": -75.9069,
+      "BoundaryGeoJSON": "@file:by-country/BS/boundaries/BS-EX.geojson",
+      "CommonAliases": [
+        "Exuma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "69A3397D-F75B-440F-8147-6F38517F3EA9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.399Z",
+      "checksum": "15b036d703af0e8ed13e91eacfa3fb172a32fca8b8461c90bde83e880f75392b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Freeport",
+      "Code": "FP",
+      "ISO3166_2": "BS-FP",
+      "Latitude": 26.5339,
+      "Longitude": -78.6252,
+      "BoundaryGeoJSON": "@file:by-country/BS/boundaries/BS-FP.geojson",
+      "CommonAliases": [
+        "Freeport"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "399325F7-2EAC-4AEF-BB0C-F9D3C48C35FE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.414Z",
+      "checksum": "094e86cc0e52c6da0acc93d204d82c54f9ec3b42e0e1f0c5641681208777c42e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fresh Creek",
+      "Code": "FC",
+      "ISO3166_2": "BS-FC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Fresh Creek"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "334591A7-8FCB-481D-A044-319CB51388A8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.429Z",
+      "checksum": "ec025911a1877be687f5b0fe00b4ca0d1a717c8c500faaeb5b7aff22f509bdf3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Governor's Harbour",
+      "Code": "GH",
+      "ISO3166_2": "BS-GH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Governor's Harbour"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "93949EC1-0CC6-423D-8387-2BC8B5201AD0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.445Z",
+      "checksum": "2bdc0dc1cb03625708558784d0051ab6e34fbe92b1c7c8aa7a0769c631acaf7d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Green Turtle Cay",
+      "Code": "GT",
+      "ISO3166_2": "BS-GT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Green Turtle Cay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "370C1545-E679-4C83-8500-A4C3473ECC98"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.462Z",
+      "checksum": "0f7ff92a58bb5d84c0cf43a7e18840768f68887d26af3b59c97f02ae91c7db39"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Harbour Island",
+      "Code": "HI",
+      "ISO3166_2": "BS-HI",
+      "Latitude": 25.5443,
+      "Longitude": -76.7641,
+      "BoundaryGeoJSON": "@file:by-country/BS/boundaries/BS-HI.geojson",
+      "CommonAliases": [
+        "Harbour Island"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "2C777168-8057-45F1-BA15-56A42E4CA2FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.478Z",
+      "checksum": "6634e2c60251affaf8e940478a0d82b4277fb5d1f89c1cfcc72143ddd455954b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "High Rock",
+      "Code": "HR",
+      "ISO3166_2": "BS-HR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "High Rock"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "6D2F49EE-18A4-4973-99CA-E6B2658DB037"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.492Z",
+      "checksum": "b846ac18d70a8597c60fbb38877c20160c0bf6c6a2a0ed3922c7b22bc35dcf8e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inagua",
+      "Code": "IN",
+      "ISO3166_2": "BS-IN",
+      "Latitude": 21.06,
+      "Longitude": -73.3607,
+      "BoundaryGeoJSON": "@file:by-country/BS/boundaries/BS-IN.geojson",
+      "CommonAliases": [
+        "Inagua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "CE367FF0-50EA-4B29-8B13-12706254B22F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.551Z",
+      "checksum": "5e02d726c270677f56e545a30fdccfc9d4d12a05db0940238023688110ed068f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kemps Bay",
+      "Code": "KB",
+      "ISO3166_2": "BS-KB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kemps Bay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "A85C33B1-CE2C-4AFA-8964-BFFBDF28FA47"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.567Z",
+      "checksum": "9821e0322cdc98320f6b59a74bfcd65a43d92eb6310894e72c65e5aff937bc52"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Long Island",
+      "Code": "LI",
+      "ISO3166_2": "BS-LI",
+      "Latitude": 23.037,
+      "Longitude": -74.9132,
+      "BoundaryGeoJSON": "@file:by-country/BS/boundaries/BS-LI.geojson",
+      "CommonAliases": [
+        "Long Island"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "9BC92F69-F26F-4755-B3BA-883C09A2384D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.586Z",
+      "checksum": "a232ce7b1298e26c78e8597bf5a70ec043c8111a5bdbaa042d7d37c2ea456649"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marsh Harbour",
+      "Code": "MH",
+      "ISO3166_2": "BS-MH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Marsh Harbour"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "9CA2F715-4C3D-4DB3-AA55-1B276317D178"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.602Z",
+      "checksum": "d97c0c19541640988cb3866dbe47904e13e7fa19fd2c360da32ba54bfc008f67"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mayaguana",
+      "Code": "MG",
+      "ISO3166_2": "BS-MG",
+      "Latitude": 22.3849,
+      "Longitude": -73.0295,
+      "BoundaryGeoJSON": "@file:by-country/BS/boundaries/BS-MG.geojson",
+      "CommonAliases": [
+        "Mayaguana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "B63F04F9-7399-421B-8E70-B3AD2EE29E26"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.619Z",
+      "checksum": "c64fff130380850bc921300eda477f69cf49e42643bcfbbe1d641c5588d7d3d5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "New Providence",
+      "Code": "NP",
+      "ISO3166_2": "BS-NP",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "New Providence"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "EBB4086B-151A-4BB7-A02F-F8571D6323AF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.635Z",
+      "checksum": "773c3462dcdc5bf4e8a8e697c2d4a8f5f40a70f4ab246a03e858608415ddb3d0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nicholls Town and Berry Islands",
+      "Code": "NB",
+      "ISO3166_2": "BS-NB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Nicholls Town and Berry Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "7100632D-9428-4A1D-9A7C-BBBD24F1ACD4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.651Z",
+      "checksum": "11cd332b77d5d2464e2234b84b00b067d8ccbf8d146beb0dbb59b975ac6e467a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ragged Island",
+      "Code": "RI",
+      "ISO3166_2": "BS-RI",
+      "Latitude": 22.2296,
+      "Longitude": -75.7413,
+      "BoundaryGeoJSON": "@file:by-country/BS/boundaries/BS-RI.geojson",
+      "CommonAliases": [
+        "Ragged Island"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "E6B2A677-C29B-4187-9571-19D669AA528F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.666Z",
+      "checksum": "f3986eb2949a43f5861ddf3009882c97b5aa0d01641ae87ea7132bf6fc1f4e5b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rock Sound",
+      "Code": "RS",
+      "ISO3166_2": "BS-RS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rock Sound"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "2CC2B8B9-E840-43C9-859D-447789C62507"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.681Z",
+      "checksum": "f4850a463fc5af94521a16dae38feea085d3641958dafbb1055e3f514dbacff2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Salvador and Rum Cay",
+      "Code": "SR",
+      "ISO3166_2": "BS-SR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "San Salvador and Rum Cay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "29F4BABC-439D-424B-A4FD-B5C68BF91593"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.695Z",
+      "checksum": "a9d8d02ac0d35a4f6d90a90ae6341a09ec25716140abe5491fb0a09d8513a39f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sandy Point",
+      "Code": "SP",
+      "ISO3166_2": "BS-SP",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sandy Point"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BS"
+    },
+    "primaryKey": {
+      "ID": "6988FFB4-3B6C-4B4C-A952-B7F83CDA9506"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:34.718Z",
+      "checksum": "72ec70efd7b8fedba3adde7e103f6f836c9a81eb43081277bdaca2ac78d01ab9"
+    }
+  }
+]

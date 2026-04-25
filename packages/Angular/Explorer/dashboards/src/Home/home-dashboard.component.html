@@ -93,6 +93,16 @@
                       </div>
                     }
                   </div>
+                } @else if (pin.ResourceType === 'Actions') {
+                  <div class="pin-thumbnail action-mode"
+                       [style.background]="'linear-gradient(135deg, ' + GetPinAccentColor(pin) + ' 0%, ' + GetPinAccentColor(pin) + 'cc 100%)'">
+                    <i [class]="GetPinIcon(pin)"></i>
+                    @if (!EditMode) {
+                      <div class="pin-overlay">
+                        <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Run</button>
+                      </div>
+                    }
+                  </div>
                 } @else {
                   <div class="pin-thumbnail icon-mode" [style.--pin-icon-color]="pin.Color || 'var(--mj-text-muted)'">
                     <i [class]="GetPinIcon(pin)"></i>
@@ -187,6 +197,16 @@
                       @if (!EditMode) {
                         <div class="pin-overlay">
                           <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Open</button>
+                        </div>
+                      }
+                    </div>
+                  } @else if (pin.ResourceType === 'Actions') {
+                    <div class="pin-thumbnail action-mode"
+                         [style.background]="'linear-gradient(135deg, ' + GetPinAccentColor(pin) + ' 0%, ' + GetPinAccentColor(pin) + 'cc 100%)'">
+                      <i [class]="GetPinIcon(pin)"></i>
+                      @if (!EditMode) {
+                        <div class="pin-overlay">
+                          <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Run</button>
                         </div>
                       }
                     </div>
@@ -459,10 +479,56 @@
                 }
               </div>
             }
+
+            <!-- Quick Actions -->
+            @if (FilterPanelItems(AvailableActions).length > 0) {
+              <div class="panel-section">
+                <div class="panel-section-title collapsible" (click)="TogglePanelSection('actions')">
+                  <i class="fa-solid fa-bolt"></i> Quick Actions
+                  <span class="panel-count">{{ FilterPanelItems(AvailableActions).length }}</span>
+                  <i class="section-chevron fa-solid" [class.fa-chevron-down]="!PanelSectionCollapsed['actions']" [class.fa-chevron-right]="PanelSectionCollapsed['actions']"></i>
+                </div>
+                @if (!PanelSectionCollapsed['actions']) {
+                  @for (item of FilterPanelItems(AvailableActions); track item.id) {
+                    <div class="panel-item">
+                      <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
+                        <i class="fa-solid fa-bolt" style="color: var(--mj-brand-primary)"></i>
+                      </div>
+                      <div class="panel-item-info">
+                        <div class="panel-item-name">{{ item.name }}</div>
+                        @if (item.description) {
+                          <div class="panel-item-sub">{{ item.description }}</div>
+                        }
+                      </div>
+                      <div class="panel-item-action">
+                        <button class="pin-btn" (click)="OpenActionPinConfig(item.id, item.name, item.description)">
+                          <i class="fa-solid fa-sliders"></i> Configure
+                        </button>
+                      </div>
+                    </div>
+                  }
+                }
+              </div>
+            }
           }
         </div>
       </div>
     }
+
+    <!-- Action Pin Dialogs -->
+    <mj-action-pin-config-dialog
+      [Visible]="ActionConfigDialogVisible"
+      [ActionID]="ActionConfigActionId"
+      [ActionName]="ActionConfigActionName"
+      [ActionDescription]="ActionConfigActionDescription"
+      (Result)="OnActionConfigResult($event)">
+    </mj-action-pin-config-dialog>
+
+    <mj-action-pin-runner-dialog
+      [Visible]="ActionRunnerDialogVisible"
+      [Pin]="ActionRunnerPin"
+      (Result)="OnActionRunnerResult($event)">
+    </mj-action-pin-runner-dialog>
 
     <!-- Loading State -->
     @if (isLoading) {
@@ -528,8 +594,8 @@
             </div>
             <h3>No Applications Available</h3>
             <p>You don't have any applications configured yet.</p>
-            <button kendoButton
-              themeColor="primary"
+            <button mjButton
+              variant="primary"
               (click)="openConfigDialog()">
               <i class="fa-solid fa-gear"></i>
               Configure Applications

@@ -1,0 +1,35 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on DefaultNavItems (Applications entity) to enable",
+      "CodeGen to emit a typed Object-suffixed accessor with MJApplicationEntity_IDefaultNavItem."
+    ],
+    "fields": {
+      "Name": "MJ: Applications"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IDefaultNavItem",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IDefaultNavItem.ts"
+          },
+          "_comments": [
+            "DefaultNavItems field — JSON array of nav items for each application"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Applications&Name=DefaultNavItems"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:39.943Z",
+            "checksum": "47c4b0e92d75034058c128f72a7b8f4a37c963ddf564e088e9a78e76ff5b03ef"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Applications"
+    }
+  }
+]

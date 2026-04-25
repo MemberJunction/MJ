@@ -9,6 +9,16 @@ import { CompositeKey } from "./compositeKey"
 import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
 
 /**
+ * Valid values for EntityField.ExtendedType.
+ * Defines semantic meaning beyond the SQL data type (e.g., a string field that holds an email, URL, or geo address).
+ */
+export type EntityFieldExtendedType =
+    | 'Code' | 'Email' | 'FaceTime' | 'Geo'
+    | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
+    | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
+    | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
+
+/**
  * The possible status values for a record change
  */
 export const RecordChangeStatus = {
@@ -152,13 +162,13 @@ export class EntityOrganicKeyInfo extends BaseInfo {
         return this.MatchFieldNames ? this.MatchFieldNames.split(',').map(f => f.trim()) : [];
     }
 
-    constructor(initData: {EntityOrganicKeyRelatedEntities?: unknown[]; _RelatedEntities?: unknown[]} & Record<string, unknown> = null) {
+    constructor(initData: {EntityOrganicKeyRelatedEntities?: unknown[]; _RelatedEntities?: unknown[]; RelatedEntities?: unknown[]} & Record<string, unknown> = null) {
         super();
         if (initData) {
             this.copyInitData(initData);
 
             this._RelatedEntities = [];
-            const re = initData.EntityOrganicKeyRelatedEntities || initData._RelatedEntities;
+            const re = initData.EntityOrganicKeyRelatedEntities || initData._RelatedEntities || initData.RelatedEntities;
             if (re && Array.isArray(re)) {
                 // sort by sequence
                 const sorted = [...re] as Record<string, unknown>[];
@@ -173,6 +183,7 @@ export class EntityOrganicKeyInfo extends BaseInfo {
             }
         }
     }
+
 }
 
 /**
@@ -245,6 +256,7 @@ export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
             this.copyInitData(initData);
         }
     }
+
 }
 
 export const EntityPermissionType = {
@@ -421,6 +433,17 @@ export class EntityFieldValueInfo extends BaseInfo {
         super();
         this.copyInitData(initData);
     }
+
+    /**
+     * Returns a plain object suitable for JSON serialization.
+     * Called automatically by JSON.stringify().
+     */
+    toJSON(): { Value: string; Code: string } {
+        return {
+            Value: this.Value,
+            Code: this.Code,
+        };
+    }
 }
 
 export const GeneratedFormSectionType = {
@@ -484,7 +507,7 @@ export class EntityFieldInfo extends BaseInfo {
     DefaultValue: string = null
     AutoIncrement: boolean = null
     ValueListType: string = null
-    ExtendedType: string = null
+    ExtendedType: EntityFieldExtendedType | null = null
     DefaultInView: boolean = null 
     ViewCellTemplate: string = null
     DefaultColumnWidth: number = null 
@@ -506,6 +529,24 @@ export class EntityFieldInfo extends BaseInfo {
      * Parsed from the RelatedEntityJoinFields column.
      */
     RelatedEntityJoinFields: string = null
+    /**
+     * The name of the TypeScript interface/type for this JSON field.
+     * When set, CodeGen will emit a strongly-typed getter/setter using this type
+     * instead of the default string getter/setter.
+     */
+    JSONType: string = null;
+    /**
+     * If true, the field holds a JSON array of JSONType items.
+     * The getter returns JSONType[] | null and the setter accepts JSONType[] | null.
+     */
+    JSONTypeIsArray: boolean = false;
+    /**
+     * Raw TypeScript code emitted by CodeGen above the entity class definition.
+     * Typically contains the interface/type definition referenced by JSONType.
+     * Can include imports, multiple types, or any valid TypeScript.
+     */
+    JSONTypeDefinition: string = null;
+
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
     EntityIDFieldName: string = null
     __mj_CreatedAt: Date = null
@@ -630,6 +671,15 @@ export class EntityFieldInfo extends BaseInfo {
     * * Description: When 1, allows system/LLM to auto-update Category; when 0, user has locked this field
     */
     AutoUpdateCategory: boolean = true;
+
+    /**
+    * * Field Name: AutoUpdateExtendedType
+    * * Display Name: Auto Update Extended Type
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows CodeGen to auto-suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, etc.); when 0, user has locked this field
+    */
+    AutoUpdateExtendedType: boolean = true;
 
     /**
     * * Field Name: AutoUpdateDisplayName
@@ -1044,6 +1094,7 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
 
+
     /**
      * This static factory method is used to check to see if the entity field in question is active or not
      * If it is not active, it will throw an exception or log a warning depending on the status of the entity field being
@@ -1254,6 +1305,22 @@ export class EntityInfo extends BaseInfo {
      */
     AuditViewRuns: boolean = null
     /**
+     * When true (default), the server-side RunView cache will store and return cached results
+     * for this entity, trusting that all mutations flow through BaseEntity.Save() which fires
+     * cache invalidation events. Set to false for entities whose rows are created as side-effects
+     * of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal),
+     * since those inserts bypass BaseEntity and never trigger cache invalidation.
+     */
+    TrustServerCacheCompletely: boolean = true
+    /**
+     * Controls whether this entity participates in server-side and client-side
+     * caching at all. When false (default for non-__mj entities), the entire
+     * cache code path is short-circuited: no PreRunView cache check, no
+     * auto-cache storage, no HandleBaseEntityEvent fingerprint scan, no
+     * client-side IndexedDB cache. Zero overhead on hot save/query paths.
+     */
+    AllowCaching: boolean = false
+    /**
      * Whether this entity is available through the GraphQL API
      */
     IncludeInAPI: boolean = false
@@ -1309,6 +1376,17 @@ export class EntityInfo extends BaseInfo {
      * Whether the full-text search function is generated by CodeGen
      */
     FullTextSearchFunctionGenerated: boolean = true
+    /**
+     * When true, this entity supports geocoding — CodeGen generates geo-aware subclass code,
+     * adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows
+     * a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields.
+     */
+    SupportsGeoCoding: boolean = false
+    /**
+     * When true (default), CodeGen can automatically set SupportsGeoCoding based on
+     * LLM analysis of entity fields. Set to false to lock the value.
+     */
+    AutoUpdateSupportsGeoCoding: boolean = true
     /**
      * Maximum number of rows to return in user views to prevent performance issues
      */
@@ -1494,13 +1572,13 @@ export class EntityInfo extends BaseInfo {
     private _FieldCategories: Record<string, FieldCategoryInfo> | null = null
     private _OrganicKeys: EntityOrganicKeyInfo[] = []
     _hasIdField: boolean = false
-    _virtualCount: number = 0 
-    _manyToManyCount: number = 0 
+    _virtualCount: number = 0
+    _manyToManyCount: number = 0
     _oneToManyCount: number = 0
     _floatCount: number = 0
 
     /**
-     * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all. 
+     * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all.
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
      */
     get FirstPrimaryKey(): EntityFieldInfo {
@@ -2129,9 +2207,9 @@ export class EntityInfo extends BaseInfo {
             this.copyInitData(initData);
 
             // do some special handling to create class instances instead of just data objects
-            // copy the Entity Fields
+            // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
             this._Fields = [];
-            const ef = initData.EntityFields || initData._Fields;
+            const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
                     this._Fields.push(new EntityFieldInfo(ef[j]));
@@ -2140,7 +2218,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Entity Permissions
             this._Permissions = [];
-            const ep = initData.EntityPermissions || initData._Permissions;
+            const ep = initData.EntityPermissions || initData._Permissions || initData.Permissions;
             if (ep) {
                 for (let j = 0; j < ep.length; j++) {
                     this._Permissions.push(new EntityPermissionInfo(ep[j]));
@@ -2149,7 +2227,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Entity settings
             this._Settings = [];
-            const es = initData.EntitySettings || initData._Settings;
+            const es = initData.EntitySettings || initData._Settings || initData.Settings;
             if (es) {
                 es.map((s) => this._Settings.push(new EntitySettingInfo(s)));
             }
@@ -2157,9 +2235,9 @@ export class EntityInfo extends BaseInfo {
             // auto-populate FieldCategories from the FieldCategoryInfo setting
             this._FieldCategories = this.parseFieldCategoriesFromSettings();
 
-            // copy the Related Entities
+            // copy the Related Entities (accept EntityRelationships, _RelatedEntities, or RelatedEntities as input names)
             this._RelatedEntities = [];
-            const er = initData.EntityRelationships || initData._RelatedEntities;
+            const er = initData.EntityRelationships || initData._RelatedEntities || initData.RelatedEntities;
             if (er) {
                 // check to see if ANY of the records in the er array have a non-null or non-zero sequence value. The reason is 
                 // if we have any sequence values populated we want to sort by that sequence, and we want to consider null to be a high number
@@ -2188,7 +2266,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Organic Keys (sorted by sequence inside EntityOrganicKeyInfo constructor)
             this._OrganicKeys = [];
-            const ok = initData.EntityOrganicKeys || initData._OrganicKeys;
+            const ok = initData.EntityOrganicKeys || initData._OrganicKeys || initData.OrganicKeys;
             if (ok && Array.isArray(ok)) {
                 for (const item of ok) {
                     this._OrganicKeys.push(new EntityOrganicKeyInfo(item));

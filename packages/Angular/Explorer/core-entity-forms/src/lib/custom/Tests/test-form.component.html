@@ -1,4 +1,4 @@
-<div class="test-form" kendoDialogContainer>
+<div class="test-form">
   <!-- Header Section -->
   <div class="test-header">
     <!-- Breadcrumb Navigation -->
@@ -41,10 +41,10 @@
       </div>
       <div class="header-actions">
         <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
-        <button kendoButton (click)="runTest()" themeColor="primary">
+        <button mjButton (click)="runTest()" variant="primary">
           <i class="fas fa-play"></i> Run Test
         </button>
-        <button kendoButton (click)="refresh()" [disabled]="isRefreshing">
+        <button mjButton (click)="refresh()" [disabled]="isRefreshing">
           <i class="fas" [ngClass]="isRefreshing ? 'fa-sync fa-spin' : 'fa-sync'"></i>
           {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
         </button>
@@ -447,7 +447,7 @@
             </div>
             <h4>No Test Runs Yet</h4>
             <p>Run this test to see execution history and results here.</p>
-            <button kendoButton (click)="runTest()" themeColor="primary">
+            <button mjButton (click)="runTest()" variant="primary">
               <i class="fas fa-play"></i> Run Test Now
             </button>
           </div>
@@ -539,7 +539,7 @@
                 (click)="setHistoryTimeRange('all')">All Time</button>
               </div>
               <div class="history-actions">
-                <button kendoButton (click)="exportHistoryToCSV()" [disabled]="historyData.length === 0">
+                <button mjButton (click)="exportHistoryToCSV()" [disabled]="historyData.length === 0">
                   <i class="fas fa-download"></i> Export CSV
                 </button>
               </div>
@@ -731,7 +731,7 @@
                 </div>
                 <h4>No History Available</h4>
                 <p>Run this test to start building history and analytics data.</p>
-                <button kendoButton (click)="runTest()" themeColor="primary">
+                <button mjButton (click)="runTest()" variant="primary">
                   <i class="fas fa-play"></i> Run Test Now
                 </button>
               </div>
@@ -772,5 +772,22 @@
         </div>
       </div>
     </div>
+  }
+
+  <!-- Slide Panel for Test Execution -->
+  @if (testingDialogService.IsPanelOpen) {
+    <mj-slide-panel
+      Mode="slide"
+      [Title]="testingDialogService.PanelOptions?.testId ? 'Test Execution' : 'Run Test'"
+      [Resizable]="true"
+      (Closed)="OnPanelClosed()">
+      <app-test-run-dialog
+        [PanelMode]="true"
+        [selectedTestId]="testingDialogService.PanelOptions?.testId ?? null"
+        [selectedSuiteId]="testingDialogService.PanelOptions?.suiteId ?? null"
+        [runMode]="testingDialogService.PanelOptions?.mode ?? 'test'"
+        (PanelClose)="OnPanelClosed()">
+      </app-test-run-dialog>
+    </mj-slide-panel>
   }
 </div>

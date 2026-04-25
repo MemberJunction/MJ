@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Svalbard & Jan Mayen Islands",
+      "Code": "SJ",
+      "ISO3166_2": "SJ-SJ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Svalbard & Jan Mayen Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SJ"
+    },
+    "primaryKey": {
+      "ID": "E7CD86E9-9F45-4B76-A9E2-B599FF14CC2D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.635Z",
+      "checksum": "34dd78e7f8c97335b2409e9c1334d8215cdfee32aa27254835587ec1d003154e"
+    }
+  }
+]

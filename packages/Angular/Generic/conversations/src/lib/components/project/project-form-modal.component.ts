@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { MJDialogRef } from '@memberjunction/ng-ui-components';
 import { MJProjectEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata } from '@memberjunction/core';
 
@@ -60,11 +60,12 @@ const DEFAULT_PROJECT_ICONS = [
   standalone: false,
   selector: 'mj-project-form-modal',
   template: `
-    <kendo-dialog
-      [title]="isEditMode ? 'Edit Project' : 'New Project'"
-      [width]="600"
-      [minWidth]="400"
-      (close)="onCancel()">
+    <mj-dialog
+      [Title]="isEditMode ? 'Edit Project' : 'New Project'"
+      [Width]="600"
+      [MinWidth]="400"
+      [Visible]="true"
+      (Close)="onCancel()">
 
       <div class="project-form">
         <!-- Name Input -->
@@ -74,10 +75,10 @@ const DEFAULT_PROJECT_ICONS = [
           </label>
           <input
             id="projectName"
-            kendoTextBox
+            type="text"
             [(ngModel)]="formData.name"
             placeholder="Enter project name"
-            class="k-textbox full-width"
+            class="mj-textbox full-width"
             (keydown.enter)="onSave()"
             autofocus />
           @if (showNameError) {
@@ -92,10 +93,9 @@ const DEFAULT_PROJECT_ICONS = [
           </label>
           <textarea
             id="projectDescription"
-            kendoTextArea
             [(ngModel)]="formData.description"
             placeholder="Enter project description (optional)"
-            class="k-textarea full-width"
+            class="mj-textarea full-width"
             rows="3"></textarea>
         </div>
 
@@ -151,13 +151,13 @@ const DEFAULT_PROJECT_ICONS = [
         </div>
       </div>
 
-      <kendo-dialog-actions>
-        <button kendoButton (click)="onCancel()">Cancel</button>
-        <button kendoButton [themeColor]="'primary'" (click)="onSave()">
+      <mj-dialog-actions>
+        <button mjButton (click)="onCancel()">Cancel</button>
+        <button mjButton variant="primary" (click)="onSave()">
           {{ isEditMode ? 'Save' : 'Create' }}
         </button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
+      </mj-dialog-actions>
+    </mj-dialog>
   `,
   styles: [`
     .project-form {
@@ -342,7 +342,7 @@ const DEFAULT_PROJECT_ICONS = [
   `]
 })
 export class ProjectFormModalComponent implements OnInit {
-  @Input() dialogRef!: DialogRef;
+  @Input() dialogRef!: MJDialogRef;
   @Input() project: MJProjectEntity | null = null;
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
@@ -419,7 +419,7 @@ export class ProjectFormModalComponent implements OnInit {
       const saved = await project.Save();
       if (saved) {
         this.projectSaved.emit(project);
-        this.dialogRef.close();
+        this.dialogRef.Close();
       } else {
         throw new Error('Failed to save project');
       }
@@ -430,6 +430,6 @@ export class ProjectFormModalComponent implements OnInit {
   }
 
   onCancel(): void {
-    this.dialogRef.close();
+    this.dialogRef.Close();
   }
 }

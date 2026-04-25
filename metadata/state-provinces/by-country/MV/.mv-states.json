@@ -1,0 +1,422 @@
+[
+  {
+    "fields": {
+      "Name": "Alif",
+      "Code": "02",
+      "ISO3166_2": "MV-02",
+      "Latitude": 4.2645,
+      "Longitude": 72.9528,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-02.geojson",
+      "CommonAliases": [
+        "Alif"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "09673DDE-FE90-47BB-9E85-C5187CB9EE22"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.659Z",
+      "checksum": "9637a90e3a3da6893386f4a5defa97efd81be8e7db69e4f47452e369cc7b27ab"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Baa",
+      "Code": "20",
+      "ISO3166_2": "MV-20",
+      "Latitude": 4.8822,
+      "Longitude": 72.9751,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-20.geojson",
+      "CommonAliases": [
+        "Baa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "8F6D388E-223F-4847-80F9-94F68B15CCD4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.676Z",
+      "checksum": "d7f7b9930e98eaabf123177ef18caf53374f8ae6a9a528b67e8bcc26829267f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dhaalu",
+      "Code": "17",
+      "ISO3166_2": "MV-17",
+      "Latitude": 2.6781,
+      "Longitude": 72.9017,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-17.geojson",
+      "CommonAliases": [
+        "Dhaalu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "8684D448-6694-49E9-A174-62A4826E1266"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.692Z",
+      "checksum": "d6807dd4fc2e54098fdf66abab53be47f86a15ad581194192cca349445c7cf02"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Faafu",
+      "Code": "14",
+      "ISO3166_2": "MV-14",
+      "Latitude": 3.3069,
+      "Longitude": 72.8315,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-14.geojson",
+      "CommonAliases": [
+        "Faafu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "F4390B48-5B3D-4265-A4E4-80667FDD8AA2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.709Z",
+      "checksum": "6e517a22a9c5705528255a819e885676dd294982e96e6e9687ead6c3e418e1b0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gaaf Alif",
+      "Code": "27",
+      "ISO3166_2": "MV-27",
+      "Latitude": 0.7644,
+      "Longitude": 73.3741,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-27.geojson",
+      "CommonAliases": [
+        "Gaaf Alif"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "4934E0E3-66A4-46D1-8096-B6295DB2216A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.725Z",
+      "checksum": "74383a18077e3bdf3b18cab1bad947aafe912f38770a01474e45a81893e36253"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gaafu Dhaalu",
+      "Code": "28",
+      "ISO3166_2": "MV-28",
+      "Latitude": 0.2218,
+      "Longitude": 73.106,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-28.geojson",
+      "CommonAliases": [
+        "Gaafu Dhaalu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "F085BAFD-7C1A-47CC-ABC9-6DC68F3E4F0C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.742Z",
+      "checksum": "1bc126ec1a7e60dfee6a49996662dcff471619e465f382c153478f3571b17dc1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gnaviyani",
+      "Code": "29",
+      "ISO3166_2": "MV-29",
+      "Latitude": -0.289,
+      "Longitude": 73.4348,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-29.geojson",
+      "CommonAliases": [
+        "Gnaviyani"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "1DD7012A-9EDA-4086-BA2E-41A593D13570"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.759Z",
+      "checksum": "65a8e23078fd88f4e91ba3c794a7d5cce7f63cf1545e264ad5884fea67fce45b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haa Alif",
+      "Code": "07",
+      "ISO3166_2": "MV-07",
+      "Latitude": 7.0277,
+      "Longitude": 72.9797,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-07.geojson",
+      "CommonAliases": [
+        "Haa Alif"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "77EDE975-901C-4449-9375-FDC6CE4FB2F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.775Z",
+      "checksum": "411f89f761ba7faff359394488b41399150e46b28860c0e89ca96b32d4d95bcc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haa Dhaalu",
+      "Code": "23",
+      "ISO3166_2": "MV-23",
+      "Latitude": 6.6221,
+      "Longitude": 73.0473,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-23.geojson",
+      "CommonAliases": [
+        "Haa Dhaalu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "69BC6194-2E6C-4514-A9A3-6A4D379910C8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.792Z",
+      "checksum": "e0f2c7fc7b66fc767ab1cae8fd7107030429101ef35d9eab525930f3fff814c7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaafu",
+      "Code": "26",
+      "ISO3166_2": "MV-26",
+      "Latitude": 4.3571,
+      "Longitude": 73.6135,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-26.geojson",
+      "CommonAliases": [
+        "Kaafu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "7A36D99C-FF10-4AAE-AB5C-8CFB6DB8EBFF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.808Z",
+      "checksum": "ad8a3c708143bcd8d3327428a78f48f6a2f73b321d3065c549f61ba866a80b57"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Laamu",
+      "Code": "05",
+      "ISO3166_2": "MV-05",
+      "Latitude": 1.8322,
+      "Longitude": 73.5114,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-05.geojson",
+      "CommonAliases": [
+        "Laamu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "CC8F32D5-E394-47E8-8676-DE9A2FC7E7E7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.861Z",
+      "checksum": "f28ba0ae59e6cbd8eca016998770960d35a492346acf3ffee363e27ff9fdb32b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lhaviyani",
+      "Code": "03",
+      "ISO3166_2": "MV-03",
+      "Latitude": 5.2748,
+      "Longitude": 73.5816,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-03.geojson",
+      "CommonAliases": [
+        "Lhaviyani"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "FA3EE0DF-84CB-4519-84EF-E2FC23C77953"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.877Z",
+      "checksum": "b858693eea1e94cf17cbbe8dc63930b0cb95c7ccd53e33c3ff502da06917a9ec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Male",
+      "Code": "MLE",
+      "ISO3166_2": "MV-MLE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Male"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "17026783-74F9-431C-894E-40A2EFD3E063"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.893Z",
+      "checksum": "79e458a2b8d962aafd577150c52e9be6662410251a112becf28d758ee6ff5ee9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Meemu",
+      "Code": "12",
+      "ISO3166_2": "MV-12",
+      "Latitude": 4.1722,
+      "Longitude": 73.5188,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-12.geojson",
+      "CommonAliases": [
+        "Meemu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "F17FDB04-1C55-48B7-88DA-9095A4866B78"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.909Z",
+      "checksum": "2bb4dfd41034581e7d62a09374e922ecac6a0c3d9a75feea17312ef46f8b8977"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Noonu",
+      "Code": "25",
+      "ISO3166_2": "MV-25",
+      "Latitude": 5.7871,
+      "Longitude": 73.3837,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-25.geojson",
+      "CommonAliases": [
+        "Noonu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "5994ECA0-B00B-4190-A5DC-68D7131330BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.926Z",
+      "checksum": "0ae07a8e0c91a38275936d9ebf25b6cc0446c33364c2421472c189f6fc5995e6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Raa",
+      "Code": "13",
+      "ISO3166_2": "MV-13",
+      "Latitude": 5.8063,
+      "Longitude": 72.9751,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-13.geojson",
+      "CommonAliases": [
+        "Raa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "8E74D7FA-1469-4C91-B443-EF3A9DB5E255"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.943Z",
+      "checksum": "85da616ffacdba18366833562078e6dc75ea31ed5face964630c191df30e4672"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Seenu",
+      "Code": "01",
+      "ISO3166_2": "MV-01",
+      "Latitude": -0.6241,
+      "Longitude": 73.1092,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-01.geojson",
+      "CommonAliases": [
+        "Seenu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "FE5CD90A-2C33-4728-A681-B33380889731"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.959Z",
+      "checksum": "ac87d16ccf087cb7a168fdd816e0ed86d94b1903d6c921899a6bd6d4c947fc58"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shaviyani",
+      "Code": "24",
+      "ISO3166_2": "MV-24",
+      "Latitude": 6.2851,
+      "Longitude": 73.2145,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-24.geojson",
+      "CommonAliases": [
+        "Shaviyani"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "A0401A1C-B4E2-41FD-926A-836F4A67019A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.979Z",
+      "checksum": "1b66413af4c1f1ad3281c6fde9c7590e600f48cc61f4da15ed23cd0e7fd16221"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thaa",
+      "Code": "08",
+      "ISO3166_2": "MV-08",
+      "Latitude": 2.1929,
+      "Longitude": 73.1252,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-08.geojson",
+      "CommonAliases": [
+        "Thaa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "9547F419-9115-4671-8722-973406C90218"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.996Z",
+      "checksum": "d167dbdbf42a96ee14a9c77f85a61e398b16a0ded52efdf2d3dd7c78b4abb6a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vaavu",
+      "Code": "04",
+      "ISO3166_2": "MV-04",
+      "Latitude": 3.4952,
+      "Longitude": 73.5082,
+      "BoundaryGeoJSON": "@file:by-country/MV/boundaries/MV-04.geojson",
+      "CommonAliases": [
+        "Vaavu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MV"
+    },
+    "primaryKey": {
+      "ID": "5D2F1C43-17F9-4451-AE26-59B8D4029D94"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.010Z",
+      "checksum": "4420f32a39b144b853e5a0bdf799c03ed12039b97b47caf361ef1eb7e979f739"
+    }
+  }
+]

@@ -1,13 +1,13 @@
 import { Component, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJAIModelEntity } from "@memberjunction/core-entities";
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJAIPromptRunFormComponent } from '../../generated/Entities/MJAIPromptRun/mjaipromptrun.form.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
-import { TestHarnessWindowService } from '@memberjunction/ng-ai-test-harness';
+import { TestHarnessWindowManagerService } from '@memberjunction/ng-ai-test-harness';
 import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs')
@@ -20,7 +20,11 @@ import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 })
 export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent implements AfterViewInit, OnDestroy {
     public record!: MJAIPromptRunEntityExtended;
-    
+    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** Custom-layout AI Prompt Run form looks best full-width on first open. */
+    public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
     // Related entities
     public prompt: MJAIPromptEntityExtended | null = null;
     public model: MJAIModelEntity | null = null;
@@ -71,7 +75,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     public FullScreenTitle = '';
 
     // Field injections
-    private testHarnessWindowService = inject(TestHarnessWindowService);
+    private testHarnessWindowService = inject(TestHarnessWindowManagerService);
     private viewContainerRef = inject(ViewContainerRef);
     
     async ngOnInit() {

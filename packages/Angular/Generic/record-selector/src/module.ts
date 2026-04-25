@@ -1,11 +1,9 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-// Kendo UI Angular imports
-import { DialogsModule } from "@progress/kendo-angular-dialog";
-import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
-import { ListBoxModule } from '@progress/kendo-angular-listbox';
- 
+// MJ UI Components
+import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
+
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { RecordSelectorComponent } from './lib/record-selector.component';
 import { RecordSelectorDialogComponent } from './lib/dialog.component';
@@ -17,10 +15,10 @@ import { RecordSelectorDialogComponent } from './lib/dialog.component';
   ],
   imports: [
     CommonModule,
-    DialogsModule,
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
     ContainerDirectivesModule,
-    ButtonsModule,
-    ListBoxModule
   ],
   exports: [
     RecordSelectorComponent,

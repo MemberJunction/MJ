@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -44,19 +44,26 @@ import {
     ActionChange,
     ActionChangeScope,
     MediaOutput,
+    FileOutputRef,
+    ParseFileOutputRef,
     SecondaryScopeConfig,
     SecondaryScopeValue,
     AgentResponseForm,
     AgentRequestAssignmentStrategy,
     parseAssignmentStrategy,
-    mergeAssignmentStrategies
+    mergeAssignmentStrategies,
+    AgentClientToolInvocation,
+    ClientToolResultSummary,
+    ClientToolMetadata
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
+import { ArtifactToolManager, ArtifactToolCall, InputArtifact } from './ArtifactToolManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
+import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import _ from 'lodash';
@@ -259,6 +266,19 @@ export class BaseAgent {
      */
     private _feedbackRequestId: string | null = null;
 
+    private _resolvedStorageAccountId: string | null = null;
+
+    /**
+     * The resolved FileStorageAccount ID for this agent run. Set during Execute()
+     * via the hierarchical resolution chain (Runtime → Agent → Category → Type → fallback).
+     * Included in the ExecuteAgentResult so AgentRunner can route file artifact uploads.
+     *
+     * Subclasses can read this to customize storage behavior based on the resolved account.
+     */
+    protected get ResolvedStorageAccountId(): string | null {
+        return this._resolvedStorageAccountId;
+    }
+
     /**
      * Access the current run for the agent
      */
@@ -355,6 +375,28 @@ export class BaseAgent {
      * @private
      */
     private static readonly LARGE_BINARY_THRESHOLD = 10000;
+
+    /**
+     * Inspects a set of action output params for any value matching the FileOutputRef shape
+     * (an object with `fileName`, `mimeType`, and either `fileData` or `fileId`).
+     * Returns all matching FileOutputRef values found across all output params.
+     *
+     * Detection is shape-based, not name-based — actions can name their file output
+     * parameter anything and it will still be detected.
+     *
+     * @param outputParams - The output parameters from an action result
+     * @private
+     * @since 5.22.0
+     */
+    private detectFileOutputs(outputParams: ActionParam[]): FileOutputRef[] {
+        const results: FileOutputRef[] = [];
+        for (const param of outputParams) {
+            if (param.Value == null) continue;
+            const ref = ParseFileOutputRef(param.Value);
+            if (ref) results.push(ref);
+        }
+        return results;
+    }
 
     /**
      * Intercepts large media content in action results and replaces with placeholder references.
@@ -667,6 +709,15 @@ export class BaseAgent {
      */
     private _mediaOutputs: MediaOutput[] = [];
 
+    /**
+     * Accumulated file outputs (PDF, Excel, Word, etc.) produced by file-generation actions.
+     * Detected from the FileOutput output param after each action executes.
+     * Returned in ExecuteAgentResult.fileOutputs for processing by AgentRunner into MJ: Artifacts.
+     * @private
+     * @since 5.22.0
+     */
+    private _fileOutputs: FileOutputRef[] = [];
+
 
     /**
      * Payload manager for handling payload access control.
@@ -681,6 +732,12 @@ export class BaseAgent {
      * @since 2.46.0
      */
     private _scratchpadManager: ScratchpadManager = new ScratchpadManager();
+
+    /**
+     * Manages artifact tools for the current agent run.
+     * Allows agents to explore input artifacts on demand.
+     */
+    private _artifactToolManager: ArtifactToolManager = new ArtifactToolManager();
 
     /**
      * Effective actions available to this agent after applying actionChanges.
@@ -1014,25 +1071,97 @@ export class BaseAgent {
      * });
      * ```
      */
+    /**
+     * Engine-default wall-clock timeout applied to any agent run whose
+     * `ExecuteAgentParams.maxExecutionTimeMs` is not set. Sub-classes can
+     * override to globally change the default. Intentionally generous
+     * (2 hours) — tighten per-run for interactive scenarios.
+     */
+    protected get DefaultAgentTimeoutMS(): number {
+        return 2 * 60 * 60 * 1000;
+    }
+
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         // Capture per-request provider for the duration of this execution so all entity
         // saves go through the isolated provider, never the global singleton's transaction.
         this._activeProvider = params.provider || Metadata.Provider;
+
+        // =====================================================================================
+        // UNIVERSAL WALL-CLOCK TIMEOUT
+        //
+        // We chain any caller-supplied `cancellationToken` with an internal
+        // AbortController that fires after `maxExecutionTimeMs` (falling back
+        // to `DefaultAgentTimeoutMS`). The chained signal replaces
+        // `params.cancellationToken` for the duration of the run, so every
+        // existing cancellation check in the body of Execute sees the merged
+        // abort condition — whether it came from the caller, the timeout, or
+        // both.
+        //
+        // Actions invoked from this agent carry their own AbortSignal on
+        // `RunActionParams.AbortSignal` (see ActionEngine.RunAction) and are
+        // unaffected by this wrapper — their timeout budget is independent.
+        // =====================================================================================
+        const agentTimeoutMS = params.maxExecutionTimeMs ?? this.DefaultAgentTimeoutMS;
+        const upstreamToken = params.cancellationToken;
+        const timeoutController = new AbortController();
+        const relayUpstreamAbort = () => {
+            if (!timeoutController.signal.aborted) {
+                timeoutController.abort(upstreamToken?.reason ?? 'upstream cancellation');
+            }
+        };
+        if (upstreamToken) {
+            if (upstreamToken.aborted) {
+                relayUpstreamAbort();
+            } else {
+                upstreamToken.addEventListener('abort', relayUpstreamAbort, { once: true });
+            }
+        }
+        const timeoutId = setTimeout(() => {
+            if (!timeoutController.signal.aborted) {
+                timeoutController.abort(
+                    `Agent '${params.agent.Name}' exceeded maxExecutionTimeMs (${agentTimeoutMS}ms)`
+                );
+            }
+        }, agentTimeoutMS);
+        // Route the merged signal back through `params` so the existing body of
+        // Execute (and downstream sub-agent invocations that propagate
+        // `cancellationToken`) observe it.
+        params.cancellationToken = timeoutController.signal;
+
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
 
-            // Check permissions - user must have run permission or be the owner
-            const canRun = await AIAgentPermissionHelper.HasPermission(
-                params.agent.ID,
-                params.contextUser,
-                'run'
-            );
+            // =====================================================================================
+            // LATENCY OPTIMIZATION (Opt #4): Parallelized initialization sequence.
+            //
+            // The agent initialization pipeline was originally fully sequential: each operation
+            // awaited before the next began, even when there were no data dependencies between
+            // them. This added ~150-200ms of unnecessary serial wait time.
+            //
+            // The restructured pipeline uses 4 phases:
+            //
+            //   PRE-WORK (sync/fast): Parameter wrapping, markup conversion, payload init,
+            //     cancellation check, payload validation (may exit early).
+            //
+            //   PHASE 1 (parallel): Permission check + Engine init + AgentRun creation.
+            //     These three are mutually independent. If permission fails, we mark the
+            //     already-created AgentRun as failed and terminate — the wasted run record
+            //     is a negligible cost vs. the ~150ms saved by not serializing these.
+            //
+            //   PHASE 2 (parallel): Config load + Data preload + Context memory injection.
+            //     All three depend on Phase 1 completing (engines loaded, agentRun exists)
+            //     but NOT on each other. Config load reads from AIEngine's in-memory cache.
+            //     Data preload fetches agent data sources. Context memory loads notes/examples
+            //     and injects them into the conversation messages.
+            //
+            //   PHASE 3 (sequential): Agent type initialization — must wait for config from
+            //     Phase 2 because it needs the resolved agent type and prompt configuration.
+            //
+            // Original total init time: ~sum of all operations (~400-500ms)
+            // Optimized: ~max(Phase1) + max(Phase2) + Phase3 (~200-300ms)
+            // =====================================================================================
 
-            if (!canRun) {
-                const errorMessage = `User ${params.contextUser.Email} does not have permission to run agent '${params.agent.Name}' (ID: ${params.agent.ID})`;
-                this.logStatus(`🚫 ${errorMessage}`, false, params);
-                throw new Error(errorMessage);
-            }
+            // --- PRE-WORK: Fast synchronous setup and early-exit checks ---
 
             // Wrap the progress callback to capture all events
             const wrappedParams = {
@@ -1045,15 +1174,34 @@ export class BaseAgent {
                 this.convertUIMarkupInMessages(wrappedParams.conversationMessages);
             }
 
-            // Reset scratchpad for each new execution (ephemeral per run)
+            // Reset scratchpad and artifact tools for each new execution (ephemeral per run)
             this._scratchpadManager.Clear();
+            this._artifactToolManager.Clear();
 
+            // Initialize artifact tools with any input artifacts from the conversation
+            const inputArtifacts = (wrappedParams.data as Record<string, unknown>)?.__inputArtifacts as InputArtifact[] | undefined;
+            if (inputArtifacts?.length) {
+                this._artifactToolManager.Initialize(inputArtifacts);
+                this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
+            } else {
+                this.logStatus(`[ArtifactTools] No input artifacts found for this run`, true, params);
+            }
+
+            // Initialize starting payload — must complete before AgentRun creation since the
+            // run record stores the starting payload snapshot.
             await this.initializeStartingPayload(wrappedParams);
 
             // Check for cancellation at start
             if (params.cancellationToken?.aborted) {
                 this.logStatus(`⚠️ Agent '${params.agent.Name}' execution cancelled before start`, true, params);
                 return await this.createCancelledResult('Cancelled before execution started', params.contextUser);
+            }
+
+            // Handle starting payload validation if configured — may return early with a
+            // validation failure result, so we run this before launching expensive parallel work.
+            const startingValidationResult = await this.handleStartingPayloadValidation(wrappedParams);
+            if (startingValidationResult) {
+                return startingValidationResult;
             }
 
             // Report initialization progress
@@ -1066,37 +1214,49 @@ export class BaseAgent {
                 }
             });
 
-            // Initialize execution tracking
-            await this.initializeAgentRun(wrappedParams);
+            // --- PHASE 1: Permission check + Engine init + AgentRun creation (parallel) ---
+            // These three operations have zero data dependencies on each other:
+            // - Permission check queries the AIAgentPermission entity
+            // - Engine init calls AIEngine.Instance.Config() and ActionEngineServer.Instance.Config()
+            // - AgentRun creation inserts a new AIAgentRun record
+            //
+            // If permission check fails, we mark the AgentRun as failed. This is acceptable:
+            // an orphaned "failed" run record is harmless and far cheaper than serializing these
+            // three operations (~150ms savings).
+            const [canRun] = await Promise.all([
+                AIAgentPermissionHelper.HasPermission(params.agent.ID, params.contextUser, 'run'),
+                this.initializeEngines(params.contextUser),
+                this.initializeAgentRun(wrappedParams)
+            ]);
 
-            // Reset validation retry counters for this run
+            if (!canRun) {
+                // Permission denied — mark the already-created AgentRun as failed so it doesn't
+                // appear as a phantom "running" record in the UI.
+                const errorMessage = `User ${params.contextUser.Email} does not have permission to run agent '${params.agent.Name}' (ID: ${params.agent.ID})`;
+                this.logStatus(`🚫 ${errorMessage}`, false, params);
+                if (this._agentRun) {
+                    this._agentRun.Status = 'Failed';
+                    this._agentRun.ErrorMessage = errorMessage;
+                    await this._agentRun.Save();
+                }
+                throw new Error(errorMessage);
+            }
+
+            // Reset per-run state (sync, instant — no parallelization needed)
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
             this._contextRecoveryAttempts = 0;
-
-            // Reset effective actions and dynamic limits for this run
             this._effectiveActions = [];
             this._dynamicActionLimits = {};
-
-            // Reset media outputs accumulator for this run
-            // (unified array now includes both promoted media and intercepted binary with refIds)
             this._mediaOutputs = [];
-
-            // Store message lifecycle callback if provided
             this._messageLifecycleCallback = params.onMessageLifecycle;
 
-            // Initialize engines
-            await this.initializeEngines(params.contextUser);
+            // Resolve storage account for file artifacts
+            this._resolvedStorageAccountId = await this.getStorageAccountID(wrappedParams);
 
-            // Check for cancellation after initialization
+            // Check for cancellation after Phase 1
             if (params.cancellationToken?.aborted) {
                 return await this.createCancelledResult('Cancelled during initialization', params.contextUser);
-            }
-
-            // Handle starting payload validation if configured
-            const startingValidationResult = await this.handleStartingPayloadValidation(wrappedParams);
-            if (startingValidationResult) {
-                return startingValidationResult;
             }
 
             // Report validation progress
@@ -1109,51 +1269,38 @@ export class BaseAgent {
                 }
             });
 
-            // Create and track validation step
+            // Validate agent — may return early with a failure result. Runs after engines are
+            // initialized (Phase 1) since validation may inspect AIEngine metadata.
             const validationResult = await this.validateAgentWithTracking(params.agent, params.contextUser);
             if (validationResult) return validationResult;
 
-            // Load agent configuration
+            // --- PHASE 2: Config load + Data preload + Context memory injection (parallel) ---
+            // All three depend on Phase 1 completing (engines initialized, agentRun exists) but
+            // have no dependencies on each other:
+            // - Config load reads agent type, prompts, and agent prompts from AIEngine's in-memory
+            //   cache — typically < 5ms but async due to potential Config() refresh.
+            // - Data preload fetches agent data sources and creates a tracking step entity.
+            // - Context memory resolves scope configuration (pure computation), then loads notes
+            //   and examples from the DB and injects them into conversation messages.
             this.logStatus(`📋 Loading configuration for agent '${params.agent.Name}'`, true, params);
-            const config = await this.loadAgentConfiguration(params.agent);
-            if (!config.success) {
-                this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
-                    agent: params.agent,
-                    category: 'AgentConfiguration'
-                });
-                return await this.createFailureResult(config.errorMessage || 'Failed to load agent configuration', params.contextUser);
-            }
 
-            // Preload agent data sources unless disabled
-            await this.preloadAgentData(wrappedParams);
-
-            // now initialize the agent type which gets us the instance setup in our class plus also gets the agent type to initialize
-            // its state
-            await this.initializeAgentType(wrappedParams, config);
-
-            // Inject context memory (notes and examples) before execution
+            // Pre-compute scope configuration for context memory injection (pure computation,
+            // no I/O — safe to do before launching the parallel phase).
             const userId = params.userId || params.contextUser?.ID;
             const companyId = params.companyId;
-
-            // Extract input text from conversation messages (last user message)
-            const lastUserMessage = params.conversationMessages
-                .filter(m => m.role === 'user')
-                .pop();
+            const lastUserMessage = params.conversationMessages.filter(m => m.role === 'user').pop();
             const inputText = lastUserMessage?.content || '';
 
-            // Parse agent-level scope config for note/example filtering
             const scopeConfigJson = params.agent.ScopeConfig;
             let scopeConfig: SecondaryScopeConfig | null = null;
             if (scopeConfigJson) {
                 try { scopeConfig = JSON.parse(scopeConfigJson); } catch { /* ignore bad JSON */ }
             }
 
-            // Resolve scope params from top-level params or data fallback (for GraphQL callers)
             const primaryScopeEntityName = params.PrimaryScopeEntityName ?? (params.data?.PrimaryScopeEntityName as string | undefined);
             const primaryScopeRecordId = params.PrimaryScopeRecordID ?? (params.data?.PrimaryScopeRecordID as string | undefined);
             const secondaryScopes = params.SecondaryScopes ?? (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined);
 
-            // Resolve entity name to entity ID for scope filtering
             let primaryScopeEntityId: string | undefined;
             if (primaryScopeEntityName) {
                 const primaryEntity = this._metadata.Entities.find(e => e.Name === primaryScopeEntityName);
@@ -1162,19 +1309,35 @@ export class BaseAgent {
                 }
             }
 
-            // Inject context memory (notes and examples) into conversation messages
-            await this.InjectContextMemory(
-                typeof inputText === 'string' ? inputText : '',
-                params.agent,
-                userId,
-                companyId,
-                params.contextUser,
-                wrappedParams.conversationMessages,
-                primaryScopeEntityId,
-                primaryScopeRecordId,
-                secondaryScopes,
-                scopeConfig
-            );
+            const [config] = await Promise.all([
+                this.loadAgentConfiguration(params.agent),
+                this.preloadAgentData(wrappedParams),
+                this.InjectContextMemory(
+                    typeof inputText === 'string' ? inputText : '',
+                    params.agent,
+                    userId,
+                    companyId,
+                    params.contextUser,
+                    wrappedParams.conversationMessages,
+                    primaryScopeEntityId,
+                    primaryScopeRecordId,
+                    secondaryScopes,
+                    scopeConfig
+                )
+            ]);
+
+            if (!config.success) {
+                this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
+                    agent: params.agent,
+                    category: 'AgentConfiguration'
+                });
+                return await this.createFailureResult(config.errorMessage || 'Failed to load agent configuration', params.contextUser);
+            }
+
+            // --- PHASE 3: Agent type initialization (sequential) ---
+            // Must wait for config from Phase 2 because it needs the resolved agent type and
+            // prompt configuration to initialize the type-specific state machine.
+            await this.initializeAgentType(wrappedParams, config);
 
             // Execute the agent's internal logic with wrapped parameters
             this.logStatus(`🚀 Executing agent '${params.agent.Name}' internal logic`, true, params);
@@ -1209,8 +1372,12 @@ export class BaseAgent {
         } catch (error) {
             // Check if error is due to cancellation
             if (params.cancellationToken?.aborted || error.message === 'Cancelled during execution') {
-                this.logStatus(`⚠️ Agent '${params.agent.Name}' execution cancelled: ${error.message}`, true, params);
-                return await this.createCancelledResult(error.message || 'Cancelled due to error during execution', params.contextUser);
+                const reason =
+                    typeof timeoutController.signal.reason === 'string'
+                        ? timeoutController.signal.reason
+                        : error.message;
+                this.logStatus(`⚠️ Agent '${params.agent.Name}' execution cancelled: ${reason}`, true, params);
+                return await this.createCancelledResult(reason || 'Cancelled due to error during execution', params.contextUser);
             }
             this.logError(error, {
                 agent: params.agent,
@@ -1218,14 +1385,25 @@ export class BaseAgent {
                 severity: 'critical'
             });
             return await this.createFailureResult(error.message, params.contextUser);
+        } finally {
+            // Release timeout / upstream-abort listeners so we don't leak
+            // handles when the run completes (success, failure, or cancel).
+            clearTimeout(timeoutId);
+            if (upstreamToken) {
+                upstreamToken.removeEventListener('abort', relayUpstreamAbort);
+            }
+            // Restore the caller's original cancellationToken on `params` so
+            // consumers that re-read `params` after the call see what they
+            // passed in, not our chained signal.
+            params.cancellationToken = upstreamToken;
         }
     }
 
     /**
      * Sub-classes can override this method to perform any specialized initialization
-     * @param params 
+     * @param params
      */
-    protected async initializeStartingPayload<P = any>(params: ExecuteAgentParams<any, P>): Promise<void> { 
+    protected async initializeStartingPayload<P = any>(params: ExecuteAgentParams<any, P>): Promise<void> {
         // the base class doesn't do anything here, this allows sub-classes
         // to do specialized initialization of the starting payload
     }
@@ -1884,6 +2062,27 @@ export class BaseAgent {
                 promptParams.data['_SCRATCHPAD_TASKS'] = this._scratchpadManager.ToPromptString();
                 promptParams.data['_SCRATCHPAD_TASK_SUMMARY'] = this._scratchpadManager.GetTaskSummary();
             }
+
+            // Inject artifact tools template variables if enabled and artifacts are present
+            const artifactToolsEnabled = agentTypePromptParams?.includeArtifactToolsDocs !== false;
+            if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
+                promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
+                promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
+                promptParams.data['_ARTIFACT_TOOL_RESULTS'] = this._artifactToolManager.GetPendingResults();
+                promptParams.data['_ARTIFACT_TOOL_SUMMARY'] = this._artifactToolManager.GetSummary();
+                this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
+            } else if (this._artifactToolManager.HasArtifacts()) {
+                this.logStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`, true, params);
+            }
+
+            // Pass file artifacts as candidate native file inputs.
+            // The AIPromptRunner will check these against the resolved driver's
+            // FileCapabilities and attach qualifying files as native content blocks.
+            // When the driver doesn't support a file type, the runner falls back to
+            // the pre-extracted TextContent on each candidate.
+            if (this._artifactToolManager.HasArtifacts()) {
+                promptParams.nativeFileInputs = await this._artifactToolManager.GetNativeFileInputCandidates();
+            }
         }
 
         // Only set up child prompts if we have a system prompt
@@ -2034,6 +2233,9 @@ export class BaseAgent {
                 return nextStep;
             case 'While':
                 // While loops are valid - no additional validation needed
+                return nextStep;
+            case 'ClientTools' as typeof nextStep.step:
+                // Client tools are valid - execution handled by executeClientToolsStep
                 return nextStep;
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
@@ -2841,14 +3043,38 @@ export class BaseAgent {
         errorMessage: string,
         config?: AgentConfiguration
     ): { isConfigError: boolean; detailedMessage: string } {
+        // Extract the property name from the error up front — used by the
+        // narrowed classifier below to decide whether this is a genuine config
+        // issue or a generic runtime exception that should bubble up normally.
+        const propertyMatch = errorMessage.match(/reading '(\w+)'/i);
+        const accessedProperty = propertyMatch ? propertyMatch[1].toLowerCase() : '';
+
+        // Only `.map/.x on undefined` errors that reference config-related
+        // properties are treated as configuration errors. Generic runtime
+        // errors (e.g. a tool handler crashing on `rows.map`) should not
+        // terminate the run as "unrecoverable config issue" — they should
+        // fail the step and let the agent try to recover.
+        const CONFIG_RELATED_PROPERTIES = new Set([
+            'prompt', 'childprompt', 'systemprompt', 'prompts',
+            'agent', 'agents', 'agenttype', 'agenttypes',
+            'model', 'models', 'vendor', 'vendors',
+            'template', 'templates',
+        ]);
+        const isConfigRelatedProperty = accessedProperty !== ''
+            && CONFIG_RELATED_PROPERTIES.has(accessedProperty);
+
         // Check for common configuration error patterns
         const configErrorPatterns = [
             {
-                pattern: /cannot read propert(y|ies) of (undefined|null)/i,
+                // Only match when the accessed property is config-related.
+                // Without this guard, any runtime `.map on undefined` (e.g.
+                // in an artifact tool handler) gets misclassified as a fatal
+                // configuration error and the agent run terminates.
+                pattern: isConfigRelatedProperty
+                    ? /cannot read propert(y|ies) of (undefined|null)/i
+                    : /__NEVER_MATCH_GENERIC_UNDEFINED_ACCESS__/,
                 getMessage: () => {
-                    // Try to extract what property was being accessed
-                    const propertyMatch = errorMessage.match(/reading '(\w+)'/i);
-                    const property = propertyMatch ? propertyMatch[1] : 'unknown property';
+                    const property = accessedProperty || 'unknown property';
 
                     let details = `Attempted to access property '${property}' on an undefined or null object.`;
 
@@ -3148,9 +3374,9 @@ export class BaseAgent {
                     ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
                     : 0,
                 tokens: this.estimateTokens(msg.content),
-                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result'
+                isToolResult: this.IsToolResultMessage(msg)
             }))
-            .filter(c => c.isActionResult && c.age >= minAge)
+            .filter(c => c.isToolResult && c.age >= minAge)
             .sort((a, b) => b.age - a.age); // Oldest first
 
         // Remove messages until we've saved enough
@@ -3217,10 +3443,10 @@ export class BaseAgent {
                     ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
                     : 0,
                 tokens: this.estimateTokens(msg.content),
-                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                isToolResult: this.IsToolResultMessage(msg),
                 alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
             }))
-            .filter(c => c.isActionResult && c.age >= minAge && !c.alreadyCompacted)
+            .filter(c => c.isToolResult && c.age >= minAge && !c.alreadyCompacted)
             .sort((a, b) => b.age - a.age); // Oldest first
 
         for (const candidate of candidates) {
@@ -3298,10 +3524,10 @@ export class BaseAgent {
                 message: msg,
                 index: index,
                 tokens: this.estimateTokens(msg.content),
-                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                isToolResult: this.IsToolResultMessage(msg),
                 alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
             }))
-            .filter(c => c.isActionResult && !c.alreadyCompacted && c.tokens > 200)
+            .filter(c => c.isToolResult && !c.alreadyCompacted && c.tokens > 200)
             .sort((a, b) => b.tokens - a.tokens); // Largest first
 
         for (const candidate of candidates) {
@@ -3688,6 +3914,12 @@ The context is now within limits. Please retry your request with the recovered c
                 runtimePromptParamOverrides
             );
 
+            // Build client tool details for the prompt
+            const clientToolDetails = this.buildClientToolPromptSection(agent, extraData);
+
+            // Build app context section if provided in extraData
+            const appContext = this.buildAppContextSection(extraData);
+
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
@@ -3696,6 +3928,8 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentDetails: this.formatSubAgentDetails(uniqueActiveSubAgents),
                 actionCount: activeActions.length,
                 actionDetails: this.formatActionDetails(activeActions),
+                clientToolDetails: clientToolDetails,
+                appContext: appContext,
             };
 
             // Build the final result with __agentTypePromptParams injected
@@ -3709,7 +3943,11 @@ The context is now within limits. Please retry your request with the recovered c
             if (extraData) {
                 // Spread extraData but don't let it override __agentTypePromptParams
                 // (which was already built with runtime overrides included)
-                const { __agentTypePromptParams: _ignored, ...restExtraData } = extraData;
+                // Spread extraData into the result but exclude properties that were already
+                // processed into formatted prompt sections above. Without this exclusion,
+                // the raw objects from extraData would overwrite the formatted markdown strings
+                // in contextData (e.g., appContext object would replace the markdown string).
+                const { __agentTypePromptParams: _ignored, appContext: _ignoredAppContext, ...restExtraData } = extraData;
                 return {
                     ...result,
                     ...restExtraData
@@ -3821,7 +4059,8 @@ The context is now within limits. Please retry your request with the recovered c
             { docsFlag: 'includeCommandDocs', responseTypeKey: 'commands' },
             { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
             { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' },
-            { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' }
+            { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' },
+            { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' }
         ];
 
         for (const { docsFlag, responseTypeKey } of alignmentMappings) {
@@ -3901,7 +4140,12 @@ The context is now within limits. Please retry your request with the recovered c
                 Value: value,
                 Type: 'Input' as const
             }));
-            
+
+            // Build action context: preserve the agent's context and inject resolved storage account ID
+            const actionContext = this._resolvedStorageAccountId
+                ? { ...(typeof params.context === 'object' && params.context ? params.context : {}), __resolvedStorageAccountId: this._resolvedStorageAccountId }
+                : params.context;
+
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({
                 Action: actionEntity,
@@ -3909,7 +4153,7 @@ The context is now within limits. Please retry your request with the recovered c
                 ContextUser: contextUser,
                 Filters: [],
                 SkipActionLog: false,
-                Context: params.context // pass along our context to actions so they can use it however they need
+                Context: actionContext
             });
             
             if (result.Success) {
@@ -4259,6 +4503,139 @@ The context is now within limits. Please retry your request with the recovered c
 
             return lines.join('\n');
         }).join('\n\n');
+    }
+
+    /**
+     * Build the client tool prompt section for system prompt injection.
+     *
+     * Tool sources (checked in order, all merged — first registration wins):
+     * 1. Metadata tools from AI Agent Client Tools junction table
+     * 2. Session-level enriched tools from ClientToolRequestManager (set by client SDK)
+     * 3. Tools provided directly in extraData.clientTools (runtime override)
+     */
+    private buildClientToolPromptSection(agent: MJAIAgentEntityExtended, extraData?: Record<string, unknown>): string {
+        const toolMap = new Map<string, ClientToolMetadata>();
+
+        // 1. Metadata tools from junction table (authoritative source)
+        const engine = AIEngine.Instance;
+        const metadataTools = engine.GetClientToolsForAgent(agent.ID);
+        for (const tool of metadataTools) {
+            toolMap.set(tool.Name, {
+                Name: tool.Name,
+                Description: tool.Description,
+                InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
+                OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
+                Category: tool.Category || undefined,
+                DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
+            });
+        }
+
+        // 2. Session-level enriched tools (client SDK decorated tools)
+        const sessionID = extraData?.sessionID as string | undefined;
+        if (sessionID) {
+            for (const tool of ClientToolRequestManager.Instance.GetSessionTools(sessionID)) {
+                if (!toolMap.has(tool.Name)) {
+                    toolMap.set(tool.Name, tool);
+                }
+            }
+        }
+
+        // 3. Runtime extraData override
+        if (extraData?.clientTools) {
+            for (const tool of extraData.clientTools as ClientToolMetadata[]) {
+                if (!toolMap.has(tool.Name)) {
+                    toolMap.set(tool.Name, tool);
+                }
+            }
+        }
+
+        const tools = Array.from(toolMap.values());
+
+        if (tools.length === 0) {
+            return ''; // No client tools available
+        }
+
+        const lines: string[] = [];
+        lines.push('### Client Tools (execute in the user\'s browser)');
+        lines.push('Client tools run in the user\'s browser and interact with the UI. Use these when you need');
+        lines.push('to navigate the user somewhere, display a specific view, switch dashboard tabs, or show');
+        lines.push('records. When you choose client tools, set nextStep.type to "ClientTools".');
+        lines.push('');
+        lines.push('NOTE: Do NOT use client tools for asking the user questions or collecting input.');
+        lines.push('Use the "Chat" step for that. Client tools are for programmatic UI interaction only.');
+        lines.push('');
+
+        for (const tool of tools) {
+            const categoryTag = tool.Category ? ` [${tool.Category}]` : '';
+            lines.push(`- **${tool.Name}**${categoryTag}: ${tool.Description}`);
+
+            // Show input parameters from InputSchema
+            const props = (tool.InputSchema as Record<string, unknown>)?.properties as Record<string, Record<string, unknown>> | undefined;
+            const required = (tool.InputSchema as Record<string, unknown>)?.required as string[] | undefined;
+            if (props) {
+                const paramParts = Object.entries(props).map(([name, schema]) => {
+                    const req = required?.includes(name) ? '\\*' : '';
+                    const desc = schema.description ? ` — ${schema.description}` : '';
+                    return `\`${name}\`${req}${desc}`;
+                });
+                lines.push(`  Inputs: ${paramParts.join(', ')}`);
+            }
+        }
+
+        return lines.join('\n');
+    }
+
+    /**
+     * Build the app context section for system prompt injection.
+     * Reads the AppContextSnapshot from extraData.appContext and formats
+     * it as a concise markdown section the LLM can reference.
+     */
+    private buildAppContextSection(extraData?: Record<string, unknown>): string {
+        const ctx = extraData?.appContext as Record<string, unknown> | undefined;
+        if (!ctx) return '';
+
+        const app = ctx['App'] as { Name?: string; Description?: string } | undefined;
+        const activeNav = ctx['ActiveNavItem'] as { Name?: string; Description?: string; ResourceType?: string } | undefined;
+        const otherNavs = ctx['OtherNavItems'] as Array<{ Name?: string; Description?: string }> | undefined;
+        const user = ctx['User'] as { Name?: string; Roles?: string[] } | undefined;
+
+        if (!app?.Name) return '';
+
+        const lines: string[] = [];
+        lines.push('### Current Application Context');
+        lines.push(`The user is currently in the **${app.Name}** application${app.Description ? ` — ${app.Description}` : ''}.`);
+
+        if (activeNav?.Name) {
+            lines.push('');
+            lines.push(`**Active view:** ${activeNav.Name}${activeNav.Description ? ` — ${activeNav.Description}` : ''}${activeNav.ResourceType ? ` (${activeNav.ResourceType})` : ''}`);
+        }
+
+        if (otherNavs && otherNavs.length > 0) {
+            lines.push('');
+            lines.push('**Other views available in this app:**');
+            for (const nav of otherNavs) {
+                lines.push(`- ${nav.Name}${nav.Description ? ` — ${nav.Description}` : ''}`);
+            }
+        }
+
+        if (user?.Name) {
+            lines.push('');
+            lines.push(`**User:** ${user.Name}${user.Roles?.length ? ` (Roles: ${user.Roles.join(', ')})` : ''}`);
+        }
+
+        // Additional context reported by the active view/component
+        const dashboardCtx = ctx['AdditionalContext'] as Record<string, unknown> | undefined;
+        if (dashboardCtx && Object.keys(dashboardCtx).length > 0) {
+            lines.push('');
+            lines.push('**Dashboard state:**');
+            for (const [key, value] of Object.entries(dashboardCtx)) {
+                if (value === null || value === undefined) continue;
+                const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+                lines.push(`- ${key}: ${displayValue}`);
+            }
+        }
+
+        return lines.join('\n');
     }
 
     /**
@@ -5130,6 +5507,10 @@ The context is now within limits. Please retry your request with the recovered c
                 return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
+            // Type assertion required because 'ClientTools' is not yet in the DB StepType value list.
+            // The LoopAgentType.DetermineNextStep() emits this value when the LLM chooses client tools.
+            case 'ClientTools' as typeof previousDecision.step:
+                return await this.executeClientToolsStep(params, config, previousDecision, stepCount);
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
@@ -5517,6 +5898,16 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
+            // Execute artifact tool calls if provided (zero turn cost — processed inline)
+            const artifactToolCalls = initialNextStep.artifactToolCalls as ArtifactToolCall[] | undefined;
+            const artifactToolsExecutedThisTurn = !!(artifactToolCalls?.length);
+            if (artifactToolsExecutedThisTurn) {
+                this.logStatus(`[ArtifactTools] LLM requested ${artifactToolCalls!.length} tool call(s): ${artifactToolCalls!.map(c => `${c.artifactId}.${c.tool}`).join(', ')}`, true, params);
+                await this._artifactToolManager.ExecuteToolCalls(artifactToolCalls!);
+            } else if (this._artifactToolManager.HasArtifacts()) {
+                this.logStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`, true, params);
+            }
+
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if
             // validation fails
             const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
@@ -5540,6 +5931,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // Include scratchpad snapshot after changes for audit/training data
                 ...(this._scratchpadManager.HasContent() && {
                     scratchpad: this._scratchpadManager.ToJSON()
+                }),
+                // Include artifact tools snapshot for audit/training data
+                ...(this._artifactToolManager.HasArtifacts() && {
+                    artifactTools: this._artifactToolManager.ToJSON()
                 }),
                 // Include memory attribution for observability
                 // This tracks which notes/examples were injected and influenced this step
@@ -5579,6 +5974,15 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Return based on next step
             if (updatedNextStep.step === 'Chat') {
+                // If artifact tools were called THIS turn, don't terminate yet — the LLM
+                // needs one more turn to see the results and incorporate them into its response.
+                // Without this, the tool results are wasted because the run exits before
+                // the LLM ever sees them.
+                if (artifactToolsExecutedThisTurn && this._artifactToolManager.HasArtifacts()) {
+                    this.logStatus(`[ArtifactTools] Chat step included tool calls — forcing one more turn so LLM can use results`, true, params);
+                    return { ...updatedNextStep, terminate: false, step: 'Retry' as BaseAgentNextStep<P>['step'] };
+                }
+
                 // For root agents, create a persistent AIAgentRequest so the request is
                 // tracked in the dashboard and can be responded to outside a conversation.
                 // This is done here because Chat decisions from executePromptStep terminate
@@ -5590,6 +5994,16 @@ The context is now within limits. Please retry your request with the recovered c
             }
             else if (updatedNextStep.step === 'Success' || updatedNextStep.step === 'Failed') {
                 return { ...updatedNextStep, terminate: true };
+            } else if (updatedNextStep.step === 'ClientTools' as string) {
+                // ClientTools must return terminate: false so the main loop continues
+                // to the next iteration where executeClientToolsStep actually dispatches
+                // and awaits the tool. The LLM's original terminate intent is preserved in
+                // terminateAfterExecution so executeClientToolsStep can honor it post-execution.
+                return {
+                    ...updatedNextStep,
+                    terminate: false,
+                    terminateAfterExecution: updatedNextStep.terminate
+                };
             } else {
                 return { ...updatedNextStep, terminate: false };
             }
@@ -5975,6 +6389,12 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
+            // Merge sub-agent's file outputs into parent's array for unified artifact creation.
+            if (subAgentResult.fileOutputs?.length) {
+                this._fileOutputs.push(...subAgentResult.fileOutputs);
+                this.logStatus(`📄 Collected ${subAgentResult.fileOutputs.length} file output(s) from sub-agent '${subAgentRequest.name}'`, true);
+            }
+
             // Determine if we should terminate after sub-agent
             const shouldTerminate = subAgentRequest.terminateAfter;
             
@@ -6299,6 +6719,12 @@ The context is now within limits. Please retry your request with the recovered c
                 if (refCount > 0) {
                     this.logStatus(`📦 Collected ${refCount} media reference(s) from related sub-agent '${subAgentRequest.name}'`, true);
                 }
+            }
+
+            // Merge sub-agent's file outputs into parent's array for unified artifact creation.
+            if (subAgentResult.fileOutputs?.length) {
+                this._fileOutputs.push(...subAgentResult.fileOutputs);
+                this.logStatus(`📄 Collected ${subAgentResult.fileOutputs.length} file output(s) from related sub-agent '${subAgentRequest.name}'`, true);
             }
 
             let mergedPayload = previousDecision.newPayload; // Start with parent's payload
@@ -6909,6 +7335,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // Pass actionEntity for generic ValueType=MediaOutput detection from metadata
                 const sanitizedParams = this.interceptLargeBinaryContent(outputParams, result.actionEntity);
 
+                // Collect file outputs (PDF, Excel, Word, etc.) for post-run artifact processing
+                const fileOutputs = this.detectFileOutputs(outputParams);
+                this._fileOutputs.push(...fileOutputs);
+
                 return {
                     actionName: result.action.name,
                     success: result.success,
@@ -7080,6 +7510,168 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @private
      */
+
+    // ================================================================
+    // Client Tools Step Execution
+    // ================================================================
+
+    /**
+     * Execute client-side tools requested by the agent.
+     * Sends each tool invocation via PubSub, awaits the client's response
+     * (or timeout), then adds results to the conversation and continues.
+     */
+    private async executeClientToolsStep(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep,
+        stepCount: number = 0
+    ): Promise<BaseAgentNextStep> {
+        const clientTools: AgentClientToolInvocation[] = previousDecision.clientTools ?? [];
+        if (clientTools.length === 0) {
+            // No tools to execute — continue with next prompt
+            return await this.executePromptStep(params, config, previousDecision, stepCount);
+        }
+
+        if (!params.sessionID) {
+            // No session ID — can't communicate with client
+            const errorMsg = 'Cannot execute client tools: no sessionID provided in ExecuteAgentParams';
+            LogError(errorMsg);
+            params.conversationMessages.push({
+                role: 'user',
+                content: `Client tool execution skipped: ${errorMsg}`
+            });
+            return await this.executePromptStep(params, config, previousDecision, stepCount);
+        }
+
+        const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
+
+        // Build assistant message describing the tool invocations
+        const toolMessage = clientTools.length === 1
+            ? `I'm invoking the **${clientTools[0].Name}** client tool${clientTools[0].Description ? ` — ${clientTools[0].Description}` : ''}.`
+            : `I'm invoking **${clientTools.length} client tools**:\n\n` +
+              clientTools.map((t, i) => `${i + 1}. **${t.Name}**${t.Description ? ` — ${t.Description}` : ''}`).join('\n');
+
+        params.conversationMessages.push({
+            role: 'assistant',
+            content: toolMessage
+        });
+
+        // Report progress
+        params.onProgress?.({
+            step: 'action_execution', // Reuse action_execution step type for progress reporting
+            message: this.formatHierarchicalMessage(toolMessage),
+            metadata: {
+                toolCount: clientTools.length,
+                toolNames: clientTools.map(t => t.Name),
+                stepCount: stepCount + 1,
+                hierarchicalStep: this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts)
+            },
+            displayMode: 'live'
+        });
+
+        // Resolve default timeout: per-tool > params > agent config > 30s
+        const defaultTimeout = params.clientToolTimeoutMs ?? 30_000;
+
+        const results: ClientToolResultSummary[] = [];
+        const agentRunID = this._agentRun?.ID ?? 'unknown';
+
+        // Execute tools sequentially (client may not support parallel UI operations)
+        for (const tool of clientTools) {
+            const stepEntity = await this.createStepEntity({
+                // INTENTIONAL: We use 'Actions' as the DB step type because the MJ: AI Agent Run Steps
+                // entity's StepType value list does not yet include 'ClientTools'. A future database
+                // migration will add 'ClientTools' to the allowed values in the StepType CHECK constraint
+                // and CodeGen will regenerate the types. Until then, client tool steps are recorded under
+                // 'Actions' in the run history. The step name ("Client Tool: {name}") distinguishes them.
+                stepType: 'Actions' as MJAIAgentRunStepEntityExtended['StepType'],
+                stepName: `Client Tool: ${tool.Name}`,
+                inputData: { toolName: tool.Name, params: tool.Params },
+                contextUser: params.contextUser,
+                payloadAtStart: currentPayload,
+                payloadAtEnd: currentPayload
+            });
+
+            const timeoutMs = tool.TimeoutMs ?? defaultTimeout;
+
+            const response = await ClientToolRequestManager.Instance.RequestClientTool(
+                `ct_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                tool.Name,
+                tool.Params,
+                params.sessionID,
+                agentRunID,
+                timeoutMs,
+                tool.Description
+            );
+
+            await this.finalizeStepEntity(
+                stepEntity,
+                response.Success,
+                response.ErrorMessage,
+                { result: response.Result }
+            );
+
+            results.push({
+                ToolName: tool.Name,
+                Success: response.Success,
+                Result: response.Result,
+                ErrorMessage: response.ErrorMessage
+            });
+        }
+
+        // Format results as conversation message
+        const resultsMarkdown = this.formatClientToolResultsAsMarkdown(results);
+        params.conversationMessages.push({
+            role: 'user',
+            content: resultsMarkdown,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'client-tool-result'
+            }
+        } as AgentChatMessage);
+
+        // If the LLM already declared taskComplete=true alongside the client tools,
+        // honor that intent now that tools have executed — no need for another LLM call.
+        if (previousDecision.terminateAfterExecution) {
+            return {
+                step: 'Success',
+                terminate: true,
+                message: previousDecision.message || 'Client tools executed successfully.',
+                payloadChangeRequest: previousDecision.payloadChangeRequest,
+                scratchpad: previousDecision.scratchpad,
+                responseForm: previousDecision.responseForm,
+                actionableCommands: previousDecision.actionableCommands,
+                automaticCommands: previousDecision.automaticCommands
+            };
+        }
+
+        return await this.executePromptStep(params, config, previousDecision, stepCount);
+    }
+
+    /**
+     * Format client tool results as a compact markdown summary for the conversation.
+     */
+    private formatClientToolResultsAsMarkdown(results: ClientToolResultSummary[]): string {
+        const failedCount = results.filter(r => !r.Success).length;
+        const header = failedCount > 0
+            ? `${failedCount} of ${results.length} client tool(s) failed:`
+            : 'Client tool results:';
+
+        const lines = results.map(r => {
+            const icon = r.Success ? '✓' : '✗';
+            let line = `${icon} **${r.ToolName}**: ${r.Success ? 'succeeded' : 'failed'}`;
+            if (r.ErrorMessage) line += ` — ${r.ErrorMessage}`;
+            if (r.Success && r.Result != null) {
+                const resultStr = typeof r.Result === 'string' ? r.Result : JSON.stringify(r.Result);
+                if (resultStr.length <= 500) {
+                    line += `\n  Result: ${resultStr}`;
+                }
+            }
+            return line;
+        });
+
+        return `${header}\n${lines.join('\n')}`;
+    }
+
     private async executeChatStep(
         params: ExecuteAgentParams,
         previousDecision: BaseAgentNextStep
@@ -7219,11 +7811,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Walks up the agent's category hierarchy looking for an AssignmentStrategy.
-     * Loads categories via RunView and caches them for the duration of this run.
-     * @private
+     * Uses AIEngine.Instance.AgentCategories (cached during engine Config).
      */
-    private _categoryCache: Array<{ ID: string; ParentID: string | null; AssignmentStrategy: string | null }> | null = null;
-
     private async resolveCategoryAssignmentStrategy(
         params: ExecuteAgentParams
     ): Promise<AgentRequestAssignmentStrategy | null> {
@@ -7231,23 +7820,14 @@ The context is now within limits. Please retry your request with the recovered c
         if (!categoryId) return null;
 
         try {
-            // Load all categories if not cached
-            if (!this._categoryCache) {
-                const rv = new RunView();
-                const result = await rv.RunView<{ ID: string; ParentID: string | null; AssignmentStrategy: string | null }>({
-                    EntityName: 'MJ: AI Agent Categories',
-                    Fields: ['ID', 'ParentID', 'AssignmentStrategy'],
-                    ResultType: 'simple'
-                }, params.contextUser);
-                this._categoryCache = result.Success ? result.Results : [];
-            }
+            const categories = AIEngine.Instance.AgentCategories;
 
             // Walk up the tree from the agent's category to the root
             let currentId: string | null = categoryId;
             const visited = new Set<string>(); // prevent infinite loops
             while (currentId && !visited.has(currentId)) {
                 visited.add(currentId);
-                const cat = this._categoryCache.find(c => UUIDsEqual(c.ID, currentId));
+                const cat = categories.find(c => UUIDsEqual(c.ID, currentId));
                 if (!cat) break;
 
                 const strategy = parseAssignmentStrategy(cat.AssignmentStrategy);
@@ -7260,6 +7840,98 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return null;
+    }
+
+
+    /**
+     * Resolves the file storage account ID for this agent's file artifacts.
+     *
+     * Resolution chain (first non-null wins):
+     * 1. Runtime override (`params.override?.storageAccountId`)
+     * 2. Agent-level (`params.agent.DefaultStorageAccountID`)
+     * 3. Category hierarchy — walks up the agent's category tree via `ParentID`
+     * 4. Agent Type-level (`agentType.DefaultStorageAccountID`)
+     * 5. System fallback — single active storage account, if only one exists
+     *
+     * This method is `protected` so subclasses can override the resolution logic
+     * for custom storage routing (e.g., routing by file type or tenant).
+     *
+     * @param params - The current agent execution parameters
+     * @returns The resolved FileStorageAccount ID, or null if none configured
+     */
+    protected async getStorageAccountID(params: ExecuteAgentParams): Promise<string | null> {
+        // 1. Runtime override — highest priority
+        if (params.override?.storageAccountId) {
+            return params.override.storageAccountId;
+        }
+
+        // 2. Agent-level override
+        if (params.agent.DefaultStorageAccountID) {
+            return params.agent.DefaultStorageAccountID;
+        }
+
+        // 3. Category tree walk
+        const categoryId = params.agent.CategoryID;
+        if (categoryId) {
+            try {
+                const categories = AIEngine.Instance.AgentCategories;
+
+                let currentId: string | null = categoryId;
+                const visited = new Set<string>();
+                while (currentId && !visited.has(currentId)) {
+                    visited.add(currentId);
+                    const cat = categories.find(c => UUIDsEqual(c.ID, currentId));
+                    if (!cat) break;
+                    if (cat.DefaultStorageAccountID) return cat.DefaultStorageAccountID;
+                    currentId = cat.ParentID;
+                }
+            } catch (error) {
+                LogError(`Error resolving category storage account: ${(error as Error).message}`);
+            }
+        }
+
+        // 4. Agent Type-level default
+        const agentTypeId = params.agent.TypeID;
+        if (agentTypeId) {
+            const agentType = AIEngine.Instance.AgentTypes.find(
+                at => UUIDsEqual(at.ID, agentTypeId)
+            );
+            if (agentType?.DefaultStorageAccountID) {
+                return agentType.DefaultStorageAccountID;
+            }
+        }
+
+        // 5. System fallback — use cached metadata (already loaded during engine Config)
+        const activeAccounts = FileStorageEngineBase.Instance.AccountsWithProviders
+            .filter(a => a.provider.IsActive);
+
+        if (activeAccounts.length === 0) {
+            // No storage configured — return null, inline base64 fallback handles it downstream
+            return null;
+        }
+
+        if (activeAccounts.length === 1) {
+            return activeAccounts[0].account.ID;
+        }
+
+        // 2+ active accounts but nothing configured at any level
+        const agentName = params.agent.Name || params.agent.ID;
+        const typeName = params.agent.TypeID
+            ? AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID))?.Name || params.agent.TypeID
+            : 'unknown';
+        const categoryName = params.agent.CategoryID
+            ? AIEngine.Instance.AgentCategories.find(c => UUIDsEqual(c.ID, params.agent.CategoryID))?.Name || params.agent.CategoryID
+            : 'none';
+        const accountNames = activeAccounts.map(a => `'${a.account.Name}' (${a.provider.Name})`).join(', ');
+
+        throw new Error(
+            `Multiple active file storage accounts detected (${accountNames}) but no DefaultStorageAccountID is configured ` +
+            `for agent '${agentName}', category '${categoryName}', or agent type '${typeName}'.\n` +
+            `To fix: Set DefaultStorageAccountID on one of the following (in order of priority):\n` +
+            `  1. Agent '${agentName}' — for this specific agent\n` +
+            `  2. Agent Category '${categoryName}' — for all agents in this category\n` +
+            `  3. Agent Type '${typeName}' — for all agents of this type`
+        );
     }
 
     /**
@@ -8365,7 +9037,9 @@ The context is now within limits. Please retry your request with the recovered c
                 ? this._injectedMemory
                 : undefined,
             mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
-            feedbackRequestId: this._feedbackRequestId || undefined
+            fileOutputs: this._fileOutputs.length > 0 ? this._fileOutputs : undefined,
+            feedbackRequestId: this._feedbackRequestId || undefined,
+            resolvedStorageAccountId: this._resolvedStorageAccountId || undefined
         };
     }
 
@@ -8840,6 +9514,15 @@ The context is now within limits. Please retry your request with the recovered c
      * @param modelName - Optional model name for accurate tokenization
      * @protected
      */
+    /**
+     * Returns true if the message is a tool result (action or client tool).
+     * Used by recovery strategies to identify compactable result messages.
+     */
+    protected IsToolResultMessage(msg: ChatMessage): boolean {
+        const messageType = (msg as AgentChatMessage).metadata?.messageType;
+        return messageType === 'action-result' || messageType === 'client-tool-result';
+    }
+
     protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {
         const text = typeof content === 'string'
             ? content

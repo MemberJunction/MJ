@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Dominica",
+      "Code": "DM",
+      "ISO3166_2": "DM-DM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dominica"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DM"
+    },
+    "primaryKey": {
+      "ID": "363A5956-E5A0-4935-BD5C-40F57AB8C45D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.726Z",
+      "checksum": "4ac06308baa2a26d949617446f89d1d82ce6f5a6b5db8664ff88e291303daa4f"
+    }
+  }
+]

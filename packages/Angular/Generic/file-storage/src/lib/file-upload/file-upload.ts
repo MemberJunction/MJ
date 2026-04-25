@@ -1,12 +1,20 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/core';
-import { MJFileEntity, MJFileSchema, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+import { MJFileEntity, MJFileSchema, MJFileStorageProviderEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 
-import { FileInfo, SelectEvent } from '@progress/kendo-angular-upload';
 import { z } from 'zod';
 
-export type FileUploadEvent = { success: true; file: MJFileEntity } | { success: false; file: FileInfo };
+/**
+ * Minimal file info interface replacing Kendo's FileInfo.
+ */
+export interface FileSelectInfo {
+  name: string;
+  size: number;
+  rawFile: File;
+}
+
+export type FileUploadEvent = { success: true; file: MJFileEntity } | { success: false; file: FileSelectInfo };
 
 const FileFieldsFragment = gql`
   fragment FileFields on MJFile_ {
@@ -27,8 +35,8 @@ const FileFieldsFragment = gql`
 
 const FileUploadMutation = gql`
   ${FileFieldsFragment}
-  mutation CreateMJFile($input: CreateMJFileInput!) {
-    CreateMJFile(input: $input) {
+  mutation CreateFile($input: CreateMJFileInput!) {
+    CreateFile(input: $input) {
       NameExists
       UploadUrl
       File {
@@ -39,15 +47,15 @@ const FileUploadMutation = gql`
 `;
 
 const FileUploadMutationSchema = z.object({
-  CreateMJFile: z.object({
+  CreateFile: z.object({
     NameExists: z.boolean(),
     UploadUrl: z.string(),
     File: MJFileSchema.omit({ __mj_CreatedAt: true, __mj_UpdatedAt: true }).passthrough(),
   }),
 });
 
-type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateMJFile']['File'];
-type UploadTuple = [FileInfo, ApiFile, string];
+type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateFile']['File'];
+type UploadTuple = [FileSelectInfo, ApiFile, string];
 
 @Component({
   standalone: false,
@@ -57,7 +65,7 @@ type UploadTuple = [FileInfo, ApiFile, string];
 })
 export class FileUploadComponent implements OnInit {
   public ConfirmQueue: Array<UploadTuple> = [];
-  public UploadQueue: Array<FileInfo> = [];
+  public UploadQueue: Array<FileSelectInfo> = [];
   private defaultProviderID = '';
   private md = new Metadata();
 
@@ -77,9 +85,11 @@ export class FileUploadComponent implements OnInit {
   }
 
   async Refresh() {
-    const rv = new RunView();
-    const viewResults = await rv.RunView({ EntityName: 'MJ: File Storage Providers', ExtraFilter: 'IsActive = 1', OrderBy: 'Priority DESC' });
-    const provider: MJFileStorageProviderEntity | undefined = viewResults.Results[0];
+    await FileStorageEngineBase.Instance.Config(false);
+    const activeProviders = FileStorageEngineBase.Instance.Providers
+      .filter(p => p.IsActive)
+      .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+    const provider: MJFileStorageProviderEntity | undefined = activeProviders[0];
     if (typeof provider?.ID === 'string') {
       this.defaultProviderID = provider.ID;
     }
@@ -105,11 +115,31 @@ export class FileUploadComponent implements OnInit {
     }
   }
 
-  async SelectEventHandler(e: SelectEvent) {
-    e.preventDefault();
+  /**
+   * Handles the native file input change event.
+   */
+  OnFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
+
     this.uploadStarted.emit();
 
-    this.UploadQueue = e.files;
+    // Convert native File objects to our FileSelectInfo format
+    for (let i = 0; i < input.files.length; i++) {
+      const nativeFile = input.files[i];
+      const fileInfo: FileSelectInfo = {
+        name: nativeFile.name,
+        size: nativeFile.size,
+        rawFile: nativeFile,
+      };
+      this.UploadQueue.push(fileInfo);
+    }
+
+    // Reset input so the same file can be selected again
+    input.value = '';
+
     this._processUploadQueue();
   }
 
@@ -130,7 +160,7 @@ export class FileUploadComponent implements OnInit {
       // make sure the response is correct
       const parsedResult = FileUploadMutationSchema.safeParse(result);
       if (parsedResult.success) {
-        const { File, UploadUrl, NameExists } = parsedResult.data.CreateMJFile;
+        const { File, UploadUrl, NameExists } = parsedResult.data.CreateFile;
         const uploadTuple: UploadTuple = [file, File, UploadUrl];
 
         // Confirm we want to overwrite
@@ -147,7 +177,7 @@ export class FileUploadComponent implements OnInit {
     }
   }
 
-  private async _uploadFile(file: FileInfo, fileRecord: ApiFile, uploadUrl: string) {
+  private async _uploadFile(file: FileSelectInfo, fileRecord: ApiFile, uploadUrl: string) {
     try {
       // now upload to the url
       await window.fetch(uploadUrl, {

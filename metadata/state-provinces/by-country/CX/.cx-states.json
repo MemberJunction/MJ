@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Christmas Island",
+      "Code": "CX",
+      "ISO3166_2": "CX-CX",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Christmas Island"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CX"
+    },
+    "primaryKey": {
+      "ID": "FE9FD29F-0693-4EAC-9E84-A7ECC5389420"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.574Z",
+      "checksum": "b599d5b41d33647e2bad22b9be00dad621c01cc146a34b7649a06a4202136e5b"
+    }
+  }
+]

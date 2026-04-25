@@ -12,6 +12,7 @@ import { CredentialsDashboardsModule } from './credentials-dashboards.module';
 import { DataExplorerDashboardsModule } from './data-explorer-dashboards.module';
 import { ListsDashboardsModule } from './lists-dashboards.module';
 import { ComponentStudioDashboardsModule } from './component-studio-dashboards.module';
+import { ArchivingDashboardsModule } from './archiving-dashboards.module';
 // Existing standalone modules
 import { MCPModule } from './MCP';
 import { IntegrationModule } from './Integration/integration.module';
@@ -47,6 +48,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     DataExplorerDashboardsModule,
     ListsDashboardsModule,
     ComponentStudioDashboardsModule,
+    ArchivingDashboardsModule,
     MCPModule,
     IntegrationModule,
     // External generic modules (re-exported for backward compatibility)
@@ -72,6 +74,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     DataExplorerDashboardsModule,
     ListsDashboardsModule,
     ComponentStudioDashboardsModule,
+    ArchivingDashboardsModule,
     MCPModule,
     IntegrationModule,
     // External generic modules (re-exported for backward compatibility)

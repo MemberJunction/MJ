@@ -798,8 +798,8 @@ function makeClassRulesWithSubclass(): RegexRule[] {
 }
 
 describe('Subclass Rename Map', () => {
-    it('should have 57 entries in SUBCLASS_RENAME_MAP', () => {
-        expect(SUBCLASS_RENAME_MAP.length).toBe(57);
+    it('should have 56 entries in SUBCLASS_RENAME_MAP', () => {
+        expect(SUBCLASS_RENAME_MAP.length).toBe(56);
     });
 
     it('should have all required fields for each entry', () => {

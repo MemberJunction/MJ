@@ -7,27 +7,29 @@
  * and storage usage.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, ViewChild, ElementRef, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
-import { ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
+    ResourceData,
     MJEntityDocumentEntity,
     MJVectorDatabaseEntity,
     MJVectorIndexEntity,
-    MJEntityRecordDocumentEntity,
     MJAIModelEntity,
     MJTemplateEntity,
-    MJTemplateContentEntity
+    MJTemplateContentEntity,
+    KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { KPICardData } from '../widgets/kpi-card.component';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJScheduledActionEntity, MJScheduledActionParamEntity } from '@memberjunction/core-entities';
+import { CronToHumanReadable } from '../autotagging/autotagging-pipeline-resource.component';
 
 /** Flattened row for the entity sync table */
 interface EntitySyncRow {
@@ -53,7 +55,7 @@ interface EmbeddingModelInfo {
 interface DocumentSuggestionResult {
     template: string;
     selectedFields: string[];
-    selectedRelationships: { name: string; fields: string[] }[];
+    selectedRelationships?: { name: string; fields: string[] }[];
     potentialMatchThreshold: number;
     absoluteMatchThreshold: number;
     reasoning: string;
@@ -68,7 +70,8 @@ interface DocumentSuggestionResult {
 })
 export class VectorManagementResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
-    private destroy$ = new Subject<void>();
+    protected override navigationService = inject(NavigationService);
+    protected override destroy$ = new Subject<void>();
 
     /** View mode: 'index' = Option A (shared index as hero, entity docs as children),
      *  'operations' = Option C (operations monitoring with real-time sync status) */
@@ -111,9 +114,24 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public EditDocAIModelID = '';
     public EditDocVectorIndexID = '';
     public EditDocStatus = '';
+    public EditDocTemplate = '';
+    public IsEditRegenerating = false;
+
+    /** Parse {{ FieldName }} patterns from the edit panel's template */
+    public get EditDocSelectedFields(): string[] {
+        if (!this.EditDocTemplate) return [];
+        const matches = this.EditDocTemplate.match(/\{\{\s*(\w+(?:\.\w+)*)\s*\}\}/g);
+        if (!matches) return [];
+        return [...new Set(
+            matches.map(m => m.replace(/\{\{\s*/, '').replace(/\s*\}\}/, ''))
+        )];
+    }
+
+    // --- Zero Vector Indexes Warning ---
+    public ShowNoIndexWarning = false;
 
     /** Open the edit panel for an entity document */
-    public OpenEditPanel(entityDocumentId: string): void {
+    public async OpenEditPanel(entityDocumentId: string): Promise<void> {
         const doc = this.entityDocuments.find(d => UUIDsEqual(d.ID, entityDocumentId));
         if (!doc) return;
         this.EditDocID = doc.ID;
@@ -123,8 +141,35 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.EditDocAIModelID = doc.AIModelID;
         this.EditDocVectorIndexID = doc.VectorIndexID || '';
         this.EditDocStatus = doc.Status;
+        this.EditDocTemplate = '';
+        this.IsEditRegenerating = false;
         this.ShowEditPanel = true;
         this.cdr.detectChanges();
+
+        // Load the template text from Template Contents
+        await this.loadEditDocTemplate(doc.TemplateID);
+    }
+
+    /** Load the template text for the edit panel from the associated Template Contents record */
+    private async loadEditDocTemplate(templateId: string): Promise<void> {
+        if (!templateId) return;
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<{ TemplateText: string }>({
+                EntityName: 'MJ: Template Contents',
+                ExtraFilter: `TemplateID='${templateId}'`,
+                Fields: ['TemplateText'],
+                ResultType: 'simple',
+                OrderBy: 'Priority ASC',
+                MaxRows: 1,
+            });
+            if (result.Success && result.Results.length > 0 && result.Results[0].TemplateText) {
+                this.EditDocTemplate = result.Results[0].TemplateText;
+                this.cdr.detectChanges();
+            }
+        } catch (error) {
+            console.warn('[VectorManagement] Could not load template text:', error);
+        }
     }
 
     public CloseEditPanel(): void {
@@ -149,6 +194,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
             const saved = await doc.Save();
             if (saved) {
+                // Also save updated template text if changed
+                await this.saveEditDocTemplate(doc.TemplateID);
                 MJNotificationService.Instance.CreateSimpleNotification('Entity document updated', 'success', 2500);
                 this.ShowEditPanel = false;
                 await this.LoadData();
@@ -163,6 +210,58 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             this.IsEditSaving = false;
             this.cdr.detectChanges();
         }
+    }
+
+    /** Save the edited template text back to the Template Contents record */
+    private async saveEditDocTemplate(templateId: string): Promise<void> {
+        if (!templateId || !this.EditDocTemplate) return;
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<MJTemplateContentEntity>({
+                EntityName: 'MJ: Template Contents',
+                ExtraFilter: `TemplateID='${templateId}'`,
+                ResultType: 'entity_object',
+                OrderBy: 'Priority ASC',
+                MaxRows: 1,
+            });
+            if (result.Success && result.Results.length > 0) {
+                const content = result.Results[0];
+                content.TemplateText = this.EditDocTemplate;
+                await content.Save();
+            }
+        } catch (error) {
+            console.warn('[VectorManagement] Could not save template text:', error);
+        }
+    }
+
+    /** Regenerate the template using AI for the current edit panel entity */
+    public async RegenerateTemplate(): Promise<void> {
+        if (!this.EditDocEntityName || this.IsEditRegenerating) return;
+
+        this.IsEditRegenerating = true;
+        this.cdr.detectChanges();
+
+        try {
+            const result = await this.callSuggestionPrompt(this.EditDocEntityName, 'duplicate detection');
+            if (result) {
+                this.EditDocTemplate = result.template;
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Template regenerated with AI. Review and save to apply.',
+                    'info', 3000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Regeneration failed: ${msg}`, 'error', 5000);
+        } finally {
+            this.IsEditRegenerating = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Handle template edits from the edit panel's code editor */
+    public OnEditTemplateChange(newValue: string): void {
+        this.EditDocTemplate = newValue;
     }
 
     public async DeleteEntityDocument(): Promise<void> {
@@ -188,6 +287,140 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         } finally {
             this.IsEditDeleting = false;
             this.cdr.detectChanges();
+        }
+    }
+
+    // --- Schedule Sync Dialog ---
+    public ShowScheduleSyncDialog = false;
+    public ScheduleSyncSaving = false;
+    public ScheduleSyncDocID = '';
+    public ScheduleSyncDocName = '';
+    public ScheduleSyncCron = '0 2 * * *';
+    public ScheduleSyncEnabled = true;
+
+    /** Opens the schedule sync dialog for a specific entity document */
+    public OpenScheduleSyncDialog(entityDocumentId: string): void {
+        const doc = this.entityDocuments.find(d => UUIDsEqual(d.ID, entityDocumentId));
+        if (!doc) return;
+        this.ScheduleSyncDocID = doc.ID;
+        this.ScheduleSyncDocName = doc.Entity || doc.Name;
+        this.ScheduleSyncCron = '0 2 * * *';
+        this.ScheduleSyncEnabled = true;
+        this.ShowScheduleSyncDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Closes the schedule sync dialog */
+    public CloseScheduleSyncDialog(): void {
+        this.ShowScheduleSyncDialog = false;
+        this.ScheduleSyncDocID = '';
+        this.cdr.detectChanges();
+    }
+
+    /** Returns a human-readable description of a cron expression */
+    public GetScheduleCronPreview(cron: string): string {
+        return CronToHumanReadable(cron);
+    }
+
+    /** Saves a new ScheduledAction for vectorizing the selected entity document */
+    public async SaveScheduleSync(): Promise<void> {
+        if (this.ScheduleSyncSaving || !this.ScheduleSyncDocID) return;
+        this.ScheduleSyncSaving = true;
+        this.cdr.detectChanges();
+
+        try {
+            const actionID = await this.findVectorizeActionID();
+            if (!actionID) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Could not find the "__VectorizeEntity" action. Please check action configuration.',
+                    'error', 5000
+                );
+                return;
+            }
+
+            const md = new Metadata();
+
+            // Create ScheduledAction
+            const scheduledAction = await md.GetEntityObject<MJScheduledActionEntity>('MJ: Scheduled Actions');
+            scheduledAction.NewRecord();
+            scheduledAction.Name = `Vectorize: ${this.ScheduleSyncDocName}`;
+            scheduledAction.Description = `Automated vectorization for entity document "${this.ScheduleSyncDocName}"`;
+            scheduledAction.ActionID = actionID;
+            scheduledAction.Type = 'Custom';
+            scheduledAction.CronExpression = this.ScheduleSyncCron;
+            scheduledAction.CustomCronExpression = this.ScheduleSyncCron;
+            scheduledAction.Status = this.ScheduleSyncEnabled ? 'Active' : 'Disabled';
+            scheduledAction.Timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+            const saved = await scheduledAction.Save();
+            if (!saved) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to create schedule: ${scheduledAction.LatestResult?.Message ?? 'Unknown error'}`,
+                    'error', 5000
+                );
+                return;
+            }
+
+            // Create param linking the entityDocumentID
+            await this.createVectorizeScheduleParam(scheduledAction.ID, actionID, this.ScheduleSyncDocID);
+
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Schedule created: ${CronToHumanReadable(this.ScheduleSyncCron)}`, 'success', 3000
+            );
+
+            this.CloseScheduleSyncDialog();
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
+        } finally {
+            this.ScheduleSyncSaving = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Find the __VectorizeEntity action ID */
+    private async findVectorizeActionID(): Promise<string | null> {
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'Actions',
+            ExtraFilter: `Name = '__VectorizeEntity'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        });
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0].ID;
+        }
+        return null;
+    }
+
+    /** Create a ScheduledActionParam linking the entity document ID */
+    private async createVectorizeScheduleParam(scheduledActionID: string, actionID: string, entityDocumentID: string): Promise<void> {
+        const rv = new RunView();
+        const paramResult = await rv.RunView<{ ID: string; Name: string }>({
+            EntityName: 'Action Params',
+            ExtraFilter: `ActionID = '${actionID}' AND Name = 'entityDocumentID'`,
+            Fields: ['ID', 'Name'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        });
+
+        if (!paramResult.Success || paramResult.Results.length === 0) {
+            console.warn('[VectorManagement] Could not find entityDocumentID action param');
+            return;
+        }
+
+        const md = new Metadata();
+        const param = await md.GetEntityObject<MJScheduledActionParamEntity>('MJ: Scheduled Action Params');
+        param.NewRecord();
+        param.ScheduledActionID = scheduledActionID;
+        param.ActionParamID = paramResult.Results[0].ID;
+        param.ValueType = 'Static';
+        param.Value = entityDocumentID;
+
+        const saved = await param.Save();
+        if (!saved) {
+            console.warn('[VectorManagement] Failed to save schedule param:', param.LatestResult?.Message);
         }
     }
 
@@ -241,13 +474,18 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public EntitySearchText = '';
     /** Whether the entity picker dropdown is open */
     public ShowEntityPicker = false;
+    public SelectedEntityIndex = -1;
+    /** Reference to the entity search input for programmatic focus */
+    @ViewChild('entitySearchInput') entitySearchInput?: ElementRef<HTMLInputElement>;
 
     // --- Raw entity data (private) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
     protected vectorDatabases: MJVectorDatabaseEntity[] = [];
     private vectorIndexes: MJVectorIndexEntity[] = [];
-    private recordDocuments: MJEntityRecordDocumentEntity[] = [];
     private aiModels: MJAIModelEntity[] = [];
+
+    /** Lightweight aggregate stats per EntityDocumentID — avoids loading all record documents */
+    private erdStats: Map<string, { vectorCount: number; lastSynced: Date | null }> = new Map();
 
     // ================================================================
     // Lifecycle
@@ -255,10 +493,15 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     async ngAfterViewInit(): Promise<void> {
         await this.LoadData();
+        this.navigationService.SetAgentContext(this, {
+            TotalVectors: this.TotalVectors,
+            KPICount: this.KPICards.length,
+        });
         this.NotifyLoadComplete();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -381,9 +624,11 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             if (idleTimer) clearTimeout(idleTimer);
             rxSub?.unsubscribe();
 
-            // Use Promise.resolve().then() to defer state changes to the next
-            // microtask, avoiding ExpressionChangedAfterItHasBeenCheckedError
-            Promise.resolve().then(async () => {
+            // Use setTimeout to defer state changes to the next macrotask,
+            // avoiding ExpressionChangedAfterItHasBeenCheckedError.
+            // (Promise.resolve microtasks run between Angular's check passes
+            // and still trigger NG0100.)
+            setTimeout(async () => {
                 this.removeSyncingId(entityDocumentId);
 
                 if (success) {
@@ -398,8 +643,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                         `Vectorization failed for ${entityName}`,
                         'error', 5000
                     );
-                    this.cdr.detectChanges();
                 }
+                this.cdr.detectChanges();
             });
         };
 
@@ -465,8 +710,14 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    /** Opens the AI suggestion dialog */
+    /** Opens the AI suggestion dialog, or shows a warning if no vector indexes exist */
     public OpenSuggestDialog(): void {
+        if (this.vectorIndexes.length === 0 && this.vectorDatabases.length === 0) {
+            this.ShowNoIndexWarning = true;
+            this.cdr.detectChanges();
+            return;
+        }
+
         this.SuggestionResult = null;
         this.SuggestEntityName = '';
         this.SuggestUseCase = 'duplicate detection';
@@ -477,6 +728,20 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.loadEntityGroups();
         this.ShowSuggestDialog = true;
         this.cdr.detectChanges();
+    }
+
+    /** Close the no-index warning dialog */
+    public CloseNoIndexWarning(): void {
+        this.ShowNoIndexWarning = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Navigate to the Configuration section from the no-index warning */
+    public async GoToConfiguration(): Promise<void> {
+        this.ShowNoIndexWarning = false;
+        this.cdr.detectChanges();
+        // Attempt to open the Config nav item in the current app
+        await this.navigationService.OpenNavItemByName('Config');
     }
 
     /** Select an entity from the grouped picker */
@@ -499,7 +764,62 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 }))
                 .filter(group => group.Entities.length > 0);
         }
+        // Reset selection to first item when filter changes
+        this.SelectedEntityIndex = this.FlatFilteredEntities.length > 0 ? 0 : -1;
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Get a flat list of all entities across groups (for keyboard navigation indexing)
+     */
+    get FlatFilteredEntities(): { Name: string; ID: string }[] {
+        return this.FilteredEntityGroups.flatMap(g => g.Entities);
+    }
+
+    /**
+     * Handle keyboard events in the entity picker search input
+     */
+    public OnEntityPickerKeyDown(event: KeyboardEvent): void {
+        const entities = this.FlatFilteredEntities;
+        if (entities.length === 0) return;
+
+        switch (event.key) {
+            case 'ArrowDown':
+                event.preventDefault();
+                this.SelectedEntityIndex = Math.min(this.SelectedEntityIndex + 1, entities.length - 1);
+                this.scrollSelectedEntityIntoView();
+                this.cdr.detectChanges();
+                break;
+            case 'ArrowUp':
+                event.preventDefault();
+                this.SelectedEntityIndex = Math.max(this.SelectedEntityIndex - 1, 0);
+                this.scrollSelectedEntityIntoView();
+                this.cdr.detectChanges();
+                break;
+            case 'Enter':
+                event.preventDefault();
+                if (this.SelectedEntityIndex >= 0 && this.SelectedEntityIndex < entities.length) {
+                    this.SelectEntity(entities[this.SelectedEntityIndex].Name);
+                }
+                break;
+            case 'Escape':
+                event.preventDefault();
+                this.ShowEntityPicker = false;
+                this.cdr.detectChanges();
+                break;
+        }
+    }
+
+    /**
+     * Scroll the currently selected entity picker item into view
+     */
+    private scrollSelectedEntityIntoView(): void {
+        setTimeout(() => {
+            const selected = document.querySelector('.entity-picker-item-focused');
+            if (selected) {
+                selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }, 0);
     }
 
     /** Toggle entity picker visibility */
@@ -508,8 +828,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (this.ShowEntityPicker) {
             this.FilteredEntityGroups = this.EntityGroups;
             this.EntitySearchText = '';
+            this.cdr.detectChanges();
+            // Focus search input after the @if block renders — deferred past the click event
+            setTimeout(() => {
+                if (this.entitySearchInput?.nativeElement) {
+                    this.entitySearchInput.nativeElement.focus();
+                }
+            }, 0);
+        } else {
+            this.cdr.detectChanges();
         }
-        this.cdr.detectChanges();
     }
 
     /** Handle template edits from code editor */
@@ -679,49 +1007,49 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     // ================================================================
 
     private async fetchAllData(): Promise<void> {
-        const rv = new RunView();
-        const [docsResult, vdbResult, viResult, erdResult, modelsResult] = await rv.RunViews([
-            {
-                EntityName: 'MJ: Entity Documents',
-                ExtraFilter: '',
-                OrderBy: 'Name',
-                ResultType: 'entity_object'
-            },
-            {
-                EntityName: 'MJ: Vector Databases',
-                ExtraFilter: '',
-                ResultType: 'entity_object'
-            },
-            {
-                EntityName: 'MJ: Vector Indexes',
-                ExtraFilter: '',
-                ResultType: 'entity_object'
-            },
-            {
-                EntityName: 'MJ: Entity Record Documents',
-                ExtraFilter: '',
-                Fields: ['ID', 'EntityDocumentID', 'VectorID', 'EntityDocument', 'Entity', '__mj_UpdatedAt'],
-                ResultType: 'simple'
-            },
-            {
-                EntityName: 'MJ: AI Models',
-                ExtraFilter: '',
-                ResultType: 'entity_object'
-            }
-        ]);
+        // Use cached engine data — BaseEngine's entity-event auto-refresh handles
+        // updates from saves/deletes on the entities it tracks.
+        const engine = KnowledgeHubMetadataEngine.Instance;
+        await engine.Config(false);
 
-        if (docsResult.Success) {
-            this.entityDocuments = docsResult.Results as MJEntityDocumentEntity[];
+        this.entityDocuments = engine.EntityDocuments;
+        this.vectorDatabases = AIEngineBase.Instance.VectorDatabases;
+        this.vectorIndexes = engine.VectorIndexes;
+
+        // Build per-EntityDocument aggregate stats (vector count + last synced).
+        // Each query fetches only the most recent row (MaxRows: 1) and uses
+        // TotalRowCount for the actual vector count — avoids loading all rows.
+        // AI Models come from a different domain — fetched in the same batch.
+        const rv = new RunView();
+        const erdQueries = this.entityDocuments.map(doc => ({
+            EntityName: 'MJ: Entity Record Documents',
+            ExtraFilter: `EntityDocumentID='${doc.ID}' AND VectorID IS NOT NULL`,
+            ResultType: 'simple' as const,
+            Fields: ['__mj_UpdatedAt'],
+            OrderBy: '__mj_UpdatedAt DESC',
+            MaxRows: 1,
+        }));
+        const allQueries = [
+            ...erdQueries,
+            { EntityName: 'MJ: AI Models', ExtraFilter: '', ResultType: 'entity_object' as const }
+        ];
+        const allResults = await rv.RunViews(allQueries);
+
+        // Map results back to erdStats
+        this.erdStats.clear();
+        for (let i = 0; i < this.entityDocuments.length; i++) {
+            const result = allResults[i];
+            if (result.Success) {
+                const rows = result.Results as { __mj_UpdatedAt: string }[];
+                const lastDate = rows.length > 0 ? new Date(rows[0].__mj_UpdatedAt) : null;
+                this.erdStats.set(this.entityDocuments[i].ID, {
+                    vectorCount: result.TotalRowCount,
+                    lastSynced: lastDate,
+                });
+            }
         }
-        if (vdbResult.Success) {
-            this.vectorDatabases = vdbResult.Results as MJVectorDatabaseEntity[];
-        }
-        if (viResult.Success) {
-            this.vectorIndexes = viResult.Results as MJVectorIndexEntity[];
-        }
-        if (erdResult.Success) {
-            this.recordDocuments = erdResult.Results as MJEntityRecordDocumentEntity[];
-        }
+
+        const modelsResult = allResults[allResults.length - 1];
         if (modelsResult.Success) {
             this.aiModels = modelsResult.Results as MJAIModelEntity[];
         }
@@ -729,12 +1057,10 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     private buildSyncRows(): void {
         this.SyncRows = this.entityDocuments.map(doc => {
-            const docsForEntity = this.recordDocuments.filter(
-                rd => UUIDsEqual(rd.EntityDocumentID, doc.ID)
-            );
-            const vectorCount = docsForEntity.filter(rd => rd.VectorID != null).length;
-            const lastSynced = this.computeLastSynced(docsForEntity);
-            const status = this.computeSyncStatus(doc, vectorCount, docsForEntity.length);
+            const stats = this.erdStats.get(doc.ID);
+            const vectorCount = stats?.vectorCount ?? 0;
+            const lastSynced = stats?.lastSynced ?? null;
+            const status = this.computeSyncStatus(doc, vectorCount);
 
             // Preserve progress info from any active sync
             const existingRow = this.SyncRows.find(r => UUIDsEqual(r.EntityDocumentID, doc.ID));
@@ -751,19 +1077,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         });
     }
 
-    private computeLastSynced(records: MJEntityRecordDocumentEntity[]): Date | null {
-        if (records.length === 0) return null;
-        const dates = records
-            .map(r => new Date(r.__mj_UpdatedAt))
-            .filter(d => !isNaN(d.getTime()));
-        if (dates.length === 0) return null;
-        return new Date(Math.max(...dates.map(d => d.getTime())));
-    }
-
     private computeSyncStatus(
         doc: MJEntityDocumentEntity,
-        vectorCount: number,
-        totalRecords: number
+        vectorCount: number
     ): 'Synced' | 'Syncing' | 'Error' | 'Pending' {
         if (this.SyncingIds.has(doc.ID)) {
             return 'Syncing';
@@ -771,31 +1087,30 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (doc.Status === 'Inactive') {
             return 'Pending';
         }
-        if (totalRecords === 0) {
-            return 'Pending';
-        }
-        // If there are any vectors, consider it synced — partial syncs
-        // still represent a successful state since the pipeline ran
         if (vectorCount > 0) {
             return 'Synced';
         }
-        return 'Synced';
+        return 'Pending';
     }
 
     private buildKPICards(): void {
-        this.TotalVectors = this.recordDocuments.filter(rd => rd.VectorID != null).length;
+        let totalVectors = 0;
+        let latestSync: Date | null = null;
+        for (const stats of this.erdStats.values()) {
+            totalVectors += stats.vectorCount;
+            if (stats.lastSynced && (!latestSync || stats.lastSynced > latestSync)) {
+                latestSync = stats.lastSynced;
+            }
+        }
+        this.TotalVectors = totalVectors;
+
         const entitiesSynced = new Set(
             this.entityDocuments
                 .filter(d => d.Status === 'Active')
                 .map(d => d.EntityID)
         ).size;
 
-        const allDates = this.recordDocuments
-            .map(r => new Date(r.__mj_UpdatedAt))
-            .filter(d => !isNaN(d.getTime()));
-        const lastSyncDate = allDates.length > 0
-            ? new Date(Math.max(...allDates.map(d => d.getTime())))
-            : null;
+        const lastSyncDate = latestSync;
 
         this.KPICards = [
             {
@@ -843,7 +1158,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             const db = this.vectorDatabases[0];
             this.VectorDBName = db.Name;
             // Determine health based on whether we have records with vectors
-            const hasVectors = this.recordDocuments.some(rd => rd.VectorID != null);
+            const hasVectors = this.TotalVectors > 0;
             this.VectorDBStatus = hasVectors ? 'Healthy' : 'Degraded';
         } else {
             this.VectorDBName = 'Not configured';
@@ -865,10 +1180,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     }
 
     private buildStorageUsage(): void {
-        // Estimate storage as a ratio of vectorized records vs total record documents
-        const total = this.recordDocuments.length;
-        const vectorized = this.recordDocuments.filter(rd => rd.VectorID != null).length;
-        this.StorageUsagePercent = total > 0 ? Math.round((vectorized / total) * 100) : 0;
+        // All records in erdStats already have vectors (query filters VectorID IS NOT NULL),
+        // so coverage is 100% if any exist.
+        this.StorageUsagePercent = this.TotalVectors > 0 ? 100 : 0;
     }
 
     /** Check if vector DB and embedding model are configured, populate selection lists */
@@ -1049,18 +1363,22 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (!row) return;
 
         const rv = new RunView();
-        const result = await rv.RunView<MJEntityRecordDocumentEntity>({
+        const result = await rv.RunView<{ __mj_UpdatedAt: string }>({
             EntityName: 'MJ: Entity Record Documents',
-            ExtraFilter: `EntityDocumentID='${entityDocumentId}'`,
-            ResultType: 'entity_object'
+            ExtraFilter: `EntityDocumentID='${entityDocumentId}' AND VectorID IS NOT NULL`,
+            Fields: ['__mj_UpdatedAt'],
+            OrderBy: '__mj_UpdatedAt DESC',
+            ResultType: 'simple',
+            MaxRows: 1
         });
 
         if (result.Success) {
-            const docs = result.Results;
-            row.VectorCount = docs.filter(d => d.VectorID != null).length;
-            row.LastSynced = this.computeLastSynced(docs);
+            row.VectorCount = result.TotalRowCount;
+            row.LastSynced = result.Results.length > 0 ? new Date(result.Results[0].__mj_UpdatedAt) : null;
             row.Status = row.VectorCount > 0 ? 'Synced' : 'Pending';
             row.PercentComplete = 100;
+            this.erdStats.set(entityDocumentId, { vectorCount: row.VectorCount, lastSynced: row.LastSynced });
+            this.buildKPICards();
             this.cdr.detectChanges();
         }
     }

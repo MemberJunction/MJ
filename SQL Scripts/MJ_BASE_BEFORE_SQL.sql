@@ -701,60 +701,69 @@ GO
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR RecordChange for INTERNAL USE WITHIN DataProvider
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [__mj].[spCreateRecordChange_Internal]
-GO
-CREATE PROCEDURE [__mj].[spCreateRecordChange_Internal]
-    @EntityName nvarchar(100),
-    @RecordID NVARCHAR(750),
-	  @UserID uniqueidentifier,
-    @Type nvarchar(20),
-    @ChangesJSON nvarchar(MAX),
-    @ChangesDescription nvarchar(MAX),
-    @FullRecordJSON nvarchar(MAX),
-    @Status nchar(15),
-    @Comments nvarchar(MAX)
+CREATE PROCEDURE __mj.[spCreateRecordChange_Internal]
+    @EntityName       NVARCHAR(100),
+    @RecordID         NVARCHAR(750),
+    @UserID           UNIQUEIDENTIFIER,
+    @Type             NVARCHAR(20),
+    @ChangesJSON      NVARCHAR(MAX),
+    @ChangesDescription NVARCHAR(MAX),
+    @FullRecordJSON   NVARCHAR(MAX),
+    @Status           NCHAR(15),
+    @Comments         NVARCHAR(MAX),
+    @Source           NVARCHAR(20)     = NULL,
+    @RestoredFromID   UNIQUEIDENTIFIER = NULL,
+    @RestoreReason    NVARCHAR(MAX)    = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[RecordChange]
+
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER);
+
+    INSERT INTO __mj.[RecordChange]
         (
             EntityID,
             RecordID,
-			      UserID,
+            UserID,
             Type,
+            Source,
             ChangedAt,
             ChangesJSON,
             ChangesDescription,
             FullRecordJSON,
             Status,
-            Comments
+            Comments,
+            RestoredFromID,
+            RestoreReason
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
             (SELECT ID FROM __mj.Entity WHERE Name = @EntityName),
             @RecordID,
-			      @UserID,
+            @UserID,
             @Type,
+            ISNULL(@Source, 'Internal'),
             GETUTCDATE(),
             @ChangesJSON,
             @ChangesDescription,
             @FullRecordJSON,
             @Status,
-            @Comments
-        )
+            @Comments,
+            @RestoredFromID,
+            @RestoreReason
+        );
 
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].vwRecordChanges WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    -- Return the new record from the base view so calculated fields are included
+    SELECT *
+    FROM __mj.vwRecordChanges
+    WHERE [ID] = (SELECT [ID] FROM @InsertedRow);
 END
-
-GO 
-GRANT EXEC ON __mj.spCreateRecordChange_Internal TO cdp_Developer, cdp_Integration, cdp_UI
-
 GO
 
+GRANT EXECUTE ON __mj.[spCreateRecordChange_Internal] TO [cdp_Developer], [cdp_Integration], [cdp_UI];
+GO
+ 
 
 
 ------------------------------------------------------------
@@ -1545,32 +1554,33 @@ GO
 
 
 /************* EXTERNAL TRACK CHANGES STUFF HERE *********/
-DROP VIEW IF EXISTS __mj.vwEntitiesWithExternalChangeTracking 
+DROP VIEW IF EXISTS __mj.vwEntitiesWithExternalChangeTracking
 GO
-CREATE VIEW __mj.vwEntitiesWithExternalChangeTracking 
+CREATE VIEW __mj.vwEntitiesWithExternalChangeTracking
 AS
-SELECT   
-  e.* 
-FROM 
+SELECT
+  e.*
+FROM
   __mj.vwEntities e
 WHERE
   e.TrackRecordChanges=1
+  AND e.DetectExternalChanges=1
   AND
     EXISTS (
-		  SELECT 
-			  1 
-		  FROM 
-			  __mj.vwEntityFields ef 
-		  WHERE 
+		  SELECT
+			  1
+		  FROM
+			  __mj.vwEntityFields ef
+		  WHERE
 			  ef.Name='__mj_UpdatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
   AND
     EXISTS (
-		  SELECT 
-			  1 
-		  FROM 
-			  __mj.vwEntityFields ef 
-		  WHERE 
+		  SELECT
+			  1
+		  FROM
+			  __mj.vwEntityFields ef
+		  WHERE
 			  ef.Name='__mj_CreatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
 GO

@@ -43,6 +43,9 @@ function createMockEntity(overrides: Record<string, unknown> = {}) {
         Set: vi.fn((field: string, value: unknown) => { data[field] = value; }),
         get ID() { return data['ID'] ?? 'generated-id'; },
         set ID(v: string) { data['ID'] = v; },
+        get PrimaryKey() {
+            return { KeyValuePairs: [{ FieldName: 'ID', Value: data['ID'] ?? 'generated-id' }] };
+        },
         // Dynamic property setters used by orchestrator
         set CompanyIntegrationID(v: string) { data['CompanyIntegrationID'] = v; },
         set RunByUserID(v: string) { data['RunByUserID'] = v; },
@@ -170,6 +173,7 @@ describe('IntegrationEngine', () => {
 
         const companyIntegration = createMockCompanyIntegration();
         const integration: MJIntegrationEntity = {
+            ID: 'int-1',
             Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
             Name: 'TestIntegration',
             ClassName: 'TestConnector',
@@ -243,6 +247,7 @@ describe('IntegrationEngine', () => {
 
         const companyIntegration = createMockCompanyIntegration();
         const integration = {
+            ID: 'int-1',
             Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
             Name: 'Test',
             ClassName: 'TestConnector',
@@ -329,6 +334,7 @@ describe('IntegrationEngine', () => {
 
         const companyIntegration = createMockCompanyIntegration();
         const integration = {
+            ID: 'int-1',
             Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
             Name: 'Test',
             ClassName: 'TestConnector',
@@ -412,6 +418,7 @@ describe('IntegrationEngine', () => {
 
         const companyIntegration = createMockCompanyIntegration();
         const integration = {
+            ID: 'int-1',
             Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
             Name: 'Test',
             ClassName: 'TestConnector',
@@ -479,6 +486,7 @@ describe('IntegrationEngine', () => {
 
         const companyIntegration = createMockCompanyIntegration();
         const integration = {
+            ID: 'int-1',
             Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
             Name: 'Test',
             ClassName: 'TestConnector',
@@ -568,7 +576,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -642,7 +651,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -712,7 +722,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -778,7 +789,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -828,20 +840,20 @@ describe('IntegrationEngine', () => {
 
             try {
                 orchestrator.MaxBatchSize = 5;
-                const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+                const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
                 const result = await orchestrator.RunSync('ci-1', contextUser);
 
-                // Should only process 5 records (truncated from 10)
-                expect(result.RecordsProcessed).toBe(5);
-                expect(result.RecordsCreated).toBe(5);
+                // Should process ALL 10 records — MaxBatchSize is a warning threshold, not a hard truncation
+                expect(result.RecordsProcessed).toBe(10);
+                expect(result.RecordsCreated).toBe(10);
 
-                // Should have logged a warning about truncation
-                expect(warnSpy).toHaveBeenCalledWith(
-                    expect.stringContaining('exceeding MaxBatchSize')
+                // Should have logged a message that the batch size was exceeded
+                expect(logSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('MaxBatchSize')
                 );
 
-                warnSpy.mockRestore();
+                logSpy.mockRestore();
             } finally {
                 ConnectorFactory.Resolve = resolveOrig;
             }
@@ -856,7 +868,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -937,7 +950,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -1023,7 +1037,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -1090,7 +1105,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -1171,7 +1187,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -1253,7 +1270,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -1319,7 +1337,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
