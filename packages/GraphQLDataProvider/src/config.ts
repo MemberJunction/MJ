@@ -25,5 +25,10 @@ export async function setupGraphQLClient(config: GraphQLProviderConfigData): Pro
     // setupGraphQLClient returns.
     await StartupManager.Instance.Startup();
 
+    // After all engines have loaded and their IndexedDB reads are complete,
+    // kick off background metadata validation. This is deferred from Config()
+    // to prevent IndexedDB write contention with engine cache reads during startup.
+    provider.backgroundValidateAndRefresh();
+
     return provider;
 }

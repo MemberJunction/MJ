@@ -94,6 +94,22 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      */
     CacheLocalTTL?: number;
 
+    /**
+     * Controls whether loaded rows are returned as full BaseEntity subclass instances
+     * ('entity_object') or plain JavaScript objects ('simple').
+     *
+     * - 'simple' (default): Skips BaseEntity construction, class factory lookup, and
+     *   change-tracking setup. Rows are plain objects with typed field values. Much faster
+     *   for read-only configuration data that engines never mutate via .Save()/.Delete().
+     * - 'entity_object': Full BaseEntity subclass instances with ORM capabilities.
+     *   Use only when the engine needs to call .Save(), .Delete(), or access BaseEntity
+     *   methods on the loaded rows.
+     *
+     * If left undefined, the engine's EngineDefaultResultType getter determines the default.
+     * Do NOT initialize to 'entity_object' here — that would prevent the engine-level override from working.
+     */
+    ResultType?: 'simple' | 'entity_object';
+
     constructor(init?: Partial<BaseEnginePropertyConfig>) {
         super();
         // now copy the values from init to this object
@@ -261,6 +277,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             affectedEntity
         };
         this._dataChange$.next(event);
+    }
+
+    /**
+     * Controls the default RunView ResultType for all entity configs loaded by this engine.
+     * Override in subclasses to change the default for the entire engine without modifying
+     * each individual config entry.
+     *
+     * - 'entity_object': Full BaseEntity subclass instances (slower, required for .Save()/.Delete())
+     * - 'simple': Plain JavaScript objects (much faster, suitable for read-only engines)
+     *
+     * Individual configs can still override this via their own ResultType property.
+     * @default 'entity_object'
+     */
+    protected get EngineDefaultResultType(): 'simple' | 'entity_object' {
+        return 'entity_object';
     }
 
     /**
@@ -1162,7 +1193,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const rv = new RunView(p);
         const result = await rv.RunView({
             EntityName: config.EntityName,
-            ResultType: 'entity_object',
+            ResultType: config.ResultType || this.EngineDefaultResultType,
             ExtraFilter: config.Filter,
             OrderBy: config.OrderBy,
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
@@ -1208,7 +1239,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             const viewConfigs = configs.map(c => {
                 return <RunViewParams>{
                     EntityName: c.EntityName,
-                    ResultType: 'entity_object',
+                    ResultType: c.ResultType || this.EngineDefaultResultType,
                     ExtraFilter: c.Filter,
                     OrderBy: c.OrderBy,
                     IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
@@ -1245,7 +1276,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
         const p = this.ProviderToUse;
-        const result: DatasetResultType = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters)
+        const result: DatasetResultType = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
         if (!result) {
             LogError(`LoadSingleDatasetConfig: GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`);
             return;
@@ -1255,7 +1286,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (config.DatasetResultHandling === 'single_property') {
                     const singleObject = {};
                     for (const item of result.Results) {
-                        //convert the results to entity objects before 
+                        //convert the results to entity objects before
                         //adding them to the singleObject
                         const entities: BaseEntity[] = [];
                         for(const entityData of item.Results) {
