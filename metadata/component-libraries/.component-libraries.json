@@ -1205,7 +1205,7 @@
       "Version": "5.29.0",
       "GlobalVariable": "MapCore",
       "Category": "Utility",
-      "CDNUrl": "https://cdn.jsdelivr.net/npm/@memberjunction/geo-maps@5.29.0/src/map-core.js",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/@memberjunction/geo-maps@^5/src/map-core.js",
       "CDNCssUrl": null,
       "Description": "Framework-agnostic Leaflet map engine for MemberJunction. Provides point markers, heatmap, and choropleth rendering with optional GeoDataEngine integration.",
       "UsageType": "Dependency",

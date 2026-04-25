@@ -156,6 +156,11 @@
       "name": "leaflet",
       "version": "1.9.4",
       "globalVariable": "L"
+    },
+    {
+      "name": "geo-maps",
+      "version": "^5",
+      "globalVariable": "MapCore"
     }
   ],
   "code": "@file:../../code/generic/simple-map.js",
