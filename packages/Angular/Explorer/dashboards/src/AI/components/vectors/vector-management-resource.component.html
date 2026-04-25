@@ -497,7 +497,7 @@
                   }
                 </div>
               </div>
-              @if (SuggestionResult.selectedRelationships.length > 0) {
+              @if ((SuggestionResult.selectedRelationships?.length ?? 0) > 0) {
                 <div class="result-section">
                   <h4 class="result-heading">Related Entities</h4>
                   @for (rel of SuggestionResult.selectedRelationships; track rel.name) {

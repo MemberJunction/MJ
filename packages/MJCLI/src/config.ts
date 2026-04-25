@@ -63,6 +63,8 @@ const dynamicPackageEntrySchema = z.object({
 const openAppsConfigSchema = z.object({
   github: z.object({
     token: z.string().optional(),
+    /** Per-repository token overrides keyed by GitHub repo URL */
+    tokens: z.record(z.string(), z.string().optional()).optional(),
   }).optional(),
   registries: z.array(z.object({
     name: z.string(),
