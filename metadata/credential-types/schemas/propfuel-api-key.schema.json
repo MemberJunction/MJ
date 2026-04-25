@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "description": "PropFuel (now part of re:Members) API credentials. PropFuel is an association engagement platform — the public marketing site does not document an API publicly, so the exact endpoint shape and auth header name should be confirmed with PropFuel before enabling this connector against a production tenant. The schema below assumes the common SaaS pattern: a per-tenant BaseURL plus a bearer/API-key token. Update the connector and this schema once PropFuel publishes formal API documentation.",
+  "properties": {
+    "BaseURL": {
+      "type": "string",
+      "title": "PropFuel API Base URL",
+      "description": "Full base URL for the customer's PropFuel API tenant (no trailing slash). Example: https://api.propfuel.com/v1 or https://{tenant}.propfuel.com/api/v1. Confirm exact format with PropFuel — the marketing site does not publish a public developer portal.",
+      "isSecret": false,
+      "order": 0
+    },
+    "ApiKey": {
+      "type": "string",
+      "title": "API Key",
+      "description": "PropFuel-issued API key. Sent as `Authorization: Bearer {ApiKey}` by the connector. Confirm with PropFuel whether your tenant uses Bearer, X-API-Key, or another header — adjust the connector's BuildHeaders if necessary.",
+      "isSecret": true,
+      "order": 1
+    }
+  },
+  "required": ["BaseURL", "ApiKey"]
+}

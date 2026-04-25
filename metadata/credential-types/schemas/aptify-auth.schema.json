@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "description": "Aptify (Community Brands / Momentive Software) Web Services API credentials. Token-based auth: POST {BaseURL}/authentication with Username/Password (and optional AuthProvider) returns a TokenId; the connector sends `Authorization: Web {TokenId}` on subsequent requests. Each customer has a tenant-specific BaseURL pointing at their AptifyServicesAPI install.",
+  "properties": {
+    "BaseURL": {
+      "type": "string",
+      "title": "Aptify Services API Base URL",
+      "description": "Full base URL to the customer's Aptify Services API (no trailing slash). Examples: https://customer.aptifyondemand.com/AptifyServicesAPI, https://api.example.org/AptifyServicesAPI. The /authentication and /services/{Entity} paths are appended at request time.",
+      "isSecret": false,
+      "order": 0
+    },
+    "Username": {
+      "type": "string",
+      "title": "API Username",
+      "description": "Aptify user with API access. Typically a service account scoped to read/write the entities you intend to sync.",
+      "isSecret": false,
+      "order": 1
+    },
+    "Password": {
+      "type": "string",
+      "title": "API Password",
+      "description": "Password for the Aptify API user.",
+      "isSecret": true,
+      "order": 2
+    },
+    "AuthProvider": {
+      "type": "string",
+      "title": "Auth Provider (optional)",
+      "description": "Aptify authentication provider. Defaults to 'AptifyUser' when omitted. Set to a custom provider name (e.g., a federated identity provider) only if your install requires it.",
+      "isSecret": false,
+      "order": 3
+    }
+  },
+  "required": ["BaseURL", "Username", "Password"]
+}
