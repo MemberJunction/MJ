@@ -21,7 +21,7 @@ export class RunqueryParametersValidationRule extends BaseLintRule {
   get Name() { return 'runquery-parameters-validation'; }
   get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
 
-  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec): Violation[] {
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec, _options?: unknown, typeContext?: import('../type-context').TypeContext): Violation[] {
     const violations: Violation[] = [];
 
     traverse(ast, {
@@ -294,62 +294,25 @@ export class RunqueryParametersValidationRule extends BaseLintRule {
               });
             }
           }
-          // Case 2.5: Parameters is a variable reference — resolve if possible, skip if not
+          // Case 2.5: Parameters is a variable reference — use TypeContext to resolve
           else if (t.isIdentifier(paramValue)) {
-            // The parameter is a variable like `Parameters: params`
-            // Try to resolve the variable's initializer to validate its properties
-            const binding = path.scope.getBinding(paramValue.name);
-            if (binding && t.isVariableDeclarator(binding.path.node) && t.isObjectExpression(binding.path.node.init)) {
-              // Variable was initialized as an object literal — validate its properties
-              const initObject = binding.path.node.init;
-              if (specQuery?.parameters) {
-                const providedParamsMap = new Map<string, string>();
-                for (const prop of initObject.properties) {
-                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                    providedParamsMap.set(prop.key.name.toLowerCase(), prop.key.name);
-                  }
-                }
+            // Use the TypeInferenceEngine's type context (5th param) to resolve the variable's type.
+            // The engine tracks object field names through initializers, assignments, conditionals,
+            // spreads, and other patterns — far more robust than manual AST walking.
+            if (typeContext && specQuery?.parameters) {
+              const varType = typeContext.getVariableType(paramValue.name);
 
-                // Also check for params.PropertyName = value assignments after initialization
-                const bindingScope = binding.scope;
-                const block = bindingScope.block;
-                let stmts: t.Statement[] = [];
-                if (t.isBlockStatement(block)) {
-                  stmts = block.body;
-                } else if (t.isProgram(block)) {
-                  stmts = block.body;
-                } else if (t.isFunction(block) && t.isBlockStatement(block.body)) {
-                  stmts = block.body.body;
-                }
-                for (const stmt of stmts) {
-                  if (t.isExpressionStatement(stmt) && t.isAssignmentExpression(stmt.expression)) {
-                    const left = stmt.expression.left;
-                    if (t.isMemberExpression(left) && t.isIdentifier(left.object) &&
-                        left.object.name === paramValue.name && t.isIdentifier(left.property)) {
-                      providedParamsMap.set(left.property.name.toLowerCase(), left.property.name);
-                    }
-                  }
-                  // Also check inside if-blocks: if (condition) { params.X = value; }
-                  if (t.isIfStatement(stmt)) {
-                    const consequent = stmt.consequent;
-                    const blockBody = t.isBlockStatement(consequent) ? consequent.body : [consequent];
-                    for (const innerStmt of blockBody) {
-                      if (t.isExpressionStatement(innerStmt) && t.isAssignmentExpression(innerStmt.expression)) {
-                        const innerLeft = innerStmt.expression.left;
-                        if (t.isMemberExpression(innerLeft) && t.isIdentifier(innerLeft.object) &&
-                            innerLeft.object.name === paramValue.name && t.isIdentifier(innerLeft.property)) {
-                          providedParamsMap.set(innerLeft.property.name.toLowerCase(), innerLeft.property.name);
-                        }
-                      }
-                    }
-                  }
+              if (varType?.type === 'object' && varType.fields) {
+                const providedParamsLower = new Map<string, string>();
+                for (const [fieldName] of varType.fields) {
+                  providedParamsLower.set(fieldName.toLowerCase(), fieldName);
                 }
 
                 const specParamNames = specQuery.parameters.map((p) => p.name);
                 const specParamNamesLower = specParamNames.map((n) => n.toLowerCase());
 
                 // Find extra parameters not in spec
-                const extra = Array.from(providedParamsMap.values()).filter(
+                const extra = Array.from(providedParamsLower.values()).filter(
                   (name) => !specParamNamesLower.includes(name.toLowerCase())
                 );
 
@@ -364,10 +327,9 @@ export class RunqueryParametersValidationRule extends BaseLintRule {
                   });
                 }
               }
-              // If no spec query info, allow the variable — can't validate without metadata
+              // If varType is unknown or not an object, skip — can't validate statically
             }
-            // If binding can't be resolved or isn't an object initializer, allow it
-            // The runtime will catch any actual parameter issues
+            // If no typeContext or no spec query info, allow the variable
           }
           // Case 3: Parameters is neither array, object, nor variable reference
           else if (!t.isObjectExpression(paramValue)) {

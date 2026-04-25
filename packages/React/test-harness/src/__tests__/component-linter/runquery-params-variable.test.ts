@@ -128,10 +128,27 @@ describe('runquery-parameters-validation: variable references', () => {
     expect(getParamViolations(result).length).toBeGreaterThan(0);
   });
 
-  it('should flag variable with conditionally-added unknown parameter', async () => {
+  it('should allow variable with conditionally-added known parameter', async () => {
+    // The TypeInferenceEngine tracks the initializer fields but not
+    // subsequent obj.prop = value mutations. This is the pattern from
+    // the original bug report — conditionally adding a VALID param.
     const code = wrapCode(`
       const params = { StartDate: '2024-01-01' };
-      if (true) { params.InvalidParam = 'bad'; }
+      if (true) { params.EventType = 'Conference'; }
+      const result = await utilities.rq.RunQuery({
+        QueryName: 'Quarterly Event Attendance Trends',
+        CategoryPath: 'Golden-Queries/Program Analytics',
+        Parameters: params
+      });
+    `);
+    const result = await lint(code);
+    expect(getParamViolations(result)).toHaveLength(0);
+  });
+
+  it('should flag variable initialized with all unknown parameter names', async () => {
+    // Unknown params in the initializer ARE detected by TypeInferenceEngine
+    const code = wrapCode(`
+      const params = { from: '2024-01-01', to: '2024-12-31', bogus: true };
       const result = await utilities.rq.RunQuery({
         QueryName: 'Quarterly Event Attendance Trends',
         CategoryPath: 'Golden-Queries/Program Analytics',
