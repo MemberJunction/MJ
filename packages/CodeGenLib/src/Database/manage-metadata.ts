@@ -2325,14 +2325,46 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Manages the creation, updating and deletion of entity field records in the metadata based on the database schema.
-    * @param pool
-    * @param excludeSchemas
-    * @returns
+    * Resolves a list of entity names to their UUIDs via the live Metadata cache.
+    * Names that don't resolve are dropped silently — they may be entities that have
+    * been queued for creation but aren't yet in the metadata. The caller treats
+    * "no IDs resolved" the same as "unscoped" rather than as an error so a stale
+    * name in `_modifiedEntityList` can't break Pass 2.
     */
-   public async manageEntityFields(pool: CodeGenConnection, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean, skipDeleteUnneededFields: boolean = false): Promise<boolean> {
+   protected resolveEntityNamesToIDs(entityNames: string[]): string[] {
+      const md = new Metadata();
+      const ids: string[] = [];
+      for (const name of entityNames) {
+         const entity = md.EntityByName(name);
+         if (entity?.ID) ids.push(entity.ID);
+      }
+      return ids;
+   }
+
+   /**
+    * Manages the creation, updating and deletion of entity field records in the metadata based on the database schema.
+    *
+    * @param entityFilter Optional list of entity NAMES to scope the field-management work to. When provided,
+    *   the three SP/inline-SQL passes (delete unneeded, create new from schema, update existing from schema)
+    *   filter to those entities only. Other steps remain unscoped — they are cheap enough that scoping them
+    *   adds complexity without measurable benefit. An empty array short-circuits the entire method as a no-op,
+    *   which is the typical "no schema changes since last run" case in Pass 2.
+    *   `undefined` (default) preserves prior full-scan behavior.
+    */
+   public async manageEntityFields(pool: CodeGenConnection, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean, skipDeleteUnneededFields: boolean = false, entityFilter?: string[]): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
+
+      // Fast-exit: an explicit empty filter means "no entities changed in Pass 1, so Pass 2 has nothing to do"
+      if (entityFilter && entityFilter.length === 0) {
+         logStatus(`      manageEntityFields: empty entityFilter — skipping Pass 2 (no entities to process)`);
+         return true;
+      }
+
+      // Resolve entity names → IDs once up front so SP wrappers can receive UUIDs directly
+      const scopedEntityIDs: string[] | undefined = entityFilter
+         ? this.resolveEntityNamesToIDs(entityFilter)
+         : undefined;
 
       if (!skipCreatedAtUpdatedAtDeletedAtFieldValidation) {
          if (!await this.ensureCreatedAtUpdatedAtFieldsExist(pool, excludeSchemas) ||
@@ -2347,7 +2379,7 @@ export class ManageMetadataBase {
       if (skipDeleteUnneededFields) {
          logStatus(`      Skipping deletion of unneeded entity fields (deferred to post-SQL pass)`);
       } else {
-         if (! await this.deleteUnneededEntityFields(pool, excludeSchemas)) {
+         if (! await this.deleteUnneededEntityFields(pool, excludeSchemas, scopedEntityIDs)) {
             logError ('Error deleting unneeded entity fields');
             bSuccess = false;
          }
@@ -2357,7 +2389,7 @@ export class ManageMetadataBase {
       // AN: 14-June-2025 - See note below about the new order of these steps, this must
       // happen before we update existing entity fields from schema.
       const step2StartTime: Date = new Date();
-      if (! await this.createNewEntityFieldsFromSchema(pool)) { // has its own internal filtering for exclude schema/table so don't pass in
+      if (! await this.createNewEntityFieldsFromSchema(pool, scopedEntityIDs)) { // has its own internal filtering for exclude schema/table so don't pass in
          logError ('Error creating new entity fields from schema')
          bSuccess = false;
       }
@@ -2379,7 +2411,7 @@ export class ManageMetadataBase {
       // with VERY HIGH sequence numbers (e.g. 100,000 above what they will be approx) and then
       // we align them properly in sequential order from 1+ via this method below.
       const step3StartTime: Date = new Date();
-      if (! await this.updateExistingEntityFieldsFromSchema(pool, excludeSchemas)) {
+      if (! await this.updateExistingEntityFieldsFromSchema(pool, excludeSchemas, scopedEntityIDs)) {
          logError ('Error updating existing entity fields from schema')
          bSuccess = false;
       }
@@ -2880,9 +2912,9 @@ export class ManageMetadataBase {
     *
     * @returns {string} - The SQL statement to retrieve pending entity fields.
     */
-   protected getPendingEntityFieldsSELECTSQL(): string {
+   protected getPendingEntityFieldsSELECTSQL(entityIDs?: string[]): string {
       const schema = mj_core_schema();
-      return this.dbProvider.getPendingEntityFieldsSQL(schema);
+      return this.dbProvider.getPendingEntityFieldsSQL(schema, entityIDs);
    }
 
    /**
@@ -3005,9 +3037,11 @@ export class ManageMetadataBase {
       return this.dbProvider.parseColumnDefaultValue(sqlDefaultValue) as string ?? null!;
    }
 
-   protected async createNewEntityFieldsFromSchema(pool: CodeGenConnection): Promise<boolean> {
+   protected async createNewEntityFieldsFromSchema(pool: CodeGenConnection, entityIDs?: string[]): Promise<boolean> {
       try   {
-         const sSQL = this.getPendingEntityFieldsSELECTSQL();
+         // entityIDs flows down to the provider's WHERE clause so the inline SELECT
+         // narrows to changed entities only when scoped.
+         const sSQL = this.getPendingEntityFieldsSELECTSQL(entityIDs);
          const newEntityFieldsResult = await this.runQuery(pool, sSQL);
          const newEntityFields = newEntityFieldsResult.recordset;
          if (newEntityFields.length > 0) {
@@ -3098,15 +3132,26 @@ export class ManageMetadataBase {
       ManageMetadataBase._modifiedEntityList = ManageMetadataBase._modifiedEntityList.concat(newlyModifiedEntityNames);
    }
 
-   protected async updateExistingEntityFieldsFromSchema(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+   protected async updateExistingEntityFieldsFromSchema(pool: CodeGenConnection, excludeSchemas: string[], entityIDs?: string[]): Promise<boolean> {
       try   {
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntityFieldsFromSchema', [`'${excludeSchemas.join(',')}'`], ['ExcludedSchemaNames']);
-         const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to update existing entity fields from schema`, true);
-         // result contains the updated entity fields
-         // there is a field in there called EntityName. Get a distinct list of entity names from this and add them
-         // to the modified entity list if they're not already in there
-         if (result && result.length > 0) {
-            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { EntityName: any; }) => r.EntityName));
+         const idsToProcess: (string | null)[] = entityIDs && entityIDs.length > 0 ? entityIDs : [null];
+         for (const entityID of idsToProcess) {
+            const params = entityID
+               ? [`'${excludeSchemas.join(',')}'`, `'${entityID}'`]
+               : [`'${excludeSchemas.join(',')}'`];
+            const paramNames = entityID
+               ? ['ExcludedSchemaNames', 'EntityID']
+               : ['ExcludedSchemaNames'];
+            const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntityFieldsFromSchema', params, paramNames);
+            const label = entityID
+               ? `SQL text to update existing entity fields from schema (entity ${entityID})`
+               : `SQL text to update existing entity fields from schema`;
+            const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
+            // result contains the updated entity fields. Get a distinct list of entity names
+            // and add them to the modified entity list if they're not already in there.
+            if (result && result.length > 0) {
+               ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { EntityName: any; }) => r.EntityName));
+            }
          }
          return true;
       }
@@ -3227,15 +3272,28 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async deleteUnneededEntityFields(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+   protected async deleteUnneededEntityFields(pool: CodeGenConnection, excludeSchemas: string[], entityIDs?: string[]): Promise<boolean> {
       try   {
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteUnneededEntityFields', [`'${excludeSchemas.join(',')}'`], ['ExcludedSchemaNames']);
-         const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to delete unneeded entity fields`, true);
-         // result contains the DELETED entity fields
-         // there is a field in there called Entity. Get a distinct list of entity names from this and add them
-         // to the modified entity list if they're not already in there
-         if (result && result.length > 0) {
-            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Entity: any; }) => r.Entity));
+         // When unscoped: one SP call against the full schema. When scoped: one SP call per
+         // entity ID, each pre-filtered by @EntityID so the table scans collapse to seeks.
+         const idsToProcess: (string | null)[] = entityIDs && entityIDs.length > 0 ? entityIDs : [null];
+         for (const entityID of idsToProcess) {
+            const params = entityID
+               ? [`'${excludeSchemas.join(',')}'`, `'${entityID}'`]
+               : [`'${excludeSchemas.join(',')}'`];
+            const paramNames = entityID
+               ? ['ExcludedSchemaNames', 'EntityID']
+               : ['ExcludedSchemaNames'];
+            const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteUnneededEntityFields', params, paramNames);
+            const label = entityID
+               ? `SQL text to delete unneeded entity fields (entity ${entityID})`
+               : `SQL text to delete unneeded entity fields`;
+            const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
+            // result contains the DELETED entity fields. Get a distinct list of entity names
+            // and add them to the modified entity list if they're not already in there.
+            if (result && result.length > 0) {
+               ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Entity: any; }) => r.Entity));
+            }
          }
          return true;
       }
