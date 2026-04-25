@@ -426,9 +426,16 @@ export class ChildComponentPropValidationRule extends BaseLintRule {
         const childInfo = depMap.get(tagName);
         if (!childInfo) return; // Not a known dependency component
 
+        // Full list used for typo detection (accepts both raw event names and on-prefixed)
         const allValidPropNames = [
           ...Array.from(childInfo.propertyNames),
           ...Array.from(childInfo.eventPropNames),
+        ];
+
+        // Display list for error messages: only show on-prefixed callback form of events
+        const displayPropNames = [
+          ...Array.from(childInfo.propertyNames),
+          ...Array.from(childInfo.eventPropNames).filter((n) => n.startsWith('on')),
         ];
 
         for (const attr of path.node.attributes) {
@@ -503,8 +510,8 @@ export class ChildComponentPropValidationRule extends BaseLintRule {
           }
 
           // No match at all -- nonexistent prop
-          const availableProps = allValidPropNames.length > 0
-            ? ` Available props: ${allValidPropNames.join(', ')}.`
+          const availableProps = displayPropNames.length > 0
+            ? ` Available props: ${displayPropNames.join(', ')}.`
             : '';
 
           violations.push({
@@ -516,8 +523,8 @@ export class ChildComponentPropValidationRule extends BaseLintRule {
               `Prop "${attrName}" does not exist on <${tagName}>.${availableProps}`,
             suggestion: {
               text: `Remove "${attrName}" or use one of the available props defined in the ${tagName} component spec.`,
-              example: allValidPropNames.length > 0
-                ? `<${tagName} ${allValidPropNames[0]}={...} />`
+              example: displayPropNames.length > 0
+                ? `<${tagName} ${displayPropNames[0]}={...} />`
                 : `<${tagName} />`,
             },
           });
