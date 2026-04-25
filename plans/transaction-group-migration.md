@@ -560,12 +560,10 @@ These are cases where the loop size is small (typically under 10 items) and the 
 
 ---
 
-#### 27. knowledge-config-resource.component.ts
+#### 27. knowledge-config-resource.component.ts — N/A (no migration needed)
 
 - **Path**: `packages/Angular/Explorer/dashboards/src/KnowledgeHub/components/config/knowledge-config-resource.component.ts`
-- **Current Pattern**: Loop save for entity documents (1-20 items).
-- **Fix**: TransactionGroup.
-- **Complexity**: **LOW**
+- **Status**: **Skipped on inspection.** The file has only single-record `Save()`/`Delete()` calls (`CreateIndex`, `DeleteIndex`) — no loop pattern. `SaveConfiguration` is a placeholder that doesn't persist FTS toggles or pipeline settings yet. TransactionGroup adds overhead for single-record operations with no atomicity benefit. Revisit if/when the FTS toggle and pipeline-settings persistence is actually wired up; *that* would introduce the loop the original inventory anticipated.
 
 ---
 

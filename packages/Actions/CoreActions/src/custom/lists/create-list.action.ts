@@ -92,7 +92,7 @@ export class CreateListAction extends BaseAction {
       await provider.BeginTransaction();
       try {
         if (!await list.Save()) {
-          throw new Error(`Failed to create list: ${list.LatestResult?.Message ?? 'unknown error'}`);
+          throw new Error(`Failed to create list: ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
 
         if (addRecordIds && addRecordIds.length > 0) {
@@ -105,7 +105,7 @@ export class CreateListAction extends BaseAction {
             listDetail.Status = 'Active';
 
             if (!await listDetail.Save()) {
-              throw new Error(`Failed to add record '${recordId}': ${listDetail.LatestResult?.Message ?? 'unknown error'}`);
+              throw new Error(`Failed to add record '${recordId}': ${listDetail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
             recordsAdded++;
           }

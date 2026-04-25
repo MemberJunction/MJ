@@ -60,7 +60,7 @@ export class CreateNewUserBase {
                                 userRole.UserID = user.ID;
                                 userRole.RoleID = roleID;
                                 if (!await userRole.Save()) {
-                                    throw new Error(`Failed to create User Role '${roleName}': ${userRole.LatestResult?.Message ?? 'unknown error'}`);
+                                    throw new Error(`Failed to create User Role '${roleName}': ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                                 }
                                 logStatus("   Created User Role: " + roleName);
                             }
@@ -83,7 +83,7 @@ export class CreateNewUserBase {
                                     userApplication.IsActive = true;
 
                                     if (!await userApplication.Save()) {
-                                        throw new Error(`Failed to create User Application ${appName} for new user ${user.Name}: ${userApplication.LatestResult?.Message ?? 'unknown error'}`);
+                                        throw new Error(`Failed to create User Application ${appName} for new user ${user.Name}: ${userApplication.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                                     }
                                     logStatus(`Created User Application ${appName} for new user ${user.Name}`);
 
@@ -109,7 +109,7 @@ export class CreateNewUserBase {
                                         userAppEntity.Sequence = index;
 
                                         if (!await userAppEntity.Save()) {
-                                            throw new Error(`Failed to create User Application Entity for new user ${user.Name}: ${userAppEntity.LatestResult?.Message ?? 'unknown error'}`);
+                                            throw new Error(`Failed to create User Application Entity for new user ${user.Name}: ${userAppEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                                         }
                                         LogStatus(`Created User Application Entity ${appEntity.Entity} for new user ${user.Name}`);
                                     }

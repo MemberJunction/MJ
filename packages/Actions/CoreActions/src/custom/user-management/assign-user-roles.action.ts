@@ -101,7 +101,7 @@ export class AssignUserRolesAction extends BaseAction {
                         userRole.RoleID = role.ID;
 
                         if (!await userRole.Save()) {
-                            throw new Error(`Failed to assign role '${role.Name}': ${userRole.LatestResult?.Message ?? 'unknown error'}`);
+                            throw new Error(`Failed to assign role '${role.Name}': ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                         }
                         assignedRoles.push({
                             roleID: role.ID,

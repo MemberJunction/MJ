@@ -156,7 +156,11 @@ export class SyncRolesAndUsersResolver {
         }
     }
 
-    /** Transaction-free core of SyncRoles — expected to be invoked inside an outer transaction. */
+    /**
+     * Transaction-free core of SyncRoles — expected to be invoked inside an outer transaction.
+     * Throws on any Save/Delete failure so the outer transaction rolls back. A returned
+     * `{ Success: true }` means every operation succeeded.
+     */
     protected async DoSyncRoles(roles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<SyncRolesAndUsersResultType> {
         const rv = new RunView();
         const result = await rv.RunView<MJRoleEntity>({
@@ -169,60 +173,53 @@ export class SyncRolesAndUsersResolver {
         }
 
         const currentRoles = result.Results;
-        if (!await this.DeleteRemovedRoles(currentRoles, roles, user, userPayload)) {
-            return { Success: false };
-        }
-        if (!await this.AddNewRoles(currentRoles, roles, user, userPayload)) {
-            return { Success: false };
-        }
-        return await this.UpdateExistingRoles(currentRoles, roles, userPayload);
+        await this.DeleteRemovedRoles(currentRoles, roles, user, userPayload);
+        await this.AddNewRoles(currentRoles, roles, user, userPayload);
+        await this.UpdateExistingRoles(currentRoles, roles, userPayload);
+        return { Success: true };
     }
 
-    protected async UpdateExistingRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], userPayload: UserPayload): Promise<SyncRolesAndUsersResultType> {
+    protected async UpdateExistingRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], userPayload: UserPayload): Promise<void> {
         // go through the future roles and update any that are in the current roles
-        const md = new Metadata();
-        let ok: boolean = true;
-
         for (const update of futureRoles) {
             const currentRole = currentRoles.find(r => r.Name.trim().toLowerCase() === update.Name.trim().toLowerCase());
             if (currentRole) {
                 currentRole.Description = update.Description;
-                ok = ok && await currentRole.Save();  
+                if (!await currentRole.Save()) {
+                    throw new Error(`Failed to update role '${currentRole.Name}': ${currentRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
             }
         }
-        return { Success: ok };
     }
 
-    protected async AddNewRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<boolean> {
+    protected async AddNewRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<void> {
         // go through the future roles and add any that are not in the current roles
         const md = new Metadata();
-        let ok: boolean = true;
 
         for (const add of futureRoles) {
             if (!currentRoles.find(r => r.Name.trim().toLowerCase() === add.Name.trim().toLowerCase())) {
                 const role = await md.GetEntityObject<MJRoleEntity>("MJ: Roles", user);
                 role.Name = add.Name;
                 role.Description = add.Description;
-                ok = ok && await role.Save();  
+                if (!await role.Save()) {
+                    throw new Error(`Failed to create role '${add.Name}': ${role.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
             }
         }
-        return ok;
     }
 
 
-    protected async DeleteRemovedRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<boolean> {
+    protected async DeleteRemovedRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<void> {
         const rv = new RunView();
-        let ok: boolean = true;
 
         // iterate through the existing roles and remove any that are not in the input
         for (const remove of currentRoles) {
             if (!this.IsStandardRole(remove.Name)) {
                 if (!futureRoles.find(r => r.Name.trim().toLowerCase() === remove.Name.trim().toLowerCase())) {
-                    ok = ok && await this.DeleteSingleRole(remove, rv, user, userPayload);
-                }    
+                    await this.DeleteSingleRole(remove, rv, user, userPayload);
+                }
             }
         }
-        return ok;
     }
 
     public get StandardRoles(): string[] {
@@ -232,10 +229,8 @@ export class SyncRolesAndUsersResolver {
         return this.StandardRoles.find(r => r.toLowerCase() === roleName.toLowerCase()) !== undefined;
     }
 
-    protected async DeleteSingleRole(role: MJRoleEntity, rv: RunView, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
+    protected async DeleteSingleRole(role: MJRoleEntity, rv: RunView, user: UserInfo, userPayload: UserPayload): Promise<void> {
         // first, remove all the UserRole records that match this role
-        let ok: boolean = true;
-
         const r2 = await rv.RunView<MJUserRoleEntity>({
             EntityName: "MJ: User Roles",
             ExtraFilter: "RoleID = '" + role.ID + "'",
@@ -243,11 +238,15 @@ export class SyncRolesAndUsersResolver {
         }, user);
         if (r2.Success) {
             for (const ur of r2.Results) {
-                ok = ok && await ur.Delete(); // remove the user role
+                if (!await ur.Delete()) {
+                    throw new Error(`Failed to delete user-role link for role '${role.Name}': ${ur.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
             }
         }
 
-        return ok && role.Delete(); // remove the role
+        if (!await role.Delete()) {
+            throw new Error(`Failed to delete role '${role.Name}': ${role.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
     }
 
     /**
@@ -283,7 +282,10 @@ export class SyncRolesAndUsersResolver {
         }
     }
 
-    /** Transaction-free core of SyncUsers — expected to be invoked inside an outer transaction. */
+    /**
+     * Transaction-free core of SyncUsers — expected to be invoked inside an outer transaction.
+     * Throws on any Save/Delete failure so the outer transaction rolls back.
+     */
     protected async DoSyncUsers(users: UserInputType[], user: UserInfo, userPayload: UserPayload): Promise<SyncRolesAndUsersResultType> {
         const rv = new RunView();
         const result = await rv.RunView<MJUserEntity>({
@@ -296,17 +298,15 @@ export class SyncRolesAndUsersResolver {
         }
 
         const currentUsers = result.Results;
-        if (!await this.DeleteRemovedUsers(currentUsers, users, user, userPayload)) return { Success: false };
-        if (!await this.AddNewUsers(currentUsers, users, userPayload)) return { Success: false };
-        if (!await this.UpdateExistingUsers(currentUsers, users, userPayload)) return { Success: false };
-        if (!await this.SyncUserRoles(users, user, userPayload)) return { Success: false };
+        await this.DeleteRemovedUsers(currentUsers, users, user, userPayload);
+        await this.AddNewUsers(currentUsers, users, userPayload);
+        await this.UpdateExistingUsers(currentUsers, users, userPayload);
+        await this.SyncUserRoles(users, user, userPayload);
         return { Success: true };
     }
 
-    protected async UpdateExistingUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<boolean> {  
+    protected async UpdateExistingUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<void> {
         // go through the future users and update any that are in the current users
-        let ok: boolean = true;
-
         for (const update of futureUsers) {
             const current = currentUsers.find(c => c.Email?.trim().toLowerCase() === update.Email?.trim().toLowerCase());
             if (current) {
@@ -315,23 +315,26 @@ export class SyncRolesAndUsersResolver {
                 current.FirstName = update.FirstName;
                 current.LastName = update.LastName;
                 current.Title = update.Title;
-                ok = ok && await current.Save();  
+                if (!await current.Save()) {
+                    throw new Error(`Failed to update user '${current.Email}': ${current.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
             }
         }
-        return ok;
     }
-    protected async AddNewUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<boolean> {
+
+    protected async AddNewUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<void> {
         // add users that are not in the current users
         const md = new Metadata();
-        let ok: boolean = true;
 
         for (const add of futureUsers) {
             const match = currentUsers.find(currentUser => currentUser.Email?.trim().toLowerCase() === add.Email?.trim().toLowerCase());
             if (match) {
                 // make sure the IsActive bit is set to true
                 match.IsActive = true;
-                ok = ok && await match.Save();  
-            }  
+                if (!await match.Save()) {
+                    throw new Error(`Failed to reactivate user '${match.Email}': ${match.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            }
             else {
                 const user = await md.GetEntityObject<MJUserEntity>("MJ: Users", userPayload.userRecord);
                 user.Name = add.Name;
@@ -342,32 +345,27 @@ export class SyncRolesAndUsersResolver {
                 user.Title = add.Title;
                 user.IsActive = true;
 
-                ok = ok && await user.Save();  
-            }
-        }
-        return ok;
-    }
-
-    protected async DeleteRemovedUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], u: UserInfo, userPayload: UserPayload): Promise<boolean> {
-        // remove users that are not in the future users
-        const rv = new RunView();
-        const md = new Metadata();
-
-        let ok: boolean = true;
-        for (const remove of currentUsers) {
-            if (remove.Type.trim().toLowerCase() !== 'owner') {
-                if (!futureUsers.find(r => r.Email.trim().toLowerCase() === remove.Email.trim().toLowerCase())) {
-                    ok = ok && await this.DeleteSingleUser(remove, rv, u, userPayload);
+                if (!await user.Save()) {
+                    throw new Error(`Failed to create user '${add.Email}': ${user.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
             }
         }
-        return ok;
     }
 
-    protected async DeleteSingleUser(user: MJUserEntity, rv: RunView, u: UserInfo, userPayload: UserPayload): Promise<boolean> {
-        // first, remove all the UserRole records that match this user
-        let ok: boolean = true;
+    protected async DeleteRemovedUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], u: UserInfo, userPayload: UserPayload): Promise<void> {
+        // remove users that are not in the future users
+        const rv = new RunView();
+        for (const remove of currentUsers) {
+            if (remove.Type.trim().toLowerCase() !== 'owner') {
+                if (!futureUsers.find(r => r.Email.trim().toLowerCase() === remove.Email.trim().toLowerCase())) {
+                    await this.DeleteSingleUser(remove, rv, u, userPayload);
+                }
+            }
+        }
+    }
 
+    protected async DeleteSingleUser(user: MJUserEntity, rv: RunView, u: UserInfo, userPayload: UserPayload): Promise<void> {
+        // first, remove all the UserRole records that match this user
         const r2 = await rv.RunView<MJUserRoleEntity>({
             EntityName: "MJ: User Roles",
             ExtraFilter: "UserID = '" + user.ID + "'",
@@ -375,20 +373,23 @@ export class SyncRolesAndUsersResolver {
         }, u);
         if (r2.Success) {
             for (const ur of r2.Results) {
-                ok = ok && await ur.Delete(); // remove the user role — part of the outer transaction
+                if (!await ur.Delete()) {
+                    throw new Error(`Failed to delete user-role link for user '${user.Email}': ${ur.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
             }
         }
         if (await user.Delete()) {
-            return ok;
+            return;
         }
-        else {
-            // in some cases there are a lot of fkey constraints that prevent the user from being deleted, so we mark the user as inactive instead
-            user.IsActive = false;
-            return await user.Save() && ok;
+        // FK constraint fallback: when the user has dependent records that block hard delete,
+        // we mark the user inactive instead. A failure to soft-delete IS a real error and rolls back.
+        user.IsActive = false;
+        if (!await user.Save()) {
+            throw new Error(`Failed to delete or deactivate user '${user.Email}': ${user.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
     }
 
-    protected async SyncUserRoles(users: UserInputType[], u: UserInfo, userPayload: UserPayload): Promise<boolean> {
+    protected async SyncUserRoles(users: UserInputType[], u: UserInfo, userPayload: UserPayload): Promise<void> {
         // for each user in the users array, make sure there is a User Role that matches. First, get a list of all DATABASE user and roels so we have that for fast lookup in memory
         const rv = new RunView();
         const md = new Metadata();
@@ -406,50 +407,43 @@ export class SyncRolesAndUsersResolver {
             ResultType: 'entity_object'
         }, u);
 
-        // await both 
-        const [uResult,rResult, urResult] = await Promise.all([p1, p2, p3]);
+        const [uResult, rResult, urResult] = await Promise.all([p1, p2, p3]);
 
-        if (uResult.Success && rResult.Success && urResult.Success) {
-            // we have the DB users and roles, and user roles
-            const dbUsers = uResult.Results;
-            const dbRoles = rResult.Results;    
-            const dbUserRoles = urResult.Results;
-            let ok: boolean = true;
+        if (!uResult.Success || !rResult.Success || !urResult.Success) {
+            throw new Error(`Failed to load users/roles/user-roles for SyncUserRoles`);
+        }
 
-            // now, we can do lookups in memory from those DB roles and Users for their ID values.
-            // now we will iterate through the users input type and for each role, make sure it is in there.
-            // Saves/Deletes below run inside the outer SyncUsers/SyncRolesAndUsers transaction.
-            for (const user of users) {
-                const dbUser = dbUsers.find(u => u.Email.trim().toLowerCase() === user.Email.trim().toLowerCase());
-                if (dbUser) {
-                    for (const role of user.Roles) {
-                        const dbRole = dbRoles.find(r => r.Name.trim().toLowerCase() === role.Name.trim().toLowerCase());
-                        if (dbRole) {
-                            // now we need to make sure there is a user role that matches this user and role
-                            if (!dbUserRoles.find(ur => UUIDsEqual(ur.UserID, dbUser.ID) && UUIDsEqual(ur.RoleID, dbRole.ID))) {
-                                // we need to add a user role
-                                const ur = await md.GetEntityObject<MJUserRoleEntity>("MJ: User Roles", u);
-                                ur.UserID = dbUser.ID;
-                                ur.RoleID = dbRole.ID;
-                                ok = ok && await ur.Save();  
-                            }
-                        }
-                    }
-                    // now, we check for DB user roles that are NOT in the user.Roles property as they are no longer part of the user's roles
-                    const thisUserDBRoles = dbUserRoles.filter(ur => UUIDsEqual(ur.UserID, dbUser.ID));
-                    for (const dbUserRole of thisUserDBRoles) {
-                        const role = user.Roles.find(r => r.Name.trim().toLowerCase() === dbRoles.find(rr => UUIDsEqual(rr.ID, dbUserRole.RoleID))?.Name.trim().toLowerCase());
-                        if (!role && !this.IsStandardRole(dbUserRole.Role)) {
-                            // this user role is no longer in the user's roles, we need to remove it
-                            ok = ok && await dbUserRole.Delete();
-                        }
+        const dbUsers = uResult.Results;
+        const dbRoles = rResult.Results;
+        const dbUserRoles = urResult.Results;
+
+        // Saves/Deletes below run inside the outer SyncUsers/SyncRolesAndUsers transaction.
+        for (const user of users) {
+            const dbUser = dbUsers.find(u => u.Email.trim().toLowerCase() === user.Email.trim().toLowerCase());
+            if (!dbUser) continue;
+
+            for (const role of user.Roles) {
+                const dbRole = dbRoles.find(r => r.Name.trim().toLowerCase() === role.Name.trim().toLowerCase());
+                if (dbRole && !dbUserRoles.find(ur => UUIDsEqual(ur.UserID, dbUser.ID) && UUIDsEqual(ur.RoleID, dbRole.ID))) {
+                    const ur = await md.GetEntityObject<MJUserRoleEntity>("MJ: User Roles", u);
+                    ur.UserID = dbUser.ID;
+                    ur.RoleID = dbRole.ID;
+                    if (!await ur.Save()) {
+                        throw new Error(`Failed to assign role '${dbRole.Name}' to user '${dbUser.Email}': ${ur.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                     }
                 }
             }
-            return ok;
-        }
-        else {
-            return false;
+
+            // Check for DB user roles that are NOT in the user.Roles input — those need to be removed
+            const thisUserDBRoles = dbUserRoles.filter(ur => UUIDsEqual(ur.UserID, dbUser.ID));
+            for (const dbUserRole of thisUserDBRoles) {
+                const role = user.Roles.find(r => r.Name.trim().toLowerCase() === dbRoles.find(rr => UUIDsEqual(rr.ID, dbUserRole.RoleID))?.Name.trim().toLowerCase());
+                if (!role && !this.IsStandardRole(dbUserRole.Role)) {
+                    if (!await dbUserRole.Delete()) {
+                        throw new Error(`Failed to remove role from user '${dbUser.Email}': ${dbUserRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    }
+                }
+            }
         }
     }
 }

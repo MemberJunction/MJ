@@ -286,7 +286,7 @@ export class RotateEncryptionKeyAction {
 
                                 record.Set(fieldName, reEncrypted);
                                 if (!await record.Save()) {
-                                    throw new Error(`Failed to save re-encrypted record in ${fullFieldName}: ${record.LatestResult?.Message ?? 'unknown error'}`);
+                                    throw new Error(`Failed to save re-encrypted record in ${fullFieldName}: ${record.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                                 }
                                 batchProcessed++;
                             }

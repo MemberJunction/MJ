@@ -68,7 +68,7 @@ export class QueryDatabaseWriter {
         query.Status = 'Pending';
 
         if (!await query.Save()) {
-          throw new Error(`Failed to save query '${vq.query.queryName}': ${query.LatestResult?.Message ?? 'unknown error'}`);
+          throw new Error(`Failed to save query '${vq.query.queryName}': ${query.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
 
         results.push(`✓ ${query.Name} (ID: ${query.ID}) - AI extraction queued`);

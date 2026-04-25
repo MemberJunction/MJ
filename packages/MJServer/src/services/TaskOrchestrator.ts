@@ -146,7 +146,7 @@ export class TaskOrchestrator {
         await provider.BeginTransaction();
         try {
             if (!await parentTask.Save()) {
-                throw new Error(`Failed to create parent workflow task: ${parentTask.LatestResult?.Message ?? 'unknown error'}`);
+                throw new Error(`Failed to create parent workflow task: ${parentTask.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
             LogStatus(`Created parent workflow task: ${parentTask.Name} (${parentTask.ID})`);
 
@@ -171,7 +171,7 @@ export class TaskOrchestrator {
                 }
 
                 if (!await task.Save()) {
-                    throw new Error(`Failed to create child task '${def.name}': ${task.LatestResult?.Message ?? 'unknown error'}`);
+                    throw new Error(`Failed to create child task '${def.name}': ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
                 tempIdToRealId.set(def.tempId, task.ID);
                 LogStatus(`Created child task: ${task.Name} (${task.ID}) under parent ${parentTask.ID}`);
@@ -194,7 +194,7 @@ export class TaskOrchestrator {
                     dependency.DependencyType = 'Prerequisite';
 
                     if (!await dependency.Save()) {
-                        throw new Error(`Failed to create task dependency (${taskId} -> ${dependsOnId}): ${dependency.LatestResult?.Message ?? 'unknown error'}`);
+                        throw new Error(`Failed to create task dependency (${taskId} -> ${dependsOnId}): ${dependency.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                     }
                     LogStatus(`Created dependency: Task ${taskId} depends on ${dependsOnId}`);
                 }
@@ -732,7 +732,7 @@ export class TaskOrchestrator {
             }
 
             if (!await artifact.Save()) {
-                throw new Error(`Failed to save artifact: ${artifact.LatestResult?.Message ?? 'unknown error'}`);
+                throw new Error(`Failed to save artifact: ${artifact.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
             LogStatus(`Created artifact: ${artifact.Name} (${artifact.ID})`);
 
@@ -744,7 +744,7 @@ export class TaskOrchestrator {
             version.UserID = this.contextUser.ID;
 
             if (!await version.Save()) {
-                throw new Error(`Failed to save artifact version: ${version.LatestResult?.Message ?? 'unknown error'}`);
+                throw new Error(`Failed to save artifact version: ${version.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
             LogStatus(`Created artifact version: ${version.ID}`);
 
@@ -758,7 +758,7 @@ export class TaskOrchestrator {
                 extractedName = extractedName.replace(/^["']|["']$/g, '');
                 artifact.Name = extractedName;
                 if (!await artifact.Save()) {
-                    throw new Error(`Failed to update artifact name: ${artifact.LatestResult?.Message ?? 'unknown error'}`);
+                    throw new Error(`Failed to update artifact name: ${artifact.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
                 LogStatus(`✨ Updated artifact name to: ${artifact.Name}`);
             }
@@ -773,7 +773,7 @@ export class TaskOrchestrator {
             junction.Direction = 'Output';
 
             if (!await junction.Save()) {
-                throw new Error(`Failed to create artifact-conversation association: ${junction.LatestResult?.Message ?? 'unknown error'}`);
+                throw new Error(`Failed to create artifact-conversation association: ${junction.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
             LogStatus(`Linked artifact ${artifact.ID} to conversation detail ${conversationDetailId}`);
 

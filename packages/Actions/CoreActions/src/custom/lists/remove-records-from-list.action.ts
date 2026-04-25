@@ -113,7 +113,7 @@ export class RemoveRecordsFromListAction extends BaseAction {
       try {
         for (const detail of details) {
           if (!await detail.Delete()) {
-            throw new Error(`Failed to remove record '${detail.RecordID}': ${detail.LatestResult?.Message ?? 'unknown error'}`);
+            throw new Error(`Failed to remove record '${detail.RecordID}': ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
           }
         }
         await provider.CommitTransaction();

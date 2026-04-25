@@ -137,7 +137,7 @@ export class UpdateListItemStatusAction extends BaseAction {
         for (const detail of details) {
           detail.Status = newStatus as ListItemStatus;
           if (!await detail.Save()) {
-            throw new Error(`Failed to update record '${detail.RecordID}': ${detail.LatestResult?.Message ?? 'unknown error'}`);
+            throw new Error(`Failed to update record '${detail.RecordID}': ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
           }
         }
         await provider.CommitTransaction();

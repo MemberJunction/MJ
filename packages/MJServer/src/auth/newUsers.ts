@@ -50,7 +50,7 @@ export class NewUserBase {
             await provider.BeginTransaction();
             try {
                 if (!await user.Save()) {
-                    throw new Error(`Failed to create new user ${firstName} ${lastName} ${email}: ${user.LatestResult?.Message ?? 'unknown error'}`);
+                    throw new Error(`Failed to create new user ${firstName} ${lastName} ${email}: ${user.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
 
                 if(configInfo.userHandling && configInfo.userHandling.newUserRoles){
@@ -67,7 +67,7 @@ export class NewUserBase {
                         userRoleEntity.UserID = user.ID;
                         userRoleEntity.RoleID = userRole.ID;
                         if (!await userRoleEntity.Save()) {
-                            throw new Error(`Failed to assign role ${role} to new user ${user.Name}: ${userRoleEntity.LatestResult?.Message ?? 'unknown error'}`);
+                            throw new Error(`Failed to assign role ${role} to new user ${user.Name}: ${userRoleEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                         }
                         LogStatus(`Assigned role ${role} to new user ${user.Name}`);
                     }
@@ -105,7 +105,7 @@ export class NewUserBase {
                         userApplication.IsActive = true;
 
                         if (!await userApplication.Save()) {
-                            throw new Error(`Failed to create User Application ${application.Name} for new user ${user.Name}: ${userApplication.LatestResult?.Message ?? 'unknown error'}`);
+                            throw new Error(`Failed to create User Application ${application.Name} for new user ${user.Name}: ${userApplication.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                         }
                         LogStatus(`Created User Application ${application.Name} for new user ${user.Name}`);
 
@@ -130,7 +130,7 @@ export class NewUserBase {
                             userAppEntity.Sequence = index;
 
                             if (!await userAppEntity.Save()) {
-                                throw new Error(`Failed to create User Application Entity for new user ${user.Name}: ${userAppEntity.LatestResult?.Message ?? 'unknown error'}`);
+                                throw new Error(`Failed to create User Application Entity for new user ${user.Name}: ${userAppEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                             }
                             LogStatus(`Created User Application Entity ${appEntity.Entity} for new user ${user.Name}`);
                         }
