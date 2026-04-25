@@ -18,6 +18,22 @@ import { describe, it, expect } from 'vitest';
 import { ComponentLinter, LintResult } from '../../lib/component-linter';
 import { loadFixturesByCategory, LoadedFixture } from './fixture-loader';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { UserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+
+/** Whether the database is available (set by vitest-setup.ts) */
+const DB_AVAILABLE = process.env.__MJ_DB_AVAILABLE === 'true';
+
+/** Get a contextUser for DB-dependent tests */
+function getContextUser(): UserInfo | undefined {
+  if (!DB_AVAILABLE) return undefined;
+  try {
+    const user = UserCache.Instance.UserByName('System', false);
+    return user || UserCache.Instance.Users?.[0] || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Detect whether a fixture requires database metadata to validate correctly.
@@ -93,8 +109,8 @@ function registerFixtureTests(
           continue;
         }
 
-        if (fixtureRequiresDatabase(fixture)) {
-          results.push({ name: fixture.metadata.name, passed: true, skipped: true, detail: 'requires database' });
+        if (fixtureRequiresDatabase(fixture) && !DB_AVAILABLE) {
+          results.push({ name: fixture.metadata.name, passed: true, skipped: true, detail: 'requires database (not connected)' });
           continue;
         }
 
@@ -104,6 +120,7 @@ function registerFixtureTests(
             fixture.spec.name,
             fixture.spec,
             true,
+            getContextUser(),
           );
           assertFn(lintResult, fixture);
           results.push({
