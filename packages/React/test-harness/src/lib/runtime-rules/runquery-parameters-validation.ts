@@ -294,7 +294,82 @@ export class RunqueryParametersValidationRule extends BaseLintRule {
               });
             }
           }
-          // Case 3: Parameters is neither array nor object
+          // Case 2.5: Parameters is a variable reference — resolve if possible, skip if not
+          else if (t.isIdentifier(paramValue)) {
+            // The parameter is a variable like `Parameters: params`
+            // Try to resolve the variable's initializer to validate its properties
+            const binding = path.scope.getBinding(paramValue.name);
+            if (binding && t.isVariableDeclarator(binding.path.node) && t.isObjectExpression(binding.path.node.init)) {
+              // Variable was initialized as an object literal — validate its properties
+              const initObject = binding.path.node.init;
+              if (specQuery?.parameters) {
+                const providedParamsMap = new Map<string, string>();
+                for (const prop of initObject.properties) {
+                  if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                    providedParamsMap.set(prop.key.name.toLowerCase(), prop.key.name);
+                  }
+                }
+
+                // Also check for params.PropertyName = value assignments after initialization
+                const bindingScope = binding.scope;
+                const block = bindingScope.block;
+                let stmts: t.Statement[] = [];
+                if (t.isBlockStatement(block)) {
+                  stmts = block.body;
+                } else if (t.isProgram(block)) {
+                  stmts = block.body;
+                } else if (t.isFunction(block) && t.isBlockStatement(block.body)) {
+                  stmts = block.body.body;
+                }
+                for (const stmt of stmts) {
+                  if (t.isExpressionStatement(stmt) && t.isAssignmentExpression(stmt.expression)) {
+                    const left = stmt.expression.left;
+                    if (t.isMemberExpression(left) && t.isIdentifier(left.object) &&
+                        left.object.name === paramValue.name && t.isIdentifier(left.property)) {
+                      providedParamsMap.set(left.property.name.toLowerCase(), left.property.name);
+                    }
+                  }
+                  // Also check inside if-blocks: if (condition) { params.X = value; }
+                  if (t.isIfStatement(stmt)) {
+                    const consequent = stmt.consequent;
+                    const blockBody = t.isBlockStatement(consequent) ? consequent.body : [consequent];
+                    for (const innerStmt of blockBody) {
+                      if (t.isExpressionStatement(innerStmt) && t.isAssignmentExpression(innerStmt.expression)) {
+                        const innerLeft = innerStmt.expression.left;
+                        if (t.isMemberExpression(innerLeft) && t.isIdentifier(innerLeft.object) &&
+                            innerLeft.object.name === paramValue.name && t.isIdentifier(innerLeft.property)) {
+                          providedParamsMap.set(innerLeft.property.name.toLowerCase(), innerLeft.property.name);
+                        }
+                      }
+                    }
+                  }
+                }
+
+                const specParamNames = specQuery.parameters.map((p) => p.name);
+                const specParamNamesLower = specParamNames.map((n) => n.toLowerCase());
+
+                // Find extra parameters not in spec
+                const extra = Array.from(providedParamsMap.values()).filter(
+                  (name) => !specParamNamesLower.includes(name.toLowerCase())
+                );
+
+                if (extra.length > 0) {
+                  violations.push({
+                    rule: 'runquery-parameters-validation',
+                    severity: 'high',
+                    line: parametersNode.loc?.start.line || 0,
+                    column: parametersNode.loc?.start.column || 0,
+                    message: `Query '${queryName}' has unknown parameters: ${extra.join(', ')}. Expected: {${specParamNames.join(', ')}}`,
+                    code: `Parameters: ${paramValue.name}`,
+                  });
+                }
+              }
+              // If no spec query info, allow the variable — can't validate without metadata
+            }
+            // If binding can't be resolved or isn't an object initializer, allow it
+            // The runtime will catch any actual parameter issues
+          }
+          // Case 3: Parameters is neither array, object, nor variable reference
           else if (!t.isObjectExpression(paramValue)) {
             let fixCode: string;
             let message: string;
