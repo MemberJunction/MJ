@@ -2330,13 +2330,22 @@ export class ManageMetadataBase {
     * been queued for creation but aren't yet in the metadata. The caller treats
     * "no IDs resolved" the same as "unscoped" rather than as an error so a stale
     * name in `_modifiedEntityList` can't break Pass 2.
+    *
+    * Guards against empty / whitespace / non-string entries because `_newEntityList`
+    * and `_modifiedEntityList` can pick those up from result-set rows whose EntityName
+    * column is null. EntityByName throws on those, so we filter them out up front.
     */
    protected resolveEntityNamesToIDs(entityNames: string[]): string[] {
       const md = new Metadata();
       const ids: string[] = [];
       for (const name of entityNames) {
-         const entity = md.EntityByName(name);
-         if (entity?.ID) ids.push(entity.ID);
+         if (typeof name !== 'string' || name.trim().length === 0) continue;
+         try {
+            const entity = md.EntityByName(name);
+            if (entity?.ID) ids.push(entity.ID);
+         } catch {
+            // Stale or invalid names can't break Pass 2 — fall through and skip
+         }
       }
       return ids;
    }
