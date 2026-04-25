@@ -88,6 +88,11 @@ vi.mock('@memberjunction/global', () => ({
         }
     },
     RegisterClass: () => (target: unknown) => target,
+    UUIDsEqual: (a: string | null | undefined, b: string | null | undefined): boolean => {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        return a.trim().toUpperCase() === b.trim().toUpperCase();
+    },
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({}));

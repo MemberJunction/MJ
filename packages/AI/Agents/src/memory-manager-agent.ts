@@ -1408,7 +1408,7 @@ export class MemoryManagerAgent extends BaseAgent {
                         agentId = sourceRun.AgentID;
                     }
                     note.AgentID = agentId;
-                    note.CompanyID = MemoryManagerAgent.isValidUUID(extracted.companyId) ? extracted.companyId! : null;
+                    note.CompanyID = sourceRun?.CompanyID || null;
                     note.AgentNoteTypeID = aiNoteTypeId;  // "AI" type for AI-generated notes
                     note.Type = extracted.type;  // Category: Preference, Constraint, Context, Issue, Example
                     note.Note = extracted.content;
@@ -1445,9 +1445,7 @@ export class MemoryManagerAgent extends BaseAgent {
                     // UserID: Only set for user-scoped notes. Company/global notes belong to the
                     // company, not a specific user. This also enables cross-user dedup — FindSimilarAgentNotes
                     // filters by userId, so null UserID makes company notes visible to all users.
-                    note.UserID = scopeLevel === 'user'
-                        ? (MemoryManagerAgent.isValidUUID(extracted.userId) ? extracted.userId! : null)
-                        : null;
+                    note.UserID = scopeLevel === 'user' ? (sourceRun?.UserID || null) : null;
 
                     const saveResult = await note.Save();
                     if (saveResult) {

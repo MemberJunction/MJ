@@ -1034,9 +1034,9 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
     ): ((metadata: NoteEmbeddingMetadata) => boolean) {
         const baseFilter = (metadata: NoteEmbeddingMetadata): boolean => {
-            if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
-            if (userId && metadata.userId && metadata.userId !== userId) return false;
-            if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
+            if (agentId && metadata.agentId && !UUIDsEqual(metadata.agentId, agentId)) return false;
+            if (userId && metadata.userId && !UUIDsEqual(metadata.userId, userId)) return false;
+            if (companyId && metadata.companyId && !UUIDsEqual(metadata.companyId, companyId)) return false;
             return true;
         };
 
@@ -1140,9 +1140,9 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
     ): ((metadata: ExampleEmbeddingMetadata) => boolean) {
         const baseFilter = (metadata: ExampleEmbeddingMetadata): boolean => {
-            if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
-            if (userId && metadata.userId && metadata.userId !== userId) return false;
-            if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
+            if (agentId && metadata.agentId && !UUIDsEqual(metadata.agentId, agentId)) return false;
+            if (userId && metadata.userId && !UUIDsEqual(metadata.userId, userId)) return false;
+            if (companyId && metadata.companyId && !UUIDsEqual(metadata.companyId, companyId)) return false;
             return true;
         };
 

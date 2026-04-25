@@ -266,7 +266,7 @@ export class AgentRunner {
 
                     conversation.Name = conversationName;
                     conversation.Description = conversationDescription || ''; // Set description too (like UI does)
-                    conversation.UserID = contextUser.ID;
+                    conversation.UserID = params.userId || contextUser.ID;
                     conversation.Status = 'Available';
                     conversation.DataContextID = null; // Can be set by caller if needed
 
