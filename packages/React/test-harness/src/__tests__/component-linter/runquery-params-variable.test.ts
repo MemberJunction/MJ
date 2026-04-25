@@ -1,5 +1,5 @@
 /**
- * Tests for runquery-parameters-validation handling of variable references.
+ * Tests for runquery-call-validation handling of variable references.
  *
  * Regression tests for the false positive where `Parameters: params` (an Identifier)
  * was incorrectly flagged as "must be object" because the rule only handled
@@ -43,10 +43,10 @@ async function lint(code: string, spec?: Partial<ComponentSpec>): Promise<LintRe
 }
 
 function getParamViolations(result: LintResult) {
-  return result.violations.filter(v => v.rule === 'runquery-parameters-validation');
+  return result.violations.filter(v => v.rule === 'runquery-call-validation');
 }
 
-describe('runquery-parameters-validation: variable references', () => {
+describe('runquery-call-validation: variable references', () => {
   // ═══════════════════════════════════════════════════════════════════════
   // FALSE POSITIVES — valid code that should NOT produce violations
   // ═══════════════════════════════════════════════════════════════════════
