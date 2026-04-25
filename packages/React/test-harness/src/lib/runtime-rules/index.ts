@@ -35,6 +35,8 @@ import './required-queries-not-called';
 import './runquery-call-validation';
 import './runview-call-validation';
 import './saved-user-settings-pattern';
+import './search-availability-check';
+import './search-call-validation';
 import './server-reload-on-client-operation';
 import './single-function-only';
 import './string-replace-all-occurrences';

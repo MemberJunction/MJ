@@ -52,6 +52,12 @@ const RUNQUERY_RESULT_PROPS: readonly string[] = [
 const VALID_RUNVIEW_RESULT = new Set(RUNVIEW_RESULT_PROPS);
 const VALID_RUNQUERY_RESULT = new Set(RUNQUERY_RESULT_PROPS);
 
+const SEARCH_RESULT_PROPS: readonly string[] = [
+  'Success', 'Results', 'TotalCount', 'ElapsedMs', 'SourceCounts', 'Providers', 'ErrorMessage',
+] as const;
+
+const VALID_SEARCH_RESULT = new Set(SEARCH_RESULT_PROPS);
+
 const ARRAY_METHODS = new Set(['map', 'filter', 'forEach', 'reduce', 'find', 'some', 'every', 'sort', 'concat']);
 
 const ARRAY_EXPECTING_FUNCS = new Set([
@@ -72,7 +78,7 @@ const INCORRECT_TO_CORRECT: Record<string, string> = {
   response: 'Results', Response: 'Results',
 };
 
-type MethodType = 'RunView' | 'RunViews' | 'RunQuery';
+type MethodType = 'RunView' | 'RunViews' | 'RunQuery' | 'Search' | 'PreviewSearch';
 
 interface ResultVarInfo {
   line: number;
@@ -83,50 +89,98 @@ interface ResultVarInfo {
 
 // ── Phase 1: Collect result variables ────────────────────────────────
 
+/**
+ * Attempts to extract utilities sub-object name and method name from a callee node.
+ * Handles both MemberExpression (direct) and OptionalMemberExpression (optional chaining) patterns.
+ * Returns [subObject, method] if matched, null otherwise.
+ */
+function extractUtilitiesCallInfo(callee: t.Node): [string, string] | null {
+  // Get the method name from the outermost property
+  let methodName: string | null = null;
+  let objectNode: t.Node | null = null;
+
+  if (t.isMemberExpression(callee) && t.isIdentifier(callee.property)) {
+    methodName = callee.property.name;
+    objectNode = callee.object;
+  } else if (t.isOptionalMemberExpression(callee) && t.isIdentifier(callee.property)) {
+    methodName = callee.property.name;
+    objectNode = callee.object;
+  }
+
+  if (!methodName || !objectNode) return null;
+
+  // Check if the object is utilities.xxx (direct or optional)
+  let subObject: string | null = null;
+
+  if (t.isMemberExpression(objectNode) && t.isIdentifier(objectNode.object) &&
+      objectNode.object.name === 'utilities' && t.isIdentifier(objectNode.property)) {
+    subObject = objectNode.property.name;
+  } else if (t.isOptionalMemberExpression(objectNode) && t.isIdentifier(objectNode.object) &&
+      objectNode.object.name === 'utilities' && t.isIdentifier(objectNode.property)) {
+    subObject = objectNode.property.name;
+  }
+
+  if (!subObject) return null;
+
+  return [subObject, methodName];
+}
+
+/**
+ * Resolves a MethodType from a utilities sub-object name and method name.
+ */
+function resolveMethodType(subObject: string, method: string): MethodType | null {
+  if (subObject === 'rv' && (method === 'RunView' || method === 'RunViews')) {
+    return method as MethodType;
+  }
+  if (subObject === 'rq' && method === 'RunQuery') return 'RunQuery';
+  if (subObject === 'search' && method === 'Search') return 'Search';
+  if (subObject === 'search' && method === 'PreviewSearch') return 'PreviewSearch';
+  return null;
+}
+
+/**
+ * Records a result variable from an AwaitExpression's parent (variable declarator or assignment).
+ */
+function recordResultVariable(
+  path: NodePath<t.AwaitExpression>,
+  methodType: MethodType,
+  resultVariables: Map<string, ResultVarInfo>,
+): void {
+  const parent = path.parent;
+  if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
+    resultVariables.set(parent.id.name, {
+      line: parent.id.loc?.start.line || 0,
+      column: parent.id.loc?.start.column || 0,
+      method: methodType,
+      varName: parent.id.name,
+    });
+  } else if (t.isAssignmentExpression(parent) && t.isIdentifier(parent.left)) {
+    resultVariables.set(parent.left.name, {
+      line: parent.left.loc?.start.line || 0,
+      column: parent.left.loc?.start.column || 0,
+      method: methodType,
+      varName: parent.left.name,
+    });
+  }
+}
+
 function collectResultVariables(ast: t.File): Map<string, ResultVarInfo> {
   const resultVariables = new Map<string, ResultVarInfo>();
 
   traverse(ast, {
     AwaitExpression(path: NodePath<t.AwaitExpression>) {
       const callExpr = path.node.argument;
-      if (!t.isCallExpression(callExpr) || !t.isMemberExpression(callExpr.callee)) return;
 
-      const callee = callExpr.callee;
-      if (
-        !t.isMemberExpression(callee.object) ||
-        !t.isIdentifier(callee.object.object) ||
-        callee.object.object.name !== 'utilities' ||
-        !t.isIdentifier(callee.object.property)
-      ) return;
+      // Handle both CallExpression and OptionalCallExpression
+      if (!t.isCallExpression(callExpr) && !t.isOptionalCallExpression(callExpr)) return;
 
-      const subObject = callee.object.property.name;
-      const method = t.isIdentifier(callee.property) ? callee.property.name : '';
+      const info = extractUtilitiesCallInfo(callExpr.callee);
+      if (!info) return;
 
-      let methodType: MethodType | null = null;
-      if (subObject === 'rv' && (method === 'RunView' || method === 'RunViews')) {
-        methodType = method as MethodType;
-      } else if (subObject === 'rq' && method === 'RunQuery') {
-        methodType = 'RunQuery';
-      }
-
+      const methodType = resolveMethodType(info[0], info[1]);
       if (!methodType) return;
 
-      const parent = path.parent;
-      if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
-        resultVariables.set(parent.id.name, {
-          line: parent.id.loc?.start.line || 0,
-          column: parent.id.loc?.start.column || 0,
-          method: methodType,
-          varName: parent.id.name,
-        });
-      } else if (t.isAssignmentExpression(parent) && t.isIdentifier(parent.left)) {
-        resultVariables.set(parent.left.name, {
-          line: parent.left.loc?.start.line || 0,
-          column: parent.left.loc?.start.column || 0,
-          method: methodType,
-          varName: parent.left.name,
-        });
-      }
+      recordResultVariable(path, methodType, resultVariables);
     },
   });
 
@@ -145,22 +199,21 @@ function isVariableFromRunQueryOrView(path: NodePath, varName: string, methodNam
   const init = bindingPath.node.init;
   if (!init) return false;
 
-  if (t.isAwaitExpression(init) && t.isCallExpression(init.argument)) {
+  // Handle both CallExpression and OptionalCallExpression inside AwaitExpression
+  if (t.isAwaitExpression(init) && (t.isCallExpression(init.argument) || t.isOptionalCallExpression(init.argument))) {
     const call = init.argument;
-    if (t.isMemberExpression(call.callee) && t.isIdentifier(call.callee.property)) {
+    const info = extractUtilitiesCallInfo(call.callee);
+    if (info) {
+      const [subObj, calledMethod] = info;
+      if (methodName === 'RunView' && subObj === 'rv' && (calledMethod === 'RunView' || calledMethod === 'RunViews')) return true;
+      if (methodName === 'RunQuery' && subObj === 'rq' && calledMethod === 'RunQuery') return true;
+      if (methodName === 'Search' && subObj === 'search' && calledMethod === 'Search') return true;
+      if (methodName === 'PreviewSearch' && subObj === 'search' && calledMethod === 'PreviewSearch') return true;
+    }
+
+    // Fallback: check just the method name without full utilities path
+    if (t.isCallExpression(call) && t.isMemberExpression(call.callee) && t.isIdentifier(call.callee.property)) {
       const calledMethod = call.callee.property.name;
-
-      if (
-        t.isMemberExpression(call.callee.object) &&
-        t.isIdentifier(call.callee.object.object) &&
-        call.callee.object.object.name === 'utilities' &&
-        t.isIdentifier(call.callee.object.property)
-      ) {
-        const subObj = call.callee.object.property.name;
-        if (methodName === 'RunView' && subObj === 'rv' && (calledMethod === 'RunView' || calledMethod === 'RunViews')) return true;
-        if (methodName === 'RunQuery' && subObj === 'rq' && calledMethod === 'RunQuery') return true;
-      }
-
       const isFromMethod = calledMethod === methodName || (methodName === 'RunView' && calledMethod === 'RunViews');
       return isFromMethod;
     }
@@ -271,15 +324,17 @@ function validatePropertyAccess(
   propName: string,
   isFromRunQuery: boolean,
   isFromRunView: boolean,
+  isFromSearch: boolean,
   line: number,
   column: number,
   code: string,
   violations: Violation[],
 ): void {
-  if (!isFromRunQuery && !isFromRunView) return;
+  if (!isFromRunQuery && !isFromRunView && !isFromSearch) return;
 
   const isValidQueryProp = VALID_RUNQUERY_RESULT.has(propName);
   const isValidViewProp = VALID_RUNVIEW_RESULT.has(propName);
+  const isValidSearchProp = VALID_SEARCH_RESULT.has(propName);
 
   if (isFromRunQuery && !isValidQueryProp) {
     const suggestion = INCORRECT_TO_CORRECT[propName];
@@ -301,6 +356,17 @@ function validatePropertyAccess(
       message: suggestion
         ? `RunView results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`
         : `Invalid property "${propName}" on RunView result. Valid properties: ${RUNVIEW_RESULT_PROPS.join(', ')}`,
+      code,
+    });
+  } else if (isFromSearch && !isValidSearchProp) {
+    const suggestion = INCORRECT_TO_CORRECT[propName];
+    violations.push({
+      rule: RULE_NAME,
+      severity: 'critical',
+      line, column,
+      message: suggestion
+        ? `Search results don't have a ".${propName}" property. Use ".${suggestion}" instead. Change "${objName}.${propName}" to "${objName}.${suggestion}"`
+        : `Invalid property "${propName}" on Search result. Valid properties: ${SEARCH_RESULT_PROPS.join(', ')}`,
       code,
     });
   }
@@ -337,9 +403,11 @@ export class DataResultValidationRule extends BaseLintRule {
           if (ARRAY_METHODS.has(methodName)) {
             const isFromRunView = isVariableFromRunQueryOrView(path, objName, 'RunView');
             const isFromRunQuery = isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+            const isFromSearch = isVariableFromRunQueryOrView(path, objName, 'Search');
+            const isFromPreviewSearch = isVariableFromRunQueryOrView(path, objName, 'PreviewSearch');
 
-            if (isFromRunView || isFromRunQuery) {
-              const methodType = isFromRunView ? 'RunView' : 'RunQuery';
+            if (isFromRunView || isFromRunQuery || isFromSearch || isFromPreviewSearch) {
+              const methodType = isFromRunView ? 'RunView' : isFromRunQuery ? 'RunQuery' : isFromSearch ? 'Search' : 'PreviewSearch';
               violations.push({
                 rule: RULE_NAME,
                 severity: 'critical',
@@ -453,8 +521,10 @@ Correct pattern:
         const objName = path.node.object.name;
         const propName = path.node.property.name;
 
-        const isFromRunQuery = path.scope.hasBinding(objName) && isVariableFromRunQueryOrView(path, objName, 'RunQuery');
-        const isFromRunView = path.scope.hasBinding(objName) && isVariableFromRunQueryOrView(path, objName, 'RunView');
+        const hasBinding = path.scope.hasBinding(objName);
+        const isFromRunQuery = hasBinding && isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+        const isFromRunView = hasBinding && isVariableFromRunQueryOrView(path, objName, 'RunView');
+        const isFromSearch = hasBinding && (isVariableFromRunQueryOrView(path, objName, 'Search') || isVariableFromRunQueryOrView(path, objName, 'PreviewSearch'));
 
         // Check 5: .length on result
         if (propName === 'length' && resultVariables.has(objName)) {
@@ -474,24 +544,25 @@ Correct pattern:
         }
 
         // Check 1: Invalid property access
-        validatePropertyAccess(objName, propName, isFromRunQuery, isFromRunView,
+        validatePropertyAccess(objName, propName, isFromRunQuery, isFromRunView, isFromSearch,
           path.node.loc?.start.line || 0, path.node.loc?.start.column || 0,
           `${objName}.${propName}`, violations);
 
         // Check 6: Nested incorrect access like result.data.entities
         if (
-          (isFromRunQuery || isFromRunView) &&
+          (isFromRunQuery || isFromRunView || isFromSearch) &&
           t.isMemberExpression(path.parent) &&
           t.isIdentifier(path.parent.property) &&
           (propName === 'data' || propName === 'Data')
         ) {
           const nestedProp = path.parent.property.name;
+          const sourceType = isFromSearch ? 'Search' : 'RunQuery/RunView';
           violations.push({
             rule: RULE_NAME,
             severity: 'critical',
             line: path.parent.loc?.start.line || 0,
             column: path.parent.loc?.start.column || 0,
-            message: `Incorrect nested property access "${objName}.${propName}.${nestedProp}". RunQuery/RunView results use ".Results" directly for the data array. Change to "${objName}.Results"`,
+            message: `Incorrect nested property access "${objName}.${propName}.${nestedProp}". ${sourceType} results use ".Results" directly for the data array. Change to "${objName}.Results"`,
             code: `${objName}.${propName}.${nestedProp}`,
           });
         }
@@ -499,12 +570,15 @@ Correct pattern:
         // Check 10: Missing Success check (null safety)
         if (propName === 'Results' && resultVarNames.has(objName)) {
           if (!isInsideSuccessGuard(path, objName)) {
+            const resultInfo = resultVariables.get(objName);
+            const sourceDesc = resultInfo && (resultInfo.method === 'Search' || resultInfo.method === 'PreviewSearch')
+              ? 'Search' : 'RunView/RunQuery';
             violations.push({
               rule: RULE_NAME,
               severity: 'medium',
               line: path.node.loc?.start.line ?? 0,
               column: path.node.loc?.start.column ?? 0,
-              message: `Accessing "${objName}.Results" without checking "${objName}.Success" first. RunView/RunQuery can fail, and .Results may be undefined when Success is false.`,
+              message: `Accessing "${objName}.Results" without checking "${objName}.Success" first. ${sourceDesc} can fail, and .Results may be undefined when Success is false.`,
               code: `${objName}.Results`,
               suggestion: {
                 text: `Wrap in a Success check before accessing Results`,
@@ -522,11 +596,13 @@ Correct pattern:
         const objName = path.node.object.name;
         const propName = path.node.property.name;
 
-        const isFromRunQuery = path.scope.hasBinding(objName) && isVariableFromRunQueryOrView(path, objName, 'RunQuery');
-        const isFromRunView = path.scope.hasBinding(objName) && isVariableFromRunQueryOrView(path, objName, 'RunView');
+        const hasBinding = path.scope.hasBinding(objName);
+        const isFromRunQuery = hasBinding && isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+        const isFromRunView = hasBinding && isVariableFromRunQueryOrView(path, objName, 'RunView');
+        const isFromSearch = hasBinding && (isVariableFromRunQueryOrView(path, objName, 'Search') || isVariableFromRunQueryOrView(path, objName, 'PreviewSearch'));
 
         // Check 1 (optional chaining variant)
-        validatePropertyAccess(objName, propName, isFromRunQuery, isFromRunView,
+        validatePropertyAccess(objName, propName, isFromRunQuery, isFromRunView, isFromSearch,
           path.node.loc?.start.line || 0, path.node.loc?.start.column || 0,
           `${objName}?.${propName}`, violations);
 
@@ -544,14 +620,17 @@ Correct pattern:
             const objName = node.object.name;
             const propName = node.property.name;
 
-            const isFromRunQuery = path.scope.hasBinding(objName) && isVariableFromRunQueryOrView(path, objName, 'RunQuery');
-            const isFromRunView = path.scope.hasBinding(objName) && isVariableFromRunQueryOrView(path, objName, 'RunView');
+            const hasBinding = path.scope.hasBinding(objName);
+            const isFromRunQuery = hasBinding && isVariableFromRunQueryOrView(path, objName, 'RunQuery');
+            const isFromRunView = hasBinding && isVariableFromRunQueryOrView(path, objName, 'RunView');
+            const isFromSearch = hasBinding && (isVariableFromRunQueryOrView(path, objName, 'Search') || isVariableFromRunQueryOrView(path, objName, 'PreviewSearch'));
 
-            if (isFromRunQuery || isFromRunView) {
+            if (isFromRunQuery || isFromRunView || isFromSearch) {
               const isValidQueryProp = VALID_RUNQUERY_RESULT.has(propName);
               const isValidViewProp = VALID_RUNVIEW_RESULT.has(propName);
+              const isValidSearchProp = VALID_SEARCH_RESULT.has(propName);
 
-              if ((isFromRunQuery && !isValidQueryProp) || (isFromRunView && !isValidViewProp)) {
+              if ((isFromRunQuery && !isValidQueryProp) || (isFromRunView && !isValidViewProp) || (isFromSearch && !isValidSearchProp)) {
                 invalidAccesses.push({ objName, propName, line: node.loc?.start.line || 0 });
               }
             }
@@ -583,10 +662,12 @@ Correct pattern:
         if (!t.isObjectPattern(path.node.id) || !t.isIdentifier(path.node.init)) return;
 
         const sourceName = path.node.init.name;
-        const isFromRunQuery = path.scope.hasBinding(sourceName) && isVariableFromRunQueryOrView(path, sourceName, 'RunQuery');
-        const isFromRunView = path.scope.hasBinding(sourceName) && isVariableFromRunQueryOrView(path, sourceName, 'RunView');
+        const hasBinding = path.scope.hasBinding(sourceName);
+        const isFromRunQuery = hasBinding && isVariableFromRunQueryOrView(path, sourceName, 'RunQuery');
+        const isFromRunView = hasBinding && isVariableFromRunQueryOrView(path, sourceName, 'RunView');
+        const isFromSearch = hasBinding && (isVariableFromRunQueryOrView(path, sourceName, 'Search') || isVariableFromRunQueryOrView(path, sourceName, 'PreviewSearch'));
 
-        if (!isFromRunQuery && !isFromRunView) return;
+        if (!isFromRunQuery && !isFromRunView && !isFromSearch) return;
 
         for (const prop of path.node.id.properties) {
           if (!t.isObjectProperty(prop) || !t.isIdentifier(prop.key)) continue;
@@ -594,6 +675,7 @@ Correct pattern:
           const propName = prop.key.name;
           const isValidQueryProp = VALID_RUNQUERY_RESULT.has(propName);
           const isValidViewProp = VALID_RUNVIEW_RESULT.has(propName);
+          const isValidSearchProp = VALID_SEARCH_RESULT.has(propName);
 
           if (isFromRunQuery && !isValidQueryProp) {
             const suggestion = INCORRECT_TO_CORRECT[propName];
@@ -617,6 +699,18 @@ Correct pattern:
               message: suggestion
                 ? `Destructuring invalid property "${propName}" from RunView result. Use "${suggestion}" instead.`
                 : `Destructuring invalid property "${propName}" from RunView result. Valid properties: ${RUNVIEW_RESULT_PROPS.join(', ')}`,
+              code: `{ ${propName} }`,
+            });
+          } else if (isFromSearch && !isValidSearchProp) {
+            const suggestion = INCORRECT_TO_CORRECT[propName];
+            violations.push({
+              rule: RULE_NAME,
+              severity: 'critical',
+              line: prop.loc?.start.line || 0,
+              column: prop.loc?.start.column || 0,
+              message: suggestion
+                ? `Destructuring invalid property "${propName}" from Search result. Use "${suggestion}" instead.`
+                : `Destructuring invalid property "${propName}" from Search result. Valid properties: ${SEARCH_RESULT_PROPS.join(', ')}`,
               code: `{ ${propName} }`,
             });
           }
