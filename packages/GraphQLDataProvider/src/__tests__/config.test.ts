@@ -27,6 +27,7 @@ vi.mock('@memberjunction/global', () => ({
 vi.mock('../graphQLDataProvider', () => {
   class MockGraphQLDataProvider {
     Config = vi.fn().mockResolvedValue(true);
+    backgroundValidateAndRefresh = vi.fn().mockResolvedValue(undefined);
   }
   class MockGraphQLProviderConfigData {
     Token: string;
