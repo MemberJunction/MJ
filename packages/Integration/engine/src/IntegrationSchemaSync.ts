@@ -61,10 +61,18 @@ export class IntegrationSchemaSync {
      *
      * - Objects matched by (IntegrationID, Name)
      * - Fields matched by (IntegrationObjectID, Name)
-     * - Static records (IsCustom=false) are never created or overwritten here
-     * - Custom records (IsCustom=true) are created/updated
-     * - When a discovered field matches an existing static field, only type/size
-     *   columns are updated (static constraints win)
+     * - Records are never deleted here — stale ones stick around
+     *
+     * **Merge strategy — describe wins for technical fields.** When a discovered
+     * field matches an existing record, we refresh Type, AllowsNull, IsRequired,
+     * and IsPrimaryKey from the live describe output. These are the attributes
+     * that drive DDL generation and sync-time coercion; curated values can
+     * (and do) drift from what the external system actually exposes and cause
+     * overflow / null-violation errors.
+     *
+     * Curated metadata still wins for **semantic** fields — DisplayName,
+     * Description (only filled when empty), Sequence, Category — because those
+     * are human-authored and the describe output usually doesn't improve them.
      */
     public static async PersistDiscoveredSchema(opts: PersistSchemaOptions): Promise<PersistSchemaResult> {
         const { IntegrationID, SourceSchema, ContextUser } = opts;
@@ -162,19 +170,43 @@ export class IntegrationSchemaSync {
         );
 
         if (existing) {
-            // Static field exists — update type/size columns only (static constraints win)
+            // Refresh technical attributes from describe — the live source is
+            // the truth here. Curated DisplayName, Sequence, Category, etc. are
+            // left alone; only fields that affect DDL and sync coercion get
+            // rewritten from the describe payload.
             let dirty = false;
             const mappedType = MapSourceType(srcField.SourceType);
+            const describedAllowsNull = !srcField.IsRequired;
+
             if (existing.Type !== mappedType) {
                 existing.Type = mappedType;
                 dirty = true;
             }
+            if (existing.AllowsNull !== describedAllowsNull) {
+                existing.AllowsNull = describedAllowsNull;
+                dirty = true;
+            }
+            if (existing.IsRequired !== srcField.IsRequired) {
+                existing.IsRequired = srcField.IsRequired;
+                dirty = true;
+            }
+            if (existing.IsPrimaryKey !== srcField.IsPrimaryKey) {
+                existing.IsPrimaryKey = srcField.IsPrimaryKey;
+                dirty = true;
+            }
+            // Description: only fill if missing — curated descriptions outrank
+            // generic describe output.
             if (!existing.Description && srcField.Description) {
                 existing.Description = srcField.Description;
                 dirty = true;
             }
             if (dirty) {
-                try { await existing.Save(); } catch { /* ignore */ }
+                const saved = await existing.Save();
+                if (!saved) {
+                    console.warn(
+                        `[IntegrationSchemaSync] UpsertField save failed for '${srcField.Name}': ${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`
+                    );
+                }
                 return { Created: false, Updated: true };
             }
             return { Created: false, Updated: false };

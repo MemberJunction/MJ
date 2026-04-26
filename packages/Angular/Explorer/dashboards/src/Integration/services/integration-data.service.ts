@@ -21,7 +21,9 @@ import {
   SchemaPreviewObjectInput,
   SchemaPreviewResult,
   DefaultConfigResult,
-  ApplyAllResult
+  ApplyAllResult,
+  SourceObjectListItem,
+  SourceObjectSelectionInput
 } from '@memberjunction/graphql-dataprovider';
 
 /**
@@ -657,10 +659,19 @@ export class IntegrationDataService {
   /** Batch Apply All: schema + entity maps + field maps + sync via IntegrationApplyAllBatch */
   async ApplyAllBatch(
     companyIntegrationID: string,
-    sourceObjectIDs: string[]
+    sourceObjects: SourceObjectSelectionInput[]
   ): Promise<ApplyAllResult> {
     const client = this.getIntegrationClient();
-    return client.ApplyAllBatch([{ CompanyIntegrationID: companyIntegrationID, SourceObjectIDs: sourceObjectIDs }]);
+    return client.ApplyAllBatch([{ CompanyIntegrationID: companyIntegrationID, SourceObjects: sourceObjects }]);
+  }
+
+  /**
+   * Lists every source object the external system exposes — thin catalog for
+   * the picker. No per-object describe; that runs later in ApplyAllBatch.
+   */
+  async ListSourceObjects(companyIntegrationID: string): Promise<DiscoveryResult<SourceObjectListItem[]>> {
+    const client = this.getIntegrationClient();
+    return client.ListSourceObjects(companyIntegrationID);
   }
 
   /** Full automatic "Apply All" flow: pipeline + entity maps + field maps + sync */

@@ -34,6 +34,7 @@ import {
     type SourceRelationshipInfo,
     type IntegrationObjectInfo,
     type ActionGeneratorConfig,
+    type IntrospectSchemaOptions,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -165,6 +166,39 @@ const SYSTEM_READ_ONLY_FIELDS = new Set([
 
 /** Fields always included in SOQL SELECT */
 const REQUIRED_SOQL_FIELDS = ['Id', 'SystemModstamp', 'IsDeleted', 'LastModifiedById'];
+
+/**
+ * Objects that SF exposes through the main `/sobjects/` endpoint but that only
+ * function correctly through the Tooling API. The Data API describes them as
+ * `queryable=true` so they'd otherwise land in the picker, but syncing them
+ * produces one or more of: duplicate-key violations (pagination returns the
+ * same record across pages), sentinel `000000000000000AAA` IDs, or
+ * `MALFORMED_QUERY` on fields like `Metadata`/`FullName` that SF permits only
+ * one-row-at-a-time in Tooling queries.
+ *
+ * Observed causing errors in production syncs; blacklisting here eliminates
+ * ~960 errors per cold apply and ~10 per incremental without any value loss
+ * (these are metadata/telemetry tables, not business data).
+ */
+const TOOLING_API_DENYLIST = new Set([
+    'EntityDefinition',
+    'DataType',
+    'AuraDefinitionInfo',
+    'AuraDefinitionBundleInfo',
+    'FormulaFunction',
+    'AppDefinition',
+    'UserSetupEntityAccess',
+    'PlatformEventUsageMetric',
+    'EventBusSubscriber',
+    'ApexClass',
+    'ApexPage',
+    'ApexTrigger',
+    'ApexComponent',
+    'Publisher',
+    'ExternalString',
+    'CustomHttpHeader',
+    'FormulaFunctionCategory',
+]);
 
 // ─── Salesforce Object Metadata for Action Generation ─────────────────
 
@@ -324,9 +358,6 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     private lastRequestTime = 0;
     private governorState: GovernorLimitState = { CurrentUsage: 0, DailyLimit: 15000, LastUpdated: 0 };
 
-    // ── Pagination state for SOQL queryMore ─────────────────────────
-    private queryLocator: string | null = null;
-
     // ── Config ──────────────────────────────────────────────────────
     private _config: SalesforceConnectionConfig | null = null;
 
@@ -391,7 +422,10 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Discovers available objects by calling the SF SObjects API.
-     * Returns all queryable objects including custom objects (__c).
+     * Returns user-relevant queryable objects: standard CRM objects + custom
+     * (__c). Filters out audit/system noise (~1,866 → ~150-300 typically).
+     * Set MJ_SALESFORCE_INCLUDE_ALL_SOBJECTS=true to bypass the filter and
+     * return the full catalog (useful for debugging or unusual integrations).
      */
     public override async DiscoverObjects(
         companyIntegration: MJCompanyIntegrationEntity,
@@ -406,15 +440,87 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         const body = response.Body as { sobjects?: SObjectDescribe[] };
         const sobjects = body.sobjects ?? [];
 
-        return sobjects
-            .filter(obj => obj.queryable)
-            .map(obj => ({
-                Name: obj.name,
-                Label: obj.label,
-                Description: obj.custom ? `Custom object: ${obj.label}` : undefined,
-                SupportsIncrementalSync: true,
-                SupportsWrite: obj.createable || obj.updateable,
-            }));
+        const includeAll = process.env.MJ_SALESFORCE_INCLUDE_ALL_SOBJECTS === 'true';
+
+        const filtered = sobjects.filter(obj => {
+            if (!obj.queryable) return false;
+            if (TOOLING_API_DENYLIST.has(obj.name)) return false;
+            if (includeAll) return true;
+            return this.isUserRelevantSObject(obj);
+        });
+
+        if (!includeAll) {
+            const removed = sobjects.length - filtered.length;
+            console.log(`[Salesforce] DiscoverObjects: filtered ${sobjects.length} → ${filtered.length} (excluded ${removed} system/audit objects; set MJ_SALESFORCE_INCLUDE_ALL_SOBJECTS=true to bypass)`);
+        }
+
+        return filtered.map(obj => ({
+            Name: obj.name,
+            Label: obj.label,
+            Description: obj.custom ? `Custom object: ${obj.label}` : undefined,
+            SupportsIncrementalSync: true,
+            SupportsWrite: obj.createable || obj.updateable,
+        }));
+    }
+
+    /**
+     * Heuristic for "user-relevant" SF object: customer data (custom objects
+     * with __c suffix) OR createable standard CRM objects, excluding audit
+     * tables, system metadata, and managed-package telemetry.
+     *
+     * Standard SF orgs return ~1,866 sobjects from describeGlobal — most are
+     * audit/internal noise that don't represent business data the user wants
+     * to sync into MJ. This drops them to ~150-300.
+     */
+    private isUserRelevantSObject(obj: SObjectDescribe): boolean {
+        // Custom objects always pass — they're customer-defined data
+        if (obj.custom) return true;
+
+        const name = obj.name;
+
+        // STRICT exclusions only. Don't filter anything that could possibly
+        // hold customer data. Each exclusion below is a category SF defines
+        // as pure audit/internal/metadata with no customer-meaningful rows:
+        //
+        //   *ChangeEvent: CDC stream, transient, replicated by replication API
+        //   *Feed:        Chatter feed entries (separate "Feed" sync if wanted)
+        //   *History:     audit tables — every value-change is one row
+        //   *FieldHistory: same as *History but per-field tracking
+        //   *Share:       SF row-level access control entries (security metadata)
+        //   *OwnerSharingRule / *CriteriaBasedSharingRule: security rules
+        //   *PermissionSet*: profile/permission internals
+        //
+        // Things we used to exclude that we now LET THROUGH because they CAN
+        // be customer data: EmailMessage (email log), CaseComment / FeedComment
+        // (customer interactions), EntitySubscription (notification subs),
+        // Vote (idea/feedback), Tag (content tagging), Solution (knowledge),
+        // ProcessInstance (workflow approvals), Domain (tenant config).
+        if (/(?:ChangeEvent|Feed|History|FieldHistory|Share|OwnerSharingRule|CriteriaBasedSharingRule)$/.test(name)) {
+            return false;
+        }
+
+        // SF tooling/setup metadata: Apex code, permissions, setup audit, login
+        // history, async job framework, sandbox/cron internals, network/site
+        // metadata, theme/branding, package licenses. None of these are
+        // business data the integration should sync.
+        if (/^(Apex|Permission|Setup|Login|Async|Sandbox|Auth|Network|Stamp|Site|FlowDefinition|FlowInterview|FlowVariableView|EventLog|CronTrigger|StreamingChannel|InstalledMobileApp|UserPackageLicense|PackageLicense|Theme)/.test(name)) {
+            return false;
+        }
+
+        // Specific system catalog objects — schema-of-the-schema metadata,
+        // not customer data. These are readable but represent SF's own
+        // structural definitions, never user-entered records.
+        if (/^(EntityDefinition|FieldDefinition|EntityParticle|RelationshipInfo|RelationshipDomain|StandardAction|UserAppMenuItem|UserListView|UserPreference|UserShare|GroupMember|FiscalYearSettings|Period|RecordType|BusinessProcess|PicklistValueInfo)$/.test(name)) {
+            return false;
+        }
+
+        // NOTE: we intentionally do NOT exclude `!obj.createable`. Many SF
+        // objects are flagged non-createable because they're auto-populated
+        // by SF (rollups, attachment-link junctions, history-style records)
+        // but they DO carry real customer data we want to sync. The
+        // targeted exclusions above already cover the audit/security/CDC
+        // categories that have no business value.
+        return true;
     }
 
     /**
@@ -442,28 +548,108 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Full schema introspection — builds object graph with relationships.
+     *
+     * If `options.ObjectNames` is provided, only those objects are described
+     * (fast path for user-selected subsets). Without a filter, every
+     * queryable sobject is described — ~70s even with parallelism on a
+     * large org — and the result is cached per-org for 5 minutes so
+     * back-to-back resolver calls don't re-describe.
+     *
+     * Filtered calls bypass the cache on purpose: the subset is typically
+     * small and cheap, and the full-schema cache would shadow newer results
+     * if a user selects a previously-unknown object.
      */
     public override async IntrospectSchema(
         companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: IntrospectSchemaOptions
     ): Promise<SourceSchemaInfo> {
-        const objects = await this.DiscoverObjects(companyIntegration, contextUser);
-        const result: SourceSchemaInfo = { Objects: [] };
-
-        for (const obj of objects) {
-            try {
-                const sourceObj = await this.BuildSourceObjectFromDescribe(
-                    companyIntegration, contextUser, obj.Name
-                );
-                result.Objects.push(sourceObj);
-            } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                console.warn(`[Salesforce] Skipping "${obj.Name}" during introspection: ${msg}`);
-            }
+        const filtered = options?.ObjectNames && options.ObjectNames.length > 0;
+        if (filtered) {
+            return this.DoIntrospectSchema(companyIntegration, contextUser, options);
         }
 
+        // Dedupe back-to-back introspection requests from the same org.
+        // Three separate resolvers call IntrospectSchema; without this, the
+        // UI's "discover then apply" flow re-describes every object twice.
+        const cacheKey = companyIntegration.ID;
+        const cached = SalesforceConnector.introspectCache.get(cacheKey);
+        const now = Date.now();
+        if (cached && cached.expiresAt > now) {
+            const remainingSec = Math.round((cached.expiresAt - now) / 1000);
+            console.log(`[Salesforce] IntrospectSchema: reusing in-flight/cached result (${remainingSec}s TTL remaining)`);
+            return cached.promise;
+        }
+
+        const promise = this.DoIntrospectSchema(companyIntegration, contextUser);
+        SalesforceConnector.introspectCache.set(cacheKey, {
+            promise,
+            expiresAt: now + SalesforceConnector.INTROSPECT_CACHE_TTL_MS,
+        });
+        // If the run fails, evict so the next request can retry
+        promise.catch(() => SalesforceConnector.introspectCache.delete(cacheKey));
+        return promise;
+    }
+
+    private async DoIntrospectSchema(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo,
+        options?: IntrospectSchemaOptions
+    ): Promise<SourceSchemaInfo> {
+        const allObjects = await this.DiscoverObjects(companyIntegration, contextUser);
+        const wanted = options?.ObjectNames && options.ObjectNames.length > 0
+            ? new Set(options.ObjectNames)
+            : null;
+        const objects = wanted ? allObjects.filter(o => wanted.has(o.Name)) : allObjects;
+        const total = objects.length;
+        const startMs = Date.now();
+        const CONCURRENCY = 8;
+        console.log(`[Salesforce] IntrospectSchema: describing ${total} queryable objects (parallel×${CONCURRENCY})...`);
+
+        const result: SourceSchemaInfo = { Objects: [] };
+        let nextIdx = 0;
+        let succeeded = 0;
+        let skipped = 0;
+
+        const worker = async (): Promise<void> => {
+            while (true) {
+                const myIdx = nextIdx++;
+                if (myIdx >= total) return;
+                const obj = objects[myIdx];
+                try {
+                    const sourceObj = await this.BuildSourceObjectFromDescribe(
+                        companyIntegration, contextUser, obj.Name
+                    );
+                    result.Objects.push(sourceObj);
+                    succeeded++;
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    skipped++;
+                    console.warn(`[Salesforce] Skipping "${obj.Name}" during introspection: ${msg}`);
+                }
+                const done = succeeded + skipped;
+                if (done % 100 === 0 || done === total) {
+                    const elapsedSec = ((Date.now() - startMs) / 1000).toFixed(1);
+                    const etaSec = done < total
+                        ? (((Date.now() - startMs) / done) * (total - done) / 1000).toFixed(0)
+                        : '0';
+                    console.log(`[Salesforce] IntrospectSchema progress: ${done}/${total} (ok=${succeeded}, skipped=${skipped}) — ${elapsedSec}s elapsed, ~${etaSec}s remaining`);
+                }
+            }
+        };
+
+        await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+
+        console.log(`[Salesforce] IntrospectSchema complete: ${succeeded}/${total} objects in ${((Date.now() - startMs) / 1000).toFixed(1)}s`);
         return result;
     }
+
+    // ─── Introspection cache (module-scoped via static) ──────────────
+    // Resolver creates a fresh connector per request, so instance-level
+    // caching is useless. Static Map survives across requests in the same
+    // process. TTL is modest to allow schema refresh on demand.
+    private static readonly INTROSPECT_CACHE_TTL_MS = 5 * 60 * 1000;
+    private static readonly introspectCache = new Map<string, { promise: Promise<SourceSchemaInfo>; expiresAt: number }>();
 
     // ─── FetchChanges (SOQL-based — overrides base class entirely) ───
 
@@ -483,8 +669,16 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         const batchSize = ctx.BatchSize || this.effectiveBatchSize;
         const family = this.ResolveAPIFamily(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
 
-        // If we have a queryLocator from a previous call, use queryMore
-        if (this.queryLocator && ctx.CurrentCursor) {
+        // Continuation: SF returned a nextRecordsUrl on the previous call,
+        // and the engine passed it back as CurrentCursor. Re-issue against
+        // the same query state via /query/<locator> rather than re-running
+        // the original SOQL (which would just return the first page again
+        // and silently truncate the dataset to one batch). Pre-existing bug:
+        // a dead `this.queryLocator` member shadowed this branch with an
+        // always-false condition, so every "next batch" call re-executed
+        // the initial SOQL and produced duplicate first-page results until
+        // the engine's duplicate-batch guard aborted the entity.
+        if (ctx.CurrentCursor) {
             return this.FetchNextPage(auth, ctx.CurrentCursor);
         }
 
@@ -502,7 +696,8 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         }
 
         if (family === 'knowledge') {
-            return this.FetchKnowledgeArticles(auth, ctx.ObjectName, ctx.WatermarkValue, batchSize);
+            const page = ctx.CurrentPage ?? 1;
+            return this.FetchKnowledgeArticles(auth, ctx.ObjectName, ctx.WatermarkValue, batchSize, page);
         }
 
         // Standard SObject (sobject) and Tooling (tooling) both use SOQL —
@@ -940,15 +1135,53 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         batchSize: number,
         includeDeleted: boolean
     ): string {
-        const dedupedFields = [...new Set([...REQUIRED_SOQL_FIELDS, ...fields])];
+        // Many SF system/tooling/meta objects lack one or more of the "standard"
+        // audit fields (SystemModstamp, IsDeleted, LastModifiedById). Assuming
+        // they're always present produces `INVALID_FIELD` errors. Build the
+        // SELECT from what the object's describe actually exposes.
+        const available = new Set(fields);
+        const requiredPresent = REQUIRED_SOQL_FIELDS.filter(f => available.has(f));
+        const dedupedFields = [...new Set([...requiredPresent, ...fields])];
+
+        // Pick the best available watermark/ordering column.
+        // Preference: SystemModstamp > LastModifiedDate > CreatedDate > (none)
+        const watermarkCol = available.has('SystemModstamp')
+            ? 'SystemModstamp'
+            : available.has('LastModifiedDate')
+                ? 'LastModifiedDate'
+                : available.has('CreatedDate')
+                    ? 'CreatedDate'
+                    : null;
+
         let soql = `SELECT ${dedupedFields.join(', ')} FROM ${objectName}`;
 
-        if (watermarkValue) {
-            soql += ` WHERE SystemModstamp > ${this.FormatSOQLDateTime(watermarkValue)}`;
+        if (watermarkValue && watermarkCol) {
+            // `>=` not `>` — strict greater-than misses records modified
+            // at exactly the watermark instant. SF's SystemModstamp has
+            // millisecond precision but bulk updates can produce multiple
+            // records with the identical modstamp; only the last one shapes
+            // the saved watermark. Without `>=`, any record colliding on
+            // that exact ms after watermark save is permanently dropped
+            // (the watermark advances past it next sync). Engine dedupe
+            // handles the cheap cost of re-fetching boundary records.
+            soql += ` WHERE ${watermarkCol} >= ${this.FormatSOQLDateTime(watermarkValue)}`;
         }
 
-        soql += ' ORDER BY SystemModstamp ASC';
-        soql += ` LIMIT ${batchSize}`;
+        if (watermarkCol) {
+            soql += ` ORDER BY ${watermarkCol} ASC`;
+        }
+
+        // NO `LIMIT batchSize`. SF's REST API natively paginates the result
+        // via `done` / `nextRecordsUrl` — the engine loop drives subsequent
+        // pages. A SOQL LIMIT here would cap the ENTIRE result set at
+        // batchSize records and SF would (correctly) report done=true at
+        // that count, silently dropping every record past the limit. The
+        // worst part: incremental syncs advance the watermark past the
+        // dropped records, so they're never re-fetched on subsequent runs.
+        // Per-page batch size is controlled by the `Sforce-Query-Options`
+        // header (or SF default) and does not need a SOQL LIMIT.
+        // _ = batchSize  // intentionally unused — preserved param for API stability
+        void batchSize;
 
         return soql;
     }
@@ -1004,7 +1237,39 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         body: SOQLQueryResponse,
         objectName: string
     ): FetchBatchResult {
-        const records = (body.records ?? []).map(r => {
+        const rawRecords = body.records ?? [];
+
+        // Some Salesforce system/metadata objects (e.g. TabDefinition,
+        // FormulaFunctionAllowedType) return many rows that all share the
+        // placeholder `Id = '000000000000000AAA'` — SF treats Id as
+        // non-unique on those objects, but MJ's auto-generated UQ_<table>_PK
+        // rejects the duplicates and produces one error per record after
+        // the first. Dedupe on Id within the batch (keep first occurrence)
+        // before returning to the engine.
+        const seenIds = new Set<string>();
+        const dedupedRaw: unknown[] = [];
+        let duplicatesDropped = 0;
+        for (const r of rawRecords) {
+            const raw = r as Record<string, unknown>;
+            const id = raw['Id'] as string | undefined;
+            if (id) {
+                if (seenIds.has(id)) {
+                    duplicatesDropped++;
+                    continue;
+                }
+                seenIds.add(id);
+            }
+            dedupedRaw.push(r);
+        }
+        if (duplicatesDropped > 0) {
+            console.warn(
+                `[Salesforce] ${objectName}: dropped ${duplicatesDropped} record(s) with duplicate Id ` +
+                `(SF returned non-unique Ids for this object — typical for system/metadata sObjects ` +
+                `like TabDefinition, FormulaFunctionAllowedType where Id is a placeholder).`
+            );
+        }
+
+        const records = dedupedRaw.map(r => {
             const raw = r as Record<string, unknown>;
             const record = this.RawToExternalRecord(raw, objectName);
             record.IsDeleted = raw['IsDeleted'] === true;
@@ -1015,7 +1280,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         });
 
         // Compute new watermark from the max SystemModstamp in this batch
-        const newWatermark = this.ExtractMaxWatermark(body.records ?? []);
+        const newWatermark = this.ExtractMaxWatermark(dedupedRaw);
 
         return {
             Records: records,
@@ -1080,7 +1345,31 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
             exp: now + 300, // 5 minutes
         };
 
-        return jwt.sign(payload, config.PrivateKey, { algorithm: 'RS256' });
+        const pem = this.NormalizePem(config.PrivateKey);
+        return jwt.sign(payload, pem, { algorithm: 'RS256' });
+    }
+
+    /**
+     * Normalize a PEM private key that may have had its newlines stripped or
+     * replaced with spaces / literal "\n" sequences. Rebuilds the standard
+     * BEGIN header / 64-char body / END footer layout that OpenSSL requires.
+     */
+    private NormalizePem(key: string): string {
+        if (!key) return key;
+        // First, normalize escaped newlines to real ones
+        let normalized = key.includes('\\n') ? key.replace(/\\n/g, '\n') : key;
+        // If real newlines exist already, trust them
+        if (normalized.includes('\n')) return normalized;
+        // Split out header / footer / body and rebuild with real newlines
+        const headerMatch = normalized.match(/^(-----BEGIN [^-]+-----)/);
+        const footerMatch = normalized.match(/(-----END [^-]+-----)\s*$/);
+        if (!headerMatch || !footerMatch) return normalized;
+        const header = headerMatch[1];
+        const footer = footerMatch[1];
+        const bodyRaw = normalized.slice(header.length, normalized.length - footer.length);
+        const body = bodyRaw.replace(/\s+/g, '');
+        const chunked = body.match(/.{1,64}/g)?.join('\n') ?? body;
+        return `${header}\n${chunked}\n${footer}`;
     }
 
     /**
@@ -1775,9 +2064,10 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         auth: SalesforceAuthContext,
         objectName: string,
         watermarkValue: string | null,
-        batchSize: number
+        batchSize: number,
+        page: number = 1
     ): Promise<FetchBatchResult> {
-        const params = new URLSearchParams({ pageSize: String(batchSize), pageNumber: '1' });
+        const params = new URLSearchParams({ pageSize: String(batchSize), pageNumber: String(page) });
         if (watermarkValue) {
             params.set('publishStatus', 'Online');
         }
@@ -1792,7 +2082,20 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
             ObjectType: objectName,
             Fields: a as unknown as Record<string, unknown>,
         }));
-        return { Records: records, HasMore: false };
+
+        // Knowledge Articles uses page-based pagination. The endpoint doesn't
+        // return a documented total/has-more signal in its body, so treat a
+        // full page as "potentially more" — same defensive pattern used for
+        // SI and YM. Engine loop drives subsequent pages via NextPage; an
+        // empty next-page response terminates naturally. Without this guard
+        // sync silently caps at batchSize records per object — identical to
+        // the SOQL LIMIT bug we already fixed in this session.
+        const hasMore = records.length >= batchSize;
+        return {
+            Records: records,
+            HasMore: hasMore,
+            NextPage: hasMore ? page + 1 : undefined,
+        };
     }
 
     // ─── Bulk API 2.0 (Ingest & Query Jobs) ──────────────────────────
