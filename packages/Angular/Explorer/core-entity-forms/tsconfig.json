@@ -4,6 +4,21 @@
       "outDir": "./dist",
       "useDefineForClassFields": false
     },
+    "angularCompilerOptions": {
+      // Forms in this package are emitted by CodeGen, one per entity. For
+      // supertype entities with many inbound FKs (Salesforce User, Account,
+      // Contact frequently exceed 1000), the generated template emits one
+      // <mj-collapsible-panel> per related entity, all in a single template.
+      // With strictTemplates=true, Angular generates a Type Check Block that
+      // represents the whole template as one TypeScript expression — and at
+      // ~150+ panels the TCB exceeds TypeScript's expression-complexity
+      // limit (TS2563 "Excessive complexity in this expression"), failing
+      // the build. Type safety on these templates is guaranteed by CodeGen
+      // construction (bindings are emitted from the same metadata used to
+      // generate the component class), so the strict template check buys
+      // little here in exchange for capping the form generator's scale.
+      "strictTemplates": false
+    },
     "include": [
       "src/**/*.ts"
     ],
