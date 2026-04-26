@@ -3,7 +3,7 @@
   "type": "generic",
   "title": "Query Result Filter Invalid Field - Broken Pattern",
   "description": "Tests linter detection of filtering query results by invalid field",
-  "code": "function QueryResultFilterInvalidFieldBroken({ utilities }) {\n  const [activeProducts, setActiveProducts] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Product Catalog',\n        CategoryPath: 'Products/Reports'\n      });\n      if (result?.Success) {\n        // ❌ Filtering by IsActive field that doesn't exist in query\n        const active = result.Results.filter(p => p.IsActive);\n        setActiveProducts(active);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Active Products</h3>\n      {activeProducts.map((p, i) => (\n        <div key={i}>{p.ProductName} - ${p.Price}</div>\n      ))}\n    </div>\n  );\n}",
+  "code": "function QueryResultFilterInvalidFieldBroken({ utilities }) {\n  const [activeModels, setActiveModels] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'AI Model Catalog',\n        CategoryPath: 'AI/Reports'\n      });\n      if (result?.Success) {\n        // ❌ Filtering by Enabled field that doesn't exist in query\n        const active = result.Results.filter(p => p.Enabled);\n        setActiveModels(active);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Active Models</h3>\n      {activeModels.map((p, i) => (\n        <div key={i}>{p.Name} - {p.Vendor}</div>\n      ))}\n    </div>\n  );\n}",
   "location": "embedded",
   "namespace": "test/fixtures/type-rules",
   "version": "1.0.0",
@@ -11,9 +11,15 @@
   "status": "Active",
   "dataRequirements": {
     "queries": [{
-      "name": "Product Catalog",
-      "categoryPath": "Products/Reports",
-      "fields": ["ProductID", "ProductName", "Price", "Category", "StockLevel"]
+      "name": "AI Model Catalog",
+      "categoryPath": "AI/Reports",
+      "fields": [
+        {"name": "ID", "type": "uniqueidentifier"},
+        {"name": "Name", "type": "nvarchar"},
+        {"name": "Vendor", "type": "nvarchar"},
+        {"name": "PowerRank", "type": "int"},
+        {"name": "IsActive", "type": "bit"}
+      ]
     }]
   }
 }

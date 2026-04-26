@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/ng-shared
 
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ng-base-application@5.29.0
+  - @memberjunction/ng-base-types@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/entity-communications-base@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- 2542615: Pin Actions as quick-launch cards on the Home dashboard with a configurable title, accent color, FA icon, preset parameter values, and a list of parameters to prompt for at runtime. Adds Configure and Runner dialogs and extends HomeAppPinService with an 'Actions' ResourceType dedup case.
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ng-base-application@5.28.0
+  - @memberjunction/ng-base-types@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/entity-communications-base@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/global@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

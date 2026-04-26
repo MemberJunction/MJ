@@ -1,5 +1,92 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.29.0
+
+### Patch Changes
+
+- bc0b6b3: feat(codegen): add `--skipfiles` flag for DB-only CodeGen runs
+
+  Adds the inverse of the existing `--skipdb` flag so CodeGen's database and file-generation phases can be driven independently:
+  - `mj codegen` → DB writes + file generation (existing default)
+  - `mj codegen --skipdb` → file generation only (existing)
+  - `mj codegen --skipfiles` → DB writes only (new)
+  - `mj codegen --skipdb --skipfiles` → both phases skipped (valid combination)
+
+  Useful for migration-dependent DB touch-ups, CI pipelines that only need SPs/views/permissions refreshed, and reset-and-rebuild scenarios where re-running file generation would conflict with stub files already on disk.
+
+  Also adds `skip_file_generation` (default `false`) to the CodeGen default settings, mirroring the existing `skip_database_generation` config key — so the behavior can be controlled from `mj.config.cjs` as well as the CLI.
+
+  Also fixes a pre-existing CLI bug: the `codegen` command was reading `this.flags.skipDb` (camelCase), which did not match the flag key `skipdb`, so `--skipdb` was always being passed as `undefined` from the CLI layer. Corrected to `this.flags.skipdb`.
+
+  Closes #2440
+
+- Updated dependencies [5c7a57f]
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+- Updated dependencies [98bad3a]
+  - @memberjunction/server-bootstrap-lite@5.29.0
+  - @memberjunction/core@5.29.0
+  - @memberjunction/sql-dialect@5.29.0
+  - @memberjunction/sql-parser@5.29.0
+  - @memberjunction/core-entities-server@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/aiengine@5.29.0
+  - @memberjunction/ai-prompts@5.29.0
+  - @memberjunction/actions-base@5.29.0
+  - @memberjunction/actions@5.29.0
+  - @memberjunction/postgresql-dataprovider@5.29.0
+  - @memberjunction/sqlserver-dataprovider@5.29.0
+  - @memberjunction/ai-provider-bundle@5.29.0
+  - @memberjunction/ai@5.29.0
+  - @memberjunction/config@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- 0779734: fix(codegen): whitelist LLM-supplied codeType against CK_EntityField_CodeType
+
+  Advanced Generation's Form Layout + Virtual Entity Decoration prompts occasionally return `codeType` values outside the six the DB's `CK_EntityField_CodeType` CHECK constraint allows (`CSS`, `HTML`, `JavaScript`, `SQL`, `TypeScript`, `Other`) — e.g. `Python`, `Markdown`, `javascript` (wrong case). Because `applyFieldCategories` batches every field's UPDATE for an entity into one execution, a single bad value previously aborted the entire batch, losing all the AI-assigned categories, display names, and extended types for that entity.
+
+  Adds a runtime whitelist (`sanitizeCodeType`) at the single point where `CodeType` is written. Out-of-enum values are coerced to `Other` and logged so prompt drift stays visible instead of silently failing at the DB. Both the regular entity pipeline and the VE decoration pipeline converge on `applyFieldCategories`, so one choke point covers both paths.
+
+  Also tightens the `CodeGen: Form Layout Generation` and `CodeGen: Virtual Entity Field Decoration` prompt templates with an explicit case-sensitive strict-enum directive and an explicit fallback-to-`Other` rule for any other language.
+
+- 1d62875: feat: bidirectional sync engine, HubSpot/YM connector improvements, RSU #2239 fixes
+  - Integration engine now respects SyncDirection (Pull/Push/Bidirectional) on entity maps
+  - Push sync uses Record Changes to detect MJ-side modifications, reverse-maps fields, and calls connector CRUD methods
+  - Separate Push watermarks tracked alongside Pull watermarks
+  - New IntegrationWriteRecord GraphQL mutation for ad-hoc writes to any connector
+  - HubSpot: 130 objects with full field metadata; association CRUD via v4 PUT/DELETE API; composite hs_object_id for association sync
+  - YourMembership: 228 objects with accurate PKs across all endpoints; 400 errors now surfaced (not silently swallowed); DateTime.MinValue → null conversion
+  - SchemaBuilder logs DDL history to \_\_mj_integration.SchemaHistory (separate schema, not surfaced as MJ Application)
+  - IntegrationObject.IsCustom column added to distinguish static vs runtime-discovered objects
+  - RSU #2239: in-process SQL execution for CodeGen (no sqlcmd dependency)
+  - RSU #2239: RSU_RESTART_COMMAND env var override for non-PM2 environments
+  - SQLServerDataProvider: incremental schema sync improvements
+
+- Updated dependencies [fdab4bb]
+- Updated dependencies [115e4da]
+  - @memberjunction/ai-prompts@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/actions@5.28.0
+  - @memberjunction/core-entities-server@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/postgresql-dataprovider@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/server-bootstrap-lite@5.28.0
+  - @memberjunction/ai-provider-bundle@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/config@5.28.0
+  - @memberjunction/global@5.28.0
+  - @memberjunction/sql-dialect@5.28.0
+  - @memberjunction/sql-parser@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

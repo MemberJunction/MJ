@@ -1,5 +1,30 @@
 # @memberjunction/ai-engine-base
 
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/templates-base-types@5.29.0
+  - @memberjunction/ai@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/templates-base-types@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/global@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

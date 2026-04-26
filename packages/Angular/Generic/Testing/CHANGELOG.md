@@ -1,5 +1,41 @@
 # @memberjunction/ng-testing
 
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ng-shared@5.29.0
+  - @memberjunction/ng-base-types@5.29.0
+  - @memberjunction/ng-code-editor@5.29.0
+  - @memberjunction/ng-container-directives@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/testing-engine-base@5.29.0
+  - @memberjunction/ng-ui-components@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [2542615]
+- Updated dependencies [115e4da]
+  - @memberjunction/ng-shared@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-base-types@5.28.0
+  - @memberjunction/ng-code-editor@5.28.0
+  - @memberjunction/ng-container-directives@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/testing-engine-base@5.28.0
+  - @memberjunction/ng-ui-components@5.28.0
+  - @memberjunction/global@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

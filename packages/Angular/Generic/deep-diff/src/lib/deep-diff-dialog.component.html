@@ -13,10 +13,10 @@
           {{ title }}
         </h2>
         <div class="dialog-actions">
-          <button class="dialog-btn" (click)="toggleMaximize()" [title]="isMaximized ? 'Restore' : 'Maximize'">
+          <button class="dialog-btn" (click)="toggleMaximize()" [title]="isMaximized ? 'Restore' : 'Maximize'" [attr.aria-label]="isMaximized ? 'Restore' : 'Maximize'">
             <i class="fa-solid" [class.fa-window-maximize]="!isMaximized" [class.fa-window-restore]="isMaximized"></i>
           </button>
-          <button class="dialog-btn close-btn" (click)="closeDialog()" title="Close">
+          <button class="dialog-btn close-btn" (click)="closeDialog()" title="Close" aria-label="Close">
             <i class="fa-solid fa-times"></i>
           </button>
         </div>

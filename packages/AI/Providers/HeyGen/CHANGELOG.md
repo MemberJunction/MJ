@@ -1,5 +1,19 @@
 # @memberjunction/ai-heygen
 
+## 5.29.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.29.0
+- @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.28.0
+- @memberjunction/global@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

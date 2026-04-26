@@ -4,6 +4,7 @@ import { Subject } from 'rxjs';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { Metadata, QueryInfo, QueryCategoryInfo, CompositeKey } from '@memberjunction/core';
+import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { ResourceData, UserInfoEngine, MJQueryEntity } from '@memberjunction/core-entities';
 import {
     QueryEntityLinkClickEvent,
@@ -92,6 +93,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public DrawerDescription = '';
     public DrawerCategoryID = '';
     public DrawerStatus: 'Pending' | 'Approved' | 'Rejected' | 'Expired' = 'Pending';
+    public DrawerReusable = false;
     public IsSavingDrawer = false;
     public DrawerNameError = false;
     public DrawerSaveError: string | null = null;
@@ -101,6 +103,25 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         ['Pending', 'Approved', 'Rejected', 'Expired'];
 
     private initialDrawerSnapshot = '';
+
+    /** The category ID of the most recently interacted-with folder in the tree */
+    private activeCategoryID: string | null = null;
+
+    /** Tree dropdown config for Query Categories (branches only, no leaves) */
+    public CategoryBranchConfig: TreeBranchConfig = {
+        EntityName: 'MJ: Query Categories',
+        DisplayField: 'Name',
+        IDField: 'ID',
+        ParentIDField: 'ParentID',
+        DefaultIcon: 'fa-solid fa-folder',
+        DescriptionField: 'Description',
+        OrderBy: 'Name ASC'
+    };
+
+    /** The DrawerCategoryID as a CompositeKey for the tree dropdown binding */
+    public get DrawerCategoryIDAsKey(): CompositeKey | null {
+        return this.DrawerCategoryID ? CompositeKey.FromID(this.DrawerCategoryID) : null;
+    }
 
     constructor(
         private cdr: ChangeDetectorRef,
@@ -391,6 +412,10 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         }
         node.expanded = !node.expanded;
         this.expandedState.set(node.category.ID, node.expanded);
+        // Track the most recently expanded folder as the active category context
+        if (node.expanded && node.category.ID !== '__uncategorized__') {
+            this.activeCategoryID = node.category.ID;
+        }
         this.saveExpandedState();
         this.cdr.markForCheck();
     }
@@ -426,6 +451,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             event.stopPropagation();
         }
         this.selectedQuery = query;
+        if (query.CategoryID) {
+            this.activeCategoryID = query.CategoryID;
+        }
         this.UpdateQueryParams({ queryId: query.ID });
         this.NotifyDisplayNameChanged(query.Name || 'Query');
         this.cdr.markForCheck();
@@ -561,15 +589,17 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         }
     }
 
-    /** Open the drawer in create mode. */
-    public OpenCreateDrawer(): void {
+    /** Open the drawer in create mode, optionally pre-selecting a category. */
+    public OpenCreateDrawer(categoryID?: string): void {
         this.DrawerMode = 'create';
         this.DrawerQueryId = null;
         this.DrawerName = '';
         this.DrawerSQL = '';
         this.DrawerDescription = '';
-        this.DrawerCategoryID = '';
+        // Default to the explicit category, or the most recently active category
+        this.DrawerCategoryID = categoryID ?? this.activeCategoryID ?? '';
         this.DrawerStatus = 'Pending';
+        this.DrawerReusable = false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;
         this.captureDrawerSnapshot();
@@ -591,6 +621,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.DrawerDescription = query.Description ?? '';
         this.DrawerCategoryID = query.CategoryID ?? '';
         this.DrawerStatus = query.Status ?? 'Pending';
+        this.DrawerReusable = query.Reusable ?? false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;
         this.captureDrawerSnapshot();
@@ -624,6 +655,15 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.DrawerSQL = value;
     }
 
+    /** Update DrawerCategoryID when the tree dropdown selection changes. */
+    public OnDrawerCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
+        if (value instanceof CompositeKey && value.HasValue) {
+            this.DrawerCategoryID = value.KeyValuePairs[0]?.Value ?? '';
+        } else {
+            this.DrawerCategoryID = '';
+        }
+    }
+
     private get currentDrawerSnapshot(): string {
         return JSON.stringify({
             name: this.DrawerName,
@@ -631,6 +671,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             description: this.DrawerDescription,
             categoryID: this.DrawerCategoryID,
             status: this.DrawerStatus,
+            reusable: this.DrawerReusable,
         });
     }
 
@@ -674,6 +715,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             entity.Description = this.DrawerDescription;
             entity.CategoryID = this.DrawerCategoryID || null;
             entity.Status = this.DrawerStatus;
+            entity.Reusable = this.DrawerReusable;
 
             const saved = await entity.Save();
             if (saved) {

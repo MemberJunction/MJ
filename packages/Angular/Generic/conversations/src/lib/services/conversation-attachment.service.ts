@@ -4,7 +4,9 @@ import {
   MJConversationDetailAttachmentEntity,
   MJConversationDetailArtifactEntity,
   MJArtifactVersionEntity,
-  MJAIModalityEntity
+  MJArtifactEntity,
+  MJAIModalityEntity,
+  ArtifactMetadataEngine
 } from '@memberjunction/core-entities';
 import {
   ConversationUtility,
@@ -72,7 +74,8 @@ export class ConversationAttachmentService {
       }, contextUser);
 
       if (artifactLinksResult.Success && artifactLinksResult.Results && artifactLinksResult.Results.length > 0) {
-        // Load the referenced artifact versions
+        // Load the referenced artifact versions AND their parent artifacts in parallel
+        // so we can resolve the semantic artifact-type name for the tile badge.
         const versionIds = artifactLinksResult.Results.map(l => `'${l.ArtifactVersionID}'`).join(',');
         const versionsResult = await rv.RunView<MJArtifactVersionEntity>({
           EntityName: 'MJ: Artifact Versions',
@@ -86,9 +89,32 @@ export class ConversationAttachmentService {
             versionMap.set(v.ID, v);
           }
 
+          // Bulk-load parent artifacts to get TypeID, then resolve type names via cached engine.
+          const artifactIds = Array.from(new Set(versionsResult.Results.map(v => v.ArtifactID).filter(Boolean)));
+          const artifactMap = new Map<string, MJArtifactEntity>();
+          if (artifactIds.length > 0) {
+            const artifactIdList = artifactIds.map(id => `'${id}'`).join(',');
+            const artifactsResult = await rv.RunView<MJArtifactEntity>({
+              EntityName: 'MJ: Artifacts',
+              ExtraFilter: `ID IN (${artifactIdList})`,
+              ResultType: 'entity_object'
+            }, contextUser);
+            if (artifactsResult.Success && artifactsResult.Results) {
+              for (const a of artifactsResult.Results) {
+                artifactMap.set(a.ID, a);
+              }
+            }
+            // Ensure the artifact-type cache is populated so FindArtifactTypeByID resolves.
+            await ArtifactMetadataEngine.Instance.Config(false, contextUser);
+          }
+
           for (const link of artifactLinksResult.Results) {
             const version = versionMap.get(link.ArtifactVersionID);
             if (version) {
+              const parentArtifact = artifactMap.get(version.ArtifactID);
+              const artifactType = parentArtifact
+                ? ArtifactMetadataEngine.Instance.FindArtifactTypeByID(parentArtifact.TypeID)
+                : undefined;
               const detailId = link.ConversationDetailID;
               if (!result.has(detailId)) {
                 result.set(detailId, []);
@@ -99,7 +125,10 @@ export class ConversationAttachmentService {
                 mimeType: version.MimeType || 'text/plain',
                 fileName: version.FileName || version.Name || 'Artifact',
                 sizeBytes: version.ContentSizeBytes || 0,
-                source: 'artifact'
+                source: 'artifact',
+                artifactId: version.ArtifactID || undefined,
+                artifactVersionId: version.ID,
+                artifactTypeName: artifactType?.Name || undefined
               } as MessageAttachment);
             }
           }

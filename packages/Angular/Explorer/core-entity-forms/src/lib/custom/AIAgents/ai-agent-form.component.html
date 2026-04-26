@@ -1,7 +1,13 @@
-<div class="record-form-container">
-  @if (record) {
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
     <form class="record-form" #form="ngForm">
-      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
       <!-- Agent Header — expanded view -->
       @if (!HeaderCollapsed) {
         <div class="agent-header">
@@ -1544,14 +1550,14 @@
           </mj-accordion-panel>
       </div>
     </form>
-  }
+</mj-record-form-container>
+}
 
-  <!-- Permissions Dialog (from @memberjunction/ng-agents) -->
-  @if (ShowPermissionsDialog) {
-    <mj-agent-permissions-dialog
-      [Agent]="record"
-      (Closed)="onPermissionsDialogClosed()"
-      (PermissionsChanged)="refreshRelatedData()">
-    </mj-agent-permissions-dialog>
-  }
-</div>
+<!-- Permissions Dialog (from @memberjunction/ng-agents) -->
+@if (ShowPermissionsDialog) {
+  <mj-agent-permissions-dialog
+    [Agent]="record"
+    (Closed)="onPermissionsDialogClosed()"
+    (PermissionsChanged)="refreshRelatedData()">
+  </mj-agent-permissions-dialog>
+}

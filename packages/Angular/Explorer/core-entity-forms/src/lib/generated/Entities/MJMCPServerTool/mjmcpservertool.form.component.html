@@ -192,6 +192,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- MCP Tool Favorites Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMCPToolFavorites"
+        SectionName="MCP Tool Favorites"
+        Icon="fa fa-star"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMCPToolFavorites')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Tool Favorites','MCPServerToolID')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Tool Favorites')"
+                [AllowLoad]="IsSectionExpanded('mJMCPToolFavorites')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMCPToolFavorites', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- MCP Tool Execution Logs Section -->
     <mj-collapsible-panel
         SectionKey="mJMCPToolExecutionLogs"

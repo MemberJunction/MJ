@@ -45,6 +45,9 @@ export * from "./generic/RegisterForStartup";
 export * from "./generic/telemetryManager";
 export * from "./generic/InMemoryLocalStorageProvider";
 export * from "./generic/dataHooks";
+export * from "./generic/column-descriptors";
+export * from "./generic/data-table";
+export * from "./generic/data-snapshot";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider;

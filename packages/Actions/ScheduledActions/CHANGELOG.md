@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/scheduled-actions
 
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+- Updated dependencies [98bad3a]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities-server@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/actions-base@5.29.0
+  - @memberjunction/core-actions@5.29.0
+  - @memberjunction/actions@5.29.0
+  - @memberjunction/sqlserver-dataprovider@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/core-actions@5.28.0
+  - @memberjunction/actions@5.28.0
+  - @memberjunction/core-entities-server@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/global@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

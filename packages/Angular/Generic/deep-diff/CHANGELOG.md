@@ -1,5 +1,22 @@
 # @memberjunction/ng-deep-diff
 
+## 5.29.0
+
+### Patch Changes
+
+- 914a6ad: Add `aria-label` attributes to icon-only buttons in the deep-diff component and dialog so screen readers announce their purpose ("Expand All", "Collapse All", "Export Diff", "Copy path", "Copy value", "Expand value" / "Collapse value", "Close", "Maximize" / "Restore").
+- Updated dependencies [e02e24e]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/global@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

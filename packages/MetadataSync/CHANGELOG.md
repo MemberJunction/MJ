@@ -1,5 +1,38 @@
 # @memberjunction/metadata-sync
 
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [5c7a57f]
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+- Updated dependencies [98bad3a]
+  - @memberjunction/server-bootstrap-lite@5.29.0
+  - @memberjunction/core@5.29.0
+  - @memberjunction/generic-database-provider@5.29.0
+  - @memberjunction/core-entities-server@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/sqlserver-dataprovider@5.29.0
+  - @memberjunction/config@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/core-entities-server@5.28.0
+  - @memberjunction/generic-database-provider@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/server-bootstrap-lite@5.28.0
+  - @memberjunction/config@5.28.0
+  - @memberjunction/global@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

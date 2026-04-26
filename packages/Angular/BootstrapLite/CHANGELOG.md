@@ -1,5 +1,52 @@
 # @memberjunction/ng-bootstrap-lite
 
+## 5.29.0
+
+### Patch Changes
+
+- 5c7a57f: Add in-app feedback system with mj-dialog UI, GitHub App authentication for issue creation, and shell header integration. Feedback submissions create formatted GitHub issues with labels, severity, environment info, and browser details.
+- Updated dependencies [5c7a57f]
+- Updated dependencies [e02e24e]
+- Updated dependencies [5585961]
+- Updated dependencies [7006276]
+  - @memberjunction/ng-explorer-core@5.29.0
+  - @memberjunction/core@5.29.0
+  - @memberjunction/ng-core-entity-forms@5.29.0
+  - @memberjunction/ng-file-storage@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/actions-base@5.29.0
+  - @memberjunction/ng-auth-services@5.29.0
+  - @memberjunction/ng-shared@5.29.0
+  - @memberjunction/ng-artifacts@5.29.0
+  - @memberjunction/ng-dashboard-viewer@5.29.0
+  - @memberjunction/communication-types@5.29.0
+  - @memberjunction/entity-communications-base@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [2542615]
+- Updated dependencies [115e4da]
+  - @memberjunction/ng-shared@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-explorer-core@5.28.0
+  - @memberjunction/ng-core-entity-forms@5.28.0
+  - @memberjunction/ng-file-storage@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/ng-auth-services@5.28.0
+  - @memberjunction/ng-artifacts@5.28.0
+  - @memberjunction/ng-dashboard-viewer@5.28.0
+  - @memberjunction/communication-types@5.28.0
+  - @memberjunction/entity-communications-base@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

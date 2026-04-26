@@ -8,6 +8,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 
 // MJ UI Components
 import {
@@ -49,6 +50,7 @@ import { MCPLogDetailPanelComponent } from './components/mcp-log-detail-panel.co
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
+        ScrollingModule,
         MJButtonDirective,
         MJDialogComponent,
         MJDialogActionsComponent,

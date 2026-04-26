@@ -1,7 +1,13 @@
-<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-  @if (record) {
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
     <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
       <div #topArea class="record-form-group">
       </div>
       <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
@@ -82,5 +88,5 @@
         </mj-tab-body>
       </mj-tabstrip>
     </form>
-  }
-</div>
+</mj-record-form-container>
+}
