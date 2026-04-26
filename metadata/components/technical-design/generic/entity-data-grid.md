@@ -150,18 +150,21 @@ If `fields` prop omitted:
 - Takes first 15 fields
 - Uses DisplayName for column headers
 
-## Primary Key Detection
-For OpenEntityRecord integration:
+## Primary Key Detection (Internal)
+EntityDataGrid auto-detects primary keys from entity metadata for OpenEntityRecord integration. This is handled entirely internally — users do NOT need to pass primary key information as a prop.
+
+Detection logic:
 - Checks `entity.PrimaryKeys` array
 - Fallback to `entity.FirstPrimaryKey`
 - Fallback to 'ID'
-- Passed to DataGrid as `entityPrimaryKeys` prop
+
+The detected keys are passed internally to the wrapped DataGrid component.
 
 ## DataGrid Integration
-EntityDataGrid passes to DataGrid:
+EntityDataGrid passes to DataGrid internally:
 - **data**: Current page records (managed)
 - **entityName**: Pass through
-- **entityPrimaryKeys**: Auto-detected
+- **entityPrimaryKeys**: Auto-detected from entity metadata (not a user-facing prop)
 - **columns**: Maps `fields` prop (auto-detected if omitted)
 - **sorting={false}**: Component manages sort logic
 - **paging={false}**: Component manages pagination
