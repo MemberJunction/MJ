@@ -3,16 +3,36 @@
   "type": "generic",
   "title": "Optional Chain Invalid Field - Broken Pattern",
   "description": "Tests optional chaining on invalid field (may fail until linter refactor)",
-  "code": "function OptionalChainInvalidFieldBroken({ utilities }) {\n  const [memberName, setMemberName] = useState('');\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        // ❌ FullName field doesn't exist, optional chaining hides the error\n        const first = result.Results?.[0];\n        setMemberName(first?.FullName || 'Unknown');\n      }\n    }\n    loadData();\n  }, []);\n\n  return <div>Member: {memberName}</div>;\n}",
+  "code": "function OptionalChainInvalidFieldBroken({ utilities }) {\n  const [employeeName, setEmployeeName] = useState('');\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Employees' });\n      if (result?.Success) {\n        // ❌ FullName field doesn't exist, optional chaining hides the error\n        const first = result.Results?.[0];\n        setEmployeeName(first?.FullName || 'Unknown');\n      }\n    }\n    loadData();\n  }, []);\n\n  return <div>Employee: {employeeName}</div>;\n}",
   "location": "embedded",
   "namespace": "test/fixtures/type-rules",
   "version": "1.0.0",
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
+    "mode": "views",
     "entities": [{
-      "name": "Members",
-      "fields": ["ID", "FirstName", "LastName", "Email"]
+      "name": "MJ: Employees",
+      "type": "view",
+      "fieldMetadata": [
+        {"name": "ID", "type": "uniqueidentifier"},
+        {"name": "FirstName", "type": "nvarchar"},
+        {"name": "LastName", "type": "nvarchar"},
+        {"name": "Email", "type": "nvarchar"},
+        {"name": "Phone", "type": "nvarchar"},
+        {"name": "Title", "type": "nvarchar"},
+        {"name": "Active", "type": "bit"},
+        {"name": "CompanyID", "type": "uniqueidentifier"},
+        {"name": "SupervisorID", "type": "uniqueidentifier"},
+        {"name": "FirstLast", "type": "nvarchar"},
+        {"name": "Supervisor", "type": "nvarchar"},
+        {"name": "SupervisorEmail", "type": "nvarchar"},
+        {"name": "SupervisorFirstName", "type": "nvarchar"},
+        {"name": "SupervisorLastName", "type": "nvarchar"},
+        {"name": "BCMID", "type": "uniqueidentifier"},
+        {"name": "__mj_CreatedAt", "type": "datetimeoffset"},
+        {"name": "__mj_UpdatedAt", "type": "datetimeoffset"}
+      ]
     }]
   }
 }

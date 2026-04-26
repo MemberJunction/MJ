@@ -1466,23 +1466,33 @@ export class SQLCodeGenBase {
     /**
      * Check if an entity has native latitude/longitude fields marked with GeoLatitude/GeoLongitude ExtendedType.
      * If both exist, the view should alias them directly instead of joining to RecordGeoCode.
+     *
+     * MUST exclude virtual fields. The view-introspection pass creates virtual
+     * EntityField rows for the `__mj_Latitude`/`__mj_Longitude` SELECT aliases
+     * the JOIN path emits, then auto-assigns ExtendedType=GeoLatitude/Longitude
+     * by name-pattern. Without this filter the next view regen flips to the
+     * native path and tries to SELECT `e.__mj_Longitude` from the base table —
+     * the column doesn't exist on the table, only on the view itself, so view
+     * creation fails with "Invalid column name '__mj_Longitude'". This recurs
+     * on any geo-eligible entity whose RecordGeoCode-based view ran once.
      */
     protected hasNativeGeoFields(entityFields: EntityFieldInfo[]): boolean {
-        const hasLat = entityFields.some(f => f.ExtendedType === 'GeoLatitude');
-        const hasLng = entityFields.some(f => f.ExtendedType === 'GeoLongitude');
+        const hasLat = entityFields.some(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
+        const hasLng = entityFields.some(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
         return hasLat && hasLng;
     }
 
     /**
      * Generate SELECT aliases for native lat/lng fields → __mj_Latitude / __mj_Longitude.
+     * Virtual fields are excluded — see hasNativeGeoFields for the rationale.
      */
     protected generateNativeGeoFields(
         entityFields: EntityFieldInfo[],
         classNameFirstChar: string,
         qi: (name: string) => string
     ): string {
-        const latField = entityFields.find(f => f.ExtendedType === 'GeoLatitude');
-        const lngField = entityFields.find(f => f.ExtendedType === 'GeoLongitude');
+        const latField = entityFields.find(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
+        const lngField = entityFields.find(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
         if (!latField || !lngField) return '';
         return `    ${qi(classNameFirstChar)}.${qi(latField.Name)} AS ${qi('__mj_Latitude')},\n    ${qi(classNameFirstChar)}.${qi(lngField.Name)} AS ${qi('__mj_Longitude')}`;
     }
