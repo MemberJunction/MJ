@@ -56,6 +56,10 @@ export interface ComponentEvent {
      * An array of parameters that this event can emit.
      */
     parameters?: ComponentEventParameter[];
+    /** Whether this is a cancelable "before" event */
+    cancelable?: boolean;
+    /** The paired "after" event name (if this is a "before" event) */
+    pairedEvent?: string;
 }
 
 export interface ComponentEventParameter {

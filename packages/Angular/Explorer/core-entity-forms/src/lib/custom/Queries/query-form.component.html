@@ -1,7 +1,14 @@
-<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-  @if (record) {
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="ToolbarConfig"
+    [IsSaving]="IsSaving"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
     <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-      <mj-form-toolbar [Form]="this" [Config]="ToolbarConfig" [IsSaving]="IsSaving"></mj-form-toolbar>
 
       <!-- Saving Overlay -->
       @if (IsSaving) {
@@ -747,19 +754,19 @@
 
       </div>
     </form>
+</mj-record-form-container>
 
-    <!-- Query Run Dialog -->
-    <mj-query-run-dialog
-      [query]="record"
-      [parameters]="queryParameters"
-      [(isVisible)]="showRunDialog"
-      (onClose)="onRunDialogClose()">
-    </mj-query-run-dialog>
+<!-- Query Run Dialog -->
+<mj-query-run-dialog
+  [query]="record"
+  [parameters]="queryParameters"
+  [(isVisible)]="showRunDialog"
+  (onClose)="onRunDialogClose()">
+</mj-query-run-dialog>
 
-    <!-- Category Creation Dialog -->
-    <mj-query-category-dialog
-      [(isVisible)]="showCategoryDialog"
-      (onCategoryCreated)="onCategoryCreated($event)">
-    </mj-query-category-dialog>
-  }
-</div>
+<!-- Category Creation Dialog -->
+<mj-query-category-dialog
+  [(isVisible)]="showCategoryDialog"
+  (onCategoryCreated)="onCategoryCreated($event)">
+</mj-query-category-dialog>
+}

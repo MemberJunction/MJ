@@ -2,11 +2,11 @@
   {
     "fields": {
       "Name": "Agent Memory Cleanup - Daily at 3 AM UTC",
-      "Description": "Archives stale notes and examples based on per-agent retention policies. Archives notes not accessed within NoteRetentionDays (default 90), examples with SuccessScore < 50 after ExampleRetentionDays (default 180), and any items past their ExpiresAt timestamp.",
+      "Description": "[Deprecated] Archival of stale notes and examples is now handled by the Memory Manager agent's decay-based archival phase (MemoryManagerAgent.decayBasedArchival), which uses importance-weighted Ebbinghaus decay instead of fixed retention windows. This scheduled job is disabled to prevent the deprecated Memory Cleanup Agent from running on its original 3 AM UTC cron and duplicating work. The MemoryCleanupAgent class is retained as @deprecated for reference and rollback. To rollback to retention-based archival, set Status back to 'Active' and disable the decay phase in MemoryManagerAgent.",
       "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=AgentScheduledJobDriver",
       "CronExpression": "0 0 3 * * *",
       "Timezone": "UTC",
-      "Status": "Active",
+      "Status": "Disabled",
       "Configuration": {
         "AgentID": "@lookup:MJ: AI Agents.Name=Memory Cleanup Agent",
         "InitialMessage": "Archive stale notes and examples based on retention policies"

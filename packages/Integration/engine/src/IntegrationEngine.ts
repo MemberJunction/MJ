@@ -1,4 +1,4 @@
-import { CompositeKey, IMetadataProvider, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase, IMetadataProvider, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
@@ -1188,28 +1188,59 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         result: SyncResult,
         contextUser: UserInfo
     ): Promise<void> {
-        for (const record of records) {
-            result.RecordsProcessed++;
+        // Batched atomicity per plans/transaction-group-migration.md: each batch of up to
+        // APPLY_BATCH_SIZE records commits or rolls back as a unit. This keeps transactions
+        // small enough to avoid SQL Server lock escalation (~5000 rows) while still giving
+        // per-batch all-or-nothing semantics. Batch failures report every record in the
+        // batch as errored since the rollback undid any partial success within the batch.
+        const APPLY_BATCH_SIZE = 500;
+        const provider = Metadata.Provider as DatabaseProviderBase;
+
+        for (let i = 0; i < records.length; i += APPLY_BATCH_SIZE) {
+            const batch = records.slice(i, i + APPLY_BATCH_SIZE);
+            const batchStartProcessed = result.RecordsProcessed;
+            const batchStartCreated = result.RecordsCreated;
+            const batchStartUpdated = result.RecordsUpdated;
+            const batchStartDeleted = result.RecordsDeleted;
+
+            await provider.BeginTransaction();
             try {
-                await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser);
+                for (const record of batch) {
+                    result.RecordsProcessed++;
+                    await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser);
+                }
+                await provider.CommitTransaction();
             } catch (err) {
-                // SchemaNotGeneratedError is per-entity-deterministic — every
-                // record in this object will fail the same way. Bubble it up
-                // so ProcessPullSync can fail-stop the entityMap with one log
-                // line instead of producing per-record duplicates.
+                await provider.RollbackTransaction();
+
+                // Roll back the in-memory counters that ApplySingleRecord bumped inside the failed batch
+                result.RecordsProcessed = batchStartProcessed;
+                result.RecordsCreated = batchStartCreated;
+                result.RecordsUpdated = batchStartUpdated;
+                result.RecordsDeleted = batchStartDeleted;
+
+                // SchemaNotGeneratedError is per-entity-deterministic — every record in
+                // this object will fail the same way. Bubble it up so ProcessPullSync
+                // can fail-stop the entityMap with one log line instead of producing
+                // per-record duplicates. Rollback + counter restore above already ran.
                 if (err instanceof SchemaNotGeneratedError) {
                     throw err;
                 }
+
                 const classified = ClassifyError(err);
-                result.RecordsErrored++;
-                result.Errors.push({
-                    ExternalID: record.ExternalRecord.ExternalID,
-                    ChangeType: record.ChangeType,
-                    ErrorMessage: err instanceof Error ? err.message : String(err),
-                    ErrorCode: classified.Code,
-                    Severity: classified.Severity,
-                    ExternalRecord: record.ExternalRecord,
-                });
+                const msg = err instanceof Error ? err.message : String(err);
+                for (const rec of batch) {
+                    result.RecordsProcessed++;
+                    result.RecordsErrored++;
+                    result.Errors.push({
+                        ExternalID: rec.ExternalRecord.ExternalID,
+                        ChangeType: rec.ChangeType,
+                        ErrorMessage: `Batch rolled back: ${msg}`,
+                        ErrorCode: classified.Code,
+                        Severity: classified.Severity,
+                        ExternalRecord: rec.ExternalRecord,
+                    });
+                }
             }
         }
     }
