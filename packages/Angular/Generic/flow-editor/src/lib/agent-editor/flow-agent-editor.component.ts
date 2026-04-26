@@ -3,7 +3,7 @@ import {
   SimpleChanges, ChangeDetectorRef, ViewEncapsulation, HostListener, HostBinding,
   ElementRef, Renderer2
 } from '@angular/core';
-import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { Metadata, RunView, CompositeKey, TransactionGroupBase } from '@memberjunction/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent, FlowNodeTypeConfig } from '../interfaces/flow-types';
 import { FlowEditorComponent } from '../components/flow-editor.component';
@@ -265,25 +265,30 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
       // Update positions from canvas to entities
       this.syncPositionsFromCanvas();
 
-      // Delete removed items first
-      await this.deleteRemovedEntities();
+      // Bundle deletes and saves for steps + paths into one transaction so a partial save
+      // can never leave the flow in an inconsistent state.
+      const md = new Metadata();
+      const tg = await md.CreateTransactionGroup();
 
-      // Save all steps
+      await this.queueRemovedEntitiesForDelete(tg);
+
       for (const step of this.steps) {
-        const result = await step.Save();
-        if (!result) {
-          console.error(`Failed to save step: ${step.Name}`, step.LatestResult);
-        }
+        step.TransactionGroup = tg;
+        await step.Save();
       }
 
-      // Save all paths
       for (const path of this.paths) {
-        const result = await path.Save();
-        if (!result) {
-          console.error(`Failed to save path: ${path.ID}`, path.LatestResult);
-        }
+        path.TransactionGroup = tg;
+        await path.Save();
       }
 
+      if (!await tg.Submit()) {
+        console.error('Failed to save flow — all changes have been rolled back');
+        return;
+      }
+
+      this.deletedPathIDs = [];
+      this.deletedStepIDs = [];
       this.hasUnsavedChanges = false;
       this.lastSaved = new Date();
 
@@ -316,23 +321,22 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
-  private async deleteRemovedEntities(): Promise<void> {
+  private async queueRemovedEntitiesForDelete(tg: TransactionGroupBase): Promise<void> {
     const md = new Metadata();
 
     for (const pathId of this.deletedPathIDs) {
       const pathEntity = await md.GetEntityObject<MJAIAgentStepPathEntity>('MJ: AI Agent Step Paths');
       await pathEntity.InnerLoad(CompositeKey.FromID(pathId));
+      pathEntity.TransactionGroup = tg;
       await pathEntity.Delete();
     }
 
     for (const stepId of this.deletedStepIDs) {
       const stepEntity = await md.GetEntityObject<MJAIAgentStepEntity>('MJ: AI Agent Steps');
       await stepEntity.InnerLoad(CompositeKey.FromID(stepId));
+      stepEntity.TransactionGroup = tg;
       await stepEntity.Delete();
     }
-
-    this.deletedPathIDs = [];
-    this.deletedStepIDs = [];
   }
 
   // ── Flow Editor Event Handlers ──────────────────────────────
