@@ -185,8 +185,17 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   // Create Tables panel state
   ShowCreateTablesPanel = false;
-  CreateTablesObjects: Array<{ ID: string; Name: string; Label: string; Selected: boolean }> = [];
+  CreateTablesObjects: Array<{
+    /** IntegrationObject.ID when AlreadyPersisted; undefined for freshly-discovered objects. */
+    ID?: string;
+    Name: string;
+    Label: string;
+    Selected: boolean;
+    AlreadyPersisted: boolean;
+    IsCustom: boolean;
+  }> = [];
   IsLoadingCreateTablesObjects = false;
+  CreateTablesSearch = '';
   CreateTablesSchema = '';
   IsCreatingTables = false;
   CreateTablesResult: { Success: boolean; Message: string } | null = null;
@@ -1286,7 +1295,9 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   ToggleAllCreateTablesObjects(selected: boolean): void {
-    for (const obj of this.CreateTablesObjects) {
+    // Only toggle what the user can currently see — otherwise hidden items
+    // silently get swept into the selection when they change filters.
+    for (const obj of this.FilteredCreateTablesObjects) {
       obj.Selected = selected;
     }
   }
@@ -1308,9 +1319,18 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     try {
       const selected = this.CreateTablesObjects.filter(o => o.Selected);
 
+      // Send Name for every selection; include ID when the object was already
+      // persisted so the server can skip the lookup. The server's SF branch
+      // describes just these N objects and hydrates IntegrationObject/Field
+      // rows for any that don't have them yet.
+      const selections = selected.map(o => ({
+        SourceObjectID: o.ID,
+        SourceObjectName: o.Name,
+      }));
+
       const result = await this.dataService.ApplyAllBatch(
         this.SelectedSummary.Integration.ID,
-        selected.map(o => o.ID)
+        selections
       );
       this.CreateTablesResult = { Success: result.Success, Message: result.Message ?? '' };
 
@@ -1329,28 +1349,56 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     }
   }
 
+  /**
+   * Search-only filter for the picker. Standard/Custom/Registered state
+   * shows up as badges — never hides anything — so Select All covers
+   * everything the user can see.
+   */
+  get FilteredCreateTablesObjects(): Array<{
+    ID?: string;
+    Name: string;
+    Label: string;
+    Selected: boolean;
+    AlreadyPersisted: boolean;
+    IsCustom: boolean;
+  }> {
+    const term = this.CreateTablesSearch.trim().toLowerCase();
+    if (!term) return this.CreateTablesObjects;
+    return this.CreateTablesObjects.filter(o =>
+      o.Name.toLowerCase().includes(term) || o.Label.toLowerCase().includes(term)
+    );
+  }
+
   private async loadCreateTablesObjects(): Promise<void> {
     if (!this.SelectedSummary) return;
     this.IsLoadingCreateTablesObjects = true;
     this.cdr.detectChanges();
 
     try {
-      const engine = IntegrationEngineBase.Instance;
-      const integration = engine.GetIntegrationForCompanyIntegration(this.SelectedSummary.Integration.ID);
-      if (integration) {
-        const objects = engine.GetActiveIntegrationObjects(integration.ID);
-        const existingNames = new Set(this.DetailEntityMaps.map(m => m.ExternalObjectName));
-        this.CreateTablesObjects = objects
-          .filter(o => !existingNames.has(o.Name))
+      // Pull the full live catalog from the connector (e.g. all ~1,800 SF
+      // sobjects), not just the curated IntegrationObject subset. Objects
+      // that already have entity maps are filtered out — those are sync
+      // targets, not candidates for "create table".
+      const result = await this.dataService.ListSourceObjects(this.SelectedSummary.Integration.ID);
+      const mappedNames = new Set(this.DetailEntityMaps.map(m => m.ExternalObjectName));
+      if (result.Success) {
+        this.CreateTablesObjects = (result.Data ?? [])
+          .filter(o => !mappedNames.has(o.Name))
           .map(o => ({
-            ID: o.ID,
+            ID: o.IntegrationObjectID ?? undefined,
             Name: o.Name,
-            Label: o.DisplayName || o.Name,
-            Selected: false
+            Label: o.Label || o.Name,
+            Selected: false,
+            AlreadyPersisted: o.AlreadyPersisted,
+            IsCustom: o.IsCustom,
           }));
+      } else {
+        console.error('[IntegrationConnections] ListSourceObjects failed:', result.Message);
+        this.CreateTablesObjects = [];
       }
     } catch (err) {
       console.error('[IntegrationConnections] Failed to load source objects for Create Tables:', err);
+      this.CreateTablesObjects = [];
     } finally {
       this.IsLoadingCreateTablesObjects = false;
       this.cdr.detectChanges();
