@@ -406,17 +406,24 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
 
     async saveTemplateContents(): Promise<boolean> {
         if (!this.config.allowEdit) return false;
-        
+
         try {
-            // Save all template contents that have changes
+            // Ensure FK is set on all contents, then persist the dirty/new ones atomically
             for (const content of this.templateContents) {
-                content.TemplateID = this.template!.ID; // Ensure FK is set
-                if (content.Dirty || !content.ID) {
-                    const contentResult = await content.Save();
-                    if (!contentResult) {
-                        console.error('Failed to save template content:', content);
-                        return false;
-                    }
+                content.TemplateID = this.template!.ID;
+            }
+            const toSave = this.templateContents.filter(c => c.Dirty || !c.ID);
+
+            if (toSave.length > 0) {
+                const tg = await this._metadata.CreateTransactionGroup();
+                for (const content of toSave) {
+                    content.TransactionGroup = tg;
+                    await content.Save();
+                }
+                const success = await tg.Submit();
+                if (!success) {
+                    console.error('Failed to save template contents transaction');
+                    return false;
                 }
             }
 
