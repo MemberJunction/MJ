@@ -1239,10 +1239,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             ? params.Fields.map(f => f.trim().toLowerCase())
             : null; // null = caller wants all fields
 
-        // Always override Fields to all entity fields for the DB query.
-        // This ensures one cache entry per entity+filter that satisfies all field subsets.
+        // Only override Fields to all entity fields when caching will actually happen
+        // for this call. For non-cached calls we respect the caller's narrow Fields
+        // end-to-end — there's no cache-coherence concern to preserve.
         const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
-        if (entity) {
+        const entityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
+        const willCache =
+            !params.BypassCache &&
+            (params.CacheLocal || this.TrustLocalCacheCompletely) &&
+            entityCacheAllowed;
+        if (entity && willCache) {
             params.Fields = entity.Fields.map(f => f.Name);
         }
         const entityLookupTime = performance.now() - entityLookupStart;
@@ -1253,8 +1259,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let cachedResult: RunViewResult | undefined;
         let fingerprint: string | undefined;
 
-        const entityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
-        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && entityCacheAllowed && LocalCacheManager.Instance.IsInitialized) {
+        if (willCache && LocalCacheManager.Instance.IsInitialized) {
             fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
@@ -1416,15 +1421,23 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ? param.Fields.map(f => f.trim().toLowerCase())
                 : null;
 
+            // Only override Fields to all entity fields when caching will actually happen
+            // for this call. For non-cached calls we respect the caller's narrow Fields
+            // end-to-end — there's no cache-coherence concern to preserve.
             const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
-            if (batchEntity) {
+            const batchEntityCacheAllowed = this.IsServerCacheAllowedForEntity(param);
+            const batchWillCache =
+                !param.BypassCache &&
+                (param.CacheLocal || this.TrustLocalCacheCompletely) &&
+                batchEntityCacheAllowed;
+            if (batchEntity && batchWillCache) {
                 param.Fields = batchEntity.Fields.map(f => f.Name);
             }
 
             // Check local cache if enabled or if server trusts its cache completely
             // BypassCache skips cache entirely — used by maintenance actions querying for
             // records that were inserted via direct SQL (bypassing BaseEntity.Save())
-            if (!param.BypassCache && (param.CacheLocal || this.TrustLocalCacheCompletely) && LocalCacheManager.Instance.IsInitialized) {
+            if (batchWillCache && LocalCacheManager.Instance.IsInitialized) {
                 const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
