@@ -351,4 +351,5 @@ describe('Semantic Action Search', () => {
             expect(scoped[0].similarityScore).toBe(0.7654);
         });
     });
+
 });

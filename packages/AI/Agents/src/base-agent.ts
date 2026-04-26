@@ -133,29 +133,74 @@ type ExtendedProgressStep = Parameters<AgentExecutionProgressCallback>[0] & {
 };
 
 /**
- * Threshold above which the full action dump in the prompt is replaced with a
- * category summary + instructions to use the built-in `_searchActions` meta-tool.
- * Below this count the full dump is kept — it's cheap and LLMs handle it fine.
- */
-const ACTION_SEARCH_THRESHOLD = 25;
-
-/**
  * Reserved name for the built-in action-search meta-tool. The leading underscore
  * signals that it isn't a real registered MJAction — it's handled inline by the
  * agent runtime, and shouldn't be registered in the Action metadata table.
+ *
+ * NOT exposed as configurable: this is a wire-protocol identifier the LLM is
+ * told about and that the runtime intercepts. Changing it per-deployment would
+ * break cross-deployment consistency for the same agent definition.
  */
 const ACTION_SEARCH_TOOL_NAME = '_searchActions';
 
 /**
- * Default topK returned by the action-search meta-tool when the LLM doesn't specify one.
+ * Tunable knobs for the `_searchActions` meta-tool. Defaults match the values
+ * we shipped with PR #2470. Consumers (typically MJAPI startup) can override
+ * any of these from `mj.config.cjs` — for example:
+ *
+ * ```typescript
+ * import { BaseAgent } from '@memberjunction/ai-agents';
+ * const cfg = configInfo.agentSettings?.actionSearch;
+ * if (cfg?.threshold != null) BaseAgent.ActionSearchConfig.Threshold = cfg.threshold;
+ * if (cfg?.defaultTopK != null) BaseAgent.ActionSearchConfig.DefaultTopK = cfg.defaultTopK;
+ * if (cfg?.maxTopK != null) BaseAgent.ActionSearchConfig.MaxTopK = cfg.maxTopK;
+ * if (cfg?.minSimilarity != null) BaseAgent.ActionSearchConfig.MinSimilarity = cfg.minSimilarity;
+ * ```
+ *
+ * Suggested `mj.config.cjs` shape:
+ *
+ * ```javascript
+ * agentSettings: {
+ *   actionSearch: {
+ *     threshold: 25,        // dump-vs-summary cutoff (default: 25)
+ *     defaultTopK: 10,      // fallback topK when LLM omits it (default: 10)
+ *     maxTopK: 50,          // hard upper bound on topK (default: 50)
+ *     minSimilarity: 0.3,   // cosine similarity floor for matches (default: 0.3)
+ *   }
+ * }
+ * ```
+ *
+ * Per-agent overrides (via fields on the `MJAIAgent` entity) are intentionally
+ * out of scope here — see the follow-on RFC for that.
  */
-const ACTION_SEARCH_DEFAULT_TOP_K = 10;
+export class ActionSearchConfig {
+    /**
+     * Threshold above which the full action dump in the prompt is replaced with a
+     * category summary + instructions to use the built-in `_searchActions`
+     * meta-tool. Below this count the full dump is kept — it's cheap and LLMs
+     * handle it fine. Default: 25.
+     */
+    public static Threshold: number = 25;
 
-/**
- * Minimum cosine similarity for action-search hits. Kept relatively loose so the
- * agent gets some candidates to reason about even on vague queries.
- */
-const ACTION_SEARCH_MIN_SIMILARITY = 0.3;
+    /**
+     * Default topK returned by the action-search meta-tool when the LLM doesn't
+     * specify one. Default: 10.
+     */
+    public static DefaultTopK: number = 10;
+
+    /**
+     * Hard maximum topK after clamping. Bounds result-list size regardless of
+     * what the LLM requests. Default: 50.
+     */
+    public static MaxTopK: number = 50;
+
+    /**
+     * Minimum cosine similarity for action-search hits. Kept relatively loose
+     * so the agent gets some candidates to reason about even on vague queries.
+     * Default: 0.3.
+     */
+    public static MinSimilarity: number = 0.3;
+}
 
 /**
  * Base implementation for AI Agents in the MemberJunction framework.
@@ -2370,7 +2415,7 @@ export class BaseAgent {
             // not registered as a real MJAction. Only accept it when the prompt actually offered it
             // (threshold crossed); otherwise treat as unknown so the LLM gets corrected.
             if (actionName === ACTION_SEARCH_TOOL_NAME.toLowerCase()) {
-                if (effectiveActions.length > ACTION_SEARCH_THRESHOLD) {
+                if (effectiveActions.length > ActionSearchConfig.Threshold) {
                     action.name = ACTION_SEARCH_TOOL_NAME;  // normalize casing
                     return false;
                 }
@@ -4496,7 +4541,7 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Formats action details as compact markdown for inclusion in prompt context.
      *
-     * When the agent has more than {@link ACTION_SEARCH_THRESHOLD} actions,
+     * When the agent has more than {@link ActionSearchConfig.Threshold} actions,
      * dumping them all balloons the prompt and drowns the LLM. Above the
      * threshold this returns a category summary plus instructions for the
      * `_searchActions` meta-tool; at or below, it returns the full dump.
@@ -4506,7 +4551,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private formatActionDetails(actions: MJActionEntityExtended[]): string {
-        if (actions.length > ACTION_SEARCH_THRESHOLD) {
+        if (actions.length > ActionSearchConfig.Threshold) {
             return this.formatActionSummary(actions);
         }
         return this.formatActionFullDump(actions);
@@ -4574,7 +4619,7 @@ The context is now within limits. Please retry your request with the recovered c
             `You have a built-in meta-tool for finding actions by semantic similarity. Call it like any other action:`,
             ``,
             `- \`query\` (string, required) — natural-language description of what you want to do`,
-            `- \`topK\` (number, optional, default ${ACTION_SEARCH_DEFAULT_TOP_K}) — max results to return`,
+            `- \`topK\` (number, optional, default ${ActionSearchConfig.DefaultTopK}) — max results to return`,
             ``,
             `It returns a ranked list of matching actions with their name, description, category, and similarity score. After searching, invoke the chosen action by its exact name on your next turn. Searching costs a turn but keeps the prompt small — use it whenever you're not sure of the exact action name.`
         ].join('\n');
@@ -4623,8 +4668,8 @@ The context is now within limits. Please retry your request with the recovered c
         const query = typeof rawParams.query === 'string' ? rawParams.query.trim() : '';
         const requestedTopK = Number(rawParams.topK);
         const topK = Number.isFinite(requestedTopK) && requestedTopK > 0
-            ? Math.min(Math.trunc(requestedTopK), 50)
-            : ACTION_SEARCH_DEFAULT_TOP_K;
+            ? Math.min(Math.trunc(requestedTopK), ActionSearchConfig.MaxTopK)
+            : ActionSearchConfig.DefaultTopK;
 
         const stepEntity = await this.createStepEntity({
             stepType: 'Actions',
@@ -4651,7 +4696,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         try {
-            const rawMatches = await AIEngine.Instance.FindSimilarActions(query, topK, ACTION_SEARCH_MIN_SIMILARITY);
+            const rawMatches = await AIEngine.Instance.FindSimilarActions(query, topK, ActionSearchConfig.MinSimilarity);
 
             // Scope matches to the agent's effective actions — agents must not learn about
             // actions they can't invoke. Rebuild with full action entity info so the
