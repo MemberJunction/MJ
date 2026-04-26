@@ -81,11 +81,28 @@ function resolveVariableType(
     const varType = lookupVariableTypeInfo(objectNode.name, typeContext, path);
     if (!varType) return null;
 
-    if (varType.type === 'entity-row' && varType.entityName && varType.fields) {
-      return { entityName: varType.entityName, fields: varType.fields };
+    if (varType.type === 'entity-row' && varType.entityName) {
+      let fields = varType.fields;
+      // If fields are missing (DB unavailable during type inference), try to
+      // load from TypeContext cache or spec fieldMetadata
+      if (!fields || fields.size === 0) {
+        fields = typeContext.getEntityFieldTypesSync(varType.entityName);
+      }
+      if (fields && fields.size > 0) {
+        return { entityName: varType.entityName, fields };
+      }
+      // Fields still empty — will be handled by the fieldMetadata fallback in the main rule logic
+      return null;
     }
-    if (varType.type === 'query-row' && varType.queryName && varType.fields) {
-      return { queryName: varType.queryName, entityName: varType.queryName, fields: varType.fields };
+    if (varType.type === 'query-row' && varType.queryName) {
+      let fields = varType.fields;
+      if (!fields || fields.size === 0) {
+        fields = typeContext.getQueryFieldTypes(varType.queryName) ?? undefined;
+      }
+      if (fields && fields.size > 0) {
+        return { queryName: varType.queryName, entityName: varType.queryName, fields };
+      }
+      return null;
     }
     return null;
   }
@@ -263,7 +280,17 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
         if (path.node.computed || !t.isIdentifier(path.node.property)) return;
         const propertyName = path.node.property.name;
 
-        const resolved = resolveVariableType(path.node.object, typeContext, path);
+        let resolved = resolveVariableType(path.node.object, typeContext, path);
+        // Fallback: if we have an entity-row variable but resolveVariableType returned null
+        // (fields unavailable from DB), try to get fields from entityFieldSets (populated from spec fieldMetadata)
+        if (!resolved && t.isIdentifier(path.node.object)) {
+          const varType = lookupVariableTypeInfo(path.node.object.name, typeContext, path);
+          if (varType?.type === 'entity-row' && varType.entityName && entityFieldSets.has(varType.entityName)) {
+            const fieldNames = entityFieldSets.get(varType.entityName)!;
+            const fields = new Map(fieldNames.map(n => [n, { type: 'string', fromMetadata: false } as FieldTypeInfo]));
+            resolved = { entityName: varType.entityName, fields };
+          }
+        }
         if (!resolved) return;
 
         const validFields = getValidFields(resolved);
@@ -277,7 +304,16 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
         if (path.node.computed || !t.isIdentifier(path.node.property)) return;
         const propertyName = path.node.property.name;
 
-        const resolved = resolveVariableType(path.node.object, typeContext, path);
+        let resolved = resolveVariableType(path.node.object, typeContext, path);
+        // Same fallback for optional chaining
+        if (!resolved && t.isIdentifier(path.node.object)) {
+          const varType = lookupVariableTypeInfo(path.node.object.name, typeContext, path);
+          if (varType?.type === 'entity-row' && varType.entityName && entityFieldSets.has(varType.entityName)) {
+            const fieldNames = entityFieldSets.get(varType.entityName)!;
+            const fields = new Map(fieldNames.map(n => [n, { type: 'string', fromMetadata: false } as FieldTypeInfo]));
+            resolved = { entityName: varType.entityName, fields };
+          }
+        }
         if (!resolved) return;
 
         const validFields = getValidFields(resolved);
