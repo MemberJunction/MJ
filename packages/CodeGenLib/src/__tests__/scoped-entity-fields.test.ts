@@ -3,7 +3,8 @@
  *
  * Covers the pieces that don't require a live database connection:
  *   - Provider getPendingEntityFieldsSQL emits the scope filter only when entityIDs are supplied
- *   - SP wrapper SQL produced by callRoutineSQL includes @EntityID exactly when one is passed
+ *   - SP wrapper SQL produced by callRoutineSQL passes @EntityIDs as a comma-delimited list
+ *     when scoped (one SP call, not one-per-entity)
  *
  * The end-to-end "manageEntityFields fast-exits on empty filter" path is verified
  * indirectly here by asserting the contract its callees honor.
@@ -59,7 +60,7 @@ describe('Phase A — scoped entity field plumbing', () => {
         });
     });
 
-    describe('SQLServerCodeGenProvider.callRoutineSQL — @EntityID parameter', () => {
+    describe('SQLServerCodeGenProvider.callRoutineSQL — @EntityIDs list parameter', () => {
         const provider = new SQLServerCodeGenProvider();
 
         it('emits a single-parameter EXEC for the unscoped case', () => {
@@ -72,27 +73,33 @@ describe('Phase A — scoped entity field plumbing', () => {
             expect(sql).toBe(`EXEC [__mj].[spDeleteUnneededEntityFields] @ExcludedSchemaNames='sys,staging'`);
         });
 
-        it('emits an EXEC with @EntityID when an ID is supplied', () => {
+        it('emits an EXEC with @EntityIDs as a comma-delimited list when scoped', () => {
+            // The SP fans this list out via STRING_SPLIT into a table variable.
+            // We pass ALL entity IDs in a single call rather than looping per-entity,
+            // because per-call round-trips and (worse) parallel calls would create
+            // lock contention on the same EntityField pages.
+            const idList = `55555555-5555-5555-5555-555555555555,66666666-6666-6666-6666-666666666666`;
             const sql = provider.callRoutineSQL(
                 '__mj',
                 'spDeleteUnneededEntityFields',
-                [`'sys,staging'`, `'55555555-5555-5555-5555-555555555555'`],
-                ['ExcludedSchemaNames', 'EntityID']
+                [`'sys,staging'`, `'${idList}'`],
+                ['ExcludedSchemaNames', 'EntityIDs']
             );
             expect(sql).toBe(
                 `EXEC [__mj].[spDeleteUnneededEntityFields] ` +
-                `@ExcludedSchemaNames='sys,staging', @EntityID='55555555-5555-5555-5555-555555555555'`
+                `@ExcludedSchemaNames='sys,staging', @EntityIDs='${idList}'`
             );
         });
 
         it('produces the same shape for spUpdateExistingEntityFieldsFromSchema', () => {
+            const idList = `77777777-7777-7777-7777-777777777777,88888888-8888-8888-8888-888888888888,99999999-9999-9999-9999-999999999999`;
             const sql = provider.callRoutineSQL(
                 '__mj',
                 'spUpdateExistingEntityFieldsFromSchema',
-                [`'sys,staging'`, `'66666666-6666-6666-6666-666666666666'`],
-                ['ExcludedSchemaNames', 'EntityID']
+                [`'sys,staging'`, `'${idList}'`],
+                ['ExcludedSchemaNames', 'EntityIDs']
             );
-            expect(sql).toContain(`@EntityID='66666666-6666-6666-6666-666666666666'`);
+            expect(sql).toContain(`@EntityIDs='${idList}'`);
             expect(sql).toContain(`spUpdateExistingEntityFieldsFromSchema`);
         });
     });

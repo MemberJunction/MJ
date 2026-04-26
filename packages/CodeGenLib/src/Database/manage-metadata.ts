@@ -3158,24 +3158,26 @@ export class ManageMetadataBase {
 
    protected async updateExistingEntityFieldsFromSchema(pool: CodeGenConnection, excludeSchemas: string[], entityIDs?: string[]): Promise<boolean> {
       try   {
-         const idsToProcess: (string | null)[] = entityIDs && entityIDs.length > 0 ? entityIDs : [null];
-         for (const entityID of idsToProcess) {
-            const params = entityID
-               ? [`'${excludeSchemas.join(',')}'`, `'${entityID}'`]
-               : [`'${excludeSchemas.join(',')}'`];
-            const paramNames = entityID
-               ? ['ExcludedSchemaNames', 'EntityID']
-               : ['ExcludedSchemaNames'];
-            const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntityFieldsFromSchema', params, paramNames);
-            const label = entityID
-               ? `SQL text to update existing entity fields from schema (entity ${entityID})`
-               : `SQL text to update existing entity fields from schema`;
-            const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
-            // result contains the updated entity fields. Get a distinct list of entity names
-            // and add them to the modified entity list if they're not already in there.
-            if (result && result.length > 0) {
-               ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { EntityName: any; }) => r.EntityName));
-            }
+         // One SP call regardless of scope: pass the entire entity ID list as a comma-delimited
+         // string (mirrors the @ExcludedSchemaNames pattern). The SP fans the list out into
+         // a table variable via STRING_SPLIT and joins once. This avoids both per-entity
+         // round-trips (slow) and parallel calls (page-level lock contention on EntityField).
+         const isScoped = entityIDs !== undefined && entityIDs.length > 0;
+         const params = isScoped
+            ? [`'${excludeSchemas.join(',')}'`, `'${entityIDs!.join(',')}'`]
+            : [`'${excludeSchemas.join(',')}'`];
+         const paramNames = isScoped
+            ? ['ExcludedSchemaNames', 'EntityIDs']
+            : ['ExcludedSchemaNames'];
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntityFieldsFromSchema', params, paramNames);
+         const label = isScoped
+            ? `SQL text to update existing entity fields from schema (${entityIDs!.length} scoped entities)`
+            : `SQL text to update existing entity fields from schema`;
+         const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
+         // result contains the updated entity fields. Get a distinct list of entity names
+         // and add them to the modified entity list if they're not already in there.
+         if (result && result.length > 0) {
+            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { EntityName: any; }) => r.EntityName));
          }
          return true;
       }
@@ -3298,26 +3300,26 @@ export class ManageMetadataBase {
 
    protected async deleteUnneededEntityFields(pool: CodeGenConnection, excludeSchemas: string[], entityIDs?: string[]): Promise<boolean> {
       try   {
-         // When unscoped: one SP call against the full schema. When scoped: one SP call per
-         // entity ID, each pre-filtered by @EntityID so the table scans collapse to seeks.
-         const idsToProcess: (string | null)[] = entityIDs && entityIDs.length > 0 ? entityIDs : [null];
-         for (const entityID of idsToProcess) {
-            const params = entityID
-               ? [`'${excludeSchemas.join(',')}'`, `'${entityID}'`]
-               : [`'${excludeSchemas.join(',')}'`];
-            const paramNames = entityID
-               ? ['ExcludedSchemaNames', 'EntityID']
-               : ['ExcludedSchemaNames'];
-            const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteUnneededEntityFields', params, paramNames);
-            const label = entityID
-               ? `SQL text to delete unneeded entity fields (entity ${entityID})`
-               : `SQL text to delete unneeded entity fields`;
-            const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
-            // result contains the DELETED entity fields. Get a distinct list of entity names
-            // and add them to the modified entity list if they're not already in there.
-            if (result && result.length > 0) {
-               ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Entity: any; }) => r.Entity));
-            }
+         // One SP call regardless of scope: pass the entire entity ID list as a comma-delimited
+         // string (mirrors the @ExcludedSchemaNames pattern). The SP fans the list out into
+         // a table variable via STRING_SPLIT and filters once. Avoids both per-entity
+         // round-trips and parallel calls (page-level lock contention on EntityField).
+         const isScoped = entityIDs !== undefined && entityIDs.length > 0;
+         const params = isScoped
+            ? [`'${excludeSchemas.join(',')}'`, `'${entityIDs!.join(',')}'`]
+            : [`'${excludeSchemas.join(',')}'`];
+         const paramNames = isScoped
+            ? ['ExcludedSchemaNames', 'EntityIDs']
+            : ['ExcludedSchemaNames'];
+         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteUnneededEntityFields', params, paramNames);
+         const label = isScoped
+            ? `SQL text to delete unneeded entity fields (${entityIDs!.length} scoped entities)`
+            : `SQL text to delete unneeded entity fields`;
+         const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
+         // result contains the DELETED entity fields. Get a distinct list of entity names
+         // and add them to the modified entity list if they're not already in there.
+         if (result && result.length > 0) {
+            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Entity: any; }) => r.Entity));
          }
          return true;
       }

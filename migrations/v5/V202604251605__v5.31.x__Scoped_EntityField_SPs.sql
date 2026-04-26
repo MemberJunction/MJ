@@ -1,10 +1,17 @@
 -- Scoped Entity Field Stored Procedures (Phase A of PR #2342)
 --
--- Adds an optional @EntityID parameter to the field-management bootstrap SPs that
--- CodeGen calls during its second `manageEntityFields` pass. When @EntityID is NULL
--- (default), behavior is identical to the prior version — full schema scan. When a
--- specific UUID is passed, the SP filters its work to that single entity, allowing
--- CodeGen's Pass 2 to scope expensive scans to entities that actually changed.
+-- Adds an optional @EntityIDs parameter (comma-delimited UUID list) to the field-management
+-- bootstrap SPs that CodeGen calls during its second `manageEntityFields` pass. When the
+-- parameter is NULL or empty (default), behavior is identical to the prior version — full
+-- schema scan. When a non-empty list is passed, the SP filters its work to those entities,
+-- allowing CodeGen's Pass 2 to scope expensive scans to entities that actually changed.
+--
+-- The list approach (vs. one SP call per entity) was chosen for two reasons:
+--   1. One large query plan with seek-by-list beats N round-trips with their own plan compile.
+--   2. Per-entity calls would either serialize (slow) or contend on the same EntityField
+--      pages under parallelism — a list keeps the work in a single transaction footprint.
+-- This mirrors the existing @ExcludedSchemaNames pattern (STRING_SPLIT to a table variable)
+-- used elsewhere in this codebase.
 --
 -- These two SPs are part of CodeGen's own bootstrap (not user-entity SPs) and live
 -- in versioned migrations the same way prior fixes did
@@ -14,16 +21,33 @@ DROP PROC IF EXISTS [${flyway:defaultSchema}].[spDeleteUnneededEntityFields]
 GO
 CREATE PROC [${flyway:defaultSchema}].[spDeleteUnneededEntityFields]
     @ExcludedSchemaNames NVARCHAR(MAX),
-    @EntityID UNIQUEIDENTIFIER = NULL
+    @EntityIDs NVARCHAR(MAX) = NULL
 AS
 -- Get rid of any EntityFields that are NOT virtual and are not part of the underlying VIEW or TABLE - these are orphaned meta-data elements
 -- where a field once existed but no longer does either it was renamed or removed from the table or view
+SET NOCOUNT ON;
+
 IF OBJECT_ID('tempdb..#ef_spDeleteUnneededEntityFields') IS NOT NULL
     DROP TABLE #ef_spDeleteUnneededEntityFields
 IF OBJECT_ID('tempdb..#actual_spDeleteUnneededEntityFields') IS NOT NULL
     DROP TABLE #actual_spDeleteUnneededEntityFields
 IF OBJECT_ID('tempdb..#DeletedFields') IS NOT NULL
     DROP TABLE #DeletedFields
+
+-- Materialize the optional entity scope list once. @IsScoped lets the WHERE clauses
+-- short-circuit to the unscoped path with a single int compare instead of joining
+-- against an empty table variable.
+DECLARE @ScopedEntityIDs TABLE (EntityID UNIQUEIDENTIFIER PRIMARY KEY);
+DECLARE @IsScoped BIT = 0;
+IF @EntityIDs IS NOT NULL AND LEN(@EntityIDs) > 0
+BEGIN
+    INSERT INTO @ScopedEntityIDs (EntityID)
+    SELECT DISTINCT TRY_CONVERT(UNIQUEIDENTIFIER, LTRIM(RTRIM(value)))
+    FROM STRING_SPLIT(@EntityIDs, ',')
+    WHERE LTRIM(RTRIM(value)) <> ''
+      AND TRY_CONVERT(UNIQUEIDENTIFIER, LTRIM(RTRIM(value))) IS NOT NULL;
+    IF EXISTS (SELECT 1 FROM @ScopedEntityIDs) SET @IsScoped = 1;
+END
 
 -- put these two views into temp tables, for some SQL systems, this makes the join below WAY faster
 SELECT
@@ -44,14 +68,14 @@ ON
 WHERE
     e.VirtualEntity = 0 AND -- exclude virtual entities from this always
     excludedSchemas.value IS NULL AND -- This ensures rows with matching SchemaName are excluded
-    (@EntityID IS NULL OR ef.EntityID = @EntityID) -- scoped run: only this entity
+    (@IsScoped = 0 OR ef.EntityID IN (SELECT EntityID FROM @ScopedEntityIDs)) -- scoped run: only listed entities
 
 -- get actual fields from the database so we can compare MJ metadata to the SQL catalog.
 -- When scoped, narrow vwSQLColumnsAndEntityFields the same way so the orphan join below stays correct.
 SELECT *
 INTO #actual_spDeleteUnneededEntityFields
 FROM vwSQLColumnsAndEntityFields
-WHERE @EntityID IS NULL OR EntityID = @EntityID
+WHERE @IsScoped = 0 OR EntityID IN (SELECT EntityID FROM @ScopedEntityIDs)
 
 -- now figure out which fields are NO longer in the DB and should be removed from MJ metadata
 SELECT ef.* INTO #DeletedFields
@@ -100,7 +124,7 @@ DROP PROC IF EXISTS [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromS
 GO
 CREATE PROC [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema]
     @ExcludedSchemaNames NVARCHAR(MAX),
-    @EntityID UNIQUEIDENTIFIER = NULL
+    @EntityIDs NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -108,6 +132,20 @@ BEGIN
     DECLARE @ExcludedSchemas TABLE (SchemaName NVARCHAR(255));
     INSERT INTO @ExcludedSchemas(SchemaName)
     SELECT TRIM(value) FROM STRING_SPLIT(@ExcludedSchemaNames, ',');
+
+    -- Materialize the optional entity scope list once (see spDeleteUnneededEntityFields header
+    -- comment for rationale). @IsScoped collapses to a cheap int compare in the unscoped path.
+    DECLARE @ScopedEntityIDs TABLE (EntityID UNIQUEIDENTIFIER PRIMARY KEY);
+    DECLARE @IsScoped BIT = 0;
+    IF @EntityIDs IS NOT NULL AND LEN(@EntityIDs) > 0
+    BEGIN
+        INSERT INTO @ScopedEntityIDs (EntityID)
+        SELECT DISTINCT TRY_CONVERT(UNIQUEIDENTIFIER, LTRIM(RTRIM(value)))
+        FROM STRING_SPLIT(@EntityIDs, ',')
+        WHERE LTRIM(RTRIM(value)) <> ''
+          AND TRY_CONVERT(UNIQUEIDENTIFIER, LTRIM(RTRIM(value))) IS NOT NULL;
+        IF EXISTS (SELECT 1 FROM @ScopedEntityIDs) SET @IsScoped = 1;
+    END
 
     DECLARE @FilteredRows TABLE (
         EntityID UNIQUEIDENTIFIER,
@@ -199,7 +237,7 @@ BEGIN
         e.VirtualEntity = 0
         AND excludedSchemas.SchemaName IS NULL -- Only include non-excluded schemas
         AND ef.ID IS NOT NULL -- Only where we have already created EntityField records
-        AND (@EntityID IS NULL OR e.ID = @EntityID) -- scoped run: only this entity
+        AND (@IsScoped = 0 OR e.ID IN (SELECT EntityID FROM @ScopedEntityIDs)) -- scoped run: only listed entities
         AND (
           -- this large filtering block includes ONLY the rows that have changes
           ISNULL(LTRIM(RTRIM(ef.Description)), '') <> ISNULL(LTRIM(RTRIM(IIF(ef.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX), fromSQL.Description), ef.Description))), '') OR
