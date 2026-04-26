@@ -1,5 +1,5 @@
 import { Command, Flags } from '@oclif/core';
-import type { ParserOutput } from '@oclif/core/lib/interfaces/parser';
+import type { ParserOutput } from '@oclif/core/interfaces';
 import { updatedConfig } from '../../config';
 
 export default class CodeGen extends Command {
@@ -27,7 +27,11 @@ Angular components, GraphQL resolvers, action subclasses, DB schema JSON) and
 only run database-side operations (metadata sync, SQL object generation,
 permissions, custom SQL scripts).
 
---skipdb and --skipfiles are independent and can be combined in any mix.`;
+--skipdb and --skipfiles are independent and can be combined in any mix.
+
+Use --force-advanced-gen to bypass Pass 2 entity scoping and re-run the LLM-driven
+advanced generation (smart fields, form layout) for ALL entities. Useful when AI
+prompts have changed and you want unchanged entities re-evaluated.`;
 
   static examples = [
     {
@@ -42,6 +46,10 @@ permissions, custom SQL scripts).
       command: '<%= config.bin %> <%= command.id %> --skipfiles',
       description: 'Run database-side operations only, without regenerating any code files',
     },
+    {
+      command: '<%= config.bin %> <%= command.id %> --force-advanced-gen',
+      description: 'Re-run advanced generation for all entities (bypasses changed-entity scoping)',
+    },
   ];
 
   static flags = {
@@ -51,12 +59,15 @@ permissions, custom SQL scripts).
     skipfiles: Flags.boolean({
       description: 'Skip file-generation operations (TypeScript entities, Angular components, GraphQL resolvers, action subclasses, DB schema JSON). Only run database-side operations.',
     }),
+    'force-advanced-gen': Flags.boolean({
+      description: 'Bypass entity scoping in Pass 2 and force advanced generation to re-run for all entities. Used when AI prompts have changed and unchanged entities should be re-evaluated.',
+    }),
   };
 
   flags: ParserOutput<CodeGen>['flags'];
 
   async run(): Promise<void> {
-    const { runMemberJunctionCodeGeneration, initializeConfig } = await import('@memberjunction/codegen-lib');
+    const { runMemberJunctionCodeGeneration, initializeConfig, configInfo } = await import('@memberjunction/codegen-lib');
 
     const parsed = await this.parse(CodeGen);
     this.flags = parsed.flags;
@@ -69,6 +80,21 @@ permissions, custom SQL scripts).
 
     // Initialize configuration
     initializeConfig(process.cwd());
+
+    // --force-advanced-gen bypasses Pass 2 scoping by toggling the existing
+    // forceRegeneration.enabled config flag. Both the Pass 2 scoping logic in
+    // sql_codegen.ts and the advanced-generation scope check in manage-metadata.ts
+    // honor this same flag, so flipping it here gives a uniform "process all entities"
+    // override across both code paths.
+    if (this.flags['force-advanced-gen']) {
+      if (!configInfo.forceRegeneration) {
+        // Initialize the object if it's missing — don't crash if config schema is sparse
+        (configInfo as { forceRegeneration: { enabled: boolean } }).forceRegeneration = { enabled: true };
+      } else {
+        configInfo.forceRegeneration.enabled = true;
+      }
+      this.log('--force-advanced-gen: bypassing entity scoping; advanced generation will re-run for all entities.');
+    }
 
     // Call the function with the determined arguments
     runMemberJunctionCodeGeneration(this.flags.skipdb, this.flags.skipfiles);
