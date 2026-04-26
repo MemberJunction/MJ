@@ -621,11 +621,19 @@ function SimpleChart({
           stacked: isStacked, // Enable stacking on X-axis
           ticks: {
             autoSkip: true,
-            maxRotation: 45,
+            maxRotation: 60,
             minRotation: 0,
             maxTicksLimit: 20, // Limit number of ticks to prevent overcrowding
             font: {
               size: 11
+            },
+            // Truncate long labels to prevent overflow
+            callback: function(value) {
+              const label = this.getLabelForValue(value);
+              if (typeof label === 'string' && label.length > 18) {
+                return label.substring(0, 16) + '…';
+              }
+              return label;
             }
           },
           // For charts with many categories, use better label management
@@ -756,7 +764,7 @@ function SimpleChart({
 
   // Render chart container with canvas
   return (
-    <div style={{ width: '100%', height: '100%', maxHeight: `${height}px`, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ width: '100%', position: 'relative', overflow: 'hidden' }}>
       {enableExport && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
           <button
@@ -778,7 +786,7 @@ function SimpleChart({
           </button>
         </div>
       )}
-      <div style={{ width: '100%', flex: 1, minHeight: `${Math.min(height, 200)}px` }}>
+      <div style={{ width: '100%', height: `${height}px` }}>
         <canvas ref={canvasRef} />
       </div>
     </div>
