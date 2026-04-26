@@ -5045,8 +5045,9 @@ The context is now within limits. Please retry your request with the recovered c
         }
         this._agentRun.Status = 'Running';
         this._agentRun.StartedAt = new Date();
-        this._agentRun.UserID = params.contextUser?.ID || null;
-        
+        this._agentRun.UserID = params.userId || params.contextUser?.ID || null;
+        this._agentRun.CompanyID = params.companyId || null;
+
         // Resolve and save the effort level used (same precedence hierarchy as prompts)
         if (params.effortLevel !== undefined && params.effortLevel !== null) {
             this._agentRun.EffortLevel = params.effortLevel;

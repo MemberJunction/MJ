@@ -1,5 +1,6 @@
 import { Pipe, PipeTransform } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { EscapeHTML } from '@memberjunction/global';
 
 /**
  * Pipe to highlight search terms within text.
@@ -14,13 +15,13 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 export class HighlightSearchPipe implements PipeTransform {
   constructor(private sanitizer: DomSanitizer) {}
 
-  transform(value: string | null | undefined, searchTerm: string | null | undefined): SafeHtml {
+  transform(value: string | null | undefined, searchTerm: string | null | undefined): SafeHtml | string {
     if (!value) {
       return '';
     }
 
     if (!searchTerm || searchTerm.trim() === '') {
-      return value;
+      return EscapeHTML(value);
     }
 
     // Escape special regex characters in the search term
@@ -29,10 +30,19 @@ export class HighlightSearchPipe implements PipeTransform {
     // Create a case-insensitive regex
     const regex = new RegExp(`(${escapedSearchTerm})`, 'gi');
 
-    // Replace matches with highlighted version
-    const highlighted = value.replace(regex, '<mark class="search-highlight">$1</mark>');
+    // Split text by the search term and escape each part,
+    // wrapping matching terms in the <mark> tags.
+    const parts = value.split(regex);
+    const highlighted = parts.map((part, index) => {
+      // The split regex includes the capturing group, so matching parts
+      // will be at odd indices (1, 3, 5, etc.).
+      if (index % 2 === 1) {
+        return `<mark class="search-highlight">${EscapeHTML(part)}</mark>`;
+      }
+      return EscapeHTML(part);
+    }).join('');
 
-    // Return as SafeHtml to allow innerHTML binding
+    // Return as SafeHtml to allow innerHTML binding securely
     return this.sanitizer.bypassSecurityTrustHtml(highlighted);
   }
 }
