@@ -1,6 +1,4 @@
-import _traverse, { NodePath } from '@babel/traverse';
-type TraverseModule = typeof _traverse & { default?: typeof _traverse };
-const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
+import { traverse, NodePath, createViolation, truncateCode, findClosestMatch, findCaseMismatch, NUMERIC_COERCION_FUNCTIONS, NON_ENTITY_PROPERTIES } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -8,7 +6,6 @@ import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ComponentExecutionOptions } from '../component-runner';
 import { TypeContext, FieldTypeInfo } from '../type-context';
-import { createViolation, truncateCode } from '../lint-utils';
 
 /**
  * Rule: entity-field-access-validation
@@ -29,57 +26,6 @@ import { createViolation, truncateCode } from '../lint-utils';
  * Applies to: all components
  */
 
-function levenshteinDistance(a: string, b: string): number {
-  if (typeof a !== 'string' || typeof b !== 'string') return Infinity;
-  const m = a.length;
-  const n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0) as number[]);
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
-    }
-  }
-  return dp[m][n];
-}
-
-function findClosestField(fieldName: string, validFields: string[]): string | null {
-  let bestMatch: string | null = null;
-  let bestDist = Infinity;
-  for (const valid of validFields) {
-    const dist = levenshteinDistance(fieldName.toLowerCase(), valid.toLowerCase());
-    if (dist < bestDist) { bestDist = dist; bestMatch = valid; }
-  }
-  const maxAllowed = Math.max(3, Math.floor(fieldName.length * 0.5));
-  return bestMatch && bestDist > 0 && bestDist <= maxAllowed ? bestMatch : null;
-}
-
-function findCaseMismatch(fieldName: string, validFields: string[]): string | null {
-  for (const valid of validFields) {
-    if (typeof valid === 'string' && valid.toLowerCase() === fieldName.toLowerCase() && valid !== fieldName) return valid;
-  }
-  return null;
-}
-
-const NUMERIC_COERCION_FUNCTIONS = new Set(['parseInt', 'parseFloat', 'Number']);
-
-/** Common DOM/React/JS properties that should never be validated as entity fields */
-const NON_ENTITY_PROPERTIES = new Set([
-  // DOM event properties
-  'target', 'currentTarget', 'preventDefault', 'stopPropagation', 'nativeEvent',
-  'type', 'bubbles', 'cancelable', 'defaultPrevented', 'eventPhase', 'isTrusted',
-  // DOM element properties
-  'value', 'checked', 'selectedIndex', 'innerHTML', 'textContent', 'className',
-  'style', 'classList', 'dataset', 'children', 'parentNode', 'parentElement',
-  'offsetWidth', 'offsetHeight', 'scrollTop', 'scrollLeft', 'clientWidth', 'clientHeight',
-  // React/JS common
-  'current', 'then', 'catch', 'finally', 'prototype', 'constructor', 'length',
-  'map', 'filter', 'reduce', 'forEach', 'find', 'some', 'every', 'includes',
-  'push', 'pop', 'shift', 'unshift', 'splice', 'slice', 'concat', 'join',
-  'keys', 'values', 'entries', 'toString', 'valueOf', 'hasOwnProperty',
-]);
 
 /**
  * Looks up a variable's TypeInfo from the TypeContext, including scoped lookups.
@@ -280,7 +226,7 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
         return;
       }
 
-      const closest = findClosestField(propertyName, validFields);
+      const closest = findClosestMatch(propertyName, validFields);
       const preview = validFields.slice(0, 10).join(', ');
       const more = validFields.length > 10 ? ` and ${validFields.length - 10} more` : '';
 

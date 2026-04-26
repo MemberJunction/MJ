@@ -1,63 +1,9 @@
-import _traverse, { NodePath } from '@babel/traverse';
-type TraverseModule = typeof _traverse & { default?: typeof _traverse };
-const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
+import { traverse, NodePath, extractRunQueryNamesFromCode } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
-import * as parser from '@babel/parser';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-
-/**
- * Parse child component code and extract QueryName values from RunQuery calls.
- * Uses AST analysis to avoid false positives from comments or string literals.
- */
-function extractRunQueryNamesFromCode(code: string): Set<string> {
-  const queryNames = new Set<string>();
-  try {
-    const ast = parser.parse(code, {
-      sourceType: 'module',
-      plugins: ['jsx', 'typescript'],
-      errorRecovery: true,
-    });
-    traverse(ast, {
-      CallExpression(path: NodePath<t.CallExpression>) {
-        // Match utilities.rq.RunQuery(...) or rq.RunQuery(...)
-        const callee = path.node.callee;
-        const isRunQuery =
-          (t.isMemberExpression(callee) &&
-            t.isMemberExpression(callee.object) &&
-            t.isIdentifier(callee.object.object) &&
-            callee.object.object.name === 'utilities' &&
-            t.isIdentifier(callee.object.property) &&
-            callee.object.property.name === 'rq' &&
-            t.isIdentifier(callee.property) &&
-            callee.property.name === 'RunQuery') ||
-          (t.isMemberExpression(callee) &&
-            t.isIdentifier(callee.object) &&
-            callee.object.name === 'rq' &&
-            t.isIdentifier(callee.property) &&
-            callee.property.name === 'RunQuery');
-
-        if (!isRunQuery) return;
-
-        // Extract QueryName from the first argument (object literal)
-        const arg = path.node.arguments[0];
-        if (t.isObjectExpression(arg)) {
-          for (const prop of arg.properties) {
-            if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) &&
-                prop.key.name === 'QueryName' && t.isStringLiteral(prop.value)) {
-              queryNames.add(prop.value.value);
-            }
-          }
-        }
-      },
-    });
-  } catch {
-    // If parsing fails, return empty set — can't validate this child
-  }
-  return queryNames;
-}
 
 /**
  * Rule: required-queries-not-called
