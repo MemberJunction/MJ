@@ -34,10 +34,10 @@
             <span>{{row.FirstColValue}}</span>
             @if (EditMode !== 'None'){
               @if (!row.JoinExists) {
-                <button mjButton class="cellButton" (click)="AddJoinEntityRecord(row)"><span class="fa-solid fa-plus"></span></button>
+                <button mjButton class="cellButton" aria-label="Add join record" title="Add join record" (click)="AddJoinEntityRecord(row)"><span class="fa-solid fa-plus"></span></button>
               }
               @else {
-              <button mjButton class="cellButton" (click)="RemoveJoinEntityRecord(row)"><span class="fa-solid fa-minus"></span></button>
+              <button mjButton class="cellButton" aria-label="Remove join record" title="Remove join record" (click)="RemoveJoinEntityRecord(row)"><span class="fa-solid fa-minus"></span></button>
             }
           }
         </td>

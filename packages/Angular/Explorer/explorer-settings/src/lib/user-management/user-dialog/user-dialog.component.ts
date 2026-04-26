@@ -223,35 +223,34 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
     try {
       // Get current role IDs from existing UserRole entities
       const existingRoleIds = new Set(this.existingUserRoles.map(ur => ur.RoleID));
-      
+
       // Determine roles to add and remove
       const rolesToAdd = Array.from(this.selectedRoleIds).filter(roleId => !existingRoleIds.has(roleId));
       const rolesToRemove = this.existingUserRoles.filter(userRole => !this.selectedRoleIds.has(userRole.RoleID));
-      
-      // Remove unselected roles
-      for (const userRole of rolesToRemove) {
-        try {
-          await userRole.Delete();
-        } catch (error) {
-          console.warn('Failed to remove role:', userRole.RoleID, error);
-        }
+
+      if (rolesToAdd.length === 0 && rolesToRemove.length === 0) {
+        return;
       }
-      
-      // Add new selected roles
+
+      // Batch all role deletes and adds into one transactional GraphQL call
+      const tg = await this.metadata.CreateTransactionGroup();
+
+      for (const userRole of rolesToRemove) {
+        userRole.TransactionGroup = tg;
+        await userRole.Delete();
+      }
+
       for (const roleId of rolesToAdd) {
-        try {
-          const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
-          userRole.NewRecord();
-          userRole.UserID = userId;
-          userRole.RoleID = roleId;
-          
-          const saveResult = await userRole.Save();
-          if (!saveResult) {
-            console.warn('Failed to assign role:', roleId, userRole.LatestResult?.Message);
-          }
-        } catch (error) {
-          console.warn('Failed to assign role:', roleId, error);
-        }
+        const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
+        userRole.NewRecord();
+        userRole.UserID = userId;
+        userRole.RoleID = roleId;
+        userRole.TransactionGroup = tg;
+        await userRole.Save();
+      }
+
+      if (!await tg.Submit()) {
+        throw new Error('Failed to update user roles — all changes have been rolled back');
       }
     } catch (error) {
       console.error('Error updating user roles:', error);

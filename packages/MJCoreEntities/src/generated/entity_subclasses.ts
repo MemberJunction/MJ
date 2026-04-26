@@ -1429,7 +1429,7 @@ export const MJAIAgentExampleSchema = z.object({
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Internal comments about this example, not included in agent context injection.`),
-    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Pending'), z.literal('Revoked')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -1437,6 +1437,7 @@ export const MJAIAgentExampleSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Active
+    *   * Archived
     *   * Pending
     *   * Revoked
         * * Description: Status of the example: Pending (awaiting review), Active (in use), or Revoked (disabled).`),
@@ -1821,7 +1822,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Internal comments about this note, not included in agent context injection.`),
-    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Pending'), z.literal('Revoked')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -1829,6 +1830,7 @@ export const MJAIAgentNoteSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Active
+    *   * Archived
     *   * Pending
     *   * Revoked
         * * Description: Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).`),
@@ -1899,6 +1901,40 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Expires At
         * * SQL Data Type: datetimeoffset
         * * Description: Optional expiration timestamp. Notes past this date are candidates for archival. NULL means no expiration.`),
+    ConsolidatedIntoNoteID: z.string().nullable().describe(`
+        * * Field Name: ConsolidatedIntoNoteID
+        * * Display Name: Consolidated Into Note ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
+        * * Description: Self-referential FK. Points to the consolidated note that replaced this one.`),
+    ConsolidationCount: z.number().describe(`
+        * * Field Name: ConsolidationCount
+        * * Display Name: Consolidation Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Re-summarization depth. 0=raw, 1=first consolidation. Capped at 3.`),
+    DerivedFromNoteIDs: z.string().nullable().describe(`
+        * * Field Name: DerivedFromNoteIDs
+        * * Display Name: Derived From Note I Ds
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of source note IDs consolidated into this note.`),
+    ProtectionTier: z.union([z.literal('Ephemeral'), z.literal('Immutable'), z.literal('Protected'), z.literal('Standard')]).describe(`
+        * * Field Name: ProtectionTier
+        * * Display Name: Protection Tier
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Standard
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Ephemeral
+    *   * Immutable
+    *   * Protected
+    *   * Standard
+        * * Description: Protection level: Immutable, Protected, Standard, Ephemeral.`),
+    ImportanceScore: z.number().nullable().describe(`
+        * * Field Name: ImportanceScore
+        * * Display Name: Importance Score
+        * * SQL Data Type: decimal(5, 2)
+        * * Description: Composite importance score (0-10) from 7 signals.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -1935,6 +1971,14 @@ export const MJAIAgentNoteSchema = z.object({
         * * Field Name: PrimaryScopeEntity
         * * Display Name: Primary Scope Entity
         * * SQL Data Type: nvarchar(255)`),
+    ConsolidatedIntoNote: z.string().nullable().describe(`
+        * * Field Name: ConsolidatedIntoNote
+        * * Display Name: Consolidated Into Note
+        * * SQL Data Type: nvarchar(MAX)`),
+    RootConsolidatedIntoNoteID: z.string().nullable().describe(`
+        * * Field Name: RootConsolidatedIntoNoteID
+        * * Display Name: Root Consolidated Into Note ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type MJAIAgentNoteEntityType = z.infer<typeof MJAIAgentNoteSchema>;
@@ -2970,6 +3014,11 @@ each time the agent processes a prompt step.`),
         * * Display Name: External Reference ID
         * * SQL Data Type: nvarchar(200)
         * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -29651,14 +29700,15 @@ export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityTyp
     * * Value List Type: List
     * * Possible Values 
     *   * Active
+    *   * Archived
     *   * Pending
     *   * Revoked
     * * Description: Status of the example: Pending (awaiting review), Active (in use), or Revoked (disabled).
     */
-    get Status(): 'Active' | 'Pending' | 'Revoked' {
+    get Status(): 'Active' | 'Archived' | 'Pending' | 'Revoked' {
         return this.Get('Status');
     }
-    set Status(value: 'Active' | 'Pending' | 'Revoked') {
+    set Status(value: 'Active' | 'Archived' | 'Pending' | 'Revoked') {
         this.Set('Status', value);
     }
 
@@ -30609,14 +30659,15 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Active
+    *   * Archived
     *   * Pending
     *   * Revoked
     * * Description: Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).
     */
-    get Status(): 'Active' | 'Pending' | 'Revoked' {
+    get Status(): 'Active' | 'Archived' | 'Pending' | 'Revoked' {
         return this.Get('Status');
     }
-    set Status(value: 'Active' | 'Pending' | 'Revoked') {
+    set Status(value: 'Active' | 'Archived' | 'Pending' | 'Revoked') {
         this.Set('Status', value);
     }
 
@@ -30784,6 +30835,80 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     }
 
     /**
+    * * Field Name: ConsolidatedIntoNoteID
+    * * Display Name: Consolidated Into Note ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
+    * * Description: Self-referential FK. Points to the consolidated note that replaced this one.
+    */
+    get ConsolidatedIntoNoteID(): string | null {
+        return this.Get('ConsolidatedIntoNoteID');
+    }
+    set ConsolidatedIntoNoteID(value: string | null) {
+        this.Set('ConsolidatedIntoNoteID', value);
+    }
+
+    /**
+    * * Field Name: ConsolidationCount
+    * * Display Name: Consolidation Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Re-summarization depth. 0=raw, 1=first consolidation. Capped at 3.
+    */
+    get ConsolidationCount(): number {
+        return this.Get('ConsolidationCount');
+    }
+    set ConsolidationCount(value: number) {
+        this.Set('ConsolidationCount', value);
+    }
+
+    /**
+    * * Field Name: DerivedFromNoteIDs
+    * * Display Name: Derived From Note I Ds
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of source note IDs consolidated into this note.
+    */
+    get DerivedFromNoteIDs(): string | null {
+        return this.Get('DerivedFromNoteIDs');
+    }
+    set DerivedFromNoteIDs(value: string | null) {
+        this.Set('DerivedFromNoteIDs', value);
+    }
+
+    /**
+    * * Field Name: ProtectionTier
+    * * Display Name: Protection Tier
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Standard
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Ephemeral
+    *   * Immutable
+    *   * Protected
+    *   * Standard
+    * * Description: Protection level: Immutable, Protected, Standard, Ephemeral.
+    */
+    get ProtectionTier(): 'Ephemeral' | 'Immutable' | 'Protected' | 'Standard' {
+        return this.Get('ProtectionTier');
+    }
+    set ProtectionTier(value: 'Ephemeral' | 'Immutable' | 'Protected' | 'Standard') {
+        this.Set('ProtectionTier', value);
+    }
+
+    /**
+    * * Field Name: ImportanceScore
+    * * Display Name: Importance Score
+    * * SQL Data Type: decimal(5, 2)
+    * * Description: Composite importance score (0-10) from 7 signals.
+    */
+    get ImportanceScore(): number | null {
+        return this.Get('ImportanceScore');
+    }
+    set ImportanceScore(value: number | null) {
+        this.Set('ImportanceScore', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -30862,6 +30987,24 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     */
     get PrimaryScopeEntity(): string | null {
         return this.Get('PrimaryScopeEntity');
+    }
+
+    /**
+    * * Field Name: ConsolidatedIntoNote
+    * * Display Name: Consolidated Into Note
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ConsolidatedIntoNote(): string | null {
+        return this.Get('ConsolidatedIntoNote');
+    }
+
+    /**
+    * * Field Name: RootConsolidatedIntoNoteID
+    * * Display Name: Root Consolidated Into Note ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootConsolidatedIntoNoteID(): string | null {
+        return this.Get('RootConsolidatedIntoNoteID');
     }
 }
 
@@ -33642,6 +33785,19 @@ each time the agent processes a prompt step.
     }
     set ExternalReferenceID(value: string | null) {
         this.Set('ExternalReferenceID', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
     }
 
     /**

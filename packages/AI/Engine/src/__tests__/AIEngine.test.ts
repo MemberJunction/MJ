@@ -88,6 +88,11 @@ vi.mock('@memberjunction/global', () => ({
         }
     },
     RegisterClass: () => (target: unknown) => target,
+    UUIDsEqual: (a: string | null | undefined, b: string | null | undefined): boolean => {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        return a.trim().toUpperCase() === b.trim().toUpperCase();
+    },
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({}));
@@ -234,7 +239,48 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 // ---------------------------------------------------------------------------
 
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
+import type { NoteEmbeddingMetadata } from '../types/NoteMatchResult';
+import type { ExampleEmbeddingMetadata } from '../types/ExampleMatchResult';
 import { ChatMessageRole } from '@memberjunction/ai';
+
+// Minimal vector-service shape the Remove tests need. Kept local to the test file
+// so we don't couple to SimpleVectorService's full generic signature.
+interface TestVectorService {
+    RemoveVector(key: string): boolean;
+}
+
+// Subclass that exposes the protected filter composition methods for testing.
+// Using a subclass avoids `as unknown as` casts and keeps the test strongly typed.
+class TestableAIEngine extends AIEngine {
+    public invokeComposeNoteFilters(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
+    ): (metadata: NoteEmbeddingMetadata) => boolean {
+        return this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
+    }
+
+    public invokeComposeExampleFilters(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
+    ): (metadata: ExampleEmbeddingMetadata) => boolean {
+        return this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
+    }
+
+    // Test-only setters for the private vector service fields. Declared as `unknown`
+    // assignment targets through a typed bracket access into `this` so unit tests can
+    // inject a minimal mock without casting via `as unknown as`.
+    public setNoteVectorServiceForTest(service: TestVectorService | null): void {
+        (this as unknown as { _noteVectorService: TestVectorService | null })._noteVectorService = service;
+    }
+
+    public setExampleVectorServiceForTest(service: TestVectorService | null): void {
+        (this as unknown as { _exampleVectorService: TestVectorService | null })._exampleVectorService = service;
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -768,6 +814,170 @@ describe('AIEngine', () => {
 
             await expect(engine.FindSimilarAgentNotes('   '))
                 .rejects.toThrow('queryText cannot be empty');
+        });
+    });
+
+    // ======================================================================
+    // composeNoteFilters — scope-only filter.
+    //
+    // Status filtering is NOT performed here — the vector store is kept in sync
+    // with persisted Status by MJAIAgentNoteEntityServer.Save/Delete. Retrieval
+    // just scope-filters the vector hits. See composeNoteFilters() doc comment.
+    // ======================================================================
+
+    describe('composeNoteFilters', () => {
+        let testEngine: TestableAIEngine;
+
+        const buildNoteMetadata = (
+            id: string,
+            overrides: Partial<NoteEmbeddingMetadata> = {}
+        ): NoteEmbeddingMetadata => ({
+            id,
+            agentId: 'agent-1',
+            userId: null,
+            companyId: null,
+            type: 'Preference',
+            noteText: 'test note',
+            noteEntity: {} as never,
+            ...overrides,
+        });
+
+        beforeEach(() => {
+            testEngine = new TestableAIEngine();
+        });
+
+        it('should return true when no scope filters are set (accept everything)', () => {
+            const filter = testEngine.invokeComposeNoteFilters();
+            expect(filter(buildNoteMetadata('note-1'))).toBe(true);
+        });
+
+        it('should return true when agentId matches', () => {
+            const filter = testEngine.invokeComposeNoteFilters('agent-1');
+            expect(filter(buildNoteMetadata('note-1'))).toBe(true);
+        });
+
+        it('should return false when agentId does not match', () => {
+            const filter = testEngine.invokeComposeNoteFilters('different-agent');
+            expect(filter(buildNoteMetadata('note-1'))).toBe(false);
+        });
+
+        it('should compose with additionalFilter (accept path)', () => {
+            const acceptsPreference = (m: NoteEmbeddingMetadata) => m.type === 'Preference';
+            const filter = testEngine.invokeComposeNoteFilters('agent-1', undefined, undefined, acceptsPreference);
+            expect(filter(buildNoteMetadata('note-1'))).toBe(true);
+        });
+
+        it('should compose with additionalFilter (reject path)', () => {
+            const rejectsPreference = (m: NoteEmbeddingMetadata) => m.type === 'Constraint';
+            const filter = testEngine.invokeComposeNoteFilters('agent-1', undefined, undefined, rejectsPreference);
+            expect(filter(buildNoteMetadata('note-1'))).toBe(false);
+        });
+
+        it('should reject scope-matching note when additionalFilter returns false', () => {
+            const filter = testEngine.invokeComposeNoteFilters('agent-1', undefined, undefined, () => false);
+            expect(filter(buildNoteMetadata('note-1'))).toBe(false);
+        });
+    });
+
+    // ======================================================================
+    // composeExampleFilters — scope-only filter (mirrors composeNoteFilters).
+    //
+    // Status filtering happens write-side via MJAIAgentExampleEntityServer.
+    // Retrieval just scope-filters the vector hits.
+    // ======================================================================
+
+    describe('composeExampleFilters', () => {
+        let testEngine: TestableAIEngine;
+
+        const buildExampleMetadata = (
+            id: string,
+            overrides: Partial<ExampleEmbeddingMetadata> = {}
+        ): ExampleEmbeddingMetadata => ({
+            id,
+            agentId: 'agent-1',
+            userId: null,
+            companyId: null,
+            type: 'Positive',
+            exampleInput: 'test input',
+            exampleOutput: 'test output',
+            successScore: null,
+            exampleEntity: {} as never,
+            ...overrides,
+        });
+
+        beforeEach(() => {
+            testEngine = new TestableAIEngine();
+        });
+
+        it('should return true when no scope filters are set (accept everything)', () => {
+            const filter = testEngine.invokeComposeExampleFilters();
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(true);
+        });
+
+        it('should return true when agentId matches', () => {
+            const filter = testEngine.invokeComposeExampleFilters('agent-1');
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(true);
+        });
+
+        it('should return false when agentId does not match', () => {
+            const filter = testEngine.invokeComposeExampleFilters('different-agent');
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(false);
+        });
+
+        it('should compose with additionalFilter (accept path)', () => {
+            const acceptsPositive = (m: ExampleEmbeddingMetadata) => m.type === 'Positive';
+            const filter = testEngine.invokeComposeExampleFilters('agent-1', undefined, undefined, acceptsPositive);
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(true);
+        });
+
+        it('should compose with additionalFilter (reject path)', () => {
+            const rejectsPositive = (m: ExampleEmbeddingMetadata) => m.type === 'Negative';
+            const filter = testEngine.invokeComposeExampleFilters('agent-1', undefined, undefined, rejectsPositive);
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(false);
+        });
+
+        it('should reject scope-matching example when additionalFilter returns false', () => {
+            const filter = testEngine.invokeComposeExampleFilters('agent-1', undefined, undefined, () => false);
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(false);
+        });
+    });
+
+    // ======================================================================
+    // RemoveSingleNoteEmbedding / RemoveSingleExampleEmbedding —
+    // write-side invariant maintenance.
+    // ======================================================================
+
+    describe('RemoveSingleNoteEmbedding', () => {
+        it('should no-op safely when the vector service is not initialized', () => {
+            const engine2 = new TestableAIEngine();
+            engine2.setNoteVectorServiceForTest(null);
+            expect(() => engine2.RemoveSingleNoteEmbedding('note-1')).not.toThrow();
+        });
+
+        it('should delegate to SimpleVectorService.RemoveVector with the note ID', () => {
+            const engine2 = new TestableAIEngine();
+            const removeSpy = vi.fn().mockReturnValue(true);
+            engine2.setNoteVectorServiceForTest({ RemoveVector: removeSpy });
+            engine2.RemoveSingleNoteEmbedding('note-42');
+            expect(removeSpy).toHaveBeenCalledTimes(1);
+            expect(removeSpy).toHaveBeenCalledWith('note-42');
+        });
+    });
+
+    describe('RemoveSingleExampleEmbedding', () => {
+        it('should no-op safely when the vector service is not initialized', () => {
+            const engine2 = new TestableAIEngine();
+            engine2.setExampleVectorServiceForTest(null);
+            expect(() => engine2.RemoveSingleExampleEmbedding('ex-1')).not.toThrow();
+        });
+
+        it('should delegate to SimpleVectorService.RemoveVector with the example ID', () => {
+            const engine2 = new TestableAIEngine();
+            const removeSpy = vi.fn().mockReturnValue(true);
+            engine2.setExampleVectorServiceForTest({ RemoveVector: removeSpy });
+            engine2.RemoveSingleExampleEmbedding('ex-42');
+            expect(removeSpy).toHaveBeenCalledTimes(1);
+            expect(removeSpy).toHaveBeenCalledWith('ex-42');
         });
     });
 
