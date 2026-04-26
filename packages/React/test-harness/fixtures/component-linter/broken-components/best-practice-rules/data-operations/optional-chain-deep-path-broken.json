@@ -3,7 +3,7 @@
   "type": "generic",
   "title": "Optional Chain Deep Path - Broken Pattern",
   "description": "Tests optional chaining on deep path with invalid nested field (may fail until linter refactor)",
-  "code": "function OptionalChainDeepPathBroken({ utilities }) {\n  const [orderTotal, setOrderTotal] = useState(0);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Order Details',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        // ❌ Accessing nested AccountInfo.CompanyName that doesn't exist\n        const total = result.Results?.[0]?.AccountInfo?.CompanyName || 0;\n        setOrderTotal(total);\n      }\n    }\n    loadData();\n  }, []);\n\n  return <div>Total: {orderTotal}</div>;\n}",
+  "code": "function OptionalChainDeepPathBroken({ utilities }) {\n  const [actionDetail, setActionDetail] = useState('');\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Action Log Details',\n        CategoryPath: 'Admin/Reports'\n      });\n      if (result?.Success) {\n        // ❌ Accessing nested ExecutionContext.Environment that doesn't exist\n        const detail = result.Results?.[0]?.ExecutionContext?.Environment || '';\n        setActionDetail(detail);\n      }\n    }\n    loadData();\n  }, []);\n\n  return <div>Detail: {actionDetail}</div>;\n}",
   "location": "embedded",
   "namespace": "test/fixtures/type-rules",
   "version": "1.0.0",
@@ -11,9 +11,14 @@
   "status": "Active",
   "dataRequirements": {
     "queries": [{
-      "name": "Order Details",
-      "categoryPath": "Sales/Reports",
-      "fields": ["OrderID", "OrderDate", "TotalAmount", "CustomerName"]
+      "name": "Action Log Details",
+      "categoryPath": "Admin/Reports",
+      "fields": [
+        {"name": "ActionID", "type": "uniqueidentifier"},
+        {"name": "Action", "type": "nvarchar"},
+        {"name": "StartedAt", "type": "datetimeoffset"},
+        {"name": "ResultCode", "type": "nvarchar"}
+      ]
     }]
   }
 }
