@@ -98,15 +98,22 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      * Controls whether loaded rows are returned as full BaseEntity subclass instances
      * ('entity_object') or plain JavaScript objects ('simple').
      *
-     * - 'simple' (default): Skips BaseEntity construction, class factory lookup, and
-     *   change-tracking setup. Rows are plain objects with typed field values. Much faster
-     *   for read-only configuration data that engines never mutate via .Save()/.Delete().
-     * - 'entity_object': Full BaseEntity subclass instances with ORM capabilities.
-     *   Use only when the engine needs to call .Save(), .Delete(), or access BaseEntity
-     *   methods on the loaded rows.
+     * - 'entity_object': Full BaseEntity subclass instances with ORM capabilities
+     *   (.Save(), .Delete(), validation, dirty-tracking). Required for engines whose
+     *   data participates in immediate-mutation cache updates on entity save/delete events.
+     * - 'simple': Skips BaseEntity construction and class-factory lookup. Rows are plain
+     *   objects with typed field values. Much faster for read-only configuration data
+     *   that engines never mutate. NOTE: configs using 'simple' should be considered
+     *   read-only — the immediate-mutation path operates on BaseEntity arrays and is
+     *   not type-compatible with plain-object arrays.
      *
-     * If left undefined, the engine's EngineDefaultResultType getter determines the default.
-     * Do NOT initialize to 'entity_object' here — that would prevent the engine-level override from working.
+     * Resolution order when this property is left undefined:
+     *   1. The engine subclass's EngineDefaultResultType getter (override per engine)
+     *   2. The base getter, which returns 'entity_object'
+     *
+     * In other words, the effective default is 'entity_object' — leaving this undefined
+     * preserves the historical behavior. Do NOT initialize this field to a literal value
+     * here; it must remain undefined so the engine-level default can take effect.
      */
     ResultType?: 'simple' | 'entity_object';
 
@@ -910,7 +917,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Immediate mutations are only safe when:
      * 1. The config has no Filter (no server-side filtering that might exclude the entity)
      * 2. The config has no OrderBy (no server-side ordering that would need to be maintained)
-     * 3. The subclass has not overridden AdditionalLoading (no post-processing that depends on full data)
+     * 3. The config does not use ResultType='simple' (immediate-mutation pushes BaseEntity
+     *    instances; arrays loaded as plain objects would become type-mixed)
+     * 4. The subclass has not overridden AdditionalLoading (no post-processing that depends on full data)
      *
      * @param config - The configuration to check
      * @param skipAdditionalLoadingCheck - When true, skips the AdditionalLoading override check.
@@ -930,6 +939,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // - For creates: we'd need to insert at the correct position
         // - For updates: the entity might need to move to a different position
         if (config.OrderBy) {
+            return false;
+        }
+
+        // applyImmediateMutation pushes/replaces with the BaseEntity instance from the
+        // event payload. If the config loaded as 'simple', the property holds plain JS
+        // objects — mixing in a BaseEntity would create a heterogeneous array. Check the
+        // effective ResultType (config override OR engine-wide default) and force a full
+        // refresh in the simple case so the array stays homogeneous and respects the
+        // configured ResultType.
+        const effectiveResultType = config.ResultType || this.EngineDefaultResultType;
+        if (effectiveResultType === 'simple') {
             return false;
         }
 

@@ -2543,6 +2543,59 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
     }
 
+    /**
+     * Synchronous pre-validation of cached metadata before engine startup.
+     *
+     * This is the deterministic counterpart to {@link backgroundValidateAndRefresh}: instead
+     * of letting engines fast-start against potentially-stale cached data and self-healing
+     * a few seconds later, we make one timestamp round-trip up front. The flow:
+     *
+     *   - **Cached metadata is current** → keep `FastStartupMode` enabled. Engines trust
+     *     their local IndexedDB caches without per-view smart-cache-check round-trips,
+     *     and we have just verified at the framework metadata level that nothing has
+     *     drifted since this client last loaded.
+     *   - **Cached metadata is stale** → refresh framework metadata in place, then call
+     *     {@link ProviderBase.ConsumeFastStartupMode} to disable fast-start. Engines
+     *     proceed through the normal smart-cache-check path so each per-view cache is
+     *     re-validated against the server.
+     *
+     * Cost on the warm-current path is one batched timestamp fetch (~50–200 ms depending
+     * on RTT). On the warm-stale path we additionally pay the full metadata fetch but
+     * avoid serving stale data to the UI in the first place.
+     *
+     * Caller contract: invoke this before `StartupManager.Startup()` so engines see the
+     * correct fast-start state from their first `RunViews()` call. Failures here are
+     * non-fatal — the engine layer's smart-cache-check + event-based invalidation
+     * remain as a safety net.
+     */
+    public async preValidateAndRefresh(providerToUse?: IMetadataProvider): Promise<void> {
+        try {
+            const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
+            if (needsRefresh) {
+                LogStatusEx({ message: `⚡ [Fast-Start] Pre-validation: metadata is stale — refreshing before engine startup and disabling fast-start`, verboseOnly: false });
+                const start = Date.now();
+                const res = await this.GetAllMetadata(providerToUse, false);
+                const elapsed = Date.now() - start;
+                if (res) {
+                    this.UpdateLocalMetadata(res);
+                    this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps;
+                    await this.SaveLocalMetadataToStorage();
+                    LogStatusEx({ message: `⚡ [Fast-Start] Pre-validation refresh complete (${elapsed}ms) — engines will smart-cache-check`, verboseOnly: false });
+                }
+                // Force engines through the normal smart-cache-check path. This re-validates
+                // each per-view IndexedDB cache against the server rather than trusting it.
+                ProviderBase.ConsumeFastStartupMode();
+            } else {
+                LogStatusEx({ message: `⚡ [Fast-Start] Pre-validation: metadata is current — fast-start engaged`, verboseOnly: false });
+            }
+        } catch (e) {
+            LogError(`[Fast-Start] Pre-validation failed: ${e instanceof Error ? e.message : String(e)} — falling back to smart-cache-check`);
+            // On failure, disable fast-start so engines validate per-view rather than
+            // trusting potentially-stale cache against a known-unknown server state.
+            ProviderBase.ConsumeFastStartupMode();
+        }
+    }
+
     protected CloneAllMetadata(toClone: AllMetadata): AllMetadata {
         // we need to create a copy but can't do it the standard way becuase we need object instances
         // for various things like EntityInfo
