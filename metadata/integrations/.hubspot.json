@@ -8,7 +8,7 @@
       "NavigationBaseURL": "https://app.hubspot.com",
       "BatchMaxRequestCount": 100,
       "BatchRequestWaitTime": 250,
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=OAuth2 Client Credentials",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key",
       "Icon": "fa-brands fa-hubspot"
     },
     "relatedEntities": {
