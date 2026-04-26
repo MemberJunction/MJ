@@ -1291,7 +1291,23 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
-     * Extracts the maximum SystemModstamp value from a batch of records.
+     * Extracts the maximum SystemModstamp value from a batch of records and
+     * advances it by 1ms so the next sync's `WHERE SystemModstamp >= <wm>`
+     * filter excludes the boundary cluster.
+     *
+     * Why advance: the SOQL filter uses `>=` (not `>`) on purpose so we don't
+     * drop records that share the modstamp instant of the previous max. But
+     * if the saved watermark equals the new max, every subsequent incremental
+     * re-pulls the same boundary cluster forever and the watermark plateaus.
+     * Observed in the wild: 1,800 EmailMessage records bulk-imported with
+     * identical SystemModstamp re-fetched on every run with `Updated` count
+     * never decreasing.
+     *
+     * SF's SystemModstamp is millisecond-precision, so adding 1ms cannot
+     * skip a real record — there is nothing scheduled between `max` and
+     * `max + 1ms`. The connector returns the advanced value as
+     * `NewWatermarkValue`; the engine persists it; the next run picks up
+     * cleanly past the cluster.
      */
     private ExtractMaxWatermark(records: unknown[]): string | null {
         let maxTimestamp: string | null = null;
@@ -1304,7 +1320,10 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
             }
         }
 
-        return maxTimestamp;
+        if (!maxTimestamp) return null;
+        const parsed = new Date(maxTimestamp);
+        if (Number.isNaN(parsed.getTime())) return maxTimestamp;
+        return new Date(parsed.getTime() + 1).toISOString();
     }
 
     /**
