@@ -35,6 +35,36 @@ const viewingSystemInfoSchema = z.object({
   enableSmartFilters: z.boolean().optional(),
 });
 
+/**
+ * Tunable knobs for the BaseAgent built-in `_searchActions` meta-tool
+ * (semantic action search for agents with large action sets).
+ *
+ * These map 1:1 to the static properties on
+ * `ActionSearchConfig` (exported from `@memberjunction/ai-agents`).
+ * `@memberjunction/server-bootstrap` reads them from `configInfo` at
+ * `createMJServer()` time and applies them to `ActionSearchConfig` so any
+ * value set here in `mj.config.cjs` actually takes effect at runtime.
+ *
+ * The `_searchActions` tool name itself is intentionally NOT configurable
+ * — it's a wire-protocol identifier the LLM is told about and the runtime
+ * intercepts; per-deployment renames would break cross-deployment
+ * consistency for the same agent definition.
+ */
+const actionSearchSettingsSchema = z.object({
+  /** Action-count above which the prompt switches to summary + meta-tool. Default: 25. */
+  threshold: z.number().int().nonnegative().optional(),
+  /** Fallback topK when the LLM omits it from the search call. Default: 10. */
+  defaultTopK: z.number().int().positive().optional(),
+  /** Hard upper bound on topK after clamping. Default: 50. */
+  maxTopK: z.number().int().positive().optional(),
+  /** Cosine similarity floor for `_searchActions` hits. Default: 0.3. */
+  minSimilarity: z.number().min(0).max(1).optional(),
+});
+
+const agentSettingsSchema = z.object({
+  actionSearch: actionSearchSettingsSchema.optional(),
+});
+
 const restApiOptionsSchema = z.object({
   enabled: z.boolean().default(true),
   includeEntities: z.array(z.string()).optional(),
@@ -226,6 +256,7 @@ const configInfoSchema = z.object({
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
+  agentSettings: agentSettingsSchema.optional(),
   askSkip: askSkipInfoSchema.optional(),
   sqlLogging: sqlLoggingSchema.optional(),
   authProviders: z.array(authProviderSchema).optional(),
@@ -273,6 +304,8 @@ export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
 export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;
+export type AgentSettings = z.infer<typeof agentSettingsSchema>;
+export type ActionSearchSettings = z.infer<typeof actionSearchSettingsSchema>;
 export type AskSkipInfo = z.infer<typeof askSkipInfoSchema>;
 export type SqlLoggingOptions = z.infer<typeof sqlLoggingOptionsSchema>;
 export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;

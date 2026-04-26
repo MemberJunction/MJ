@@ -14,8 +14,33 @@
  * See BaseServerMiddleware for details.
  */
 
-import { serve, MJServerOptions } from '@memberjunction/server';
+import { serve, MJServerOptions, configInfo } from '@memberjunction/server';
+import { ActionSearchConfig } from '@memberjunction/ai-agents';
 import { cosmiconfigSync } from 'cosmiconfig';
+
+/**
+ * Apply any `agentSettings.actionSearch` overrides from `mj.config.cjs` to the
+ * static `ActionSearchConfig` knobs on `@memberjunction/ai-agents`. Done here
+ * (not inside `ai-agents` itself) because the library shouldn't know it's
+ * running inside an MJ-Server-bootstrapped app — same library can be consumed
+ * from MJCLI / custom Node apps / tests, each with their own config-source.
+ *
+ * Defaults from `ActionSearchConfig` are preserved when a knob is absent from
+ * the user's config.
+ */
+function applyAgentSettingsFromConfig(): void {
+  const cfg = configInfo.agentSettings?.actionSearch;
+  if (!cfg) return;
+  if (cfg.threshold != null) ActionSearchConfig.Threshold = cfg.threshold;
+  if (cfg.defaultTopK != null) ActionSearchConfig.DefaultTopK = cfg.defaultTopK;
+  if (cfg.maxTopK != null) ActionSearchConfig.MaxTopK = cfg.maxTopK;
+  if (cfg.minSimilarity != null) ActionSearchConfig.MinSimilarity = cfg.minSimilarity;
+  console.log(
+    `[ServerBootstrap] Applied agentSettings.actionSearch overrides ` +
+    `(threshold=${ActionSearchConfig.Threshold}, defaultTopK=${ActionSearchConfig.DefaultTopK}, ` +
+    `maxTopK=${ActionSearchConfig.MaxTopK}, minSimilarity=${ActionSearchConfig.MinSimilarity}).`
+  );
+}
 
 /**
  * Configuration options for creating an MJ Server
@@ -144,6 +169,12 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
     hasUserConfig: configSearchResult && !configSearchResult.isEmpty,
     configFilePath: configSearchResult?.filepath
   };
+
+  // Apply any agent-runtime config overrides from mj.config.cjs (e.g.
+  // agentSettings.actionSearch.threshold) to the corresponding static knobs
+  // on @memberjunction/ai-agents. Done here rather than inside ai-agents
+  // itself because the library is config-source-agnostic by design.
+  applyAgentSettingsFromConfig();
 
   // Discover and load generated packages automatically
   // This triggers their @RegisterClass decorators to register entities, actions, etc.
