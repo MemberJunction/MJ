@@ -1,5 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, LogStatus } from "@memberjunction/core";
-import { RegisterForStartup } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo, LogStatus } from "@memberjunction/core";
 import { MJCountryEntity, MJStateProvinceEntity } from "../generated/entity_subclasses";
 
 /**
@@ -38,17 +37,28 @@ export interface GeoPointResolution {
 
 /**
  * GeoDataEngine provides cached, in-memory access to Country and StateProvince
- * reference data. Loaded once at startup via @RegisterForStartup, all lookups
- * are O(1) via pre-built Maps keyed by common lookup patterns.
+ * reference data, plus point-in-polygon resolution against country/state boundaries.
+ * All lookups are O(1) via pre-built Maps keyed by common lookup patterns.
+ *
+ * **Loaded on demand**, not at app startup. The dataset is large (~3,000+ rows
+ * with BoundaryGeoJSON blobs) and parsing the geometry takes ~3–4s synchronously,
+ * so we only pay that cost when geocoding or geo lookups are actually needed.
+ *
+ * **Caller contract**: `await GeoDataEngine.Instance.Config(...)` once before
+ * calling any sync lookup method. `Config()` is idempotent — concurrent calls
+ * dedup against a single in-flight load (see `BaseEngine.Load`), and repeated
+ * calls after load complete return immediately. If no entity in the tenant has
+ * `SupportsGeoCoding=1`, `Config()` returns early and lookups will return
+ * `undefined` — callers already handle the not-found case so the empty state
+ * is safe to leave in place.
  *
  * Usage:
  * ```typescript
- * const engine = GeoDataEngine.Instance;
- * const country = engine.GetCountryByISO2('US');
- * const state = engine.GetStateByCode('US-country-id', 'CO');
+ * await GeoDataEngine.Instance.Config(false, contextUser);
+ * const country = GeoDataEngine.Instance.GetCountryByISO2('US');
+ * const state = GeoDataEngine.Instance.GetStateByCode(country.ID, 'CO');
  * ```
  */
-@RegisterForStartup()
 export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
     public static get Instance(): GeoDataEngine {
         return super.getInstance<GeoDataEngine>();
@@ -73,6 +83,16 @@ export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
     private _stateGeometriesByCountry = new Map<string, CachedGeometry[]>();
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        // Skip the load entirely if no entity in this tenant has SupportsGeoCoding=1.
+        // The country/state-province dataset is large (~3,000+ rows with BoundaryGeoJSON
+        // blobs) and parsing the geometry for point-in-polygon takes ~3-4s synchronously.
+        // None of that work is useful unless at least one entity opts into geocoding.
+        const entities = (provider ?? Metadata.Provider)?.Entities;
+        if (entities && !entities.some(e => e.SupportsGeoCoding)) {
+            LogStatus('GeoDataEngine: no entities have SupportsGeoCoding=1 — skipping country/state-province load and geometry parsing');
+            return;
+        }
+
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
