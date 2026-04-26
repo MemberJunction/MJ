@@ -3,9 +3,61 @@ type TraverseModule = typeof _traverse & { default?: typeof _traverse };
 const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
+import * as parser from '@babel/parser';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+
+/**
+ * Parse child component code and extract QueryName values from RunQuery calls.
+ * Uses AST analysis to avoid false positives from comments or string literals.
+ */
+function extractRunQueryNamesFromCode(code: string): Set<string> {
+  const queryNames = new Set<string>();
+  try {
+    const ast = parser.parse(code, {
+      sourceType: 'module',
+      plugins: ['jsx', 'typescript'],
+      errorRecovery: true,
+    });
+    traverse(ast, {
+      CallExpression(path: NodePath<t.CallExpression>) {
+        // Match utilities.rq.RunQuery(...) or rq.RunQuery(...)
+        const callee = path.node.callee;
+        const isRunQuery =
+          (t.isMemberExpression(callee) &&
+            t.isMemberExpression(callee.object) &&
+            t.isIdentifier(callee.object.object) &&
+            callee.object.object.name === 'utilities' &&
+            t.isIdentifier(callee.object.property) &&
+            callee.object.property.name === 'rq' &&
+            t.isIdentifier(callee.property) &&
+            callee.property.name === 'RunQuery') ||
+          (t.isMemberExpression(callee) &&
+            t.isIdentifier(callee.object) &&
+            callee.object.name === 'rq' &&
+            t.isIdentifier(callee.property) &&
+            callee.property.name === 'RunQuery');
+
+        if (!isRunQuery) return;
+
+        // Extract QueryName from the first argument (object literal)
+        const arg = path.node.arguments[0];
+        if (t.isObjectExpression(arg)) {
+          for (const prop of arg.properties) {
+            if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) &&
+                prop.key.name === 'QueryName' && t.isStringLiteral(prop.value)) {
+              queryNames.add(prop.value.value);
+            }
+          }
+        }
+      },
+    });
+  } catch {
+    // If parsing fails, return empty set — can't validate this child
+  }
+  return queryNames;
+}
 
 /**
  * Rule: required-queries-not-called
@@ -44,14 +96,40 @@ export class RequiredQueriesNotCalledRule extends BaseLintRule {
     // In hierarchical components, the root's dataRequirements contains the complete
     // set of queries for the entire tree, but child components can own subsets and
     // call RunQuery themselves. Collect query names claimed by child dependencies
-    // so we only require the root to call RunQuery for unclaimed queries.
+    // via two methods:
+    //   1. Child spec has dataRequirements.queries (explicit delegation)
+    //   2. Child spec has code that contains RunQuery + the query name (implicit delegation)
     const childClaimedQueries = new Set<string>();
     if (componentSpec!.dependencies) {
       for (const dep of componentSpec!.dependencies) {
+        // Method 1: Explicit dataRequirements on child
         if (dep.dataRequirements?.queries) {
           for (const q of dep.dataRequirements.queries) {
             if (q.name) {
               childClaimedQueries.add(q.name);
+            }
+          }
+        }
+
+        // Method 2: Parse child code AST and extract actual RunQuery QueryName values
+        if (dep.code) {
+          for (const name of extractRunQueryNamesFromCode(dep.code)) {
+            childClaimedQueries.add(name);
+          }
+        }
+
+        // Recurse into nested dependencies (grandchildren)
+        if (dep.dependencies) {
+          for (const grandchild of dep.dependencies) {
+            if (grandchild.dataRequirements?.queries) {
+              for (const q of grandchild.dataRequirements.queries) {
+                if (q.name) childClaimedQueries.add(q.name);
+              }
+            }
+            if (grandchild.code) {
+              for (const name of extractRunQueryNamesFromCode(grandchild.code)) {
+                childClaimedQueries.add(name);
+              }
             }
           }
         }
