@@ -46,6 +46,8 @@ export type { VersionCheckResult } from './dependency/version-checker.js';
 export {
     FetchManifestFromGitHub,
     ListGitHubReleases,
+    ListGitHubTags,
+    ValidateGitHubTag,
     DownloadMigrations,
     GetLatestVersion,
     ParseGitHubUrl
@@ -64,7 +66,7 @@ export type { SchemaOperationResult } from './install/schema-manager.js';
 export { RunAppMigrations } from './install/migration-runner.js';
 export type { MigrationRunOptions, MigrationRunResult, FlywayDatabaseConfig, SkywayDatabaseConfig } from './install/migration-runner.js';
 
-export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, detectPackageManager, hasPnpmCatalog } from './install/package-manager.js';
+export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, BumpPrefixedDependencies, detectPackageManager, hasPnpmCatalog } from './install/package-manager.js';
 export type { PackageManagerOptions, PackageOperationResult, PackageManagerType, VersionStrategy, WorkspaceTarget } from './install/package-manager.js';
 
 export {
