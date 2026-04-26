@@ -616,7 +616,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
     /**
      * Updates the vector service to the latest vector containd within the specified agent note that is passed in
-     * @param note 
+     * @param note
      */
     public AddOrUpdateSingleNoteEmbedding(note: MJAIAgentNoteEntity) {
         if (this._noteVectorService) {
@@ -625,6 +625,17 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         else {
             throw new Error('note vector service not initialized, error state')
         }
+    }
+
+    /**
+     * Drops a note from the in-memory vector service. Called by the server-side entity
+     * subclass when a note is saved with a non-Active Status or is deleted, so subsequent
+     * FindSimilarAgentNotes calls cannot return it. Silently no-ops if the vector service
+     * isn't initialized yet (e.g., during early startup before Config has run).
+     * @param noteId
+     */
+    public RemoveSingleNoteEmbedding(noteId: string): void {
+        this._noteVectorService?.RemoveVector(noteId);
     }
 
     /**
@@ -656,6 +667,17 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         else {
             throw new Error('example vector service not initialized, error state')
         }
+    }
+
+    /**
+     * Drops an example from the in-memory vector service. Called by the server-side entity
+     * subclass when an example is saved with a non-Active Status or is deleted, so subsequent
+     * FindSimilarAgentExamples calls cannot return it. Silently no-ops if the vector service
+     * isn't initialized yet (e.g., during early startup before Config has run).
+     * @param exampleId
+     */
+    public RemoveSingleExampleEmbedding(exampleId: string): void {
+        this._exampleVectorService?.RemoveVector(exampleId);
     }
 
     /**
@@ -992,28 +1014,37 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Compose base scope filters (agentId/userId/companyId) with an optional additional filter
      * into a single filter callback for use with FindNearest.
+     *
+     * Status filtering is NOT performed here. The invariant the retrieval path relies on is:
+     * `_noteVectorService` contains an entry for a note iff its persisted Status is `'Active'`.
+     * That invariant is maintained write-side by `MJAIAgentNoteEntityServer.Save()`, which calls
+     * `AddOrUpdateSingleNoteEmbedding` on Active saves and `RemoveSingleNoteEmbedding` on
+     * non-Active saves. Deletes are handled by the same subclass's `Delete()` override.
+     *
+     * This avoids a subtle bug the earlier Status-check-at-retrieval approach had: BaseAIEngine
+     * overrides `AdditionalLoading()`, which disables BaseEngine's immediate-mutation path for
+     * `_agentNotes`. Newly-created notes don't appear in `this.AgentNotes` until the next
+     * `Config(true)` — so any retrieval-time lookup against that cache returned `undefined` for
+     * post-startup notes and rejected everything.
      */
-    private composeNoteFilters(
+    protected composeNoteFilters(
         agentId?: string,
         userId?: string,
         companyId?: string,
         additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
-    ): ((metadata: NoteEmbeddingMetadata) => boolean) | undefined {
-        const needsBaseFilter = agentId || userId || companyId;
-        const baseFilter = needsBaseFilter
-            ? (metadata: NoteEmbeddingMetadata): boolean => {
-                if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
-                if (userId && metadata.userId && metadata.userId !== userId) return false;
-                if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
-                return true;
-            }
-            : undefined;
+    ): ((metadata: NoteEmbeddingMetadata) => boolean) {
+        const baseFilter = (metadata: NoteEmbeddingMetadata): boolean => {
+            if (agentId && metadata.agentId && !UUIDsEqual(metadata.agentId, agentId)) return false;
+            if (userId && metadata.userId && !UUIDsEqual(metadata.userId, userId)) return false;
+            if (companyId && metadata.companyId && !UUIDsEqual(metadata.companyId, companyId)) return false;
+            return true;
+        };
 
-        if (baseFilter && additionalFilter) {
+        if (additionalFilter) {
             return (metadata: NoteEmbeddingMetadata): boolean =>
                 baseFilter(metadata) && additionalFilter(metadata);
         }
-        return baseFilter || additionalFilter || undefined;
+        return baseFilter;
     }
 
     /**
@@ -1096,28 +1127,30 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Compose base scope filters (agentId/userId/companyId) with an optional additional filter
      * into a single filter callback for use with FindNearest on examples.
+     *
+     * Mirrors `composeNoteFilters`: Status filtering is NOT performed here. The vector store
+     * is kept in sync with persisted Status by `MJAIAgentExampleEntityServer.Save()` /
+     * `Delete()`, which call `AddOrUpdateSingleExampleEmbedding` / `RemoveSingleExampleEmbedding`
+     * based on the example's current Status.
      */
-    private composeExampleFilters(
+    protected composeExampleFilters(
         agentId?: string,
         userId?: string,
         companyId?: string,
         additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
-    ): ((metadata: ExampleEmbeddingMetadata) => boolean) | undefined {
-        const needsBaseFilter = agentId || userId || companyId;
-        const baseFilter = needsBaseFilter
-            ? (metadata: ExampleEmbeddingMetadata): boolean => {
-                if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
-                if (userId && metadata.userId && metadata.userId !== userId) return false;
-                if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
-                return true;
-            }
-            : undefined;
+    ): ((metadata: ExampleEmbeddingMetadata) => boolean) {
+        const baseFilter = (metadata: ExampleEmbeddingMetadata): boolean => {
+            if (agentId && metadata.agentId && !UUIDsEqual(metadata.agentId, agentId)) return false;
+            if (userId && metadata.userId && !UUIDsEqual(metadata.userId, userId)) return false;
+            if (companyId && metadata.companyId && !UUIDsEqual(metadata.companyId, companyId)) return false;
+            return true;
+        };
 
-        if (baseFilter && additionalFilter) {
+        if (additionalFilter) {
             return (metadata: ExampleEmbeddingMetadata): boolean =>
                 baseFilter(metadata) && additionalFilter(metadata);
         }
-        return baseFilter || additionalFilter || undefined;
+        return baseFilter;
     }
 
     /**
