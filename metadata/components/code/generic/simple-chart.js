@@ -37,18 +37,18 @@ function SimpleChart({
   const [error, setError] = React.useState(null);
   const [entityInfo, setEntityInfo] = React.useState(null);
 
-  // Default color palette - accessible and visually distinct
+  // Modern color palette - balanced saturation for polished dashboards
   const defaultColors = [
-    '#1890ff', // Blue
-    '#52c41a', // Green
-    '#fa8c16', // Orange
-    '#f5222d', // Red
-    '#722ed1', // Purple
-    '#13c2c2', // Cyan
-    '#fa541c', // Red-orange
-    '#2f54eb', // Deep blue
-    '#a0d911', // Lime
-    '#eb2f96'  // Magenta
+    '#4a90d9', // Steel blue
+    '#6abf69', // Soft green
+    '#f0a030', // Warm amber
+    '#e8665d', // Soft red
+    '#9270ca', // Soft purple
+    '#45b5b5', // Teal
+    '#e87040', // Soft coral
+    '#5c7cfa', // Periwinkle
+    '#8cc63f', // Olive green
+    '#d66ba0'  // Dusty rose
   ];
 
   // Load entity metadata
@@ -432,13 +432,18 @@ function SimpleChart({
                   ? 'rgba(24, 144, 255, 0.2)'
                   : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar
               borderColor: isPieOrDoughnut
-                ? undefined
+                ? '#fff'
                 : isLineOrArea
                   ? (colors || defaultColors)[0]
-                  : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar border
-              borderWidth: isLineOrArea ? 2 : 1,
+                  : (colors || defaultColors).slice(0, processData.values.length),
+              borderWidth: isPieOrDoughnut ? 2 : isLineOrArea ? 3 : 0,
+              borderRadius: isPieOrDoughnut || isLineOrArea ? undefined : 4,
               fill: actualChartType === 'area',
-              tension: isLineOrArea ? 0.1 : undefined
+              tension: isLineOrArea ? 0.35 : undefined,
+              pointRadius: isLineOrArea ? 4 : undefined,
+              pointBackgroundColor: isLineOrArea ? '#fff' : undefined,
+              pointBorderWidth: isLineOrArea ? 2 : undefined,
+              pointHoverRadius: isLineOrArea ? 7 : undefined
             }]
       },
       options: {
@@ -463,23 +468,21 @@ function SimpleChart({
         },
         elements: {
           bar: {
-            hoverBackgroundColor: undefined, // Use default color
-            hoverBorderWidth: 3,
-            hoverBorderColor: '#1890ff'
+            hoverBorderWidth: 0,
+            borderSkipped: false
           },
           arc: {
-            hoverOffset: 8,
-            hoverBorderWidth: 3,
-            hoverBorderColor: '#1890ff'
+            hoverOffset: 6,
+            hoverBorderWidth: 2,
+            hoverBorderColor: '#fff'
           },
           line: {
-            hoverBorderWidth: 4,
-            hoverBorderColor: '#1890ff'
+            hoverBorderWidth: 4
           },
           point: {
-            hoverRadius: 6,
-            hoverBorderWidth: 3,
-            hoverBorderColor: '#1890ff'
+            hoverRadius: 7,
+            hoverBorderWidth: 2,
+            hoverBackgroundColor: '#fff'
           }
         },
         onHover: (event, activeElements) => {
@@ -573,6 +576,9 @@ function SimpleChart({
               ? (isPieOrDoughnut ? 'bottom' : 'top')
               : legendPosition,
             labels: {
+              usePointStyle: true,
+              pointStyle: 'circle',
+              padding: 16,
               font: {
                 size: legendFontSize
               }
@@ -584,17 +590,19 @@ function SimpleChart({
             color: isPieOrDoughnut ? '#fff' : '#666'
           } : undefined,
           tooltip: {
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            backgroundColor: 'rgba(30, 30, 30, 0.9)',
             titleFont: {
-              size: 14,
-              weight: 'bold'
+              size: 13,
+              weight: 600
             },
             bodyFont: {
               size: 13
             },
-            padding: 12,
-            cornerRadius: 4,
+            padding: { top: 10, bottom: 10, left: 14, right: 14 },
+            cornerRadius: 8,
             displayColors: true,
+            usePointStyle: true,
+            boxPadding: 6,
             callbacks: {
               label: (context) => {
                 const label = context.dataset.label || '';
@@ -612,22 +620,30 @@ function SimpleChart({
       config.options.scales = {
         y: {
           beginAtZero: true,
-          stacked: isStacked, // Enable stacking on Y-axis
+          stacked: isStacked,
+          border: { display: false },
+          grid: {
+            color: '#f0f0f0',
+            drawTicks: false
+          },
           ticks: {
+            padding: 8,
             callback: (value) => formatValue(value)
           }
         },
         x: {
-          stacked: isStacked, // Enable stacking on X-axis
+          stacked: isStacked,
+          border: { display: false },
+          grid: { display: false },
           ticks: {
             autoSkip: true,
             maxRotation: 60,
             minRotation: 0,
-            maxTicksLimit: 20, // Limit number of ticks to prevent overcrowding
+            maxTicksLimit: 20,
+            padding: 4,
             font: {
               size: 11
             },
-            // Truncate long labels to prevent overflow
             callback: function(value) {
               const label = this.getLabelForValue(value);
               if (typeof label === 'string' && label.length > 18) {
@@ -635,10 +651,6 @@ function SimpleChart({
               }
               return label;
             }
-          },
-          // For charts with many categories, use better label management
-          grid: {
-            display: processData.categories.length <= 20
           }
         }
       };
