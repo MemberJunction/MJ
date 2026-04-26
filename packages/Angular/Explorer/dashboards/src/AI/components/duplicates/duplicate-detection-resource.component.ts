@@ -1776,9 +1776,17 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
 
         try {
+            const md = new Metadata();
+            const tg = await md.CreateTransactionGroup();
             for (const match of group.Matches) {
                 match.ApprovalStatus = status;
+                match.TransactionGroup = tg;
                 await match.Save();
+            }
+            const success = await tg.Submit();
+            if (!success) {
+                console.error(`Failed to update match approval statuses to ${status}`);
+                return;
             }
 
             // Update the local group state

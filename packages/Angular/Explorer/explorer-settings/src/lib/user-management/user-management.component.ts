@@ -547,21 +547,35 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private async bulkSetUserStatus(users: MJUserEntity[], isActive: boolean): Promise<void> {
+    if (users.length === 0) return;
+
+    const md = new Metadata();
+    const tg = await md.CreateTransactionGroup();
     for (const user of users) {
       user.IsActive = isActive;
-      const result = await user.Save();
-      if (!result) {
-        throw new Error(`Failed to update user ${user.Name}: ${user.LatestResult?.Message}`);
+      user.TransactionGroup = tg;
+      await user.Save();
+    }
+    if (!await tg.Submit()) {
+      // Server rolled back — restore in-memory flags to their prior state
+      for (const user of users) {
+        user.IsActive = !isActive;
       }
+      throw new Error('Failed to update users — all changes have been rolled back');
     }
   }
 
   private async bulkDeleteUsers(users: MJUserEntity[]): Promise<void> {
+    if (users.length === 0) return;
+
+    const md = new Metadata();
+    const tg = await md.CreateTransactionGroup();
     for (const user of users) {
-      const result = await user.Delete();
-      if (!result) {
-        throw new Error(`Failed to delete user ${user.Name}: ${user.LatestResult?.Message}`);
-      }
+      user.TransactionGroup = tg;
+      await user.Delete();
+    }
+    if (!await tg.Submit()) {
+      throw new Error('Failed to delete users — all changes have been rolled back');
     }
   }
 
@@ -584,19 +598,25 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       this.isLoading = true;
       const selectedUserIds = Array.from(this.selectedUserIds);
 
-      for (const userId of selectedUserIds) {
-        // Check if user already has this role
+      // Collect only the users that don't already have the role
+      const usersNeedingRole = selectedUserIds.filter(userId => {
         const existingRoles = this.userRoleMap.get(userId) || [];
-        if (!existingRoles.includes(this.bulkRoleId)) {
+        return !existingRoles.includes(this.bulkRoleId);
+      });
+
+      if (usersNeedingRole.length > 0) {
+        const tg = await this.metadata.CreateTransactionGroup();
+        for (const userId of usersNeedingRole) {
           const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
           userRole.NewRecord();
           userRole.UserID = userId;
           userRole.RoleID = this.bulkRoleId;
+          userRole.TransactionGroup = tg;
+          await userRole.Save();
+        }
 
-          const result = await userRole.Save();
-          if (!result) {
-            console.warn(`Failed to assign role to user ${userId}:`, userRole.LatestResult?.Message);
-          }
+        if (!await tg.Submit()) {
+          throw new Error('Failed to assign roles — all changes have been rolled back');
         }
       }
 
