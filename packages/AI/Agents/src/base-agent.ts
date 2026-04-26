@@ -137,11 +137,15 @@ type ExtendedProgressStep = Parameters<AgentExecutionProgressCallback>[0] & {
  * signals that it isn't a real registered MJAction — it's handled inline by the
  * agent runtime, and shouldn't be registered in the Action metadata table.
  *
+ * Stored lowercase deliberately so call sites comparing against
+ * `action.name.trim().toLowerCase()` don't need to re-lowercase this constant
+ * on every iteration. Per AN-BC's review.
+ *
  * NOT exposed as configurable: this is a wire-protocol identifier the LLM is
  * told about and that the runtime intercepts. Changing it per-deployment would
  * break cross-deployment consistency for the same agent definition.
  */
-const ACTION_SEARCH_TOOL_NAME = '_searchActions';
+const ACTION_SEARCH_TOOL_NAME = '_searchactions';
 
 /**
  * Tunable knobs for the `_searchActions` meta-tool. Defaults match the values
@@ -2414,9 +2418,9 @@ export class BaseAgent {
             // Built-in action-search meta-tool is always valid — handled inline in executeActionsStep,
             // not registered as a real MJAction. Only accept it when the prompt actually offered it
             // (threshold crossed); otherwise treat as unknown so the LLM gets corrected.
-            if (actionName === ACTION_SEARCH_TOOL_NAME.toLowerCase()) {
+            if (actionName === ACTION_SEARCH_TOOL_NAME) {
                 if (effectiveActions.length > ActionSearchConfig.Threshold) {
-                    action.name = ACTION_SEARCH_TOOL_NAME;  // normalize casing
+                    action.name = ACTION_SEARCH_TOOL_NAME;  // normalize to canonical form
                     return false;
                 }
                 return true;
@@ -7544,8 +7548,8 @@ The context is now within limits. Please retry your request with the recovered c
             // it resolves to a semantic lookup against the agent's own action list and returns the hits as
             // a synthesized ActionResultSummary. Only valid when the prompt offered it (threshold crossed);
             // validateActionsNextStep rejects it otherwise, so by the time we get here it's legitimate.
-            const searchCalls = actions.filter(a => a.name.trim().toLowerCase() === ACTION_SEARCH_TOOL_NAME.toLowerCase());
-            const regularActions = actions.filter(a => a.name.trim().toLowerCase() !== ACTION_SEARCH_TOOL_NAME.toLowerCase());
+            const searchCalls = actions.filter(a => a.name.trim().toLowerCase() === ACTION_SEARCH_TOOL_NAME);
+            const regularActions = actions.filter(a => a.name.trim().toLowerCase() !== ACTION_SEARCH_TOOL_NAME);
 
             // Track step numbers for parallel actions
             let numActionsProcessed = 0;
