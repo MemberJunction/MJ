@@ -857,23 +857,9 @@ ${indentedFormHTML}
         const isaChildIDs = new Set(entity.ChildEntities.map(c => c.ID));
 
         // Sort related entities deterministically using the shared sort with cascading tiebreakers
-        const sortedRelatedEntitiesAll = sortRelatedEntities(
+        const sortedRelatedEntities = sortRelatedEntities(
             entity.RelatedEntities.filter(re => re.DisplayInForm && !isaChildIDs.has(re.RelatedEntityID))
         );
-
-        // Cap related-entity panels per form. Salesforce "supertype" entities
-        // (User, Account, Contact) can have 1000+ inbound FKs; emitting one
-        // <mj-collapsible-panel> with nested @if/@for per related entity blows
-        // past TypeScript's control-flow analysis depth (TS2563 "Excessive
-        // complexity"). With this cap, the first MAX_RELATED_ENTITY_TABS get
-        // rendered statically, the rest get logged as a one-line warning so
-        // the operator can adjust if needed. Configurable via env override.
-        const MAX_RELATED_ENTITY_TABS = Number(process.env.MJ_CODEGEN_MAX_RELATED_ENTITY_TABS ?? '100');
-        const sortedRelatedEntities = sortedRelatedEntitiesAll.slice(0, MAX_RELATED_ENTITY_TABS);
-        if (sortedRelatedEntitiesAll.length > MAX_RELATED_ENTITY_TABS) {
-            logStatus(`   WARNING: Entity "${entity.Name}" has ${sortedRelatedEntitiesAll.length} related-entity tabs — capping at ${MAX_RELATED_ENTITY_TABS} to avoid TypeScript control-flow analysis limit (TS2563). Override via MJ_CODEGEN_MAX_RELATED_ENTITY_TABS env var.`);
-        }
-
         let index = startIndex;
         for (const relatedEntity of sortedRelatedEntities) {
             const tabName: string = this.generateRelatedEntityTabName(relatedEntity, sortedRelatedEntities)
