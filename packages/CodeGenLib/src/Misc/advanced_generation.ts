@@ -4,6 +4,7 @@ import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
+import { CodeGenReporter } from "./codegen-reporter";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
@@ -151,8 +152,23 @@ export class AdvancedGeneration {
     private async executePrompt<T>(
         params: AIPromptParams
     ): Promise<AIPromptRunResult<T>> {
+        const startMs = Date.now();
+        const promptName = params.prompt?.Name ?? 'unknown';
         try {
             const result = await this._promptRunner.ExecutePrompt<T>(params);
+            // Record telemetry for this LLM call. Entity attribution falls back to the
+            // entityPhase in processEntityAdvancedGeneration via CodeGenReporter's
+            // _currentEntity. No-op if no run is active.
+            CodeGenReporter.Instance.recordLLMCall({
+                promptName,
+                // Model name lives on the promptRun entity once the call succeeds;
+                // falls back to null for runs where the entity didn't get populated.
+                model: (result.promptRun as unknown as { Model?: string })?.Model ?? null,
+                tokensIn: result.promptTokens ?? 0,
+                tokensOut: result.completionTokens ?? 0,
+                costUSD: result.cost ?? 0,
+                latencyMs: result.executionTimeMS ?? (Date.now() - startMs),
+            });
             return result;
         } catch (error) {
             LogError(`AdvancedGeneration:Prompt execution failed: ${error}`);
