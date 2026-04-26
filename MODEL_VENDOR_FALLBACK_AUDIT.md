@@ -5,6 +5,9 @@
 > **Date**: 2026-04-25
 > **Scope**: All AI model / vendor selection sites across the MemberJunction monorepo
 
+> ### ⚠️ Out-of-scope: DBAutoDoc
+> DBAutoDoc (`packages/DBAutoDoc/`) lives in this monorepo for distribution convenience but is a standalone CLI tool — it does not run inside MJAPI / MJExplorer and does not share the `AIPromptRunner` runtime. Its model-selection gaps (**G22, G23**) and the corresponding change-list items (**24, 25**) are kept in the inventory below for completeness but are **not part of this standardization effort**. Effective change list for MJ is **33 items across 16 files**, not 35/18.
+
 ---
 
 ## 1. Executive summary
@@ -120,8 +123,8 @@ Severity legend:
 | G19 | [packages/MJServer/src/resolvers/RunAIPromptResolver.ts:469-485](packages/MJServer/src/resolvers/RunAIPromptResolver.ts#L469-L485) `selectEmbeddingModelBySize` | Returns one local embedding model. The `GenerateEmbeddings` GraphQL mutation (around line 700) instantiates one driver and calls it. | Embedding GraphQL mutation has no fallback. | HARD |
 | G20 | [packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts:1605-1614](packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L1605-L1614) `createEmbeddingInstance` | One driver class, throws on missing API key, no retry. | The vectorization side of content auto-tagging silently breaks. The prompt side correctly uses `AIPromptRunner` (line 661-662). | HARD (vector path only) |
 | G21 | [packages/ContentAutotagging/src/LocalFileSystem/generic/AutotagLocalFileSystem.ts:7,17](packages/ContentAutotagging/src/LocalFileSystem/generic/AutotagLocalFileSystem.ts#L7) | `import { OpenAI } from "openai"` and `static _openAI: OpenAI` — declared but never instantiated. | Dormant landmine: any future code that fills `_openAI` would hard-couple to OpenAI without going through metadata or fallback. | LATENT |
-| G22 | [packages/DBAutoDoc/src/utils/llm-factory.ts:36-59](packages/DBAutoDoc/src/utils/llm-factory.ts#L36-L59) `createLLMInstance` | Hard-coded `PROVIDER_TO_DRIVER_CLASS` map. Used by [LLMSanityChecker.ts:37](packages/DBAutoDoc/src/discovery/LLMSanityChecker.ts#L37) and [PromptEngine.ts:63](packages/DBAutoDoc/src/prompts/PromptEngine.ts#L63). One driver, one API key, no failover. | DBAutoDoc is a CLI tool, but it is shipped as `@memberjunction/db-auto-doc`. Long-running schema analysis dies if the configured provider has a transient issue. | HARD |
-| G23 | [packages/DBAutoDoc/src/discovery/LLMDiscoveryValidator.ts:32-80](packages/DBAutoDoc/src/discovery/LLMDiscoveryValidator.ts#L32-L80) | Same factory, same gap. | Same. | HARD |
+| G22 | [packages/DBAutoDoc/src/utils/llm-factory.ts:36-59](packages/DBAutoDoc/src/utils/llm-factory.ts#L36-L59) `createLLMInstance` | Hard-coded `PROVIDER_TO_DRIVER_CLASS` map. Used by [LLMSanityChecker.ts:37](packages/DBAutoDoc/src/discovery/LLMSanityChecker.ts#L37) and [PromptEngine.ts:63](packages/DBAutoDoc/src/prompts/PromptEngine.ts#L63). One driver, one API key, no failover. | **OUT OF SCOPE** — DBAutoDoc is a standalone CLI, not part of MJ runtime. Listed for inventory completeness only. | HARD (out of scope) |
+| G23 | [packages/DBAutoDoc/src/discovery/LLMDiscoveryValidator.ts:32-80](packages/DBAutoDoc/src/discovery/LLMDiscoveryValidator.ts#L32-L80) | Same factory, same gap. | **OUT OF SCOPE** — same reason as G22. | HARD (out of scope) |
 | G24 | [packages/AI/MJComputerUse/src/engine/MJComputerUseEngine.ts:298-321](packages/AI/MJComputerUse/src/engine/MJComputerUseEngine.ts#L298-L321) `selectModel` (the *MJ* computer-use, not the standalone one) | Calls `AIEngine.GetHighestPowerLLM(undefined, ...)`. After that, the actual prompt **is** routed through `AIPromptRunner.ExecutePrompt`. | Selection is single-vendor but execution has failover. The selected `model` here is just used as the metadata default for the prompt run — `AIPromptRunner.selectModel` will still produce a candidate list. | OK at runtime; SOFT for naming the “primary model” |
 
 ### 3.2 Higher-level call sites of `AIEngine.SimpleLLMCompletion` / `EmbedTextLocal` (transitive HARD gaps)
@@ -172,6 +175,175 @@ These all transit the failover-aware path. Listed so the audit is complete:
 - **`AgentRunner.ts:935-958` uses `await import('@memberjunction/ai-prompts')`** ([packages/AI/Agents/src/AgentRunner.ts:936](packages/AI/Agents/src/AgentRunner.ts#L936)) — that violates the project rule “NO DYNAMIC `import()` UNLESS NARROWLY JUSTIFIED” (CLAUDE.md §8). Out of scope for this audit but worth flagging since it touches the same code path.
 - **`AIEngine.getDriver` uses `await import(driverModuleName)` based on entity field `DriverImportPath`** ([AIEngine.ts:1370-1384](packages/AI/Engine/src/AIEngine.ts#L1370-L1384)) — this is the legacy `BaseModel`-driver-loading path. Safe (it’s genuine plugin discovery from metadata) but interacts badly with bundlers.
 - **`ContentAutotagging` instance variable `static _openAI: OpenAI`** is dead code; safe to delete in a follow-up.
+
+### 3.5 Capability matrix (per-capability sufficiency)
+
+> **The guarantee being tested.** "Any single configured vendor sufficient to run any feature it supports." Concretely: for every AI capability MJ uses (LLM, embeddings, reranker, image generation, audio TTS, audio STT, video, etc.), if a deployment has at least one configured vendor whose providers implement that capability, the corresponding feature works without requiring a *specific* vendor. Vendors that don't sell a given capability (e.g., Anthropic for image gen) are accepted gaps — the guarantee is per-capability, not per-vendor.
+
+#### 3.5.1 Capability surface — `AIModelType` rows in MJ today
+
+Source: `AIModelType` seed data in [migrations/v5/B202602151200__v5.0__Baseline.sql:110410-110416](migrations/v5/B202602151200__v5.0__Baseline.sql#L110410) plus base provider classes under [packages/AI/Core/src/generic/](packages/AI/Core/src/generic/).
+
+| `AIModelType.Name` (literal) | Base provider class | Default modality (in → out) | Notes |
+|---|---|---|---|
+| **`LLM`** | [`BaseLLM`](packages/AI/Core/src/generic/baseLLM.ts) | Text → Text | Most heavily used capability |
+| **`Embeddings`** | [`BaseEmbeddings`](packages/AI/Core/src/generic/baseEmbeddings.ts) | Text → Embedding | Used by vector / semantic-search paths |
+| **`Reranker`** | [`BaseReranker`](packages/AI/Core/src/generic/baseReranker.ts) | Text → Text (reordering) | Two-stage retrieval improvement |
+| **`Image Generator`** | [`BaseImageGenerator`](packages/AI/Core/src/generic/baseImage.ts) (formerly `BaseDiffusion`, deprecated alias still exported from [baseDiffusion.ts](packages/AI/Core/src/generic/baseDiffusion.ts)) | Text → Image | Renamed from `Diffusion` to `Image Generator` in the multi-modal migration |
+| **`TTS`** | [`BaseAudioGenerator.CreateSpeech`](packages/AI/Core/src/generic/baseAudio.ts) | Text → Audio | Renamed from `Audio` in the STT split migration |
+| **`STT`** | [`BaseAudioGenerator.SpeechToText`](packages/AI/Core/src/generic/baseAudio.ts) | Audio → Text | New row added in `V202601010001__v2.130.x__Multi_Modal_Chat_Support.sql` |
+| **`Video`** | [`BaseVideoGenerator`](packages/AI/Core/src/generic/baseVideo.ts) | Text → Video | Avatar / video translation surface |
+
+`BaseDiffusion` is preserved as a deprecated re-export for backward compatibility — see the file header comment.
+
+#### 3.5.2 Per-capability call-site table
+
+Each capability is enumerated below with every MJ runtime consumer (DBAutoDoc excluded per the §1 banner). For each call site:
+
+- **VENDOR-AGNOSTIC** = selection is purely capability-driven; adding a new capable vendor immediately widens the working set.
+- **VENDOR-PINNED** = call site hard-codes a specific vendor name, vendor ID, or driver-class string.
+- **MODEL-PINNED** = call site hard-codes a specific model entity (by ID, name, or metadata lookup).
+
+##### Capability: `LLM`
+
+| Call site | Status | Notes |
+|---|---|---|
+| [packages/AI/Prompts/src/AIPromptRunner.ts:585](packages/AI/Prompts/src/AIPromptRunner.ts#L585) `ExecutePrompt` | VENDOR-AGNOSTIC | Reference impl — multi-source candidate ranking + cross-vendor failover. |
+| [packages/AI/Engine/src/AIEngine.ts:739-793](packages/AI/Engine/src/AIEngine.ts#L739) `PrepareLLMInstance` / `SimpleLLMCompletion` | VENDOR-AGNOSTIC at selection (`GetHighestPowerLLM(undefined, …)` accepts any LLM vendor) but **single-vendor at execution** — no failover (G1, G2). |
+| [packages/AI/Engine/src/AIEngine.ts:809-849](packages/AI/Engine/src/AIEngine.ts#L809) `ParallelLLMCompletions` | VENDOR-AGNOSTIC at selection, single-vendor per task (G3). |
+| [packages/AI/Engine/src/AIEngine.ts:1305-1349](packages/AI/Engine/src/AIEngine.ts#L1305) `ExecuteAIAction` (deprecated) | VENDOR-AGNOSTIC at selection, no failover (G5, latent). |
+| [packages/AI/ComputerUse/src/engine/ComputerUseEngine.ts:1009-1040](packages/AI/ComputerUse/src/engine/ComputerUseEngine.ts#L1009) `createLLMInstance` | **VENDOR-PINNED** — `vendorToDriverClass` map (anthropic/openai/google/groq/mistral) (G6). |
+| [packages/MJServer/src/resolvers/FeedbackResolver.ts:362-365](packages/MJServer/src/resolvers/FeedbackResolver.ts#L362-L365) `categorizeFeedback` | **VENDOR-PINNED** — `find(m => m.DriverClass === 'GroqLLM') \|\| find(m => m.DriverClass === 'OpenAILLM')` (G7). |
+| [packages/MJServer/src/resolvers/RunAIPromptResolver.ts:633-661](packages/MJServer/src/resolvers/RunAIPromptResolver.ts#L633-L661) `ExecuteSimplePrompt` | VENDOR-AGNOSTIC at selection (`PowerRank` ordered), single-vendor at execution (G8). |
+| [packages/Templates/engine/src/extensions/AIPrompt.extension.ts:128](packages/Templates/engine/src/extensions/AIPrompt.extension.ts#L128) Nunjucks `{% AIPrompt %}` | **VENDOR-PINNED** — `GetHighestPowerModel('Groq', 'llm', …)` literal (G15). Default override returns `'OpenAI'` literal at line 170. |
+| [packages/AI/MJComputerUse/src/engine/MJComputerUseEngine.ts:298-321](packages/AI/MJComputerUse/src/engine/MJComputerUseEngine.ts#L298-L321) `selectModel` | VENDOR-AGNOSTIC at selection (`GetHighestPowerLLM(undefined, …)`), executes through `AIPromptRunner` (G24, OK at runtime). |
+| [packages/AI/Prompts/src/ParallelExecutionCoordinator.ts:546-613](packages/AI/Prompts/src/ParallelExecutionCoordinator.ts#L546-L613) per-task LLM call | VENDOR-AGNOSTIC at selection, single-vendor per parallel task (G16). |
+| [packages/React/test-harness/src/lib/component-runner.ts:1984](packages/React/test-harness/src/lib/component-runner.ts#L1984) | VENDOR-AGNOSTIC at selection; transitively HARD via `SimpleLLMCompletion` (G25). |
+| [packages/AI/AICLI/src/services/PromptService.ts:130](packages/AI/AICLI/src/services/PromptService.ts#L130) | **VENDOR-PINNED (cosmetic)** — pins `vendorUsed: 'OpenAI'` in the result-metadata payload regardless of actual vendor used. Does not affect selection but misleads downstream telemetry. **NEW** finding. |
+
+##### Capability: `Embeddings`
+
+| Call site | Status | Notes |
+|---|---|---|
+| [packages/AI/Engine/src/AIEngine.ts:858-921](packages/AI/Engine/src/AIEngine.ts#L858-L921) `EmbedTextLocal` / `LocalEmbeddingModels` filter | **VENDOR-PINNED** — filters by `m.Vendor === 'localembeddings'` literal (G4). The "local" semantics intentionally exclude internet vendors. |
+| [packages/AI/Engine/src/AIEngine.ts:902-921](packages/AI/Engine/src/AIEngine.ts#L902-L921) `EmbedText(model)` | MODEL-PINNED at call (caller passes one model), VENDOR-AGNOSTIC at selection of that model's first vendor; single-vendor at execution (G4). |
+| [packages/AI/Prompts/src/AIModelRunner.ts:80-244](packages/AI/Prompts/src/AIModelRunner.ts#L80-L244) `RunEmbedding` / `findBestVendor` | MODEL-PINNED (caller supplies `modelID`), VENDOR-AGNOSTIC across that model's vendors at selection, single-vendor at execution (G17, G18). |
+| [packages/SearchEngine/src/generic/VectorSearchProvider.ts:166-196](packages/SearchEngine/src/generic/VectorSearchProvider.ts#L166-L196) `embedQueryAndSearch` | MODEL-PINNED (`embeddingModelID` from index metadata), single-vendor at execution (G9). |
+| [packages/AI/Vectors/Sync/src/models/entityVectorSync.ts:580-619](packages/AI/Vectors/Sync/src/models/entityVectorSync.ts#L580-L619) | MODEL-PINNED per `EntityDocument`, single-vendor at execution (G10). |
+| [packages/AI/Vectors/Sync/src/models/workers/VectorizeTemplates.ts:26](packages/AI/Vectors/Sync/src/models/workers/VectorizeTemplates.ts#L26) worker | MODEL-PINNED, single-vendor (G11). |
+| [packages/AI/Vectors/Dupe/src/duplicateRecordDetector.ts:501-548](packages/AI/Vectors/Dupe/src/duplicateRecordDetector.ts#L501-L548) `InitializeProviders` | MODEL-PINNED, single-vendor (G12). |
+| [packages/AI/Knowledge/TagEngine/src/TagEngine.ts:301-334](packages/AI/Knowledge/TagEngine/src/TagEngine.ts#L301-L334) `embedBatchDirect` | MODEL-PINNED (re-uses tracked `modelInfo.DriverClass`), single-vendor (G13). |
+| [packages/MJServer/src/resolvers/RunAIPromptResolver.ts:469-485](packages/MJServer/src/resolvers/RunAIPromptResolver.ts#L469-L485) `selectEmbeddingModelBySize` + `GenerateEmbeddings` mutation | VENDOR-PINNED (filters `Vendor === 'localembeddings'` via `LocalEmbeddingModels`) and single-vendor at execution (G19). |
+| [packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts:1605-1614](packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L1605-L1614) `createEmbeddingInstance` | MODEL-PINNED, single-vendor (G20). |
+| [packages/QueryGen/src/vectors/EmbeddingService.ts:46-48](packages/QueryGen/src/vectors/EmbeddingService.ts#L46-L48), [packages/Actions/CoreActions/src/custom/data/search-query-catalog.action.ts:75](packages/Actions/CoreActions/src/custom/data/search-query-catalog.action.ts#L75), [packages/AI/Engine/src/services/ActionEmbeddingService.ts](packages/AI/Engine/src/services/ActionEmbeddingService.ts), [packages/AI/Engine/src/services/AgentEmbeddingService.ts](packages/AI/Engine/src/services/AgentEmbeddingService.ts), [packages/MJCoreEntitiesServer/src/custom/util.ts:10-15](packages/MJCoreEntitiesServer/src/custom/util.ts#L10-L15) `EmbedTextLocalHelper` and its 4 callers (G27-G31) | All transit `EmbedTextLocal` (G4) → **VENDOR-PINNED** to `LocalEmbeddings` (G32, G33, G34). |
+
+##### Capability: `Reranker`
+
+| Call site | Status | Notes |
+|---|---|---|
+| [packages/AI/Reranker/src/RerankerService.ts:135-265](packages/AI/Reranker/src/RerankerService.ts#L135-L265) `getReranker` + `getModelDriverInfo` | MODEL-PINNED (caller supplies `modelID`), VENDOR-AGNOSTIC across that model's vendors at selection (with the inverted-priority bug — I1), single-vendor at execution (G14). |
+| [packages/AI/Reranker/src/LLMReranker.ts:213](packages/AI/Reranker/src/LLMReranker.ts#L213) | VENDOR-AGNOSTIC — uses `AIPromptRunner.ExecutePrompt`. The "reranker via LLM" alternate path correctly inherits failover. |
+
+##### Capability: `Image Generator`
+
+| Call site | Status | Notes |
+|---|---|---|
+| [packages/Actions/CoreActions/src/custom/ai/generate-image.action.ts:228-296](packages/Actions/CoreActions/src/custom/ai/generate-image.action.ts#L228-L296) `prepareImageGenerator` (action `Generate Image`) | VENDOR-AGNOSTIC at selection — filters `m.AIModelType === 'image generator' && m.IsActive`, picks highest `PowerRank`, picks the **first** active `ModelVendor` with a `DriverClass`. **Single-vendor at execution, no failover.** **NEW gap** (was not in §3.1 because the search pattern was scoped to `BaseLLM\|BaseEmbeddings\|BaseModel\|BaseReranker\|BaseImage`, and this file uses the more recent `BaseImageGenerator` class name, which `BaseImage` matches as a prefix only via the `baseImage.ts` filename — the audit's `rg` pattern `BaseImage` does match in `entity_subclasses.ts` exports but the `ClassFactory` instantiation here was not surfaced in the original 14-file count.) |
+
+There are **no other MJ runtime consumers** of `BaseImageGenerator` outside of `packages/AI/Providers/{OpenAI,Gemini,BlackForestLabs}/`.
+
+##### Capability: `TTS` (Text-to-Speech)
+
+| Call site | Status | Notes |
+|---|---|---|
+| _(none in MJ runtime)_ | — | No code in `packages/` outside of `packages/AI/Providers/{OpenAI,ElevenLabs}/` instantiates `BaseAudioGenerator.CreateSpeech`. The capability is declared in the data model and providers ship implementations, but **no MJ feature consumes it today.** |
+
+##### Capability: `STT` (Speech-to-Text)
+
+| Call site | Status | Notes |
+|---|---|---|
+| _(none in MJ runtime)_ | — | Same situation as TTS. `BaseAudioGenerator.SpeechToText` exists in the providers but no MJ feature calls it. |
+
+##### Capability: `Video`
+
+| Call site | Status | Notes |
+|---|---|---|
+| _(none in MJ runtime)_ | — | `BaseVideoGenerator` is implemented by `packages/AI/Providers/HeyGen/` only. No MJ feature consumes it. |
+
+#### 3.5.3 Vendor support matrix
+
+Source: which provider packages under [packages/AI/Providers/](packages/AI/Providers/) ship `@RegisterClass`-decorated subclasses of each base class.
+
+|  | LLM | Embeddings | Reranker | Image Gen | TTS | STT | Video |
+|---|---|---|---|---|---|---|---|
+| **OpenAI** | ✓ | ✓ | — | ✓ | ✓ | ✓ | — |
+| **Anthropic** | ✓ | — | — | — | — | — | — |
+| **Gemini** (Google) | ✓ | — | — | ✓ | — | — | — |
+| **Vertex** (Google) | ✓ | — | — | — | — | — | — |
+| **Azure** | ✓ | ✓ | — | — | — | — | — |
+| **Bedrock** (AWS) | ✓ | ✓ | — | — | — | — | — |
+| **Mistral** | ✓ | ✓ | — | — | — | — | — |
+| **Ollama** | ✓ | ✓ | — | — | — | — | — |
+| **Groq** | ✓ | — | — | — | — | — | — |
+| **xAI** | ✓ | — | — | — | — | — | — |
+| **Cerebras** | ✓ | — | — | — | — | — | — |
+| **Fireworks** | ✓ | — | — | — | — | — | — |
+| **OpenRouter** | ✓ | — | — | — | — | — | — |
+| **LMStudio** | ✓ | — | — | — | — | — | — |
+| **MiniMax** | ✓ | — | — | — | — | — | — |
+| **Zhipu** | ✓ | — | — | — | — | — | — |
+| **BettyBot** | ✓ | — | — | — | — | — | — |
+| **LocalEmbeddings** | — | ✓ | — | — | — | — | — |
+| **Cohere** | — | — | ✓ | — | — | — | — |
+| **BlackForestLabs** | — | — | — | ✓ | — | — | — |
+| **ElevenLabs** | — | — | — | — | ✓ | ✓ (via SpeechToText) | — |
+| **HeyGen** | — | — | — | — | — | — | ✓ |
+
+✓ = provider package ships an `@RegisterClass`-decorated subclass of the relevant base. — = none in this provider package. The `Bundle` and `Recommendations-Rex` provider packages ship no model providers (they are aggregators / placeholders).
+
+`BettyBot` is an internal/legacy LLM driver. `STT` for `OpenAI` is implemented through `OpenAIAudioGenerator` (Whisper).
+
+#### 3.5.4 Per-capability post-Phase-5 verdict
+
+For each capability, given the change list in §6 (items 1-35) and the proposed `ModelResolver` (§5.2), the user's per-capability sufficiency guarantee is evaluated below.
+
+| Capability | Verdict | Reason |
+|---|---|---|
+| **LLM** | **SATISFIED** | After items 1-8 (Phase 1 Foundation), 11 (G7 FeedbackResolver), 12 (G8/G19 RunAIPromptResolver), 14 (G6 ComputerUseEngine), 15-16 (G15 Templates `{% AIPrompt %}` + DefaultAIVendorName), 27-28 (G2/G3 SimpleLLMCompletion / ParallelLLMCompletions), and 34 (G16 ParallelExecutionCoordinator), every LLM call site routes through `ModelResolver.resolveForRequirements({ modelTypeName: 'LLM', … })` + `ModelResolver.withFailover(…)`. No remaining hard-coded vendor strings on the live path. |
+| **Embeddings** | **SATISFIED with one caveat** | Items 9 (G17/G18 AIModelRunner), 13 (`GenerateEmbeddings` mutation), 17 (G9 VectorSearchProvider), 18 (G10 entityVectorSync), 19 (G11 worker), 20 (G12 Dupe), 21 (G13 TagEngine), 22 (G20 AutotagBaseEngine) cover all embeddings consumers. **Caveat**: `EmbedTextLocal` (G4) is intentionally pinned to `LocalEmbeddings` for the local-only path; this is by design (offline / privacy) but means semantic-search consumers G27-G34 still fail when no LocalEmbeddings model is configured *and* the deployment only has cloud embedding vendors. Item 29 adds an optional `failover: boolean` to `EmbedText` but does not redefine `EmbedTextLocal`. **Sub-verdict**: SATISFIED for arbitrary embeddings; NOT SATISFIED for the specific "local-only" semantic search variant unless we add change item 36 below. |
+| **Reranker** | **SATISFIED** | Item 10 rewrites `RerankerService.getReranker` to use `ModelResolver.resolveForRequirements({ modelTypeName: 'Reranker', modelId })` + `withFailover`. Item 32 fixes the inverted priority direction (subsumed by item 10). Any Cohere — or future Voyage / Jina / Mixedbread — reranker that ships an `@RegisterClass(BaseReranker, …)` will be picked up automatically. |
+| **Image Generator** | **NOT SATISFIED** | The §6 change list has no item for `packages/Actions/CoreActions/src/custom/ai/generate-image.action.ts:228-296`. After Phase 5 the action still picks a single `ModelVendor` and instantiates one `BaseImageGenerator` with no failover. With OpenAI (DALL·E), Gemini (Imagen), and BlackForestLabs (Flux) all available, the user's guarantee — "any single configured image-gen vendor sufficient" — is partially met (selection *is* capability-driven; it filters by `AIModelType === 'image generator'`) but execution is single-vendor: a transient OpenAI outage breaks the action even when Gemini/BlackForestLabs are configured. **Add change item 37 below.** |
+| **TTS** | **VACUOUSLY SATISFIED** | No MJ consumer exists today. The data-model column / provider class are present but not wired to any feature. Once a consumer is built it must use `ModelResolver.resolveForRequirements({ modelTypeName: 'TTS' })` from day one. **Add change item 38 below as a forward-looking guard rail** (to prevent recreating the `Generate Image` pattern). |
+| **STT** | **VACUOUSLY SATISFIED** | Same as TTS. |
+| **Video** | **VACUOUSLY SATISFIED** | Same as TTS. Only HeyGen ships a provider — there is no concept of vendor failover yet because there is only one vendor; this becomes a real concern when a second video vendor is added. |
+
+#### 3.5.5 Additional change-list items to satisfy the per-capability guarantee
+
+Continuing the numbering from §6 (items 1-35):
+
+36. **`packages/AI/Engine/src/AIEngine.ts:858-921` `EmbedTextLocal` / semantic-search consumers** — Add an optional second-pass fallback inside `EmbedTextLocal`: if no `LocalEmbeddings` model is configured *or* the local embedding fails, fall back to `ModelResolver.resolveForRequirements({ modelTypeName: 'Embeddings' })` and use the highest-priority cloud embedding vendor. Document the dimensionality-mismatch caveat (a search-time embedding only matches an index built with the same model). Required so G27-G34 (the Helper-driven semantic-search paths) inherit cross-vendor resilience under the user's guarantee. Fixes the only remaining gap in **Embeddings**.
+
+37. **`packages/Actions/CoreActions/src/custom/ai/generate-image.action.ts:228-296` `prepareImageGenerator`** — Replace the manual model + vendor pick with `ModelResolver.resolveForRequirements({ modelTypeName: 'Image Generator' })`. Wrap the per-image generation call in `ModelResolver.withFailover(candidates, async (c) => generator.GenerateImage(genParams))` so that if OpenAI's `images.generate` returns 429 or 5xx, the action falls through to Gemini's Imagen or BlackForestLabs' Flux automatically. Required to satisfy **Image Generator**. Also delete the redundant `vendor.Name` API-key fallback at lines 278-284 (the new resolver's credential hierarchy supersedes it).
+
+38. **Forward-looking guard rail for TTS / STT / Video** — When the first consumer of `BaseAudioGenerator` or `BaseVideoGenerator` is built (whether in `Actions/CoreActions/`, in `MJServer/resolvers/`, or elsewhere), it must route through `ModelResolver.resolveForRequirements({ modelTypeName: 'TTS' \| 'STT' \| 'Video' })` + `ModelResolver.withFailover(…)`. Add an **eslint rule or a CI grep gate** that flags any `MJGlobal.Instance.ClassFactory.CreateInstance<BaseAudioGenerator>` / `<BaseVideoGenerator>` outside of `packages/AI/Providers/` and outside of `packages/AI/ModelResolver/`. This prevents a future PR from re-introducing the `Generate Image` pattern. Same rule should retroactively cover `BaseImageGenerator`, `BaseLLM`, `BaseEmbeddings`, `BaseReranker` to lock in the post-Phase-5 invariant.
+
+#### 3.5.6 Vendor-pinning inventory (cross-cutting)
+
+Cross-cutting list of every place in the **MJ runtime** (DBAutoDoc out of scope per the §1 banner; tests excluded) that pins to a specific vendor name, vendor ID, model name, or driver-class string. Each entry is marked **IN GAP LIST** (already cited as G#) or **NEW** (newly surfaced by this §3.5 sweep).
+
+| Site | Pin type | Status |
+|---|---|---|
+| [packages/Templates/engine/src/extensions/AIPrompt.extension.ts:128](packages/Templates/engine/src/extensions/AIPrompt.extension.ts#L128) | Vendor name `'Groq'` | IN GAP LIST (G15) |
+| [packages/Templates/engine/src/extensions/AIPrompt.extension.ts:170](packages/Templates/engine/src/extensions/AIPrompt.extension.ts#L170) `DefaultAIVendorName` | Vendor name `'OpenAI'` | IN GAP LIST (G15, change item 16) |
+| [packages/MJServer/src/resolvers/FeedbackResolver.ts:362-365](packages/MJServer/src/resolvers/FeedbackResolver.ts#L362-L365) | Driver class `'GroqLLM'`, `'OpenAILLM'` | IN GAP LIST (G7) |
+| [packages/AI/ComputerUse/src/engine/ComputerUseEngine.ts:1010,1030-1040](packages/AI/ComputerUse/src/engine/ComputerUseEngine.ts#L1010) `vendorToDriverClass` | Vendor→driver map (anthropic/openai/google/groq/mistral) | IN GAP LIST (G6) |
+| [packages/AI/Engine/src/AIEngine.ts:858-867](packages/AI/Engine/src/AIEngine.ts#L858-L867) `LocalEmbeddingModels` filter | Vendor name `'localembeddings'` (intentional but propagates) | IN GAP LIST (G4) — addressed by change item 36 |
+| [packages/Actions/CoreActions/src/custom/ai/generate-image.action.ts:228-296](packages/Actions/CoreActions/src/custom/ai/generate-image.action.ts#L228-L296) | Single-vendor pick from a model's `ModelVendors` array (no failover) | **NEW** — addressed by change item 37 |
+| [packages/AI/AICLI/src/services/PromptService.ts:130](packages/AI/AICLI/src/services/PromptService.ts#L130) | Hardcoded `vendorUsed: 'OpenAI'` in result-metadata payload | **NEW** (cosmetic — does not affect selection but misleads telemetry; one-line fix during item 12 retrofit) |
+
+`packages/Angular/Explorer/explorer-core/src/lib/shell/shell.component.ts:1167` (`item.DriverClass === driverClass`) is a runtime equality compare against a parameter, not a hard-coded literal — not a pinning site.
+
+`packages/DBAutoDoc/src/utils/llm-factory.ts` (G22, G23, change items 24-25) remains explicitly **out of scope** per the §1 banner.
 
 ---
 
@@ -477,8 +649,8 @@ const { result } = await ModelResolver.Instance.withFailover(resolved.candidates
 21. **`packages/AI/Knowledge/TagEngine/src/TagEngine.ts:226-334`** — `embedBatchViaModelRunner` already uses `AIModelRunner` (good); `embedBatchDirect` is dead code after change item 9 (since `AIModelRunner` will have failover). Delete `embedBatchDirect` and the `try`/`fallback` branching in `generateTagEmbeddings`. Fixes G13.
 22. **`packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts:1605-1614`** — replace `createEmbeddingInstance` with `AIModelRunner.RunEmbedding`. Fixes G20.
 23. **`packages/ContentAutotagging/src/LocalFileSystem/generic/AutotagLocalFileSystem.ts:7,17`** — delete the dead `import { OpenAI } from "openai"` and `static _openAI: OpenAI` declaration. Fixes G21.
-24. **`packages/DBAutoDoc/src/utils/llm-factory.ts:14-77`** — replace `PROVIDER_TO_DRIVER_CLASS` and `createLLMInstance` with a thin wrapper around `ModelResolver`. The DBAutoDoc CLI passes `--ai.provider gemini --ai.apiKey ...` from config; map those to `ModelResolver.resolveForRequirements({ vendorName, credentialId? })` then `withFailover`. Fixes G22.
-25. **`packages/DBAutoDoc/src/discovery/LLMDiscoveryValidator.ts:32-80`** — same change as item 24 (uses the same factory). Fixes G23.
+24. **~~`packages/DBAutoDoc/src/utils/llm-factory.ts:14-77`~~** — **OUT OF SCOPE**. DBAutoDoc is a standalone CLI tool that does not share the `AIPromptRunner` runtime. If DBAutoDoc later wants failover, it can adopt the published `ModelResolver` independently — no MJ-side change needed.
+25. **~~`packages/DBAutoDoc/src/discovery/LLMDiscoveryValidator.ts:32-80`~~** — **OUT OF SCOPE**, same reason as item 24.
 
 ### Engine-level deprecations (Phase 5)
 
