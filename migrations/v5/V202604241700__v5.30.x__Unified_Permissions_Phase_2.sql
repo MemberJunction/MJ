@@ -2,7 +2,13 @@
 -- Migration: Unified Permissions Architecture — Phase 2 (consolidated)
 -- Version:   v5.30.x
 -- =====================================================================================================================
--- This migration consolidates five Phase 2 unified-permissions migrations into a single script:
+-- This migration consolidates the Phase 2 unified-permissions schema changes into a single script.
+-- Application-level cascade-delete semantics for Dashboard child rows are handled out-of-band by
+-- setting `CascadeDeletes=true` on the `MJ: Dashboards` entity in metadata (see
+-- `metadata/entities/.entity-cascade-deletes-dashboards.json`); CodeGen regenerates
+-- `spDeleteDashboard` to transactionally delete child rows before the parent. We deliberately
+-- do NOT use SQL `ON DELETE CASCADE` so the delete fires through `BaseEntity.Delete()` and audit /
+-- engine cache invalidation runs for every child row.
 --
 --   1. PermissionDomain catalog table — registers each permission subsystem (provider) so the
 --      unified `PermissionEngine` can load them at startup via ClassFactory.
@@ -11,17 +17,12 @@
 --      'Allow' preserves existing behaviour; Deny rows override Allow rows on the same
 --      (EntityID, RoleID, action) at evaluation time.
 --
---   3. Dashboard ON DELETE CASCADE — replaces the FK constraints on DashboardPermission,
---      DashboardCategoryLink, DashboardUserPreference and DashboardUserState so deleting a
---      Dashboard no longer fails with FK conflicts. Each child row is meaningless without
---      its parent dashboard, so cascading is the correct semantics.
---
---   4. ResourcePermission.SharedByUserID — adds the column + FK to `User` so resource-permission
+--   3. ResourcePermission.SharedByUserID — adds the column + FK to `User` so resource-permission
 --      grants record their grantor (parity with DashboardPermission, CollectionPermission,
 --      ArtifactPermission, AccessControlRule). Required for UI surfaces that show
 --      "Shared by {user}" on records the current user didn't create.
 --
---   5. UI Role permissions fix — closes gaps that were preventing UI users from sharing
+--   4. UI Role permissions fix — closes gaps that were preventing UI users from sharing
 --      dashboards / sending chat messages. Grants Create/Update/Delete on the four sharing
 --      entities and on AI Prompt Runs + Artifact Version entities. Adds three RLS filters that
 --      narrow UI reads on AIAgentRun / AIAgentRunStep / AIPromptRun to runs the user owns
@@ -32,10 +33,9 @@
 -- Layout below:
 --   §1  PermissionDomain catalog (CREATE TABLE)
 --   §2  EntityPermission.Type (ALTER TABLE)
---   §3  Dashboard FK cascade (ALTER FK constraints, four child tables)
---   §4  ResourcePermission.SharedByUserID (ALTER TABLE + FK)
---   §5  UI role permission updates + RLS filters (DML)
---   §6  Extended properties for all new columns
+--   §3  ResourcePermission.SharedByUserID (ALTER TABLE + FK)
+--   §4  UI role permission updates + RLS filters (DML)
+--   §5  Extended properties for all new columns
 -- =====================================================================================================================
 
 
@@ -71,52 +71,7 @@ GO
 
 
 -- =====================================================================================================================
--- §3  Dashboard child-table FK cascade delete
---     Drop and re-add four FKs so deleting a Dashboard cascades to its child rows.
--- =====================================================================================================================
-ALTER TABLE [${flyway:defaultSchema}].[DashboardPermission]
-    DROP CONSTRAINT [FK_DashboardPermission_DashboardID];
-GO
-ALTER TABLE [${flyway:defaultSchema}].[DashboardPermission]
-    ADD CONSTRAINT [FK_DashboardPermission_DashboardID]
-    FOREIGN KEY ([DashboardID])
-    REFERENCES [${flyway:defaultSchema}].[Dashboard]([ID])
-    ON DELETE CASCADE;
-GO
-
-ALTER TABLE [${flyway:defaultSchema}].[DashboardCategoryLink]
-    DROP CONSTRAINT [FK_DashboardCategoryLink_DashboardID];
-GO
-ALTER TABLE [${flyway:defaultSchema}].[DashboardCategoryLink]
-    ADD CONSTRAINT [FK_DashboardCategoryLink_DashboardID]
-    FOREIGN KEY ([DashboardID])
-    REFERENCES [${flyway:defaultSchema}].[Dashboard]([ID])
-    ON DELETE CASCADE;
-GO
-
-ALTER TABLE [${flyway:defaultSchema}].[DashboardUserPreference]
-    DROP CONSTRAINT [FK_DashboardUserPreference_Dashboard];
-GO
-ALTER TABLE [${flyway:defaultSchema}].[DashboardUserPreference]
-    ADD CONSTRAINT [FK_DashboardUserPreference_Dashboard]
-    FOREIGN KEY ([DashboardID])
-    REFERENCES [${flyway:defaultSchema}].[Dashboard]([ID])
-    ON DELETE CASCADE;
-GO
-
-ALTER TABLE [${flyway:defaultSchema}].[DashboardUserState]
-    DROP CONSTRAINT [FK_DashboardUserState_Dashboard];
-GO
-ALTER TABLE [${flyway:defaultSchema}].[DashboardUserState]
-    ADD CONSTRAINT [FK_DashboardUserState_Dashboard]
-    FOREIGN KEY ([DashboardID])
-    REFERENCES [${flyway:defaultSchema}].[Dashboard]([ID])
-    ON DELETE CASCADE;
-GO
-
-
--- =====================================================================================================================
--- §4  ResourcePermission.SharedByUserID
+-- §3  ResourcePermission.SharedByUserID
 -- =====================================================================================================================
 ALTER TABLE [${flyway:defaultSchema}].[ResourcePermission]
     ADD [SharedByUserID] UNIQUEIDENTIFIER NULL;
@@ -130,7 +85,7 @@ GO
 
 
 -- =====================================================================================================================
--- §5  UI role permission updates + RLS filters
+-- §4  UI role permission updates + RLS filters
 -- =====================================================================================================================
 SET NOCOUNT ON;
 GO
@@ -233,10 +188,10 @@ GO
 
 
 -- =====================================================================================================================
--- §6  Extended properties (descriptions for CodeGen)
+-- §5  Extended properties (descriptions for CodeGen)
 -- =====================================================================================================================
 
--- ----- 6a) PermissionDomain table + columns
+-- ----- 5a) PermissionDomain table + columns
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -321,7 +276,7 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'PermissionDomain',
     @level2type = N'COLUMN', @level2name = N'Icon';
 
--- ----- 6b) EntityPermission.Type
+-- ----- 5b) EntityPermission.Type
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -330,7 +285,7 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'EntityPermission',
     @level2type = N'COLUMN', @level2name = N'Type';
 
--- ----- 6c) ResourcePermission.SharedByUserID
+-- ----- 5c) ResourcePermission.SharedByUserID
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -339,3 +294,91 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'ResourcePermission',
     @level2type = N'COLUMN', @level2name = N'SharedByUserID';
 GO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
