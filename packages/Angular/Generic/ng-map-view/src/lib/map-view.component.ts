@@ -110,7 +110,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                 // Becoming visible again — fix tile rendering and re-fit
                 this.map.invalidateSize();
                 if (this.pendingRender) {
-                    this.RenderMarkers();
+                    this.RenderMarkers().catch(err => console.error('MapViewComponent: RenderMarkers failed on visibility resume', err));
                     this.pendingRender = false;
                 }
             }
@@ -127,7 +127,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                 setTimeout(() => {
                     if (this.map) {
                         this.map.invalidateSize();
-                        this.RenderMarkers();
+                        this.RenderMarkers().catch(err => console.error('MapViewComponent: RenderMarkers failed on input change', err));
                     }
                 }, 100);
             } else {
@@ -185,10 +185,18 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
 
         // invalidateSize after a short delay to ensure tile rendering is correct
         // then render markers and fit bounds
-        setTimeout(() => {
+        setTimeout(async () => {
             if (this.map) {
                 this.map.invalidateSize();
-                this.RenderMarkers();
+                // Await RenderMarkers so the IsLoading toggle for the choropleth on-demand load
+                // (which sets IsLoading=true while awaiting GeoDataEngine.Config) doesn't get
+                // clobbered by the IsLoading=false below. RenderMarkers manages its own
+                // IsLoading state during the choropleth wait.
+                try {
+                    await this.RenderMarkers();
+                } catch (err) {
+                    console.error('MapViewComponent: RenderMarkers failed during init', err);
+                }
                 this.IsLoading = false;
                 this.cdr.detectChanges();
 
@@ -202,8 +210,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
 
     /**
      * Render map content based on the current RenderMode.
+     *
+     * Choropleth mode uses GeoDataEngine, which is loaded on-demand (no @RegisterForStartup).
+     * Config() is idempotent — concurrent calls dedup against a single in-flight load and
+     * subsequent calls return immediately once loaded.
      */
-    private RenderMarkers(): void {
+    private async RenderMarkers(): Promise<void> {
         if (!this.map || !this.markerLayer) return;
 
         this.markerLayer.clearLayers();
@@ -215,9 +227,25 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
             case 'heatmap':
                 this.RenderHeatmap();
                 break;
-            case 'choropleth':
+            case 'choropleth': {
+                // Show the loading overlay only on the first load; subsequent renders
+                // (mode toggles, Records changes) hit the in-memory cache and complete instantly.
+                const needsLoad = !GeoDataEngine.Instance.Loaded;
+                if (needsLoad) {
+                    this.IsLoading = true;
+                    this.cdr.detectChanges();
+                }
+                await GeoDataEngine.Instance.Config();
+                if (needsLoad) {
+                    this.IsLoading = false;
+                    this.cdr.detectChanges();
+                }
+                // Re-check that the map is still alive — the user could have
+                // navigated away during the multi-second initial load.
+                if (!this.map || !this.markerLayer) return;
                 this.RenderChoropleth();
                 break;
+            }
             default:
                 this.RenderPointMarkers();
         }
@@ -601,7 +629,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     SetRenderMode(mode: MapRenderMode): void {
         this.RenderMode = mode;
         this.RenderModeChange.emit(mode);
-        this.RenderMarkers();
+        this.RenderMarkers().catch(err => console.error('MapViewComponent: RenderMarkers failed on mode change', err));
     }
 
     /**

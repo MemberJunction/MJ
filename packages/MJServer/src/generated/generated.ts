@@ -20897,6 +20897,16 @@ export class MJArchiveRunResolver extends ResolverBase {
         return result;
     }
         
+    @Query(() => [MJArchiveRun_])
+    async AllMJArchiveRuns(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRuns')}` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Runs', userPayload, EntityPermissionType.Read, ' WHERE');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
     @Mutation(() => MJArchiveRun_)
     async CreateMJArchiveRun(
         @Arg('input', () => CreateMJArchiveRunInput) input: CreateMJArchiveRunInput,

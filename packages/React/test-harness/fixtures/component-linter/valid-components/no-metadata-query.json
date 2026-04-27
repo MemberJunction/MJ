@@ -1,0 +1,16 @@
+{
+  "name": "NoMetadataQueryComponent",
+  "title": "Query Without Field Metadata",
+  "description": "Tests skip-with-warning when query field metadata is unavailable",
+  "type": "report",
+  "code": "function NoMetadataQueryComponent({ utilities }) {\n  const [data, setData] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'NonExistentTestQuery12345',\n        CategoryPath: 'Test/Reports'\n      });\n      if (result?.Success) {\n        setData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Query Results</h3>\n      {data.map((item, i) => (\n        <div key={i}>{JSON.stringify(item)}</div>\n      ))}\n    </div>\n  );\n}",
+  "properties": [],
+  "events": [],
+  "dataRequirements": {
+    "mode": "queries",
+    "queries": [{
+      "name": "NonExistentTestQuery12345",
+      "categoryPath": "Test/Reports"
+    }]
+  }
+}

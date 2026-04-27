@@ -20,8 +20,11 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
+    "dotenv": "^16.5.0",
+    "mssql": "^11.0.1",
     "ts-node-dev": "^2.0.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "@memberjunction/sqlserver-dataprovider": "5.24.0"
   },
   "dependencies": {
     "@babel/parser": "^7.29.0",
