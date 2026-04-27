@@ -24,6 +24,7 @@
     "@memberjunction/core": "5.29.0",
     "@memberjunction/core-entities": "5.29.0",
     "@memberjunction/global": "5.29.0",
+    "@memberjunction/geo-maps": "5.29.0",
     "@memberjunction/ng-shared-generic": "5.29.0",
     "leaflet": "^1.9.4",
     "@types/leaflet": "^1.9.17",
