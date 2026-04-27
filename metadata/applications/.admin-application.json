@@ -64,6 +64,13 @@
         "isDefault": false
       },
       {
+        "Label": "App Roles",
+        "Icon": "fa-solid fa-user-shield",
+        "ResourceType": "Custom",
+        "DriverClass": "ApplicationRolesResource",
+        "isDefault": false
+      },
+      {
         "Label": "Database Designer",
         "Icon": "fa-solid fa-wand-magic-sparkles",
         "ResourceType": "Custom",

@@ -153,11 +153,33 @@ export class ResolverBase {
           Key: mapper.ReverseMapFieldName(item.Key),
           Value: item.Value,
         }));
+      } else if (key === 'RestoreContext___') {
+        // Pass through the restore-context blob unchanged — its inner field
+        // names (SourceChangeID, Reason) are not entity-field names.
+        mapped[key] = input[key];
       } else {
         mapped[mapper.ReverseMapFieldName(key)] = input[key];
       }
     }
     return mapped;
+  }
+
+  /**
+   * Applies an inbound RestoreContext___ blob to a server-side BaseEntity.
+   * Mirrors the OldValues___ pattern — the client-side BaseEntity's
+   * `_restoreContext` doesn't traverse the network, so the server must
+   * reconstruct it from the mutation input before calling Save().
+   *
+   * Returns true when context was applied; false when no context was on the input.
+   */
+  protected applyRestoreContext(
+    entityObject: BaseEntity,
+    input: { RestoreContext___?: { SourceChangeID?: string; Reason?: string | null } | null },
+  ): boolean {
+    const ctx = input?.RestoreContext___;
+    if (!ctx || !ctx.SourceChangeID) return false;
+    entityObject.SetRestoreContext(ctx.SourceChangeID, ctx.Reason ?? null);
+    return true;
   }
 
   protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo): Promise<any[]> {
@@ -1053,7 +1075,17 @@ export class ResolverBase {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
       entityObject.NewRecord();
-      entityObject.SetMany(input);
+      // Strip the RestoreContext___ blob from the field assignments — it's
+      // metadata for the upcoming Save(), not a field on the record.
+      const fieldsForSet: Record<string, unknown> = {};
+      for (const key of Object.keys(input)) {
+        if (key !== 'RestoreContext___') fieldsForSet[key] = input[key];
+      }
+      entityObject.SetMany(fieldsForSet);
+
+      // Reconstruct the client-side restore context, if any, on this server
+      // entity so the data provider writes the lineage columns on Save().
+      this.applyRestoreContext(entityObject, input);
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
 
@@ -1095,10 +1127,11 @@ export class ResolverBase {
       const entityInfo = entityObject.EntityInfo;
       const clientNewValues = {};
       Object.keys(input).forEach((key) => {
-        if (key !== 'OldValues___') {
+        // Skip metadata blobs that aren't actual entity fields.
+        if (key !== 'OldValues___' && key !== 'RestoreContext___') {
           clientNewValues[key] = input[key];
         }
-      }); // grab all the props except for the OldValues property
+      });
 
       if (entityInfo.TrackRecordChanges || !input.OldValues___) {
         // We get here because EITHER the entity tracks record changes OR the client did not provide OldValues, so we need to load the old values from the DB
@@ -1140,8 +1173,12 @@ export class ResolverBase {
         entityObject.SetMany(clientNewValues);
       }
 
+      // Reconstruct the client-side restore context, if any, on this server
+      // entity so the data provider writes the lineage columns on Save().
+      this.applyRestoreContext(entityObject, input);
+
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
-      
+
       if (await entityObject.Save()) {
         // save worked, fire afterevent and return all the data
         await this.AfterUpdate(provider, input); // fire event

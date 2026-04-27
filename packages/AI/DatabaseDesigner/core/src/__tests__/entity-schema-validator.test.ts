@@ -118,6 +118,27 @@ const AUTH_CREATE_UDT = {
     UserCanExecute: () => true,
 };
 
+/** Phase D helper: wrap a single TableDefinition in the new Tables[] shape */
+function makeCreatePayload(tableDef = VALID_TABLE_DEFINITION): DatabaseDesignerPayload {
+    return {
+        SchemaDesign: {
+            Tables: [{ TableDefinition: tableDef, ModificationType: 'create' }],
+        },
+    };
+}
+
+function makeAlterPayload(tableDef = VALID_TABLE_DEFINITION, existingEntityID?: string): DatabaseDesignerPayload {
+    return {
+        SchemaDesign: {
+            Tables: [{
+                TableDefinition: tableDef,
+                ModificationType: 'alter',
+                ExistingEntityID: existingEntityID,
+            }],
+        },
+    };
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('DatabaseDesignerSchemaValidator', () => {
@@ -148,7 +169,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
             // mockState.authorizations stays [] → auth record not found
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
-                makeParams({ SchemaDesign: { TableDefinition: VALID_TABLE_DEFINITION, ModificationType: 'create' } }),
+                makeParams(makeCreatePayload()),
                 {} as AgentConfiguration
             );
             expect(result.finalStep.step).toBe('Failed');
@@ -164,7 +185,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
             const validator = makeValidator();
             const blockedDef = { ...VALID_TABLE_DEFINITION, SchemaName: 'dbo' };
             const result = await validator.executeAgentInternal(
-                makeParams({ SchemaDesign: { TableDefinition: blockedDef, ModificationType: 'create' } }),
+                makeParams(makeCreatePayload(blockedDef)),
                 {} as AgentConfiguration
             );
 
@@ -181,7 +202,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
             const validator = makeValidator();
             const blockedDef = { ...VALID_TABLE_DEFINITION, SchemaName: '__mj' };
             const result = await validator.executeAgentInternal(
-                makeParams({ SchemaDesign: { TableDefinition: blockedDef, ModificationType: 'create' } }),
+                makeParams(makeCreatePayload(blockedDef)),
                 {} as AgentConfiguration
             );
 
@@ -197,7 +218,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
             const validator = makeValidator();
             const blockedDef = { ...VALID_TABLE_DEFINITION, SchemaName: 'myschema' };
             const result = await validator.executeAgentInternal(
-                makeParams({ SchemaDesign: { TableDefinition: blockedDef, ModificationType: 'create' } }),
+                makeParams(makeCreatePayload(blockedDef)),
                 {} as AgentConfiguration
             );
 
@@ -213,7 +234,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
 
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
-                makeParams({ SchemaDesign: { TableDefinition: VALID_TABLE_DEFINITION, ModificationType: 'create' } }),
+                makeParams(makeCreatePayload()),
                 {} as AgentConfiguration
             );
 
@@ -235,7 +256,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
                 ],
             };
             const result = await validator.executeAgentInternal(
-                makeParams({ SchemaDesign: { TableDefinition: reservedColDef, ModificationType: 'create' } }),
+                makeParams(makeCreatePayload(reservedColDef)),
                 {} as AgentConfiguration
             );
 
@@ -249,7 +270,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
 
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
-                makeParams({ SchemaDesign: { TableDefinition: VALID_TABLE_DEFINITION, ModificationType: 'create' } }),
+                makeParams(makeCreatePayload()),
                 {} as AgentConfiguration
             );
 
@@ -264,7 +285,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
 
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
-                makeParams({ SchemaDesign: { TableDefinition: VALID_TABLE_DEFINITION, ModificationType: 'create' } }),
+                makeParams(makeCreatePayload()),
                 {} as AgentConfiguration
             );
 
@@ -285,13 +306,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
 
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
-                makeParams({
-                    SchemaDesign: {
-                        TableDefinition: VALID_TABLE_DEFINITION,
-                        ModificationType: 'alter',
-                        ExistingEntityID: 'existing-id',
-                    },
-                }, 'user-1'),
+                makeParams(makeAlterPayload(VALID_TABLE_DEFINITION, 'existing-id'), 'user-1'),
                 {} as AgentConfiguration
             );
 
@@ -308,13 +323,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
 
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
-                makeParams({
-                    SchemaDesign: {
-                        TableDefinition: VALID_TABLE_DEFINITION,
-                        ModificationType: 'alter',
-                        // No ExistingEntityID → falls back to MODIFY_ANY_UDT_ENTITIES
-                    },
-                }),
+                makeParams(makeAlterPayload()), // No ExistingEntityID → falls back to MODIFY_ANY_UDT_ENTITIES
                 {} as AgentConfiguration
             );
 
@@ -325,14 +334,6 @@ describe('DatabaseDesignerSchemaValidator', () => {
     });
 
     describe('alter mode — ownership-based authorization', () => {
-        const MODIFY_PAYLOAD_BASE: DatabaseDesignerPayload = {
-            SchemaDesign: {
-                TableDefinition: VALID_TABLE_DEFINITION,
-                ModificationType: 'alter',
-                ExistingEntityID: 'entity-abc',
-            },
-        };
-
         it('requires only MODIFY_OWN_ENTITIES when contextUser is the entity owner', async () => {
             mockState.authorizations = [{
                 Name: AUTHORIZATIONS.MODIFY_OWN_ENTITIES,
@@ -346,7 +347,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
 
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
-                makeParams(MODIFY_PAYLOAD_BASE, 'user-1'),
+                makeParams(makeAlterPayload(VALID_TABLE_DEFINITION, 'entity-abc'), 'user-1'),
                 {} as AgentConfiguration
             );
 
@@ -367,7 +368,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
 
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
-                makeParams(MODIFY_PAYLOAD_BASE, 'user-1'),
+                makeParams(makeAlterPayload(VALID_TABLE_DEFINITION, 'entity-abc'), 'user-1'),
                 {} as AgentConfiguration
             );
 
@@ -387,7 +388,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
 
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
-                makeParams(MODIFY_PAYLOAD_BASE, 'user-1'),
+                makeParams(makeAlterPayload(VALID_TABLE_DEFINITION, 'entity-abc'), 'user-1'),
                 {} as AgentConfiguration
             );
 
@@ -410,7 +411,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
 
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
-                makeParams(MODIFY_PAYLOAD_BASE, 'abcd-1234-ef56'), // lowercase contextUser.ID
+                makeParams(makeAlterPayload(VALID_TABLE_DEFINITION, 'entity-abc'), 'abcd-1234-ef56'),
                 {} as AgentConfiguration
             );
 
@@ -420,13 +421,6 @@ describe('DatabaseDesignerSchemaValidator', () => {
         });
 
         it('falls back to MODIFY_ANY_UDT_ENTITIES when ExistingEntityID is absent', async () => {
-            const noIDPayload: DatabaseDesignerPayload = {
-                SchemaDesign: {
-                    TableDefinition: VALID_TABLE_DEFINITION,
-                    ModificationType: 'alter',
-                    // ExistingEntityID absent
-                },
-            };
             mockState.authorizations = [{
                 Name: AUTHORIZATIONS.MODIFY_ANY_UDT_ENTITIES,
                 UserCanExecute: () => true,
@@ -435,7 +429,7 @@ describe('DatabaseDesignerSchemaValidator', () => {
 
             const validator = makeValidator();
             const result = await validator.executeAgentInternal(
-                makeParams(noIDPayload),
+                makeParams(makeAlterPayload()), // no ExistingEntityID
                 {} as AgentConfiguration
             );
 

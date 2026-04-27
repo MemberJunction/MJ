@@ -7,6 +7,11 @@
  *
  * All FK target data comes from `Metadata.Entities` (already in-memory at login),
  * so every dropdown is synchronous — no async loading needed.
+ *
+ * Phase C: FK source columns are no longer restricted to UUID type — any column
+ * may be used as a FK source.  When the user selects a target column, the
+ * component reads its SQL type and auto-selects the first source column whose
+ * type matches, improving UX and preventing silent type mismatches.
  */
 
 import {
@@ -14,13 +19,30 @@ import {
     ChangeDetectionStrategy, ChangeDetectorRef, inject,
 } from '@angular/core';
 import { Metadata, EntityInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { ColumnSpec, ForeignKeySpec } from '../../../database-designer.types.js';
+
+// `MJ: Schema Info` only surfaces MJ-registered schemas, so only __mj needs blocking here.
+// Server-side RSM.GetAllProtectedSchemas() remains the authoritative gate.
+const FRONTEND_BLOCKED_SCHEMAS = new Set(['__mj']);
+
+/** Default referenced column name used when a FK relationship is first created or schema/table changes. */
+const DEFAULT_PK_COLUMN = 'ID';
+
+/** Target entity column with its SQL type — used for source-column auto-matching. */
+export interface EntityColumnInfo {
+    Name: string;
+    /** SQL type string from EntityInfo.Fields (e.g. 'uniqueidentifier', 'int', 'nvarchar'). */
+    SqlType: string;
+}
 
 /** Internal per-row state — carries the resolved entityId alongside the FK spec. */
 interface FkRowState extends ForeignKeySpec {
     rowIndex: number;
     /** EntityInfo.ID of the selected target entity — used to look up columns. */
     selectedEntityId: string;
+    /** SQL type of the selected target column — used for source-column auto-matching. */
+    referencedColumnType?: string;
 }
 
 @Component({
@@ -38,16 +60,22 @@ export class StepRelationshipsComponent {
     @Input() public AvailableColumns: ColumnSpec[] = [];
     @Output() public readonly ForeignKeysChanged = new EventEmitter<ForeignKeySpec[]>();
 
-    /** Only UUID columns are valid FK sources. */
-    public get UuidColumns(): ColumnSpec[] {
-        return this.AvailableColumns.filter(c => c.Type === 'uuid');
+    /** All Step 2 columns are valid FK source candidates (not just UUID). */
+    public get AllColumns(): ColumnSpec[] {
+        return this.AvailableColumns;
     }
 
     // ─── Metadata-backed synchronous getters ──────────────────────────────────
 
-    /** Sorted list of all schema names present in Metadata.Entities. */
+    /**
+     * Sorted schema names present in Metadata.Entities, excluding blocked schemas.
+     * `MJ: Schema Info` only surfaces MJ-registered schemas, so __mj is the only
+     * schema that needs filtering here.
+     */
     public get AvailableSchemas(): string[] {
-        return [...new Set(new Metadata().Entities.map(e => e.SchemaName))].sort();
+        return [...new Set(new Metadata().Entities.map(e => e.SchemaName))]
+            .filter(s => !FRONTEND_BLOCKED_SCHEMAS.has(s))
+            .sort();
     }
 
     /** Entities that belong to the given schema, sorted by BaseTable. */
@@ -58,12 +86,18 @@ export class StepRelationshipsComponent {
             .sort((a, b) => a.BaseTable.localeCompare(b.BaseTable));
     }
 
-    /** Physical column names for the entity identified by `entityId`. */
-    public ColumnsForEntity(entityId: string): string[] {
+    /**
+     * Physical columns for the entity identified by `entityId`, including SQL type info.
+     * Returns `EntityColumnInfo[]` so the template can display `Name (SqlType)` and
+     * the component can auto-match source columns by type.
+     */
+    public ColumnsForEntity(entityId: string): EntityColumnInfo[] {
         if (!entityId) return [];
-        const entity = new Metadata().Entities.find(e => e.ID === entityId);
-        if (!entity) return ['ID'];
-        return entity.Fields.filter(f => !f.IsVirtual).map(f => f.Name);
+        const entity = new Metadata().Entities.find(e => UUIDsEqual(e.ID, entityId));
+        if (!entity) return [{ Name: 'ID', SqlType: 'uniqueidentifier' }];
+        return entity.Fields
+            .filter(f => !f.IsVirtual)
+            .map(f => ({ Name: f.Name, SqlType: f.Type ?? '' }));
     }
 
     // ─── Placeholder helpers ───────────────────────────────────────────────────
@@ -88,7 +122,7 @@ export class StepRelationshipsComponent {
     public OnSchemaChange(rowIndex: number, schema: string): void {
         this.rows = this.rows.map(r =>
             r.rowIndex === rowIndex
-                ? { ...r, ReferencedSchema: schema, ReferencedTable: '', ReferencedColumn: 'ID', selectedEntityId: '' }
+                ? { ...r, ReferencedSchema: schema, ReferencedTable: '', ReferencedColumn: DEFAULT_PK_COLUMN, selectedEntityId: '', referencedColumnType: undefined }
                 : r
         );
         this.emit();
@@ -98,13 +132,13 @@ export class StepRelationshipsComponent {
         if (!entityId) {
             this.rows = this.rows.map(r =>
                 r.rowIndex === rowIndex
-                    ? { ...r, ReferencedTable: '', ReferencedColumn: 'ID', selectedEntityId: '' }
+                    ? { ...r, ReferencedTable: '', ReferencedColumn: DEFAULT_PK_COLUMN, selectedEntityId: '', referencedColumnType: undefined }
                     : r
             );
             this.emit();
             return;
         }
-        const entity = new Metadata().Entities.find(e => e.ID === entityId);
+        const entity = new Metadata().Entities.find(e => UUIDsEqual(e.ID, entityId));
         this.rows = this.rows.map(r => {
             if (r.rowIndex !== rowIndex) return r;
             // Auto-name the source FK column if the user hasn't chosen one — the
@@ -116,8 +150,9 @@ export class StepRelationshipsComponent {
                 ...r,
                 ColumnName: autoSourceName,
                 ReferencedTable: entity?.BaseTable ?? '',
-                ReferencedColumn: 'ID',
+                ReferencedColumn: DEFAULT_PK_COLUMN,
                 selectedEntityId: entityId,
+                referencedColumnType: undefined,
             };
         });
         this.emit();
@@ -133,10 +168,28 @@ export class StepRelationshipsComponent {
         return `${base}ID`;
     }
 
-    public OnColumnChange(rowIndex: number, column: string): void {
-        this.rows = this.rows.map(r =>
-            r.rowIndex === rowIndex ? { ...r, ReferencedColumn: column } : r
-        );
+    /**
+     * Handle target-column selection.  Reads the column's SQL type, stores it in row
+     * state, then auto-selects the first source column whose (normalised) type matches.
+     */
+    public OnColumnChange(rowIndex: number, column: string, entityId: string): void {
+        const colInfo = this.ColumnsForEntity(entityId).find(c => c.Name === column);
+        const targetType = colInfo?.SqlType;
+
+        const autoSourceColumn = targetType
+            ? this.findMatchingSourceColumn(targetType)
+            : undefined;
+
+        this.rows = this.rows.map(r => {
+            if (r.rowIndex !== rowIndex) return r;
+            return {
+                ...r,
+                ReferencedColumn: column,
+                referencedColumnType: targetType,
+                // Only update source column if a better match was found
+                ColumnName: autoSourceColumn ?? r.ColumnName,
+            };
+        });
         this.emit();
     }
 
@@ -160,17 +213,23 @@ export class StepRelationshipsComponent {
         const schemas = this.AvailableSchemas;
         const defaultSchema = schemas.includes('__mj_UDT') ? '__mj_UDT' : (schemas[0] ?? '');
 
-        // ColumnName defaults to empty so OnTableChange auto-names a unique
-        // column from the target table ("User" → "UserID", "Role" → "RoleID").
-        // Pre-filling with an existing UUID column would make two relationships
-        // collide on the same source column.
+        // Default the new row's source column to the first Step 2 column
+        // that isn't already used by another FK row.  This honours the
+        // "give the user a sensible default of any type" intent from
+        // f842848683 while avoiding the multi-FK source-column collision
+        // bug fixed in 8e52898ec6 — when every existing column is already
+        // wired up, we fall through to OnTableChange's auto-naming
+        // (mints a unique "<TargetTable>ID" once the user picks a table).
+        const usedColumns = new Set(this.rows.map(r => r.ColumnName).filter(Boolean));
+        const firstFreeColumn = this.AllColumns.find(c => !usedColumns.has(c.Name))?.Name ?? '';
+
         this.rows = [
             ...this.rows,
             {
-                ColumnName: '',
+                ColumnName: firstFreeColumn,
                 ReferencedSchema: defaultSchema,
                 ReferencedTable: '',
-                ReferencedColumn: 'ID',
+                ReferencedColumn: DEFAULT_PK_COLUMN,
                 IsSoft: true,
                 rowIndex: this.rows.length,
                 selectedEntityId: '',
@@ -201,6 +260,26 @@ export class StepRelationshipsComponent {
     }
 
     public TrackByIndex(_: number, row: FkRowState): number { return row.rowIndex; }
+
+    // ─── Source-column type matching ───────────────────────────────────────────
+
+    /**
+     * Find the first Step 2 source column whose SQL type matches `targetSqlType`.
+     * Type comparison is case-insensitive and ignores length/precision qualifiers
+     * (e.g. `NVARCHAR(255)` normalises to `NVARCHAR`).
+     *
+     * Returns `undefined` when no match is found so the caller can decide whether
+     * to leave the existing selection untouched.
+     */
+    private findMatchingSourceColumn(targetSqlType: string): string | undefined {
+        const normalise = (t: string) => t.toUpperCase().replace(/\s*\(.*\)$/, '').trim();
+        const targetNorm = normalise(targetSqlType);
+        const match = this.AllColumns.find(c => {
+            const colType = c.RawSqlType ?? c.Type ?? '';
+            return normalise(colType) === targetNorm;
+        });
+        return match?.Name;
+    }
 
     // ─── Emit ──────────────────────────────────────────────────────────────────
 

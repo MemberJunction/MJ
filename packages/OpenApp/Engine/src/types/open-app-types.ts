@@ -58,6 +58,8 @@ export interface InstallOptions {
     Version?: string;
     /** Enable verbose output */
     Verbose?: boolean;
+    /** Allow schema names starting with '__'. Dangerous; MJ-internal apps only. */
+    AllowDoubleUnderscoreSchema?: boolean;
 }
 
 /**
@@ -70,6 +72,8 @@ export interface UpgradeOptions {
     Version?: string;
     /** Enable verbose output */
     Verbose?: boolean;
+    /** Allow schema names starting with '__'. Dangerous; MJ-internal apps only. */
+    AllowDoubleUnderscoreSchema?: boolean;
 }
 
 /**
@@ -84,6 +88,12 @@ export interface RemoveOptions {
     Force?: boolean;
     /** Enable verbose output */
     Verbose?: boolean;
+    /**
+     * Allow dropping schemas whose name starts with '__' (normally reserved for MJ internals).
+     * The exact-match reserved list (dbo/sys/guest/INFORMATION_SCHEMA/__mj) remains blocked.
+     * Dangerous; intended for MJ-internal apps only.
+     */
+    AllowDoubleUnderscoreSchema?: boolean;
 }
 
 /**

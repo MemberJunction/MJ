@@ -4,9 +4,8 @@ import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '
 // ─── Hoisted mocks (referenced inside vi.mock factories) ────────────────────
 // vi.mock() is hoisted to file top; variables used in factories must use vi.hoisted()
 
-const { mockCreateEntity, mockModifyEntity } = vi.hoisted(() => ({
-    mockCreateEntity: vi.fn(),
-    mockModifyEntity: vi.fn(),
+const { mockCreateEntitiesBatch } = vi.hoisted(() => ({
+    mockCreateEntitiesBatch: vi.fn(),
 }));
 
 // ─── Mock all external dependencies ─────────────────────────────────────────
@@ -38,8 +37,7 @@ vi.mock('@memberjunction/global', () => ({
 
 vi.mock('../pipeline-executor.js', () => ({
     DatabaseDesignerPipelineExecutor: {
-        CreateEntity: mockCreateEntity,
-        ModifyEntity: mockModifyEntity,
+        CreateEntitiesBatch: mockCreateEntitiesBatch,
     },
 }));
 
@@ -75,9 +73,12 @@ const VALID_TABLE_DEFINITION = {
     Columns: [{ Name: 'Title', Type: 'string' as const, IsNullable: false }],
 };
 
+/** Phase D: SchemaDesign uses Tables[] array, not single TableDefinition */
 const VALID_PAYLOAD: DatabaseDesignerPayload = {
     ValidationResult: { Valid: true, Errors: [], Warnings: [] },
-    SchemaDesign: { TableDefinition: VALID_TABLE_DEFINITION, ModificationType: 'create' },
+    SchemaDesign: {
+        Tables: [{ TableDefinition: VALID_TABLE_DEFINITION, ModificationType: 'create' }],
+    },
 };
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -103,7 +104,9 @@ describe('DatabaseDesignerSchemaBuilder', () => {
             const result = await builder.executeAgentInternal(
                 makeParams({
                     ValidationResult: { Valid: false, Errors: ['column conflict'], Warnings: [] },
-                    SchemaDesign: { TableDefinition: VALID_TABLE_DEFINITION },
+                    SchemaDesign: {
+                        Tables: [{ TableDefinition: VALID_TABLE_DEFINITION, ModificationType: 'create' }],
+                    },
                 }),
                 {} as AgentConfiguration
             );
@@ -116,24 +119,28 @@ describe('DatabaseDesignerSchemaBuilder', () => {
             const result = await builder.executeAgentInternal(
                 makeParams({
                     ValidationResult: { Valid: true, Errors: [], Warnings: [] },
-                    SchemaDesign: {},
+                    SchemaDesign: { Tables: [] }, // empty Tables[]
                 }),
                 {} as AgentConfiguration
             );
             expect(result.finalStep.step).toBe('Failed');
-            expect(result.finalStep.reasoning).toContain('TableDefinition');
+            // Message should mention Tables[] or missing
+            expect(result.finalStep.reasoning).toMatch(/Tables|missing/i);
         });
     });
 
     describe('executeAgentInternal — happy path (create mode)', () => {
         beforeEach(() => {
-            mockCreateEntity.mockResolvedValue({
+            mockCreateEntitiesBatch.mockResolvedValue({
                 Success: true,
-                EntityName: 'Project Milestones',
-                EntityID: 'ent-123',
-                SchemaName: '__mj_UDT',
-                TableName: 'ProjectMilestones',
-                PipelineSteps: [{ Name: 'RunMigration', Status: 'success', DurationMs: 200 }],
+                Results: [{
+                    Success: true,
+                    EntityName: 'Project Milestones',
+                    EntityID: 'ent-123',
+                    SchemaName: '__mj_UDT',
+                    TableName: 'ProjectMilestones',
+                    PipelineSteps: [{ Name: 'RunMigration', Status: 'success', DurationMs: 200 }],
+                }],
             });
         });
 
@@ -147,20 +154,19 @@ describe('DatabaseDesignerSchemaBuilder', () => {
             expect(result.finalStep.step).toBe('Success');
             const payload = result.finalStep.newPayload as DatabaseDesignerPayload;
             expect(payload.DatabaseDesignerResult?.Success).toBe(true);
-            expect(payload.DatabaseDesignerResult?.EntityName).toBe('Project Milestones');
-            expect(payload.DatabaseDesignerResult?.EntityID).toBe('ent-123');
+            expect(payload.DatabaseDesignerResult?.Results[0]?.EntityName).toBe('Project Milestones');
+            expect(payload.DatabaseDesignerResult?.Results[0]?.EntityID).toBe('ent-123');
         });
 
-        it('calls CreateEntity with the TableDefinition', async () => {
+        it('calls CreateEntitiesBatch with the TableDefinition', async () => {
             const builder = makeBuilder();
             await builder.executeAgentInternal(makeParams(VALID_PAYLOAD), {} as AgentConfiguration);
 
-            expect(mockCreateEntity).toHaveBeenCalledWith(
-                VALID_TABLE_DEFINITION,
+            expect(mockCreateEntitiesBatch).toHaveBeenCalledWith(
+                [expect.objectContaining({ tableDefinition: VALID_TABLE_DEFINITION })],
                 expect.anything(),
                 // SkipRestart must be true — the builder runs inside a live MJAPI request
                 // and a full server restart would kill the in-flight agent run.
-                // Metadata.Refresh() handles entity registration without a restart.
                 expect.objectContaining({ SkipGitCommit: false, SkipRestart: true })
             );
         });
@@ -173,7 +179,7 @@ describe('DatabaseDesignerSchemaBuilder', () => {
             };
             await builder.executeAgentInternal(makeParams(payloadWithRequirements), {} as AgentConfiguration);
 
-            expect(mockCreateEntity).toHaveBeenCalledWith(
+            expect(mockCreateEntitiesBatch).toHaveBeenCalledWith(
                 expect.anything(),
                 expect.anything(),
                 expect.objectContaining({ Source: 'DatabaseDesigner' })
@@ -184,7 +190,7 @@ describe('DatabaseDesignerSchemaBuilder', () => {
             const builder = makeBuilder();
             await builder.executeAgentInternal(makeParams(VALID_PAYLOAD), {} as AgentConfiguration);
 
-            expect(mockCreateEntity).toHaveBeenCalledWith(
+            expect(mockCreateEntitiesBatch).toHaveBeenCalledWith(
                 expect.anything(),
                 expect.anything(),
                 expect.objectContaining({ Source: 'AgentManager' })
@@ -194,9 +200,12 @@ describe('DatabaseDesignerSchemaBuilder', () => {
 
     describe('executeAgentInternal — failure from pipeline', () => {
         it('returns Failed when pipeline fails', async () => {
-            mockCreateEntity.mockResolvedValue({
+            mockCreateEntitiesBatch.mockResolvedValue({
                 Success: false,
-                ErrorMessage: 'SQL execution error: duplicate table',
+                Results: [{
+                    Success: false,
+                    ErrorMessage: 'SQL execution error: duplicate table',
+                }],
             });
 
             const builder = makeBuilder();
@@ -207,10 +216,13 @@ describe('DatabaseDesignerSchemaBuilder', () => {
         });
 
         it('writes DatabaseDesignerResult to payload even on failure', async () => {
-            mockCreateEntity.mockResolvedValue({
+            mockCreateEntitiesBatch.mockResolvedValue({
                 Success: false,
-                ErrorMessage: 'Failed',
-                PipelineSteps: [],
+                Results: [{
+                    Success: false,
+                    ErrorMessage: 'Failed',
+                    PipelineSteps: [],
+                }],
             });
 
             const builder = makeBuilder();

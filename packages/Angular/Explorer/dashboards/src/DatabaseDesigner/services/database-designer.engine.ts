@@ -5,7 +5,7 @@
  * `DatabaseDesignerEngine` is a `BaseSingleton` (NOT an Angular service) that:
  *  - Loads the list of entities accessible to the current user
  *  - Loads full entity detail for the modify wizard
- *  - Returns available schemas based on the user's authorizations
+ *  - Loads available schemas from `MJ: Schema Info` (async, cached per-user)
  *  - Checks whether a proposed entity name / table name is available
  *
  * ### Why BaseSingleton, not @Injectable?
@@ -92,6 +92,17 @@ interface EntityListCacheEntry {
     timestamp: number;
 }
 
+interface SchemaCacheEntry {
+    schemas: SchemaOption[];
+    timestamp: number;
+}
+
+// ─── Frontend-only schema blocklist ──────────────────────────────────────────
+// `MJ: Schema Info` only surfaces MJ-registered schemas, so system schemas
+// (sys, dbo, information_schema) never appear.  Only __mj must be blocked here.
+// Server-side RSM.GetAllProtectedSchemas() remains the authoritative gate.
+const FRONTEND_BLOCKED_SCHEMAS = new Set(['__mj']);
+
 // ─── Engine ──────────────────────────────────────────────────────────────────
 
 /**
@@ -111,11 +122,15 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
     /** Per-user entity list cache. Key = userID. */
     private readonly _cache = new Map<string, EntityListCacheEntry>();
 
-    /** Invalidate the entity list cache for the current user (call after create/modify). */
+    /** Per-user schema list cache. Key = userID. Invalidated alongside entity cache. */
+    private readonly _schemaCache = new Map<string, SchemaCacheEntry>();
+
+    /** Invalidate all per-user caches for the current user (call after create/modify). */
     public invalidateCache(): void {
         const userId = new Metadata().CurrentUser?.ID;
         if (userId) {
             this._cache.delete(userId);
+            this._schemaCache.delete(userId);
         }
     }
 
@@ -209,21 +224,46 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
     /**
      * Return the list of schemas the current user is authorized to create tables in.
      *
-     * Synchronous — reads only from the in-memory `Metadata.Authorizations` cache.
-     * No database round-trip required.
+     * Async — queries `MJ: Schema Info` to surface real DB schemas for users
+     * with `Create in Custom Schema` authorization.  Results are cached per-user
+     * with the same 5-minute TTL as the entity list.
      *
-     * Always includes `__mj_UDT` for users with `Create in UDT Schema` auth.
-     * Includes a "custom schema" option for users with `Create in Custom Schema` auth.
+     * Order:
+     *   1. `__mj_UDT`  (if user holds `Create in UDT Schema`)
+     *   2. Real DB schemas from `MJ: Schema Info`, excluding blocked schemas
+     *      and `__mj_UDT` (already listed first)
+     *   3. "Other (enter schema name)" free-text option, at the end
+     *
+     * All items beyond #1 require `Create in Custom Schema` authorization.
      */
-    public getAvailableSchemas(): SchemaOption[] {
-        const schemas: SchemaOption[] = [];
-        const md = new Metadata();
+    public async loadAvailableSchemas(): Promise<SchemaOption[]> {
+        const userId = new Metadata().CurrentUser?.ID;
+        if (!userId) return [];
 
-        const udtAuth = md.Authorizations.find(a => a.Name === ENTITY_DESIGNER_AUTH.CREATE_IN_UDT_SCHEMA);
-        const customAuth = md.Authorizations.find(a => a.Name === ENTITY_DESIGNER_AUTH.CREATE_IN_CUSTOM_SCHEMA);
+        const cached = this._schemaCache.get(userId);
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+            return cached.schemas;
+        }
+
+        const schemas = await this.fetchAvailableSchemas();
+        this._schemaCache.set(userId, { schemas, timestamp: Date.now() });
+        return schemas;
+    }
+
+    /** Build the schema option list: UDT first, then real DB schemas, then Other. */
+    private async fetchAvailableSchemas(): Promise<SchemaOption[]> {
+        const md = new Metadata();
         const evaluator = new AuthorizationEvaluator();
 
-        if (udtAuth && evaluator.CurrentUserCanExecuteWithAncestors(udtAuth)) {
+        const udtAuth    = md.Authorizations.find(a => a.Name === ENTITY_DESIGNER_AUTH.CREATE_IN_UDT_SCHEMA);
+        const customAuth = md.Authorizations.find(a => a.Name === ENTITY_DESIGNER_AUTH.CREATE_IN_CUSTOM_SCHEMA);
+
+        const canUseUdt    = !!(udtAuth    && evaluator.CurrentUserCanExecuteWithAncestors(udtAuth));
+        const canUseCustom = !!(customAuth && evaluator.CurrentUserCanExecuteWithAncestors(customAuth));
+
+        const schemas: SchemaOption[] = [];
+
+        if (canUseUdt) {
             schemas.push({
                 value: UDT_SCHEMA_NAME,
                 label: `${UDT_SCHEMA_NAME} — User-Defined Tables (default)`,
@@ -232,16 +272,44 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
             });
         }
 
-        if (customAuth && evaluator.CurrentUserCanExecuteWithAncestors(customAuth)) {
+        if (canUseCustom) {
+            const dbSchemas = await this.loadDbSchemaNames();
+            for (const schemaName of dbSchemas) {
+                // Skip the UDT schema (already first) and any server-blocked schemas
+                if (schemaName === UDT_SCHEMA_NAME) continue;
+                if (FRONTEND_BLOCKED_SCHEMAS.has(schemaName)) continue;
+                schemas.push({
+                    value: schemaName,
+                    label: schemaName,
+                    isDefault: false,
+                    requiresElevatedAuth: true,
+                });
+            }
+
+            // Free-text escape hatch for schemas not yet registered with MJ
             schemas.push({
-                value: '',  // User types the custom schema name in the wizard
-                label: 'Custom schema (requires elevated access)',
+                value: '',
+                label: 'Other (enter schema name)',
                 isDefault: false,
                 requiresElevatedAuth: true,
             });
         }
 
         return schemas;
+    }
+
+    /** Query `MJ: Schema Info` for distinct schema names registered with this MJ instance. */
+    private async loadDbSchemaNames(): Promise<string[]> {
+        const rv = new RunView();
+        const result = await rv.RunView<{ SchemaName: string }>({
+            EntityName: 'MJ: Schema Info',
+            Fields: ['SchemaName'],
+            OrderBy: 'SchemaName ASC',
+            ResultType: 'simple',
+        });
+
+        if (!result.Success) return [];
+        return result.Results.map(r => r.SchemaName).filter(Boolean);
     }
 
     // ─── Name availability ────────────────────────────────────────────────

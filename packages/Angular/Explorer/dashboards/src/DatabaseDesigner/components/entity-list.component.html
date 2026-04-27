@@ -36,6 +36,19 @@
       }
     </div>
 
+    @if (AvailableFilterSchemas.length > 1) {
+      <select
+        class="mj-input schema-filter"
+        [value]="SelectedSchema"
+        (change)="SelectedSchema = $any($event.target).value"
+        aria-label="Filter by schema">
+        <option value="">All Schemas</option>
+        @for (schema of AvailableFilterSchemas; track schema) {
+          <option [value]="schema">{{ schema }}</option>
+        }
+      </select>
+    }
+
     <button
       mjButton
       buttonStyle="secondary"

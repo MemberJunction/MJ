@@ -6,6 +6,7 @@
 <!-- Normal authenticated view (not OAuth callback) -->
 @if ((authBase.isAuthenticated() | async) && !isOAuthCallback) {
   <div class="app-main">
+    <mj-server-connectivity-banner></mj-server-connectivity-banner>
     <mj-system-validation-banner></mj-system-validation-banner>
     @if (!HasError) {
       <mj-shell class="app-body"></mj-shell>

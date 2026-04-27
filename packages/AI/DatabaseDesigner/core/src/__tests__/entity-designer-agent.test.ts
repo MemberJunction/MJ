@@ -84,7 +84,7 @@ describe('DatabaseDesignerAgent.determineNextStep', () => {
                 mode: 'subagent',
                 callerContext: {
                     agentName: 'Planning Designer Agent',
-                    tableSpec: { name: 'Customer Orders', description: 'Tracks orders placed by customers' },
+                    tableSpecs: [{ name: 'Customer Orders', description: 'Tracks orders placed by customers' }],
                 },
             };
 
@@ -99,7 +99,7 @@ describe('DatabaseDesignerAgent.determineNextStep', () => {
             const tableSpec = { name: 'Orders', description: 'Order records', schemaName: 'sales' };
             const payload: DatabaseDesignerPayload = {
                 mode: 'subagent',
-                callerContext: { agentName: 'Planning Designer Agent', tableSpec },
+                callerContext: { agentName: 'Planning Designer Agent', tableSpecs: [tableSpec] },
             };
 
             const result = await agent.determineNextStep(makeParams(), BLANK_AGENT_TYPE, BLANK_PROMPT_RESULT, payload) as SubAgentStep;
@@ -113,7 +113,7 @@ describe('DatabaseDesignerAgent.determineNextStep', () => {
                 mode: 'subagent',
                 callerContext: {
                     agentName: 'Planning Designer Agent',
-                    tableSpec: { name: 'Orders', description: 'Order records' },
+                    tableSpecs: [{ name: 'Orders', description: 'Order records' }],
                     subagentConfirmedByParent: true,
                 },
             };
@@ -129,9 +129,9 @@ describe('DatabaseDesignerAgent.determineNextStep', () => {
                 mode: 'subagent',
                 callerContext: {
                     agentName: 'Planning Designer Agent',
-                    tableSpec: { name: 'Orders', description: 'Order records' },
+                    tableSpecs: [{ name: 'Orders', description: 'Order records' }],
                 },
-                SchemaDesign: { ModificationType: 'create' }, // already designed
+                SchemaDesign: { Tables: [{ TableDefinition: { SchemaName: '__mj_UDT', TableName: 'Orders', EntityName: 'Orders', Columns: [] }, ModificationType: 'create' }] }, // already designed
             };
 
             const result = await agent.determineNextStep(makeParams(), BLANK_AGENT_TYPE, BLANK_PROMPT_RESULT, payload);
@@ -236,7 +236,7 @@ describe('DatabaseDesignerAgent.determineNextStep', () => {
             const agent = makeAgent();
             const payload: DatabaseDesignerPayload = {
                 ValidationResult: { Valid: true, Errors: [], Warnings: [] },
-                DatabaseDesignerResult: { Success: true, EntityName: 'Customer Orders' },
+                DatabaseDesignerResult: { Success: true, Results: [{ Success: true, EntityName: 'Customer Orders' }] },
             };
 
             const result = await agent.determineNextStep(makeParams(), BLANK_AGENT_TYPE, BLANK_PROMPT_RESULT, payload);
@@ -260,7 +260,7 @@ describe('DatabaseDesignerAgent.determineNextStep', () => {
                 mode: 'subagent',
                 callerContext: {
                     agentName: 'Planning Designer Agent',
-                    tableSpec: { name: 'Orders', description: 'Order records' },
+                    tableSpecs: [{ name: 'Orders', description: 'Order records' }],
                 },
                 // No SchemaDesign yet — intercept 1 will fire
             };

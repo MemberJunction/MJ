@@ -34,6 +34,7 @@ import { TestingModule } from "@memberjunction/ng-testing";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { DeepDiffModule } from "@memberjunction/ng-deep-diff";
+import { VersionsModule } from "@memberjunction/ng-versions";
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
@@ -144,7 +145,8 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         EntityViewerModule,
         MarkdownModule,
         NgTreesModule,
-        AngularSplitModule
+        AngularSplitModule,
+        VersionsModule
     ],
     exports: [
         MJEntityFormComponentExtended,

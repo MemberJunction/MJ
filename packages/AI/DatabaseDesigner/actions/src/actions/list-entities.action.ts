@@ -6,7 +6,7 @@
  * then joins with Entities metadata to build a human-readable summary.
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RunView, Metadata, UserInfo } from '@memberjunction/core';
@@ -94,7 +94,7 @@ export class ListMyEntitiesAction extends BaseDatabaseDesignerAction {
     ): EntitySummary[] {
         const md = new Metadata();
         return entityIDs.reduce<EntitySummary[]>((acc, id) => {
-            const info = md.Entities.find(e => e.ID === id);
+            const info = md.Entities.find(e => UUIDsEqual(e.ID, id));
             if (info) {
                 acc.push({
                     EntityID: info.ID,

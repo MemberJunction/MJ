@@ -78,6 +78,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     /** Emitted when display state changes (for persistence). */
     @Output() DisplayStateChange = new EventEmitter<MapDisplayState>();
 
+    /** Emitted when render mode changes (supports two-way binding: [(RenderMode)]). */
+    @Output() RenderModeChange = new EventEmitter<MapRenderMode>();
+
     private map: L.Map | null = null;
     private markerLayer: L.LayerGroup | null = null;
     private visibilityObserver: IntersectionObserver | null = null;
@@ -585,7 +588,6 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         if (!this.map) return;
         const center = this.map.getCenter();
         this.DisplayStateChange.emit({
-            RenderMode: this.RenderMode,
             ZoomLevel: this.map.getZoom(),
             CenterLat: center.lat,
             CenterLng: center.lng,
@@ -598,6 +600,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
      */
     SetRenderMode(mode: MapRenderMode): void {
         this.RenderMode = mode;
+        this.RenderModeChange.emit(mode);
         this.RenderMarkers();
     }
 

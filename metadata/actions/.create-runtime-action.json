@@ -1,0 +1,442 @@
+[
+  {
+    "_comments": [
+      "Persists a new Action record with Type='Runtime' and CodeApprovalStatus='Pending'.",
+      "Called by ActionSmith at the end of its generate/test/submit pipeline. Validates",
+      "the supplied RuntimeActionConfiguration via Zod before any DB write."
+    ],
+    "fields": {
+      "Name": "Create Runtime Action",
+      "Description": "Creates a new Action record with Type='Runtime'. Validates the supplied RuntimeActionConfiguration, persists the Action row (CodeApprovalStatus='Pending'), and creates companion ActionParam + ActionResultCode rows from the input/output/resultCodes payloads. The created action is NOT activated until a human approves it.",
+      "DriverClass": "Create Runtime Action",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-wand-magic-sparkles",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Human-readable name for the Runtime action (required, unique within CategoryID).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "544136F2-A97C-4D48-B74B-D72BC72817D9"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:33.773Z",
+            "checksum": "a42d343838a2620b57b7ec81c2efbc8077d52ec75a71837f73ba873617220a4e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "One-paragraph description of what the action does and when to use it.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "CD024F8D-CB67-486A-8765-53603AF11717"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:33.806Z",
+            "checksum": "43887e518e1a512a3c58dc06c0a45bb58ac561b739c9b8080857566ceaa86951"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Code",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JavaScript code body that runs inside the sandbox. Has access to `input`, `utilities.*`, and `libs`.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "71A700D8-2D8A-4DEA-8C89-A11AC78587C4"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:33.836Z",
+            "checksum": "e91469f1c92bb144eb5126e40f99fca42f546e14195218724e36420e97611343"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Configuration",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "RuntimeActionConfiguration JSON object with permissions.allowedEntities, permissions.allowedActions, permissions.allowedAgents (each an array of { id, name }), and optional limits + sandbox fields.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A2273741-7142-4524-9440-BC2BF6D1BFE0"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:33.868Z",
+            "checksum": "0742d696201a7133df34d389314fe93638352cfed0f6dfeea9c110b8eaeb58e7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CategoryID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of the Action Category to place this Runtime action in.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C3E82D53-2A04-4E62-A71A-14741E105A73"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:33.897Z",
+            "checksum": "ee9ec9bc4090a4c4b745f3c0747bfbc0f30c918c744af61b4da582898de59a44"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxExecutionTimeMs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional wall-clock timeout for this action in milliseconds. Falls back to ActionEngine's default (2 hours).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D6BAE219-DAEC-4B16-B390-B917A886A070"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:33.928Z",
+            "checksum": "024b8cf561bfce213289c325c2aaa3887c926b8e41bfccb24f024036dc0baa8a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedByAgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the AI Agent that authored this Runtime action (typically ActionSmith's own ID).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1C2D73C5-44B2-49AD-9A8B-6CD46B74BB7B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:33.959Z",
+            "checksum": "754b5ba5c8517f25e840c22fb647231c49b76bfb210b371b6a18ea7983b69b6c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InputParams",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of { name, type: 'Input', valueType?, isArray?, isRequired?, description?, defaultValue? } describing each Input action param to create.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1D297E73-62C3-4202-9039-13702FC65A7B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:33.987Z",
+            "checksum": "dd275cd826c4955077d56b27a1ad49c7fc547e3cb916e1ca3c1f75317be35ac3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OutputParams",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of { name, type: 'Output', valueType?, description? } describing each Output action param to create.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3701000D-51CF-4616-BD33-A51D4627C323"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.018Z",
+            "checksum": "3d82927d61524317ff1cf385dd002a1fd952dca1dde5007922ea59ce8a132e98"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResultCodes",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of { resultCode, isSuccess, description? } for every terminal exit code the action can emit.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8AE037AF-C37C-428B-BAF5-A4D14E872601"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.047Z",
+            "checksum": "5036452badd0270792fc37b1388a7f4c358ae9b46ae1fe847da5e2bc4f5d7a22"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ActionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the newly-created Action record.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "10FE492B-E8A0-4B33-83FB-47BA74A73717"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.128Z",
+            "checksum": "f609cc3a2320cb5944b48d363216c977b7f99461bf85b0a3431860e1122d3af5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CodeApprovalStatus",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Approval status of the created action — always 'Pending' on first creation.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "99C2FEA2-93CC-46B6-8D88-AFAF3A193145"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.157Z",
+            "checksum": "4d639aa988cca0b7ec8bb59b1225937754f517d45bc2b8bc7513987e1bdb5e00"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Runtime action was created and is awaiting approval."
+          },
+          "primaryKey": {
+            "ID": "9E15F53E-4306-48A8-9863-3A2C5B4EEEB2"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.188Z",
+            "checksum": "8417c064f039d441a4332c179d903af961935b214526e401969ca24ac1ec6a3f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_NAME",
+            "IsSuccess": false,
+            "Description": "Name parameter is required."
+          },
+          "primaryKey": {
+            "ID": "1A5BD423-5CD8-47D8-A306-8B51BFE9A1F7"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.208Z",
+            "checksum": "f47723381a03122f3f6ac73b3c6c08729597442a347ec35c75b3967cc64552f6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_DESCRIPTION",
+            "IsSuccess": false,
+            "Description": "Description parameter is required."
+          },
+          "primaryKey": {
+            "ID": "2DE9F6EF-70E6-41C5-81AF-8B7813CCDB17"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.225Z",
+            "checksum": "fd28e714b6798c6074b3c5ffcbb5266dfe298074bc1380eddde90b09e0714549"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CODE",
+            "IsSuccess": false,
+            "Description": "Code parameter is required."
+          },
+          "primaryKey": {
+            "ID": "5C4E5AE2-1507-4D49-89A6-C674EF1E8E0A"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.241Z",
+            "checksum": "dc84c7ff4645234aa03b0dff0e5bdd2c7c027529f17b671977de1d48be4c82a7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CONFIG",
+            "IsSuccess": false,
+            "Description": "Configuration (RuntimeActionConfiguration) parameter is required."
+          },
+          "primaryKey": {
+            "ID": "6034007C-D138-404D-A9EE-7E95E9AA9535"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.258Z",
+            "checksum": "2888a0f210737063c43689013625142a00b84a15b0b07369deb05164ceb2336f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_CONFIG",
+            "IsSuccess": false,
+            "Description": "The supplied RuntimeActionConfiguration failed Zod validation — shape does not match IRuntimeActionConfiguration."
+          },
+          "primaryKey": {
+            "ID": "BD17BEF8-E4E8-472E-A134-327B30875CE7"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.275Z",
+            "checksum": "0138287c008f7650cb492b36a0503b21d784d7ae3b92da6371fff10b00f850dd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_LOAD_FAILED",
+            "IsSuccess": false,
+            "Description": "Could not instantiate the Actions entity — likely a metadata issue."
+          },
+          "primaryKey": {
+            "ID": "0A59BCA9-C91B-4BEB-ACE0-098BC11EE72B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.292Z",
+            "checksum": "e097470c737990a63d67b48b9472a08d4395b20eaafb4ecff98098d804609079"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SAVE_FAILED",
+            "IsSuccess": false,
+            "Description": "The Action record failed to save. See Message for BaseEntity.LatestResult details."
+          },
+          "primaryKey": {
+            "ID": "C805C99C-3E5C-4E8E-AAFA-E8998B96321D"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.308Z",
+            "checksum": "79e0d1af22731770f2cbfeaeff9d0705b9b7162057d5b64cb37dab738c8593ff"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARAM_SAVE_FAILED",
+            "IsSuccess": false,
+            "Description": "One of the ActionParam child records failed to save."
+          },
+          "primaryKey": {
+            "ID": "B4CA9308-BFDA-41B3-A8A2-D3E87C2F5902"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.345Z",
+            "checksum": "dd169eb72c709f2997378cf14e28e03db519946e3b96827d24cfda24c31e0d86"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RESULT_CODE_SAVE_FAILED",
+            "IsSuccess": false,
+            "Description": "One of the ActionResultCode child records failed to save."
+          },
+          "primaryKey": {
+            "ID": "FAD38014-09CD-49F2-91DA-A0BA5DDD95BE"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.363Z",
+            "checksum": "efe8d1e06aa179dde5acf9147d2fde5a1b05b1e288fcf9672d0b5ab19f3f7598"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARAM_ENTITY_FAILED",
+            "IsSuccess": false,
+            "Description": "Could not instantiate the Action Params entity."
+          },
+          "primaryKey": {
+            "ID": "FA212926-791C-4D80-98EF-850436E6F5C4"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.381Z",
+            "checksum": "32d3c1f9c7da5a28af9892218d18ade74e8105e0967215cf81085bb67afce8f4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RESULT_CODE_ENTITY_FAILED",
+            "IsSuccess": false,
+            "Description": "Could not instantiate the Action Result Codes entity."
+          },
+          "primaryKey": {
+            "ID": "EF1638A4-FBF6-44F4-8F52-BE26CC796472"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.398Z",
+            "checksum": "955ac05b9f81a2f71948ea4aaaa9382290d1f424956cad17d5daf4b93deca65a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected exception occurred while creating the Runtime action."
+          },
+          "primaryKey": {
+            "ID": "479654D7-5354-4FE9-9541-C50C7F745F22"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:34.414Z",
+            "checksum": "d79126a6fe73debc7528a63aab2376ca8a141511ac775341b5cb60b9927f7e4b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E7E4302B-9124-41F4-8CDE-CB1037778573"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T13:09:33.678Z",
+      "checksum": "802c6a23013cbdc818547c547638100f3e158354169a127d46b68b7f7550151e"
+    }
+  }
+]

@@ -71,7 +71,6 @@ describe('LocalCacheManager Differential Caching', () => {
         await cacheManager.Initialize(mockStorage, {
             enabled: true,
             maxSizeBytes: 50 * 1024 * 1024,
-            maxEntries: 1000,
             defaultTTLMs: 5 * 60 * 1000,
             evictionPolicy: 'lru'
         });

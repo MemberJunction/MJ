@@ -2,7 +2,7 @@ import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, injec
 import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJAIAgentNoteEntity, MJAIAgentPromptEntity, MJAIAgentTypeEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
 import { RegisterClass, MJGlobal , UUIDsEqual } from '@memberjunction/global';
-import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, BaseFormSectionComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -75,6 +75,12 @@ export interface UnifiedSubAgent {
 export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent implements OnDestroy {
     /** The AI Agent entity being edited */
     public record!: MJAIAgentEntityExtended;
+
+    /** Toolbar config — hide right-hand section controls since this form has a custom layout */
+    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** Custom-layout AI Agent form looks best full-width on first open. */
+    public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
     
     /** Subject for managing component lifecycle and cleaning up subscriptions */
     private destroy$ = new Subject<void>();

@@ -146,6 +146,9 @@ export class UserViewResource extends BaseResourceComponent {
     /** View mode from dashboard configuration (grid/cards/timeline/map) */
     public configuredViewMode: EntityViewMode | null = null;
 
+    /** Map render mode from dashboard configuration */
+    public configuredMapRenderMode: 'point' | 'choropleth' | 'heatmap' = 'point';
+
     // Export state
     public isExporting: boolean = false;
 
@@ -167,12 +170,19 @@ export class UserViewResource extends BaseResourceComponent {
         const newRecordId = value?.ResourceRecordID;
         const newEntity = value?.Configuration?.Entity;
 
-        // Read view mode from configuration if provided
+        // Read view mode and map render mode from configuration if provided
         const viewMode = value?.Configuration?.['viewMode'] as string | undefined;
         if (viewMode && ['grid', 'cards', 'timeline', 'map'].includes(viewMode)) {
             this.configuredViewMode = viewMode as EntityViewMode;
         } else {
             this.configuredViewMode = null;
+        }
+
+        const mapMode = value?.Configuration?.['mapRenderMode'] as string | undefined;
+        if (mapMode && ['point', 'choropleth', 'heatmap'].includes(mapMode)) {
+            this.configuredMapRenderMode = mapMode as 'point' | 'choropleth' | 'heatmap';
+        } else {
+            this.configuredMapRenderMode = 'point';
         }
 
         // Load on first set, or when the view/entity has changed

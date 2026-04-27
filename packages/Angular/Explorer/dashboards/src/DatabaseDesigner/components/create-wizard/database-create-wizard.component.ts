@@ -29,7 +29,7 @@ import { DatabaseDesignerEngine } from '../../services/database-designer.engine.
 import { StepPipelineComponent } from './steps/step-pipeline.component.js';
 import type {
     WizardStep, WizardStepDef, BasicsStepValue,
-    ColumnSpec, ForeignKeySpec, EntityPipelineResult,
+    ColumnSpec, ForeignKeySpec, EntityPipelineResult, SchemaOption,
 } from '../../database-designer.types.js';
 
 const WIZARD_STEP_DEFS: Omit<WizardStepDef, 'isComplete' | 'isActive'>[] = [
@@ -96,6 +96,8 @@ export class DatabaseCreateWizardComponent implements OnDestroy {
 
     private readonly destroy$ = new Subject<void>();
 
+    public AvailableSchemas: SchemaOption[] = [];
+
     constructor() {
         this.WizardState.currentStep$
             .pipe(takeUntil(this.destroy$))
@@ -118,6 +120,13 @@ export class DatabaseCreateWizardComponent implements OnDestroy {
 
         // Build initial step defs
         this.rebuildStepDefs('basics');
+
+        // Load available schemas asynchronously — wizard renders synchronously but
+        // the schema dropdown populates when the async result arrives
+        DatabaseDesignerEngine.Instance.loadAvailableSchemas().then(schemas => {
+            this.AvailableSchemas = schemas;
+            this.cdr.markForCheck();
+        });
     }
 
     ngOnDestroy(): void {
@@ -208,10 +217,6 @@ export class DatabaseCreateWizardComponent implements OnDestroy {
     // ─── Template helpers ──────────────────────────────────────────────────
 
     public get TableDefinition() { return this.WizardState.TableDefinition; }
-
-    public get AvailableSchemas() {
-        return DatabaseDesignerEngine.Instance.getAvailableSchemas();
-    }
 
     public TrackByStep(_: number, def: WizardStepDef): string { return def.id; }
 

@@ -44,10 +44,14 @@ export class EntityListComponent implements OnInit, OnDestroy {
     /** Full unfiltered list from the engine. */
     private _allEntities: AccessibleEntity[] = [];
 
+    /** Cached sorted unique schema names — recomputed only when _allEntities changes. */
+    private _availableFilterSchemas: string[] = [];
+
     /** Currently displayed (filtered + sorted) rows. */
     public FilteredEntities: AccessibleEntity[] = [];
 
     private readonly _search$ = new BehaviorSubject<string>('');
+    private readonly _schema$ = new BehaviorSubject<string>('');
     private readonly _sortField$ = new BehaviorSubject<SortField>('entityName');
     private readonly _sortDir$ = new BehaviorSubject<SortDirection>('asc');
     private readonly _destroy$ = new Subject<void>();
@@ -70,6 +74,12 @@ export class EntityListComponent implements OnInit, OnDestroy {
 
     get SearchTerm(): string { return this._search$.value; }
     set SearchTerm(v: string) { this._search$.next(v); }
+
+    get SelectedSchema(): string { return this._schema$.value; }
+    set SelectedSchema(v: string) { this._schema$.next(v); }
+
+    /** Unique schema names present in the loaded entity list, sorted alphabetically. */
+    get AvailableFilterSchemas(): string[] { return this._availableFilterSchemas; }
 
     get SortField(): SortField { return this._sortField$.value; }
     get SortDirection(): SortDirection { return this._sortDir$.value; }
@@ -112,10 +122,10 @@ export class EntityListComponent implements OnInit, OnDestroy {
     // ─── Private helpers ───────────────────────────────────────────────────
 
     private setupFilter(): void {
-        combineLatest([this._search$, this._sortField$, this._sortDir$])
+        combineLatest([this._search$, this._schema$, this._sortField$, this._sortDir$])
             .pipe(
                 debounceTime(150),
-                map(([search, field, dir]) => this.applyFilterAndSort(search, field, dir)),
+                map(([search, schema, field, dir]) => this.applyFilterAndSort(search, schema, field, dir)),
                 takeUntil(this._destroy$),
             )
             .subscribe(result => {
@@ -131,8 +141,15 @@ export class EntityListComponent implements OnInit, OnDestroy {
 
         try {
             this._allEntities = await DatabaseDesignerEngine.Instance.loadAccessibleEntities();
-            // Trigger the combineLatest pipe to recalculate
-            this._search$.next(this._search$.value);
+            this._availableFilterSchemas = [...new Set(this._allEntities.map(e => e.schemaName))].sort();
+            // Trigger the combineLatest pipe to recalculate; reset schema filter if
+            // the previously selected schema is no longer present in the new entity list.
+            const schemas = this._availableFilterSchemas;
+            if (this._schema$.value && !schemas.includes(this._schema$.value)) {
+                this._schema$.next('');
+            } else {
+                this._search$.next(this._search$.value);
+            }
         } catch (err) {
             this.ErrorMessage = err instanceof Error ? err.message : String(err);
         } finally {
@@ -141,15 +158,21 @@ export class EntityListComponent implements OnInit, OnDestroy {
         }
     }
 
-    private applyFilterAndSort(search: string, field: SortField, dir: SortDirection): AccessibleEntity[] {
+    private applyFilterAndSort(search: string, schema: string, field: SortField, dir: SortDirection): AccessibleEntity[] {
         const term = search.trim().toLowerCase();
-        let results = term
-            ? this._allEntities.filter(e =>
+        let results = [...this._allEntities];
+
+        if (schema) {
+            results = results.filter(e => e.schemaName === schema);
+        }
+
+        if (term) {
+            results = results.filter(e =>
                 e.entityName.toLowerCase().includes(term) ||
                 e.tableName.toLowerCase().includes(term) ||
                 e.schemaName.toLowerCase().includes(term)
-            )
-            : [...this._allEntities];
+            );
+        }
 
         results.sort((a, b) => {
             const aVal = this.sortValue(a, field);

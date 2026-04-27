@@ -145,6 +145,17 @@ export class BaseUserMenu {
                 enabled: true,
                 tooltip: 'Pin the current resource to your Home dashboard'
             },
+            {
+                id: 'submit-feedback',
+                label: 'Submit Feedback',
+                icon: 'fa-solid fa-comment-dots',
+                group: 'primary',
+                order: 25,
+                developerOnly: false,
+                visible: this._context?.feedbackEnabled !== false,
+                enabled: true,
+                tooltip: 'Report a bug or request a feature'
+            },
 
             // === DEVELOPER GROUP (Only visible to developers) ===
             {
@@ -436,6 +447,15 @@ export class BaseUserMenu {
             success: true,
             closeMenu: true,
             message: 'pin-to-home'
+        };
+    }
+
+    /** Signal the shell to open the feedback dialog */
+    protected async Handle_submit_feedback(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'submit-feedback'
         };
     }
 

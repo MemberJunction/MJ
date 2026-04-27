@@ -185,6 +185,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: options.entityName,
                         PrimaryKeys: [{ Name: options.pkFieldName }],
+                        AllowCaching: true,
                     },
                     Get: (fieldName: string) => fields[fieldName],
                     GetAll: () => ({ ...fields }),
@@ -380,6 +381,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: options.entityName,
                         PrimaryKeys: options.primaryKeys,
+                        AllowCaching: true,
                     },
                     Get: (fieldName: string) => options.fields[fieldName],
                     GetAll: () => ({ ...options.fields }),
@@ -467,6 +469,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [{ Name: 'ID' }],
+                        AllowCaching: true,
                     },
                     Get: (field: string) => field === 'ID' ? '1' : 'Alice Updated',
                     GetAll: () => ({ ID: '1', Name: 'Alice Updated' }),
@@ -490,8 +493,8 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
 
     describe('Eviction Entity Index Cleanup', () => {
         it('should remove fingerprints from entity index when entries are evicted', async () => {
-            // Configure a very small cache to force eviction
-            cacheManager.UpdateConfig({ maxEntries: 2, maxSizeBytes: 10_000_000 });
+            // Configure a small cache to force eviction (each entry ~150 bytes; budget holds 2, 3rd triggers eviction)
+            cacheManager.UpdateConfig({ maxSizeBytes: 400 });
 
             const fp1 = 'EntityA|_|_|-1|0|_';
             const fp2 = 'EntityB|_|_|-1|0|_';
@@ -587,6 +590,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [{ Name: 'ID' }],
+                        AllowCaching: true,
                     },
                     Get: () => null, // null PK value
                     GetAll: () => ({ ID: null, Name: 'Ghost' }),
@@ -618,6 +622,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [], // empty array
+                        AllowCaching: true,
                     },
                     Get: () => '1',
                     GetAll: () => ({ ID: '1' }),
@@ -640,6 +645,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: undefined,
+                        AllowCaching: true,
                     },
                     Get: () => '1',
                     GetAll: () => ({ ID: '1' }),
@@ -675,6 +681,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [{ Name: 'ID' }],
+                        AllowCaching: true,
                     },
                     Get: (f: string) => f === 'ID' ? '1' : 'Alice Updated',
                     GetAll: () => ({ ID: '1', Name: 'Alice Updated' }),

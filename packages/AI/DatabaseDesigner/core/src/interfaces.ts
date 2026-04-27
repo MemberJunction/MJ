@@ -26,14 +26,14 @@ import type { TableDefinition } from '@memberjunction/schema-engine';
  *
  * ### Subagent mode (`mode === 'subagent'`)
  * Invoked by another agent (e.g. Planning Designer) that has already determined
- * what entity is needed.  The caller provides `callerContext.tableSpec` and the
+ * what entity is needed.  The caller provides `callerContext.tableSpecs` and the
  * orchestrator skips Requirements Analyst, routing directly to Schema Designer.
  */
 export interface DatabaseDesignerPayload {
     /**
      * Operating mode set by whoever initiates the agent run.
      * - `'standalone'`: full conversational flow (default when omitted)
-     * - `'subagent'`: fast path — caller provides `callerContext.tableSpec`,
+     * - `'subagent'`: fast path — caller provides `callerContext.tableSpecs`,
      *   Requirements Analyst is skipped
      */
     mode?: 'standalone' | 'subagent';
@@ -89,8 +89,12 @@ export interface DatabaseDesignerCallerContext {
     /** Display name of the calling agent — used in user-facing confirmation messages. */
     agentName: string;
 
-    /** The entity specification the calling agent wants created or modified. */
-    tableSpec: SubagentTableSpec;
+    /**
+     * One or more entity specifications the calling agent wants created or modified.
+     * Always an array — single-table invocations pass an array of length 1.
+     * Schema Designer writes one SchemaDesignEntry per spec in SchemaDesign.Tables[].
+     */
+    tableSpecs: SubagentTableSpec[];
 
     /**
      * When true, the calling agent has already obtained explicit user approval
@@ -166,50 +170,60 @@ export interface ExistingEntityResearch {
 }
 
 /**
- * Schema design artefacts.  The `TableDefinition` is the single source of
- * truth consumed by downstream code-based agents.
+ * Schema design artefacts. Always uses the Tables[] array — single-table
+ * invocations write Tables[0] only. The Angular wizard action path uses
+ * EntityTableSpec directly and never reads this interface.
  */
 export interface SchemaDesignSection {
     /**
-     * One-paragraph human-readable description of what this table stores and
-     * what each row represents.  Written by the Schema Designer LLM; shown to
-     * the user above the prototype column table in both the chat approval
-     * message and the Angular wizard review step.
-     *
-     * Required when `ModificationType === 'create'`.  Optional for `'alter'`
-     * where the entity already has a description.
+     * One entry per table being designed. Single-table = array of length 1.
+     * Written by Schema Designer sub-agent; consumed by Validator and Builder.
+     */
+    Tables: SchemaDesignEntry[];
+
+    /**
+     * Combined mermaid erDiagram covering all tables and their cross-table
+     * FK relationships. Injected server-side by DatabaseDesignerAgent after
+     * Schema Designer returns — never written by the LLM.
+     * Omitted when no FK relationships exist across any of the tables.
+     */
+    ERDMermaid?: string;
+}
+
+/**
+ * Design artefacts for a single table within a multi-table (or single-table)
+ * SchemaDesignSection. All fields except TableDefinition are optional for
+ * alter operations where the entity already has a description.
+ */
+export interface SchemaDesignEntry {
+    /**
+     * One-paragraph human-readable description of what this table stores.
+     * Required for create; optional for alter.
      */
     Description?: string;
 
     /**
-     * Human-readable markdown table shown to the user for approval.
-     * Example:
-     * | Column | Type | Nullable | Description |
-     * |--------|------|----------|-------------|
-     * | Name   | string | No   | Full name   |
+     * Human-readable markdown prototype table shown to the user for approval.
+     * Format: | Column | SQL Type | Required | Default | Description |
      */
     Prototype?: string;
 
     /**
-     * Mermaid `erDiagram` block visualising the table's FK relationships.
-     * Injected server-side by `DatabaseDesignerAgent` after Schema Designer
-     * returns — NOT written by the LLM (eliminates mermaid syntax errors).
-     *
-     * Shown to the user in both the chat approval message (appended after the
-     * prototype table) and the Angular wizard review step via `MarkdownComponent`.
+     * Per-table mermaid erDiagram showing this table's FK relationships.
+     * Injected server-side alongside SchemaDesignSection.ERDMermaid.
      * Omitted when the table has no FK relationships.
      */
     ERDMermaid?: string;
 
-    /** Fully typed input to SchemaEngine.GenerateMigration(). */
-    TableDefinition?: TableDefinition;
+    /** Fully typed input to SchemaEngine.GenerateMigration(). Required. */
+    TableDefinition: TableDefinition;
 
     /** Whether this is a new table or an ALTER to an existing one. */
-    ModificationType?: 'create' | 'alter';
+    ModificationType: 'create' | 'alter';
 
     /**
      * Entity ID of the entity being modified.
-     * Required when `ModificationType === 'alter'`.
+     * Required when ModificationType === 'alter'.
      */
     ExistingEntityID?: string;
 }
@@ -223,8 +237,25 @@ export interface EntityValidationResult {
     Warnings: string[];
 }
 
-/** Final pipeline outcome written by `DatabaseDesignerSchemaBuilder`. */
+/**
+ * Final pipeline outcome written by DatabaseDesignerSchemaBuilder.
+ * Always uses Results[] — single-table runs produce Results[] of length 1.
+ * Success is true only when ALL tables in the batch succeeded.
+ */
 export interface DatabaseDesignerResult {
+    /** True only if every table in Results succeeded. */
+    Success: boolean;
+    /** Per-table pipeline outcomes, same order as SchemaDesign.Tables[]. */
+    Results: DatabasePipelineResult[];
+    /** Non-fatal advisories — e.g. metadata refresh stale after partial success. */
+    Warnings?: string[];
+}
+
+/**
+ * Outcome for a single table within a DatabaseDesignerResult batch.
+ * Maps 1-to-1 with SchemaDesignEntry and PipelineExecutionResult.
+ */
+export interface DatabasePipelineResult {
     Success: boolean;
     /** Populated on success — the MJ entity name (e.g. "Meetup Attendees"). */
     EntityName?: string;
@@ -265,6 +296,20 @@ export interface PipelineExecutionResult {
     PipelineSteps?: PipelineStepSummary[];
     ErrorMessage?: string;
     /** Non-fatal advisories — e.g. metadata refresh failure after a successful pipeline run. */
+    Warnings?: string[];
+}
+
+/**
+ * Batch result from DatabaseDesignerPipelineExecutor.CreateEntitiesBatch().
+ * Contains one PipelineExecutionResult per input table, in the same order.
+ * Success is true only when every individual result succeeded.
+ */
+export interface BatchPipelineExecutionResult {
+    /** True only when every table in Results succeeded. */
+    Success: boolean;
+    /** Per-table results in the same order as the input table definitions. */
+    Results: PipelineExecutionResult[];
+    /** Non-fatal advisories aggregated from all per-table results. */
     Warnings?: string[];
 }
 

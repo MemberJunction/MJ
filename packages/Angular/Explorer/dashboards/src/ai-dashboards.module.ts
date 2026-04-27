@@ -11,6 +11,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
+import { MJComboboxComponent, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -32,6 +33,18 @@ import { AutotaggingPipelineResourceComponent } from './AI/components/autotaggin
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
+import { AIAnalyticsResourceComponent, LoadAIAnalyticsResource } from './AI/components/analytics/ai-analytics-resource.component';
+import { AnalyticsFilterBarComponent } from './AI/components/analytics/analytics-filter-bar.component';
+import { AnalyticsExecutiveSummaryComponent, LoadAnalyticsExecutiveSummary } from './AI/components/analytics/executive-summary/executive-summary.component';
+import { AnalyticsPromptRunsComponent, LoadAnalyticsPromptRuns } from './AI/components/analytics/prompt-runs/prompt-run-analysis.component';
+import { AnalyticsAgentRunsComponent, LoadAnalyticsAgentRuns } from './AI/components/analytics/agent-runs/agent-run-analysis.component';
+import { AnalyticsModelPerformanceComponent, LoadAnalyticsModelPerformance } from './AI/components/analytics/model-performance/model-performance.component';
+import { AnalyticsCostBudgetComponent, LoadAnalyticsCostBudget } from './AI/components/analytics/cost-budget/cost-budget.component';
+import { AnalyticsErrorAnalysisComponent, LoadAnalyticsErrorAnalysis } from './AI/components/analytics/error-analysis/error-analysis.component';
+import { AnalyticsUsagePatternsComponent, LoadAnalyticsUsagePatterns } from './AI/components/analytics/usage-patterns/usage-patterns.component';
+
+// AI Overview Hub
+import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overview/ai-overview-hub.component';
 
 // Knowledge Hub components
 import {
@@ -82,7 +95,17 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,
     SchedulingResourceComponent,
-    AnalyticsResourceComponent
+    AnalyticsResourceComponent,
+    AIAnalyticsResourceComponent,
+    AnalyticsFilterBarComponent,
+    AnalyticsExecutiveSummaryComponent,
+    AnalyticsPromptRunsComponent,
+    AnalyticsAgentRunsComponent,
+    AnalyticsModelPerformanceComponent,
+    AnalyticsCostBudgetComponent,
+    AnalyticsErrorAnalysisComponent,
+    AnalyticsUsagePatternsComponent,
+    AIOverviewHubComponent
   ],
   imports: [
     CommonModule,
@@ -98,6 +121,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SharedDashboardWidgetsModule,
     SharedPipesModule,
     SearchModule,
+    MJComboboxComponent,
+    MJDropdownComponent,
     ClusteringModule,
     SchedulingModule,
     MJWordCloudComponent
@@ -122,6 +147,16 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClusterVisualizationResourceComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
+    AIAnalyticsResourceComponent,
+    AnalyticsFilterBarComponent,
+    AnalyticsExecutiveSummaryComponent,
+    AnalyticsPromptRunsComponent,
+    AnalyticsAgentRunsComponent,
+    AnalyticsModelPerformanceComponent,
+    AnalyticsCostBudgetComponent,
+    AnalyticsErrorAnalysisComponent,
+    AnalyticsUsagePatternsComponent,
+    AIOverviewHubComponent,
     SharedDashboardWidgetsModule
   ]
 })
@@ -131,5 +166,14 @@ export class AIDashboardsModule {
         LoadClusterVisualizationResource();
         LoadSchedulingResource();
         LoadAnalyticsResource();
+        LoadAIAnalyticsResource();
+        LoadAnalyticsExecutiveSummary();
+        LoadAnalyticsPromptRuns();
+        LoadAnalyticsAgentRuns();
+        LoadAnalyticsModelPerformance();
+        LoadAnalyticsCostBudget();
+        LoadAnalyticsErrorAnalysis();
+        LoadAnalyticsUsagePatterns();
+        LoadAIOverviewHub();
     }
 }

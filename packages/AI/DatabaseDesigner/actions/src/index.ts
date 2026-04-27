@@ -12,4 +12,4 @@ export * from './actions/create-entity.action.js';
 export * from './actions/modify-entity.action.js';
 export * from './actions/list-entities.action.js';
 export * from './actions/describe-entity.action.js';
-export * from './actions/validate-database-schema.action.js';
+export * from './actions/validate-entity-schema.action.js';

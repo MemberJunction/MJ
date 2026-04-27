@@ -1,4 +1,5 @@
 import { Args, Command, Flags } from '@oclif/core';
+import { InstallApp } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { buildOrchestratorContext } from '../../utils/open-app-context.js';
@@ -29,6 +30,10 @@ export default class AppInstall extends Command {
   static flags = {
     version: Flags.string({ description: 'Specific version to install (default: latest)' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
+    'dangerously-ignore-dbl-underscore-schema-rule': Flags.boolean({
+      hidden: true,
+      default: false,
+    }),
   };
 
   async run(): Promise<void> {
@@ -36,11 +41,15 @@ export default class AppInstall extends Command {
     const spinner = ora();
 
     try {
-      const { InstallApp } = await import('@memberjunction/open-app-engine');
       const context = await buildOrchestratorContext(this, flags.verbose);
 
       const result = await InstallApp(
-        { Source: args.source, Version: flags.version, Verbose: flags.verbose },
+        {
+          Source: args.source,
+          Version: flags.version,
+          Verbose: flags.verbose,
+          AllowDoubleUnderscoreSchema: flags['dangerously-ignore-dbl-underscore-schema-rule'],
+        },
         context
       );
 

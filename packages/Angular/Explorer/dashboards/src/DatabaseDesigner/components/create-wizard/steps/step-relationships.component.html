@@ -20,14 +20,14 @@
 
           <div class="fk-row-grid">
 
-            <!-- Source Column -->
+            <!-- Source Column — any Step 2 column, not just UUID -->
             <div class="fk-field">
               <label class="fk-label">Source Column</label>
               <select class="mj-input"
                       [value]="row.ColumnName"
                       (change)="OnSourceColumnChange(row.rowIndex, $any($event.target).value)">
                 <option value="">— auto-create {{ row.ColumnName || '—' }} —</option>
-                @for (col of UuidColumns; track col.Name) {
+                @for (col of AllColumns; track col.Name) {
                   <option [value]="col.Name">{{ col.Name }}</option>
                 }
               </select>
@@ -60,16 +60,16 @@
               </select>
             </div>
 
-            <!-- Target Column -->
+            <!-- Target Column — shows SQL type to help user match source column type -->
             <div class="fk-field">
               <label class="fk-label">Target Column</label>
               <select class="mj-input"
                       [value]="row.ReferencedColumn"
                       [disabled]="!row.selectedEntityId"
-                      (change)="OnColumnChange(row.rowIndex, $any($event.target).value)">
+                      (change)="OnColumnChange(row.rowIndex, $any($event.target).value, row.selectedEntityId)">
                 <option value="">{{ ColumnPlaceholder(row) }}</option>
-                @for (col of ColumnsForEntity(row.selectedEntityId); track col) {
-                  <option [value]="col">{{ col }}</option>
+                @for (col of ColumnsForEntity(row.selectedEntityId); track col.Name) {
+                  <option [value]="col.Name">{{ col.Name }} ({{ col.SqlType }})</option>
                 }
               </select>
             </div>
