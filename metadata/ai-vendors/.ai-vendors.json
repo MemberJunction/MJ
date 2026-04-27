@@ -322,6 +322,13 @@
       "Name": "Inception Labs",
       "Description": "Inception Labs is an AI research company specializing in diffusion-based large language models. Creator of the Mercury family, which uses a diffusion architecture to deliver high-throughput reasoning at 1000+ tokens per second on commercial GPUs. Provides an OpenAI-compatible API.",
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "62E1A70D-66EA-4876-B96C-77289DC23713"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T18:49:53.104Z",
+      "checksum": "e55e2bee57f00a207a5d5c3916093ef0d6d27d0c7f591620ffff5c37e687eb10"
     }
   }
 ]

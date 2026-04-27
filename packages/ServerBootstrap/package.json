@@ -57,6 +57,7 @@
     "@memberjunction/ai-gemini": "5.29.0",
     "@memberjunction/ai-groq": "5.29.0",
     "@memberjunction/ai-heygen": "5.29.0",
+    "@memberjunction/ai-inception": "5.29.0",
     "@memberjunction/ai-llamacpp": "5.29.0",
     "@memberjunction/ai-lmstudio": "5.29.0",
     "@memberjunction/ai-local-embeddings": "5.29.0",

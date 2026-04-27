@@ -12628,7 +12628,7 @@
             "ID": "881D94C8-83AD-4FAD-8D5B-927D6E4BBD1F"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:34.017Z",
+            "lastModified": "2026-04-27T18:50:01.892Z",
             "checksum": "579fd3b8c146054746c1a753ca0a35ccc313e73417014bb46aa8b2d1a1713452"
           }
         },
@@ -12651,7 +12651,7 @@
             "ID": "D9BA098C-5D41-4226-8A98-9037851C1EFC"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:34.033Z",
+            "lastModified": "2026-04-27T18:50:01.909Z",
             "checksum": "8dccacb2b28638fc10dd015d3ebff53264dd38727240780c5c38d9c1ad0159b5"
           }
         }
@@ -12675,7 +12675,7 @@
             "ID": "7550E9EF-3333-4EDD-8382-DFACF4C3B716"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:34.047Z",
+            "lastModified": "2026-04-27T18:50:01.924Z",
             "checksum": "ae6ab97ad1e01c99132cf9f76b8e624acf2d9a345fb4a7dcb430f39c72f0761d"
           }
         }
@@ -12685,7 +12685,7 @@
       "ID": "669B84EE-0749-44DF-BE4F-C0390E25E484"
     },
     "sync": {
-      "lastModified": "2026-04-20T23:52:33.886Z",
+      "lastModified": "2026-04-27T18:50:01.816Z",
       "checksum": "f5434ef41056a6356ff52093bc6ab1172c766bee41555f6b0ff288203b818718"
     }
   },
@@ -12717,7 +12717,7 @@
             "ID": "8531C06F-F407-4419-AF1B-962E5FE1E28F"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:32.769Z",
+            "lastModified": "2026-04-27T18:50:00.822Z",
             "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
           }
         },
@@ -12740,7 +12740,7 @@
             "ID": "50116063-42A7-48F6-9B5A-6ACF21FF22DF"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:32.784Z",
+            "lastModified": "2026-04-27T18:50:00.843Z",
             "checksum": "37b2b59a598edf9dfdfc3e8d5699aded7e97964957da489ec4162d71af98735d"
           }
         }
@@ -12764,7 +12764,7 @@
             "ID": "9856C369-1129-4AC2-ADF9-61F067964D1D"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:32.803Z",
+            "lastModified": "2026-04-27T18:50:00.860Z",
             "checksum": "c75c767b6155f602e72ebca4640d28db03e3cdd5c82a34358e5f74884e290484"
           }
         }
@@ -12774,7 +12774,7 @@
       "ID": "D4D993DA-764C-4037-B311-07BDE89056C6"
     },
     "sync": {
-      "lastModified": "2026-04-20T23:52:27.354Z",
+      "lastModified": "2026-04-27T18:49:55.304Z",
       "checksum": "581e521e2f53dd404428eccf2d1046f25ecdac61c81daafe42ae50ccc9ea747c"
     }
   },
@@ -12806,7 +12806,7 @@
             "ID": "3EE1D387-E3BF-4774-A503-DF9EBB287B00"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:32.817Z",
+            "lastModified": "2026-04-27T18:50:00.877Z",
             "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
           }
         },
@@ -12829,7 +12829,7 @@
             "ID": "FAE42244-18DB-43E1-81FB-74AE3D74939F"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:32.833Z",
+            "lastModified": "2026-04-27T18:50:00.895Z",
             "checksum": "731d6de4f7c2e52e41fdad55bae093ce8e8cc4fa0329aa60b604478e9fdbd477"
           }
         }
@@ -12853,7 +12853,7 @@
             "ID": "17725E8D-B7A0-48CA-8D31-9A38FA3EE8C5"
           },
           "sync": {
-            "lastModified": "2026-04-20T23:52:32.847Z",
+            "lastModified": "2026-04-27T18:50:00.910Z",
             "checksum": "517c422391eb9f86dcc05780d61cf4104154c1d1dfff292b77934c2d7052506a"
           }
         }
@@ -12863,7 +12863,7 @@
       "ID": "4E826B27-5A88-4320-8440-D15BB112A367"
     },
     "sync": {
-      "lastModified": "2026-04-20T23:52:27.368Z",
+      "lastModified": "2026-04-27T18:49:55.320Z",
       "checksum": "f17b8c46d3836739905ad42b6e5fdc706dfaaae84fd8a033e54e1ace2c43e18b"
     }
   },
@@ -12890,6 +12890,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C049B48D-5F0E-4271-A8CF-2CB298F924BE"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.949Z",
+            "checksum": "8e73f8253b30485054f7c298776ef475fff76b69d310c82491b59d0e9ca90b16"
           }
         },
         {
@@ -12906,6 +12913,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "1C773E2B-47AC-410D-B889-198535CCE923"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.965Z",
+            "checksum": "7badc87656cc011a7d6d4ffb9c819cad5b390eccd4ce063ead8b7f0c6b223286"
           }
         }
       ],
@@ -12923,9 +12937,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Mercury 2 pricing on Inception Labs as of April 2026. $0.25/M input, $0.75/M output. Cached input is $0.025/M (90% discount on cache hits)."
+          },
+          "primaryKey": {
+            "ID": "B396DAC0-5974-4FAB-A845-A11EF6D927FC"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.979Z",
+            "checksum": "35e1b843c9f09f7f70d4c165439ca101465bf8b7f8237b1fef10559c61b4951b"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "2FB388D2-B5DD-4A0A-986C-F7F0152CFF3D"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T18:49:55.335Z",
+      "checksum": "d1e6c49b7e3d401672126b704909bc62d0d3c0991e2d193998ddfaadd039029c"
     }
   }
 ]
