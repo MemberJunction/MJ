@@ -1,5 +1,28 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 5.30.0
+
+### Patch Changes
+
+- 11df18d: Add `aria-label` attributes to icon-only close/back/drill-open buttons in the autotagging pipeline slide-over panels, Knowledge Hub analytics drill-down dialogs, and the dashboard-viewer add-panel dialog so screen readers announce their purpose ("Close form", "Close item detail", "Close source detail", "Close warning", "Close drill-down", "Open record", "Close dialog", "Go back").
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [00b5c26]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [a00af98]
+- Updated dependencies [c199f3b]
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/ng-map-view@5.30.0
+  - @memberjunction/ng-artifacts@5.30.0
+  - @memberjunction/ng-entity-viewer@5.30.0
+  - @memberjunction/ng-query-viewer@5.30.0
+  - @memberjunction/ng-shared-generic@5.30.0
+  - @memberjunction/ng-trees@5.30.0
+  - @memberjunction/global@5.30.0
+
 ## 5.29.0
 
 ### Patch Changes

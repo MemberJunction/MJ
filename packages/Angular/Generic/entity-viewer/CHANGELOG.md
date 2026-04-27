@@ -1,5 +1,29 @@
 # @memberjunction/ng-entity-viewer
 
+## 5.30.0
+
+### Patch Changes
+
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [00b5c26]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/ng-map-view@5.30.0
+  - @memberjunction/ng-record-changes@5.30.0
+  - @memberjunction/ng-shared-generic@5.30.0
+  - @memberjunction/ng-versions@5.30.0
+  - @memberjunction/ng-filter-builder@5.30.0
+  - @memberjunction/ng-timeline@5.30.0
+  - @memberjunction/ng-export-service@5.30.0
+  - @memberjunction/ng-pagination@5.30.0
+  - @memberjunction/export-engine@5.30.0
+  - @memberjunction/global@5.30.0
+
 ## 5.29.0
 
 ### Patch Changes

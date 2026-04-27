@@ -1,5 +1,12 @@
 # @memberjunction/ai-ollama
 
+## 5.30.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.30.0
+- @memberjunction/global@5.30.0
+
 ## 5.29.0
 
 ### Patch Changes

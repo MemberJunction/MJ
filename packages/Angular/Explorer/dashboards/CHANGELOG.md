@@ -1,5 +1,110 @@
 # @memberjunction/ng-dashboards
 
+## 5.30.0
+
+### Patch Changes
+
+- 735a618: Component linter bug fixes and new rules: fix false positives on multi-component tree query delegation, SQL injection detection, datagrid computed fields, and optional chaining; consolidate duplicated utilities into shared lint-utils; add event-parameter-validation rule that catches wrong event property access (e.g., e.data vs e.record); replace substring SQL keyword matching with structural pattern detection.
+- 11df18d: Add `aria-label` attributes to icon-only close/back/drill-open buttons in the autotagging pipeline slide-over panels, Knowledge Hub analytics drill-down dialogs, and the dashboard-viewer add-panel dialog so screen readers announce their purpose ("Close form", "Close item detail", "Close source detail", "Close warning", "Close drill-down", "Open record", "Close dialog", "Go back").
+- 9154ac7: feat(integration): Salesforce + Sage Intacct pipeline hardening
+
+  **This is in-progress work — not ready to merge.** PR is open for incremental review and discussion.
+
+  ### Sage Intacct connector
+  - Range-chunked walk over `RECORDNO` for numeric-PK objects, replacing the previous PK-cursor strategy that silently dropped records when SI's natural scan order wasn't PK-ascending.
+  - Upper-bound discovery via exponential probe so termination is exact (not heuristic).
+  - Sub-range verification on every completed chunk (independent count of two halves must sum to the parent's count) to catch SI inconsistencies that would otherwise silently undercount.
+  - Discovery-probe retry with backoff for transport-only errors; immediate fail-stop on SI API errors (permissions, schema, syntax).
+  - `WHENMODIFIED` filter values normalized to SI's `MM/DD/YYYY HH:mm:ss` format — the engine sometimes passes ISO 8601 which SI rejects with `DL02000001`.
+  - Bumped `DEFAULT_PAGE_SIZE` from 100 to 1000 (proven safe via probing); legacy single-pull path now hard-fails on full-page-no-resultId instead of silently dropping records via PK-cursor.
+
+  ### Salesforce connector
+  - Removed dead `queryLocator` member field. `if (this.queryLocator && ctx.CurrentCursor)` was always false (member never assigned), so every "next batch" call re-executed the original SOQL and returned the same first page until the engine's duplicate-batch guard aborted the entity. Continuation now uses `ctx.CurrentCursor` directly via `FetchNextPage`.
+  - Per-batch dedup by `Id` for system metadata sObjects (TabDefinition, FormulaFunctionAllowedType) where SF returns multiple records sharing the placeholder Id `000000000000000AAA`. Drops are logged once per object instead of producing N per-record `UQ_<table>_PK` constraint violations.
+  - Removed the over-aggressive `!obj.createable` filter on `isUserRelevantSObject`. Many SF objects are flagged non-createable but carry real customer data (rollups, attachment-link junctions, history-style records).
+  - `BuildSOQLQuery` no longer emits `LIMIT batchSize` — that was silently capping every full result set at the page size. Pagination is via SF's native `done` / `nextRecordsUrl`.
+  - Watermark comparison uses `>=` instead of `>` so records modified at exactly the watermark instant aren't dropped on the next sync.
+
+  ### IntegrationEngine
+  - New typed `SchemaNotGeneratedError` (and `detectSchemaNotGenerated` helper) — `CreateRecord`/`UpdateRecord` now detect the SQL Server `Could not find stored procedure` pattern, throw the typed error, and `ProcessPullSync` fail-stops the entire EntityMap with one `[CONFIGURATION_ERROR]` log line + remaining records marked skipped. Previously every record produced an identical per-record error, drowning sync reports in O(records) duplicates.
+
+  ### Picker → ApplyAll resolver fixes (`IntegrationDiscoveryResolver`)
+  - New `resolveSourceObjectsToNames` per-item ID/Name fallback resolver. The old `resolveSourceObjectNames` only honored the IDs path and silently discarded any selection that arrived with `SourceObjectName` only (typical for newly-discovered objects with no IntegrationObject row yet). Real-world impact: 1,156 picker selections were collapsing to 420 IntegrationObjects to 181 generated tables. `LogError` now fires on truly unresolvable selections.
+  - `buildTargetConfigs` collects every silent skip into three buckets (`notInSchema`, `noFields`, `noPK`) and emits a single summary line per call: `[buildTargetConfigs summary] requested=X, accepted=Y, dropped=Z (...)`. Lossy stages in the pipeline are now greppable.
+
+  ### SchemaEngine RSU pipeline
+  - `executeMigration` chunks oversized migration SQL (>32KB) into batches of 25 statements per `ExecuteSQL` call. Salesforce-class schemas (1100+ tables) produce migrations with 17K+ ALTER TABLE statements as a single batch, which exceeded mssql's client request timeout (30s). Each chunk now resets the timeout clock.
+
+  ### Other
+  - `IntegrationSchemaSync` and `IntegrationApplyAllBatch` plumbing for filtered IntrospectSchema flow (Salesforce-only path that describes selected objects rather than a full-org probe).
+  - Integration dashboard UI tweaks (connections page rendering for high-FK supertype entities).
+
+- a00af98: no migration/metadata
+- c199f3b: Phase 2 of the unified permissions architecture: introduces the `IPermissionProvider` interface with 9 domain providers (Entity, Application Role, Dashboard, Resource, Artifact, AI Agent, Collection, Query, Access Control Rule) aggregated by a new `PermissionEngine` singleton, adds explicit Allow/Deny support to `EntityPermission`, and ships the Permissions admin dashboard. Includes migrations for the Permission Domain catalog, EntityPermission.Type column, Dashboard FK cascade delete, ResourcePermission.SharedByUserID, and UI role permission fixes.
+- 216ddc3: Wrap sequential Save/Delete looops in atomic transcatoins (TransactionGroup client-side BeginTransaction/Commit/Rollback server-side)
+- Updated dependencies [901e81b]
+- Updated dependencies [8980b38]
+- Updated dependencies [c2c5892]
+- Updated dependencies [11df18d]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [9154ac7]
+- Updated dependencies [00b5c26]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+- Updated dependencies [216ddc3]
+  - @memberjunction/ng-search@5.30.0
+  - @memberjunction/ng-core-entity-forms@5.30.0
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/ng-dashboard-viewer@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/actions-base@5.30.0
+  - @memberjunction/ai-core-plus@5.30.0
+  - @memberjunction/graphql-dataprovider@5.30.0
+  - @memberjunction/ng-map-view@5.30.0
+  - @memberjunction/ng-react@5.30.0
+  - @memberjunction/interactive-component-types@5.30.0
+  - @memberjunction/ai-engine-base@5.30.0
+  - @memberjunction/ng-conversations@5.30.0
+  - @memberjunction/ng-resource-permissions@5.30.0
+  - @memberjunction/ng-explorer-settings@5.30.0
+  - @memberjunction/api-keys-base@5.30.0
+  - @memberjunction/ng-base-application@5.30.0
+  - @memberjunction/ng-shared@5.30.0
+  - @memberjunction/ng-testing@5.30.0
+  - @memberjunction/ng-action-gallery@5.30.0
+  - @memberjunction/ng-actions@5.30.0
+  - @memberjunction/ng-agent-requests@5.30.0
+  - @memberjunction/ng-agents@5.30.0
+  - @memberjunction/ng-ai-test-harness@5.30.0
+  - @memberjunction/ng-archive-manager@5.30.0
+  - @memberjunction/ng-code-editor@5.30.0
+  - @memberjunction/ng-credentials@5.30.0
+  - @memberjunction/ng-entity-viewer@5.30.0
+  - @memberjunction/ng-list-management@5.30.0
+  - @memberjunction/ng-notifications@5.30.0
+  - @memberjunction/ng-query-viewer@5.30.0
+  - @memberjunction/ng-scheduling@5.30.0
+  - @memberjunction/ng-shared-generic@5.30.0
+  - @memberjunction/ng-trees@5.30.0
+  - @memberjunction/ng-versions@5.30.0
+  - @memberjunction/credentials@5.30.0
+  - @memberjunction/integration-engine-base@5.30.0
+  - @memberjunction/templates-base-types@5.30.0
+  - @memberjunction/testing-engine-base@5.30.0
+  - @memberjunction/ng-container-directives@5.30.0
+  - @memberjunction/ng-entity-relationship-diagram@5.30.0
+  - @memberjunction/ng-filter-builder@5.30.0
+  - @memberjunction/skip-types@5.30.0
+  - @memberjunction/ng-clustering@5.30.0
+  - @memberjunction/ng-export-service@5.30.0
+  - @memberjunction/ng-markdown@5.30.0
+  - @memberjunction/ng-ui-components@5.30.0
+  - @memberjunction/ng-word-cloud@5.30.0
+  - @memberjunction/export-engine@5.30.0
+  - @memberjunction/global@5.30.0
+
 ## 5.29.0
 
 ### Minor Changes

@@ -1,5 +1,26 @@
 # @memberjunction/query-gen
 
+## 5.30.0
+
+### Patch Changes
+
+- 216ddc3: Wrap sequential Save/Delete looops in atomic transcatoins (TransactionGroup client-side BeginTransaction/Commit/Rollback server-side)
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/aiengine@5.30.0
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/ai-core-plus@5.30.0
+  - @memberjunction/ai-prompts@5.30.0
+  - @memberjunction/sqlserver-dataprovider@5.30.0
+  - @memberjunction/ai-vectors-memory@5.30.0
+  - @memberjunction/ai@5.30.0
+  - @memberjunction/global@5.30.0
+
 ## 5.29.0
 
 ### Patch Changes

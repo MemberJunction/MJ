@@ -1,5 +1,7 @@
 # @memberjunction/export-engine
 
+## 5.30.0
+
 ## 5.29.0
 
 ## 5.28.0
