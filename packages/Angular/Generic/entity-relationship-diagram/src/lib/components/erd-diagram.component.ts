@@ -628,14 +628,14 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     }
 
     /**
-     * Whether to render FK field labels along edges.  Defaults differ by
-     * layout (off in schema-grid, on in dagre — matches user expectations
-     * for each style) and labels are suppressed below a zoom threshold so
-     * they don't pollute zoomed-out views with illegible text.
+     * Whether to render FK field labels along edges.  Defaults to ON in
+     * both layouts — the zoom-gate (>=0.55x) keeps the labels off when
+     * the user is zoomed out far enough to see hundreds of entities, so
+     * "noise on dense views" isn't a real concern.  Consumers can still
+     * force off via `config.showRelationshipLabels: false`.
      */
     public get showEdgeLabels(): boolean {
-        const explicit = this.config.showRelationshipLabels;
-        const enabled = explicit ?? (this.activeLayout === 'dagre');
+        const enabled = this.config.showRelationshipLabels ?? true;
         if (!enabled) return false;
         return this.transform.k >= 0.55;
     }
