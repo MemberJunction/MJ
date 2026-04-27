@@ -11,6 +11,72 @@
     }
   },
 
+  "example_1b_creation_mode_with_schema_changes": {
+    "description": "Planning Designer when the agent needs a new database table that doesn't exist yet. Writes pendingSchemaChanges to payload (machine-readable, Agent Manager passes to DB Designer post-approval) AND includes a ## Planned Schema Changes section in TechnicalDesign (human-readable, shown to user). Does NOT call Database Designer directly.",
+
+    "taskComplete": true,
+    "message": "Technical design is complete. No existing entity was found for vacation request tracking, so I've defined a new table specification in pendingSchemaChanges. Agent Manager will create it after user approval, then Architect will wire up the agent.",
+    "payloadChangeRequest": {
+      "updateElements": {
+        "pendingSchemaChanges": [
+          {
+            "name": "Vacation Requests",
+            "description": "Stores vacation request records submitted by employees. Each row is a single request with start/end dates, status, and a reference to the employee who submitted it.",
+            "schemaName": "__mj_UDT",
+            "modificationType": "create",
+            "columns": [
+              {
+                "name": "EmployeeID",
+                "type": "UNIQUEIDENTIFIER",
+                "description": "References the User who submitted this vacation request",
+                "required": true,
+                "foreignKeyTarget": "__mj.User.ID"
+              },
+              {
+                "name": "StartDate",
+                "type": "DATE",
+                "description": "First day of the requested vacation",
+                "required": true
+              },
+              {
+                "name": "EndDate",
+                "type": "DATE",
+                "description": "Last day of the requested vacation",
+                "required": true
+              },
+              {
+                "name": "Status",
+                "type": "NVARCHAR(50)",
+                "description": "Lifecycle status of the request: Pending, Approved, Rejected, Cancelled",
+                "required": true
+              },
+              {
+                "name": "Notes",
+                "type": "NVARCHAR(MAX)",
+                "description": "Optional notes from the employee about the request",
+                "required": false
+              },
+              {
+                "name": "ReviewedByID",
+                "type": "UNIQUEIDENTIFIER",
+                "description": "References the User (manager) who approved or rejected the request. Null until reviewed.",
+                "required": false,
+                "foreignKeyTarget": "__mj.User.ID"
+              },
+              {
+                "name": "ReviewedAt",
+                "type": "DATETIMEOFFSET",
+                "description": "Timestamp when the request was approved or rejected",
+                "required": false
+              }
+            ]
+          }
+        ],
+        "TechnicalDesign": "# Vacation Request Agent – Technical Design\n\n## Overview\n\n**Agent Name**: Vacation Request Agent\n**Agent Type**: Loop\n**Description**: Allows employees to submit vacation requests and notifies their manager for approval.\n\n## Planned Schema Changes\n\nThe following database entity will be **created** automatically after you approve the design.\n\n### New Entity: Vacation Requests (schema: __mj_UDT)\nStores vacation request records submitted by employees.\n\n| Column | Type | Required | Notes |\n|---|---|---|---|\n| EmployeeID | UNIQUEIDENTIFIER | Yes | FK → User.ID |\n| StartDate | DATE | Yes | First day of vacation |\n| EndDate | DATE | Yes | Last day of vacation |\n| Status | NVARCHAR(50) | Yes | Pending, Approved, Rejected, Cancelled |\n| Notes | NVARCHAR(MAX) | No | Optional employee notes |\n| ReviewedByID | UNIQUEIDENTIFIER | No | FK → User.ID (manager who reviewed) |\n| ReviewedAt | DATETIMEOFFSET | No | When the request was reviewed |\n\n## Agent Architecture\n\nThis is a Loop-type agent that handles vacation request submission and approval notification.\n\n## Actions\n\n### Create Record\n- **Purpose**: Save a new vacation request to the Vacation Requests entity\n- **When Used**: When employee submits a request\n\n### Update Record\n- **Purpose**: Update Status and ReviewedByID/ReviewedAt when manager approves or rejects\n- **When Used**: When manager responds\n\n### Send Single Message\n- **Purpose**: Email manager when a new request is submitted; email employee when request is reviewed\n\n## Main Agent Prompt\n\nYou handle vacation request submissions and approvals.\n\n### Submitting a Request\nCall Create Record with EntityName='Vacation Requests' and Fields: { EmployeeID, StartDate, EndDate, Status: 'Pending', Notes }\nThen call Send Single Message to notify the employee's manager.\n\n### Approving / Rejecting\nCall Update Record with EntityName='Vacation Requests', PrimaryKey: { ID: <request-id> }, Fields: { Status: 'Approved' | 'Rejected', ReviewedByID, ReviewedAt }\nThen call Send Single Message to notify the employee."
+      }
+    }
+  },
+
   "example_2_modification_mode": {
     "taskComplete": true,
     "message": "Modification plan is complete. I researched the existing agent, identified the targeted change needed, and verified the database entity exists. The plan adds one action and one prompt step with minimal impact to the existing workflow.",

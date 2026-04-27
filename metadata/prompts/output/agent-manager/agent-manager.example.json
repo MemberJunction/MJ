@@ -71,8 +71,42 @@
     }
   },
 
+  "example_5b_after_approval_calling_db_designer_for_schema": {
+    "description": "User approved a design plan that includes pendingSchemaChanges (Planning Designer found no suitable entity and specified a new table). Agent Manager MUST call Database Designer BEFORE Architect to create the table. Pass pendingSchemaChanges as callerContext.tableSpecs with subagentConfirmedByParent: true so DB Designer skips its own approval gate. terminateAfter MUST be false.",
+    "message": "Creating the database tables your agent needs...",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Database Designer",
+        "message": "Create the database entities specified in callerContext.tableSpecs. The user has reviewed and approved this schema as part of the full agent design plan. Proceed directly to validation and creation — do not ask for confirmation.",
+        "terminateAfter": false,
+        "payload": {
+          "mode": "subagent",
+          "callerContext": {
+            "agentName": "Agent Manager",
+            "subagentConfirmedByParent": true,
+            "tableSpecs": [
+              {
+                "name": "Vacation Requests",
+                "description": "Stores vacation request records submitted by employees.",
+                "schemaName": "__mj_UDT",
+                "modificationType": "create",
+                "columns": [
+                  { "name": "EmployeeID", "type": "UNIQUEIDENTIFIER", "required": true, "foreignKeyTarget": "__mj.User.ID" },
+                  { "name": "StartDate", "type": "DATE", "required": true },
+                  { "name": "EndDate", "type": "DATE", "required": true },
+                  { "name": "Status", "type": "NVARCHAR(50)", "required": true }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+
   "example_6_after_approval_calling_architect": {
-    "description": "User approved the plan. Call Architect Agent immediately — no second confirmation needed. terminateAfter MUST be false — Agent Manager must check if Architect returns Success or Retry.",
+    "description": "User approved the plan (and schema was created if needed). Call Architect Agent — no second confirmation needed. terminateAfter MUST be false — Agent Manager must check if Architect returns Success or Retry.",
     "message": "Perfect! I'm validating the agent specification now...",
     "nextStep": {
       "type": "Sub-Agent",
