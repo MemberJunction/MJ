@@ -5250,6 +5250,23 @@ export class MJAIAgentNote_ {
     @Field({nullable: true, description: `Optional expiration timestamp. Notes past this date are candidates for archival. NULL means no expiration.`}) 
     ExpiresAt?: Date;
         
+    @Field({nullable: true, description: `Self-referential FK. Points to the consolidated note that replaced this one when revoked during consolidation or contradiction resolution.`}) 
+    @MaxLength(36)
+    ConsolidatedIntoNoteID?: string;
+        
+    @Field(() => Int, {description: `Tracks re-summarization depth. 0=raw extraction, 1=first consolidation, etc. Capped at 3 to prevent semantic drift.`}) 
+    ConsolidationCount: number;
+        
+    @Field({nullable: true, description: `JSON array of source note IDs that were consolidated into this note. Enables provenance chain resolution and rollback.`}) 
+    DerivedFromNoteIDs?: string;
+        
+    @Field({description: `Protection level: Immutable (never consolidated/archived), Protected (no consolidation, extended 365-day retention), Standard (default), Ephemeral (aggressive consolidation, 2x decay rate).`}) 
+    @MaxLength(20)
+    ProtectionTier: string;
+        
+    @Field(() => Float, {nullable: true, description: `Composite importance score (0-10) computed from 7 signals: recency, LLM-importance, relevance, uniqueness, correction boost, goal alignment, user mark. Replaces raw AccessCount for authority and retention decisions.`}) 
+    ImportanceScore?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -5285,6 +5302,16 @@ export class MJAIAgentNote_ {
     @MaxLength(255)
     PrimaryScopeEntity?: string;
         
+    @Field({nullable: true}) 
+    ConsolidatedIntoNote?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootConsolidatedIntoNoteID?: string;
+        
+    @Field(() => [MJAIAgentNote_])
+    MJAIAgentNotes_ConsolidatedIntoNoteIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
+    
 }
 
 //****************************************************************************
@@ -5354,6 +5381,21 @@ export class CreateMJAIAgentNoteInput {
 
     @Field({ nullable: true })
     ExpiresAt: Date | null;
+
+    @Field({ nullable: true })
+    ConsolidatedIntoNoteID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ConsolidationCount?: number;
+
+    @Field({ nullable: true })
+    DerivedFromNoteIDs: string | null;
+
+    @Field({ nullable: true })
+    ProtectionTier?: string;
+
+    @Field(() => Float, { nullable: true })
+    ImportanceScore: number | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -5428,6 +5470,21 @@ export class UpdateMJAIAgentNoteInput {
     @Field({ nullable: true })
     ExpiresAt?: Date | null;
 
+    @Field({ nullable: true })
+    ConsolidatedIntoNoteID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ConsolidationCount?: number;
+
+    @Field({ nullable: true })
+    DerivedFromNoteIDs?: string | null;
+
+    @Field({ nullable: true })
+    ProtectionTier?: string;
+
+    @Field(() => Float, { nullable: true })
+    ImportanceScore?: number | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 
@@ -5492,6 +5549,16 @@ export class MJAIAgentNoteResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJAIAgentNote_])
+    async MJAIAgentNotes_ConsolidatedIntoNoteIDArray(@Root() mjaiagentnote_: MJAIAgentNote_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentNotes')} WHERE ${provider.QuoteIdentifier('ConsolidatedIntoNoteID')}='${mjaiagentnote_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Notes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJAIAgentNote_)
     async CreateMJAIAgentNote(
         @Arg('input', () => CreateMJAIAgentNoteInput) input: CreateMJAIAgentNoteInput,
@@ -7522,6 +7589,10 @@ each time the agent processes a prompt step.`})
     @MaxLength(200)
     ExternalReferenceID?: string;
         
+    @Field({nullable: true, description: `Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.`}) 
+    @MaxLength(36)
+    CompanyID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -7740,6 +7811,9 @@ export class CreateMJAIAgentRunInput {
     @Field({ nullable: true })
     ExternalReferenceID: string | null;
 
+    @Field({ nullable: true })
+    CompanyID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -7878,6 +7952,9 @@ export class UpdateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     ExternalReferenceID?: string | null;
+
+    @Field({ nullable: true })
+    CompanyID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -33703,24 +33780,18 @@ export class MJCountry_ {
     @Field({nullable: true, description: `JSON array of common aliases and alternate names (e.g., ["United States","USA","U.S.","America"]). Used by GeoResolver for fuzzy text-to-country matching.`}) 
     CommonAliases?: string;
         
-    @Field()
+    @Field() 
     _mj__CreatedAt: Date;
-
-    @Field()
+        
+    @Field() 
     _mj__UpdatedAt: Date;
-
-    @Field(() => Float, {nullable: true, description: `Virtual geo field — alias of Latitude for map rendering.`})
-    _mj__Latitude?: number;
-
-    @Field(() => Float, {nullable: true, description: `Virtual geo field — alias of Longitude for map rendering.`})
-    _mj__Longitude?: number;
-
+        
     @Field(() => [MJStateProvince_])
     MJStateProvinces_CountryIDArray: MJStateProvince_[]; // Link to MJStateProvinces
-
+    
     @Field(() => [MJRecordGeoCode_])
     MJRecordGeoCodes_CountryIDArray: MJRecordGeoCode_[]; // Link to MJRecordGeoCodes
-
+    
 }
 
 //****************************************************************************
@@ -65891,25 +65962,19 @@ export class MJStateProvince_ {
     @Field({nullable: true, description: `JSON array of common aliases (e.g., ["Calif.","California","Cal"]). Used by GeoResolver for fuzzy text-to-state matching.`}) 
     CommonAliases?: string;
         
-    @Field()
+    @Field() 
     _mj__CreatedAt: Date;
-
-    @Field()
+        
+    @Field() 
     _mj__UpdatedAt: Date;
-
-    @Field()
+        
+    @Field() 
     @MaxLength(200)
     Country: string;
-
-    @Field(() => Float, {nullable: true, description: `Virtual geo field — alias of Latitude for map rendering.`})
-    _mj__Latitude?: number;
-
-    @Field(() => Float, {nullable: true, description: `Virtual geo field — alias of Longitude for map rendering.`})
-    _mj__Longitude?: number;
-
+        
     @Field(() => [MJRecordGeoCode_])
     MJRecordGeoCodes_StateProvinceIDArray: MJRecordGeoCode_[]; // Link to MJRecordGeoCodes
-
+    
 }
 
 //****************************************************************************
@@ -66703,11 +66768,11 @@ export class MJTag_ {
     @Field(() => [MJTagCoOccurrence_])
     MJTagCoOccurrences_TagAIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
     
-    @Field(() => [MJTagAuditLog_])
-    MJTagAuditLogs_TagIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
-    
     @Field(() => [MJTag_])
     MJTags_MergedIntoTagIDArray: MJTag_[]; // Link to MJTags
+    
+    @Field(() => [MJTagAuditLog_])
+    MJTagAuditLogs_TagIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
     
 }
 
@@ -66892,16 +66957,6 @@ export class MJTagResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJTagAuditLog_])
-    async MJTagAuditLogs_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJTag_])
     async MJTags_MergedIntoTagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tags', userPayload);
@@ -66909,6 +66964,16 @@ export class MJTagResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTags')} WHERE ${provider.QuoteIdentifier('MergedIntoTagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tags', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tags', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTagAuditLog_])
+    async MJTagAuditLogs_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -74403,11 +74468,11 @@ export class MJUser_ {
     @Field(() => [MJOAuthAuthorizationState_])
     MJOAuthAuthorizationStates_UserIDArray: MJOAuthAuthorizationState_[]; // Link to MJOAuthAuthorizationStates
     
-    @Field(() => [MJOpenAppInstallHistory_])
-    MJOpenAppInstallHistories_ExecutedByUserIDArray: MJOpenAppInstallHistory_[]; // Link to MJOpenAppInstallHistories
-    
     @Field(() => [MJOpenApp_])
     MJOpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJOpenApps
+    
+    @Field(() => [MJOpenAppInstallHistory_])
+    MJOpenAppInstallHistories_ExecutedByUserIDArray: MJOpenAppInstallHistory_[]; // Link to MJOpenAppInstallHistories
     
     @Field(() => [MJContentItemDuplicate_])
     MJContentItemDuplicates_ResolvedByUserIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
@@ -75260,16 +75325,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJOpenAppInstallHistory_])
-    async MJOpenAppInstallHistories_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Open App Install Histories', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOpenAppInstallHistories')} WHERE ${provider.QuoteIdentifier('ExecutedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open App Install Histories', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open App Install Histories', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJOpenApp_])
     async MJOpenApps_InstalledByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Open Apps', userPayload);
@@ -75277,6 +75332,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOpenApps')} WHERE ${provider.QuoteIdentifier('InstalledByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open Apps', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open Apps', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJOpenAppInstallHistory_])
+    async MJOpenAppInstallHistories_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Open App Install Histories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOpenAppInstallHistories')} WHERE ${provider.QuoteIdentifier('ExecutedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open App Install Histories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open App Install Histories', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
