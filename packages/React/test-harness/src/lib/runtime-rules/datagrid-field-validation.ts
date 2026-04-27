@@ -1,6 +1,4 @@
-import _traverse, { NodePath } from '@babel/traverse';
-type TraverseModule = typeof _traverse & { default?: typeof _traverse };
-const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
+import { traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -21,8 +19,11 @@ import { TypeContext } from '../type-context';
 
 /** Grid component names to check */
 const GRID_COMPONENT_NAMES = new Set([
-  'EntityGrid', 'DataGrid', 'DataTable',
+  'EntityGrid', 'EntityDataGrid', 'DataGrid', 'DataTable', 'SingleRecordView',
 ]);
+
+/** Grid components that are inherently entity-bound (always validate) */
+const ENTITY_BOUND_GRIDS = new Set(['EntityGrid', 'EntityDataGrid']);
 
 /**
  * Checks if a JSX element is a grid component by name or by having grid-related props.
@@ -229,12 +230,18 @@ export class DatagridFieldValidationRule extends BaseLintRule {
         const hasGridProps = propsMap.has('fields') || propsMap.has('columns');
         if (!isGridComponent(nameNode.name, hasGridProps)) return;
 
-        // If this is an entity-based grid (name contains "Entity" or it has an
-        // entityName prop) and we have no entity field metadata loaded, skip
-        // validation. The grid fields reference entity columns that we can't
-        // verify without metadata.
-        const isEntityGrid = nameNode.name.includes('Entity') || propsMap.has('entityName');
-        if (isEntityGrid && !hasEntityFields) return;
+        // Determine if this grid is bound to a known entity schema.
+        // Only validate field names when we have a definitive schema to check against:
+        // 1. Entity-bound grids (EntityGrid, EntityDataGrid) — always entity-bound
+        // 2. Any grid with an explicit entityName prop — schema is known
+        //
+        // For plain DataGrid/DataTable/SingleRecordView WITHOUT entityName, the data
+        // is likely from a client-side transformation (renamed/computed fields), a query
+        // result, or a constructed display object. Field validation against the raw entity
+        // schema would produce false positives.
+        const isEntityBound = ENTITY_BOUND_GRIDS.has(nameNode.name) || propsMap.has('entityName');
+        if (!isEntityBound) return; // Skip — can't validate without a known entity schema
+        if (!hasEntityFields) return; // Entity-bound but no metadata loaded — skip
 
         // Validate `fields` prop: fields={['Name', 'Email']}
         const fieldsAttr = propsMap.get('fields');
