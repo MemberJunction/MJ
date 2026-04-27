@@ -149,6 +149,15 @@ const result = await RerankerService.Instance.rerankNotes(
 
 This approach combines the speed of vector search with the accuracy of LLM-based understanding, significantly improving retrieval quality for agent memory.
 
+### Interaction with Consolidation
+
+The candidate corpus the reranker scores is the in-process vector store (`AIEngine._noteVectorService`). Since v5.30.x, that store is kept in sync with persisted `Status='Active'` (see [`@memberjunction/aiengine` README](../Engine/README.md#vector-store-invariant-preservation)), which has two consequences for reranking:
+
+- **Consolidated source notes drop out immediately.** When MemoryManagerAgent's consolidation pipeline merges a cluster, source notes are revoked in the same operation that removes their vector entries. They stop appearing as rerank candidates without an MJAPI restart.
+- **Protection tier is metadata, not a rerank gate.** `ProtectionTier` (`Immutable` / `Protected` / `Standard` / `Ephemeral`) lives on the note entity and flows through to the reranker as part of each candidate's data. The reranker itself does not filter or weight by tier; downstream consumers (MemoryManagerAgent's decay phase, retrieval policies layered on top of `RerankServiceResult`) are responsible for any tier-aware logic.
+
+For the consolidation pipeline mechanics and protection-tier semantics, see [`@memberjunction/ai-agents`](../Agents/README.md#consolidation-pipeline).
+
 ## Dependencies
 
 - `@memberjunction/ai` -- BaseReranker, RerankParams, RerankResult

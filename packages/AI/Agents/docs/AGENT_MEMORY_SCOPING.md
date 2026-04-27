@@ -189,6 +189,17 @@ The Memory Manager agent automatically inherits scope from the source agent run 
 | `organization` | Copied from run | null | null |
 | `contact` | Copied from run | Copied from run | Set |
 
+### Consolidation Interaction with Scopes
+
+When MemoryManagerAgent runs its consolidation pipeline, scope fields are preserved alongside the consolidation provenance fields introduced in v5.30.x (`ConsolidatedIntoNoteID`, `ConsolidationCount`, `DerivedFromNoteIDs`, `ProtectionTier`, `ImportanceScore`). Scope and consolidation are independent layers — neither overrides the other:
+
+- **Consolidated notes inherit scope from their source notes.** A merged note copies `PrimaryScopeEntityID`, `PrimaryScopeRecordID`, and `SecondaryScopes` from the cluster's input notes, which by construction share scope (clustering operates within a scope cohort, not across).
+- **Protection tiers do not bypass scope-based access.** `Immutable` and `Protected` notes still respect `PrimaryScopeRecordID` / `SecondaryScopes` filtering during retrieval — a Protected note from one organization is not visible to runs scoped to another.
+- **`mergeWithExistingId` revocation invariant.** When the LLM consolidates a cluster, source notes are revoked (Status flipped from `Active`) and their entry in `_noteVectorService` is removed in the same transaction by `MJAIAgentNoteEntityServer.Save/Delete`. This means revoked sources stop appearing in `FindSimilarAgentNotes` immediately — without an MJAPI restart — so subsequent retrieval at the same scope sees only the consolidated successor.
+- **Contradiction resolution respects scope.** Entity-attribute-value triple extraction operates within a scope cohort; a contradiction between a note scoped to org A and a note scoped to org B is not flagged.
+
+For the consolidation pipeline itself (clustering threshold, drift prevention, decay, protection tiers), see [`packages/AI/Agents/README.md`](../README.md) and [`specs/001-memory-consolidation/spec.md`](../../../../specs/001-memory-consolidation/spec.md).
+
 ## Data Flow
 
 ```

@@ -152,6 +152,16 @@ const exampleMatches: ExampleMatchResult[] = await AIEngine.Instance.FindSimilar
 | `NoteMatchResult` | `note`, `score`, `metadata` | Agent note found via semantic similarity |
 | `ExampleMatchResult` | `example`, `score`, `metadata` | Agent example found via semantic similarity |
 
+### Vector Store Invariant Preservation
+
+`AIEngine` exposes `FindSimilarAgentNotes` over the in-process `_noteVectorService`. Since v5.30.x the vector store is kept strictly in sync with the persisted note state:
+
+- **Invariant.** `_noteVectorService` contains an entry for an `AIAgentNote` if and only if its persisted `Status='Active'` AND its `EmbeddingVector` is non-null.
+- **Write-side enforcement.** `MJAIAgentNoteEntityServer.Save()` and `.Delete()` (in [`@memberjunction/core-entities-server`](../../MJCoreEntitiesServer/README.md)) update the in-process vector store inline with each note write — adding entries when a note becomes Active with a non-null embedding, removing them when Status flips away from Active or when the note is deleted.
+- **What this fixes.** Before this change, revoking a note (e.g. during MemoryManagerAgent consolidation, or when a contradiction was resolved) would leave a stale entry in `_noteVectorService` until MJAPI was restarted. Subsequent calls to `FindSimilarAgentNotes` would surface revoked notes back to retrieval. The invariant now holds without a restart.
+
+The relevant code paths live in [`src/AIEngine.ts`](./src/AIEngine.ts) and [`packages/MJCoreEntitiesServer/src/custom/MJAIAgentNoteEntityServer.server.ts`](../../MJCoreEntitiesServer/src/custom/MJAIAgentNoteEntityServer.server.ts).
+
 ### ConversationAttachmentService
 
 Manages media attachments (images, audio, video, files) in agent conversations:
