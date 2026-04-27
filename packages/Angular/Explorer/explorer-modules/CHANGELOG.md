@@ -1,5 +1,17 @@
 # @memberjunction/ng-explorer-modules
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@5.30.1
+- @memberjunction/ng-explorer-core@5.30.1
+- @memberjunction/ng-explorer-settings@5.30.1
+- @memberjunction/ng-link-directives@5.30.1
+- @memberjunction/ng-shared@5.30.1
+- @memberjunction/ng-workspace-initializer@5.30.1
+- @memberjunction/ng-container-directives@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

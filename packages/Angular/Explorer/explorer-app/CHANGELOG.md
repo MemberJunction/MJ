@@ -1,5 +1,23 @@
 # @memberjunction/ng-explorer-app
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/ng-bootstrap@5.30.1
+- @memberjunction/ng-auth-services@5.30.1
+- @memberjunction/ng-base-application@5.30.1
+- @memberjunction/ng-explorer-core@5.30.1
+- @memberjunction/ng-shared@5.30.1
+- @memberjunction/ng-workspace-initializer@5.30.1
+- @memberjunction/ng-agent-client@5.30.1
+- @memberjunction/ng-conversations@5.30.1
+- @memberjunction/ng-feedback@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/core@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

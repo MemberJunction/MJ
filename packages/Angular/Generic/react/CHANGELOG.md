@@ -1,5 +1,18 @@
 # @memberjunction/ng-react
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/interactive-component-types@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/react-runtime@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

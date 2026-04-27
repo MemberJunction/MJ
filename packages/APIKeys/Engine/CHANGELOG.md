@@ -1,5 +1,14 @@
 # @memberjunction/api-keys
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/api-keys-base@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

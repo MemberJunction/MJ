@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/ng-auth-services@5.30.1
+- @memberjunction/ng-base-application@5.30.1
+- @memberjunction/ng-dashboards@5.30.1
+- @memberjunction/ng-entity-form-dialog@5.30.1
+- @memberjunction/ng-entity-permissions@5.30.1
+- @memberjunction/ng-explorer-settings@5.30.1
+- @memberjunction/ng-list-detail-grid@5.30.1
+- @memberjunction/ng-shared@5.30.1
+- @memberjunction/ng-ai-test-harness@5.30.1
+- @memberjunction/ng-artifacts@5.30.1
+- @memberjunction/ng-base-forms@5.30.1
+- @memberjunction/ng-container-directives@5.30.1
+- @memberjunction/ng-conversations@5.30.1
+- @memberjunction/ng-dashboard-viewer@5.30.1
+- @memberjunction/ng-entity-viewer@5.30.1
+- @memberjunction/ng-export-service@5.30.1
+- @memberjunction/ng-feedback@5.30.1
+- @memberjunction/ng-file-storage@5.30.1
+- @memberjunction/ng-generic-dialog@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-query-viewer@5.30.1
+- @memberjunction/ng-record-changes@5.30.1
+- @memberjunction/ng-record-selector@5.30.1
+- @memberjunction/ng-record-tags@5.30.1
+- @memberjunction/ng-resource-permissions@5.30.1
+- @memberjunction/ng-search@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-ui-components@5.30.1
+- @memberjunction/ng-user-avatar@5.30.1
+- @memberjunction/ng-word-cloud@5.30.1
+- @memberjunction/communication-types@5.30.1
+- @memberjunction/entity-communications-client@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/export-engine@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/templates-base-types@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

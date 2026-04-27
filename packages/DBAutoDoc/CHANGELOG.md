@@ -1,5 +1,14 @@
 # @memberjunction/db-auto-doc
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/server-bootstrap@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

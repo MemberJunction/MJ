@@ -1,5 +1,20 @@
 # @memberjunction/ng-query-viewer
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@5.30.1
+- @memberjunction/ng-export-service@5.30.1
+- @memberjunction/ng-markdown@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-pagination@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/export-engine@5.30.1
+- @memberjunction/global@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

@@ -1,5 +1,7 @@
 # @memberjunction/geo-maps
 
+## 5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

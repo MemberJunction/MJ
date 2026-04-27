@@ -1,5 +1,17 @@
 # @memberjunction/ng-agent-requests
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/ng-forms@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

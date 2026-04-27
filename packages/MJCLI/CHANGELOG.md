@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/cli
 
+## 5.30.1
+
+### Patch Changes
+
+- 1826093: Fix migration V202604260056 failure on existing databases by replacing hardcoded CHECK constraint names with dynamic lookups via sys.check_constraints
+  - @memberjunction/ai-cli@5.30.1
+  - @memberjunction/codegen-lib@5.30.1
+  - @memberjunction/config@5.30.1
+  - @memberjunction/db-auto-doc@5.30.1
+  - @memberjunction/core@5.30.1
+  - @memberjunction/installer@5.30.1
+  - @memberjunction/metadata-sync@5.30.1
+  - @memberjunction/open-app-engine@5.30.1
+  - @memberjunction/query-gen@5.30.1
+  - @memberjunction/sql-converter@5.30.1
+  - @memberjunction/sqlserver-dataprovider@5.30.1
+  - @memberjunction/server-bootstrap-lite@5.30.1
+  - @memberjunction/testing-cli@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

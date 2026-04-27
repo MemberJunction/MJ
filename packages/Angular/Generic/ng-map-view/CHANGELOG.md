@@ -1,5 +1,15 @@
 # @memberjunction/ng-map-view
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/geo-maps@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes
