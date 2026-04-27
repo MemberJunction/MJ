@@ -12,7 +12,7 @@
     <mj-collapsible-panel
         SectionKey="domainConfiguration"
         SectionName="Domain Configuration"
-        Icon="fa fa-cog"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -34,6 +34,40 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="IsActive"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DisplayOrder"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Icon"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Provider Implementation Section -->
+    <mj-collapsible-panel
+        SectionKey="providerImplementation"
+        SectionName="Provider Implementation"
+        Icon="fa fa-code"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
             FieldName="ProviderClassName"
             Type="textbox"
             [EditMode]="EditMode"
@@ -42,11 +76,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Capability Settings Section -->
+    <!-- Provider Capabilities Section -->
     <mj-collapsible-panel
-        SectionKey="capabilitySettings"
-        SectionName="Capability Settings"
-        Icon="fa fa-sliders-h"
+        SectionKey="providerCapabilities"
+        SectionName="Provider Capabilities"
+        Icon="fa fa-cogs"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -86,40 +120,6 @@
             [ShowLabel]="true"
             FieldName="SupportsHierarchyInheritance"
             Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- UI and Status Section -->
-    <mj-collapsible-panel
-        SectionKey="uIAndStatus"
-        SectionName="UI and Status"
-        Icon="fa fa-desktop"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="IsActive"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DisplayOrder"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Icon"
-            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

@@ -543,8 +543,15 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (320 classes)
+// @memberjunction/core-entities (335 classes)
 import {
+    AIAgentPermissionProvider,
+    AccessControlRuleProvider,
+    ApplicationRolePermissionProvider,
+    ArtifactPermissionProvider,
+    CollectionPermissionProvider,
+    DashboardPermissionProvider,
+    EntityPermissionProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -603,6 +610,7 @@ import {
     MJAPIKeyUsageLogEntity,
     MJAPIScopeEntity,
     MJAccessControlRuleEntity,
+    MJAccessControlRuleEntityExtended,
     MJActionAuthorizationEntity,
     MJActionCategoryEntity,
     MJActionContextEntity,
@@ -623,6 +631,7 @@ import {
     MJArchiveRunEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
+    MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
     MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
@@ -634,6 +643,7 @@ import {
     MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
+    MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
     MJCommunicationProviderEntity,
@@ -674,6 +684,7 @@ import {
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
+    MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
     MJCountryEntity,
@@ -687,6 +698,7 @@ import {
     MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
+    MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
     MJDataContextEntity,
@@ -771,6 +783,7 @@ import {
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJOutputTriggerTypeEntity,
+    MJPermissionDomainEntity,
     MJProjectEntity,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
@@ -865,6 +878,8 @@ import {
     MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    QueryPermissionProvider,
+    ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/core-entities-server (15 classes)
@@ -1339,6 +1354,13 @@ export const CLASS_REGISTRATIONS: any[] = [
     WebPageContentAction,
     WebSearchAction,
     XMLParserAction,
+    AIAgentPermissionProvider,
+    AccessControlRuleProvider,
+    ApplicationRolePermissionProvider,
+    ArtifactPermissionProvider,
+    CollectionPermissionProvider,
+    DashboardPermissionProvider,
+    EntityPermissionProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -1397,6 +1419,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAPIKeyUsageLogEntity,
     MJAPIScopeEntity,
     MJAccessControlRuleEntity,
+    MJAccessControlRuleEntityExtended,
     MJActionAuthorizationEntity,
     MJActionCategoryEntity,
     MJActionContextEntity,
@@ -1417,6 +1440,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJArchiveRunEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
+    MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
     MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
@@ -1428,6 +1452,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
+    MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
     MJCommunicationProviderEntity,
@@ -1468,6 +1493,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
+    MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
     MJCountryEntity,
@@ -1481,6 +1507,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
+    MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
     MJDataContextEntity,
@@ -1565,6 +1592,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJOutputTriggerTypeEntity,
+    MJPermissionDomainEntity,
     MJProjectEntity,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
@@ -1659,6 +1687,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    QueryPermissionProvider,
+    ResourcePermissionProvider,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIPromptEntityServer,
@@ -1731,7 +1761,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 714;
+export const CLASS_REGISTRATIONS_COUNT = 729;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

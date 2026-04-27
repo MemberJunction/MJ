@@ -184,6 +184,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Tag Co Occurrences (Tag B ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagCoOccurrencesTagBID"
+        SectionName="Tag Co Occurrences (Tag B ID)"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagCoOccurrencesTagBID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Co Occurrences','TagBID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Co Occurrences')"
+                [AllowLoad]="IsSectionExpanded('mJTagCoOccurrencesTagBID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagCoOccurrencesTagBID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Content Item Tags Section -->
     <mj-collapsible-panel
         SectionKey="mJContentItemTags"
@@ -209,17 +234,6 @@
         }
     </mj-collapsible-panel>
 
-<<<<<<< unified-permissions-phase-2
-    <!-- Tag Co Occurrences (Tag B ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJTagCoOccurrencesTagBID"
-        SectionName="Tag Co Occurrences (Tag B ID)"
-        Icon="fa fa-project-diagram"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTagCoOccurrencesTagBID')"
-=======
     <!-- Tag Audit Logs (Related Tag) Section -->
     <mj-collapsible-panel
         SectionKey="mJTagAuditLogsRelatedTagID"
@@ -229,51 +243,16 @@
         [Form]="this"
         [FormContext]="formContext"
         [BadgeCount]="GetSectionRowCount('mJTagAuditLogsRelatedTagID')"
->>>>>>> next
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-<<<<<<< unified-permissions-phase-2
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Co Occurrences','TagBID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Co Occurrences')"
-                [AllowLoad]="IsSectionExpanded('mJTagCoOccurrencesTagBID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTagCoOccurrencesTagBID', $event.totalRowCount)"
-=======
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','RelatedTagID')"
                 [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
                 [AllowLoad]="IsSectionExpanded('mJTagAuditLogsRelatedTagID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogsRelatedTagID', $event.totalRowCount)"
->>>>>>> next
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Tag Co Occurrences (Tag A ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJTagCoOccurrencesTagAID"
-        SectionName="Tag Co Occurrences (Tag A ID)"
-        Icon="fa fa-project-diagram"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTagCoOccurrencesTagAID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Co Occurrences','TagAID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Co Occurrences')"
-                [AllowLoad]="IsSectionExpanded('mJTagCoOccurrencesTagAID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTagCoOccurrencesTagAID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -330,25 +309,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Tags (Merged Into Tag) Section -->
+    <!-- Tag Audit Logs (Tag) Section -->
     <mj-collapsible-panel
-        SectionKey="mJTagsMergedIntoTagID"
-        SectionName="Tags (Merged Into Tag)"
-        Icon="fa fa-tags"
+        SectionKey="mJTagAuditLogsTagID"
+        SectionName="Tag Audit Logs (Tag)"
+        Icon="fa fa-history"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTagsMergedIntoTagID')"
+        [BadgeCount]="GetSectionRowCount('mJTagAuditLogsTagID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tags','MergedIntoTagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tags')"
-                [AllowLoad]="IsSectionExpanded('mJTagsMergedIntoTagID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','TagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
+                [AllowLoad]="IsSectionExpanded('mJTagAuditLogsTagID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTagsMergedIntoTagID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogsTagID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
