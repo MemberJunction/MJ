@@ -11,6 +11,9 @@
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Sage Intacct",
       "Icon": "fa-solid fa-file-invoice-dollar"
     },
+    "primaryKey": {
+      "ID": "F488B075-3170-4200-8171-96A2757B3CF0"
+    },
     "relatedEntities": {
       "MJ: Integration Objects": [
         {
