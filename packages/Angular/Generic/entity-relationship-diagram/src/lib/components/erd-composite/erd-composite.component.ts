@@ -252,6 +252,14 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
   public onEntitySelected(entity: EntityInfo): void {
     this.selectedEntity = entity;
 
+    // Bring the entity into view in the diagram and emit nodeSelected
+    // upstream so the focus + highlight logic kicks in.  Done in a
+    // microtask so the [focusEntityId] binding flushes first and the
+    // inner diagram has the new focus state when we ask it to center.
+    queueMicrotask(() => {
+      this.mjEntityErd?.zoomToEntity(entity.ID);
+    });
+
     this.emitStateChange();
     this.emitUserStateChange();
   }

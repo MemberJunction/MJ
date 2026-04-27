@@ -530,6 +530,10 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
             y: rect.height / 2 - (n.y + n.height / 2) * k,
         };
         this.emitZoom();
+        // External callers (e.g. zoomToNode invoked from the side panel)
+        // need CD to pick up the new transform — onNodeClick used to do
+        // this itself but external pathways were silently no-op'ing.
+        this.cdr.markForCheck();
     }
 
     private emitZoom(): void {
