@@ -64,3 +64,11 @@ import { SaveVersionDialogComponent } from './ComponentStudio/components/save-ve
   ]
 })
 export class ComponentStudioDashboardsModule { }
+
+// JS-level re-export so that public-api.ts line 187 (`export * from
+// './component-studio-dashboards.module'`) exposes the dashboard component
+// class through a path that includes ɵɵsetComponentScope.  Without this,
+// the only export path is the ComponentStudio/index.ts barrel which
+// imports the bare component file — creating a second ESBuild copy that
+// lacks child-component scope metadata.
+export { ComponentStudioDashboardComponent } from './ComponentStudio/component-studio-dashboard.component';
