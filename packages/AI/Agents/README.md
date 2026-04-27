@@ -288,20 +288,24 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
-### With User Scope (Multi-Tenant)
+### With Memory Scope (Multi-Tenant)
+
+Multi-tenant deployments can isolate the agent's memory cohort (notes and examples) per request by passing scope fields on `ExecuteAgentParams`. The fields are top-level — there is no `userScope` wrapper:
 
 ```typescript
 const result = await runner.ExecuteAgent({
     agentId: 'my-agent-id',
     conversationMessages: messages,
     contextUser: currentUser,
-    userScope: {
-        primaryEntityName: 'Organizations',
-        primaryRecordId: orgId,
-        secondary: { TeamID: teamId }
-    }
+    // Primary scope (indexed for fast filtering)
+    PrimaryScopeEntityName: 'Organizations',
+    PrimaryScopeRecordID: orgId,
+    // Secondary scopes (arbitrary dimensions, validated against the agent's ScopeConfig)
+    SecondaryScopes: { TeamID: teamId }
 });
 ```
+
+See [`docs/AGENT_MEMORY_SCOPING.md`](./docs/AGENT_MEMORY_SCOPING.md) for the full model — built-in scopes, primary/secondary semantics, inheritance modes, and how scope propagates through sub-agent invocations.
 
 ### With Message Lifecycle Management
 

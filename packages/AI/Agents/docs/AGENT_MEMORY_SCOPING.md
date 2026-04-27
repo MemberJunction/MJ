@@ -173,6 +173,17 @@ If `allowSecondaryOnly: true` in the agent's config, you can omit primary scope:
 }
 ```
 
+## Sub-Agent Scope Propagation
+
+Scope is inherited by sub-agent invocations by default. When a parent agent (e.g., Sage) delegates to a sub-agent (e.g., Memory Manager, or any user-defined sub-agent), `BaseAgent` propagates `PrimaryScopeEntityName`, `PrimaryScopeRecordID`, and `SecondaryScopes` from the parent's `ExecuteAgentParams` onto the sub-agent's params before its run begins (see `packages/AI/Agents/src/base-agent.ts:4378-4380`).
+
+This has two consequences:
+
+- **Retrieval**: the sub-agent's `AgentContextInjector` queries notes and examples in the same scope cohort the parent saw — a sub-agent invoked from an org-scoped Sage run sees only that org's notes, not global-pool notes from other orgs.
+- **Creation**: notes created by the sub-agent (typically via Memory Manager) inherit the same scope fields, so they land in the cohort the user expects.
+
+If you need a sub-agent to operate in a different scope (e.g., a system-level utility agent that always reads from the global pool), don't delegate to it as a sub-agent — invoke it as a separate top-level run with its own scope params.
+
 ## Memory Manager Integration
 
 The Memory Manager agent automatically inherits scope from the source agent run when creating notes:
