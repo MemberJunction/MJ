@@ -23,14 +23,24 @@ describe('TypeMapper', () => {
     const mapper = new TypeMapper();
 
     describe('MapSourceType', () => {
-        it('should map string with MaxLength to NVARCHAR(n) on SQL Server', () => {
+        it('should floor declared MaxLength below 255 to NVARCHAR(255) on SQL Server', () => {
+            // Declared MaxLength of 100 is widened to the 255 minimum because
+            // sources (notably Salesforce) under-report describe lengths and
+            // real values can exceed declared length. See TypeMapper.ts.
             const field = MakeField({ MaxLength: 100 });
-            expect(mapper.MapSourceType('string', 'sqlserver', field)).toBe('NVARCHAR(100)');
+            expect(mapper.MapSourceType('string', 'sqlserver', field)).toBe('NVARCHAR(255)');
         });
 
-        it('should map string with MaxLength to VARCHAR(n) on PostgreSQL', () => {
+        it('should floor declared MaxLength below 255 to VARCHAR(255) on PostgreSQL', () => {
             const field = MakeField({ MaxLength: 100 });
-            expect(mapper.MapSourceType('string', 'postgresql', field)).toBe('VARCHAR(100)');
+            expect(mapper.MapSourceType('string', 'postgresql', field)).toBe('VARCHAR(255)');
+        });
+
+        it('should apply 1.25× headroom for declared lengths between 255 and 1000', () => {
+            // 500 → ceil(500*1.25) = 625
+            const field = MakeField({ MaxLength: 500 });
+            expect(mapper.MapSourceType('string', 'sqlserver', field)).toBe('NVARCHAR(625)');
+            expect(mapper.MapSourceType('string', 'postgresql', field)).toBe('VARCHAR(625)');
         });
 
         it('should default string without MaxLength to 255', () => {
@@ -85,15 +95,28 @@ describe('TypeMapper', () => {
             expect(mapper.MapSourceType('json', 'postgresql', field)).toBe('JSONB');
         });
 
-        it('should map decimal with precision/scale', () => {
+        it('should floor low declared precision to 28 (defensive against narrow describe output)', () => {
+            // Sources sometimes report narrow precision (e.g. SF formula fields
+            // declared 10,4) but real values overflow. TypeMapper floors at 28.
             const field = MakeField({ Precision: 10, Scale: 4 });
-            expect(mapper.MapSourceType('decimal', 'sqlserver', field)).toBe('DECIMAL(10,4)');
-            expect(mapper.MapSourceType('decimal', 'postgresql', field)).toBe('NUMERIC(10,4)');
+            expect(mapper.MapSourceType('decimal', 'sqlserver', field)).toBe('DECIMAL(28,4)');
+            expect(mapper.MapSourceType('decimal', 'postgresql', field)).toBe('NUMERIC(28,4)');
         });
 
-        it('should default decimal precision to 18,2', () => {
+        it('should respect declared precision when above the 28 floor', () => {
+            const field = MakeField({ Precision: 30, Scale: 4 });
+            expect(mapper.MapSourceType('decimal', 'sqlserver', field)).toBe('DECIMAL(30,4)');
+            expect(mapper.MapSourceType('decimal', 'postgresql', field)).toBe('NUMERIC(30,4)');
+        });
+
+        it('should cap declared precision at SQL Server max of 38', () => {
+            const field = MakeField({ Precision: 50, Scale: 4 });
+            expect(mapper.MapSourceType('decimal', 'sqlserver', field)).toBe('DECIMAL(38,4)');
+        });
+
+        it('should default decimal precision to 28,2 (the floor)', () => {
             const field = MakeField();
-            expect(mapper.MapSourceType('decimal', 'sqlserver', field)).toBe('DECIMAL(18,2)');
+            expect(mapper.MapSourceType('decimal', 'sqlserver', field)).toBe('DECIMAL(28,2)');
         });
 
         it('should fall back to text for unknown types', () => {

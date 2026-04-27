@@ -53,6 +53,50 @@ const DEFAULT_BATCH_SIZE = 200;
  *   await IntegrationEngine.Instance.Config(false, contextUser);
  *   const result = await IntegrationEngine.Instance.RunSync(companyIntegrationID, contextUser);
  */
+
+/**
+ * Thrown when a per-record write fails because the destination entity's
+ * stored procedure (spCreate/spUpdate/spDelete) doesn't exist in the
+ * database. This happens when CodeGen has not been run for an entity that
+ * the picker added to the integration's object list — typically right
+ * after expanding which sObjects/objects are syncable. The condition is
+ * deterministic per entity (no amount of retrying will create the proc),
+ * so the engine treats this as fail-stop FOR THE ENTIRE OBJECT instead of
+ * per-record: one log line, all remaining records marked as skipped, sync
+ * moves on to the next entity. Without this, a single un-CodeGen'd
+ * destination object can produce thousands of identical per-record
+ * "Could not find stored procedure" errors that drown the run report.
+ */
+export class SchemaNotGeneratedError extends Error {
+    public readonly EntityName: string;
+    public readonly StoredProcedureName: string;
+
+    constructor(entityName: string, storedProcedureName: string) {
+        super(
+            `Schema not generated for entity '${entityName}': stored procedure ` +
+            `'${storedProcedureName}' does not exist in the database. ` +
+            `Run CodeGen for this entity to create the destination tables/views/procs, then re-sync.`
+        );
+        this.name = 'SchemaNotGeneratedError';
+        this.EntityName = entityName;
+        this.StoredProcedureName = storedProcedureName;
+    }
+}
+
+/**
+ * Returns a SchemaNotGeneratedError if the given Save() failure message
+ * matches the SP-not-found pattern. Otherwise returns null. The pattern
+ * comes from SQL Server's `Could not find stored procedure '<schema>.<name>'`
+ * — when CodeGen hasn't created the spCreate/spUpdate/spDelete for an
+ * entity, BaseEntity.Save() returns false and the SP-not-found error
+ * lands in entity.LatestResult.CompleteMessage.
+ */
+function detectSchemaNotGenerated(entityName: string, errorMessage: string): SchemaNotGeneratedError | null {
+    const match = errorMessage.match(/Could not find stored procedure '([^']+)'/i);
+    if (!match) return null;
+    return new SchemaNotGeneratedError(entityName, match[1]);
+}
+
 export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     public constructor() {
         super();
@@ -610,7 +654,34 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             );
 
             const beforeApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
-            await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser);
+            try {
+                await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser);
+            } catch (applyErr) {
+                if (applyErr instanceof SchemaNotGeneratedError) {
+                    // The destination spCreate/Update/Delete doesn't exist
+                    // (CodeGen hasn't run for this entity). Every remaining
+                    // record in this batch (and every record from any future
+                    // fetch on this entityMap) would fail identically. Skip
+                    // the rest cleanly with one error entry, abort fetching.
+                    const remainingInBatch = resolved.length - (result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored - beforeApply);
+                    result.RecordsSkipped += Math.max(remainingInBatch, 0);
+                    result.Errors.push({
+                        ExternalID: '',
+                        ChangeType: 'Create',
+                        ErrorMessage: applyErr.message,
+                        ErrorCode: 'CONFIGURATION_ERROR',
+                        Severity: 'Critical',
+                    });
+                    console.warn(
+                        `[IntegrationEngine] ${entityMap.ExternalObjectName} → ${entityMap.Entity}: ` +
+                        `${applyErr.message} Skipped ${remainingInBatch} record(s) in this batch and aborting further fetches for this entity.`
+                    );
+                    fetchCompletedCleanly = false;
+                    hasMore = false;
+                    break;
+                }
+                throw applyErr;
+            }
             const afterApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
 
             if (batch.Records.length > 0) {
@@ -645,15 +716,30 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
-        if (currentWatermark) {
-            // After a clean full sync, advance the watermark to now rather than the max
-            // modification date found in the last batch. HubSpot's list API returns records
-            // in creation order, so the last batch can contain records with very old
-            // hs_lastmodifieddate values. A stale watermark causes the next incremental to
-            // re-fetch the entire change history from that old date.
-            const finalWatermark = (config.fullSync && fetchCompletedCleanly)
-                ? new Date().toISOString()
-                : currentWatermark;
+        if (fetchCompletedCleanly) {
+            // Save a watermark on every clean fetch, even when the connector
+            // can't compute a NewWatermarkValue (empty result set, or a source
+            // object with no modstamp column). Without the fallback, every
+            // subsequent incremental re-issues the same unfiltered query — on
+            // Salesforce orgs this means scanning 1,500+ empty tables per run.
+            //
+            // After a clean full sync, advance the watermark to "now" rather
+            // than the max modification date in the last batch. HubSpot's list
+            // API returns records in creation order, so the last batch can
+            // contain records with very old hs_lastmodifieddate values; a
+            // stale watermark then causes the next incremental to re-fetch
+            // the entire change history from that old date.
+            //
+            // For source objects that have no modstamp column at all (e.g.
+            // Salesforce __Share tables), the connector will ignore the saved
+            // watermark when building its SOQL — behavior there is unchanged,
+            // but at least a watermark row exists for bookkeeping.
+            let finalWatermark: string;
+            if (currentWatermark) {
+                finalWatermark = config.fullSync ? new Date().toISOString() : currentWatermark;
+            } else {
+                finalWatermark = new Date().toISOString();
+            }
             await this.watermarkService.Update(entityMapID, finalWatermark, contextUser, 'Pull');
             result.WatermarkAfter = finalWatermark;
         }
@@ -1133,6 +1219,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 result.RecordsUpdated = batchStartUpdated;
                 result.RecordsDeleted = batchStartDeleted;
 
+                // SchemaNotGeneratedError is per-entity-deterministic — every record in
+                // this object will fail the same way. Bubble it up so ProcessPullSync
+                // can fail-stop the entityMap with one log line instead of producing
+                // per-record duplicates. Rollback + counter restore above already ran.
+                if (err instanceof SchemaNotGeneratedError) {
+                    throw err;
+                }
+
                 const classified = ClassifyError(err);
                 const msg = err instanceof Error ? err.message : String(err);
                 for (const rec of batch) {
@@ -1201,7 +1295,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const saved = await entity.Save();
         if (!saved) {
-            throw new Error(`Failed to create ${record.MJEntityName} record`);
+            const errMsg = entity.LatestResult?.CompleteMessage ?? 'unknown error';
+            const schemaErr = detectSchemaNotGenerated(record.MJEntityName, errMsg);
+            if (schemaErr) throw schemaErr;
+            throw new Error(`Failed to create ${record.MJEntityName} record: ${errMsg}`);
         }
 
         // Use the entity's actual PK (e.g. the UUID assigned by the DB) as the
@@ -1267,7 +1364,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const saved = await entity.Save();
         if (!saved) {
-            throw new Error(`Failed to update ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
+            const errMsg = entity.LatestResult?.CompleteMessage ?? 'unknown error';
+            const schemaErr = detectSchemaNotGenerated(record.MJEntityName, errMsg);
+            if (schemaErr) throw schemaErr;
+            throw new Error(`Failed to update ${record.MJEntityName} record ${record.MatchedMJRecordID}: ${errMsg}`);
         }
         result.RecordsUpdated++;
     }
@@ -1348,12 +1448,117 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * Sets fields on a BaseEntity instance from a field value map.
      */
     private SetEntityFields(
-        entity: { Set(fieldName: string, value: unknown): void },
+        entity: {
+            Set(fieldName: string, value: unknown): void;
+            Fields?: Array<{ Name: string; EntityFieldInfo?: { Type?: string; AllowsNull?: boolean }; Type?: string }>;
+        },
         fields: Record<string, unknown>
     ): void {
-        for (const [fieldName, value] of Object.entries(fields)) {
-            entity.Set(fieldName, value);
+        // Build a quick lookup of field types so we can coerce values correctly.
+        // Empty strings and common "null sentinel" values from external systems
+        // (e.g., Salesforce returns "" for unset lat/lon on some records) MUST
+        // become JS null before hitting BaseEntity.Set() — otherwise MJ's SQL
+        // provider passes "" into a DECIMAL/INT/DATE column and SQL Server
+        // throws "Error converting data type nvarchar to decimal".
+        const typeLookup = new Map<string, string>();
+        for (const f of entity.Fields ?? []) {
+            const rawType = f.EntityFieldInfo?.Type ?? f.Type;
+            if (rawType) typeLookup.set(f.Name.toLowerCase(), rawType.toLowerCase());
         }
+
+        for (const [fieldName, value] of Object.entries(fields)) {
+            entity.Set(fieldName, this.coerceIncomingValue(value, typeLookup.get(fieldName.toLowerCase())));
+        }
+    }
+
+    /**
+     * Coerce external values to something MJ's SQL provider can bind safely.
+     * The external system has already done its best — this is only a safety
+     * net for common edge cases (empty strings for numeric columns, etc.).
+     */
+    private coerceIncomingValue(value: unknown, targetType?: string): unknown {
+        if (value == null) return value;
+
+        // Reject NaN / Infinity for any numeric value before it hits the SQL
+        // parameter binder. The mssql driver passes these straight through to
+        // SQL Server as 'NaN' / 'Infinity' strings, which then fails decimal
+        // conversion. Connectors occasionally surface NaN when the source API
+        // returns a sentinel that JSON.parse coerces to NaN, or when arithmetic
+        // on missing fields produces it. Better to null than crash the row.
+        if (typeof value === 'number' && !Number.isFinite(value)) return null;
+
+        // Non-string primitives pass through unchanged (numbers, booleans,
+        // Dates, etc.). The mssql driver handles them natively.
+        if (typeof value !== 'string') return value;
+        const trimmed = value.trim();
+        if (trimmed === '') {
+            // Empty string → null for ALL types. If the column is non-string and
+            // we pass an empty string, SQL Server's implicit conversion fails.
+            // If the column IS a string and was nullable, null is still a
+            // reasonable representation of "no value".
+            return null;
+        }
+        if (targetType) {
+            if (this.isNumericSqlType(targetType)) {
+                // Strip common formatting that SI/SF/HubSpot occasionally
+                // include in numeric-typed responses: thousands separators,
+                // currency symbols, leading +. Trailing % stays as-is —
+                // a percent column should be unformatted upstream.
+                const cleaned = trimmed.replace(/^\+/, '').replace(/[,$£€¥]/g, '');
+                const n = Number(cleaned);
+                return Number.isFinite(n) ? n : null;
+            }
+            if (this.isBooleanSqlType(targetType)) {
+                const lower = trimmed.toLowerCase();
+                if (lower === 'true' || lower === '1' || lower === 'yes') return true;
+                if (lower === 'false' || lower === '0' || lower === 'no') return false;
+                return null;
+            }
+            if (this.isDateSqlType(targetType)) {
+                const d = new Date(trimmed);
+                return Number.isNaN(d.getTime()) ? null : d;
+            }
+            return value;
+        }
+        // No target type info — this happens when the entity's Fields array
+        // isn't enriched (e.g. freshly-RSU'd entities before the metadata cache
+        // catches up). Without this branch, a SF field typed `double` in
+        // describe but returned as "3.14" by the API flows through as an
+        // nvarchar → SQL Server throws "Error converting data type nvarchar to
+        // decimal". We can't be sure of the target column type here, but shape
+        // sniffing is safer than silently handing SQL Server a string: if the
+        // incoming value is unambiguously numeric or boolean we coerce,
+        // otherwise leave it alone.
+        return this.shapeSniffedCoerce(trimmed, value);
+    }
+
+    /**
+     * Shape-based coercion used only when we have no target type info. Matches
+     * JSON-safe number/boolean literals exactly so we don't accidentally coerce
+     * legitimately string-shaped IDs that happen to contain digits.
+     */
+    private shapeSniffedCoerce(trimmed: string, original: string): unknown {
+        // Boolean literal
+        if (trimmed === 'true') return true;
+        if (trimmed === 'false') return false;
+        // Strict numeric literal — no leading/trailing characters, finite
+        if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+            const n = Number(trimmed);
+            if (Number.isFinite(n)) return n;
+        }
+        return original;
+    }
+
+    private isNumericSqlType(t: string): boolean {
+        return /decimal|numeric|int|bigint|smallint|tinyint|float|double|real|money/.test(t);
+    }
+
+    private isBooleanSqlType(t: string): boolean {
+        return /bit|bool/.test(t);
+    }
+
+    private isDateSqlType(t: string): boolean {
+        return /date|time|timestamp/.test(t);
     }
 
     /**
