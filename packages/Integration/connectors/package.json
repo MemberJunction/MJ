@@ -18,6 +18,7 @@
     "@memberjunction/core-entities": "5.29.0",
     "@memberjunction/global": "5.29.0",
     "@memberjunction/integration-engine": "5.29.0",
+    "@memberjunction/integration-engine-base": "5.29.0",
     "jsonwebtoken": "9.0.3",
     "mssql": "^12.2.0"
   },

@@ -3,7 +3,7 @@
   "type": "generic",
   "title": "Component Property Name Nonexistent - Broken Pattern",
   "description": "Tests linter detection of non-existent component property",
-  "code": "function ComponentPropNameNonexistentBroken({ utilities, components }) {\n  const [chartData, setChartData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Sales By Month',\n        CategoryPath: 'Sales/Reports'\n      });\n      if (result?.Success) {\n        setChartData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Sales Chart</h3>\n      {/* ❌ Property 'title' doesn't exist on SimpleChart */}\n      <SimpleChart data={chartData} groupBy=\"Month\" valueField=\"Revenue\" title=\"Sales Overview\" />\n    </div>\n  );\n}",
+  "code": "function ComponentPropNameNonexistentBroken({ utilities, components }) {\n  const [chartData, setChartData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Action Summary',\n        CategoryPath: 'Admin/Reports'\n      });\n      if (result?.Success) {\n        setChartData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Action Chart</h3>\n      {/* ❌ Property 'title' doesn't exist on SimpleChart */}\n      <SimpleChart data={chartData} groupBy=\"Action\" valueField=\"RetentionPeriod\" title=\"Action Overview\" />\n    </div>\n  );\n}",
   "location": "embedded",
   "namespace": "test/fixtures/type-rules",
   "version": "1.0.0",
@@ -18,5 +18,23 @@
         {"name": "valueField", "type": "string", "isRequired": true}
       ]
     }]
-  }
+  },
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "location": "registry",
+      "type": "chart",
+      "title": "Simple Chart",
+      "description": "Renders a simple chart visualization from data",
+      "code": "",
+      "functionalRequirements": "",
+      "technicalDesign": "",
+      "exampleUsage": "<SimpleChart data={chartData} groupBy=\"Category\" valueField=\"Amount\" />",
+      "properties": [
+        {"name": "data", "type": "array", "required": true, "description": "Array of data records to chart"},
+        {"name": "groupBy", "type": "string", "required": true, "description": "Field name to group data by"},
+        {"name": "valueField", "type": "string", "required": true, "description": "Field name for the numeric value axis"}
+      ]
+    }
+  ]
 }

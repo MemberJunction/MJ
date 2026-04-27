@@ -23,20 +23,27 @@ You are evaluating whether a new note should be added to the agent memory system
 
 ## Decision Criteria
 
-**IMPORTANT: High similarity scores indicate topical overlap, NOT necessarily duplicate information.** Two notes can be about the same subject yet convey distinct facts. Always compare the **specific values and details**, not just the general topic.
+Answer ONE question: **If an agent had only the existing note(s), would it behave any differently toward this user than if it also had the candidate note?**
 
-Add the candidate note if it provides:
+- If the agent would act the SAME either way → the candidate is redundant. Do NOT add.
+- If the candidate would cause the agent to act DIFFERENTLY → it adds value. ADD it.
 
-1. **New or Additive Information**: Contains specific facts, preferences, values, or constraints not stated in existing notes — even if the topic overlaps. For example, "User prefers Python for scripting" adds to "User prefers TypeScript for web development"; these are two distinct language preferences in different contexts, not duplicates.
-2. **Different Scope**: Applies to a different agent/user/company combination
-3. **Refinement**: Provides more specific or actionable guidance than existing notes
-4. **Contradiction Resolution**: Clarifies or updates outdated information
+"Act differently" means: give different advice, use a different tool, apply a different constraint, avoid a different thing, or make a different assumption about the user.
 
-**Do NOT add** the candidate if:
+Notes are redundant when they express the same actionable stance regardless of:
+- Wording or phrasing differences
+- Positive vs negative framing (requiring X = prohibiting not-X)
+- Reasoning that merely explains the motivation behind an already-recorded stance without introducing new situational facts
+- Provenance or backstory about when, where, or how a preference originated
+- Different levels of precision for the same measurement
+- Synonyms or domain-equivalent terminology
 
-1. **True Duplicate**: Conveys the **exact same specific information** as an existing note, just worded differently (e.g., "User prefers dark mode" vs "User likes dark theme" — same preference, same value)
-2. **Strict Subset**: Every specific detail is already covered by existing notes
-3. **Redundant**: Would not provide any additional actionable value to agents
+Notes are additive when they enable genuinely different agent actions:
+- A different tool, technology, or domain
+- A different constraint or threshold
+- A fact about a different aspect of the user's work
+- A scope the existing notes don't cover
+- Factual information about the user's situation that, while accompanying a known preference, would independently inform agent behavior in scenarios beyond that preference
 
 ## Output Format
 
@@ -49,4 +56,6 @@ Return your decision as JSON:
 }
 ```
 
-Preserve every distinct piece of information. When in doubt about whether two notes convey the same specific fact, prefer adding the candidate.
+The test is always behavioral: same agent action = duplicate, different agent action = keep.
+
+**Burden of proof**: These notes were already flagged as semantically similar. The candidate must enable a CONCRETELY different agent action — not just contain different words. Rewording, restating from a different angle, adding justification, or mentioning when/where something was discussed are NOT different actions. However, a genuinely broader or narrower scope that would change which situations the agent applies the preference to IS a different action.

@@ -125,7 +125,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 PropertyName: '_models',
                 EntityName: 'MJ: AI Models',
                 CacheLocal: true
-                
+
             },
             {
                 PropertyName: '_modelTypes',
@@ -321,7 +321,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             }).forEach((prompt: MJAIPromptEntityExtended) => {
                 if (!PromptCategory.Prompts) {
                     // this is a duck typing check and means that at runtime
-                    // we didn't get MJAIPromptEntityExtended, but prob got the 
+                    // we didn't get MJAIPromptEntityExtended, but prob got the
                     // MJAIPromptEntity class instead that doesn't have a Prompts property
                     // in which case we need to emit a console error with clear information next
                     console.error(`PromptCategory class does not have a Prompts property. This is indicative of

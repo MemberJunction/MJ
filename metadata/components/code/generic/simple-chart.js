@@ -756,7 +756,7 @@ function SimpleChart({
 
   // Render chart container with canvas
   return (
-    <div style={{ width: '100%', position: 'relative' }}>
+    <div style={{ width: '100%', height: '100%', maxHeight: `${height}px`, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       {enableExport && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
           <button
@@ -778,7 +778,7 @@ function SimpleChart({
           </button>
         </div>
       )}
-      <div style={{ width: '100%', height: `${height}px` }}>
+      <div style={{ width: '100%', flex: 1, minHeight: `${Math.min(height, 200)}px` }}>
         <canvas ref={canvasRef} />
       </div>
     </div>

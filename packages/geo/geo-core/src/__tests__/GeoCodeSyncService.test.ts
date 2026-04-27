@@ -64,6 +64,9 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJStateProvinceEntity: class {},
     GeoDataEngine: {
         Instance: {
+            // GeoDataEngine is loaded on-demand — SyncIfChanged() awaits Config() before
+            // calling any sync resolver. Mock as a no-op resolved Promise.
+            Config: vi.fn().mockResolvedValue(undefined),
             ResolveCountry: (...args: unknown[]) => mockResolveCountry(...args),
             ResolveState: (...args: unknown[]) => mockResolveState(...args),
         },

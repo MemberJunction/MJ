@@ -667,7 +667,11 @@ For comprehensive information about IS-A relationships in MemberJunction:
 
 ## Caching & Real-Time Sync
 
-This package provides browser-side storage providers (`BrowserIndexedDBStorageProvider`, `BrowserLocalStorageProvider`) for `LocalCacheManager`, and subscribes to `CACHE_INVALIDATION` GraphQL events to keep browser data fresh when other users or servers modify entities. For the full architecture — including differential updates, Redis cross-server sync, session-based deduplication, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
+This package provides browser-side storage providers (`BrowserIndexedDBStorageProvider`, `BrowserLocalStorageProvider`) for `LocalCacheManager`, and subscribes to `CACHE_INVALIDATION` GraphQL events to keep browser data fresh when other users or servers modify entities.
+
+`setupGraphQLClient` orchestrates a deterministic warm-load path: after `provider.Config(...)` loads the cached `AllMetadata` blob from IndexedDB (gzip-compressed), it calls `provider.preValidateAndRefresh()` to confirm the cache is current via a single batched timestamp round-trip. If current, fast-start engages and engines trust their local IndexedDB caches without per-view smart-cache-check round-trips during `StartupManager.Startup()`. If stale, metadata is refreshed in place and fast-start is disabled so engines fall through to smart-cache-check.
+
+For the full architecture — including differential updates, the fast-start window, Redis cross-server sync, session-based deduplication, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
 
 ## Dependencies
 

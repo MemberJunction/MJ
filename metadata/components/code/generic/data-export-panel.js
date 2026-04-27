@@ -204,8 +204,6 @@ function DataExportPanel({
       })
     );
     
-    console.log(`✅ [DataExportPanel] Prepared ${rows.length} rows with ${headers.length} columns for export`);
-    
     return { headers, rows };
   };
   
@@ -359,13 +357,6 @@ function DataExportPanel({
     // Get elements at export time
     const exportHtmlElement = getHtmlElement ? getHtmlElement() : null;
     
-    console.log('=== PDF Export Debug ===');
-    console.log('getHtmlElement provided:', !!getHtmlElement);
-    console.log('exportHtmlElement:', !!exportHtmlElement, exportHtmlElement);
-    console.log('aiInsightsText provided:', !!aiInsightsText);
-    console.log('pdfOptions:', pdfOptions);
-    console.log('data length:', data?.length || 0);
-    
     try {
       setIsExporting(true);
       setExportProgress(10);
@@ -382,14 +373,6 @@ function DataExportPanel({
       setExportProgress(20);
       
       if (exportHtmlElement) {
-        console.log('HTML element path - capturing dashboard');
-        console.log('exportHtmlElement dimensions:', {
-          scrollWidth: exportHtmlElement.scrollWidth,
-          scrollHeight: exportHtmlElement.scrollHeight,
-          clientWidth: exportHtmlElement.clientWidth,
-          clientHeight: exportHtmlElement.clientHeight
-        });
-        
         // Capture HTML element as image (for charts, dashboards, etc.)
         setExportProgress(30);
         
@@ -406,10 +389,8 @@ function DataExportPanel({
         
         setExportProgress(40);
         
-        // Wait longer for ApexCharts to fully render
-        console.log('Waiting 1000ms for charts to render...');
+        // Wait for ApexCharts to fully render
         await new Promise(resolve => setTimeout(resolve, 1000));
-        console.log('Wait complete, starting html2canvas...');
         
         // Capture the element with better options for dashboards
         let canvas = null;
@@ -428,7 +409,6 @@ function DataExportPanel({
                      element.tagName === 'BUTTON';
             }
           });
-          console.log('Dashboard canvas captured successfully');
           imgData = canvas.toDataURL('image/jpeg', 0.95);  // Use JPEG for better compression
         } catch (canvasError) {
           console.error('Error capturing dashboard canvas:', canvasError);
@@ -472,7 +452,6 @@ function DataExportPanel({
           // For cluster visualization, maximize the image size on the first page
           // since we'll put the data table on subsequent pages
           if (exportHtmlElement && exportHtmlElement.id === 'cluster-graph-container') {
-            console.log('Detected cluster graph - maximizing image size for PDF');
             // Use more of the page for the visualization
             const availableHeight = pageHeight - marginTop - marginBottom;
             const availableWidth = pageWidth - marginLeft - marginRight;
@@ -487,12 +466,6 @@ function DataExportPanel({
             }
           }
           
-          console.log('Image sizing:', {
-            canvas: { width: canvas.width, height: canvas.height, ratio: canvasAspectRatio },
-            page: { maxWidth, maxHeight, ratio: pageAspectRatio },
-            final: { width: imgWidth, height: imgHeight }
-          });
-          
           // Skip AI Insights canvas capture - we only want the markdown text
           // The aiInsightsText parameter provides the markdown content directly
           
@@ -502,7 +475,6 @@ function DataExportPanel({
           
           // Check if we need multi-page support for tall dashboards
           if (pdfOptions.multiPage && imgHeight > bottomMargin - yPosition) {
-            console.log('Using multi-page mode for tall dashboard');
             // Split the image across multiple pages
             const pageHeight = bottomMargin - yPosition;
             let remainingHeight = imgHeight;
@@ -572,8 +544,7 @@ function DataExportPanel({
             
             // For cluster graphs, always put data table on next page for better layout
             if (exportHtmlElement && exportHtmlElement.id === 'cluster-graph-container') {
-              console.log('Cluster graph exported - data table will be on next page');
-              // Force data table to next page by setting a flag
+              // Force data table to next page for better layout
               doc.addPage();
             }
           }
@@ -586,7 +557,6 @@ function DataExportPanel({
         
         // Add AI Insights on a new page - only use markdown text
         if (aiInsightsText) {
-          console.log('Adding AI Insights to PDF on new page');
           doc.addPage();
           
           // Add AI Insights header
@@ -702,7 +672,6 @@ function DataExportPanel({
         
         // Optionally add data table below the image if both are provided
         if (pdfOptions.includeDataTable && data && data.length > 0) {
-          console.log('Adding data table to PDF on new page');
           doc.addPage();
           
           // Add table title
@@ -777,7 +746,6 @@ function DataExportPanel({
         setExportProgress(90);
         
       } else {
-        console.log('No HTML element provided - using data table only path');
         // Generate table from data
         const { headers, rows } = prepareData();
         setExportProgress(30);
@@ -913,10 +881,6 @@ function DataExportPanel({
   
   // Handle export based on format
   const handleExport = (format) => {
-    console.log('🎯 [DataExportPanel] handleExport called with format:', format);
-    console.log('  - data:', data);
-    console.log('  - data length:', data?.length);
-    console.log('  - columns:', columns);
     setIsDropdownOpen(false);
     
     if (showPreview) {
@@ -1217,13 +1181,6 @@ function DataExportPanel({
     return (
       <button
         onClick={() => {
-          console.log('🖱️ [DataExportPanel] Button clicked!');
-          console.log('  - buttonStyle:', buttonStyle);
-          console.log('  - formats:', formats);
-          console.log('  - isDropdownOpen:', isDropdownOpen);
-          console.log('  - data at click:', data);
-          console.log('  - data length at click:', data?.length);
-          
           if (buttonStyle === 'dropdown') {
             setIsDropdownOpen(!isDropdownOpen);
           } else if (formats.length === 1) {

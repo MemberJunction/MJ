@@ -62,6 +62,14 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
      */
     public async SyncIfChanged(entity: BaseEntity, contextUser: UserInfo, mappings?: GeoFieldMapping[]): Promise<GeocodeResult | null> {
         const resolvedMappings = mappings ?? GeoCodeSyncService.BuildMappingsFromMetadata(entity.EntityInfo);
+        if (resolvedMappings.length === 0) return null;
+
+        // GeoDataEngine is loaded on-demand (no @RegisterForStartup). Config() is idempotent —
+        // concurrent calls dedup, and repeated calls after load return immediately. Both
+        // resolveReferenceIDs() and geocodeViaReferenceData() rely on the in-memory maps
+        // populated by this load, so await it before any per-mapping processing.
+        await GeoDataEngine.Instance.Config(false, contextUser);
+
         for (const mapping of resolvedMappings) {
             try {
                 const result = await this.ProcessMapping(entity, mapping, contextUser);

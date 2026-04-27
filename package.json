@@ -100,7 +100,9 @@
     "@changesets/cli": "^2.27.12",
     "@typescript-eslint/eslint-plugin": "7.12.0",
     "@typescript-eslint/parser": "7.12.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "baseline-browser-mapping": "^2.9.19",
+    "browserslist": "4.28.1",
     "caniuse-lite": "^1.0.30001764",
     "cpy-cli": "^5.0.0",
     "eslint": "8.56.0",
@@ -117,10 +119,8 @@
     "typedoc": "~0.28.0",
     "typedoc-plugin-missing-exports": "~4.1.0",
     "typescript": "5.9.3",
-    "browserslist": "4.28.1",
-    "vitest": "^4.0.18",
-    "@vitest/coverage-v8": "^4.0.18",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^4.0.18"
   },
   "overrides": {
     "@types/node": "20.14.2",

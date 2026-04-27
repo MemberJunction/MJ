@@ -464,24 +464,36 @@
             } @else if (CreateTablesObjects.length === 0) {
               <div class="auto-map-result auto-map-success">
                 <i class="fa-solid fa-circle-info"></i>
-                All source objects already have entity maps.
+                No source objects available from this connector.
               </div>
             } @else {
+              <div class="create-tables-filters">
+                <input type="text"
+                       class="create-tables-search mj-input"
+                       placeholder="Search by name or label..."
+                       [(ngModel)]="CreateTablesSearch" />
+              </div>
               <div class="create-tables-list">
                 <div class="create-tables-select-all">
                   <label class="create-tables-checkbox">
                     <input type="checkbox"
-                           [checked]="CreateTablesSelectedCount === CreateTablesObjects.length"
+                           [checked]="FilteredCreateTablesObjects.length > 0 && CreateTablesSelectedCount === FilteredCreateTablesObjects.length"
                            (change)="ToggleAllCreateTablesObjects($any($event.target).checked)" />
-                    <span>Select All ({{ CreateTablesObjects.length }})</span>
+                    <span>Select All ({{ FilteredCreateTablesObjects.length }} of {{ CreateTablesObjects.length }})</span>
                   </label>
                 </div>
-                @for (obj of CreateTablesObjects; track obj.Name) {
+                @for (obj of FilteredCreateTablesObjects; track obj.Name) {
                   <label class="create-tables-checkbox">
                     <input type="checkbox" [(ngModel)]="obj.Selected" />
                     <span>{{ obj.Label }}</span>
                     @if (obj.Label !== obj.Name) {
                       <span class="create-tables-name-hint">{{ obj.Name }}</span>
+                    }
+                    @if (obj.IsCustom) {
+                      <span class="create-tables-badge create-tables-badge-custom">Custom</span>
+                    }
+                    @if (obj.AlreadyPersisted) {
+                      <span class="create-tables-badge create-tables-badge-registered">Registered</span>
                     }
                   </label>
                 }

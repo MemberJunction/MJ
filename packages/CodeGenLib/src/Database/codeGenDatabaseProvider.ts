@@ -624,8 +624,12 @@ export abstract class CodeGenDatabaseProvider {
      * but not yet in the MJ metadata. This is a large, platform-specific query.
      *
      * @param mjCoreSchema The MJ core schema name (e.g., `__mj`).
+     * @param entityIDs Optional list of entity UUIDs to scope the query to. When provided,
+     *   the query filters to fields belonging to those entities only — used by Pass 2 to
+     *   avoid re-scanning the entire schema for entities that haven't changed. `undefined`
+     *   or empty preserves the prior unscoped behavior.
      */
-    abstract getPendingEntityFieldsSQL(mjCoreSchema: string): string;
+    abstract getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string;
 
     /**
      * Returns an additional WHERE clause fragment for the check-constraints query.
