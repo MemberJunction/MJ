@@ -23,6 +23,102 @@ ALTER TABLE __mj."Entity"
 
 -- ===================== Views =====================
 
+-- Refresh __mj."vwEntities" to expose the new Entity columns added above plus
+-- five earlier-migration columns that drifted from the hand-rolled view
+-- (BaseViewGenerated=FALSE, so CodeGen does not regenerate it). SQL Server's
+-- counterpart of this migration uses EXEC sp_refreshview, which works because
+-- the SQL Server view body is "SELECT e.*". On PG the view lists columns
+-- explicitly, so we must regenerate it here.
+--
+-- This is a plain CREATE OR REPLACE VIEW — no DROP CASCADE, no 42P16 fallback.
+-- PG allows replacing a view as long as the new column list is a superset that
+-- preserves existing column names, types, and order. The 7 new columns are
+-- appended at the very end. Subsequent codegen runs that regenerate the view
+-- can place them in their natural position; appending here just guarantees the
+-- migration completes without disturbing dependent views or functions.
+CREATE OR REPLACE VIEW __mj."vwEntities" AS
+SELECT e."ID",
+    e."ParentID",
+    e."Name",
+    e."NameSuffix",
+    e."Description",
+    e."AutoUpdateDescription",
+    e."BaseTable",
+    e."BaseView",
+    e."BaseViewGenerated",
+    e."SchemaName",
+    e."VirtualEntity",
+    e."TrackRecordChanges",
+    e."AuditRecordAccess",
+    e."AuditViewRuns",
+    e."IncludeInAPI",
+    e."AllowAllRowsAPI",
+    e."AllowUpdateAPI",
+    e."AllowCreateAPI",
+    e."AllowDeleteAPI",
+    e."CustomResolverAPI",
+    e."AllowUserSearchAPI",
+    e."FullTextSearchEnabled",
+    e."FullTextCatalog",
+    e."FullTextCatalogGenerated",
+    e."FullTextIndex",
+    e."FullTextIndexGenerated",
+    e."FullTextSearchFunction",
+    e."FullTextSearchFunctionGenerated",
+    e."UserViewMaxRows",
+    e."spCreate",
+    e."spUpdate",
+    e."spDelete",
+    e."spCreateGenerated",
+    e."spUpdateGenerated",
+    e."spDeleteGenerated",
+    e."CascadeDeletes",
+    e."DeleteType",
+    e."AllowRecordMerge",
+    e."spMatch",
+    e."RelationshipDefaultDisplayType",
+    e."UserFormGenerated",
+    e."EntityObjectSubclassName",
+    e."EntityObjectSubclassImport",
+    e."PreferredCommunicationField",
+    e."Icon",
+    e."__mj_CreatedAt",
+    e."__mj_UpdatedAt",
+    e."ScopeDefault",
+    e."RowsToPackWithSchema",
+    e."RowsToPackSampleMethod",
+    e."RowsToPackSampleCount",
+    e."RowsToPackSampleOrder",
+    e."AutoRowCountFrequency",
+    e."RowCount",
+    e."RowCountRunAt",
+    e."Status",
+    e."DisplayName",
+    e."AllowMultipleSubtypes",
+    __mj."GetProgrammaticName"(COALESCE(__mj."StripToAlphanumeric"(si."EntityNamePrefix"::text), ''::text) || replace(
+        CASE
+            WHEN si."EntityNamePrefix" IS NOT NULL THEN replace(e."Name"::text, si."EntityNamePrefix"::text, ''::text)::character varying
+            ELSE e."Name"
+        END::text, ' '::text, ''::text)) AS "CodeName",
+    __mj."GetProgrammaticName"((COALESCE(__mj."StripToAlphanumeric"(si."EntityNamePrefix"::text), ''::text) || e."BaseTable"::text) || COALESCE(e."NameSuffix", ''::character varying)::text) AS "ClassName",
+    __mj."GetProgrammaticName"(e."BaseTable"::text || COALESCE(e."NameSuffix", ''::character varying)::text) AS "BaseTableCodeName",
+    par."Name" AS "ParentEntity",
+    par."BaseTable" AS "ParentBaseTable",
+    par."BaseView" AS "ParentBaseView",
+    -- New columns (appended to preserve existing column order/positions for
+    -- PG's CREATE OR REPLACE VIEW compatibility).
+    e."AutoUpdateFullTextSearch",
+    e."AutoUpdateAllowUserSearchAPI",
+    e."TrustServerCacheCompletely",
+    e."SupportsGeoCoding",
+    e."AutoUpdateSupportsGeoCoding",
+    e."AllowCaching",
+    e."DetectExternalChanges"
+FROM __mj."Entity" e
+  LEFT JOIN __mj."Entity" par ON e."ParentID" = par."ID"
+  LEFT JOIN __mj."SchemaInfo" si ON e."SchemaName"::text = si."SchemaName"::text;
+
+
 DO $do$
 DECLARE
   v_target_schema CONSTANT TEXT := '__mj';
