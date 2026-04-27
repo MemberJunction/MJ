@@ -1,5 +1,5 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, Float, InputType, ID } from 'type-graphql';
-import GraphQLJSON from 'graphql-type-json';
+import { GraphQLJSON } from 'graphql-type-json';
 import { AppContext } from '../types.js';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
