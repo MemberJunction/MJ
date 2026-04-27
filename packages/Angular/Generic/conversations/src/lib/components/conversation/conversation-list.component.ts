@@ -87,7 +87,13 @@ import { UUIDsEqual } from '@memberjunction/global';
                     </div>
                   </div>
                   <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
-                    <div class="conversation-name">{{ conversation.Name }}</div>
+                    <div class="conversation-name">
+                      {{ conversation.Name }}
+                      @if (isSharedWithMe(conversation)) {
+                        <i class="fas fa-share-nodes shared-indicator"
+                           [title]="sharedWithMeTooltip(conversation)"></i>
+                      }
+                    </div>
                     <div class="conversation-preview">{{ conversation.Description }}</div>
                   </div>
                   @if (!isSelectionMode) {
@@ -152,7 +158,13 @@ import { UUIDsEqual } from '@memberjunction/global';
                   </div>
                 </div>
                 <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
-                  <div class="conversation-name">{{ conversation.Name }}</div>
+                  <div class="conversation-name">
+                    {{ conversation.Name }}
+                    @if (isSharedWithMe(conversation)) {
+                      <i class="fas fa-share-nodes shared-indicator"
+                         [title]="sharedWithMeTooltip(conversation)"></i>
+                    }
+                  </div>
                   <div class="conversation-preview">{{ conversation.Description }}</div>
                 </div>
                 @if (!isSelectionMode) {
@@ -310,7 +322,9 @@ import { UUIDsEqual } from '@memberjunction/global';
     .conversation-icon.has-tasks { color: var(--mj-status-warning); }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
     .conversation-info { flex: 1; min-width: 0; }
-    .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+    .shared-indicator { font-size: 10px; color: rgba(255, 255, 255, 0.55); flex-shrink: 0; }
+    .conversation-item.active .shared-indicator { color: rgba(255, 255, 255, 0.85); }
     .conversation-preview { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conversation-item.active .conversation-preview { color: rgba(255,255,255,0.8); }
     .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -970,6 +984,18 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   hasActiveTasks(conversationId: string): boolean {
     return this.conversationIdsWithTasks.has(conversationId);
+  }
+
+  /** True when this conversation was shared with the current user by someone else. */
+  isSharedWithMe(conversation: MJConversationEntity): boolean {
+    return this.engine.GetSharedByInfo(conversation.ID) !== null;
+  }
+
+  /** Tooltip for the sidebar share icon: "Shared by {email or name}". */
+  sharedWithMeTooltip(conversation: MJConversationEntity): string {
+    const info = this.engine.GetSharedByInfo(conversation.ID);
+    if (!info) return 'Shared with you';
+    return `Shared by ${info.Email ?? info.Name ?? 'another user'}`;
   }
 
   toggleSelectionMode(): void {

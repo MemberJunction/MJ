@@ -193,5 +193,35 @@
       "lastModified": "2026-04-20T23:56:14.909Z",
       "checksum": "7f89c17722dcc8f191026feb6ca8371edd06cfdec3ee2ff56153fd29e039c5ce"
     }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Permissions",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "E3A60BED-C451-4369-A3C6-9D191BF87C50"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T00:51:50.193Z",
+      "checksum": "25494a9c488fb79dd3264984fbac0c45bdcae91528e8eedf6ff3c415fe90abe4"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Permissions",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "98CC6138-E264-4FFA-AA55-0442FF99E853"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T00:51:50.194Z",
+      "checksum": "aa821cad060f340abaec89734cffa0b1b2632d633633fbac1557b36e4c401da1"
+    }
   }
 ]

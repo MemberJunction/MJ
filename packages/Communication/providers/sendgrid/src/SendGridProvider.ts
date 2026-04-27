@@ -153,25 +153,39 @@ export class SendGridProvider extends BaseCommunicationProvider {
                 };
             }
             else {
-                LogError(`Error sending email to ${msg.to}:`, undefined, result);
-                LogError(result[0].body);
+                const status = result?.[0]?.statusCode ?? '?';
+                const body = safeStringify(result?.[0]?.body);
+                LogError(
+                    `SendGrid rejected email to ${msg.to} — status ${status}. ` +
+                    `From: ${from}. Response: ${body}`
+                );
                 return {
                     Message: message,
                     Success: false,
-                    Error: result[0].toString()
+                    Error: `SendGrid ${status}: ${body}`
                 };
             }
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            const errorResponse = (error as { response?: { body?: unknown } })?.response?.body;
-            LogError(`Error sending email to ${msg.to}:`, undefined, error);
-            if (errorResponse) {
-                LogError(errorResponse);
-            }
+            const status = (error as { code?: number })?.code ?? '?';
+            const body = (error as { response?: { body?: unknown } })?.response?.body;
+            const bodyText = safeStringify(body);
+            const sendGridMessages = extractSendGridErrorMessages(body);
+            const combined =
+                sendGridMessages.length > 0
+                    ? `SendGrid ${status}: ${sendGridMessages.join('; ')}`
+                    : `SendGrid ${status}: ${errorMessage}`;
+
+            LogError(
+                `${combined} — sending email to ${msg.to}. ` +
+                `From: ${from}. Subject: "${message.Subject ?? '(none)'}". ` +
+                `Full SendGrid response body: ${bodyText}`
+            );
+
             return {
                 Message: message,
                 Success: false,
-                Error: errorMessage
+                Error: combined
             };
         }
     }
@@ -221,5 +235,49 @@ export class SendGridProvider extends BaseCommunicationProvider {
             Success: false,
             ErrorMessage: 'SendGrid does not support creating draft messages. Drafts are only supported by email providers with mailbox access (Gmail, MS Graph).'
         };
+    }
+}
+
+/**
+ * Shape SendGrid returns in `error.response.body` on 4xx/5xx — e.g.,
+ * `{ errors: [{ message, field, help }], id, ... }`. We keep this loose because
+ * SendGrid occasionally adds or omits fields between API versions.
+ */
+interface SendGridErrorBody {
+    errors?: Array<{ message?: string; field?: string | null; help?: string | null }>;
+}
+
+/**
+ * Pull human-readable messages out of the SendGrid error body. Returns an
+ * empty array when the body doesn't match the expected shape (e.g., proxy
+ * error, HTML, malformed JSON) so the caller can fall back to the raw string.
+ */
+function extractSendGridErrorMessages(body: unknown): string[] {
+    if (!body || typeof body !== 'object') return [];
+    const errors = (body as SendGridErrorBody).errors;
+    if (!Array.isArray(errors)) return [];
+    return errors
+        .map((e) => {
+            const parts: string[] = [];
+            if (e.message) parts.push(e.message);
+            if (e.field) parts.push(`field=${e.field}`);
+            if (e.help) parts.push(`help=${e.help}`);
+            return parts.join(' ');
+        })
+        .filter((s) => s.length > 0);
+}
+
+/**
+ * `JSON.stringify` that never throws — important in logging paths where a
+ * circular reference in the response object would otherwise replace a useful
+ * error with a secondary crash.
+ */
+function safeStringify(value: unknown): string {
+    if (value === undefined) return 'undefined';
+    if (typeof value === 'string') return value;
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return String(value);
     }
 }

@@ -685,6 +685,14 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
+   * Read-only view of the ApplicationRole catalog. Used by permission providers
+   * that need to reason about grants for arbitrary users (not just CurrentUser).
+   */
+  public get ApplicationRoles(): readonly MJApplicationRoleEntity[] {
+    return this._applicationRoles;
+  }
+
+  /**
    * Checks if the current user's roles grant access to the application.
    * If no ApplicationRole records exist for the app, access is open (backwards compatible).
    * If records exist, user must have at least one role with CanAccess=1.

@@ -45,6 +45,19 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         return this._Permissions;
     }
 
+    /**
+     * Case-insensitive name → ID lookup against the cached `MJ: Resource Types`
+     * catalog. Returns null when the catalog isn't loaded yet or no matching
+     * type exists. Used by `shareNotification.ts` and `shareNotificationHandler.ts`
+     * to resolve the `ResourceTypeID` for notification deep-links.
+     */
+    public ResourceTypeIdByName(name: string | null | undefined): string | null {
+        if (!name) return null;
+        const lower = name.trim().toLowerCase();
+        const match = this._ResourceTypes?.ResourceTypes?.find((rt) => rt.Name?.trim().toLowerCase() === lower);
+        return match?.ID ?? null;
+    }
+
 
     /**
      * Convenience method to find all of the permissions for a given Resource Type and Resource Record ID, no additional filtering takes place in this method regarding

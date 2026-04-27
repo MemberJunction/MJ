@@ -738,11 +738,10 @@ export const MJActionSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.`),
-    RuntimeActionConfiguration: z.any().nullable().describe(`
+    RuntimeActionConfiguration: z.string().nullable().describe(`
         * * Field Name: RuntimeActionConfiguration
         * * Display Name: Runtime Configuration
         * * SQL Data Type: nvarchar(MAX)
-        * * JSON Type: MJActionEntity_IRuntimeActionConfiguration
         * * Description: JSON blob holding configuration specific to Type='Runtime' actions: declarative permission scopes (allowedEntities, allowedActions, allowedAgents with id+name pairs), resource limits (maxMemoryMB, maxBridgeCalls), and sandbox options (additionalLibraries, debugMode). Evolvable — new keys can be introduced without schema changes. NULL for non-Runtime actions.`),
     MaxExecutionTimeMS: z.number().nullable().describe(`
         * * Field Name: MaxExecutionTimeMS
@@ -1429,7 +1428,7 @@ export const MJAIAgentExampleSchema = z.object({
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Internal comments about this example, not included in agent context injection.`),
-    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Revoked')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -1437,7 +1436,6 @@ export const MJAIAgentExampleSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Active
-    *   * Archived
     *   * Pending
     *   * Revoked
         * * Description: Status of the example: Pending (awaiting review), Active (in use), or Revoked (disabled).`),
@@ -1822,7 +1820,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Internal comments about this note, not included in agent context injection.`),
-    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Revoked')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -1830,7 +1828,6 @@ export const MJAIAgentNoteSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Active
-    *   * Archived
     *   * Pending
     *   * Revoked
         * * Description: Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).`),
@@ -1901,40 +1898,6 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Expires At
         * * SQL Data Type: datetimeoffset
         * * Description: Optional expiration timestamp. Notes past this date are candidates for archival. NULL means no expiration.`),
-    ConsolidatedIntoNoteID: z.string().nullable().describe(`
-        * * Field Name: ConsolidatedIntoNoteID
-        * * Display Name: Consolidated Into Note ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
-        * * Description: Self-referential FK. Points to the consolidated note that replaced this one.`),
-    ConsolidationCount: z.number().describe(`
-        * * Field Name: ConsolidationCount
-        * * Display Name: Consolidation Count
-        * * SQL Data Type: int
-        * * Default Value: 0
-        * * Description: Re-summarization depth. 0=raw, 1=first consolidation. Capped at 3.`),
-    DerivedFromNoteIDs: z.string().nullable().describe(`
-        * * Field Name: DerivedFromNoteIDs
-        * * Display Name: Derived From Note I Ds
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON array of source note IDs consolidated into this note.`),
-    ProtectionTier: z.union([z.literal('Ephemeral'), z.literal('Immutable'), z.literal('Protected'), z.literal('Standard')]).describe(`
-        * * Field Name: ProtectionTier
-        * * Display Name: Protection Tier
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: Standard
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Ephemeral
-    *   * Immutable
-    *   * Protected
-    *   * Standard
-        * * Description: Protection level: Immutable, Protected, Standard, Ephemeral.`),
-    ImportanceScore: z.number().nullable().describe(`
-        * * Field Name: ImportanceScore
-        * * Display Name: Importance Score
-        * * SQL Data Type: decimal(5, 2)
-        * * Description: Composite importance score (0-10) from 7 signals.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -1971,14 +1934,6 @@ export const MJAIAgentNoteSchema = z.object({
         * * Field Name: PrimaryScopeEntity
         * * Display Name: Primary Scope Entity
         * * SQL Data Type: nvarchar(255)`),
-    ConsolidatedIntoNote: z.string().nullable().describe(`
-        * * Field Name: ConsolidatedIntoNote
-        * * Display Name: Consolidated Into Note
-        * * SQL Data Type: nvarchar(MAX)`),
-    RootConsolidatedIntoNoteID: z.string().nullable().describe(`
-        * * Field Name: RootConsolidatedIntoNoteID
-        * * Display Name: Root Consolidated Into Note ID
-        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type MJAIAgentNoteEntityType = z.infer<typeof MJAIAgentNoteSchema>;
@@ -3014,11 +2969,6 @@ each time the agent processes a prompt step.`),
         * * Display Name: External Reference ID
         * * SQL Data Type: nvarchar(200)
         * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`),
-    CompanyID: z.string().nullable().describe(`
-        * * Field Name: CompanyID
-        * * Display Name: Company ID
-        * * SQL Data Type: uniqueidentifier
-        * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -7503,7 +7453,7 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Description: The __mj_UpdatedAt timestamp of the record at the time of archiving, used for conflict detection during restore.`),
     IsRecordChangeArchive: z.boolean().describe(`
         * * Field Name: IsRecordChangeArchive
-        * * Display Name: Is Record Change Archive
+        * * Display Name: Is Record Change
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this detail row represents an archived Record Change entry rather than a primary entity record.`),
@@ -15482,6 +15432,7 @@ export type MJEntityOrganicKeyEntityType = z.infer<typeof MJEntityOrganicKeySche
 export const MJEntityPermissionSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
@@ -15520,34 +15471,44 @@ export const MJEntityPermissionSchema = z.object({
         * * Description: Whether the role/user can delete records from this entity.`),
     ReadRLSFilterID: z.string().nullable().describe(`
         * * Field Name: ReadRLSFilterID
-        * * Display Name: Read RLSFilter ID
+        * * Display Name: Read Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)`),
     CreateRLSFilterID: z.string().nullable().describe(`
         * * Field Name: CreateRLSFilterID
-        * * Display Name: Create RLSFilter ID
+        * * Display Name: Create Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)`),
     UpdateRLSFilterID: z.string().nullable().describe(`
         * * Field Name: UpdateRLSFilterID
-        * * Display Name: Update RLSFilter ID
+        * * Display Name: Update Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)`),
     DeleteRLSFilterID: z.string().nullable().describe(`
         * * Field Name: DeleteRLSFilterID
-        * * Display Name: Delete RLSFilter ID
+        * * Display Name: Delete Filter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Type: z.union([z.literal('Allow'), z.literal('Deny')]).describe(`
+        * * Field Name: Type
+        * * Display Name: Access Type
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Allow
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+        * * Description: Allow or Deny. Deny rows override any Allow grants on the same (EntityID, RoleID, action) at evaluation time, letting administrators exclude a role from an action another role grants.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -15558,23 +15519,23 @@ export const MJEntityPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     RoleSQLName: z.string().nullable().describe(`
         * * Field Name: RoleSQLName
-        * * Display Name: Role SQLName
+        * * Display Name: Role SQL Name
         * * SQL Data Type: nvarchar(250)`),
     CreateRLSFilter: z.string().nullable().describe(`
         * * Field Name: CreateRLSFilter
-        * * Display Name: Create RLSFilter
+        * * Display Name: Create Filter
         * * SQL Data Type: nvarchar(100)`),
     ReadRLSFilter: z.string().nullable().describe(`
         * * Field Name: ReadRLSFilter
-        * * Display Name: Read RLSFilter
+        * * Display Name: Read Filter
         * * SQL Data Type: nvarchar(100)`),
     UpdateRLSFilter: z.string().nullable().describe(`
         * * Field Name: UpdateRLSFilter
-        * * Display Name: Update RLSFilter
+        * * Display Name: Update Filter
         * * SQL Data Type: nvarchar(100)`),
     DeleteRLSFilter: z.string().nullable().describe(`
         * * Field Name: DeleteRLSFilter
-        * * Display Name: Delete RLSFilter
+        * * Display Name: Delete Filter
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -18254,14 +18215,16 @@ export const MJMCPToolFavoriteSchema = z.object({
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who starred this tool. Favorites are per-user; multiple users can favorite the same tool independently. References the MJ User table.`),
     MCPServerToolID: z.string().describe(`
         * * Field Name: MCPServerToolID
-        * * Display Name: MCP Server Tool ID
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)`),
+        * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
+        * * Description: The MCP Server Tool that has been favorited. Combined with UserID this forms a unique constraint so a user cannot favorite the same tool twice.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -18274,11 +18237,11 @@ export const MJMCPToolFavoriteSchema = z.object({
         * * Default Value: getutcdate()`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: MCP Server Tool
+        * * Display Name: Tool Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -19045,6 +19008,89 @@ export const MJOutputTriggerTypeSchema = z.object({
 });
 
 export type MJOutputTriggerTypeEntityType = z.infer<typeof MJOutputTriggerTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Permission Domains
+ */
+export const MJPermissionDomainSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Human-readable unique name for the permission domain (e.g., "Entity Permissions", "Dashboard Permissions"). Used in admin UI and as the domain identifier in PermissionEngine API calls.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of what this permission domain covers and how permissions are enforced.`),
+    ProviderClassName: z.string().describe(`
+        * * Field Name: ProviderClassName
+        * * Display Name: Provider Class Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: ClassFactory key used to instantiate this provider. Must match the key passed to @RegisterClass(PermissionProviderBase, 'ClassName'). Convention: prefix with MJ for built-in providers (e.g., MJEntityPermissionProvider).`),
+    SupportedGranteeTypes: z.string().describe(`
+        * * Field Name: SupportedGranteeTypes
+        * * Display Name: Supported Grantee Types
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Comma-delimited list of grantee types this provider supports. Valid tokens: User, Role, Everyone, Public. Example: "User,Role".`),
+    SupportedActions: z.string().describe(`
+        * * Field Name: SupportedActions
+        * * Display Name: Supported Actions
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Comma-delimited list of permission actions this provider can evaluate. Valid tokens: Read, Create, Update, Delete, Share, Execute, Admin. Example: "Read,Create,Update,Delete".`),
+    SupportsDeny: z.boolean().describe(`
+        * * Field Name: SupportsDeny
+        * * Display Name: Supports Deny
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this provider supports explicit Deny records that override Allow grants at the same scope.`),
+    SupportsExpiration: z.boolean().describe(`
+        * * Field Name: SupportsExpiration
+        * * Display Name: Supports Expiration
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this provider supports time-bound permissions with an expiration timestamp.`),
+    SupportsHierarchyInheritance: z.boolean().describe(`
+        * * Field Name: SupportsHierarchyInheritance
+        * * Display Name: Supports Hierarchy Inheritance
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this provider resolves permissions hierarchically (e.g., category-level grants cascade to items within the category).`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When false, the PermissionEngine skips loading this provider at startup. Use to temporarily disable a provider without removing its record.`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Sort order for displaying domains in the Sharing Center admin UI. Lower numbers appear first.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome icon class for display in admin UI (e.g., "fa-solid fa-shield").`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJPermissionDomainEntityType = z.infer<typeof MJPermissionDomainSchema>;
 
 /**
  * zod schema definition for the entity MJ: Projects
@@ -21234,12 +21280,12 @@ export const MJResourcePermissionSchema = z.object({
         * * Description: Reference to the type of resource being shared (View, Dashboard, Report, etc.)`),
     ResourceRecordID: z.string().describe(`
         * * Field Name: ResourceRecordID
-        * * Display Name: Resource Record ID
+        * * Display Name: Resource Record
         * * SQL Data Type: nvarchar(255)
         * * Description: ID of the specific resource being shared`),
     Type: z.union([z.literal('Role'), z.literal('User')]).describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Share Type
         * * SQL Data Type: nvarchar(10)
     * * Value List Type: List
     * * Possible Values 
@@ -21248,12 +21294,12 @@ export const MJResourcePermissionSchema = z.object({
         * * Description: The level of sharing either Role or User`),
     StartSharingAt: z.date().nullable().describe(`
         * * Field Name: StartSharingAt
-        * * Display Name: Start Sharing At
+        * * Display Name: Start Date
         * * SQL Data Type: datetimeoffset
         * * Description: Optional: Date when sharing starts`),
     EndSharingAt: z.date().nullable().describe(`
         * * Field Name: EndSharingAt
-        * * Display Name: End Sharing At
+        * * Display Name: End Date
         * * SQL Data Type: datetimeoffset
         * * Description: Optional: Date when sharing ends`),
     RoleID: z.string().nullable().describe(`
@@ -21298,6 +21344,12 @@ export const MJResourcePermissionSchema = z.object({
     *   * Requested
     *   * Revoked
         * * Description: Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.`),
+    SharedByUserID: z.string().nullable().describe(`
+        * * Field Name: SharedByUserID
+        * * Display Name: Shared By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who granted this permission. NULL when the share pre-dates this column or when the grantor is unknown (e.g., a system-seeded permission).`),
     ResourceType: z.string().describe(`
         * * Field Name: ResourceType
         * * Display Name: Resource Type
@@ -21309,6 +21361,10 @@ export const MJResourcePermissionSchema = z.object({
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    SharedByUser: z.string().nullable().describe(`
+        * * Field Name: SharedByUser
+        * * Display Name: Shared By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -27231,155 +27287,6 @@ export class MJActionResultCodeEntity extends BaseEntity<MJActionResultCodeEntit
 
 
 /**
- * Configuration stored on Action.RuntimeActionConfiguration when Action.Type='Runtime'.
- *
- * Runtime actions are JavaScript payloads executed inside MJ's isolated-vm
- * sandbox that call back to the host via a permissioned bridge (utilities
- * object) to access metadata, views, queries, entity CRUD, other actions,
- * agents, and AI capabilities.
- *
- * This configuration is the security and resource contract for a single
- * Runtime action:
- *  - What it is permitted to touch (permissions)
- *  - How much it is allowed to consume (limits)
- *  - What sandbox affordances it needs (sandbox)
- *  - How it relates to prior versions of itself (version / previousVersionId)
- *
- * The JSON blob is evolvable — new optional keys can be added without a
- * schema migration. Required keys MUST be marked required here and enforced
- * at Save time (see the zod validator in @memberjunction/actions-base).
- *
- * Only applicable when Action.Type='Runtime'. NULL for Custom / Generated actions.
- */
-export interface MJActionEntity_IRuntimeActionConfiguration {
-    /** Declarative permission scopes. The bridge validates every call against these. */
-    permissions: MJActionEntity_IRuntimeActionPermissions;
-
-    /** Resource limits (memory, bridge-call count). Defaults applied when omitted. */
-    limits?: MJActionEntity_IRuntimeActionLimits;
-
-    /** Sandbox options — additional libraries, debug mode, etc. */
-    sandbox?: MJActionEntity_IRuntimeActionSandboxOptions;
-
-    /** Semantic version of this action (e.g. "1.0.3"). Tracked in version history. */
-    version?: string;
-
-    /** ID of the previous Action record this version was derived from, if any. */
-    previousVersionId?: string;
-}
-
-/**
- * Declarative permission scopes for a Runtime action. The bridge enforces
- * each scope on every call — an attempt to touch an unlisted entity / action /
- * agent throws a PermissionDenied error before the downstream operation runs.
- *
- * IDs are the source of truth; names are kept alongside for display, logging,
- * and human review during the approval workflow.
- *
- * The `allowAnyEntity` / `allowAnyAction` / `allowAnyAgent` booleans are
- * escape hatches for framework-shipped utility actions that must accept the
- * target entity/action/agent as runtime input (e.g. a generic "data quality
- * report" that can analyze any entity). They bypass the allowlist entirely
- * for their namespace. The approval UI renders a prominent warning when any
- * of them is set so a human reviewer sees the blast radius at approval time;
- * agent-authored Runtime actions should enumerate specific references rather
- * than set these flags.
- */
-export interface MJActionEntity_IRuntimeActionPermissions {
-    /** Other actions this Runtime action can invoke via utilities.actions.Invoke */
-    allowedActions: MJActionEntity_IRuntimeActionReference[];
-
-    /** Agents this Runtime action can run via utilities.agents.Run */
-    allowedAgents: MJActionEntity_IRuntimeActionReference[];
-
-    /** Entities this Runtime action can read or mutate via utilities.rv / utilities.entity */
-    allowedEntities: MJActionEntity_IRuntimeActionReference[];
-
-    /**
-     * DANGEROUS ESCAPE HATCH. When true, allows access to ANY entity via
-     * `utilities.md.*`, `utilities.rv.*`, and `utilities.entity.*`, ignoring
-     * `allowedEntities`. Only set for framework-authored utility actions that
-     * accept the target entity as runtime input. Approval UI flags this.
-     */
-    allowAnyEntity?: boolean;
-
-    /**
-     * DANGEROUS ESCAPE HATCH. When true, allows invocation of ANY action via
-     * `utilities.actions.Invoke`, ignoring `allowedActions`. Only set for
-     * framework-authored orchestrators. Approval UI flags this.
-     */
-    allowAnyAction?: boolean;
-
-    /**
-     * DANGEROUS ESCAPE HATCH. When true, allows invocation of ANY agent via
-     * `utilities.agents.Run`, ignoring `allowedAgents`. Only set for
-     * framework-authored orchestrators. Approval UI flags this.
-     */
-    allowAnyAgent?: boolean;
-}
-
-/**
- * Resource limits enforced per invocation. Host enforces memory via isolated-vm;
- * bridge-call count is tracked on the host side and blocks once exceeded.
- */
-export interface MJActionEntity_IRuntimeActionLimits {
-    /** Memory limit in MB. Default: 128. */
-    maxMemoryMB?: number;
-
-    /** Max bridge calls per single execution. Default: 100. Prevents runaway loops. */
-    maxBridgeCalls?: number;
-}
-
-/**
- * Sandbox affordances the action needs beyond the default library set
- * (lodash, date-fns, uuid, validator).
- */
-export interface MJActionEntity_IRuntimeActionSandboxOptions {
-    /**
-     * Additional libraries beyond the default set. Must be in the approved
-     * registry in @memberjunction/action-runtime — arbitrary npm packages
-     * are not allowed. Currently approved opt-in libraries:
-     *   - mathjs (heavy math)
-     *   - papaparse (CSV parsing)
-     *   - cheerio (HTML parsing)
-     *   - marked (markdown parsing)
-     */
-    additionalLibraries?: MJActionEntity_IRuntimeLibraryReference[];
-
-    /** Enable verbose console output in the sandbox. Default false. */
-    debugMode?: boolean;
-}
-
-/**
- * Stable reference to an entity / action / agent.
- *
- * `id` is authoritative (used for lookups and permission checks).
- * `name` is kept so that the approval UI, logs, and diffs stay readable
- * even when items are renamed — the UI should show the current name from
- * the lookup and fall back to the stored one if the target is deleted.
- */
-export interface MJActionEntity_IRuntimeActionReference {
-    /** UUID of the referenced item */
-    id: string;
-
-    /** Human-readable name at the time this configuration was authored */
-    name: string;
-}
-
-/**
- * Reference to a sandbox library. Names must match the approved library
- * registry in @memberjunction/action-runtime. Version is optional and only
- * honored if multiple versions of the same library are registered.
- */
-export interface MJActionEntity_IRuntimeLibraryReference {
-    /** Library name as used in require() / import (e.g. "papaparse") */
-    name: string;
-
-    /** Optional semver constraint. If omitted, uses the registry's default. */
-    version?: string;
-}
-
-/**
  * MJ: Actions - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Action
@@ -27776,7 +27683,6 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     * * Field Name: RuntimeActionConfiguration
     * * Display Name: Runtime Configuration
     * * SQL Data Type: nvarchar(MAX)
-    * * JSON Type: MJActionEntity_IRuntimeActionConfiguration
     * * Description: JSON blob holding configuration specific to Type='Runtime' actions: declarative permission scopes (allowedEntities, allowedActions, allowedAgents with id+name pairs), resource limits (maxMemoryMB, maxBridgeCalls), and sandbox options (additionalLibraries, debugMode). Evolvable — new keys can be introduced without schema changes. NULL for non-Runtime actions.
     */
     get RuntimeActionConfiguration(): string | null {
@@ -27784,27 +27690,6 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     }
     set RuntimeActionConfiguration(value: string | null) {
         this.Set('RuntimeActionConfiguration', value);
-    }
-
-    private _RuntimeActionConfigurationObject_cached: MJActionEntity_IRuntimeActionConfiguration | null | undefined = undefined;
-    private _RuntimeActionConfigurationObject_lastRaw: string | null = null;
-    /**
-    * Typed accessor for RuntimeActionConfiguration — returns parsed JSON as MJActionEntity_IRuntimeActionConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
-    */
-    get RuntimeActionConfigurationObject(): MJActionEntity_IRuntimeActionConfiguration | null {
-        const raw = this.RuntimeActionConfiguration;
-        if (raw !== this._RuntimeActionConfigurationObject_lastRaw) {
-            this._RuntimeActionConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._RuntimeActionConfigurationObject_lastRaw = raw;
-        }
-        return this._RuntimeActionConfigurationObject_cached!;
-    }
-    set RuntimeActionConfigurationObject(value: MJActionEntity_IRuntimeActionConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.RuntimeActionConfiguration = raw;
-        this._RuntimeActionConfigurationObject_cached = value;
-        this._RuntimeActionConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -29700,15 +29585,14 @@ export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityTyp
     * * Value List Type: List
     * * Possible Values 
     *   * Active
-    *   * Archived
     *   * Pending
     *   * Revoked
     * * Description: Status of the example: Pending (awaiting review), Active (in use), or Revoked (disabled).
     */
-    get Status(): 'Active' | 'Archived' | 'Pending' | 'Revoked' {
+    get Status(): 'Active' | 'Pending' | 'Revoked' {
         return this.Get('Status');
     }
-    set Status(value: 'Active' | 'Archived' | 'Pending' | 'Revoked') {
+    set Status(value: 'Active' | 'Pending' | 'Revoked') {
         this.Set('Status', value);
     }
 
@@ -30659,15 +30543,14 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Active
-    *   * Archived
     *   * Pending
     *   * Revoked
     * * Description: Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).
     */
-    get Status(): 'Active' | 'Archived' | 'Pending' | 'Revoked' {
+    get Status(): 'Active' | 'Pending' | 'Revoked' {
         return this.Get('Status');
     }
-    set Status(value: 'Active' | 'Archived' | 'Pending' | 'Revoked') {
+    set Status(value: 'Active' | 'Pending' | 'Revoked') {
         this.Set('Status', value);
     }
 
@@ -30835,80 +30718,6 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     }
 
     /**
-    * * Field Name: ConsolidatedIntoNoteID
-    * * Display Name: Consolidated Into Note ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
-    * * Description: Self-referential FK. Points to the consolidated note that replaced this one.
-    */
-    get ConsolidatedIntoNoteID(): string | null {
-        return this.Get('ConsolidatedIntoNoteID');
-    }
-    set ConsolidatedIntoNoteID(value: string | null) {
-        this.Set('ConsolidatedIntoNoteID', value);
-    }
-
-    /**
-    * * Field Name: ConsolidationCount
-    * * Display Name: Consolidation Count
-    * * SQL Data Type: int
-    * * Default Value: 0
-    * * Description: Re-summarization depth. 0=raw, 1=first consolidation. Capped at 3.
-    */
-    get ConsolidationCount(): number {
-        return this.Get('ConsolidationCount');
-    }
-    set ConsolidationCount(value: number) {
-        this.Set('ConsolidationCount', value);
-    }
-
-    /**
-    * * Field Name: DerivedFromNoteIDs
-    * * Display Name: Derived From Note I Ds
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON array of source note IDs consolidated into this note.
-    */
-    get DerivedFromNoteIDs(): string | null {
-        return this.Get('DerivedFromNoteIDs');
-    }
-    set DerivedFromNoteIDs(value: string | null) {
-        this.Set('DerivedFromNoteIDs', value);
-    }
-
-    /**
-    * * Field Name: ProtectionTier
-    * * Display Name: Protection Tier
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: Standard
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Ephemeral
-    *   * Immutable
-    *   * Protected
-    *   * Standard
-    * * Description: Protection level: Immutable, Protected, Standard, Ephemeral.
-    */
-    get ProtectionTier(): 'Ephemeral' | 'Immutable' | 'Protected' | 'Standard' {
-        return this.Get('ProtectionTier');
-    }
-    set ProtectionTier(value: 'Ephemeral' | 'Immutable' | 'Protected' | 'Standard') {
-        this.Set('ProtectionTier', value);
-    }
-
-    /**
-    * * Field Name: ImportanceScore
-    * * Display Name: Importance Score
-    * * SQL Data Type: decimal(5, 2)
-    * * Description: Composite importance score (0-10) from 7 signals.
-    */
-    get ImportanceScore(): number | null {
-        return this.Get('ImportanceScore');
-    }
-    set ImportanceScore(value: number | null) {
-        this.Set('ImportanceScore', value);
-    }
-
-    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -30987,24 +30796,6 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     */
     get PrimaryScopeEntity(): string | null {
         return this.Get('PrimaryScopeEntity');
-    }
-
-    /**
-    * * Field Name: ConsolidatedIntoNote
-    * * Display Name: Consolidated Into Note
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get ConsolidatedIntoNote(): string | null {
-        return this.Get('ConsolidatedIntoNote');
-    }
-
-    /**
-    * * Field Name: RootConsolidatedIntoNoteID
-    * * Display Name: Root Consolidated Into Note ID
-    * * SQL Data Type: uniqueidentifier
-    */
-    get RootConsolidatedIntoNoteID(): string | null {
-        return this.Get('RootConsolidatedIntoNoteID');
     }
 }
 
@@ -33785,19 +33576,6 @@ each time the agent processes a prompt step.
     }
     set ExternalReferenceID(value: string | null) {
         this.Set('ExternalReferenceID', value);
-    }
-
-    /**
-    * * Field Name: CompanyID
-    * * Display Name: Company ID
-    * * SQL Data Type: uniqueidentifier
-    * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.
-    */
-    get CompanyID(): string | null {
-        return this.Get('CompanyID');
-    }
-    set CompanyID(value: string | null) {
-        this.Set('CompanyID', value);
     }
 
     /**
@@ -45890,7 +45668,7 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
 
     /**
     * * Field Name: IsRecordChangeArchive
-    * * Display Name: Is Record Change Archive
+    * * Display Name: Is Record Change
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, this detail row represents an archived Record Change entry rather than a primary entity record.
@@ -66349,6 +66127,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -66443,7 +66222,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: ReadRLSFilterID
-    * * Display Name: Read RLSFilter ID
+    * * Display Name: Read Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
@@ -66456,7 +66235,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: CreateRLSFilterID
-    * * Display Name: Create RLSFilter ID
+    * * Display Name: Create Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
@@ -66469,7 +66248,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: UpdateRLSFilterID
-    * * Display Name: Update RLSFilter ID
+    * * Display Name: Update Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
@@ -66482,7 +66261,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: DeleteRLSFilterID
-    * * Display Name: Delete RLSFilter ID
+    * * Display Name: Delete Filter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
@@ -66495,7 +66274,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -66505,12 +66284,30 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Access Type
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Allow
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    * * Description: Allow or Deny. Deny rows override any Allow grants on the same (EntityID, RoleID, action) at evaluation time, letting administrators exclude a role from an action another role grants.
+    */
+    get Type(): 'Allow' | 'Deny' {
+        return this.Get('Type');
+    }
+    set Type(value: 'Allow' | 'Deny') {
+        this.Set('Type', value);
     }
 
     /**
@@ -66533,7 +66330,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: RoleSQLName
-    * * Display Name: Role SQLName
+    * * Display Name: Role SQL Name
     * * SQL Data Type: nvarchar(250)
     */
     get RoleSQLName(): string | null {
@@ -66542,7 +66339,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: CreateRLSFilter
-    * * Display Name: Create RLSFilter
+    * * Display Name: Create Filter
     * * SQL Data Type: nvarchar(100)
     */
     get CreateRLSFilter(): string | null {
@@ -66551,7 +66348,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: ReadRLSFilter
-    * * Display Name: Read RLSFilter
+    * * Display Name: Read Filter
     * * SQL Data Type: nvarchar(100)
     */
     get ReadRLSFilter(): string | null {
@@ -66560,7 +66357,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: UpdateRLSFilter
-    * * Display Name: Update RLSFilter
+    * * Display Name: Update Filter
     * * SQL Data Type: nvarchar(100)
     */
     get UpdateRLSFilter(): string | null {
@@ -66569,7 +66366,7 @@ export class MJEntityPermissionEntity extends BaseEntity<MJEntityPermissionEntit
 
     /**
     * * Field Name: DeleteRLSFilter
-    * * Display Name: Delete RLSFilter
+    * * Display Name: Delete Filter
     * * SQL Data Type: nvarchar(100)
     */
     get DeleteRLSFilter(): string | null {
@@ -73433,7 +73230,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
  * * Schema: __mj
  * * Base Table: MCPToolFavorite
  * * Base View: vwMCPToolFavorites
- * * @description Per-user favorite marker for an MCP Server Tool. Lets users star tools for quick access in the MCP Dashboard and Test dialog.
+ * * @description Per-user favorite marker for an MCP Server Tool. Each row indicates the user has starred the referenced tool for quick access in the MCP Dashboard Tools tab and in the Test Tool dialog picker. Combined with UserID forms a unique pair so a user cannot favorite the same tool twice.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -73473,9 +73270,10 @@ export class MJMCPToolFavoriteEntity extends BaseEntity<MJMCPToolFavoriteEntityT
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who starred this tool. Favorites are per-user; multiple users can favorite the same tool independently. References the MJ User table.
     */
     get UserID(): string {
         return this.Get('UserID');
@@ -73486,9 +73284,10 @@ export class MJMCPToolFavoriteEntity extends BaseEntity<MJMCPToolFavoriteEntityT
 
     /**
     * * Field Name: MCPServerToolID
-    * * Display Name: MCP Server Tool ID
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
+    * * Description: The MCP Server Tool that has been favorited. Combined with UserID this forms a unique constraint so a user cannot favorite the same tool twice.
     */
     get MCPServerToolID(): string {
         return this.Get('MCPServerToolID');
@@ -73519,7 +73318,7 @@ export class MJMCPToolFavoriteEntity extends BaseEntity<MJMCPToolFavoriteEntityT
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -73528,7 +73327,7 @@ export class MJMCPToolFavoriteEntity extends BaseEntity<MJMCPToolFavoriteEntityT
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: MCP Server Tool
+    * * Display Name: Tool Name
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -75547,6 +75346,219 @@ export class MJOutputTriggerTypeEntity extends BaseEntity<MJOutputTriggerTypeEnt
     }
     set Description(value: string | null) {
         this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Permission Domains - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: PermissionDomain
+ * * Base View: vwPermissionDomains
+ * * @description Catalog of registered permission subsystems. Each row describes one permission provider; the PermissionEngine uses ProviderClassName as the ClassFactory key to instantiate providers at startup. Enables unified permission queries across all subsystems.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Permission Domains')
+export class MJPermissionDomainEntity extends BaseEntity<MJPermissionDomainEntityType> {
+    /**
+    * Loads the MJ: Permission Domains record from the database
+    * @param ID: string - primary key value to load the MJ: Permission Domains record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJPermissionDomainEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Human-readable unique name for the permission domain (e.g., "Entity Permissions", "Dashboard Permissions"). Used in admin UI and as the domain identifier in PermissionEngine API calls.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of what this permission domain covers and how permissions are enforced.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ProviderClassName
+    * * Display Name: Provider Class Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: ClassFactory key used to instantiate this provider. Must match the key passed to @RegisterClass(PermissionProviderBase, 'ClassName'). Convention: prefix with MJ for built-in providers (e.g., MJEntityPermissionProvider).
+    */
+    get ProviderClassName(): string {
+        return this.Get('ProviderClassName');
+    }
+    set ProviderClassName(value: string) {
+        this.Set('ProviderClassName', value);
+    }
+
+    /**
+    * * Field Name: SupportedGranteeTypes
+    * * Display Name: Supported Grantee Types
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Comma-delimited list of grantee types this provider supports. Valid tokens: User, Role, Everyone, Public. Example: "User,Role".
+    */
+    get SupportedGranteeTypes(): string {
+        return this.Get('SupportedGranteeTypes');
+    }
+    set SupportedGranteeTypes(value: string) {
+        this.Set('SupportedGranteeTypes', value);
+    }
+
+    /**
+    * * Field Name: SupportedActions
+    * * Display Name: Supported Actions
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-delimited list of permission actions this provider can evaluate. Valid tokens: Read, Create, Update, Delete, Share, Execute, Admin. Example: "Read,Create,Update,Delete".
+    */
+    get SupportedActions(): string {
+        return this.Get('SupportedActions');
+    }
+    set SupportedActions(value: string) {
+        this.Set('SupportedActions', value);
+    }
+
+    /**
+    * * Field Name: SupportsDeny
+    * * Display Name: Supports Deny
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this provider supports explicit Deny records that override Allow grants at the same scope.
+    */
+    get SupportsDeny(): boolean {
+        return this.Get('SupportsDeny');
+    }
+    set SupportsDeny(value: boolean) {
+        this.Set('SupportsDeny', value);
+    }
+
+    /**
+    * * Field Name: SupportsExpiration
+    * * Display Name: Supports Expiration
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this provider supports time-bound permissions with an expiration timestamp.
+    */
+    get SupportsExpiration(): boolean {
+        return this.Get('SupportsExpiration');
+    }
+    set SupportsExpiration(value: boolean) {
+        this.Set('SupportsExpiration', value);
+    }
+
+    /**
+    * * Field Name: SupportsHierarchyInheritance
+    * * Display Name: Supports Hierarchy Inheritance
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this provider resolves permissions hierarchically (e.g., category-level grants cascade to items within the category).
+    */
+    get SupportsHierarchyInheritance(): boolean {
+        return this.Get('SupportsHierarchyInheritance');
+    }
+    set SupportsHierarchyInheritance(value: boolean) {
+        this.Set('SupportsHierarchyInheritance', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When false, the PermissionEngine skips loading this provider at startup. Use to temporarily disable a provider without removing its record.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Sort order for displaying domains in the Sharing Center admin UI. Lower numbers appear first.
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome icon class for display in admin UI (e.g., "fa-solid fa-shield").
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
     }
 
     /**
@@ -81274,7 +81286,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: ResourceRecordID
-    * * Display Name: Resource Record ID
+    * * Display Name: Resource Record
     * * SQL Data Type: nvarchar(255)
     * * Description: ID of the specific resource being shared
     */
@@ -81287,7 +81299,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Share Type
     * * SQL Data Type: nvarchar(10)
     * * Value List Type: List
     * * Possible Values 
@@ -81304,7 +81316,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: StartSharingAt
-    * * Display Name: Start Sharing At
+    * * Display Name: Start Date
     * * SQL Data Type: datetimeoffset
     * * Description: Optional: Date when sharing starts
     */
@@ -81317,7 +81329,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
 
     /**
     * * Field Name: EndSharingAt
-    * * Display Name: End Sharing At
+    * * Display Name: End Date
     * * SQL Data Type: datetimeoffset
     * * Description: Optional: Date when sharing ends
     */
@@ -81413,6 +81425,20 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
     }
 
     /**
+    * * Field Name: SharedByUserID
+    * * Display Name: Shared By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who granted this permission. NULL when the share pre-dates this column or when the grantor is unknown (e.g., a system-seeded permission).
+    */
+    get SharedByUserID(): string | null {
+        return this.Get('SharedByUserID');
+    }
+    set SharedByUserID(value: string | null) {
+        this.Set('SharedByUserID', value);
+    }
+
+    /**
     * * Field Name: ResourceType
     * * Display Name: Resource Type
     * * SQL Data Type: nvarchar(255)
@@ -81437,6 +81463,15 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
     */
     get User(): string | null {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: SharedByUser
+    * * Display Name: Shared By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SharedByUser(): string | null {
+        return this.Get('SharedByUser');
     }
 }
 

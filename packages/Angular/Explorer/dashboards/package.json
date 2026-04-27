@@ -130,6 +130,7 @@
     "@memberjunction/ng-notifications": "5.29.0",
     "@memberjunction/ng-query-viewer": "5.29.0",
     "@memberjunction/ng-react": "5.29.0",
+    "@memberjunction/ng-resource-permissions": "5.29.0",
     "@memberjunction/ng-scheduling": "5.29.0",
     "@memberjunction/ng-search": "5.29.0",
     "@memberjunction/ng-shared": "5.29.0",

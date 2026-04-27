@@ -28,7 +28,7 @@ const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjun
 // --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (1 entries) ---
 const loadComponentStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/component-studio-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (12 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (15 entries) ---
 const loadCoreDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/core-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./credentials-dashboards.module (6 entries) ---
@@ -112,6 +112,9 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::ApplicationRolesResource': loadCoreDashboardsModule,
   'BaseResourceComponent::DashboardBrowserResource': loadCoreDashboardsModule,
   'BaseResourceComponent::HomeDashboard': loadCoreDashboardsModule,
+  'BaseResourceComponent::PermissionsAuditLogResource': loadCoreDashboardsModule,
+  'BaseResourceComponent::PermissionsResourceAccessResource': loadCoreDashboardsModule,
+  'BaseResourceComponent::PermissionsUserAccessResource': loadCoreDashboardsModule,
   'BaseResourceComponent::QueryBrowserResource': loadCoreDashboardsModule,
   'BaseResourceComponent::SystemDiagnosticsResource': loadCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryDiffResource': loadCoreDashboardsModule,
@@ -183,4 +186,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 80;
+export const LAZY_FEATURE_CONFIG_COUNT = 83;

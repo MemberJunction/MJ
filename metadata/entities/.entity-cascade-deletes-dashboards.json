@@ -1,0 +1,11 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Dashboards",
+      "CascadeDeletes": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Dashboards"
+    }
+  }
+]
