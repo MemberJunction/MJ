@@ -180,7 +180,7 @@
       "parameters": [
         {
           "name": "clickData",
-          "type": "{ seriesName: string; value: number; label: string; records: Array<object>; chartType: string; percentage?: number }",
+          "type": "{ series: string; value: number; label: string; records: Array<object>; chartType: string; percentage?: number }",
           "description": "Object containing series name, data value, label, original records, and chart type"
         }
       ]
@@ -191,8 +191,8 @@
       "parameters": [
         {
           "name": "chartInfo",
-          "type": "{ chartType: string; dataPointCount: number; aggregationMethod: string; isEmpty: boolean }",
-          "description": "Information about the rendered chart including type, data point count, and aggregation method"
+          "type": "{ chartType: string; dataPointCount: number; aggregateMethod: string; totalValue: number }",
+          "description": "Information about the rendered chart including type, data point count, aggregation method, and total sum value"
         }
       ]
     }
