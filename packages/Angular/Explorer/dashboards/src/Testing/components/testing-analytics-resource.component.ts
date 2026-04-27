@@ -26,11 +26,13 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 export class TestingAnalyticsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
+    super.ngOnInit();
     // Notify that loading is complete
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     // Cleanup if needed
   }
 

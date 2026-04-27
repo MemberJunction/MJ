@@ -1,0 +1,37 @@
+{
+  "name": "OptionalChainArrayAccessBroken",
+  "type": "generic",
+  "title": "Optional Chain Array Access - Broken Pattern",
+  "description": "Tests optional chaining on array with invalid field access (may fail until linter refactor)",
+  "code": "function OptionalChainArrayAccessBroken({ utilities }) {\n  const [modelNames, setModelNames] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: AI Models' });\n      if (result?.Success) {\n        // ❌ Mapping with invalid field using optional chaining\n        const names = result.Results?.map(p => p?.DisplayName) || [];\n        setModelNames(names.filter(Boolean));\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>AI Models</h3>\n      {modelNames.map((name, i) => <div key={i}>{name}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [{
+      "name": "MJ: AI Models",
+      "type": "view",
+      "fieldMetadata": [
+        {"name": "ID", "type": "uniqueidentifier"},
+        {"name": "Name", "type": "nvarchar"},
+        {"name": "Description", "type": "nvarchar"},
+        {"name": "Vendor", "type": "nvarchar"},
+        {"name": "AIModelTypeID", "type": "uniqueidentifier"},
+        {"name": "AIModelType", "type": "nvarchar"},
+        {"name": "IsActive", "type": "bit"},
+        {"name": "APIName", "type": "nvarchar"},
+        {"name": "PowerRank", "type": "int"},
+        {"name": "SpeedRank", "type": "int"},
+        {"name": "CostRank", "type": "int"},
+        {"name": "InputTokenLimit", "type": "int"},
+        {"name": "DriverClass", "type": "nvarchar"},
+        {"name": "DriverImportPath", "type": "nvarchar"},
+        {"name": "__mj_CreatedAt", "type": "datetimeoffset"},
+        {"name": "__mj_UpdatedAt", "type": "datetimeoffset"}
+      ]
+    }]
+  }
+}

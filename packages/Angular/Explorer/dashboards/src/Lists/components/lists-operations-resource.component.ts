@@ -218,15 +218,15 @@ interface EntityOption {
                 <span class="region-count">{{selectedRegion.size}} records</span>
               </div>
               <div class="region-actions">
-                <button class="action-btn primary" (click)="createListFromSelection()">
+                <button mjButton variant="primary" (click)="createListFromSelection()">
                   <i class="fa-solid fa-plus"></i>
                   Create New List
                 </button>
-                <button class="action-btn" (click)="addToExistingList()">
+                <button mjButton (click)="addToExistingList()">
                   <i class="fa-solid fa-folder-plus"></i>
                   Add to List
                 </button>
-                <button class="action-btn" (click)="exportToExcel()">
+                <button mjButton (click)="exportToExcel()">
                   <i class="fa-solid fa-file-excel"></i>
                   Export
                 </button>
@@ -267,11 +267,11 @@ interface EntityOption {
                 <span class="result-count">{{lastOperationResult.resultCount}} records</span>
               </div>
               <div class="region-actions">
-                <button class="action-btn primary" (click)="createListFromResult()">
+                <button mjButton variant="primary" (click)="createListFromResult()">
                   <i class="fa-solid fa-plus"></i>
                   Create New List
                 </button>
-                <button class="action-btn" (click)="addResultToExistingList()">
+                <button mjButton (click)="addResultToExistingList()">
                   <i class="fa-solid fa-folder-plus"></i>
                   Add to List
                 </button>
@@ -1288,7 +1288,7 @@ interface EntityOption {
   encapsulation: ViewEncapsulation.None
 })
 export class ListsOperationsResource extends BaseResourceComponent implements OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   maxLists = 4;
   selectedLists: ListSelection[] = [];
@@ -1346,12 +1346,14 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   }
 
   async ngOnInit() {
+    super.ngOnInit();
     await this.loadAvailableLists();
     await this.loadSavedState();
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
 
@@ -1737,25 +1739,23 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     try {
       const md = new Metadata();
+      const tg = await md.CreateTransactionGroup();
 
-      // Create the list
+      // Queue the list plus all of its initial detail records in a single transaction.
+      // NewRecord() assigns a client-side UUID so the details can reference list.ID
+      // before the list actually persists.
       const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
+      list.NewRecord();
       list.Name = this.newListName;
       list.Description = this.newListDescription || null;
       list.EntityID = entityId;
       list.UserID = md.CurrentUser!.ID;
-
-      const saved = await list.Save();
-      if (!saved) {
-        this.notificationService.CreateSimpleNotification('Failed to create list', 'error', 4000);
-        return;
-      }
-
-      // Add records to the list using transaction group
-      const tg = await md.CreateTransactionGroup();
+      list.TransactionGroup = tg;
+      await list.Save();
 
       for (const recordId of this.recordsToAdd) {
         const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
+        detail.NewRecord();
         detail.ListID = list.ID;
         detail.RecordID = recordId;
         detail.Sequence = 0;
@@ -1763,21 +1763,20 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         await detail.Save();
       }
 
-      const success = await tg.Submit();
-
-      if (success) {
+      if (!await tg.Submit()) {
         this.notificationService.CreateSimpleNotification(
-          `Created "${this.newListName}" with ${this.recordsToAdd.length} items`,
-          'success',
-          3000
-        );
-      } else {
-        this.notificationService.CreateSimpleNotification(
-          `Created list but failed to add some records`,
-          'warning',
+          'Failed to create list — all changes have been rolled back',
+          'error',
           4000
         );
+        return;
       }
+
+      this.notificationService.CreateSimpleNotification(
+        `Created "${this.newListName}" with ${this.recordsToAdd.length} items`,
+        'success',
+        3000
+      );
 
       this.cancelCreateDialog();
 

@@ -1,0 +1,842 @@
+[
+  {
+    "fields": {
+      "Name": "Bake, Gouvernorat de",
+      "Code": "B",
+      "ISO3166_2": "GN-B",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bake, Gouvernorat de"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "659FD36B-C691-4453-A43A-66C914D99381"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.255Z",
+      "checksum": "52c7621ae5fc0dbfd1fd7308303bef910e442e6b1ad3ecc068b9a39603188b0e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Beyla",
+      "Code": "BE",
+      "ISO3166_2": "GN-BE",
+      "Latitude": 8.8139,
+      "Longitude": -8.4073,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-BE.geojson",
+      "CommonAliases": [
+        "Beyla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "790882B9-09B7-4F3F-9C4E-D9BDF7C02E72"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.270Z",
+      "checksum": "1e0acad938ee6efe55c56b46a908b99b2d2fb90011d022706511d731bf50c2c8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Boffa",
+      "Code": "BF",
+      "ISO3166_2": "GN-BF",
+      "Latitude": 10.3994,
+      "Longitude": -14.0764,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-BF.geojson",
+      "CommonAliases": [
+        "Boffa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "AA7ADCF7-7C97-4DCB-84AE-DE4E9B261F05"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.287Z",
+      "checksum": "bfb017678f01c284ead801dfc17d79bdd1bdd0c771e7d83eb0034ec93a2b9415"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Boké",
+      "Code": "BK",
+      "ISO3166_2": "GN-BK",
+      "Latitude": 11.1674,
+      "Longitude": -14.3088,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-BK.geojson",
+      "CommonAliases": [
+        "Boké"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "84EA7105-A329-4432-AF3F-73D5783076E7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.303Z",
+      "checksum": "6e1b444788417984f14fe2d04303f26057d01f296d4a75977d820fbc70b5fd37"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Conakry, Gouvernorat de",
+      "Code": "C",
+      "ISO3166_2": "GN-C",
+      "Latitude": 9.5392,
+      "Longitude": -13.6847,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-C.geojson",
+      "CommonAliases": [
+        "Conakry, Gouvernorat de"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "72CCD18F-B34B-4FED-9028-B28BAB15CB2B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.319Z",
+      "checksum": "5834f135ca5efcd34fab7eecf1c5ea6c8470b377fcd3e3694939836bd3d9e85d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Coyah",
+      "Code": "CO",
+      "ISO3166_2": "GN-CO",
+      "Latitude": 9.791,
+      "Longitude": -13.3482,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-CO.geojson",
+      "CommonAliases": [
+        "Coyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "63CF0BA9-D03E-4BC8-8737-0F49B93D7DD4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.334Z",
+      "checksum": "743ed67d7eccaac2258853bace01ceba46e999850a7e4c83ec540662ba98726b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dabola",
+      "Code": "DB",
+      "ISO3166_2": "GN-DB",
+      "Latitude": 10.7774,
+      "Longitude": -11.2004,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-DB.geojson",
+      "CommonAliases": [
+        "Dabola"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "1016CF86-226A-421E-B7A7-33C4EB17FB6D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.349Z",
+      "checksum": "82b099a3562081875d9ad1750cdaa8268ac44b6ec186a14b9adc7290e70788ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dalaba",
+      "Code": "DL",
+      "ISO3166_2": "GN-DL",
+      "Latitude": 10.8327,
+      "Longitude": -12.2144,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-DL.geojson",
+      "CommonAliases": [
+        "Dalaba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "ED607335-0144-4142-B099-42543280BC6C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.365Z",
+      "checksum": "36d69c16d692242fa0a9c611b15d27cc5c43c9a2e9d48832079756884454590f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dinguiraye",
+      "Code": "DI",
+      "ISO3166_2": "GN-DI",
+      "Latitude": 11.5609,
+      "Longitude": -10.6749,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-DI.geojson",
+      "CommonAliases": [
+        "Dinguiraye"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "1B3B6F1E-24B5-4CE0-A223-EC8A99F87BF8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.382Z",
+      "checksum": "d274bbcf207a8b7874f331ad46c8d64da222e73eb77766775b7dac2efc565cab"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dubréka",
+      "Code": "DU",
+      "ISO3166_2": "GN-DU",
+      "Latitude": 10.1137,
+      "Longitude": -13.468,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-DU.geojson",
+      "CommonAliases": [
+        "Dubréka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "2F0DCE3F-2C8A-4400-9825-FFA50DE50272"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.397Z",
+      "checksum": "e024866d0daca900e5291a63cf95f0f4a11c96cf125d22ddb22d233dbad242ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Faranah",
+      "Code": "FA",
+      "ISO3166_2": "GN-FA",
+      "Latitude": 9.9852,
+      "Longitude": -10.881,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-FA.geojson",
+      "CommonAliases": [
+        "Faranah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "7247F3EE-C9C3-4595-971F-660C52971C96"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.450Z",
+      "checksum": "3ff5b1039f1bc01ae9df3ee72e71e1f968206193806729872ab7313a9a1170cb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Faranah, Gouvernorat de",
+      "Code": "F",
+      "ISO3166_2": "GN-F",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Faranah, Gouvernorat de"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "FD3B0353-B53E-4F3D-9316-04C5C832792D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.465Z",
+      "checksum": "ece4e4901f9a4e94591cb111130aa76ab145747d0f078ecf498d5d8972329778"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Forécariah",
+      "Code": "FO",
+      "ISO3166_2": "GN-FO",
+      "Latitude": 9.3854,
+      "Longitude": -13.0624,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-FO.geojson",
+      "CommonAliases": [
+        "Forécariah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "900D75BF-6B46-4DEE-80AE-AF78619AF3F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.481Z",
+      "checksum": "ec3a1c3a83d406a5713d8c554f1ea9ed968f5b4a75f97123e82e5cd4081f751f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fria",
+      "Code": "FR",
+      "ISO3166_2": "GN-FR",
+      "Latitude": 10.4732,
+      "Longitude": -13.4957,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-FR.geojson",
+      "CommonAliases": [
+        "Fria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "639BF183-E7FE-43B1-BCF8-328AE0562C93"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.498Z",
+      "checksum": "2e67a02cae96b8af48c416d9550727ad7aa19b61c9954053d2f9270c97803dec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gaoual",
+      "Code": "GA",
+      "ISO3166_2": "GN-GA",
+      "Latitude": 11.7453,
+      "Longitude": -13.3943,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-GA.geojson",
+      "CommonAliases": [
+        "Gaoual"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "F2F253E3-6CD1-41AB-818D-4CBB7A4736E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.511Z",
+      "checksum": "aaa56bfae1c3a0cbc83059e9cd7830acf031d9d6c66054b828c1028c53271f0f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guékédou",
+      "Code": "GU",
+      "ISO3166_2": "GN-GU",
+      "Latitude": 8.7033,
+      "Longitude": -10.2232,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-GU.geojson",
+      "CommonAliases": [
+        "Guékédou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "83AAF1C9-5B4C-48FB-9F95-EC191C4983A5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.525Z",
+      "checksum": "d95fea1f65a02c67d12703126de3cd7daa24abbdccf8b65d713c3a61145ed2b3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kankan",
+      "Code": "KA",
+      "ISO3166_2": "GN-KA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kankan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "1064943D-2D22-4928-BBA7-962DFEE791DE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.540Z",
+      "checksum": "b776af713a5910031540fb31f87395fba281a9fdcaf4386f6532f914de589f13"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kankan, Gouvernorat de",
+      "Code": "K",
+      "ISO3166_2": "GN-K",
+      "Latitude": 10.1319,
+      "Longitude": -9.1262,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-K.geojson",
+      "CommonAliases": [
+        "Kankan, Gouvernorat de"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "9C1BAFA9-37BE-4036-84FA-241AAEAB5069"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.556Z",
+      "checksum": "9ffe186adff2e458a90a8561e553406c6d448336f2bbaffdc309230787b0f847"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kérouané",
+      "Code": "KE",
+      "ISO3166_2": "GN-KE",
+      "Latitude": 9.3301,
+      "Longitude": -8.905,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-KE.geojson",
+      "CommonAliases": [
+        "Kérouané"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "4DFE2C1C-6D6F-4DD6-8387-F43F2C77884D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.571Z",
+      "checksum": "73077e9b18b208f3816d6bd01aecd942e892f7a16fe2e9508abf5ebd384c3fba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kindia",
+      "Code": "KD",
+      "ISO3166_2": "GN-KD",
+      "Latitude": 10.0552,
+      "Longitude": -12.7298,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-KD.geojson",
+      "CommonAliases": [
+        "Kindia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "F7CED80D-9963-47C3-8CE5-721938352D3F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.585Z",
+      "checksum": "1f0da3782b2974e64afe5352a783163ccb1ca86607336c398008ea52bdca7396"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kindia, Gouvernorat de",
+      "Code": "D",
+      "ISO3166_2": "GN-D",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kindia, Gouvernorat de"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "2BE8F8AE-1BD3-450A-9304-075AD1222B92"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.636Z",
+      "checksum": "282aaeebe33af30bc0d293a9e76bc858b3287dd9eeaef5099c013ef932d68356"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kissidougou",
+      "Code": "KS",
+      "ISO3166_2": "GN-KS",
+      "Latitude": 9.2564,
+      "Longitude": -9.8914,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-KS.geojson",
+      "CommonAliases": [
+        "Kissidougou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "CFE4E9B9-9F1C-4C67-ACB7-D82076648886"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.653Z",
+      "checksum": "1bc177415f36ef2908b70ed77d008de0ad215aadd9dda1b0df8de4fbe40a980a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Koubia",
+      "Code": "KB",
+      "ISO3166_2": "GN-KB",
+      "Latitude": 11.6162,
+      "Longitude": -11.7074,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-KB.geojson",
+      "CommonAliases": [
+        "Koubia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "14BA1D62-14A8-4C7A-AA4D-0CBEF259C74A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.669Z",
+      "checksum": "9565862501fc182bf2a443b26af84d94ff950fe293706cb718f88c196c790d4c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kouroussa",
+      "Code": "KO",
+      "ISO3166_2": "GN-KO",
+      "Latitude": 10.7221,
+      "Longitude": -10.0204,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-KO.geojson",
+      "CommonAliases": [
+        "Kouroussa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "4BE702CD-A7AB-423C-A863-5B4F98C238D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.685Z",
+      "checksum": "216cfdb98282eb950ae65b73b3ca0bbcdd458aed3c0d841757454d31f72cd0bd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Labé",
+      "Code": "LA",
+      "ISO3166_2": "GN-LA",
+      "Latitude": 11.515,
+      "Longitude": -12.3404,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-LA.geojson",
+      "CommonAliases": [
+        "Labé"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "13EE7E7A-1DED-4C56-B9E6-F753418A1AA0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.701Z",
+      "checksum": "fb6547d57d636e568a97e5475165589cad41183df7a4f2701192e37b6631c8d1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Labé, Gouvernorat de",
+      "Code": "L",
+      "ISO3166_2": "GN-L",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Labé, Gouvernorat de"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "9EE6137F-477E-4AB9-B3FC-C8E6E149A9F5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.720Z",
+      "checksum": "6c2edfb4c50fa8363b7da8c3e4c311b9c655c8116d677eb7882759c500734348"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lélouma",
+      "Code": "LE",
+      "ISO3166_2": "GN-LE",
+      "Latitude": 11.4687,
+      "Longitude": -12.6338,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-LE.geojson",
+      "CommonAliases": [
+        "Lélouma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "1EF38232-3414-4C85-88DA-25BC80709CF5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.736Z",
+      "checksum": "25e420f9d466cdf0a81ab07f646742698c331200009e92de436d8bb09f768302"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lola",
+      "Code": "LO",
+      "ISO3166_2": "GN-LO",
+      "Latitude": 7.8552,
+      "Longitude": -8.3335,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-LO.geojson",
+      "CommonAliases": [
+        "Lola"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "C3F34488-E9D8-448C-B881-7F58E4031FA2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.752Z",
+      "checksum": "b760006038318d4a2a812c3f11dc2bd72a44841e1368b83b8a7e3240164f6884"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Macenta",
+      "Code": "MC",
+      "ISO3166_2": "GN-MC",
+      "Latitude": 8.5466,
+      "Longitude": -9.3199,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-MC.geojson",
+      "CommonAliases": [
+        "Macenta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "9CF7D283-FC5E-4321-A69C-34FF8469E1F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.768Z",
+      "checksum": "a19a1a8e0fbfa9f1caf73d0553e7b7c1d74ac01895c209e67682a3412e8e77e1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mali",
+      "Code": "ML",
+      "ISO3166_2": "GN-ML",
+      "Latitude": 12.0218,
+      "Longitude": -12.1222,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-ML.geojson",
+      "CommonAliases": [
+        "Mali"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "C57934C0-017D-4D77-9C0B-611CA4823F14"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.782Z",
+      "checksum": "fcf3b5fdab5bb4c9162b61973c7dd646a5bfe6a1fd38a72d797ce8a2876ccfd8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mamou",
+      "Code": "MM",
+      "ISO3166_2": "GN-MM",
+      "Latitude": 10.3442,
+      "Longitude": -11.8934,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-MM.geojson",
+      "CommonAliases": [
+        "Mamou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "9A0485A2-2DCC-4C53-A14B-B6DE2C210E52"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.837Z",
+      "checksum": "e3c95b79f5d09a2e1729c232e44e35862de869b47891659300b52dee39d6e9de"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mamou, Gouvernorat de",
+      "Code": "M",
+      "ISO3166_2": "GN-M",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mamou, Gouvernorat de"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "2DA0E77F-16AB-4418-8897-6C31DA5C4899"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.853Z",
+      "checksum": "69e46ad2064edebf4a3b5160ba7b2dd450cf9cefd21e8b9fb72d8e64033e4703"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mandiana",
+      "Code": "MD",
+      "ISO3166_2": "GN-MD",
+      "Latitude": 10.7221,
+      "Longitude": -8.6654,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-MD.geojson",
+      "CommonAliases": [
+        "Mandiana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "5572CF28-1BB0-406F-87DD-A3F4939E8E41"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.869Z",
+      "checksum": "84ac4227ed47e4e940bd1ebf3b48853a23c45111cd38e884d7d929c456253956"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nzérékoré",
+      "Code": "NZ",
+      "ISO3166_2": "GN-NZ",
+      "Latitude": 8.0508,
+      "Longitude": -8.7384,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-NZ.geojson",
+      "CommonAliases": [
+        "Nzérékoré"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "EB6C2848-DAE8-4791-9A6A-1541A0DA6CD1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.886Z",
+      "checksum": "4a5a20c7277f0646019b6c72f6b5fba678a553d67bd9f9dd278c860e76246fe2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nzérékoré, Gouvernorat de",
+      "Code": "N",
+      "ISO3166_2": "GN-N",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Nzérékoré, Gouvernorat de"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "EAE1E8D1-27B2-4329-85F8-BF69F0318A7B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.903Z",
+      "checksum": "7b70a68e11fc95513b5039f739a9703ae5da1e73eddc18eea70e2500fcba5a41"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pita",
+      "Code": "PI",
+      "ISO3166_2": "GN-PI",
+      "Latitude": 10.9341,
+      "Longitude": -12.62,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-PI.geojson",
+      "CommonAliases": [
+        "Pita"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "456E6ACB-1FB3-4D8A-BCEF-50168A7C5103"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.919Z",
+      "checksum": "16e104452065545ef805babc4cb0af96c1bd3999efd552e7b9fc40480ef137b8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Siguiri",
+      "Code": "SI",
+      "ISO3166_2": "GN-SI",
+      "Latitude": 11.5701,
+      "Longitude": -9.3936,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-SI.geojson",
+      "CommonAliases": [
+        "Siguiri"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "6A1B7548-AD02-4222-AFAF-F0EB8DC437CD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.934Z",
+      "checksum": "7dc1592b97db7b790a92df314f25ac01a97f3ceaec1c935015d10ca4305d5ff8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Télimélé",
+      "Code": "TE",
+      "ISO3166_2": "GN-TE",
+      "Latitude": 10.9156,
+      "Longitude": -13.3113,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-TE.geojson",
+      "CommonAliases": [
+        "Télimélé"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "D41671E7-56A3-4A4F-AFB4-7B05010908C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.952Z",
+      "checksum": "435f1bb96a6f0ff5a9f7f276e8ceecef06a738d9c0aaf3cd78fe94c8063fc282"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tougué",
+      "Code": "TO",
+      "ISO3166_2": "GN-TO",
+      "Latitude": 11.4503,
+      "Longitude": -11.4677,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-TO.geojson",
+      "CommonAliases": [
+        "Tougué"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "60FD111A-F3CC-4043-96CF-172AF804EF26"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.968Z",
+      "checksum": "ce3a96867a9d247117ec7c4895c1da17a546091b6b92647ac47e9475c2306414"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yomou",
+      "Code": "YO",
+      "ISO3166_2": "GN-YO",
+      "Latitude": 7.6156,
+      "Longitude": -9.0802,
+      "BoundaryGeoJSON": "@file:by-country/GN/boundaries/GN-YO.geojson",
+      "CommonAliases": [
+        "Yomou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GN"
+    },
+    "primaryKey": {
+      "ID": "DC44DB62-C0AE-4D61-98EE-22EBB2234A02"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.982Z",
+      "checksum": "378104cef0fe91e55898fa02ae1d5dbc9831f735de41f95e3705e1d71805a181"
+    }
+  }
+]

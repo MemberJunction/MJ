@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 import { MJConversationEntity } from '@memberjunction/core-entities';
-import { ConversationDataService } from '../../services/conversation-data.service';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
@@ -13,7 +13,7 @@ import { UUIDsEqual } from '@memberjunction/global';
   standalone: false,
   selector: 'mj-conversation-list',
   template: `
-    <div class="conversation-list" kendoDialogContainer>
+    <div class="conversation-list">
       <div class="list-header">
         <div class="header-top">
           <input
@@ -87,7 +87,13 @@ import { UUIDsEqual } from '@memberjunction/global';
                     </div>
                   </div>
                   <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
-                    <div class="conversation-name">{{ conversation.Name }}</div>
+                    <div class="conversation-name">
+                      {{ conversation.Name }}
+                      @if (isSharedWithMe(conversation)) {
+                        <i class="fas fa-share-nodes shared-indicator"
+                           [title]="sharedWithMeTooltip(conversation)"></i>
+                      }
+                    </div>
                     <div class="conversation-preview">{{ conversation.Description }}</div>
                   </div>
                   @if (!isSelectionMode) {
@@ -152,7 +158,13 @@ import { UUIDsEqual } from '@memberjunction/global';
                   </div>
                 </div>
                 <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
-                  <div class="conversation-name">{{ conversation.Name }}</div>
+                  <div class="conversation-name">
+                    {{ conversation.Name }}
+                    @if (isSharedWithMe(conversation)) {
+                      <i class="fas fa-share-nodes shared-indicator"
+                         [title]="sharedWithMeTooltip(conversation)"></i>
+                    }
+                  </div>
                   <div class="conversation-preview">{{ conversation.Description }}</div>
                 </div>
                 @if (!isSelectionMode) {
@@ -310,7 +322,9 @@ import { UUIDsEqual } from '@memberjunction/global';
     .conversation-icon.has-tasks { color: var(--mj-status-warning); }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
     .conversation-info { flex: 1; min-width: 0; }
-    .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+    .shared-indicator { font-size: 10px; color: rgba(255, 255, 255, 0.55); flex-shrink: 0; }
+    .conversation-item.active .shared-indicator { color: rgba(255, 255, 255, 0.85); }
     .conversation-preview { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conversation-item.active .conversation-preview { color: rgba(255,255,255,0.8); }
     .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -744,8 +758,12 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
+  private engine = ConversationEngine.Instance;
+
+  // Local UI state for loading/refreshing
+  public IsLoading: boolean = false;
+
   constructor(
-    public conversationData: ConversationDataService,
     private dialogService: DialogService,
     private notificationService: NotificationService,
     private activeTasksService: ActiveTasksService,
@@ -754,10 +772,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   get filteredConversations(): MJConversationEntity[] {
     if (!this.searchQuery || this.searchQuery.trim() === '') {
-      return this.conversationData.conversations;
+      return this.engine.Conversations;
     }
     const lowerQuery = this.searchQuery.toLowerCase();
-    return this.conversationData.conversations.filter(c =>
+    return this.engine.Conversations.filter(c =>
       (c.Name?.toLowerCase().includes(lowerQuery)) ||
       (c.Description?.toLowerCase().includes(lowerQuery))
     );
@@ -773,7 +791,17 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     // Load conversations on init
-    this.conversationData.loadConversations(this.environmentId, this.currentUser);
+    this.engine.LoadConversations(this.environmentId, this.currentUser, false);
+
+    // Re-run change detection whenever the conversations list changes (pin, archive, rename, etc.).
+    // filteredConversations/pinnedConversations/unpinnedConversations are pure getters that read
+    // engine.Conversations directly, so Angular doesn't know to re-evaluate them unless
+    // we explicitly trigger a check here.
+    this.engine.Conversations$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.cdr.detectChanges();
+    });
 
     // Subscribe to conversation IDs with active tasks (hot set)
     this.activeTasksService.conversationIdsWithTasks$.pipe(
@@ -821,7 +849,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
     this.isRefreshing = true;
     try {
-      await this.conversationData.refreshConversations(this.environmentId, this.currentUser);
+      await this.engine.LoadConversations(this.environmentId, this.currentUser, true);
       // Signal parent to also reload messages in the active conversation
       this.refreshRequested.emit();
     } catch (error) {
@@ -900,7 +928,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
         const newDescription = typeof result === 'string' ? conversation.Description : result.secondValue;
 
         if (newName !== conversation.Name || newDescription !== conversation.Description) {
-          await this.conversationData.saveConversation(
+          await this.engine.SaveConversation(
             conversation.ID,
             { Name: newName, Description: newDescription || '' },
             this.currentUser
@@ -924,7 +952,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
       if (confirmed) {
         const deletedId = conversation.ID;
-        await this.conversationData.deleteConversation(deletedId, this.currentUser);
+        await this.engine.DeleteConversation(deletedId, this.currentUser);
         this.cdr.detectChanges();
         this.conversationDeleted.emit(deletedId);
       }
@@ -945,9 +973,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   async togglePin(conversation: MJConversationEntity, event?: Event): Promise<void> {
     if (event) event.stopPropagation();
+    this.closeMenu(); // Close immediately on user action — don't wait for the async op
     try {
-      await this.conversationData.togglePin(conversation.ID, this.currentUser);
-      this.closeMenu();
+      await this.engine.PinConversation(conversation.ID, !conversation.IsPinned, this.currentUser);
     } catch (error) {
       console.error('Error toggling pin:', error);
       await this.dialogService.alert('Error', 'Failed to pin/unpin conversation. Please try again.');
@@ -956,6 +984,18 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   hasActiveTasks(conversationId: string): boolean {
     return this.conversationIdsWithTasks.has(conversationId);
+  }
+
+  /** True when this conversation was shared with the current user by someone else. */
+  isSharedWithMe(conversation: MJConversationEntity): boolean {
+    return this.engine.GetSharedByInfo(conversation.ID) !== null;
+  }
+
+  /** Tooltip for the sidebar share icon: "Shared by {email or name}". */
+  sharedWithMeTooltip(conversation: MJConversationEntity): string {
+    const info = this.engine.GetSharedByInfo(conversation.ID);
+    if (!info) return 'Shared with you';
+    return `Shared by ${info.Email ?? info.Name ?? 'another user'}`;
   }
 
   toggleSelectionMode(): void {
@@ -997,25 +1037,40 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
     if (confirmed) {
       try {
-        const result = await this.conversationData.deleteMultipleConversations(
+        const result = await this.engine.DeleteMultipleConversations(
           Array.from(this.selectedConversationIds),
           this.currentUser
         );
 
-        // Show results if there were any failures
-        if (result.failed.length > 0) {
+        if (result.Failed.length > 0 && result.Successful.length > 0) {
+          // Partial success
+          const failedNames = result.Failed.map(f => `"${f.Name}"`).join(', ');
           await this.dialogService.alert(
             'Partial Success',
-            `Deleted ${result.successful.length} of ${count} conversations. ${result.failed.length} failed.`
+            `Deleted ${result.Successful.length} of ${count} conversations.\n\n` +
+            `${result.Failed.length} could not be deleted: ${failedNames}`
+          );
+        } else if (result.Failed.length > 0 && result.Successful.length === 0) {
+          // All failed
+          await this.dialogService.alert(
+            'Delete Failed',
+            `None of the ${count} conversations could be deleted. They may have already been removed.`
           );
         }
 
-        // Exit selection mode
-        this.toggleSelectionMode();
+        // Emit deleted events for successful deletions
+        for (const id of result.Successful) {
+          this.conversationDeleted.emit(id);
+        }
 
       } catch (error) {
         console.error('Error deleting conversations:', error);
         await this.dialogService.alert('Error', 'Failed to delete conversations. Please try again.');
+      } finally {
+        // Always exit selection mode after an attempt, whether success or failure
+        this.selectedConversationIds.clear();
+        this.isSelectionMode = false;
+        this.cdr.detectChanges();
       }
     }
   }

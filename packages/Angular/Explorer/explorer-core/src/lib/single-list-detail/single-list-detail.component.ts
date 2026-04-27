@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, OnInit, ViewChild, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
 import { BaseEntity, CompositeKey, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
 import { MJListDetailEntity, MJListDetailEntityExtended, MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -75,6 +75,9 @@ export class SingleListDetailComponent implements OnInit {
   public addFromViewTotal: number = 0;
   public fetchingRecordsToSave: boolean = false;
 
+  // Dropdown button toggle state
+  public showAddDropdown: boolean = false;
+
   // Dropdown menu options
   public addOptions: NewItemOption[] = [
     {
@@ -91,9 +94,20 @@ export class SingleListDetailComponent implements OnInit {
     }
   ];
 
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (this.showAddDropdown) {
+      const target = event.target as HTMLElement;
+      if (!this.elementRef.nativeElement.querySelector('.add-dropdown-wrapper')?.contains(target)) {
+        this.showAddDropdown = false;
+      }
+    }
+  }
+
   constructor(
     private sharedService: SharedService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private elementRef: ElementRef
   ) {
     // Debounce search input
     this.searchSubject
@@ -163,6 +177,22 @@ export class SingleListDetailComponent implements OnInit {
   // Toolbar Actions
   // ==========================================
 
+  // ==========================================
+  // Progress Percentage Getters
+  // ==========================================
+
+  get removeProgressPercent(): number {
+    return this.removeTotal > 0 ? Math.round((this.removeProgress / this.removeTotal) * 100) : 0;
+  }
+
+  get addProgressPercent(): number {
+    return this.addTotal > 0 ? Math.round((this.addProgress / this.addTotal) * 100) : 0;
+  }
+
+  get addFromViewProgressPercent(): number {
+    return this.addFromViewTotal > 0 ? Math.round((this.addFromViewProgress / this.addFromViewTotal) * 100) : 0;
+  }
+
   onRefreshClick(): void {
     this.refreshGrid();
   }
@@ -174,7 +204,12 @@ export class SingleListDetailComponent implements OnInit {
     }
   }
 
+  toggleAddDropdown(): void {
+    this.showAddDropdown = !this.showAddDropdown;
+  }
+
   onDropdownItemClick(item: NewItemOption): void {
+    this.showAddDropdown = false;
     if (item.Action) {
       item.Action();
     }
@@ -311,6 +346,11 @@ export class SingleListDetailComponent implements OnInit {
     if (result.Success) {
       this.existingListDetailIds = new Set(result.Results.map(r => NormalizeUUID(r.RecordID)));
     }
+  }
+
+  onAddRecordsSearchInputEvent(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.onAddRecordsSearchChange(value);
   }
 
   onAddRecordsSearchChange(value: string): void {

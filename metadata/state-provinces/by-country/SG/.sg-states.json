@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Singapore",
+      "Code": "SG",
+      "ISO3166_2": "SG-SG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Singapore"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SG"
+    },
+    "primaryKey": {
+      "ID": "E5A93273-D32F-4ADB-ADA4-42311237A08F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.335Z",
+      "checksum": "58e7857cf7b68c288e9c84f264187038ca8607e8ccee8de10d8bfa0c16b9a6aa"
+    }
+  }
+]

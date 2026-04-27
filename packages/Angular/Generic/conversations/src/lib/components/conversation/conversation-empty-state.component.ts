@@ -13,6 +13,26 @@ export class ConversationEmptyStateComponent {
   @Input() currentUser!: UserInfo;
   @Input() disabled: boolean = false;
   @Input() showSidebarToggle: boolean = false;
+  @Input() enableAttachments: boolean = false;
+  @Input() maxAttachments: number = 10;
+  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024;
+  @Input() acceptedFileTypes: string = 'image/*';
+
+  /** Greeting text shown in the empty state. Set by host app via overlay/chat-area chain. */
+  @Input() greeting: string = 'How can I help you?';
+
+  /** When true (overlay context), suggested prompts are hidden to save space */
+  private _overlayMode = false;
+  @Input()
+  set overlayMode(value: boolean) {
+      this._overlayMode = value;
+      if (value) {
+          this.suggestedPrompts = [];
+      }
+  }
+  get overlayMode(): boolean {
+      return this._overlayMode;
+  }
 
   @ViewChild(MessageInputComponent) private messageInput?: MessageInputComponent;
 

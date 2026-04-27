@@ -1,0 +1,191 @@
+[
+  {
+    "fields": {
+      "Name": "Ad Dawḩah",
+      "Code": "DA",
+      "ISO3166_2": "QA-DA",
+      "Latitude": 25.2686,
+      "Longitude": 51.5282,
+      "BoundaryGeoJSON": "@file:by-country/QA/boundaries/QA-DA.geojson",
+      "CommonAliases": [
+        "Ad Dawḩah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=QA"
+    },
+    "primaryKey": {
+      "ID": "8560FE1C-6703-4A17-A458-6274AF890C93"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.735Z",
+      "checksum": "8db4c754f55322f76a9ebb8b904cff8de026122940aa2471296f042a0b63a7c0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Ghuwayrīyah",
+      "Code": "GH",
+      "ISO3166_2": "QA-GH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Ghuwayrīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=QA"
+    },
+    "primaryKey": {
+      "ID": "E49AB2A1-B011-4AAD-8414-A9D27027342A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.751Z",
+      "checksum": "bbfdfafb9b89d7337fca328efa0b2488e9606cf319ffdd2301127e332f6db6e0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Jumaylīyah",
+      "Code": "JU",
+      "ISO3166_2": "QA-JU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Jumaylīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=QA"
+    },
+    "primaryKey": {
+      "ID": "5438D633-0780-4A97-B381-023FEC33DB11"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.768Z",
+      "checksum": "13682614299f3e3da190275e32c464e4f1fe413d086c6ea55a5d4c1057926757"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Khawr",
+      "Code": "KH",
+      "ISO3166_2": "QA-KH",
+      "Latitude": 25.7512,
+      "Longitude": 51.4212,
+      "BoundaryGeoJSON": "@file:by-country/QA/boundaries/QA-KH.geojson",
+      "CommonAliases": [
+        "Al Khawr"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=QA"
+    },
+    "primaryKey": {
+      "ID": "3BCCC5AB-8161-463A-B423-4D7EEC1E008A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.785Z",
+      "checksum": "641d1192143e0ff7590b4ad824088dfa658c1e83c1e5467ee8579d0c6b436857"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Wakrah",
+      "Code": "WA",
+      "ISO3166_2": "QA-WA",
+      "Latitude": 24.9661,
+      "Longitude": 51.4743,
+      "BoundaryGeoJSON": "@file:by-country/QA/boundaries/QA-WA.geojson",
+      "CommonAliases": [
+        "Al Wakrah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=QA"
+    },
+    "primaryKey": {
+      "ID": "D4143A7F-D4C4-49FA-A3A2-BEAC4166512C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.802Z",
+      "checksum": "1d50a4c085c8f440f483eee9b0909e58d97e600cc19def79d5435bdda4063def"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ar Rayyān",
+      "Code": "RA",
+      "ISO3166_2": "QA-RA",
+      "Latitude": 25.1648,
+      "Longitude": 51.1605,
+      "BoundaryGeoJSON": "@file:by-country/QA/boundaries/QA-RA.geojson",
+      "CommonAliases": [
+        "Ar Rayyān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=QA"
+    },
+    "primaryKey": {
+      "ID": "21AF0E62-B9E4-4658-A012-AD8C7359534D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.818Z",
+      "checksum": "45029522383d0c2ff738d48bebac442e9c0c695a9ced8ee2111834ab76fe3d90"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jarīyān al Bāţnah",
+      "Code": "JB",
+      "ISO3166_2": "QA-JB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jarīyān al Bāţnah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=QA"
+    },
+    "primaryKey": {
+      "ID": "8A06B63F-BCAA-470D-82D1-6409FE66BE94"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.834Z",
+      "checksum": "fdde0de6ef641901a582b4be39ad6cce13c27066613a448f099bfa5cd10260ee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madīnat ash Shamāl",
+      "Code": "MS",
+      "ISO3166_2": "QA-MS",
+      "Latitude": 26.0095,
+      "Longitude": 51.1832,
+      "BoundaryGeoJSON": "@file:by-country/QA/boundaries/QA-MS.geojson",
+      "CommonAliases": [
+        "Madīnat ash Shamāl"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=QA"
+    },
+    "primaryKey": {
+      "ID": "64F19DAD-E88A-44BE-A10E-01A4BCE1FF1B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.851Z",
+      "checksum": "c590d053905b7efef468d6a1cc0f9d7de3bdb72d28b224572d89f02c2684d191"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Umm Şalāl",
+      "Code": "US",
+      "ISO3166_2": "QA-US",
+      "Latitude": 25.4594,
+      "Longitude": 51.3552,
+      "BoundaryGeoJSON": "@file:by-country/QA/boundaries/QA-US.geojson",
+      "CommonAliases": [
+        "Umm Şalāl"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=QA"
+    },
+    "primaryKey": {
+      "ID": "56D88A43-4063-4DDB-9AC5-63EFD128F304"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.864Z",
+      "checksum": "ff4313a3b98cccdd38b565debbbe06ff3bbb4021a7de0aab1a0e6c2cf72657a3"
+    }
+  }
+]

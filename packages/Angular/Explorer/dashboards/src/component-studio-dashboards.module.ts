@@ -1,11 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { TabStripModule, SplitterModule } from '@progress/kendo-angular-layout';
+import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJReactModule } from '@memberjunction/ng-react';
@@ -53,21 +49,26 @@ import { SaveVersionDialogComponent } from './ComponentStudio/components/save-ve
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    ButtonsModule,
-    GridModule,
-    InputsModule,
-    DialogsModule,
-    WindowModule,
-    TabStripModule,
-    SplitterModule,
     ContainerDirectivesModule,
     CodeEditorModule,
     MJReactModule,
     SharedGenericModule,
-    MarkdownModule
+    MarkdownModule,
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogTitlebarComponent,
+    MJDialogActionsComponent
   ],
   exports: [
     ComponentStudioDashboardComponent
   ]
 })
 export class ComponentStudioDashboardsModule { }
+
+// JS-level re-export so that public-api.ts line 187 (`export * from
+// './component-studio-dashboards.module'`) exposes the dashboard component
+// class through a path that includes ɵɵsetComponentScope.  Without this,
+// the only export path is the ComponentStudio/index.ts barrel which
+// imports the bare component file — creating a second ESBuild copy that
+// lacks child-component scope metadata.
+export { ComponentStudioDashboardComponent } from './ComponentStudio/component-studio-dashboard.component';

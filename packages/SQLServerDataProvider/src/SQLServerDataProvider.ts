@@ -52,6 +52,9 @@ import {
   RunViewsWithCacheCheckResponse,
   RunViewWithCacheCheckResult,
   RunQueryWithCacheCheckParams,
+  SaveContext,
+  RestoreContext,
+  RecordChangePayload,
 } from '@memberjunction/core';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
@@ -211,9 +214,18 @@ async function executeSQLCore(
       return executeSQLCore(query, parameters, context, options, true);
     }
 
-    // Build detailed error message with query and parameters
+    // Build detailed error message with query and parameters.
+    // mssql RequestError has a precedingErrors array with the actual root-cause
+    // SQL Server messages (e.g. "object already exists") that precede the
+    // generic "Could not create constraint" wrapper. Always include them.
+    const precedingMsgs: string =
+      Array.isArray(error?.precedingErrors) && error.precedingErrors.length > 0
+        ? `\n    Preceding errors: ${(error.precedingErrors as Array<{ message?: string }>)
+            .map((e) => e?.message ?? String(e))
+            .join(' | ')}`
+        : '';
     const errorMessage = `Error executing SQL
-    Error: ${error?.message ? error.message : error}
+    Error: ${error?.message ? error.message : error}${precedingMsgs}
     Query: ${query}
     Parameters: ${parameters ? JSON.stringify(parameters) : 'None'}`;
 
@@ -804,7 +816,7 @@ export class SQLServerDataProvider
         }
       }
 
-      const logRecordChangeSQL = this.GetLogRecordChangeSQL(newData, oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false);
+      const logRecordChangeSQL = this.GetLogRecordChangeSQL(newData, oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false, entity.RestoreContext);
       if (logRecordChangeSQL === null) {
         // if we don't have any record changes to log, just return the simple SQL to run which will do nothing but update __mj_UpdatedAt
         // this can happen if a subclass overrides the Dirty() flag to make the object dirty due to factors outside of the
@@ -1140,24 +1152,40 @@ export class SQLServerDataProvider
     type: 'Create' | 'Update' | 'Delete',
     user: UserInfo,
     wrapRecordIdInQuotes: boolean,
+    restoreContext?: RestoreContext | null,
   ) {
-    const fullRecordJSON: string = JSON.stringify(this.EscapeQuotesInProperties(newData ? newData : oldData, "'")); // stringify old data if we don't have new - means we are DELETING A RECORD
-    const changes: any = this.DiffObjects(oldData, newData, entityInfo, "'");
-    const changesKeys = changes ? Object.keys(changes) : [];
-    if (changesKeys.length > 0 || oldData === null /*new record*/ || newData === null /*deleted record*/) {
-      const changesJSON: string = changes !== null ? JSON.stringify(changes) : '';
-      const quotes = wrapRecordIdInQuotes ? "'" : '';
-      const sSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
+    // Dialect-agnostic payload assembly is hoisted into DatabaseProviderBase
+    // so SQL Server and PostgreSQL share one implementation. We only render
+    // the T-SQL EXEC wrapper here.
+    const payload = this.BuildRecordChangePayload(
+      newData,
+      oldData,
+      String(recordID),
+      entityInfo,
+      type,
+      user,
+      restoreContext,
+      "'",
+    );
+    if (!payload) return null;
+
+    const quotes = wrapRecordIdInQuotes ? "'" : '';
+    const restoreClause = payload.source === 'Restore'
+      ? `,
+                                                                                        @Source='Restore',
+                                                                                        @RestoredFromID='${payload.restoredFromID}',
+                                                                                        @RestoreReason=${payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL'}`
+      : '';
+
+    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
                                                                                         @RecordID=${quotes}${recordID}${quotes},
-                                                                                        @UserID='${user.ID}',
-                                                                                        @Type='${type}',
-                                                                                        @ChangesJSON='${changesJSON}',
-                                                                                        @ChangesDescription='${oldData && newData ? this.CreateUserDescriptionOfChanges(changes) : !oldData ? 'Record Created' : 'Record Deleted'}',
-                                                                                        @FullRecordJSON='${fullRecordJSON}',
+                                                                                        @UserID='${payload.userID}',
+                                                                                        @Type='${payload.type}',
+                                                                                        @ChangesJSON='${payload.changesJSON}',
+                                                                                        @ChangesDescription='${payload.changesDescription}',
+                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
-                                                                                        @Comments=null`;
-      return sSQL;
-    } else return null;
+                                                                                        @Comments=null${restoreClause}`;
   }
   /**
    * Implements the abstract BuildRecordChangeSQL from DatabaseProviderBase.
@@ -1171,8 +1199,9 @@ export class SQLServerDataProvider
     entityInfo: EntityInfo,
     type: 'Create' | 'Update' | 'Delete',
     user: UserInfo,
+    restoreContext?: RestoreContext | null,
   ): { sql: string; parameters?: unknown[] } | null {
-    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true);
+    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext);
     if (sql) return { sql };
     return null;
   }
@@ -1244,7 +1273,7 @@ export class SQLServerDataProvider
                         )
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true)}
+                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext)}
                     END
 
                     SELECT ${sReturnList}`;
@@ -1279,32 +1308,6 @@ export class SQLServerDataProvider
       fullSQL: sqlDetails.fullSQL,
       simpleSQL: sqlDetails.simpleSQL,
     };
-  }
-
-  protected override async OnSaveCompleted(
-    entity: BaseEntity,
-    saveSQLResult: SaveSQLResult,
-    user: UserInfo,
-    options: EntitySaveOptions,
-  ): Promise<void> {
-    const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
-      | { changesJSON: string; changesDescription: string }
-      | undefined;
-    if (
-      overlappingChangeData &&
-      entity.EntityInfo.AllowMultipleSubtypes &&
-      entity.EntityInfo.TrackRecordChanges
-    ) {
-      const transaction = (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-      await this.PropagateRecordChangesToSiblings(
-        entity.EntityInfo,
-        overlappingChangeData,
-        entity.PrimaryKey.Values(),
-        user?.ID ?? '',
-        options.ISAActiveChildEntityName,
-        transaction ? { connectionSource: transaction } : undefined,
-      );
-    }
   }
 
   protected override OnSuspendRefresh(): void {
@@ -2104,6 +2107,23 @@ IF ${varName} IS NOT NULL
         this._savepointStack.pop();
       }
     } catch (e) {
+      // If commit() threw after we already decremented _transactionDepth to 0,
+      // the caller's RollbackTransaction() will see depth===0 and refuse to act,
+      // leaving the mssql transaction permanently open on SQL Server and holding
+      // row locks until the TCP connection drops (requires MJAPI restart).
+      // Detect this state and force a direct rollback to release the locks.
+      if (this._transactionDepth === 0 && this._transaction) {
+        try {
+          await this._transaction.rollback();
+        } catch (rollbackError) {
+          LogError('Rollback after commit failure also failed:', undefined, rollbackError);
+        } finally {
+          this._transaction = null;
+          this._savepointStack = [];
+          this._savepointCounter = 0;
+          this._transactionState$.next(false);
+        }
+      }
       LogError(e);
       throw e; // force caller to handle
     }

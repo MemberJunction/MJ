@@ -449,32 +449,45 @@ export class AuthorizationInfo extends BaseInfo {
 
     /**
      * Determines if a given user can execute actions under this authorization based on their roles.
-     * 
+     *
+     * Evaluation rules (fixed in Phase 2b):
+     * - Match by `AuthorizationRoleInfo.RoleID` (the FK to Roles), not the authorization-role PK.
+     * - Honour the `Type` column: any matching Deny row wins; without a Deny, at least one Allow is required.
+     *
      * @param {UserInfo} user - The user to check for execution rights.
-     * @returns {boolean} True if the user can execute actions under this authorization, otherwise false.
+     * @returns {boolean} True if the user has a matching Allow role and no matching Deny role; false otherwise.
      */
     public UserCanExecute(user: UserInfo): boolean {
-        if (this.IsActive && user && user.UserRoles) {
-            for (let i = 0; i < user.UserRoles.length; i++) {
-                const matchingRole = this.Roles.find(r => UUIDsEqual(r.ID, user.UserRoles[i].RoleID))
-                if (matchingRole)
-                    return true; // as soon as we find a single matching role we can bail out as the user can execute
+        if (!this.IsActive || !user || !user.UserRoles) return false;
+        let hasAllow = false;
+        for (const userRole of user.UserRoles) {
+            const matchingAuthRoles = this.Roles.filter(r => UUIDsEqual(r.RoleID, userRole.RoleID));
+            for (const ar of matchingAuthRoles) {
+                if (ar.AuthorizationType() === AuthorizationRoleType.Deny) return false; // Deny wins globally
+                if (ar.AuthorizationType() === AuthorizationRoleType.Allow) hasAllow = true;
             }
         }
-        return false
+        return hasAllow;
     }
 
     /**
      * Determines if a given role can execute actions under this authorization.
-     * 
+     *
+     * Phase 2b also honours Deny semantics for consistency with {@link UserCanExecute}.
+     *
      * @param {RoleInfo} role - The role to check for execution rights.
-     * @returns {boolean} True if the role can execute actions under this authorization, otherwise false.
+     * @returns {boolean} True if an Allow authorization-role exists for this role and no Deny does.
      */
     public RoleCanExecute(role: RoleInfo): boolean {
-        if (this.IsActive) {
-            return this.Roles.find(r => UUIDsEqual(r.ID, role.ID)) != null
+        if (!this.IsActive) return false;
+        const matchingAuthRoles = this.Roles.filter(r => UUIDsEqual(r.RoleID, role.ID));
+        if (matchingAuthRoles.length === 0) return false;
+        let hasAllow = false;
+        for (const ar of matchingAuthRoles) {
+            if (ar.AuthorizationType() === AuthorizationRoleType.Deny) return false;
+            if (ar.AuthorizationType() === AuthorizationRoleType.Allow) hasAllow = true;
         }
-        return false
+        return hasAllow;
     }
 }
 

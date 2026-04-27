@@ -1,17 +1,17 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
+import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ChatMessage } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { getAttachmentService } from '@memberjunction/aiengine';
+import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
 
 @ObjectType()
@@ -361,7 +361,9 @@ export class RunAIAgentResolver extends ResolverBase {
         createArtifacts: boolean = false,
         createNotification: boolean = false,
         sourceArtifactId?: string,
-        sourceArtifactVersionId?: string
+        sourceArtifactVersionId?: string,
+        /** LATENCY OPT #2: Pre-resolved conversationId avoids redundant DB load in AgentRunner */
+        conversationId?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -390,10 +392,10 @@ export class RunAIAgentResolver extends ResolverBase {
             // Validate agent
             const agentEntity = await this.validateAgent(agentId, currentUser);
 
-            // @jordanfanapour IMPORTANT TO-DO for various engine classes (via base engine class) and here for AI Agent Runner and for AI Prompt Runner, need to be able to pass in a IMetadataProvider for it to use
-            // for multi-user server environments like this one
-            // Create AI agent runner
-            const agentRunner = new AgentRunner();
+            // Create AI agent runner with the per-request isolated provider so all agent DB operations
+            // (AIAgentRun, AIAgentRunSteps, AIAgentRequests, AIPromptRuns) never share the global
+            // singleton's transaction state with concurrent requests (e.g. conversation deletes).
+            const agentRunner = new AgentRunner(p);
 
             // Track agent run for streaming (use ref to update later)
             const agentRunRef = { current: null as any };
@@ -406,6 +408,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 conversationMessages: parsedMessages,
                 payload: payload ? SafeJSONParse(payload) : undefined,
                 contextUser: currentUser,
+                sessionID: sessionId,
                 onProgress: this.createProgressCallback(pubSub, sessionId, userPayload, agentRunRef),
                 onStreaming: this.createStreamingCallback(pubSub, sessionId, userPayload, agentRunRef),
                 lastRunId: lastRunId,
@@ -417,6 +420,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 }
             }, {
                 conversationDetailId: conversationDetailId, // Use existing if provided
+                conversationId: conversationId, // LATENCY OPT #2: pre-resolved to skip redundant load in AgentRunner
                 userMessage: userMessage, // Provide user message when conversationDetailId not provided
                 createArtifacts: createArtifacts || false,
                 sourceArtifactId: sourceArtifactId
@@ -434,35 +438,51 @@ export class RunAIAgentResolver extends ResolverBase {
 
             const executionTime = Date.now() - startTime;
 
-            // Sync feedback request if this is a continuation run (user responded via conversation)
+            // LATENCY OPTIMIZATION (Opt #6): These three post-execution operations are independent
+            // of each other — none reads the output of another. Previously they ran sequentially,
+            // adding their latencies together (~50ms total). Now they run in parallel via Promise.all,
+            // so we only pay the cost of the slowest one.
+            //
+            // 1. syncFeedbackRequestFromConversation — links a prior Chat-step feedback request to
+            //    the new agent run so the conversation thread stays coherent.
+            // 2. sendFeedbackRequestNotification — sends an in-app/email/SMS notification when the
+            //    agent paused for human input (Chat step).
+            // 3. createCompletionNotification — sends an in-app/email/SMS notification that the
+            //    agent finished and created an artifact.
+            const postExecutionOps: Promise<void>[] = [];
+
             if (lastRunId && result.agentRun?.ID) {
-                await this.syncFeedbackRequestFromConversation(
-                    lastRunId,
-                    result.agentRun.ID,
-                    userMessage,
-                    currentUser
+                postExecutionOps.push(
+                    this.syncFeedbackRequestFromConversation(lastRunId, result.agentRun.ID, userMessage, currentUser, p)
                 );
             }
 
-            // Send notification if agent created a feedback request (Chat step)
             if (result.feedbackRequestId) {
-                await this.sendFeedbackRequestNotification(result, currentUser, pubSub, userPayload);
+                postExecutionOps.push(
+                    this.sendFeedbackRequestNotification(result, currentUser, pubSub, userPayload)
+                );
             }
 
-            // Create notification if enabled and artifact was created successfully
             if (createNotification && result.success && artifactInfo && artifactInfo.artifactId && artifactInfo.versionId && artifactInfo.versionNumber) {
-                await this.createCompletionNotification(
-                    result.agentRun,
-                    {
-                        artifactId: artifactInfo.artifactId,
-                        versionId: artifactInfo.versionId,
-                        versionNumber: artifactInfo.versionNumber
-                    },
-                    finalConversationDetailId,
-                    currentUser,
-                    pubSub,
-                    userPayload
+                postExecutionOps.push(
+                    this.createCompletionNotification(
+                        result.agentRun,
+                        {
+                            artifactId: artifactInfo.artifactId,
+                            versionId: artifactInfo.versionId,
+                            versionNumber: artifactInfo.versionNumber
+                        },
+                        conversationResult.conversationId,
+                        finalConversationDetailId,
+                        currentUser,
+                        pubSub,
+                        userPayload
+                    )
                 );
+            }
+
+            if (postExecutionOps.length > 0) {
+                await Promise.all(postExecutionOps);
             }
 
             // Create sanitized payload for JSON serialization
@@ -679,34 +699,31 @@ export class RunAIAgentResolver extends ResolverBase {
      * Create a user notification for agent completion with artifact
      * Notification includes navigation link back to the conversation
      */
+    /**
+     * LATENCY OPTIMIZATION (Opt #2): Now accepts conversationId directly instead of
+     * conversationDetailId. Previously this method loaded a ConversationDetail entity
+     * from the DB solely to extract its ConversationID field for building a URL — a
+     * redundant ~50ms DB round-trip since the caller already resolved conversationId
+     * when loading conversation history.
+     */
     private async createCompletionNotification(
         agentRun: MJAIAgentRunEntityExtended,
         artifactInfo: { artifactId: string; versionId: string; versionNumber: number },
+        conversationId: string,
         conversationDetailId: string,
         contextUser: UserInfo,
         pubSub: PubSubEngine,
         userPayload: UserPayload
     ): Promise<void> {
         try {
-            const md = new Metadata();
-
             // Get agent info for notification message
             await AIEngine.Instance.Config(false, contextUser);
             const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
             const agentName = agent?.Name || 'Agent';
 
-            // Load conversation detail to get conversation info
-            const detail = await md.GetEntityObject<MJConversationDetailEntity>(
-                'MJ: Conversation Details',
-                contextUser
-            );
-            if (!(await detail.Load(conversationDetailId))) {
-                throw new Error(`Failed to load conversation detail ${conversationDetailId}`);
-            }
-
             // Build conversation URL for email/SMS templates
             const baseUrl = process.env.APP_BASE_URL || 'http://localhost:4201';
-            const conversationUrl = `${baseUrl}/conversations/${detail.ConversationID}?artifact=${artifactInfo.artifactId}`;
+            const conversationUrl = `${baseUrl}/conversations/${conversationId}?artifact=${artifactInfo.artifactId}`;
 
             // Craft message based on versioning
             const message = artifactInfo.versionNumber > 1
@@ -723,7 +740,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 message: message,
                 resourceConfiguration: {
                     type: 'conversation',
-                    conversationId: detail.ConversationID,
+                    conversationId: conversationId,
                     messageId: conversationDetailId,
                     artifactId: artifactInfo.artifactId,
                     versionId: artifactInfo.versionId,
@@ -753,7 +770,8 @@ export class RunAIAgentResolver extends ResolverBase {
                         notificationId: result.inAppNotificationId,
                         action: 'create',
                         title: `${agentName} completed your request`,
-                        message: message
+                        message: message,
+                        conversationId: conversationId
                     })
                 });
 
@@ -779,10 +797,11 @@ export class RunAIAgentResolver extends ResolverBase {
         lastRunId: string,
         newRunId: string,
         userMessage: string | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider: IMetadataProvider
     ): Promise<void> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(provider);
             const result = await rv.RunView<MJAIAgentRequestEntity>({
                 EntityName: 'MJ: AI Agent Requests',
                 ExtraFilter: `OriginatingAgentRunID='${lastRunId}' AND Status='Requested'`,
@@ -916,11 +935,26 @@ export class RunAIAgentResolver extends ResolverBase {
         }
 
         try {
+            // LATENCY OPTIMIZATION (Opt #2 + #3): Load ConversationDetail once here to extract
+            // conversationId, then pass it downstream. Previously this record was loaded multiple
+            // times: once in loadConversationHistoryWithAttachments (just to get conversationId),
+            // once in AgentRunner (same reason), and once in createCompletionNotification. Now we
+            // load it a single time and thread conversationId through the call chain.
+            const currentDetail = await p.GetEntityObject<MJConversationDetailEntity>(
+                'MJ: Conversation Details',
+                currentUser
+            );
+            if (!await currentDetail.Load(conversationDetailId)) {
+                throw new Error(`Conversation detail ${conversationDetailId} not found`);
+            }
+            const conversationId = currentDetail.ConversationID;
+
             // Load conversation history with attachments from DB
             const messages = await this.loadConversationHistoryWithAttachments(
-                conversationDetailId,
+                conversationId,
                 currentUser,
-                maxHistoryMessages || 20
+                maxHistoryMessages || 20,
+                p
             );
 
             // Convert to JSON string for the existing executeAIAgent method
@@ -933,7 +967,7 @@ export class RunAIAgentResolver extends ResolverBase {
                     p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
                     data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                     conversationDetailId, createArtifacts || false, createNotification || false,
-                    sourceArtifactId, sourceArtifactVersionId
+                    sourceArtifactId, sourceArtifactVersionId, conversationId
                 );
 
                 LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
@@ -963,7 +997,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 createArtifacts || false,
                 createNotification || false,
                 sourceArtifactId,
-                sourceArtifactVersionId
+                sourceArtifactVersionId,
+                conversationId // LATENCY OPT #2: pass pre-resolved conversationId
             );
         } catch (error) {
             const errorMessage = (error as Error).message || 'Unknown error loading conversation history';
@@ -997,8 +1032,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 throw new Error('Unable to determine current user');
             }
 
-            const md = new Metadata();
-            const request = await md.GetEntityObject<MJAIAgentRequestEntity>(
+            const p = GetReadWriteProvider(providers);
+            const request = await p.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
                 currentUser
             );
@@ -1062,7 +1097,7 @@ export class RunAIAgentResolver extends ResolverBase {
     async ReassignAgentRequest(
         @Arg('requestId') requestId: string,
         @Arg('newUserID') newUserID: string,
-        @Ctx() { userPayload }: AppContext,
+        @Ctx() { userPayload, providers }: AppContext,
         @Arg('note', { nullable: true }) note?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
@@ -1072,8 +1107,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 throw new Error('Unable to determine current user');
             }
 
-            const md = new Metadata();
-            const request = await md.GetEntityObject<MJAIAgentRequestEntity>(
+            const p = GetReadWriteProvider(providers);
+            const request = await p.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
                 currentUser
             );
@@ -1176,14 +1211,16 @@ export class RunAIAgentResolver extends ResolverBase {
         createArtifacts: boolean = false,
         createNotification: boolean = false,
         sourceArtifactId?: string,
-        sourceArtifactVersionId?: string
+        sourceArtifactVersionId?: string,
+        /** LATENCY OPT #2: Pre-resolved conversationId avoids redundant DB load in AgentRunner */
+        conversationId?: string
     ): void {
         // Execute in background - errors are handled within, not propagated
         this.executeAIAgent(
             p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
-            sourceArtifactId, sourceArtifactVersionId
+            sourceArtifactId, sourceArtifactVersionId, conversationId
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).
@@ -1208,34 +1245,40 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Load conversation history with attachments from database.
      * Builds ChatMessage[] with multimodal content blocks for attachments.
+     *
+     * LATENCY OPTIMIZATIONS (plans/agent-latency-optimization.md — Opts #3 and #8):
+     *
+     * Opt #3: This method now accepts conversationId directly instead of conversationDetailId.
+     * Previously it loaded a ConversationDetail entity object just to extract its ConversationID
+     * field — a redundant DB round-trip (~40ms) since the caller already has this information.
+     * The caller (RunAIAgentFromConversationDetail) now loads the ConversationDetail once and
+     * passes conversationId down.
+     *
+     * Opt #8: Switched from ResultType 'entity_object' to 'simple' with explicit Fields.
+     * The history query only needs ID, Role, and Message from each ConversationDetail record.
+     * Using 'entity_object' created full BaseEntity instances with getters/setters, dirty tracking,
+     * and validation — none of which are needed for read-only history assembly. The 'simple' result
+     * type returns plain JS objects, reducing per-record overhead (~30ms total savings).
      */
     private async loadConversationHistoryWithAttachments(
-        conversationDetailId: string,
+        conversationId: string,
         contextUser: UserInfo,
-        maxMessages: number
+        maxMessages: number,
+        provider: IMetadataProvider
     ): Promise<ChatMessage[]> {
-        const md = new Metadata();
-        const rv = new RunView();
-        const attachmentService = getAttachmentService();
+        const rv = RunView.FromMetadataProvider(provider);
+        const attachmentService = GetAttachmentService();
 
-        // Load the current conversation detail to get the conversation ID
-        const currentDetail = await md.GetEntityObject<MJConversationDetailEntity>(
-            'MJ: Conversation Details',
-            contextUser
-        );
-        if (!await currentDetail.Load(conversationDetailId)) {
-            throw new Error(`Conversation detail ${conversationDetailId} not found`);
-        }
-
-        const conversationId = currentDetail.ConversationID;
-
-        // Load recent conversation details (messages) for this conversation
-        const detailsResult = await rv.RunView<MJConversationDetailEntity>({
+        // Load recent conversation details (messages) for this conversation.
+        // Only fetch the three fields we actually use — ID for attachment lookups,
+        // Role for message routing, Message for content.
+        const detailsResult = await rv.RunView<{ ID: string; Role: string; Message: string }>({
             EntityName: 'MJ: Conversation Details',
             ExtraFilter: `ConversationID='${conversationId}'`,
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: maxMessages,
-            ResultType: 'entity_object'
+            Fields: ['ID', 'Role', 'Message'],
+            ResultType: 'simple'
         }, contextUser);
 
         if (!detailsResult.Success || !detailsResult.Results) {
@@ -1249,9 +1292,12 @@ export class RunAIAgentResolver extends ResolverBase {
         const messageIds = details.map(d => d.ID);
 
         // Batch load all attachments for these messages
-        const attachmentsByDetailId = await attachmentService.getAttachmentsBatch(messageIds, contextUser);
+        const attachmentsByDetailId = await attachmentService.GetAttachmentsBatch(messageIds, contextUser, provider);
 
-        // Build ChatMessage array with attachments
+        // Batch load input artifacts for these messages
+        const inputArtifactsByDetailId = await this.loadInputArtifactsBatch(messageIds, contextUser, provider);
+
+        // Build ChatMessage array with attachments and input artifacts
         const messages: ChatMessage[] = [];
 
         for (const detail of details) {
@@ -1260,30 +1306,113 @@ export class RunAIAgentResolver extends ResolverBase {
 
             // Get attachment data with content URLs (handles both inline and FileID storage)
             const attachmentDataPromises = attachments.map(att =>
-                attachmentService.getAttachmentData(att, contextUser)
+                attachmentService.GetAttachmentData(att, contextUser, provider)
             );
             const attachmentDataResults = await Promise.all(attachmentDataPromises);
 
-            // Filter out nulls and convert to AttachmentData format
-            const validAttachments: AttachmentData[] = attachmentDataResults
-                .filter((result): result is NonNullable<typeof result> => result !== null)
-                .map(result => ({
-                    type: ConversationUtility.GetAttachmentTypeFromMime(result.attachment.MimeType),
-                    mimeType: result.attachment.MimeType,
-                    fileName: result.attachment.FileName ?? undefined,
-                    sizeBytes: result.attachment.FileSizeBytes ?? undefined,
-                    width: result.attachment.Width ?? undefined,
-                    height: result.attachment.Height ?? undefined,
-                    durationSeconds: result.attachment.DurationSeconds ?? undefined,
-                    content: result.contentUrl
-                }));
+            // Filter out nulls and convert to AttachmentData format.
+            // IMPORTANT: Skip large document attachments that are handled by artifact tools.
+            // These file types (PDF, Excel, Word) are accessible via ArtifactToolManager
+            // and embedding their multi-MB base64 content in the conversation causes
+            // context overflow on follow-up messages when conversation history is replayed.
+            // Images are kept inline since LLMs handle them natively via multimodal.
+            const ARTIFACT_TOOL_MIME_PREFIXES = [
+                'application/pdf',
+                'application/vnd.openxmlformats-officedocument', // .docx, .xlsx, .pptx
+                'application/vnd.ms-excel', // .xls
+                'application/msword', // .doc
+            ];
+
+            const validAttachments: AttachmentData[] = [];
+
+            for (const result of attachmentDataResults) {
+                if (!result) continue;
+                const mime = result.attachment.MimeType || '';
+                const isArtifactToolType = ARTIFACT_TOOL_MIME_PREFIXES.some(prefix => mime.startsWith(prefix));
+                if (isArtifactToolType) {
+                    // Skip raw file embedding — the agent accesses the file via
+                    // artifact tools (manifest injected into prompt) and/or native
+                    // file input (resolved per-driver in AIPromptRunner).
+                    // Do NOT add a placeholder attachment: 'Document' maps to 'file_url'
+                    // content blocks, and drivers attempt base64 decoding of the text,
+                    // causing API errors.
+                } else {
+                    validAttachments.push({
+                        type: ConversationUtility.GetAttachmentTypeFromMime(result.attachment.MimeType),
+                        mimeType: result.attachment.MimeType,
+                        fileName: result.attachment.FileName ?? undefined,
+                        sizeBytes: result.attachment.FileSizeBytes ?? undefined,
+                        width: result.attachment.Width ?? undefined,
+                        height: result.attachment.Height ?? undefined,
+                        durationSeconds: result.attachment.DurationSeconds ?? undefined,
+                        content: result.contentUrl
+                    });
+                }
+            }
+
+            // Get input artifacts for this message and convert to AttachmentData.
+            // Like regular attachments above, skip file-backed artifacts whose MIME
+            // types are handled by ArtifactToolManager — embedding their multi-MB
+            // base64 content in every conversation replay causes context overflow.
+            const inputArtifacts = inputArtifactsByDetailId.get(detail.ID) || [];
+            for (const artifactVersion of inputArtifacts) {
+                const artifactMime = artifactVersion.MimeType || '';
+                const isArtifactToolHandled = ARTIFACT_TOOL_MIME_PREFIXES.some(
+                    prefix => artifactMime.startsWith(prefix)
+                );
+
+                if (artifactVersion.ContentMode === 'File' && artifactVersion.FileID) {
+                    if (isArtifactToolHandled) {
+                        // Skip raw file embedding — the agent accesses the file via
+                        // artifact tools (manifest injected into prompt) and/or native
+                        // file input (resolved per-driver in AIPromptRunner).
+                        // Do NOT add a placeholder attachment here: 'Document' maps to
+                        // 'file_url' content blocks, and drivers attempt base64 decoding
+                        // of the placeholder text, causing API errors.
+                    } else {
+                        // Non-artifact-tool file types: embed normally
+                        const fileContent = await this.downloadArtifactFileContent(artifactVersion, contextUser, provider);
+                        if (fileContent) {
+                            validAttachments.push({
+                                type: ConversationUtility.GetAttachmentTypeFromMime(artifactMime),
+                                mimeType: artifactMime || 'application/octet-stream',
+                                fileName: artifactVersion.FileName || artifactVersion.Name || undefined,
+                                sizeBytes: artifactVersion.ContentSizeBytes || undefined,
+                                content: fileContent
+                            });
+                        }
+                    }
+                } else if (artifactVersion.Content) {
+                    // Text artifact — use BuildInlinePreview for large DataSnapshots
+                    // to preserve table structure instead of raw substring truncation.
+                    const textContent = artifactVersion.Content;
+                    const MAX_INLINE_ARTIFACT_CHARS = 10_000;
+
+                    if (textContent.length > MAX_INLINE_ARTIFACT_CHARS) {
+                        const preview = ArtifactToolManager.BuildInlinePreview(textContent, 5);
+                        validAttachments.push({
+                            type: 'Document' as AttachmentData['type'],
+                            mimeType: 'text/plain',
+                            fileName: undefined,
+                            content: `[Artifact: ${artifactVersion.Name || 'Untitled'} — ${textContent.length.toLocaleString()} chars, accessible via artifact tools]\n\nPreview (first 5 rows per table):\n${preview}`
+                        });
+                    } else {
+                        validAttachments.push({
+                            type: 'Document' as AttachmentData['type'],
+                            mimeType: 'text/plain',
+                            fileName: artifactVersion.Name || 'artifact.txt',
+                            content: `[Artifact: ${artifactVersion.Name || 'Untitled'}]\n\n${textContent}`
+                        });
+                    }
+                }
+            }
 
             // Build message content (with or without attachments)
-            let content: string | ReturnType<typeof ConversationUtility.BuildChatMessageContent>;
+            let content: ChatMessageContent;
 
             if (validAttachments.length > 0) {
                 // Use ConversationUtility to build multimodal content blocks
-                content = ConversationUtility.BuildChatMessageContent(
+                content = await ConversationUtility.BuildChatMessageContent(
                     detail.Message || '',
                     validAttachments
                 );
@@ -1309,6 +1438,89 @@ export class RunAIAgentResolver extends ResolverBase {
         if (roleLower === 'assistant' || roleLower === 'agent' || roleLower === 'ai') return 'assistant';
         if (roleLower === 'system') return 'system';
         return 'user'; // Default to user
+    }
+
+    /**
+     * Batch load input artifact versions for conversation details.
+     * Returns a map of ConversationDetailID -> ArtifactVersion[]
+     */
+    private async loadInputArtifactsBatch(
+        conversationDetailIds: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<Map<string, MJArtifactVersionEntity[]>> {
+        const map = new Map<string, MJArtifactVersionEntity[]>();
+        if (conversationDetailIds.length === 0) return map;
+
+        const rv = RunView.FromMetadataProvider(provider);
+        const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
+
+        // Load ConversationDetailArtifact links with Direction='Input'
+        const linksResult = await rv.RunView<MJConversationDetailArtifactEntity>({
+            EntityName: 'MJ: Conversation Detail Artifacts',
+            ExtraFilter: `ConversationDetailID IN (${idList}) AND Direction = 'Input'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!linksResult.Success || !linksResult.Results || linksResult.Results.length === 0) {
+            return map;
+        }
+
+        // Load the referenced artifact versions
+        const versionIds = linksResult.Results.map(l => `'${l.ArtifactVersionID}'`).join(',');
+        const versionsResult = await rv.RunView<MJArtifactVersionEntity>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN (${versionIds})`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!versionsResult.Success || !versionsResult.Results) return map;
+
+        // Build a lookup of version ID -> version entity
+        const versionMap = new Map<string, MJArtifactVersionEntity>();
+        for (const v of versionsResult.Results) {
+            versionMap.set(v.ID, v);
+        }
+
+        // Group by conversation detail ID
+        for (const link of linksResult.Results) {
+            const version = versionMap.get(link.ArtifactVersionID);
+            if (version) {
+                const existing = map.get(link.ConversationDetailID) || [];
+                existing.push(version);
+                map.set(link.ConversationDetailID, existing);
+            }
+        }
+
+        return map;
+    }
+
+    /**
+     * Download file content from an artifact version's FileID.
+     * Returns base64 data URL for extraction pipeline compatibility.
+     * Uses the same downloadFileContent path as ConversationAttachmentService
+     * to avoid Box driver path resolution issues.
+     */
+    private async downloadArtifactFileContent(
+        artifactVersion: MJArtifactVersionEntity,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<string | null> {
+        if (!artifactVersion.FileID) return null;
+
+        try {
+            // Use the attachment service's downloadFileContent which uses GetObject directly
+            const attachmentService = GetAttachmentService();
+            const buffer = await attachmentService.DownloadFileContent(artifactVersion.FileID, contextUser, provider);
+            if (!buffer) return null;
+
+            const base64 = buffer.toString('base64');
+            const mimeType = artifactVersion.MimeType || 'application/octet-stream';
+            return `data:${mimeType};base64,${base64}`;
+        } catch (err) {
+            LogError(`Failed to download artifact file ${artifactVersion.FileID}: ${err}`);
+            return null;
+        }
     }
 
 }

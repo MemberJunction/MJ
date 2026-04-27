@@ -10,7 +10,7 @@
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
-            GetReadOnlyProvider, GetReadWriteProvider } from '@memberjunction/server';
+            GetReadOnlyProvider, GetReadWriteProvider, RestoreContextInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSkillEntity, MJSQLDialectEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentClientToolEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchProviderEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -124,6 +124,9 @@ export class CreateMJAccessControlRuleInput {
 
     @Field({ nullable: true })
     GrantedByUserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -170,6 +173,9 @@ export class UpdateMJAccessControlRuleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -310,6 +316,9 @@ export class CreateMJActionAuthorizationInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -332,6 +341,9 @@ export class UpdateMJActionAuthorizationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -488,6 +500,9 @@ export class CreateMJActionCategoryInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -513,6 +528,9 @@ export class UpdateMJActionCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -671,6 +689,9 @@ export class CreateMJActionContextTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -690,6 +711,9 @@ export class UpdateMJActionContextTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -841,6 +865,9 @@ export class CreateMJActionContextInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -863,6 +890,9 @@ export class UpdateMJActionContextInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -1034,6 +1064,9 @@ export class CreateMJActionExecutionLogInput {
 
     @Field({ nullable: true })
     Message: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -1071,6 +1104,9 @@ export class UpdateMJActionExecutionLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -1210,6 +1246,9 @@ export class CreateMJActionFilterInput {
 
     @Field({ nullable: true })
     CodeExplanation: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -1235,6 +1274,9 @@ export class UpdateMJActionFilterInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -1385,6 +1427,9 @@ export class CreateMJActionLibraryInput {
 
     @Field({ nullable: true })
     ItemsUsed: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -1407,6 +1452,9 @@ export class UpdateMJActionLibraryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -1588,6 +1636,9 @@ export class CreateMJActionParamInput {
 
     @Field({ nullable: true })
     MediaModality: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -1628,6 +1679,9 @@ export class UpdateMJActionParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -1790,6 +1844,9 @@ export class CreateMJActionResultCodeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -1815,6 +1872,9 @@ export class UpdateMJActionResultCodeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -1991,6 +2051,16 @@ export class MJAction_ {
     @Field({nullable: true, description: `Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.`}) 
     Config?: string;
         
+    @Field({nullable: true, description: `JSON blob holding configuration specific to Type='Runtime' actions: declarative permission scopes (allowedEntities, allowedActions, allowedAgents with id+name pairs), resource limits (maxMemoryMB, maxBridgeCalls), and sandbox options (additionalLibraries, debugMode). Evolvable — new keys can be introduced without schema changes. NULL for non-Runtime actions.`}) 
+    RuntimeActionConfiguration?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Universal maximum execution time in milliseconds for a single action invocation. Enforced by ActionEngine across ALL action types (Custom, Generated, Runtime) via AbortSignal passed through RunActionParams. NULL means use the engine default.`}) 
+    MaxExecutionTimeMS?: number;
+        
+    @Field({nullable: true, description: `Optional reference to the AI Agent that authored this action — populated when an agent (e.g. ActionSmith) dynamically generates a Runtime action. NULL for human-authored Custom/Generated actions. Provides an audit trail linking agent-generated capabilities back to their creator.`}) 
+    @MaxLength(36)
+    CreatedByAgentID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Category?: string;
@@ -2006,6 +2076,10 @@ export class MJAction_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     DefaultCompactPrompt?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    CreatedByAgent?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -2119,6 +2193,18 @@ export class CreateMJActionInput {
 
     @Field({ nullable: true })
     Config: string | null;
+
+    @Field({ nullable: true })
+    RuntimeActionConfiguration: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionTimeMS: number | null;
+
+    @Field({ nullable: true })
+    CreatedByAgentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -2193,8 +2279,20 @@ export class UpdateMJActionInput {
     @Field({ nullable: true })
     Config?: string | null;
 
+    @Field({ nullable: true })
+    RuntimeActionConfiguration?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxExecutionTimeMS?: number | null;
+
+    @Field({ nullable: true })
+    CreatedByAgentID?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -2469,6 +2567,9 @@ export class CreateMJAIActionInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -2497,6 +2598,9 @@ export class UpdateMJAIActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -2717,6 +2821,9 @@ export class CreateMJAIAgentActionInput {
 
     @Field({ nullable: true })
     CompactPromptID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -2760,6 +2867,9 @@ export class UpdateMJAIAgentActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -2900,6 +3010,9 @@ export class CreateMJAIAgentArtifactTypeInput {
 
     @Field(() => Int, { nullable: true })
     Sequence: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -2922,6 +3035,9 @@ export class UpdateMJAIAgentArtifactTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -3043,9 +3159,17 @@ export class MJAIAgentCategory_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Default file storage account for agents in this category. Inherited by child categories that do not define their own value — resolution walks up the ParentID tree until a non-null value is found. Overrides the Type-level default. FK to FileStorageAccount.`}) 
+    @MaxLength(36)
+    DefaultStorageAccountID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    DefaultStorageAccount?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -3081,6 +3205,12 @@ export class CreateMJAIAgentCategoryInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    DefaultStorageAccountID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -3107,8 +3237,14 @@ export class UpdateMJAIAgentCategoryInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    DefaultStorageAccountID?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -3218,6 +3354,183 @@ export class MJAIAgentCategoryResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: AI Agent Client Tools
+//****************************************************************************
+@ObjectType()
+export class MJAIAgentClientTool_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    AgentID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    ClientToolDefinitionID: string;
+        
+    @Field(() => Boolean, {description: `When true, the agent expects this tool to always be available on the client. If the client has not registered a handler, agent execution may warn or fail depending on configuration.`}) 
+    IsRequired: boolean;
+        
+    @Field(() => Int, {description: `Sort order for tool listing in prompts. Lower numbers appear first. Tools with the same priority are listed alphabetically.`}) 
+    Priority: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Agent?: string;
+        
+    @Field() 
+    @MaxLength(200)
+    ClientToolDefinition: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Client Tools
+//****************************************************************************
+@InputType()
+export class CreateMJAIAgentClientToolInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    ClientToolDefinitionID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Client Tools
+//****************************************************************************
+@InputType()
+export class UpdateMJAIAgentClientToolInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    ClientToolDefinitionID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Agent Client Tools
+//****************************************************************************
+@ObjectType()
+export class RunMJAIAgentClientToolViewResult {
+    @Field(() => [MJAIAgentClientTool_])
+    Results: MJAIAgentClientTool_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIAgentClientTool_)
+export class MJAIAgentClientToolResolver extends ResolverBase {
+    @Query(() => RunMJAIAgentClientToolViewResult)
+    async RunMJAIAgentClientToolViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentClientToolViewResult)
+    async RunMJAIAgentClientToolViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentClientToolViewResult)
+    async RunMJAIAgentClientToolDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Agent Client Tools';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIAgentClientTool_, { nullable: true })
+    async MJAIAgentClientTool(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIAgentClientTool_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Agent Client Tools', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentClientTools')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Client Tools', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Agent Client Tools', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAIAgentClientTool_)
+    async CreateMJAIAgentClientTool(
+        @Arg('input', () => CreateMJAIAgentClientToolInput) input: CreateMJAIAgentClientToolInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Agent Client Tools', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIAgentClientTool_)
+    async UpdateMJAIAgentClientTool(
+        @Arg('input', () => UpdateMJAIAgentClientToolInput) input: UpdateMJAIAgentClientToolInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Agent Client Tools', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIAgentClientTool_)
+    async DeleteMJAIAgentClientTool(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Agent Client Tools', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Configurations
 //****************************************************************************
 @ObjectType({ description: `Defines semantic configuration presets for agents, allowing users to select between different AI model configurations (e.g., Fast, Balanced, High Quality) when executing an agent. Each preset maps to an AI Configuration which controls model selection across all prompts.` })
@@ -3302,6 +3615,9 @@ export class CreateMJAIAgentConfigurationInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -3339,6 +3655,9 @@ export class UpdateMJAIAgentConfigurationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -3581,6 +3900,9 @@ export class CreateMJAIAgentDataSourceInput {
 
     @Field({ nullable: true })
     DestinationPath: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -3651,6 +3973,9 @@ export class UpdateMJAIAgentDataSourceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -3931,6 +4256,9 @@ export class CreateMJAIAgentExampleInput {
 
     @Field({ nullable: true })
     ExpiresAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -4007,6 +4335,9 @@ export class UpdateMJAIAgentExampleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -4155,6 +4486,9 @@ export class CreateMJAIAgentLearningCycleInput {
 
     @Field({ nullable: true })
     AgentSummary: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -4183,6 +4517,9 @@ export class UpdateMJAIAgentLearningCycleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -4342,6 +4679,9 @@ export class CreateMJAIAgentModalityInput {
 
     @Field(() => Int, { nullable: true })
     MaxCountPerMessage: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -4373,6 +4713,9 @@ export class UpdateMJAIAgentModalityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -4519,6 +4862,9 @@ export class CreateMJAIAgentModelInput {
 
     @Field(() => Int, { nullable: true })
     Priority: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -4544,6 +4890,9 @@ export class UpdateMJAIAgentModelInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -4685,6 +5034,9 @@ export class CreateMJAIAgentNoteTypeInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -4710,6 +5062,9 @@ export class UpdateMJAIAgentNoteTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -4895,6 +5250,23 @@ export class MJAIAgentNote_ {
     @Field({nullable: true, description: `Optional expiration timestamp. Notes past this date are candidates for archival. NULL means no expiration.`}) 
     ExpiresAt?: Date;
         
+    @Field({nullable: true, description: `Self-referential FK. Points to the consolidated note that replaced this one when revoked during consolidation or contradiction resolution.`}) 
+    @MaxLength(36)
+    ConsolidatedIntoNoteID?: string;
+        
+    @Field(() => Int, {description: `Tracks re-summarization depth. 0=raw extraction, 1=first consolidation, etc. Capped at 3 to prevent semantic drift.`}) 
+    ConsolidationCount: number;
+        
+    @Field({nullable: true, description: `JSON array of source note IDs that were consolidated into this note. Enables provenance chain resolution and rollback.`}) 
+    DerivedFromNoteIDs?: string;
+        
+    @Field({description: `Protection level: Immutable (never consolidated/archived), Protected (no consolidation, extended 365-day retention), Standard (default), Ephemeral (aggressive consolidation, 2x decay rate).`}) 
+    @MaxLength(20)
+    ProtectionTier: string;
+        
+    @Field(() => Float, {nullable: true, description: `Composite importance score (0-10) computed from 7 signals: recency, LLM-importance, relevance, uniqueness, correction boost, goal alignment, user mark. Replaces raw AccessCount for authority and retention decisions.`}) 
+    ImportanceScore?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -4930,6 +5302,16 @@ export class MJAIAgentNote_ {
     @MaxLength(255)
     PrimaryScopeEntity?: string;
         
+    @Field({nullable: true}) 
+    ConsolidatedIntoNote?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootConsolidatedIntoNoteID?: string;
+        
+    @Field(() => [MJAIAgentNote_])
+    MJAIAgentNotes_ConsolidatedIntoNoteIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
+    
 }
 
 //****************************************************************************
@@ -4999,6 +5381,24 @@ export class CreateMJAIAgentNoteInput {
 
     @Field({ nullable: true })
     ExpiresAt: Date | null;
+
+    @Field({ nullable: true })
+    ConsolidatedIntoNoteID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ConsolidationCount?: number;
+
+    @Field({ nullable: true })
+    DerivedFromNoteIDs: string | null;
+
+    @Field({ nullable: true })
+    ProtectionTier?: string;
+
+    @Field(() => Float, { nullable: true })
+    ImportanceScore: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -5070,8 +5470,26 @@ export class UpdateMJAIAgentNoteInput {
     @Field({ nullable: true })
     ExpiresAt?: Date | null;
 
+    @Field({ nullable: true })
+    ConsolidatedIntoNoteID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ConsolidationCount?: number;
+
+    @Field({ nullable: true })
+    DerivedFromNoteIDs?: string | null;
+
+    @Field({ nullable: true })
+    ProtectionTier?: string;
+
+    @Field(() => Float, { nullable: true })
+    ImportanceScore?: number | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -5131,6 +5549,16 @@ export class MJAIAgentNoteResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJAIAgentNote_])
+    async MJAIAgentNotes_ConsolidatedIntoNoteIDArray(@Root() mjaiagentnote_: MJAIAgentNote_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentNotes')} WHERE ${provider.QuoteIdentifier('ConsolidatedIntoNoteID')}='${mjaiagentnote_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Notes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJAIAgentNote_)
     async CreateMJAIAgentNote(
         @Arg('input', () => CreateMJAIAgentNoteInput) input: CreateMJAIAgentNoteInput,
@@ -5247,6 +5675,9 @@ export class CreateMJAIAgentPermissionInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -5284,6 +5715,9 @@ export class UpdateMJAIAgentPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -5461,6 +5895,9 @@ export class CreateMJAIAgentPromptInput {
 
     @Field(() => Int, { nullable: true })
     ContextMessageCount: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -5498,6 +5935,9 @@ export class UpdateMJAIAgentPromptInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -5670,6 +6110,9 @@ export class CreateMJAIAgentRelationshipInput {
 
     @Field(() => Int, { nullable: true })
     MaxMessages: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -5707,6 +6150,9 @@ export class UpdateMJAIAgentRelationshipInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -5866,6 +6312,9 @@ export class CreateMJAIAgentRequestTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     RequiresResponse?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -5900,6 +6349,9 @@ export class UpdateMJAIAgentRequestTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -6167,6 +6619,9 @@ export class CreateMJAIAgentRequestInput {
 
     @Field({ nullable: true })
     ResponseSource: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -6234,6 +6689,9 @@ export class UpdateMJAIAgentRequestInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -6465,6 +6923,9 @@ export class CreateMJAIAgentRunMediaInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -6526,6 +6987,9 @@ export class UpdateMJAIAgentRunMediaInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -6781,6 +7245,9 @@ export class CreateMJAIAgentRunStepInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -6851,6 +7318,9 @@ export class UpdateMJAIAgentRunStepInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -7119,6 +7589,10 @@ each time the agent processes a prompt step.`})
     @MaxLength(200)
     ExternalReferenceID?: string;
         
+    @Field({nullable: true, description: `Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.`}) 
+    @MaxLength(36)
+    CompanyID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -7336,6 +7810,12 @@ export class CreateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     ExternalReferenceID: string | null;
+
+    @Field({ nullable: true })
+    CompanyID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -7473,8 +7953,14 @@ export class UpdateMJAIAgentRunInput {
     @Field({ nullable: true })
     ExternalReferenceID?: string | null;
 
+    @Field({ nullable: true })
+    CompanyID?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -7724,6 +8210,9 @@ export class CreateMJAIAgentStepPathInput {
 
     @Field({ nullable: true })
     PathPoints: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -7755,6 +8244,9 @@ export class UpdateMJAIAgentStepPathInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -8018,6 +8510,9 @@ export class CreateMJAIAgentStepInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -8091,6 +8586,9 @@ export class UpdateMJAIAgentStepInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -8253,9 +8751,17 @@ export class MJAIAgentType_ {
     @Field({nullable: true, description: `JSON-serialized AgentRequestAssignmentStrategy defining the default assignment strategy for all agents of this type. Overridden by per-invocation or category-level strategies in the resolution chain.`}) 
     AssignmentStrategy?: string;
         
+    @Field({nullable: true, description: `Default file storage account for agents of this type. Lowest priority in the resolution chain (Type → Category tree → Agent → Runtime override). When set, all agents of this type use this storage account unless overridden at a more specific level. FK to FileStorageAccount.`}) 
+    @MaxLength(36)
+    DefaultStorageAccountID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     SystemPrompt?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    DefaultStorageAccount?: string;
         
     @Field(() => [MJAIAgent_])
     MJAIAgents_TypeIDArray: MJAIAgent_[]; // Link to MJAIAgents
@@ -8302,6 +8808,12 @@ export class CreateMJAIAgentTypeInput {
 
     @Field({ nullable: true })
     AssignmentStrategy: string | null;
+
+    @Field({ nullable: true })
+    DefaultStorageAccountID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -8346,8 +8858,14 @@ export class UpdateMJAIAgentTypeInput {
     @Field({ nullable: true })
     AssignmentStrategy?: string | null;
 
+    @Field({ nullable: true })
+    DefaultStorageAccountID?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -8668,6 +9186,13 @@ if this limit is exceeded.`})
     @MaxLength(36)
     CategoryID?: string;
         
+    @Field(() => Boolean, {description: `When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.`}) 
+    AllowEphemeralClientTools: boolean;
+        
+    @Field({nullable: true, description: `Default file storage account for this specific agent. Overrides both Type-level and Category-level defaults. Can be further overridden at runtime via ExecuteAgentParams.override.storageAccountId. FK to FileStorageAccount.`}) 
+    @MaxLength(36)
+    DefaultStorageAccountID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -8695,6 +9220,10 @@ if this limit is exceeded.`})
     @Field({nullable: true}) 
     @MaxLength(200)
     Category?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    DefaultStorageAccount?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -8729,6 +9258,9 @@ if this limit is exceeded.`})
     
     @Field(() => [MJAIAgentModality_])
     MJAIAgentModalities_AgentIDArray: MJAIAgentModality_[]; // Link to MJAIAgentModalities
+    
+    @Field(() => [MJAIAgentClientTool_])
+    MJAIAgentClientTools_AgentIDArray: MJAIAgentClientTool_[]; // Link to MJAIAgentClientTools
     
     @Field(() => [MJAIAgentNote_])
     MJAIAgentNotes_AgentIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
@@ -8765,6 +9297,9 @@ if this limit is exceeded.`})
     
     @Field(() => [MJAIAgent_])
     MJAIAgents_ParentIDArray: MJAIAgent_[]; // Link to MJAIAgents
+    
+    @Field(() => [MJAction_])
+    MJActions_CreatedByAgentIDArray: MJAction_[]; // Link to MJActions
     
 }
 
@@ -8952,6 +9487,15 @@ export class CreateMJAIAgentInput {
 
     @Field({ nullable: true })
     CategoryID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowEphemeralClientTools?: boolean;
+
+    @Field({ nullable: true })
+    DefaultStorageAccountID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -9140,8 +9684,17 @@ export class UpdateMJAIAgentInput {
     @Field({ nullable: true })
     CategoryID?: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    AllowEphemeralClientTools?: boolean;
+
+    @Field({ nullable: true })
+    DefaultStorageAccountID?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -9301,6 +9854,16 @@ export class MJAIAgentResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAIAgentClientTool_])
+    async MJAIAgentClientTools_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Client Tools', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentClientTools')} WHERE ${provider.QuoteIdentifier('AgentID')}='${mjaiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Client Tools', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Client Tools', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIAgentNote_])
     async MJAIAgentNotes_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
@@ -9421,6 +9984,16 @@ export class MJAIAgentResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAction_])
+    async MJActions_CreatedByAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Actions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwActions')} WHERE ${provider.QuoteIdentifier('CreatedByAgentID')}='${mjaiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Actions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJAIAgent_)
     async CreateMJAIAgent(
         @Arg('input', () => CreateMJAIAgentInput) input: CreateMJAIAgentInput,
@@ -9535,6 +10108,9 @@ export class CreateMJAIArchitectureInput {
 
     @Field({ nullable: true })
     KeyPaper: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -9569,6 +10145,9 @@ export class UpdateMJAIArchitectureInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -9678,6 +10257,216 @@ export class MJAIArchitectureResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: AI Client Tool Definitions
+//****************************************************************************
+@ObjectType()
+export class MJAIClientToolDefinition_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Unique identifier for the client tool (e.g., NavigateToApp, NavigateToRecord). Used to match tool invocations from the LLM to registered handlers on the client.`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({description: `Human-readable description of what the tool does. This text is injected into the LLM system prompt so it knows when and how to use the tool.`}) 
+    Description: string;
+        
+    @Field({nullable: true, description: `Tool category for grouping and filtering (e.g., navigation, form, display, data).`}) 
+    @MaxLength(50)
+    Category?: string;
+        
+    @Field({nullable: true, description: `JSON Schema defining the input parameters the tool accepts. Included in the LLM prompt so it generates valid parameter objects.`}) 
+    InputSchemaJSON?: string;
+        
+    @Field({nullable: true, description: `JSON Schema describing the return value from the tool. Optional — used for documentation and LLM context.`}) 
+    OutputSchemaJSON?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Default timeout in milliseconds for this tool. Can be overridden per-invocation by the LLM or per-run by execution params. Default is 30000ms (30 seconds).`}) 
+    DefaultTimeoutMs?: number;
+        
+    @Field({nullable: true, description: `When set, the client only sends this tool to the server when the user is in the specified context (e.g., entity-form, dashboard, search). Null means the tool is always available.`}) 
+    @MaxLength(100)
+    RequiresContextType?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJAIAgentClientTool_])
+    MJAIAgentClientTools_ClientToolDefinitionIDArray: MJAIAgentClientTool_[]; // Link to MJAIAgentClientTools
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Client Tool Definitions
+//****************************************************************************
+@InputType()
+export class CreateMJAIClientToolDefinitionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field({ nullable: true })
+    Category: string | null;
+
+    @Field({ nullable: true })
+    InputSchemaJSON: string | null;
+
+    @Field({ nullable: true })
+    OutputSchemaJSON: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultTimeoutMs?: number | null;
+
+    @Field({ nullable: true })
+    RequiresContextType: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Client Tool Definitions
+//****************************************************************************
+@InputType()
+export class UpdateMJAIClientToolDefinitionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field({ nullable: true })
+    Category?: string | null;
+
+    @Field({ nullable: true })
+    InputSchemaJSON?: string | null;
+
+    @Field({ nullable: true })
+    OutputSchemaJSON?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultTimeoutMs?: number | null;
+
+    @Field({ nullable: true })
+    RequiresContextType?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Client Tool Definitions
+//****************************************************************************
+@ObjectType()
+export class RunMJAIClientToolDefinitionViewResult {
+    @Field(() => [MJAIClientToolDefinition_])
+    Results: MJAIClientToolDefinition_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIClientToolDefinition_)
+export class MJAIClientToolDefinitionResolver extends ResolverBase {
+    @Query(() => RunMJAIClientToolDefinitionViewResult)
+    async RunMJAIClientToolDefinitionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIClientToolDefinitionViewResult)
+    async RunMJAIClientToolDefinitionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIClientToolDefinitionViewResult)
+    async RunMJAIClientToolDefinitionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Client Tool Definitions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIClientToolDefinition_, { nullable: true })
+    async MJAIClientToolDefinition(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIClientToolDefinition_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Client Tool Definitions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIClientToolDefinitions')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Client Tool Definitions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Client Tool Definitions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJAIAgentClientTool_])
+    async MJAIAgentClientTools_ClientToolDefinitionIDArray(@Root() mjaiclienttooldefinition_: MJAIClientToolDefinition_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Client Tools', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentClientTools')} WHERE ${provider.QuoteIdentifier('ClientToolDefinitionID')}='${mjaiclienttooldefinition_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Client Tools', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Client Tools', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJAIClientToolDefinition_)
+    async CreateMJAIClientToolDefinition(
+        @Arg('input', () => CreateMJAIClientToolDefinitionInput) input: CreateMJAIClientToolDefinitionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Client Tool Definitions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIClientToolDefinition_)
+    async UpdateMJAIClientToolDefinition(
+        @Arg('input', () => UpdateMJAIClientToolDefinitionInput) input: UpdateMJAIClientToolDefinitionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Client Tool Definitions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIClientToolDefinition_)
+    async DeleteMJAIClientToolDefinition(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Client Tool Definitions', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: AI Configuration Params
 //****************************************************************************
 @ObjectType({ description: `Stores configuration parameters that can be referenced by prompts and used to control execution behavior.` })
@@ -9738,6 +10527,9 @@ export class CreateMJAIConfigurationParamInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -9766,6 +10558,9 @@ export class UpdateMJAIConfigurationParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -9983,6 +10778,9 @@ export class CreateMJAIConfigurationInput {
 
     @Field({ nullable: true })
     ParentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -10023,6 +10821,9 @@ export class UpdateMJAIConfigurationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -10278,6 +11079,9 @@ export class CreateMJAICredentialBindingInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -10312,6 +11116,9 @@ export class UpdateMJAICredentialBindingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -10498,6 +11305,9 @@ export class CreateMJAIModalityInput {
 
     @Field(() => Int, { nullable: true })
     DisplayOrder?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -10535,6 +11345,9 @@ export class UpdateMJAIModalityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -10745,6 +11558,9 @@ export class CreateMJAIModelActionInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -10767,6 +11583,9 @@ export class UpdateMJAIModelActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -10930,6 +11749,9 @@ export class CreateMJAIModelArchitectureInput {
 
     @Field({ nullable: true })
     Notes: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -10958,6 +11780,9 @@ export class UpdateMJAIModelArchitectureInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -11165,6 +11990,9 @@ export class CreateMJAIModelCostInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -11214,6 +12042,9 @@ export class UpdateMJAIModelCostInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -11398,6 +12229,9 @@ export class CreateMJAIModelModalityInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -11441,6 +12275,9 @@ export class UpdateMJAIModelModalityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -11569,6 +12406,9 @@ export class CreateMJAIModelPriceTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -11588,6 +12428,9 @@ export class UpdateMJAIModelPriceTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -11733,6 +12576,9 @@ export class CreateMJAIModelPriceUnitTypeInput {
 
     @Field({ nullable: true })
     DriverClass?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -11755,6 +12601,9 @@ export class UpdateMJAIModelPriceUnitTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -11930,6 +12779,9 @@ export class CreateMJAIModelTypeInput {
 
     @Field({ nullable: true })
     PrefillFallbackText: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -11961,6 +12813,9 @@ export class UpdateMJAIModelTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -12216,6 +13071,9 @@ export class CreateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     PrefillFallbackText: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -12274,6 +13132,9 @@ export class UpdateMJAIModelVendorInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -12501,8 +13362,17 @@ export class MJAIModel_ {
     @Field(() => [MJAIModelCost_])
     MJAIModelCosts_ModelIDArray: MJAIModelCost_[]; // Link to MJAIModelCosts
     
+    @Field(() => [MJContentType_])
+    MJContentTypes_EmbeddingModelIDArray: MJContentType_[]; // Link to MJContentTypes
+    
+    @Field(() => [MJContentItem_])
+    MJContentItems_EmbeddingModelIDArray: MJContentItem_[]; // Link to MJContentItems
+    
     @Field(() => [MJAIPromptModel_])
     MJAIPromptModels_ModelIDArray: MJAIPromptModel_[]; // Link to MJAIPromptModels
+    
+    @Field(() => [MJContentSource_])
+    MJContentSources_EmbeddingModelIDArray: MJContentSource_[]; // Link to MJContentSources
     
     @Field(() => [MJAIPromptRun_])
     MJAIPromptRuns_OriginalModelIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
@@ -12585,6 +13455,9 @@ export class CreateMJAIModelInput {
 
     @Field(() => Boolean, { nullable: true })
     SupportsEffortLevel: boolean | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -12655,6 +13528,9 @@ export class UpdateMJAIModelInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -12874,6 +13750,26 @@ export class MJAIModelResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJContentType_])
+    async MJContentTypes_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentTypes')} WHERE ${provider.QuoteIdentifier('EmbeddingModelID')}='${mjaimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentItem_])
+    async MJContentItems_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Items', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItems')} WHERE ${provider.QuoteIdentifier('EmbeddingModelID')}='${mjaimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Items', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Items', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIPromptModel_])
     async MJAIPromptModels_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
@@ -12881,6 +13777,16 @@ export class MJAIModelResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIPromptModels')} WHERE ${provider.QuoteIdentifier('ModelID')}='${mjaimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentSource_])
+    async MJContentSources_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentSources')} WHERE ${provider.QuoteIdentifier('EmbeddingModelID')}='${mjaimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Sources', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -13021,6 +13927,9 @@ export class CreateMJAIPromptCategoryInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -13043,6 +13952,9 @@ export class UpdateMJAIPromptCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -13273,6 +14185,9 @@ export class CreateMJAIPromptModelInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -13322,6 +14237,9 @@ export class UpdateMJAIPromptModelInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -13548,6 +14466,9 @@ export class CreateMJAIPromptRunMediaInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -13603,6 +14524,9 @@ export class UpdateMJAIPromptRunMediaInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -14041,6 +14965,9 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     RootRerunFromPromptRunID?: string;
         
+    @Field(() => [MJContentProcessRunPromptRun_])
+    MJContentProcessRunPromptRuns_AIPromptRunIDArray: MJContentProcessRunPromptRun_[]; // Link to MJContentProcessRunPromptRuns
+    
     @Field(() => [MJAIPromptRun_])
     MJAIPromptRuns_RerunFromPromptRunIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
@@ -14308,6 +15235,9 @@ export class CreateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     AssistantPrefill: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -14567,6 +15497,9 @@ export class UpdateMJAIPromptRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -14626,6 +15559,16 @@ export class MJAIPromptRunResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJContentProcessRunPromptRun_])
+    async MJContentProcessRunPromptRuns_AIPromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Process Run Prompt Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRunPromptRuns')} WHERE ${provider.QuoteIdentifier('AIPromptRunID')}='${mjaipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Run Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Process Run Prompt Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIPromptRun_])
     async MJAIPromptRuns_RerunFromPromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
@@ -14735,6 +15678,9 @@ export class CreateMJAIPromptTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -14754,6 +15700,9 @@ export class UpdateMJAIPromptTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -15040,6 +15989,9 @@ export class MJAIPrompt_ {
     @MaxLength(20)
     PrefillFallbackMode: string;
         
+    @Field(() => Boolean, {description: `Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`}) 
+    RequireSpecificModels: boolean;
+        
     @Field() 
     @MaxLength(255)
     Template: string;
@@ -15265,6 +16217,12 @@ export class CreateMJAIPromptInput {
 
     @Field({ nullable: true })
     PrefillFallbackMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    RequireSpecificModels?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -15426,8 +16384,14 @@ export class UpdateMJAIPromptInput {
     @Field({ nullable: true })
     PrefillFallbackMode?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    RequireSpecificModels?: boolean;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -15783,6 +16747,9 @@ export class CreateMJAIResultCacheInput {
 
     @Field({ nullable: true })
     PromptRunID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -15832,6 +16799,9 @@ export class UpdateMJAIResultCacheInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -15963,6 +16933,9 @@ export class CreateMJAIVendorTypeDefinitionInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -15982,6 +16955,9 @@ export class UpdateMJAIVendorTypeDefinitionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -16149,6 +17125,9 @@ export class CreateMJAIVendorTypeInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -16174,6 +17153,9 @@ export class UpdateMJAIVendorTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -16334,6 +17316,9 @@ export class CreateMJAIVendorInput {
 
     @Field({ nullable: true })
     CredentialTypeID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -16356,6 +17341,9 @@ export class UpdateMJAIVendorInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -16596,6 +17584,9 @@ export class CreateMJAPIApplicationScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -16627,6 +17618,9 @@ export class UpdateMJAPIApplicationScopeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -16768,6 +17762,9 @@ export class CreateMJAPIApplicationInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -16790,6 +17787,9 @@ export class UpdateMJAPIApplicationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -16954,6 +17954,9 @@ export class CreateMJAPIKeyApplicationInput {
 
     @Field({ nullable: true })
     ApplicationID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -16973,6 +17976,9 @@ export class UpdateMJAPIKeyApplicationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -17133,6 +18139,9 @@ export class CreateMJAPIKeyScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -17164,6 +18173,9 @@ export class UpdateMJAPIKeyScopeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -17372,6 +18384,9 @@ export class CreateMJAPIKeyUsageLogInput {
 
     @Field({ nullable: true })
     DeniedReason: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -17424,6 +18439,9 @@ export class UpdateMJAPIKeyUsageLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -17607,6 +18625,9 @@ export class CreateMJAPIKeyInput {
 
     @Field({ nullable: true })
     CreatedByUserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -17644,6 +18665,9 @@ export class UpdateMJAPIKeyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -17857,6 +18881,9 @@ export class CreateMJAPIScopeInput {
 
     @Field({ nullable: true })
     UIConfig: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -17894,6 +18921,9 @@ export class UpdateMJAPIScopeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -18083,6 +19113,9 @@ export class CreateMJApplicationEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     DefaultForNewUser?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -18108,6 +19141,9 @@ export class UpdateMJApplicationEntityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -18197,6 +19233,183 @@ export class MJApplicationEntityResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Application Roles
+//****************************************************************************
+@ObjectType({ description: `Controls which roles can access and administer specific applications. When no ApplicationRole records exist for an application, all roles can access it (open access). When at least one record exists, only roles with CanAccess=1 are permitted.` })
+export class MJApplicationRole_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the Application this role grant applies to`}) 
+    @MaxLength(36)
+    ApplicationID: string;
+        
+    @Field({description: `Foreign key to the Role being granted or denied access`}) 
+    @MaxLength(36)
+    RoleID: string;
+        
+    @Field(() => Boolean, {description: `When true, users in this role can access the application. When false, this record acts as an explicit deny for the role.`}) 
+    CanAccess: boolean;
+        
+    @Field(() => Boolean, {description: `When true, users in this role can modify application settings, manage nav items, and configure the application.`}) 
+    CanAdmin: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Application: string;
+        
+    @Field() 
+    @MaxLength(50)
+    Role: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Application Roles
+//****************************************************************************
+@InputType()
+export class CreateMJApplicationRoleInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    CanAccess?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanAdmin?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Application Roles
+//****************************************************************************
+@InputType()
+export class UpdateMJApplicationRoleInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    CanAccess?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanAdmin?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Application Roles
+//****************************************************************************
+@ObjectType()
+export class RunMJApplicationRoleViewResult {
+    @Field(() => [MJApplicationRole_])
+    Results: MJApplicationRole_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJApplicationRole_)
+export class MJApplicationRoleResolver extends ResolverBase {
+    @Query(() => RunMJApplicationRoleViewResult)
+    async RunMJApplicationRoleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJApplicationRoleViewResult)
+    async RunMJApplicationRoleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJApplicationRoleViewResult)
+    async RunMJApplicationRoleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Application Roles';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJApplicationRole_, { nullable: true })
+    async MJApplicationRole(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJApplicationRole_ | null> {
+        this.CheckUserReadPermissions('MJ: Application Roles', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwApplicationRoles')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Application Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Application Roles', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJApplicationRole_)
+    async CreateMJApplicationRole(
+        @Arg('input', () => CreateMJApplicationRoleInput) input: CreateMJApplicationRoleInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Application Roles', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJApplicationRole_)
+    async UpdateMJApplicationRole(
+        @Arg('input', () => UpdateMJApplicationRoleInput) input: UpdateMJApplicationRoleInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Application Roles', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJApplicationRole_)
+    async DeleteMJApplicationRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Application Roles', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Application Settings
 //****************************************************************************
 @ObjectType({ description: `Stores configuration settings and preferences for applications, including key-value pairs for runtime parameters and user-specific customizations.` })
@@ -18250,6 +19463,9 @@ export class CreateMJApplicationSettingInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -18275,6 +19491,9 @@ export class UpdateMJApplicationSettingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -18446,6 +19665,9 @@ export class MJApplication_ {
     @Field(() => [MJDashboardUserPreference_])
     MJDashboardUserPreferences_ApplicationIDArray: MJDashboardUserPreference_[]; // Link to MJDashboardUserPreferences
     
+    @Field(() => [MJApplicationRole_])
+    MJApplicationRoles_ApplicationIDArray: MJApplicationRole_[]; // Link to MJApplicationRoles
+    
 }
 
 //****************************************************************************
@@ -18500,6 +19722,9 @@ export class CreateMJApplicationInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdatePath?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -18558,6 +19783,9 @@ export class UpdateMJApplicationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -18677,6 +19905,16 @@ export class MJApplicationResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJApplicationRole_])
+    async MJApplicationRoles_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Application Roles', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwApplicationRoles')} WHERE ${provider.QuoteIdentifier('ApplicationID')}='${mjapplication_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Application Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Application Roles', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJApplication_)
     async CreateMJApplication(
         @Arg('input', () => CreateMJApplicationInput) input: CreateMJApplicationInput,
@@ -18702,6 +19940,1065 @@ export class MJApplicationResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Applications', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Archive Configuration Entities
+//****************************************************************************
+@ObjectType({ description: `Per-entity configuration within an archive pipeline. Allows overriding the parent configuration\'s defaults for mode, retention, batch size, and filtering on a per-entity basis.` })
+export class MJArchiveConfigurationEntity_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the parent ArchiveConfiguration.`}) 
+    @MaxLength(36)
+    ArchiveConfigurationID: string;
+        
+    @Field({description: `Foreign key to the Entity being archived.`}) 
+    @MaxLength(36)
+    EntityID: string;
+        
+    @Field({nullable: true, description: `Archive mode override for this entity. NULL inherits from the parent configuration's DefaultMode.`}) 
+    @MaxLength(20)
+    Mode?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Retention period override in days. NULL inherits from the parent configuration's DefaultRetentionDays.`}) 
+    RetentionDays?: number;
+        
+    @Field({description: `The date field on the entity used to determine record age for retention policy evaluation. Defaults to __mj_CreatedAt.`}) 
+    @MaxLength(100)
+    DateField: string;
+        
+    @Field({nullable: true, description: `Optional SQL WHERE clause fragment to further filter which records are eligible for archiving (e.g., "Status = 'Closed'").`}) 
+    FilterExpression?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Batch size override for this entity. NULL inherits from the parent configuration's DefaultBatchSize.`}) 
+    BatchSize?: number;
+        
+    @Field(() => Int, {description: `Processing priority — lower numbers are archived first. Default is 100.`}) 
+    Priority: number;
+        
+    @Field({description: `JSON configuration specifying which fields to include/exclude in the archive output. Required for all modes.`}) 
+    FieldConfiguration: string;
+        
+    @Field({nullable: true, description: `Optional fully-qualified class name of a custom archive driver to use for this entity, overriding the default archiver.`}) 
+    @MaxLength(500)
+    DriverClass?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `Override for archiving related Record Changes. NULL inherits from the parent configuration.`}) 
+    ArchiveRelatedRecordChanges?: boolean;
+        
+    @Field(() => Boolean, {description: `Whether this entity is active within the archive configuration.`}) 
+    IsActive: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    ArchiveConfiguration: string;
+        
+    @Field() 
+    @MaxLength(255)
+    Entity: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Archive Configuration Entities
+//****************************************************************************
+@InputType()
+export class CreateMJArchiveConfigurationEntityInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ArchiveConfigurationID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    Mode: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetentionDays: number | null;
+
+    @Field({ nullable: true })
+    DateField?: string;
+
+    @Field({ nullable: true })
+    FilterExpression: string | null;
+
+    @Field(() => Int, { nullable: true })
+    BatchSize: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    FieldConfiguration?: string;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ArchiveRelatedRecordChanges: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Archive Configuration Entities
+//****************************************************************************
+@InputType()
+export class UpdateMJArchiveConfigurationEntityInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ArchiveConfigurationID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    Mode?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetentionDays?: number | null;
+
+    @Field({ nullable: true })
+    DateField?: string;
+
+    @Field({ nullable: true })
+    FilterExpression?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    BatchSize?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    FieldConfiguration?: string;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ArchiveRelatedRecordChanges?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Archive Configuration Entities
+//****************************************************************************
+@ObjectType()
+export class RunMJArchiveConfigurationEntityViewResult {
+    @Field(() => [MJArchiveConfigurationEntity_])
+    Results: MJArchiveConfigurationEntity_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJArchiveConfigurationEntity_)
+export class MJArchiveConfigurationEntityResolver extends ResolverBase {
+    @Query(() => RunMJArchiveConfigurationEntityViewResult)
+    async RunMJArchiveConfigurationEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArchiveConfigurationEntityViewResult)
+    async RunMJArchiveConfigurationEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArchiveConfigurationEntityViewResult)
+    async RunMJArchiveConfigurationEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Archive Configuration Entities';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJArchiveConfigurationEntity_, { nullable: true })
+    async MJArchiveConfigurationEntity(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJArchiveConfigurationEntity_ | null> {
+        this.CheckUserReadPermissions('MJ: Archive Configuration Entities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurationEntities')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configuration Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Archive Configuration Entities', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Query(() => [MJArchiveConfigurationEntity_])
+    async AllMJArchiveConfigurationEntities(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Configuration Entities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurationEntities')}` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configuration Entities', userPayload, EntityPermissionType.Read, ' WHERE');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configuration Entities', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJArchiveConfigurationEntity_)
+    async CreateMJArchiveConfigurationEntity(
+        @Arg('input', () => CreateMJArchiveConfigurationEntityInput) input: CreateMJArchiveConfigurationEntityInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Archive Configuration Entities', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJArchiveConfigurationEntity_)
+    async UpdateMJArchiveConfigurationEntity(
+        @Arg('input', () => UpdateMJArchiveConfigurationEntityInput) input: UpdateMJArchiveConfigurationEntityInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Archive Configuration Entities', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJArchiveConfigurationEntity_)
+    async DeleteMJArchiveConfigurationEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Archive Configuration Entities', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Archive Configurations
+//****************************************************************************
+@ObjectType({ description: `Top-level configuration for an archive pipeline. Defines the storage target, default retention policy, archive format, and operational mode for archiving entity records.` })
+export class MJArchiveConfiguration_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Human-readable name for this archive configuration.`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `Foreign key to FileStorageAccount — the blob/file storage target for archived data.`}) 
+    @MaxLength(36)
+    StorageAccountID?: string;
+        
+    @Field({description: `Root path within the storage account where archive files are written (e.g., "archives/production/").`}) 
+    @MaxLength(500)
+    RootPath: string;
+        
+    @Field({description: `Output format for archived records: JSON, Parquet, or CSV.`}) 
+    @MaxLength(20)
+    ArchiveFormat: string;
+        
+    @Field(() => Boolean, {description: `Whether this configuration is active and eligible for scheduled archive runs.`}) 
+    IsActive: boolean;
+        
+    @Field(() => Int, {description: `Default number of days after which records become eligible for archiving. Can be overridden per entity.`}) 
+    DefaultRetentionDays: number;
+        
+    @Field({description: `Default archive mode: StripFields (null out specified fields), HardDelete (delete from source after archiving), ArchiveOnly (copy to storage without modifying source).`}) 
+    @MaxLength(20)
+    DefaultMode: string;
+        
+    @Field(() => Int, {description: `Default number of records to process per batch during archive runs.`}) 
+    DefaultBatchSize: number;
+        
+    @Field(() => Boolean, {description: `When enabled, related Record Changes entries are also archived alongside the source records.`}) 
+    ArchiveRelatedRecordChanges: boolean;
+        
+    @Field({description: `Current operational status of this configuration: Idle, Running, Error, or Disabled.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({description: `The user who created this archive configuration.`}) 
+    @MaxLength(36)
+    CreatedByUserID: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    StorageAccount?: string;
+        
+    @Field() 
+    @MaxLength(100)
+    CreatedByUser: string;
+        
+    @Field(() => [MJArchiveConfigurationEntity_])
+    MJArchiveConfigurationEntities_ArchiveConfigurationIDArray: MJArchiveConfigurationEntity_[]; // Link to MJArchiveConfigurationEntities
+    
+    @Field(() => [MJArchiveRun_])
+    MJArchiveRuns_ArchiveConfigurationIDArray: MJArchiveRun_[]; // Link to MJArchiveRuns
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Archive Configurations
+//****************************************************************************
+@InputType()
+export class CreateMJArchiveConfigurationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    StorageAccountID: string | null;
+
+    @Field({ nullable: true })
+    RootPath?: string;
+
+    @Field({ nullable: true })
+    ArchiveFormat?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DefaultRetentionDays?: number;
+
+    @Field({ nullable: true })
+    DefaultMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    DefaultBatchSize?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    ArchiveRelatedRecordChanges?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    CreatedByUserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Archive Configurations
+//****************************************************************************
+@InputType()
+export class UpdateMJArchiveConfigurationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    StorageAccountID?: string | null;
+
+    @Field({ nullable: true })
+    RootPath?: string;
+
+    @Field({ nullable: true })
+    ArchiveFormat?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DefaultRetentionDays?: number;
+
+    @Field({ nullable: true })
+    DefaultMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    DefaultBatchSize?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    ArchiveRelatedRecordChanges?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    CreatedByUserID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Archive Configurations
+//****************************************************************************
+@ObjectType()
+export class RunMJArchiveConfigurationViewResult {
+    @Field(() => [MJArchiveConfiguration_])
+    Results: MJArchiveConfiguration_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJArchiveConfiguration_)
+export class MJArchiveConfigurationResolver extends ResolverBase {
+    @Query(() => RunMJArchiveConfigurationViewResult)
+    async RunMJArchiveConfigurationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArchiveConfigurationViewResult)
+    async RunMJArchiveConfigurationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArchiveConfigurationViewResult)
+    async RunMJArchiveConfigurationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Archive Configurations';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJArchiveConfiguration_, { nullable: true })
+    async MJArchiveConfiguration(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJArchiveConfiguration_ | null> {
+        this.CheckUserReadPermissions('MJ: Archive Configurations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurations')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configurations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Archive Configurations', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Query(() => [MJArchiveConfiguration_])
+    async AllMJArchiveConfigurations(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Configurations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurations')}` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configurations', userPayload, EntityPermissionType.Read, ' WHERE');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configurations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJArchiveConfigurationEntity_])
+    async MJArchiveConfigurationEntities_ArchiveConfigurationIDArray(@Root() mjarchiveconfiguration_: MJArchiveConfiguration_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Configuration Entities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurationEntities')} WHERE ${provider.QuoteIdentifier('ArchiveConfigurationID')}='${mjarchiveconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configuration Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configuration Entities', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJArchiveRun_])
+    async MJArchiveRuns_ArchiveConfigurationIDArray(@Root() mjarchiveconfiguration_: MJArchiveConfiguration_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRuns')} WHERE ${provider.QuoteIdentifier('ArchiveConfigurationID')}='${mjarchiveconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJArchiveConfiguration_)
+    async CreateMJArchiveConfiguration(
+        @Arg('input', () => CreateMJArchiveConfigurationInput) input: CreateMJArchiveConfigurationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Archive Configurations', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJArchiveConfiguration_)
+    async UpdateMJArchiveConfiguration(
+        @Arg('input', () => UpdateMJArchiveConfigurationInput) input: UpdateMJArchiveConfigurationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Archive Configurations', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJArchiveConfiguration_)
+    async DeleteMJArchiveConfiguration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Archive Configurations', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Archive Run Details
+//****************************************************************************
+@ObjectType({ description: `Per-record detail for each archive run. Tracks the outcome, storage location, and error information for each individual record processed.` })
+export class MJArchiveRunDetail_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the parent ArchiveRun.`}) 
+    @MaxLength(36)
+    ArchiveRunID: string;
+        
+    @Field({description: `Foreign key to the Entity this record belongs to.`}) 
+    @MaxLength(36)
+    EntityID: string;
+        
+    @Field({description: `The primary key value of the archived record (string representation to support all key types).`}) 
+    @MaxLength(750)
+    RecordID: string;
+        
+    @Field({description: `Outcome for this record: Success, Failed, or Skipped.`}) 
+    @MaxLength(50)
+    Status: string;
+        
+    @Field({nullable: true, description: `Full path to the archived file in storage (e.g., "archives/production/Users/2026/04/record-id.json").`}) 
+    @MaxLength(1000)
+    StoragePath?: string;
+        
+    @Field(() => Int, {description: `Number of bytes written to storage for this record.`}) 
+    BytesArchived: number;
+        
+    @Field({nullable: true, description: `Error details when Status is Failed.`}) 
+    ErrorMessage?: string;
+        
+    @Field({nullable: true, description: `Timestamp when this record was successfully archived.`}) 
+    ArchivedAt?: Date;
+        
+    @Field({nullable: true, description: `The __mj_UpdatedAt timestamp of the record at the time of archiving, used for conflict detection during restore.`}) 
+    VersionStamp?: Date;
+        
+    @Field(() => Boolean, {description: `When true, this detail row represents an archived Record Change entry rather than a primary entity record.`}) 
+    IsRecordChangeArchive: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    ArchiveRun: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Entity: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Archive Run Details
+//****************************************************************************
+@InputType()
+export class CreateMJArchiveRunDetailInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ArchiveRunID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StoragePath: string | null;
+
+    @Field(() => Int, { nullable: true })
+    BytesArchived?: number;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    ArchivedAt: Date | null;
+
+    @Field({ nullable: true })
+    VersionStamp: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRecordChangeArchive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Archive Run Details
+//****************************************************************************
+@InputType()
+export class UpdateMJArchiveRunDetailInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ArchiveRunID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StoragePath?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    BytesArchived?: number;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    ArchivedAt?: Date | null;
+
+    @Field({ nullable: true })
+    VersionStamp?: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRecordChangeArchive?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Archive Run Details
+//****************************************************************************
+@ObjectType()
+export class RunMJArchiveRunDetailViewResult {
+    @Field(() => [MJArchiveRunDetail_])
+    Results: MJArchiveRunDetail_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJArchiveRunDetail_)
+export class MJArchiveRunDetailResolver extends ResolverBase {
+    @Query(() => RunMJArchiveRunDetailViewResult)
+    async RunMJArchiveRunDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArchiveRunDetailViewResult)
+    async RunMJArchiveRunDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArchiveRunDetailViewResult)
+    async RunMJArchiveRunDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Archive Run Details';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJArchiveRunDetail_, { nullable: true })
+    async MJArchiveRunDetail(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJArchiveRunDetail_ | null> {
+        this.CheckUserReadPermissions('MJ: Archive Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRunDetails')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Archive Run Details', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Query(() => [MJArchiveRunDetail_])
+    async AllMJArchiveRunDetails(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRunDetails')}` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Run Details', userPayload, EntityPermissionType.Read, ' WHERE');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJArchiveRunDetail_)
+    async CreateMJArchiveRunDetail(
+        @Arg('input', () => CreateMJArchiveRunDetailInput) input: CreateMJArchiveRunDetailInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Archive Run Details', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJArchiveRunDetail_)
+    async UpdateMJArchiveRunDetail(
+        @Arg('input', () => UpdateMJArchiveRunDetailInput) input: UpdateMJArchiveRunDetailInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Archive Run Details', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJArchiveRunDetail_)
+    async DeleteMJArchiveRunDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Archive Run Details', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Archive Runs
+//****************************************************************************
+@ObjectType({ description: `Tracks each execution of an archive configuration, including timing, aggregate statistics, and overall status.` })
+export class MJArchiveRun_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the ArchiveConfiguration that was executed.`}) 
+    @MaxLength(36)
+    ArchiveConfigurationID: string;
+        
+    @Field({description: `Timestamp when the archive run started.`}) 
+    StartedAt: Date;
+        
+    @Field({nullable: true, description: `Timestamp when the archive run completed (NULL while still running).`}) 
+    CompletedAt?: Date;
+        
+    @Field({description: `Current status: Running, Complete, Failed, Cancelled, or PartialSuccess.`}) 
+    @MaxLength(50)
+    Status: string;
+        
+    @Field(() => Int, {description: `Total number of records identified for archiving in this run.`}) 
+    TotalRecords: number;
+        
+    @Field(() => Int, {description: `Number of records successfully archived.`}) 
+    ArchivedRecords: number;
+        
+    @Field(() => Int, {description: `Number of records that failed to archive.`}) 
+    FailedRecords: number;
+        
+    @Field(() => Int, {description: `Number of records skipped (e.g., already archived or filtered out).`}) 
+    SkippedRecords: number;
+        
+    @Field(() => Int, {description: `Total bytes written to archive storage during this run.`}) 
+    TotalBytesArchived: number;
+        
+    @Field({nullable: true, description: `Aggregated error log for the run. Contains error details when Status is Failed or PartialSuccess.`}) 
+    ErrorLog?: string;
+        
+    @Field({description: `The user who initiated this archive run.`}) 
+    @MaxLength(36)
+    UserID: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    ArchiveConfiguration: string;
+        
+    @Field() 
+    @MaxLength(100)
+    User: string;
+        
+    @Field(() => [MJArchiveRunDetail_])
+    MJArchiveRunDetails_ArchiveRunIDArray: MJArchiveRunDetail_[]; // Link to MJArchiveRunDetails
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Archive Runs
+//****************************************************************************
+@InputType()
+export class CreateMJArchiveRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ArchiveConfigurationID?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    CompletedAt: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    TotalRecords?: number;
+
+    @Field(() => Int, { nullable: true })
+    ArchivedRecords?: number;
+
+    @Field(() => Int, { nullable: true })
+    FailedRecords?: number;
+
+    @Field(() => Int, { nullable: true })
+    SkippedRecords?: number;
+
+    @Field(() => Int, { nullable: true })
+    TotalBytesArchived?: number;
+
+    @Field({ nullable: true })
+    ErrorLog: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Archive Runs
+//****************************************************************************
+@InputType()
+export class UpdateMJArchiveRunInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ArchiveConfigurationID?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    CompletedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    TotalRecords?: number;
+
+    @Field(() => Int, { nullable: true })
+    ArchivedRecords?: number;
+
+    @Field(() => Int, { nullable: true })
+    FailedRecords?: number;
+
+    @Field(() => Int, { nullable: true })
+    SkippedRecords?: number;
+
+    @Field(() => Int, { nullable: true })
+    TotalBytesArchived?: number;
+
+    @Field({ nullable: true })
+    ErrorLog?: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Archive Runs
+//****************************************************************************
+@ObjectType()
+export class RunMJArchiveRunViewResult {
+    @Field(() => [MJArchiveRun_])
+    Results: MJArchiveRun_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJArchiveRun_)
+export class MJArchiveRunResolver extends ResolverBase {
+    @Query(() => RunMJArchiveRunViewResult)
+    async RunMJArchiveRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArchiveRunViewResult)
+    async RunMJArchiveRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArchiveRunViewResult)
+    async RunMJArchiveRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Archive Runs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJArchiveRun_, { nullable: true })
+    async MJArchiveRun(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJArchiveRun_ | null> {
+        this.CheckUserReadPermissions('MJ: Archive Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRuns')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Archive Runs', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Query(() => [MJArchiveRun_])
+    async AllMJArchiveRuns(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRuns')}` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Runs', userPayload, EntityPermissionType.Read, ' WHERE');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJArchiveRunDetail_])
+    async MJArchiveRunDetails_ArchiveRunIDArray(@Root() mjarchiverun_: MJArchiveRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRunDetails')} WHERE ${provider.QuoteIdentifier('ArchiveRunID')}='${mjarchiverun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJArchiveRun_)
+    async CreateMJArchiveRun(
+        @Arg('input', () => CreateMJArchiveRunInput) input: CreateMJArchiveRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Archive Runs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJArchiveRun_)
+    async UpdateMJArchiveRun(
+        @Arg('input', () => UpdateMJArchiveRunInput) input: UpdateMJArchiveRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Archive Runs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJArchiveRun_)
+    async DeleteMJArchiveRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Archive Runs', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -18787,6 +21084,9 @@ export class CreateMJArtifactPermissionInput {
 
     @Field({ nullable: true })
     SharedByUserID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -18821,6 +21121,9 @@ export class UpdateMJArtifactPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -18953,6 +21256,14 @@ export class MJArtifactType_ {
     @MaxLength(255)
     Icon?: string;
         
+    @Field({description: `Classifies whether this artifact type stores text content ('Text', the default for all existing types) or a binary file in MJStorage ('File'). Used by AgentRunner and viewer components to route file-based artifacts correctly.`}) 
+    @MaxLength(10)
+    ContentCategory: string;
+        
+    @Field({nullable: true, description: `Class name for the BaseArtifactToolLibrary subclass that provides type-specific artifact exploration tools for agents. Resolved via ClassFactory. When NULL, ArtifactToolManager uses name-based fallback resolution.`}) 
+    @MaxLength(100)
+    ToolLibraryClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
@@ -19009,6 +21320,15 @@ export class CreateMJArtifactTypeInput {
 
     @Field({ nullable: true })
     Icon: string | null;
+
+    @Field({ nullable: true })
+    ContentCategory?: string;
+
+    @Field({ nullable: true })
+    ToolLibraryClass: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -19044,8 +21364,17 @@ export class UpdateMJArtifactTypeInput {
     @Field({ nullable: true })
     Icon?: string | null;
 
+    @Field({ nullable: true })
+    ContentCategory?: string;
+
+    @Field({ nullable: true })
+    ToolLibraryClass?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -19243,6 +21572,9 @@ export class CreateMJArtifactUseInput {
 
     @Field({ nullable: true })
     UsageContext: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -19268,6 +21600,9 @@ export class UpdateMJArtifactUseInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -19418,6 +21753,9 @@ export class CreateMJArtifactVersionAttributeInput {
 
     @Field({ nullable: true })
     StandardProperty: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -19446,6 +21784,9 @@ export class UpdateMJArtifactVersionAttributeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -19580,6 +21921,25 @@ export class MJArtifactVersion_ {
     @Field({nullable: true, description: `Description of this artifact version. Can differ from Artifact.Description as it may evolve with versions.`}) 
     Description?: string;
         
+    @Field({nullable: true, description: `Foreign key to the MJ: Files entity. When ContentMode is 'File', this references the binary file stored in MJStorage. NULL when ContentMode is 'Text'.`}) 
+    @MaxLength(36)
+    FileID?: string;
+        
+    @Field({description: `Determines how artifact content is stored. 'Text' (default) means the Content column holds the data. 'File' means FileID references a binary file in MJStorage and Content is unused.`}) 
+    @MaxLength(10)
+    ContentMode: string;
+        
+    @Field({nullable: true, description: `MIME type of the stored file (e.g. application/pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`}) 
+    @MaxLength(200)
+    MimeType?: string;
+        
+    @Field({nullable: true, description: `Original filename of the stored file (e.g. report.pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`}) 
+    @MaxLength(500)
+    FileName?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.`}) 
+    ContentSizeBytes?: number;
+        
     @Field() 
     @MaxLength(255)
     Artifact: string;
@@ -19587,6 +21947,10 @@ export class MJArtifactVersion_ {
     @Field() 
     @MaxLength(100)
     User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    File?: string;
         
     @Field(() => [MJArtifactVersionAttribute_])
     MJArtifactVersionAttributes_ArtifactVersionIDArray: MJArtifactVersionAttribute_[]; // Link to MJArtifactVersionAttributes
@@ -19636,6 +22000,24 @@ export class CreateMJArtifactVersionInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field({ nullable: true })
+    FileID: string | null;
+
+    @Field({ nullable: true })
+    ContentMode?: string;
+
+    @Field({ nullable: true })
+    MimeType: string | null;
+
+    @Field({ nullable: true })
+    FileName: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ContentSizeBytes: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -19674,8 +22056,26 @@ export class UpdateMJArtifactVersionInput {
     @Field({ nullable: true })
     Description?: string | null;
 
+    @Field({ nullable: true })
+    FileID?: string | null;
+
+    @Field({ nullable: true })
+    ContentMode?: string;
+
+    @Field({ nullable: true })
+    MimeType?: string | null;
+
+    @Field({ nullable: true })
+    FileName?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ContentSizeBytes?: number | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -19893,6 +22293,9 @@ export class CreateMJArtifactInput {
 
     @Field({ nullable: true })
     Visibility?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -19927,6 +22330,9 @@ export class UpdateMJArtifactInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20104,6 +22510,9 @@ export class CreateMJAuditLogTypeInput {
 
     @Field({ nullable: true })
     AuthorizationID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20129,6 +22538,9 @@ export class UpdateMJAuditLogTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20341,6 +22753,9 @@ export class CreateMJAuditLogInput {
 
     @Field({ nullable: true })
     RecordID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20378,6 +22793,9 @@ export class UpdateMJAuditLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20519,6 +22937,9 @@ export class CreateMJAuthorizationRoleInput {
 
     @Field({ nullable: true })
     Type?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20541,6 +22962,9 @@ export class UpdateMJAuthorizationRoleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20718,6 +23142,9 @@ export class CreateMJAuthorizationInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20746,6 +23173,9 @@ export class UpdateMJAuthorizationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -20946,6 +23376,9 @@ export class CreateMJCollectionArtifactInput {
 
     @Field({ nullable: true })
     ArtifactVersionID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -20968,6 +23401,9 @@ export class UpdateMJCollectionArtifactInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -21137,6 +23573,9 @@ export class CreateMJCollectionPermissionInput {
 
     @Field({ nullable: true })
     SharedByUserID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -21171,6 +23610,9 @@ export class UpdateMJCollectionPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -21362,6 +23804,9 @@ export class CreateMJCollectionInput {
 
     @Field({ nullable: true })
     OwnerID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -21399,6 +23844,9 @@ export class UpdateMJCollectionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -21578,6 +24026,9 @@ export class CreateMJCommunicationBaseMessageTypeInput {
 
     @Field(() => Int, { nullable: true })
     MaxBytes: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -21606,6 +24057,9 @@ export class UpdateMJCommunicationBaseMessageTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -21803,6 +24257,9 @@ export class CreateMJCommunicationLogInput {
 
     @Field({ nullable: true })
     ErrorMessage: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -21840,6 +24297,9 @@ export class UpdateMJCommunicationLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -21997,6 +24457,9 @@ export class CreateMJCommunicationProviderMessageTypeInput {
 
     @Field({ nullable: true })
     AdditionalAttributes: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -22025,6 +24488,9 @@ export class UpdateMJCommunicationProviderMessageTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -22209,6 +24675,9 @@ export class CreateMJCommunicationProviderInput {
 
     @Field(() => Boolean, { nullable: true })
     SupportsDrafts?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -22249,6 +24718,9 @@ export class UpdateMJCommunicationProviderInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -22433,6 +24905,9 @@ export class CreateMJCommunicationRunInput {
 
     @Field({ nullable: true })
     ErrorMessage: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -22467,6 +24942,9 @@ export class UpdateMJCommunicationRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -22639,6 +25117,9 @@ export class CreateMJCompanyInput {
 
     @Field({ nullable: true })
     Domain: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -22667,6 +25148,9 @@ export class UpdateMJCompanyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -22933,6 +25417,9 @@ export class CreateMJCompanyIntegrationEntityMapInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -22982,6 +25469,9 @@ export class UpdateMJCompanyIntegrationEntityMapInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -23197,6 +25687,9 @@ export class CreateMJCompanyIntegrationFieldMapInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -23246,6 +25739,9 @@ export class UpdateMJCompanyIntegrationFieldMapInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -23394,6 +25890,9 @@ export class CreateMJCompanyIntegrationRecordMapInput {
 
     @Field({ nullable: true })
     EntityRecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -23419,6 +25918,9 @@ export class UpdateMJCompanyIntegrationRecordMapInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -23573,6 +26075,9 @@ export class CreateMJCompanyIntegrationRunAPILogInput {
 
     @Field({ nullable: true })
     Parameters: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -23604,6 +26109,9 @@ export class UpdateMJCompanyIntegrationRunAPILogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -23769,6 +26277,9 @@ export class CreateMJCompanyIntegrationRunDetailInput {
 
     @Field(() => Boolean, { nullable: true })
     IsSuccess?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -23800,6 +26311,9 @@ export class UpdateMJCompanyIntegrationRunDetailInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -24007,6 +26521,9 @@ export class CreateMJCompanyIntegrationRunInput {
 
     @Field({ nullable: true })
     ScheduledJobRunID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -24050,6 +26567,9 @@ export class UpdateMJCompanyIntegrationRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -24235,6 +26755,9 @@ export class CreateMJCompanyIntegrationSyncWatermarkInput {
 
     @Field(() => Int, { nullable: true })
     RecordsSynced?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -24266,6 +26789,9 @@ export class UpdateMJCompanyIntegrationSyncWatermarkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -24597,6 +27123,9 @@ export class CreateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     ScheduledJobID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -24691,6 +27220,9 @@ export class UpdateMJCompanyIntegrationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -24875,6 +27407,9 @@ export class CreateMJComponentDependencyInput {
 
     @Field({ nullable: true })
     DependencyComponentID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -24894,6 +27429,9 @@ export class UpdateMJComponentDependencyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -25090,6 +27628,9 @@ export class CreateMJComponentLibraryInput {
 
     @Field({ nullable: true })
     UsageType?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -25139,6 +27680,9 @@ export class UpdateMJComponentLibraryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -25290,6 +27834,9 @@ export class CreateMJComponentLibraryLinkInput {
 
     @Field({ nullable: true })
     MinVersion: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -25312,6 +27859,9 @@ export class UpdateMJComponentLibraryLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -25468,6 +28018,9 @@ export class CreateMJComponentRegistryInput {
 
     @Field({ nullable: true })
     Status: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -25499,6 +28052,9 @@ export class UpdateMJComponentRegistryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -25799,6 +28355,9 @@ export class CreateMJComponentInput {
 
     @Field(() => Boolean, { nullable: true })
     HasRequiredCustomProps?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -25890,6 +28449,9 @@ export class UpdateMJComponentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -26052,6 +28614,9 @@ export class CreateMJContentFileTypeInput {
 
     @Field({ nullable: true })
     FileExtension: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -26071,6 +28636,9 @@ export class UpdateMJContentFileTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -26227,6 +28795,9 @@ export class CreateMJContentItemAttributeInput {
 
     @Field({ nullable: true })
     Value?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -26249,6 +28820,9 @@ export class UpdateMJContentItemAttributeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -26338,6 +28912,227 @@ export class MJContentItemAttributeResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Content Item Duplicates
+//****************************************************************************
+@ObjectType({ description: `Detected duplicate or near-duplicate content items across sources. Each row represents a pair of items with similarity scoring and resolution tracking.` })
+export class MJContentItemDuplicate_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    ContentItemAID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    ContentItemBID: string;
+        
+    @Field(() => Float, {description: `Cosine similarity (for Vector) or exact match score (1.0 for Checksum/URL). Range 0.0-1.0.`}) 
+    SimilarityScore: number;
+        
+    @Field({description: `How the duplicate was detected: Checksum (identical text hash), Vector (embedding similarity), Title (same title text), URL (same source URL).`}) 
+    @MaxLength(30)
+    DetectionMethod: string;
+        
+    @Field({description: `Current status: Pending (awaiting review), Confirmed (verified duplicate), Dismissed (not a duplicate), Merged (one item was removed).`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ResolvedByUserID?: string;
+        
+    @Field({nullable: true}) 
+    ResolvedAt?: Date;
+        
+    @Field({nullable: true, description: `How the duplicate was resolved: KeepA (keep first, remove second), KeepB (keep second, remove first), MergeBoth (combine into one), NotDuplicate (false positive).`}) 
+    @MaxLength(20)
+    Resolution?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(250)
+    ContentItemA?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(250)
+    ContentItemB?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ResolvedByUser?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Content Item Duplicates
+//****************************************************************************
+@InputType()
+export class CreateMJContentItemDuplicateInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ContentItemAID?: string;
+
+    @Field({ nullable: true })
+    ContentItemBID?: string;
+
+    @Field(() => Float, { nullable: true })
+    SimilarityScore?: number;
+
+    @Field({ nullable: true })
+    DetectionMethod?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ResolvedByUserID: string | null;
+
+    @Field({ nullable: true })
+    ResolvedAt: Date | null;
+
+    @Field({ nullable: true })
+    Resolution: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Content Item Duplicates
+//****************************************************************************
+@InputType()
+export class UpdateMJContentItemDuplicateInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ContentItemAID?: string;
+
+    @Field({ nullable: true })
+    ContentItemBID?: string;
+
+    @Field(() => Float, { nullable: true })
+    SimilarityScore?: number;
+
+    @Field({ nullable: true })
+    DetectionMethod?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ResolvedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    ResolvedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Resolution?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Content Item Duplicates
+//****************************************************************************
+@ObjectType()
+export class RunMJContentItemDuplicateViewResult {
+    @Field(() => [MJContentItemDuplicate_])
+    Results: MJContentItemDuplicate_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJContentItemDuplicate_)
+export class MJContentItemDuplicateResolver extends ResolverBase {
+    @Query(() => RunMJContentItemDuplicateViewResult)
+    async RunMJContentItemDuplicateViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJContentItemDuplicateViewResult)
+    async RunMJContentItemDuplicateViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJContentItemDuplicateViewResult)
+    async RunMJContentItemDuplicateDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Content Item Duplicates';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJContentItemDuplicate_, { nullable: true })
+    async MJContentItemDuplicate(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJContentItemDuplicate_ | null> {
+        this.CheckUserReadPermissions('MJ: Content Item Duplicates', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemDuplicates')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Duplicates', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Content Item Duplicates', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJContentItemDuplicate_)
+    async CreateMJContentItemDuplicate(
+        @Arg('input', () => CreateMJContentItemDuplicateInput) input: CreateMJContentItemDuplicateInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Content Item Duplicates', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJContentItemDuplicate_)
+    async UpdateMJContentItemDuplicate(
+        @Arg('input', () => UpdateMJContentItemDuplicateInput) input: UpdateMJContentItemDuplicateInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Content Item Duplicates', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJContentItemDuplicate_)
+    async DeleteMJContentItemDuplicate(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Content Item Duplicates', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Content Item Tags
 //****************************************************************************
 @ObjectType({ description: `Links tags to content items for categorization, searchability, and content discovery across the system.` })
@@ -26360,9 +29155,20 @@ export class MJContentItemTag_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Float, {description: `Relevance weight for this tag (0.0-1.0). 1.0 = highly relevant central topic, 0.5 = moderately relevant, 0.1 = tangentially related. Assigned by the LLM during autotagging.`}) 
+    Weight: number;
+        
+    @Field({nullable: true, description: `Optional link to the formal MJ Tag taxonomy. When set, this free-text tag has been matched (via semantic similarity or exact match) to a curated Tag record. NULL means the tag is unmatched free text only.`}) 
+    @MaxLength(36)
+    TagID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(250)
     Item?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Tag_Virtual?: string;
         
 }
 
@@ -26379,6 +29185,15 @@ export class CreateMJContentItemTagInput {
 
     @Field({ nullable: true })
     Tag?: string;
+
+    @Field(() => Float, { nullable: true })
+    Weight?: number;
+
+    @Field({ nullable: true })
+    TagID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -26396,8 +29211,17 @@ export class UpdateMJContentItemTagInput {
     @Field({ nullable: true })
     Tag?: string;
 
+    @Field(() => Float, { nullable: true })
+    Weight?: number;
+
+    @Field({ nullable: true })
+    TagID?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -26535,6 +29359,28 @@ export class MJContentItem_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.`}) 
+    @MaxLength(36)
+    EntityRecordDocumentID?: string;
+        
+    @Field({description: `Vectorization status: Pending (not yet embedded), Processing (currently being embedded), Complete (vector stored), Failed (embedding error), Skipped (excluded from vectorization).`}) 
+    @MaxLength(20)
+    EmbeddingStatus: string;
+        
+    @Field({nullable: true, description: `Timestamp of the most recent successful embedding for this content item.`}) 
+    LastEmbeddedAt?: Date;
+        
+    @Field({nullable: true, description: `The AI model used to generate the most recent embedding for this content item.`}) 
+    @MaxLength(36)
+    EmbeddingModelID?: string;
+        
+    @Field({description: `Autotagging status: Pending (not yet tagged), Processing (LLM is generating tags), Complete (tags assigned), Failed (LLM error), Skipped (excluded from tagging).`}) 
+    @MaxLength(20)
+    TaggingStatus: string;
+        
+    @Field({nullable: true, description: `Timestamp of the most recent successful autotagging run for this content item.`}) 
+    LastTaggedAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     ContentSource?: string;
@@ -26551,11 +29397,25 @@ export class MJContentItem_ {
     @MaxLength(255)
     ContentFileType: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(450)
+    EntityRecordDocument?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    EmbeddingModel?: string;
+        
     @Field(() => [MJContentItemAttribute_])
     MJContentItemAttributes_ContentItemIDArray: MJContentItemAttribute_[]; // Link to MJContentItemAttributes
     
     @Field(() => [MJContentItemTag_])
     MJContentItemTags_ItemIDArray: MJContentItemTag_[]; // Link to MJContentItemTags
+    
+    @Field(() => [MJContentItemDuplicate_])
+    MJContentItemDuplicates_ContentItemAIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
+    
+    @Field(() => [MJContentItemDuplicate_])
+    MJContentItemDuplicates_ContentItemBIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
     
 }
 
@@ -26593,6 +29453,27 @@ export class CreateMJContentItemInput {
 
     @Field({ nullable: true })
     Text: string | null;
+
+    @Field({ nullable: true })
+    EntityRecordDocumentID: string | null;
+
+    @Field({ nullable: true })
+    EmbeddingStatus?: string;
+
+    @Field({ nullable: true })
+    LastEmbeddedAt: Date | null;
+
+    @Field({ nullable: true })
+    EmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    TaggingStatus?: string;
+
+    @Field({ nullable: true })
+    LastTaggedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -26631,8 +29512,29 @@ export class UpdateMJContentItemInput {
     @Field({ nullable: true })
     Text?: string | null;
 
+    @Field({ nullable: true })
+    EntityRecordDocumentID?: string | null;
+
+    @Field({ nullable: true })
+    EmbeddingStatus?: string;
+
+    @Field({ nullable: true })
+    LastEmbeddedAt?: Date | null;
+
+    @Field({ nullable: true })
+    EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    TaggingStatus?: string;
+
+    @Field({ nullable: true })
+    LastTaggedAt?: Date | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -26712,6 +29614,26 @@ export class MJContentItemResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJContentItemDuplicate_])
+    async MJContentItemDuplicates_ContentItemAIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Item Duplicates', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemDuplicates')} WHERE ${provider.QuoteIdentifier('ContentItemAID')}='${mjcontentitem_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Duplicates', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Duplicates', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentItemDuplicate_])
+    async MJContentItemDuplicates_ContentItemBIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Item Duplicates', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemDuplicates')} WHERE ${provider.QuoteIdentifier('ContentItemBID')}='${mjcontentitem_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Duplicates', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Duplicates', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJContentItem_)
     async CreateMJContentItem(
         @Arg('input', () => CreateMJContentItemInput) input: CreateMJContentItemInput,
@@ -26737,6 +29659,448 @@ export class MJContentItemResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Content Items', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Content Process Run Details
+//****************************************************************************
+@ObjectType({ description: `Per-content-source tracking within a pipeline run. Each source processed during a ContentProcessRun gets one detail record with item counts, timing, token usage, and cost rollups.` })
+export class MJContentProcessRunDetail_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `The parent pipeline run this detail belongs to.`}) 
+    @MaxLength(36)
+    ContentProcessRunID: string;
+        
+    @Field({description: `The content source being processed in this detail record.`}) 
+    @MaxLength(36)
+    ContentSourceID: string;
+        
+    @Field({description: `The type of content source (RSS Feed, Entity, Website, Cloud Storage, etc.).`}) 
+    @MaxLength(36)
+    ContentSourceTypeID: string;
+        
+    @Field({description: `Processing status: Pending, Running, Completed, Failed, or Skipped.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field(() => Int, {description: `Total content items processed for this source during the run.`}) 
+    ItemsProcessed: number;
+        
+    @Field(() => Int, {description: `Number of content items successfully tagged by the LLM.`}) 
+    ItemsTagged: number;
+        
+    @Field(() => Int, {description: `Number of content items successfully embedded and upserted to the vector database.`}) 
+    ItemsVectorized: number;
+        
+    @Field(() => Int, {description: `Number of new ContentItemTag records created during LLM tagging.`}) 
+    TagsCreated: number;
+        
+    @Field(() => Int, {description: `Number of errors encountered while processing this source.`}) 
+    ErrorCount: number;
+        
+    @Field({nullable: true, description: `When processing started for this source within the pipeline run.`}) 
+    StartTime?: Date;
+        
+    @Field({nullable: true, description: `When processing completed for this source within the pipeline run.`}) 
+    EndTime?: Date;
+        
+    @Field(() => Int, {description: `Rollup of all tokens used across LLM tagging and embedding calls for this source. Computed from linked AIPromptRun records via the ContentProcessRunPromptRun junction table.`}) 
+    TotalTokensUsed: number;
+        
+    @Field(() => Float, {description: `Rollup of all costs across LLM tagging and embedding calls for this source. Computed from linked AIPromptRun records via the ContentProcessRunPromptRun junction table.`}) 
+    TotalCost: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ContentProcessRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ContentSource?: string;
+        
+    @Field() 
+    @MaxLength(255)
+    ContentSourceType: string;
+        
+    @Field(() => [MJContentProcessRunPromptRun_])
+    MJContentProcessRunPromptRuns_ContentProcessRunDetailIDArray: MJContentProcessRunPromptRun_[]; // Link to MJContentProcessRunPromptRuns
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Content Process Run Details
+//****************************************************************************
+@InputType()
+export class CreateMJContentProcessRunDetailInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ContentProcessRunID?: string;
+
+    @Field({ nullable: true })
+    ContentSourceID?: string;
+
+    @Field({ nullable: true })
+    ContentSourceTypeID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    ItemsProcessed?: number;
+
+    @Field(() => Int, { nullable: true })
+    ItemsTagged?: number;
+
+    @Field(() => Int, { nullable: true })
+    ItemsVectorized?: number;
+
+    @Field(() => Int, { nullable: true })
+    TagsCreated?: number;
+
+    @Field(() => Int, { nullable: true })
+    ErrorCount?: number;
+
+    @Field({ nullable: true })
+    StartTime: Date | null;
+
+    @Field({ nullable: true })
+    EndTime: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalTokensUsed?: number;
+
+    @Field(() => Float, { nullable: true })
+    TotalCost?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Content Process Run Details
+//****************************************************************************
+@InputType()
+export class UpdateMJContentProcessRunDetailInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ContentProcessRunID?: string;
+
+    @Field({ nullable: true })
+    ContentSourceID?: string;
+
+    @Field({ nullable: true })
+    ContentSourceTypeID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    ItemsProcessed?: number;
+
+    @Field(() => Int, { nullable: true })
+    ItemsTagged?: number;
+
+    @Field(() => Int, { nullable: true })
+    ItemsVectorized?: number;
+
+    @Field(() => Int, { nullable: true })
+    TagsCreated?: number;
+
+    @Field(() => Int, { nullable: true })
+    ErrorCount?: number;
+
+    @Field({ nullable: true })
+    StartTime?: Date | null;
+
+    @Field({ nullable: true })
+    EndTime?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalTokensUsed?: number;
+
+    @Field(() => Float, { nullable: true })
+    TotalCost?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Content Process Run Details
+//****************************************************************************
+@ObjectType()
+export class RunMJContentProcessRunDetailViewResult {
+    @Field(() => [MJContentProcessRunDetail_])
+    Results: MJContentProcessRunDetail_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJContentProcessRunDetail_)
+export class MJContentProcessRunDetailResolver extends ResolverBase {
+    @Query(() => RunMJContentProcessRunDetailViewResult)
+    async RunMJContentProcessRunDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJContentProcessRunDetailViewResult)
+    async RunMJContentProcessRunDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJContentProcessRunDetailViewResult)
+    async RunMJContentProcessRunDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Content Process Run Details';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJContentProcessRunDetail_, { nullable: true })
+    async MJContentProcessRunDetail(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJContentProcessRunDetail_ | null> {
+        this.CheckUserReadPermissions('MJ: Content Process Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRunDetails')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Content Process Run Details', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJContentProcessRunPromptRun_])
+    async MJContentProcessRunPromptRuns_ContentProcessRunDetailIDArray(@Root() mjcontentprocessrundetail_: MJContentProcessRunDetail_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Process Run Prompt Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRunPromptRuns')} WHERE ${provider.QuoteIdentifier('ContentProcessRunDetailID')}='${mjcontentprocessrundetail_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Run Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Process Run Prompt Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJContentProcessRunDetail_)
+    async CreateMJContentProcessRunDetail(
+        @Arg('input', () => CreateMJContentProcessRunDetailInput) input: CreateMJContentProcessRunDetailInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Content Process Run Details', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJContentProcessRunDetail_)
+    async UpdateMJContentProcessRunDetail(
+        @Arg('input', () => UpdateMJContentProcessRunDetailInput) input: UpdateMJContentProcessRunDetailInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Content Process Run Details', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJContentProcessRunDetail_)
+    async DeleteMJContentProcessRunDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Content Process Run Details', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Content Process Run Prompt Runs
+//****************************************************************************
+@ObjectType({ description: `Links ContentProcessRunDetail records to their associated AIPromptRun records. Each LLM tagging call and embedding call creates an AIPromptRun, and this junction table provides the FK relationship for cost/token analytics.` })
+export class MJContentProcessRunPromptRun_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `The content process run detail record this prompt run is associated with.`}) 
+    @MaxLength(36)
+    ContentProcessRunDetailID: string;
+        
+    @Field({description: `The AI prompt run record containing token usage, cost, model, vendor, and execution details for this call.`}) 
+    @MaxLength(36)
+    AIPromptRunID: string;
+        
+    @Field({description: `Whether this AIPromptRun was for LLM tagging (Tag) or text embedding (Embed).`}) 
+    @MaxLength(20)
+    RunType: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AIPromptRun?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Content Process Run Prompt Runs
+//****************************************************************************
+@InputType()
+export class CreateMJContentProcessRunPromptRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ContentProcessRunDetailID?: string;
+
+    @Field({ nullable: true })
+    AIPromptRunID?: string;
+
+    @Field({ nullable: true })
+    RunType?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Content Process Run Prompt Runs
+//****************************************************************************
+@InputType()
+export class UpdateMJContentProcessRunPromptRunInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ContentProcessRunDetailID?: string;
+
+    @Field({ nullable: true })
+    AIPromptRunID?: string;
+
+    @Field({ nullable: true })
+    RunType?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Content Process Run Prompt Runs
+//****************************************************************************
+@ObjectType()
+export class RunMJContentProcessRunPromptRunViewResult {
+    @Field(() => [MJContentProcessRunPromptRun_])
+    Results: MJContentProcessRunPromptRun_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJContentProcessRunPromptRun_)
+export class MJContentProcessRunPromptRunResolver extends ResolverBase {
+    @Query(() => RunMJContentProcessRunPromptRunViewResult)
+    async RunMJContentProcessRunPromptRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJContentProcessRunPromptRunViewResult)
+    async RunMJContentProcessRunPromptRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJContentProcessRunPromptRunViewResult)
+    async RunMJContentProcessRunPromptRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Content Process Run Prompt Runs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJContentProcessRunPromptRun_, { nullable: true })
+    async MJContentProcessRunPromptRun(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJContentProcessRunPromptRun_ | null> {
+        this.CheckUserReadPermissions('MJ: Content Process Run Prompt Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRunPromptRuns')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Run Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Content Process Run Prompt Runs', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJContentProcessRunPromptRun_)
+    async CreateMJContentProcessRunPromptRun(
+        @Arg('input', () => CreateMJContentProcessRunPromptRunInput) input: CreateMJContentProcessRunPromptRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Content Process Run Prompt Runs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJContentProcessRunPromptRun_)
+    async UpdateMJContentProcessRunPromptRun(
+        @Arg('input', () => UpdateMJContentProcessRunPromptRunInput) input: UpdateMJContentProcessRunPromptRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Content Process Run Prompt Runs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJContentProcessRunPromptRun_)
+    async DeleteMJContentProcessRunPromptRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Content Process Run Prompt Runs', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -26773,10 +30137,42 @@ export class MJContentProcessRun_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The user who triggered this pipeline run. NULL for system-initiated runs.`}) 
+    @MaxLength(36)
+    StartedByUserID?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Total number of content items to process in this run. Used for progress percentage calculation.`}) 
+    TotalItemCount?: number;
+        
+    @Field(() => Int, {nullable: true, description: `StartRow offset of the last successfully completed batch. Used for resume-from-crash: next batch starts at this offset. Reset to 0 on new runs.`}) 
+    LastProcessedOffset?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of content items processed per batch. Configurable per run, default 100.`}) 
+    BatchSize?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Running count of errors encountered during processing. Used by the circuit breaker to halt the pipeline if error rate exceeds the configured threshold.`}) 
+    ErrorCount?: number;
+        
+    @Field({nullable: true, description: `Error details if the run failed. Includes error messages, stack traces, or circuit breaker trigger reason.`}) 
+    ErrorMessage?: string;
+        
+    @Field(() => Boolean, {description: `When set to 1, the pipeline stops after completing the current batch. Used for pause and cancel operations. The Status column reflects the final state (Paused or Cancelled).`}) 
+    CancellationRequested: boolean;
+        
+    @Field({nullable: true, description: `JSON snapshot of the pipeline configuration used for this run. Conforms to the IContentProcessRunConfiguration interface. Includes batch size, rate limits, error thresholds, and duplicate detection settings.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Source?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    StartedByUser?: string;
+        
+    @Field(() => [MJContentProcessRunDetail_])
+    MJContentProcessRunDetails_ContentProcessRunIDArray: MJContentProcessRunDetail_[]; // Link to MJContentProcessRunDetails
+    
 }
 
 //****************************************************************************
@@ -26801,6 +30197,33 @@ export class CreateMJContentProcessRunInput {
 
     @Field(() => Int, { nullable: true })
     ProcessedItems: number | null;
+
+    @Field({ nullable: true })
+    StartedByUserID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalItemCount: number | null;
+
+    @Field(() => Int, { nullable: true })
+    LastProcessedOffset?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    BatchSize?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ErrorCount?: number | null;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CancellationRequested?: boolean;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -26827,8 +30250,35 @@ export class UpdateMJContentProcessRunInput {
     @Field(() => Int, { nullable: true })
     ProcessedItems?: number | null;
 
+    @Field({ nullable: true })
+    StartedByUserID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalItemCount?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    LastProcessedOffset?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    BatchSize?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ErrorCount?: number | null;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CancellationRequested?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -26888,6 +30338,16 @@ export class MJContentProcessRunResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJContentProcessRunDetail_])
+    async MJContentProcessRunDetails_ContentProcessRunIDArray(@Root() mjcontentprocessrun_: MJContentProcessRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Process Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRunDetails')} WHERE ${provider.QuoteIdentifier('ContentProcessRunID')}='${mjcontentprocessrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Process Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJContentProcessRun_)
     async CreateMJContentProcessRun(
         @Arg('input', () => CreateMJContentProcessRunInput) input: CreateMJContentProcessRunInput,
@@ -26965,6 +30425,9 @@ export class CreateMJContentSourceParamInput {
 
     @Field({ nullable: true })
     Value?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -26987,6 +30450,9 @@ export class UpdateMJContentSourceParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -27131,6 +30597,9 @@ export class CreateMJContentSourceTypeParamInput {
 
     @Field(() => Boolean, { nullable: true })
     IsRequired?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -27159,6 +30628,9 @@ export class UpdateMJContentSourceTypeParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -27270,11 +30742,21 @@ export class MJContentSourceType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The registered class name used by ClassFactory to instantiate the provider for this source type (e.g., AutotagLocalFileSystem, AutotagEntity). Must match a @RegisterClass key on a class extending AutotagBase.`}) 
+    @MaxLength(255)
+    DriverClass?: string;
+        
+    @Field({nullable: true, description: `JSON configuration blob for type-level settings. Conforms to the IContentSourceTypeConfiguration interface. Reserved for future type-wide settings shared by all sources of this type.`}) 
+    Configuration?: string;
+        
     @Field(() => [MJContentSource_])
     MJContentSources_ContentSourceTypeIDArray: MJContentSource_[]; // Link to MJContentSources
     
     @Field(() => [MJContentItem_])
     MJContentItems_ContentSourceTypeIDArray: MJContentItem_[]; // Link to MJContentItems
+    
+    @Field(() => [MJContentProcessRunDetail_])
+    MJContentProcessRunDetails_ContentSourceTypeIDArray: MJContentProcessRunDetail_[]; // Link to MJContentProcessRunDetails
     
 }
 
@@ -27291,6 +30773,15 @@ export class CreateMJContentSourceTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -27308,8 +30799,17 @@ export class UpdateMJContentSourceTypeInput {
     @Field({ nullable: true })
     Description?: string | null;
 
+    @Field({ nullable: true })
+    DriverClass?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -27389,6 +30889,16 @@ export class MJContentSourceTypeResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJContentProcessRunDetail_])
+    async MJContentProcessRunDetails_ContentSourceTypeIDArray(@Root() mjcontentsourcetype_: MJContentSourceType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Process Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRunDetails')} WHERE ${provider.QuoteIdentifier('ContentSourceTypeID')}='${mjcontentsourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Process Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJContentSourceType_)
     async CreateMJContentSourceType(
         @Arg('input', () => CreateMJContentSourceTypeInput) input: CreateMJContentSourceTypeInput,
@@ -27453,6 +30963,29 @@ export class MJContentSource_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Per-source override for the AI embedding model. When NULL, falls back to the ContentType default.`}) 
+    @MaxLength(36)
+    EmbeddingModelID?: string;
+        
+    @Field({nullable: true, description: `Per-source override for the vector index. When NULL, falls back to the ContentType default.`}) 
+    @MaxLength(36)
+    VectorIndexID?: string;
+        
+    @Field({nullable: true, description: `JSON configuration blob for source-instance settings. Conforms to the IContentSourceConfiguration interface. Includes tag taxonomy mode (constrained/auto-grow/free-flow), tag root ID, match threshold, LLM taxonomy sharing, and vectorization toggle.`}) 
+    Configuration?: string;
+        
+    @Field({nullable: true, description: `For Entity-type content sources, the MJ Entity to pull records from. NULL for non-entity sources (files, RSS, websites, etc.).`}) 
+    @MaxLength(36)
+    EntityID?: string;
+        
+    @Field({nullable: true, description: `For Entity-type content sources, the Entity Document template used to render entity records into text for autotagging. The template defines which fields to include, how to format them, and related record inclusion. NULL for non-entity sources.`}) 
+    @MaxLength(36)
+    EntityDocumentID?: string;
+        
+    @Field({nullable: true, description: `Optional link to a MJ Scheduled Action that automatically runs the classification pipeline for this source on a cron schedule.`}) 
+    @MaxLength(36)
+    ScheduledActionID?: string;
+        
     @Field() 
     @MaxLength(255)
     ContentType: string;
@@ -27465,6 +30998,26 @@ export class MJContentSource_ {
     @MaxLength(255)
     ContentFileType: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    EmbeddingModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    VectorIndex?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Entity?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(250)
+    EntityDocument?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ScheduledAction?: string;
+        
     @Field(() => [MJContentItem_])
     MJContentItems_ContentSourceIDArray: MJContentItem_[]; // Link to MJContentItems
     
@@ -27473,6 +31026,9 @@ export class MJContentSource_ {
     
     @Field(() => [MJContentSourceParam_])
     MJContentSourceParams_ContentSourceIDArray: MJContentSourceParam_[]; // Link to MJContentSourceParams
+    
+    @Field(() => [MJContentProcessRunDetail_])
+    MJContentProcessRunDetails_ContentSourceIDArray: MJContentProcessRunDetail_[]; // Link to MJContentProcessRunDetails
     
 }
 
@@ -27498,6 +31054,27 @@ export class CreateMJContentSourceInput {
 
     @Field({ nullable: true })
     URL?: string;
+
+    @Field({ nullable: true })
+    EmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    VectorIndexID: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    EntityID: string | null;
+
+    @Field({ nullable: true })
+    EntityDocumentID: string | null;
+
+    @Field({ nullable: true })
+    ScheduledActionID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -27524,8 +31101,29 @@ export class UpdateMJContentSourceInput {
     @Field({ nullable: true })
     URL?: string;
 
+    @Field({ nullable: true })
+    EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    VectorIndexID?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    EntityID?: string | null;
+
+    @Field({ nullable: true })
+    EntityDocumentID?: string | null;
+
+    @Field({ nullable: true })
+    ScheduledActionID?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -27615,6 +31213,16 @@ export class MJContentSourceResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJContentProcessRunDetail_])
+    async MJContentProcessRunDetails_ContentSourceIDArray(@Root() mjcontentsource_: MJContentSource_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Process Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRunDetails')} WHERE ${provider.QuoteIdentifier('ContentSourceID')}='${mjcontentsource_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Process Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJContentSource_)
     async CreateMJContentSource(
         @Arg('input', () => CreateMJContentSourceInput) input: CreateMJContentSourceInput,
@@ -27694,6 +31302,9 @@ export class CreateMJContentTypeAttributeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -27719,6 +31330,9 @@ export class UpdateMJContentTypeAttributeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -27839,9 +31453,28 @@ export class MJContentType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Default AI embedding model for vectorizing content items of this type. Sources can override per-source. If NULL, uses the first available embedding model.`}) 
+    @MaxLength(36)
+    EmbeddingModelID?: string;
+        
+    @Field({nullable: true, description: `Default vector index for storing embeddings of this content type. Sources can override per-source. If NULL, uses the first available vector index.`}) 
+    @MaxLength(36)
+    VectorIndexID?: string;
+        
+    @Field({nullable: true, description: `JSON configuration blob for content-type-level settings. Conforms to the IContentTypeConfiguration interface. Reserved for future type-wide settings such as default tag taxonomy rules and processing options.`}) 
+    Configuration?: string;
+        
     @Field() 
     @MaxLength(50)
     AIModel: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    EmbeddingModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    VectorIndex?: string;
         
     @Field(() => [MJContentSource_])
     MJContentSources_ContentTypeIDArray: MJContentSource_[]; // Link to MJContentSources
@@ -27873,6 +31506,18 @@ export class CreateMJContentTypeInput {
 
     @Field(() => Int, { nullable: true })
     MaxTags?: number;
+
+    @Field({ nullable: true })
+    EmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    VectorIndexID: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -27899,8 +31544,20 @@ export class UpdateMJContentTypeInput {
     @Field(() => Int, { nullable: true })
     MaxTags?: number;
 
+    @Field({ nullable: true })
+    EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    VectorIndexID?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -28058,6 +31715,9 @@ export class CreateMJConversationArtifactPermissionInput {
 
     @Field({ nullable: true })
     AccessLevel?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -28080,6 +31740,9 @@ export class UpdateMJConversationArtifactPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -28230,6 +31893,9 @@ export class CreateMJConversationArtifactVersionInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -28258,6 +31924,9 @@ export class UpdateMJConversationArtifactVersionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -28437,6 +32106,9 @@ export class CreateMJConversationArtifactInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -28468,6 +32140,9 @@ export class UpdateMJConversationArtifactInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -28638,6 +32313,9 @@ export class CreateMJConversationDetailArtifactInput {
 
     @Field({ nullable: true })
     Direction?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -28660,6 +32338,9 @@ export class UpdateMJConversationDetailArtifactInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -28866,6 +32547,9 @@ export class CreateMJConversationDetailAttachmentInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -28918,6 +32602,9 @@ export class UpdateMJConversationDetailAttachmentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -29063,6 +32750,9 @@ export class CreateMJConversationDetailRatingInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -29088,6 +32778,9 @@ export class UpdateMJConversationDetailRatingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -29412,6 +33105,9 @@ export class CreateMJConversationDetailInput {
 
     @Field(() => Boolean, { nullable: true })
     OriginalMessageChanged?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -29497,6 +33193,9 @@ export class UpdateMJConversationDetailInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -29836,6 +33535,9 @@ export class CreateMJConversationInput {
 
     @Field({ nullable: true })
     TestRunID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -29891,6 +33593,9 @@ export class UpdateMJConversationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -30040,6 +33745,238 @@ export class MJConversationResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Countries
+//****************************************************************************
+@ObjectType({ description: `Reference table for countries with ISO 3166-1 codes, geographic centroids, and optional medium-resolution boundary GeoJSON for choropleth rendering. Seeded with ~250 countries.` })
+export class MJCountry_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Full country name (e.g., "United States", "Canada").`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({description: `ISO 3166-1 alpha-2 code (e.g., "US", "CA"). Unique business key for lookups.`}) 
+    @MaxLength(2)
+    ISO2: string;
+        
+    @Field({description: `ISO 3166-1 alpha-3 code (e.g., "USA", "CAN"). Unique business key for lookups.`}) 
+    @MaxLength(3)
+    ISO3: string;
+        
+    @Field(() => Int, {nullable: true, description: `ISO 3166-1 numeric code (e.g., 840 for US, 124 for Canada).`}) 
+    NumericCode?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Geographic centroid latitude. Used as fallback point for country-level geocoding.`}) 
+    Latitude?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Geographic centroid longitude. Used as fallback point for country-level geocoding.`}) 
+    Longitude?: number;
+        
+    @Field({nullable: true, description: `Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable — point map falls back to centroid if absent. Total ~3MB for all countries.`}) 
+    BoundaryGeoJSON?: string;
+        
+    @Field({nullable: true, description: `JSON array of common aliases and alternate names (e.g., ["United States","USA","U.S.","America"]). Used by GeoResolver for fuzzy text-to-country matching.`}) 
+    CommonAliases?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJStateProvince_])
+    MJStateProvinces_CountryIDArray: MJStateProvince_[]; // Link to MJStateProvinces
+    
+    @Field(() => [MJRecordGeoCode_])
+    MJRecordGeoCodes_CountryIDArray: MJRecordGeoCode_[]; // Link to MJRecordGeoCodes
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Countries
+//****************************************************************************
+@InputType()
+export class CreateMJCountryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    ISO2?: string;
+
+    @Field({ nullable: true })
+    ISO3?: string;
+
+    @Field(() => Int, { nullable: true })
+    NumericCode: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Latitude: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude: number | null;
+
+    @Field({ nullable: true })
+    BoundaryGeoJSON: string | null;
+
+    @Field({ nullable: true })
+    CommonAliases: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Countries
+//****************************************************************************
+@InputType()
+export class UpdateMJCountryInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    ISO2?: string;
+
+    @Field({ nullable: true })
+    ISO3?: string;
+
+    @Field(() => Int, { nullable: true })
+    NumericCode?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Latitude?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude?: number | null;
+
+    @Field({ nullable: true })
+    BoundaryGeoJSON?: string | null;
+
+    @Field({ nullable: true })
+    CommonAliases?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Countries
+//****************************************************************************
+@ObjectType()
+export class RunMJCountryViewResult {
+    @Field(() => [MJCountry_])
+    Results: MJCountry_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJCountry_)
+export class MJCountryResolver extends ResolverBase {
+    @Query(() => RunMJCountryViewResult)
+    async RunMJCountryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCountryViewResult)
+    async RunMJCountryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCountryViewResult)
+    async RunMJCountryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Countries';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJCountry_, { nullable: true })
+    async MJCountry(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJCountry_ | null> {
+        this.CheckUserReadPermissions('MJ: Countries', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCountries')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Countries', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Countries', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJStateProvince_])
+    async MJStateProvinces_CountryIDArray(@Root() mjcountry_: MJCountry_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: State Provinces', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwStateProvinces')} WHERE ${provider.QuoteIdentifier('CountryID')}='${mjcountry_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: State Provinces', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: State Provinces', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordGeoCode_])
+    async MJRecordGeoCodes_CountryIDArray(@Root() mjcountry_: MJCountry_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Geo Codes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordGeoCodes')} WHERE ${provider.QuoteIdentifier('CountryID')}='${mjcountry_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Geo Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Geo Codes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJCountry_)
+    async CreateMJCountry(
+        @Arg('input', () => CreateMJCountryInput) input: CreateMJCountryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Countries', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJCountry_)
+    async UpdateMJCountry(
+        @Arg('input', () => UpdateMJCountryInput) input: UpdateMJCountryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Countries', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJCountry_)
+    async DeleteMJCountry(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Countries', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Credential Categories
 //****************************************************************************
 @ObjectType({ description: `Hierarchical organization for credentials. Allows grouping credentials by service type, department, or any organizational structure.` })
@@ -30104,6 +34041,9 @@ export class CreateMJCredentialCategoryInput {
 
     @Field({ nullable: true })
     IconClass: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -30129,6 +34069,9 @@ export class UpdateMJCredentialCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -30313,6 +34256,9 @@ export class CreateMJCredentialTypeInput {
 
     @Field({ nullable: true })
     ValidationEndpoint: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -30344,6 +34290,9 @@ export class UpdateMJCredentialTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -30535,11 +34484,17 @@ export class MJCredential_ {
     @Field(() => [MJOAuthToken_])
     MJOAuthTokens_CredentialIDArray: MJOAuthToken_[]; // Link to MJOAuthTokens
     
+    @Field(() => [MJSearchProvider_])
+    MJSearchProviders_CredentialIDArray: MJSearchProvider_[]; // Link to MJSearchProviders
+    
     @Field(() => [MJFileStorageAccount_])
     MJFileStorageAccounts_CredentialIDArray: MJFileStorageAccount_[]; // Link to MJFileStorageAccounts
     
     @Field(() => [MJMCPServerConnection_])
     MJMCPServerConnections_CredentialIDArray: MJMCPServerConnection_[]; // Link to MJMCPServerConnections
+    
+    @Field(() => [MJVectorDatabase_])
+    MJVectorDatabases_CredentialIDArray: MJVectorDatabase_[]; // Link to MJVectorDatabases
     
     @Field(() => [MJAICredentialBinding_])
     MJAICredentialBindings_CredentialIDArray: MJAICredentialBinding_[]; // Link to MJAICredentialBindings
@@ -30589,6 +34544,9 @@ export class CreateMJCredentialInput {
 
     @Field({ nullable: true })
     IconClass: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -30635,6 +34593,9 @@ export class UpdateMJCredentialInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -30704,6 +34665,16 @@ export class MJCredentialResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJSearchProvider_])
+    async MJSearchProviders_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Search Providers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchProviders')} WHERE ${provider.QuoteIdentifier('CredentialID')}='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Providers', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJFileStorageAccount_])
     async MJFileStorageAccounts_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: File Storage Accounts', userPayload);
@@ -30721,6 +34692,16 @@ export class MJCredentialResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPServerConnections')} WHERE ${provider.QuoteIdentifier('CredentialID')}='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connections', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connections', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJVectorDatabase_])
+    async MJVectorDatabases_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Vector Databases', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwVectorDatabases')} WHERE ${provider.QuoteIdentifier('CredentialID')}='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Vector Databases', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Vector Databases', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -30848,6 +34829,9 @@ export class CreateMJDashboardCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -30873,6 +34857,9 @@ export class UpdateMJDashboardCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -31071,6 +35058,9 @@ export class CreateMJDashboardCategoryLinkInput {
 
     @Field(() => Int, { nullable: true })
     Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -31099,6 +35089,9 @@ export class UpdateMJDashboardCategoryLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -31268,6 +35261,9 @@ export class CreateMJDashboardCategoryPermissionInput {
 
     @Field({ nullable: true })
     SharedByUserID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -31302,6 +35298,9 @@ export class UpdateMJDashboardCategoryPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -31466,6 +35465,9 @@ export class CreateMJDashboardPartTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -31503,6 +35505,9 @@ export class UpdateMJDashboardPartTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -31672,6 +35677,9 @@ export class CreateMJDashboardPermissionInput {
 
     @Field({ nullable: true })
     SharedByUserID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -31706,6 +35714,9 @@ export class UpdateMJDashboardPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -31864,6 +35875,9 @@ export class CreateMJDashboardUserPreferenceInput {
 
     @Field(() => Int, { nullable: true })
     DisplayOrder?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -31892,6 +35906,9 @@ export class UpdateMJDashboardUserPreferenceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -32032,6 +36049,9 @@ export class CreateMJDashboardUserStateInput {
 
     @Field({ nullable: true })
     UserState: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -32054,6 +36074,9 @@ export class UpdateMJDashboardUserStateInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -32275,6 +36298,9 @@ export class CreateMJDashboardInput {
 
     @Field({ nullable: true })
     EnvironmentID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -32324,6 +36350,9 @@ export class UpdateMJDashboardInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -32565,6 +36594,9 @@ export class CreateMJDataContextItemInput {
 
     @Field({ nullable: true })
     CodeName: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -32611,6 +36643,9 @@ export class UpdateMJDataContextItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -32762,6 +36797,9 @@ export class CreateMJDataContextInput {
 
     @Field({ nullable: true })
     LastRefreshedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -32787,6 +36825,9 @@ export class UpdateMJDataContextInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -32989,6 +37030,9 @@ export class CreateMJDatasetItemInput {
 
     @Field({ nullable: true })
     Columns: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -33026,6 +37070,9 @@ export class UpdateMJDatasetItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -33154,6 +37201,9 @@ export class CreateMJDatasetInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -33173,6 +37223,9 @@ export class UpdateMJDatasetInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -33323,6 +37376,9 @@ export class MJDuplicateRunDetailMatch_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON metadata snapshot of the matched record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`}) 
+    RecordMetadata?: string;
+        
     @Field() 
     @MaxLength(500)
     DuplicateRunDetail: string;
@@ -33370,6 +37426,12 @@ export class CreateMJDuplicateRunDetailMatchInput {
 
     @Field({ nullable: true })
     MergedAt?: Date;
+
+    @Field({ nullable: true })
+    RecordMetadata: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -33411,8 +37473,14 @@ export class UpdateMJDuplicateRunDetailMatchInput {
     @Field({ nullable: true })
     MergedAt?: Date;
 
+    @Field({ nullable: true })
+    RecordMetadata?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -33541,6 +37609,15 @@ export class MJDuplicateRunDetail_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON metadata snapshot of the source record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`}) 
+    RecordMetadata?: string;
+        
+    @Field({nullable: true, description: `When processing started for this specific record during duplicate detection.`}) 
+    StartedAt?: Date;
+        
+    @Field({nullable: true, description: `When processing completed for this specific record during duplicate detection.`}) 
+    EndedAt?: Date;
+        
     @Field() 
     @MaxLength(255)
     DuplicateRun: string;
@@ -33578,6 +37655,18 @@ export class CreateMJDuplicateRunDetailInput {
 
     @Field({ nullable: true })
     MergeErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    RecordMetadata: string | null;
+
+    @Field({ nullable: true })
+    StartedAt: Date | null;
+
+    @Field({ nullable: true })
+    EndedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -33610,8 +37699,20 @@ export class UpdateMJDuplicateRunDetailInput {
     @Field({ nullable: true })
     MergeErrorMessage?: string | null;
 
+    @Field({ nullable: true })
+    RecordMetadata?: string | null;
+
+    @Field({ nullable: true })
+    StartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    EndedAt?: Date | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -33727,9 +37828,9 @@ export class MJDuplicateRun_ {
     @MaxLength(36)
     StartedByUserID: string;
         
-    @Field() 
+    @Field({nullable: true, description: `Optional List ID to narrow the scope of duplicate detection. When NULL, all records in the entity are scanned. When set, only records in the specified list are checked for duplicates.`}) 
     @MaxLength(36)
-    SourceListID: string;
+    SourceListID?: string;
         
     @Field() 
     StartedAt: Date;
@@ -33761,6 +37862,21 @@ export class MJDuplicateRun_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `Total entity records to check for duplicates in this run.`}) 
+    TotalItemCount?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of records checked so far. Used for progress percentage.`}) 
+    ProcessedItemCount?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Resume cursor for large-scale duplicate detection. Stores the offset of the last completed batch.`}) 
+    LastProcessedOffset?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of records processed per batch during duplicate detection.`}) 
+    BatchSize?: number;
+        
+    @Field(() => Boolean, {description: `When set to 1, duplicate detection stops after the current batch. Used for pause/cancel.`}) 
+    CancellationRequested: boolean;
+        
     @Field() 
     @MaxLength(255)
     Entity: string;
@@ -33769,9 +37885,9 @@ export class MJDuplicateRun_ {
     @MaxLength(100)
     StartedByUser: string;
         
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(100)
-    SourceList: string;
+    SourceList?: string;
         
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -33797,7 +37913,7 @@ export class CreateMJDuplicateRunInput {
     StartedByUserID?: string;
 
     @Field({ nullable: true })
-    SourceListID?: string;
+    SourceListID: string | null;
 
     @Field({ nullable: true })
     StartedAt?: Date;
@@ -33819,6 +37935,24 @@ export class CreateMJDuplicateRunInput {
 
     @Field({ nullable: true })
     ProcessingErrorMessage: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalItemCount: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ProcessedItemCount?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    LastProcessedOffset?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    BatchSize?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CancellationRequested?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -33837,7 +37971,7 @@ export class UpdateMJDuplicateRunInput {
     StartedByUserID?: string;
 
     @Field({ nullable: true })
-    SourceListID?: string;
+    SourceListID?: string | null;
 
     @Field({ nullable: true })
     StartedAt?: Date;
@@ -33860,8 +37994,26 @@ export class UpdateMJDuplicateRunInput {
     @Field({ nullable: true })
     ProcessingErrorMessage?: string | null;
 
+    @Field(() => Int, { nullable: true })
+    TotalItemCount?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ProcessedItemCount?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    LastProcessedOffset?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    BatchSize?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CancellationRequested?: boolean;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -34019,6 +38171,9 @@ export class CreateMJEmployeeCompanyIntegrationInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -34044,6 +38199,9 @@ export class UpdateMJEmployeeCompanyIntegrationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -34178,6 +38336,9 @@ export class CreateMJEmployeeRoleInput {
 
     @Field({ nullable: true })
     RoleID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -34197,6 +38358,9 @@ export class UpdateMJEmployeeRoleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -34331,6 +38495,9 @@ export class CreateMJEmployeeSkillInput {
 
     @Field({ nullable: true })
     SkillID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -34350,6 +38517,9 @@ export class UpdateMJEmployeeSkillInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -34556,6 +38726,9 @@ export class CreateMJEmployeeInput {
 
     @Field(() => Boolean, { nullable: true })
     Active?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -34593,6 +38766,9 @@ export class UpdateMJEmployeeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -34812,6 +38988,9 @@ export class CreateMJEncryptionAlgorithmInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -34846,6 +39025,9 @@ export class UpdateMJEncryptionAlgorithmInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -35017,6 +39199,9 @@ export class CreateMJEncryptionKeySourceInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -35051,6 +39236,9 @@ export class UpdateMJEncryptionKeySourceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -35257,6 +39445,9 @@ export class CreateMJEncryptionKeyInput {
 
     @Field({ nullable: true })
     ExpiresAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -35303,6 +39494,9 @@ export class UpdateMJEncryptionKeyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -35605,6 +39799,27 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).`}) 
     AllowMultipleSubtypes: boolean;
         
+    @Field(() => Boolean, {description: `When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.`}) 
+    AutoUpdateFullTextSearch: boolean;
+        
+    @Field(() => Boolean, {description: `When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.`}) 
+    AutoUpdateAllowUserSearchAPI: boolean;
+        
+    @Field(() => Boolean, {description: `When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.`}) 
+    TrustServerCacheCompletely: boolean;
+        
+    @Field(() => Boolean, {description: `When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).`}) 
+    SupportsGeoCoding: boolean;
+        
+    @Field(() => Boolean, {description: `When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.`}) 
+    AutoUpdateSupportsGeoCoding: boolean;
+        
+    @Field(() => Boolean, {description: `Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults.AllowCachingBySchema.`}) 
+    AllowCaching: boolean;
+        
+    @Field(() => Boolean, {description: `When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.`}) 
+    DetectExternalChanges: boolean;
+        
     @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
     CodeName?: string;
         
@@ -35764,6 +39979,9 @@ export class MJEntity_ {
     @Field(() => [MJEntityOrganicKey_])
     MJEntityOrganicKeys_EntityIDArray: MJEntityOrganicKey_[]; // Link to MJEntityOrganicKeys
     
+    @Field(() => [MJRecordGeoCode_])
+    MJRecordGeoCodes_EntityIDArray: MJRecordGeoCode_[]; // Link to MJRecordGeoCodes
+    
     @Field(() => [MJGeneratedCode_])
     MJGeneratedCodes_LinkedEntityIDArray: MJGeneratedCode_[]; // Link to MJGeneratedCodes
     
@@ -35776,8 +39994,17 @@ export class MJEntity_ {
     @Field(() => [MJEntityField_])
     MJEntityFields_RelatedEntityIDArray: MJEntityField_[]; // Link to MJEntityFields
     
+    @Field(() => [MJArchiveConfigurationEntity_])
+    MJArchiveConfigurationEntities_EntityIDArray: MJArchiveConfigurationEntity_[]; // Link to MJArchiveConfigurationEntities
+    
+    @Field(() => [MJArchiveRunDetail_])
+    MJArchiveRunDetails_EntityIDArray: MJArchiveRunDetail_[]; // Link to MJArchiveRunDetails
+    
     @Field(() => [MJResourceType_])
     MJResourceTypes_CategoryEntityIDArray: MJResourceType_[]; // Link to MJResourceTypes
+    
+    @Field(() => [MJContentSource_])
+    MJContentSources_EntityIDArray: MJContentSource_[]; // Link to MJContentSources
     
     @Field(() => [MJTestRun_])
     MJTestRuns_TargetLogEntityIDArray: MJTestRun_[]; // Link to MJTestRuns
@@ -35953,6 +40180,30 @@ export class CreateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowMultipleSubtypes?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateFullTextSearch?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateAllowUserSearchAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    TrustServerCacheCompletely?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsGeoCoding?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateSupportsGeoCoding?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowCaching?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    DetectExternalChanges?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -36123,8 +40374,32 @@ export class UpdateMJEntityInput {
     @Field(() => Boolean, { nullable: true })
     AllowMultipleSubtypes?: boolean;
 
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateFullTextSearch?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateAllowUserSearchAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    TrustServerCacheCompletely?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsGeoCoding?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateSupportsGeoCoding?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowCaching?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    DetectExternalChanges?: boolean;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -36654,6 +40929,16 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJRecordGeoCode_])
+    async MJRecordGeoCodes_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Geo Codes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordGeoCodes')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Geo Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Geo Codes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJGeneratedCode_])
     async MJGeneratedCodes_LinkedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Generated Codes', userPayload);
@@ -36694,6 +40979,26 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJArchiveConfigurationEntity_])
+    async MJArchiveConfigurationEntities_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Configuration Entities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurationEntities')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configuration Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configuration Entities', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJArchiveRunDetail_])
+    async MJArchiveRunDetails_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRunDetails')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJResourceType_])
     async MJResourceTypes_CategoryEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Resource Types', userPayload);
@@ -36701,6 +41006,16 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwResourceTypes')} WHERE ${provider.QuoteIdentifier('CategoryEntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Resource Types', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Resource Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentSource_])
+    async MJContentSources_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentSources')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Sources', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -36811,6 +41126,9 @@ export class CreateMJEntityActionFilterInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -36836,6 +41154,9 @@ export class UpdateMJEntityActionFilterInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -36970,6 +41291,9 @@ export class CreateMJEntityActionInvocationTypeInput {
 
     @Field(() => Int, { nullable: true })
     DisplaySequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -36992,6 +41316,9 @@ export class UpdateMJEntityActionInvocationTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -37143,6 +41470,9 @@ export class CreateMJEntityActionInvocationInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -37165,6 +41495,9 @@ export class UpdateMJEntityActionInvocationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -37318,6 +41651,9 @@ export class CreateMJEntityActionParamInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -37346,6 +41682,9 @@ export class UpdateMJEntityActionParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -37496,6 +41835,9 @@ export class CreateMJEntityActionInput {
 
     @Field({ nullable: true })
     ID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -37518,6 +41860,9 @@ export class UpdateMJEntityActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -37756,6 +42101,9 @@ export class CreateMJEntityAIActionInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -37805,6 +42153,9 @@ export class UpdateMJEntityAIActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -37951,6 +42302,9 @@ export class CreateMJEntityCommunicationFieldInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -37973,6 +42327,9 @@ export class UpdateMJEntityCommunicationFieldInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -38116,6 +42473,9 @@ export class CreateMJEntityCommunicationMessageTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -38138,6 +42498,9 @@ export class UpdateMJEntityCommunicationMessageTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -38290,6 +42653,9 @@ export class CreateMJEntityDocumentRunInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -38315,6 +42681,9 @@ export class UpdateMJEntityDocumentRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -38457,6 +42826,9 @@ export class CreateMJEntityDocumentSettingInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -38482,6 +42854,9 @@ export class UpdateMJEntityDocumentSettingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -38610,6 +42985,9 @@ export class CreateMJEntityDocumentTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -38629,6 +43007,9 @@ export class UpdateMJEntityDocumentTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -38776,6 +43157,13 @@ export class MJEntityDocument_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional foreign key to the specific Vector Index where this entity document's embeddings should be stored. When specified, the vectorization pipeline will upsert vectors directly to this index rather than auto-creating or looking up an index based on VectorDatabaseID + AIModelID. This enables explicit control over which Pinecone/Weaviate/etc. index is used per entity document, supporting multi-index architectures and shared indexes across entity types.`}) 
+    @MaxLength(36)
+    VectorIndexID?: string;
+        
+    @Field({nullable: true, description: `JSON configuration settings for this entity document. Controls vector metadata field inclusion (which fields get stored in the vector index for search result display), large field truncation limits, and future settings like sync scheduling and threshold overrides. NULL means use system defaults.`}) 
+    Configuration?: string;
+        
     @Field() 
     @MaxLength(100)
     Type: string;
@@ -38796,6 +43184,10 @@ export class MJEntityDocument_ {
     @MaxLength(50)
     AIModel: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    VectorIndex?: string;
+        
     @Field(() => [MJEntityDocumentRun_])
     MJEntityDocumentRuns_EntityDocumentIDArray: MJEntityDocumentRun_[]; // Link to MJEntityDocumentRuns
     
@@ -38804,6 +43196,9 @@ export class MJEntityDocument_ {
     
     @Field(() => [MJEntityRecordDocument_])
     MJEntityRecordDocuments_EntityDocumentIDArray: MJEntityRecordDocument_[]; // Link to MJEntityRecordDocuments
+    
+    @Field(() => [MJContentSource_])
+    MJContentSources_EntityDocumentIDArray: MJContentSource_[]; // Link to MJContentSources
     
 }
 
@@ -38841,6 +43236,15 @@ export class CreateMJEntityDocumentInput {
 
     @Field(() => Float, { nullable: true })
     AbsoluteMatchThreshold?: number;
+
+    @Field({ nullable: true })
+    VectorIndexID: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -38879,8 +43283,17 @@ export class UpdateMJEntityDocumentInput {
     @Field(() => Float, { nullable: true })
     AbsoluteMatchThreshold?: number;
 
+    @Field({ nullable: true })
+    VectorIndexID?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -38967,6 +43380,16 @@ export class MJEntityDocumentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityRecordDocuments')} WHERE ${provider.QuoteIdentifier('EntityDocumentID')}='${mjentitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Record Documents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentSource_])
+    async MJContentSources_EntityDocumentIDArray(@Root() mjentitydocument_: MJEntityDocument_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentSources')} WHERE ${provider.QuoteIdentifier('EntityDocumentID')}='${mjentitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Sources', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -39068,6 +43491,9 @@ export class CreateMJEntityFieldValueInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -39096,6 +43522,9 @@ export class UpdateMJEntityFieldValueInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -39388,6 +43817,29 @@ export class MJEntityField_ {
     @Field({nullable: true, description: `JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`}) 
     RelatedEntityJoinFields?: string;
         
+    @Field({nullable: true, description: `The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.`}) 
+    @MaxLength(255)
+    JSONType?: string;
+        
+    @Field(() => Boolean, {description: `If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.`}) 
+    JSONTypeIsArray: boolean;
+        
+    @Field({nullable: true, description: `Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`}) 
+    JSONTypeDefinition?: string;
+        
+    @Field({description: `Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.`}) 
+    @MaxLength(20)
+    UserSearchPredicateAPI: string;
+        
+    @Field(() => Boolean, {description: `When true, CodeGen LLM can auto-set the UserSearchPredicateAPI value during code generation runs.`}) 
+    AutoUpdateUserSearchPredicate: boolean;
+        
+    @Field(() => Boolean, {description: `When true, CodeGen LLM can auto-set the FullTextSearchEnabled value during code generation runs.`}) 
+    AutoUpdateFullTextSearch: boolean;
+        
+    @Field(() => Boolean, {description: `When true (default), CodeGen can automatically suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, GeoAddress, etc.) during LLM field categorization. Set to 0 to lock admin-specified ExtendedType.`}) 
+    AutoUpdateExtendedType: boolean;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -39573,6 +44025,30 @@ export class CreateMJEntityFieldInput {
 
     @Field({ nullable: true })
     RelatedEntityJoinFields: string | null;
+
+    @Field({ nullable: true })
+    JSONType: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    JSONTypeIsArray?: boolean;
+
+    @Field({ nullable: true })
+    JSONTypeDefinition: string | null;
+
+    @Field({ nullable: true })
+    UserSearchPredicateAPI?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateUserSearchPredicate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateFullTextSearch?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateExtendedType?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -39710,8 +44186,32 @@ export class UpdateMJEntityFieldInput {
     @Field({ nullable: true })
     RelatedEntityJoinFields?: string | null;
 
+    @Field({ nullable: true })
+    JSONType?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    JSONTypeIsArray?: boolean;
+
+    @Field({ nullable: true })
+    JSONTypeDefinition?: string | null;
+
+    @Field({ nullable: true })
+    UserSearchPredicateAPI?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateUserSearchPredicate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateFullTextSearch?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateExtendedType?: boolean;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -39934,6 +44434,9 @@ export class CreateMJEntityOrganicKeyRelatedEntityInput {
 
     @Field(() => Int, { nullable: true })
     Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -39983,6 +44486,9 @@ export class UpdateMJEntityOrganicKeyRelatedEntityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -40161,6 +44667,9 @@ export class CreateMJEntityOrganicKeyInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -40201,6 +44710,9 @@ export class UpdateMJEntityOrganicKeyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -40350,6 +44862,10 @@ export class MJEntityPermission_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Allow or Deny. Deny rows override any Allow grants on the same (EntityID, RoleID, action) at evaluation time, letting administrators exclude a role from an action another role grants.`}) 
+    @MaxLength(10)
+    Type: string;
+        
     @Field() 
     @MaxLength(255)
     Entity: string;
@@ -40417,6 +44933,12 @@ export class CreateMJEntityPermissionInput {
 
     @Field({ nullable: true })
     DeleteRLSFilterID: string | null;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -40458,8 +44980,14 @@ export class UpdateMJEntityPermissionInput {
     @Field({ nullable: true })
     DeleteRLSFilterID?: string | null;
 
+    @Field({ nullable: true })
+    Type?: string;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -40614,6 +45142,9 @@ export class MJEntityRecordDocument_ {
     @MaxLength(255)
     VectorIndex: string;
         
+    @Field(() => [MJContentItem_])
+    MJContentItems_EntityRecordDocumentIDArray: MJContentItem_[]; // Link to MJContentItems
+    
 }
 
 //****************************************************************************
@@ -40647,6 +45178,9 @@ export class CreateMJEntityRecordDocumentInput {
 
     @Field({ nullable: true })
     EntityRecordUpdatedAt?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -40684,6 +45218,9 @@ export class UpdateMJEntityRecordDocumentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -40743,6 +45280,16 @@ export class MJEntityRecordDocumentResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJContentItem_])
+    async MJContentItems_EntityRecordDocumentIDArray(@Root() mjentityrecorddocument_: MJEntityRecordDocument_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Items', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItems')} WHERE ${provider.QuoteIdentifier('EntityRecordDocumentID')}='${mjentityrecorddocument_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Items', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Items', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJEntityRecordDocument_)
     async CreateMJEntityRecordDocument(
         @Arg('input', () => CreateMJEntityRecordDocumentInput) input: CreateMJEntityRecordDocumentInput,
@@ -40819,6 +45366,9 @@ export class CreateMJEntityRelationshipDisplayComponentInput {
 
     @Field({ nullable: true })
     RelationshipType?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -40841,6 +45391,9 @@ export class UpdateMJEntityRelationshipDisplayComponentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -41143,6 +45696,9 @@ export class CreateMJEntityRelationshipInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdateAdditionalFieldsToInclude?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -41219,6 +45775,9 @@ export class UpdateMJEntityRelationshipInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -41371,6 +45930,9 @@ export class CreateMJEntitySettingInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -41396,6 +45958,9 @@ export class UpdateMJEntitySettingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -41554,6 +46119,9 @@ export class CreateMJEnvironmentInput {
 
     @Field({ nullable: true })
     Settings: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -41579,6 +46147,9 @@ export class UpdateMJEnvironmentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -41823,6 +46394,9 @@ export class CreateMJErrorLogInput {
 
     @Field({ nullable: true })
     Details: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -41860,6 +46434,9 @@ export class UpdateMJErrorLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -42029,6 +46606,9 @@ export class CreateMJExplorerNavigationItemInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -42069,6 +46649,9 @@ export class UpdateMJExplorerNavigationItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -42215,6 +46798,9 @@ export class CreateMJFileCategoryInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -42237,6 +46823,9 @@ export class UpdateMJFileCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -42398,6 +46987,9 @@ export class CreateMJFileEntityRecordLinkInput {
 
     @Field({ nullable: true })
     RecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -42420,6 +47012,9 @@ export class UpdateMJFileEntityRecordLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -42509,6 +47104,207 @@ export class MJFileEntityRecordLinkResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: File Storage Account Permissions
+//****************************************************************************
+@ObjectType({ description: `Controls which users and roles can access specific file storage accounts. If no permission records exist for an account, it is accessible to everyone (backwards compatible).` })
+export class MJFileStorageAccountPermission_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `The storage account this permission applies to.`}) 
+    @MaxLength(36)
+    FileStorageAccountID: string;
+        
+    @Field({description: `Permission type: User (requires UserID), Role (requires RoleID), or Everyone (both NULL).`}) 
+    @MaxLength(20)
+    Type: string;
+        
+    @Field({nullable: true, description: `Required when Type is User. The specific user granted access to this storage account.`}) 
+    @MaxLength(36)
+    UserID?: string;
+        
+    @Field({nullable: true, description: `Required when Type is Role. The role granted access to this storage account.`}) 
+    @MaxLength(36)
+    RoleID?: string;
+        
+    @Field(() => Boolean, {description: `Whether the grantee can read/search files in this storage account.`}) 
+    CanRead: boolean;
+        
+    @Field(() => Boolean, {description: `Whether the grantee can upload/modify files in this storage account.`}) 
+    CanWrite: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    FileStorageAccount: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Role?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: File Storage Account Permissions
+//****************************************************************************
+@InputType()
+export class CreateMJFileStorageAccountPermissionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    FileStorageAccountID?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    UserID: string | null;
+
+    @Field({ nullable: true })
+    RoleID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CanRead?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanWrite?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: File Storage Account Permissions
+//****************************************************************************
+@InputType()
+export class UpdateMJFileStorageAccountPermissionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    FileStorageAccountID?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
+
+    @Field({ nullable: true })
+    RoleID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CanRead?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanWrite?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: File Storage Account Permissions
+//****************************************************************************
+@ObjectType()
+export class RunMJFileStorageAccountPermissionViewResult {
+    @Field(() => [MJFileStorageAccountPermission_])
+    Results: MJFileStorageAccountPermission_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJFileStorageAccountPermission_)
+export class MJFileStorageAccountPermissionResolver extends ResolverBase {
+    @Query(() => RunMJFileStorageAccountPermissionViewResult)
+    async RunMJFileStorageAccountPermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJFileStorageAccountPermissionViewResult)
+    async RunMJFileStorageAccountPermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJFileStorageAccountPermissionViewResult)
+    async RunMJFileStorageAccountPermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: File Storage Account Permissions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJFileStorageAccountPermission_, { nullable: true })
+    async MJFileStorageAccountPermission(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJFileStorageAccountPermission_ | null> {
+        this.CheckUserReadPermissions('MJ: File Storage Account Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFileStorageAccountPermissions')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: File Storage Account Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: File Storage Account Permissions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJFileStorageAccountPermission_)
+    async CreateMJFileStorageAccountPermission(
+        @Arg('input', () => CreateMJFileStorageAccountPermissionInput) input: CreateMJFileStorageAccountPermissionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: File Storage Account Permissions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJFileStorageAccountPermission_)
+    async UpdateMJFileStorageAccountPermission(
+        @Arg('input', () => UpdateMJFileStorageAccountPermissionInput) input: UpdateMJFileStorageAccountPermissionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: File Storage Account Permissions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJFileStorageAccountPermission_)
+    async DeleteMJFileStorageAccountPermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: File Storage Account Permissions', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: File Storage Accounts
 //****************************************************************************
 @ObjectType({ description: `Enterprise-level file storage accounts. Each account represents a configured connection to a storage provider (e.g., Marketing Dropbox, Engineering Google Drive) with credentials managed centrally.` })
@@ -42538,6 +47334,9 @@ export class MJFileStorageAccount_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When true, this storage account is included in universal/global search results. Only effective if the associated provider supports search (SupportsSearch = 1).`}) 
+    IncludeInGlobalSearch: boolean;
+        
     @Field() 
     @MaxLength(50)
     Provider: string;
@@ -42546,6 +47345,21 @@ export class MJFileStorageAccount_ {
     @MaxLength(200)
     Credential: string;
         
+    @Field(() => [MJAIAgentType_])
+    MJAIAgentTypes_DefaultStorageAccountIDArray: MJAIAgentType_[]; // Link to MJAIAgentTypes
+    
+    @Field(() => [MJArchiveConfiguration_])
+    MJArchiveConfigurations_StorageAccountIDArray: MJArchiveConfiguration_[]; // Link to MJArchiveConfigurations
+    
+    @Field(() => [MJFileStorageAccountPermission_])
+    MJFileStorageAccountPermissions_FileStorageAccountIDArray: MJFileStorageAccountPermission_[]; // Link to MJFileStorageAccountPermissions
+    
+    @Field(() => [MJAIAgentCategory_])
+    MJAIAgentCategories_DefaultStorageAccountIDArray: MJAIAgentCategory_[]; // Link to MJAIAgentCategories
+    
+    @Field(() => [MJAIAgent_])
+    MJAIAgents_DefaultStorageAccountIDArray: MJAIAgent_[]; // Link to MJAIAgents
+    
 }
 
 //****************************************************************************
@@ -42567,6 +47381,12 @@ export class CreateMJFileStorageAccountInput {
 
     @Field({ nullable: true })
     CredentialID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IncludeInGlobalSearch?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -42590,8 +47410,14 @@ export class UpdateMJFileStorageAccountInput {
     @Field({ nullable: true })
     CredentialID?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    IncludeInGlobalSearch?: boolean;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -42651,6 +47477,56 @@ export class MJFileStorageAccountResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJAIAgentType_])
+    async MJAIAgentTypes_DefaultStorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentTypes')} WHERE ${provider.QuoteIdentifier('DefaultStorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJArchiveConfiguration_])
+    async MJArchiveConfigurations_StorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Configurations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurations')} WHERE ${provider.QuoteIdentifier('StorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configurations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configurations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJFileStorageAccountPermission_])
+    async MJFileStorageAccountPermissions_FileStorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: File Storage Account Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFileStorageAccountPermissions')} WHERE ${provider.QuoteIdentifier('FileStorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: File Storage Account Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: File Storage Account Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentCategory_])
+    async MJAIAgentCategories_DefaultStorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Categories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentCategories')} WHERE ${provider.QuoteIdentifier('DefaultStorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Categories', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgent_])
+    async MJAIAgents_DefaultStorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgents')} WHERE ${provider.QuoteIdentifier('DefaultStorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJFileStorageAccount_)
     async CreateMJFileStorageAccount(
         @Arg('input', () => CreateMJFileStorageAccountInput) input: CreateMJFileStorageAccountInput,
@@ -42773,6 +47649,9 @@ export class CreateMJFileStorageProviderInput {
 
     @Field(() => Boolean, { nullable: true })
     RequiresOAuth?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -42813,6 +47692,9 @@ export class UpdateMJFileStorageProviderInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -43003,6 +47885,9 @@ export class MJFile_ {
     @Field(() => [MJAIAgentRunMedia_])
     MJAIAgentRunMedias_FileIDArray: MJAIAgentRunMedia_[]; // Link to MJAIAgentRunMedias
     
+    @Field(() => [MJArtifactVersion_])
+    MJArtifactVersions_FileIDArray: MJArtifactVersion_[]; // Link to MJArtifactVersions
+    
 }
 
 //****************************************************************************
@@ -43033,6 +47918,9 @@ export class CreateMJFileInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -43067,6 +47955,9 @@ export class UpdateMJFileInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -43166,6 +48057,16 @@ export class MJFileResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJArtifactVersion_])
+    async MJArtifactVersions_FileIDArray(@Root() mjfile_: MJFile_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Artifact Versions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArtifactVersions')} WHERE ${provider.QuoteIdentifier('FileID')}='${mjfile_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Versions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJFile_)
     async CreateMJFile(
         @Arg('input', () => CreateMJFileInput) input: CreateMJFileInput,
@@ -43253,6 +48154,9 @@ export class CreateMJGeneratedCodeCategoryInput {
 
     @Field({ nullable: true })
     ParentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -43275,6 +48179,9 @@ export class UpdateMJGeneratedCodeCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -43491,6 +48398,9 @@ export class CreateMJGeneratedCodeInput {
 
     @Field({ nullable: true })
     Language?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -43537,6 +48447,9 @@ export class UpdateMJGeneratedCodeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -43626,6 +48539,204 @@ export class MJGeneratedCodeResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Instance Configurations
+//****************************************************************************
+@ObjectType({ description: `Instance-level feature toggles and configuration. Controls which features are enabled per MJ Explorer deployment.` })
+export class MJInstanceConfiguration_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Unique dot-notation key identifying the feature, e.g. Shell.SearchBar.Enabled.`}) 
+    @MaxLength(200)
+    FeatureKey: string;
+        
+    @Field({description: `Current value for this feature setting.`}) 
+    Value: string;
+        
+    @Field({description: `Data type of the value: boolean, string, number, or json.`}) 
+    @MaxLength(20)
+    ValueType: string;
+        
+    @Field({description: `Grouping category for admin UI display.`}) 
+    @MaxLength(100)
+    Category: string;
+        
+    @Field({description: `Human-readable display name for the setting.`}) 
+    @MaxLength(200)
+    DisplayName: string;
+        
+    @Field({nullable: true, description: `Optional extended description or help text for the setting.`}) 
+    Description?: string;
+        
+    @Field({description: `Factory default value. Used when resetting to defaults.`}) 
+    DefaultValue: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Instance Configurations
+//****************************************************************************
+@InputType()
+export class CreateMJInstanceConfigurationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    FeatureKey?: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    ValueType?: string;
+
+    @Field({ nullable: true })
+    Category?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DefaultValue?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Instance Configurations
+//****************************************************************************
+@InputType()
+export class UpdateMJInstanceConfigurationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    FeatureKey?: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    ValueType?: string;
+
+    @Field({ nullable: true })
+    Category?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DefaultValue?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Instance Configurations
+//****************************************************************************
+@ObjectType()
+export class RunMJInstanceConfigurationViewResult {
+    @Field(() => [MJInstanceConfiguration_])
+    Results: MJInstanceConfiguration_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJInstanceConfiguration_)
+export class MJInstanceConfigurationResolver extends ResolverBase {
+    @Query(() => RunMJInstanceConfigurationViewResult)
+    async RunMJInstanceConfigurationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInstanceConfigurationViewResult)
+    async RunMJInstanceConfigurationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInstanceConfigurationViewResult)
+    async RunMJInstanceConfigurationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Instance Configurations';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJInstanceConfiguration_, { nullable: true })
+    async MJInstanceConfiguration(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJInstanceConfiguration_ | null> {
+        this.CheckUserReadPermissions('MJ: Instance Configurations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwInstanceConfigurations')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Instance Configurations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Instance Configurations', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJInstanceConfiguration_)
+    async CreateMJInstanceConfiguration(
+        @Arg('input', () => CreateMJInstanceConfigurationInput) input: CreateMJInstanceConfigurationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Instance Configurations', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJInstanceConfiguration_)
+    async UpdateMJInstanceConfiguration(
+        @Arg('input', () => UpdateMJInstanceConfigurationInput) input: UpdateMJInstanceConfigurationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Instance Configurations', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJInstanceConfiguration_)
+    async DeleteMJInstanceConfiguration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Instance Configurations', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Integration Object Fields
 //****************************************************************************
 @ObjectType({ description: `Describes a field on an integration object, mirroring EntityField column patterns for type compatibility` })
@@ -43709,6 +48820,9 @@ export class MJIntegrationObjectField_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`}) 
+    IsCustom: boolean;
+        
     @Field() 
     @MaxLength(255)
     IntegrationObject: string;
@@ -43786,6 +48900,12 @@ export class CreateMJIntegrationObjectFieldInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsCustom?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -43857,8 +48977,14 @@ export class UpdateMJIntegrationObjectFieldInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    IsCustom?: boolean;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -44030,6 +49156,9 @@ export class MJIntegrationObject_ {
     @MaxLength(10)
     DeleteMethod?: string;
         
+    @Field(() => Boolean, {description: `When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`}) 
+    IsCustom: boolean;
+        
     @Field() 
     @MaxLength(100)
     Integration: string;
@@ -44106,6 +49235,12 @@ export class CreateMJIntegrationObjectInput {
 
     @Field({ nullable: true })
     DeleteMethod?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsCustom?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -44174,8 +49309,14 @@ export class UpdateMJIntegrationObjectInput {
     @Field({ nullable: true })
     DeleteMethod?: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    IsCustom?: boolean;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -44345,6 +49486,9 @@ export class CreateMJIntegrationSourceTypeInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -44373,6 +49517,9 @@ export class UpdateMJIntegrationSourceTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -44534,6 +49681,9 @@ export class CreateMJIntegrationURLFormatInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -44559,6 +49709,9 @@ export class UpdateMJIntegrationURLFormatInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -44757,6 +49910,9 @@ export class CreateMJIntegrationInput {
 
     @Field({ nullable: true })
     Icon: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -44797,6 +49953,9 @@ export class UpdateMJIntegrationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -44936,6 +50095,207 @@ export class MJIntegrationResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Knowledge Hub Saved Searches
+//****************************************************************************
+@ObjectType({ description: `User-saved search queries for the Knowledge Hub. Stores query text, active filters (JSON), and score thresholds so searches can be recalled or run on a schedule.` })
+export class MJKnowledgeHubSavedSearch_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    UserID: string;
+        
+    @Field() 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field() 
+    @MaxLength(1000)
+    Query: string;
+        
+    @Field({nullable: true, description: `JSON object with active filter selections. Keys are filter categories (Entity, Tags), values are arrays of selected option values.`}) 
+    Filters?: string;
+        
+    @Field(() => Float, {nullable: true}) 
+    MinScore?: number;
+        
+    @Field(() => Int, {nullable: true}) 
+    MaxResults?: number;
+        
+    @Field(() => Boolean, {description: `When enabled, the system will notify the user when new results match this saved search (future capability).`}) 
+    NotifyOnNewResults: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    User: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Knowledge Hub Saved Searches
+//****************************************************************************
+@InputType()
+export class CreateMJKnowledgeHubSavedSearchInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Query?: string;
+
+    @Field({ nullable: true })
+    Filters: string | null;
+
+    @Field(() => Float, { nullable: true })
+    MinScore: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxResults?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NotifyOnNewResults?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Knowledge Hub Saved Searches
+//****************************************************************************
+@InputType()
+export class UpdateMJKnowledgeHubSavedSearchInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Query?: string;
+
+    @Field({ nullable: true })
+    Filters?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    MinScore?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxResults?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NotifyOnNewResults?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Knowledge Hub Saved Searches
+//****************************************************************************
+@ObjectType()
+export class RunMJKnowledgeHubSavedSearchViewResult {
+    @Field(() => [MJKnowledgeHubSavedSearch_])
+    Results: MJKnowledgeHubSavedSearch_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJKnowledgeHubSavedSearch_)
+export class MJKnowledgeHubSavedSearchResolver extends ResolverBase {
+    @Query(() => RunMJKnowledgeHubSavedSearchViewResult)
+    async RunMJKnowledgeHubSavedSearchViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJKnowledgeHubSavedSearchViewResult)
+    async RunMJKnowledgeHubSavedSearchViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJKnowledgeHubSavedSearchViewResult)
+    async RunMJKnowledgeHubSavedSearchDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Knowledge Hub Saved Searches';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJKnowledgeHubSavedSearch_, { nullable: true })
+    async MJKnowledgeHubSavedSearch(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJKnowledgeHubSavedSearch_ | null> {
+        this.CheckUserReadPermissions('MJ: Knowledge Hub Saved Searches', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwKnowledgeHubSavedSearches')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Knowledge Hub Saved Searches', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Knowledge Hub Saved Searches', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJKnowledgeHubSavedSearch_)
+    async CreateMJKnowledgeHubSavedSearch(
+        @Arg('input', () => CreateMJKnowledgeHubSavedSearchInput) input: CreateMJKnowledgeHubSavedSearchInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Knowledge Hub Saved Searches', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJKnowledgeHubSavedSearch_)
+    async UpdateMJKnowledgeHubSavedSearch(
+        @Arg('input', () => UpdateMJKnowledgeHubSavedSearchInput) input: UpdateMJKnowledgeHubSavedSearchInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Knowledge Hub Saved Searches', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJKnowledgeHubSavedSearch_)
+    async DeleteMJKnowledgeHubSavedSearch(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Knowledge Hub Saved Searches', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Libraries
 //****************************************************************************
 @ObjectType({ description: `Stores information about the available libraries, including a list of classes/functions, type definitions, and sample code. You can add additional custom libraries here to make them avaialable to code generation features within the system.` })
@@ -44997,6 +50357,9 @@ export class CreateMJLibraryInput {
 
     @Field({ nullable: true })
     SampleCode: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -45025,6 +50388,9 @@ export class UpdateMJLibraryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -45182,6 +50548,9 @@ export class CreateMJLibraryItemInput {
 
     @Field({ nullable: true })
     Type?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -45204,6 +50573,9 @@ export class UpdateMJLibraryItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -45361,6 +50733,9 @@ export class CreateMJListCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -45386,6 +50761,9 @@ export class UpdateMJListCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -45555,6 +50933,9 @@ export class CreateMJListDetailInput {
 
     @Field({ nullable: true })
     AdditionalData: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -45583,6 +50964,9 @@ export class UpdateMJListDetailInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -45751,6 +51135,9 @@ export class CreateMJListInvitationInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -45785,6 +51172,9 @@ export class UpdateMJListInvitationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -45933,6 +51323,9 @@ export class CreateMJListShareInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -45958,6 +51351,9 @@ export class UpdateMJListShareInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -46146,6 +51542,9 @@ export class CreateMJListInput {
 
     @Field({ nullable: true })
     CompanyIntegrationID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -46180,6 +51579,9 @@ export class UpdateMJListInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -46383,6 +51785,9 @@ export class CreateMJMCPServerConnectionPermissionInput {
 
     @Field(() => Boolean, { nullable: true })
     CanViewCredentials?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -46414,6 +51819,9 @@ export class UpdateMJMCPServerConnectionPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -46566,6 +51974,9 @@ export class CreateMJMCPServerConnectionToolInput {
 
     @Field(() => Int, { nullable: true })
     MaxCallsPerMinute: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -46594,6 +52005,9 @@ export class UpdateMJMCPServerConnectionToolInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -46838,6 +52252,9 @@ export class CreateMJMCPServerConnectionInput {
 
     @Field({ nullable: true })
     EnvironmentVars: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -46899,6 +52316,9 @@ export class UpdateMJMCPServerConnectionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -47119,6 +52539,9 @@ export class MJMCPServerTool_ {
     @Field(() => [MJMCPServerConnectionTool_])
     MJMCPServerConnectionTools_MCPServerToolIDArray: MJMCPServerConnectionTool_[]; // Link to MJMCPServerConnectionTools
     
+    @Field(() => [MJMCPToolFavorite_])
+    MJMCPToolFavorites_MCPServerToolIDArray: MJMCPToolFavorite_[]; // Link to MJMCPToolFavorites
+    
     @Field(() => [MJMCPToolExecutionLog_])
     MJMCPToolExecutionLogs_MCPServerToolIDArray: MJMCPToolExecutionLog_[]; // Link to MJMCPToolExecutionLogs
     
@@ -47167,6 +52590,9 @@ export class CreateMJMCPServerToolInput {
 
     @Field({ nullable: true })
     GeneratedActionCategoryID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -47216,6 +52642,9 @@ export class UpdateMJMCPServerToolInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -47282,6 +52711,16 @@ export class MJMCPServerToolResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPServerConnectionTools')} WHERE ${provider.QuoteIdentifier('MCPServerToolID')}='${mjmcpservertool_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connection Tools', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connection Tools', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPToolFavorite_])
+    async MJMCPToolFavorites_MCPServerToolIDArray(@Root() mjmcpservertool_: MJMCPServerTool_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Tool Favorites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPToolFavorites')} WHERE ${provider.QuoteIdentifier('MCPServerToolID')}='${mjmcpservertool_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Tool Favorites', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -47505,6 +52944,9 @@ export class CreateMJMCPServerInput {
 
     @Field(() => Boolean, { nullable: true })
     OAuthRequirePKCE?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -47584,6 +53026,9 @@ export class UpdateMJMCPServerInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -47814,6 +53259,9 @@ export class CreateMJMCPToolExecutionLogInput {
 
     @Field(() => Boolean, { nullable: true })
     OutputTruncated?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -47863,6 +53311,9 @@ export class UpdateMJMCPToolExecutionLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -47947,6 +53398,165 @@ export class MJMCPToolExecutionLogResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: MCP Tool Execution Logs', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: MCP Tool Favorites
+//****************************************************************************
+@ObjectType({ description: `Per-user favorite marker for an MCP Server Tool. Each row indicates the user has starred the referenced tool for quick access in the MCP Dashboard Tools tab and in the Test Tool dialog picker. Combined with UserID forms a unique pair so a user cannot favorite the same tool twice.` })
+export class MJMCPToolFavorite_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `The user who starred this tool. Favorites are per-user; multiple users can favorite the same tool independently. References the MJ User table.`}) 
+    @MaxLength(36)
+    UserID: string;
+        
+    @Field({description: `The MCP Server Tool that has been favorited. Combined with UserID this forms a unique constraint so a user cannot favorite the same tool twice.`}) 
+    @MaxLength(36)
+    MCPServerToolID: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    MCPServerTool?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Tool Favorites
+//****************************************************************************
+@InputType()
+export class CreateMJMCPToolFavoriteInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    MCPServerToolID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: MCP Tool Favorites
+//****************************************************************************
+@InputType()
+export class UpdateMJMCPToolFavoriteInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    MCPServerToolID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: MCP Tool Favorites
+//****************************************************************************
+@ObjectType()
+export class RunMJMCPToolFavoriteViewResult {
+    @Field(() => [MJMCPToolFavorite_])
+    Results: MJMCPToolFavorite_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMCPToolFavorite_)
+export class MJMCPToolFavoriteResolver extends ResolverBase {
+    @Query(() => RunMJMCPToolFavoriteViewResult)
+    async RunMJMCPToolFavoriteViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPToolFavoriteViewResult)
+    async RunMJMCPToolFavoriteViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMCPToolFavoriteViewResult)
+    async RunMJMCPToolFavoriteDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: MCP Tool Favorites';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMCPToolFavorite_, { nullable: true })
+    async MJMCPToolFavorite(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMCPToolFavorite_ | null> {
+        this.CheckUserReadPermissions('MJ: MCP Tool Favorites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPToolFavorites')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: MCP Tool Favorites', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMCPToolFavorite_)
+    async CreateMJMCPToolFavorite(
+        @Arg('input', () => CreateMJMCPToolFavoriteInput) input: CreateMJMCPToolFavoriteInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: MCP Tool Favorites', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMCPToolFavorite_)
+    async UpdateMJMCPToolFavorite(
+        @Arg('input', () => UpdateMJMCPToolFavoriteInput) input: UpdateMJMCPToolFavoriteInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: MCP Tool Favorites', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMCPToolFavorite_)
+    async DeleteMJMCPToolFavorite(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: MCP Tool Favorites', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -48065,6 +53675,9 @@ export class CreateMJOAuthAuthServerMetadataCacheInput {
 
     @Field({ nullable: true })
     ExpiresAt?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -48120,6 +53733,9 @@ export class UpdateMJOAuthAuthServerMetadataCacheInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -48340,6 +53956,9 @@ export class CreateMJOAuthAuthorizationStateInput {
 
     @Field({ nullable: true })
     FrontendReturnURL: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -48398,6 +54017,9 @@ export class UpdateMJOAuthAuthorizationStateInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -48615,6 +54237,9 @@ export class CreateMJOAuthClientRegistrationInput {
 
     @Field({ nullable: true })
     RegistrationResponse?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -48673,6 +54298,9 @@ export class UpdateMJOAuthClientRegistrationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -48846,6 +54474,9 @@ export class CreateMJOAuthTokenInput {
 
     @Field(() => Int, { nullable: true })
     RefreshCount?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -48883,6 +54514,9 @@ export class UpdateMJOAuthTokenInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -49045,6 +54679,9 @@ export class CreateMJOpenAppDependencyInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -49076,6 +54713,9 @@ export class UpdateMJOpenAppDependencyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -49280,6 +54920,9 @@ export class CreateMJOpenAppInstallHistoryInput {
 
     @Field({ nullable: true })
     ErrorPhase: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -49332,6 +54975,9 @@ export class UpdateMJOpenAppInstallHistoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -49573,6 +55219,9 @@ export class CreateMJOpenAppInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -49637,6 +55286,9 @@ export class UpdateMJOpenAppInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -49795,6 +55447,9 @@ export class CreateMJOutputDeliveryTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -49814,6 +55469,9 @@ export class UpdateMJOutputDeliveryTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -49958,6 +55616,9 @@ export class CreateMJOutputFormatTypeInput {
 
     @Field({ nullable: true })
     DisplayFormat: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -49980,6 +55641,9 @@ export class UpdateMJOutputFormatTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -50118,6 +55782,9 @@ export class CreateMJOutputTriggerTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -50137,6 +55804,9 @@ export class UpdateMJOutputTriggerTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -50236,6 +55906,241 @@ export class MJOutputTriggerTypeResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Permission Domains
+//****************************************************************************
+@ObjectType({ description: `Catalog of registered permission subsystems. Each row describes one permission provider; the PermissionEngine uses ProviderClassName as the ClassFactory key to instantiate providers at startup. Enables unified permission queries across all subsystems.` })
+export class MJPermissionDomain_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Human-readable unique name for the permission domain (e.g., "Entity Permissions", "Dashboard Permissions"). Used in admin UI and as the domain identifier in PermissionEngine API calls.`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Detailed description of what this permission domain covers and how permissions are enforced.`}) 
+    Description?: string;
+        
+    @Field({description: `ClassFactory key used to instantiate this provider. Must match the key passed to @RegisterClass(PermissionProviderBase, 'ClassName'). Convention: prefix with MJ for built-in providers (e.g., MJEntityPermissionProvider).`}) 
+    @MaxLength(500)
+    ProviderClassName: string;
+        
+    @Field({description: `Comma-delimited list of grantee types this provider supports. Valid tokens: User, Role, Everyone, Public. Example: "User,Role".`}) 
+    @MaxLength(200)
+    SupportedGranteeTypes: string;
+        
+    @Field({description: `Comma-delimited list of permission actions this provider can evaluate. Valid tokens: Read, Create, Update, Delete, Share, Execute, Admin. Example: "Read,Create,Update,Delete".`}) 
+    @MaxLength(500)
+    SupportedActions: string;
+        
+    @Field(() => Boolean, {description: `When true, this provider supports explicit Deny records that override Allow grants at the same scope.`}) 
+    SupportsDeny: boolean;
+        
+    @Field(() => Boolean, {description: `When true, this provider supports time-bound permissions with an expiration timestamp.`}) 
+    SupportsExpiration: boolean;
+        
+    @Field(() => Boolean, {description: `When true, this provider resolves permissions hierarchically (e.g., category-level grants cascade to items within the category).`}) 
+    SupportsHierarchyInheritance: boolean;
+        
+    @Field(() => Boolean, {description: `When false, the PermissionEngine skips loading this provider at startup. Use to temporarily disable a provider without removing its record.`}) 
+    IsActive: boolean;
+        
+    @Field(() => Int, {description: `Sort order for displaying domains in the Sharing Center admin UI. Lower numbers appear first.`}) 
+    DisplayOrder: number;
+        
+    @Field({nullable: true, description: `Optional Font Awesome icon class for display in admin UI (e.g., "fa-solid fa-shield").`}) 
+    @MaxLength(100)
+    Icon?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Permission Domains
+//****************************************************************************
+@InputType()
+export class CreateMJPermissionDomainInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ProviderClassName?: string;
+
+    @Field({ nullable: true })
+    SupportedGranteeTypes?: string;
+
+    @Field({ nullable: true })
+    SupportedActions?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsDeny?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsExpiration?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsHierarchyInheritance?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DisplayOrder?: number;
+
+    @Field({ nullable: true })
+    Icon: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Permission Domains
+//****************************************************************************
+@InputType()
+export class UpdateMJPermissionDomainInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ProviderClassName?: string;
+
+    @Field({ nullable: true })
+    SupportedGranteeTypes?: string;
+
+    @Field({ nullable: true })
+    SupportedActions?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsDeny?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsExpiration?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsHierarchyInheritance?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    DisplayOrder?: number;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Permission Domains
+//****************************************************************************
+@ObjectType()
+export class RunMJPermissionDomainViewResult {
+    @Field(() => [MJPermissionDomain_])
+    Results: MJPermissionDomain_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJPermissionDomain_)
+export class MJPermissionDomainResolver extends ResolverBase {
+    @Query(() => RunMJPermissionDomainViewResult)
+    async RunMJPermissionDomainViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJPermissionDomainViewResult)
+    async RunMJPermissionDomainViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJPermissionDomainViewResult)
+    async RunMJPermissionDomainDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Permission Domains';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJPermissionDomain_, { nullable: true })
+    async MJPermissionDomain(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJPermissionDomain_ | null> {
+        this.CheckUserReadPermissions('MJ: Permission Domains', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwPermissionDomains')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Permission Domains', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Permission Domains', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJPermissionDomain_)
+    async CreateMJPermissionDomain(
+        @Arg('input', () => CreateMJPermissionDomainInput) input: CreateMJPermissionDomainInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Permission Domains', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJPermissionDomain_)
+    async UpdateMJPermissionDomain(
+        @Arg('input', () => UpdateMJPermissionDomainInput) input: UpdateMJPermissionDomainInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Permission Domains', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJPermissionDomain_)
+    async DeleteMJPermissionDomain(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Permission Domains', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Projects
 //****************************************************************************
 @ObjectType({ description: `Container for grouping related conversations around a common topic, client, or initiative. Supports nesting for sub-projects.` })
@@ -50327,6 +56232,9 @@ export class CreateMJProjectInput {
 
     @Field(() => Boolean, { nullable: true })
     IsArchived?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -50361,6 +56269,9 @@ export class UpdateMJProjectInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -50566,6 +56477,9 @@ export class CreateMJPublicLinkInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -50606,6 +56520,9 @@ export class UpdateMJPublicLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -50885,6 +56802,9 @@ export class CreateMJQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     Reusable?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -50961,6 +56881,9 @@ export class UpdateMJQueryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -51222,6 +57145,9 @@ export class CreateMJQueryCategoryInput {
 
     @Field(() => Boolean, { nullable: true })
     CacheInheritanceEnabled?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -51259,6 +57185,9 @@ export class UpdateMJQueryCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -51440,6 +57369,9 @@ export class CreateMJQueryDependencyInput {
 
     @Field({ nullable: true })
     DetectionMethod?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -51471,6 +57403,9 @@ export class UpdateMJQueryDependencyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -51618,6 +57553,9 @@ export class CreateMJQueryEntityInput {
 
     @Field(() => Float, { nullable: true })
     AutoDetectConfidenceScore: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -51643,6 +57581,9 @@ export class UpdateMJQueryEntityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -51854,6 +57795,9 @@ export class CreateMJQueryFieldInput {
 
     @Field(() => Float, { nullable: true })
     AutoDetectConfidenceScore: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -51909,6 +57853,9 @@ export class UpdateMJQueryFieldInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -52089,6 +58036,9 @@ export class CreateMJQueryParameterInput {
 
     @Field(() => Float, { nullable: true })
     AutoDetectConfidenceScore: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -52132,6 +58082,9 @@ export class UpdateMJQueryParameterInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -52266,6 +58219,9 @@ export class CreateMJQueryPermissionInput {
 
     @Field({ nullable: true })
     RoleID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -52285,6 +58241,9 @@ export class UpdateMJQueryPermissionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -52425,6 +58384,9 @@ export class CreateMJQuerySQLInput {
 
     @Field({ nullable: true })
     SQL?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -52447,6 +58409,9 @@ export class UpdateMJQuerySQLInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -52619,6 +58584,9 @@ export class CreateMJQueueTaskInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -52659,6 +58627,9 @@ export class UpdateMJQueueTaskInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -52807,6 +58778,9 @@ export class CreateMJQueueTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -52835,6 +58809,9 @@ export class UpdateMJQueueTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -53072,6 +59049,9 @@ export class CreateMJQueueInput {
 
     @Field({ nullable: true })
     LastHeartbeat?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -53133,6 +59113,9 @@ export class UpdateMJQueueInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -53289,6 +59272,9 @@ export class CreateMJRecommendationItemInput {
 
     @Field(() => Float, { nullable: true })
     MatchProbability: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -53314,6 +59300,9 @@ export class UpdateMJRecommendationItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -53442,6 +59431,9 @@ export class CreateMJRecommendationProviderInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -53461,6 +59453,9 @@ export class UpdateMJRecommendationProviderInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -53633,6 +59628,9 @@ export class CreateMJRecommendationRunInput {
 
     @Field({ nullable: true })
     RunByUserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -53664,6 +59662,9 @@ export class UpdateMJRecommendationRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -53817,6 +59818,9 @@ export class CreateMJRecommendationInput {
 
     @Field({ nullable: true })
     SourceEntityRecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -53839,6 +59843,9 @@ export class UpdateMJRecommendationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -53994,6 +60001,9 @@ export class CreateMJRecordChangeReplayRunInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -54019,6 +60029,9 @@ export class UpdateMJRecordChangeReplayRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -54182,6 +60195,13 @@ export class MJRecordChange_ {
     @Field({description: `Field UpdatedAt for entity Record Changes.`}) 
     UpdatedAt: Date;
         
+    @Field({nullable: true, description: `When this RecordChange was produced by a restore operation, points at the historical RecordChange whose state was restored. NULL for ordinary changes. Together with Source='Restore' this builds the version-chain lineage for auditing and timeline navigation.`}) 
+    @MaxLength(36)
+    RestoredFromID?: string;
+        
+    @Field({nullable: true, description: `Optional user-entered explanation captured at restore time. Persisted for audit purposes (regulated industries often require a reason for every reversal). NULL when the user did not enter one or when the change was not a restore.`}) 
+    RestoreReason?: string;
+        
     @Field() 
     @MaxLength(255)
     Entity: string;
@@ -54198,8 +60218,19 @@ export class MJRecordChange_ {
     @MaxLength(100)
     Integration?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(750)
+    RestoredFrom?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootRestoredFromID?: string;
+        
     @Field(() => [MJVersionLabelItem_])
     MJVersionLabelItems_RecordChangeIDArray: MJVersionLabelItem_[]; // Link to MJVersionLabelItems
+    
+    @Field(() => [MJRecordChange_])
+    MJRecordChanges_RestoredFromIDArray: MJRecordChange_[]; // Link to MJRecordChanges
     
 }
 
@@ -54252,6 +60283,15 @@ export class CreateMJRecordChangeInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field({ nullable: true })
+    RestoredFromID: string | null;
+
+    @Field({ nullable: true })
+    RestoreReason: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -54305,8 +60345,17 @@ export class UpdateMJRecordChangeInput {
     @Field({ nullable: true })
     Comments?: string | null;
 
+    @Field({ nullable: true })
+    RestoredFromID?: string | null;
+
+    @Field({ nullable: true })
+    RestoreReason?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -54376,6 +60425,16 @@ export class MJRecordChangeResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJRecordChange_])
+    async MJRecordChanges_RestoredFromIDArray(@Root() mjrecordchange_: MJRecordChange_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Changes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordChanges')} WHERE ${provider.QuoteIdentifier('RestoredFromID')}='${mjrecordchange_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Changes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Changes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJRecordChange_)
     async CreateMJRecordChange(
         @Arg('input', () => CreateMJRecordChangeInput) input: CreateMJRecordChangeInput,
@@ -54401,6 +60460,284 @@ export class MJRecordChangeResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Record Changes', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Record Geo Codes
+//****************************************************************************
+@ObjectType({ description: `Polymorphic table storing persisted geocoding results for any MJ entity record. Each row maps an entity record + location type to a lat/lng coordinate, with optional country/state references for choropleth grouping. Supports multi-location entities via LocationType discriminator.` })
+export class MJRecordGeoCode_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to Entity. Identifies which entity this geocode belongs to.`}) 
+    @MaxLength(36)
+    EntityID: string;
+        
+    @Field({description: `MJ composite primary key format string identifying the source record (e.g., "ID|<uuid>"). Max 450 chars for SQL Server index support.`}) 
+    @MaxLength(450)
+    RecordID: string;
+        
+    @Field({description: `Discriminator for multi-location entities. Default "Primary" for single-address entities. Multi-address examples: "Home", "Business", "Mailing", "PO Box".`}) 
+    @MaxLength(50)
+    LocationType: string;
+        
+    @Field(() => Float, {nullable: true, description: `Geocoded latitude coordinate. NULL when Status is "pending" or "failed".`}) 
+    Latitude?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Geocoded longitude coordinate. NULL when Status is "pending" or "failed".`}) 
+    Longitude?: number;
+        
+    @Field({nullable: true, description: `Precision level of the geocoded result: exact (street address), postal_code, city, county, state_province, or country.`}) 
+    @MaxLength(20)
+    Precision?: string;
+        
+    @Field({nullable: true, description: `Optional FK to Country reference table. Populated alongside lat/lng to enable choropleth grouping without reverse-geocoding at render time.`}) 
+    @MaxLength(36)
+    CountryID?: string;
+        
+    @Field({nullable: true, description: `Optional FK to StateProvince reference table. Populated alongside lat/lng to enable state-level choropleth grouping.`}) 
+    @MaxLength(36)
+    StateProvinceID?: string;
+        
+    @Field({description: `Current geocoding status: "pending" (awaiting geocode), "success" (geocoded), or "failed" (geocoding error). Used by scheduled job for retry logic.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `Error details when Status is "failed". Captures API error messages, rate limit info, etc. for debugging.`}) 
+    ErrorMessage?: string;
+        
+    @Field(() => Int, {description: `Number of geocoding attempts. Used for exponential backoff in the scheduled retry job. Stops retrying at configurable maxRetries (default 3).`}) 
+    RetryCount: number;
+        
+    @Field({nullable: true, description: `SHA-256 hash of the source field values that produced this geocode. When source fields change on save, the hash won't match and re-geocoding is triggered. Format: SHA-256(concat(field1, "|", field2, ...)).`}) 
+    @MaxLength(64)
+    SourceFieldHash?: string;
+        
+    @Field({nullable: true, description: `Timestamp of when geocoding was last attempted (success or failure).`}) 
+    GeocodedAt?: Date;
+        
+    @Field({nullable: true, description: `How this geocode was produced: google (Google Geocoding API), reference_data (resolved via Country/StateProvince tables), manual (user-entered), ip_geolocation (IP lookup), native (copied from entity lat/lng fields), reverse (reverse geocode from coordinates).`}) 
+    @MaxLength(30)
+    GeocodingSource?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Entity: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Country?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    StateProvince?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Record Geo Codes
+//****************************************************************************
+@InputType()
+export class CreateMJRecordGeoCodeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    LocationType?: string;
+
+    @Field(() => Float, { nullable: true })
+    Latitude: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude: number | null;
+
+    @Field({ nullable: true })
+    Precision: string | null;
+
+    @Field({ nullable: true })
+    CountryID: string | null;
+
+    @Field({ nullable: true })
+    StateProvinceID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    SourceFieldHash: string | null;
+
+    @Field({ nullable: true })
+    GeocodedAt: Date | null;
+
+    @Field({ nullable: true })
+    GeocodingSource: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Record Geo Codes
+//****************************************************************************
+@InputType()
+export class UpdateMJRecordGeoCodeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    LocationType?: string;
+
+    @Field(() => Float, { nullable: true })
+    Latitude?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude?: number | null;
+
+    @Field({ nullable: true })
+    Precision?: string | null;
+
+    @Field({ nullable: true })
+    CountryID?: string | null;
+
+    @Field({ nullable: true })
+    StateProvinceID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    SourceFieldHash?: string | null;
+
+    @Field({ nullable: true })
+    GeocodedAt?: Date | null;
+
+    @Field({ nullable: true })
+    GeocodingSource?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Record Geo Codes
+//****************************************************************************
+@ObjectType()
+export class RunMJRecordGeoCodeViewResult {
+    @Field(() => [MJRecordGeoCode_])
+    Results: MJRecordGeoCode_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRecordGeoCode_)
+export class MJRecordGeoCodeResolver extends ResolverBase {
+    @Query(() => RunMJRecordGeoCodeViewResult)
+    async RunMJRecordGeoCodeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRecordGeoCodeViewResult)
+    async RunMJRecordGeoCodeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRecordGeoCodeViewResult)
+    async RunMJRecordGeoCodeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Record Geo Codes';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRecordGeoCode_, { nullable: true })
+    async MJRecordGeoCode(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRecordGeoCode_ | null> {
+        this.CheckUserReadPermissions('MJ: Record Geo Codes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordGeoCodes')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Geo Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Record Geo Codes', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRecordGeoCode_)
+    async CreateMJRecordGeoCode(
+        @Arg('input', () => CreateMJRecordGeoCodeInput) input: CreateMJRecordGeoCodeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Record Geo Codes', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRecordGeoCode_)
+    async UpdateMJRecordGeoCode(
+        @Arg('input', () => UpdateMJRecordGeoCodeInput) input: UpdateMJRecordGeoCodeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Record Geo Codes', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRecordGeoCode_)
+    async DeleteMJRecordGeoCode(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Record Geo Codes', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -54484,6 +60821,9 @@ export class CreateMJRecordLinkInput {
 
     @Field({ nullable: true })
     Metadata: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -54518,6 +60858,9 @@ export class UpdateMJRecordLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -54661,6 +61004,9 @@ export class CreateMJRecordMergeDeletionLogInput {
 
     @Field({ nullable: true })
     ProcessingLog: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -54686,6 +61032,9 @@ export class UpdateMJRecordMergeDeletionLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -54882,6 +61231,9 @@ export class CreateMJRecordMergeLogInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -54925,6 +61277,9 @@ export class UpdateMJRecordMergeLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -55102,6 +61457,9 @@ export class CreateMJReportCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -55127,6 +61485,9 @@ export class UpdateMJReportCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -55287,6 +61648,9 @@ export class CreateMJReportSnapshotInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -55309,6 +61673,9 @@ export class UpdateMJReportSnapshotInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -55449,6 +61816,9 @@ export class CreateMJReportUserStateInput {
 
     @Field({ nullable: true })
     ReportState: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -55471,6 +61841,9 @@ export class UpdateMJReportUserStateInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -55625,6 +61998,9 @@ export class CreateMJReportVersionInput {
 
     @Field(() => Boolean, { nullable: true })
     DataContextUpdated?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -55656,6 +62032,9 @@ export class UpdateMJReportVersionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -55932,6 +62311,9 @@ export class CreateMJReportInput {
 
     @Field({ nullable: true })
     EnvironmentID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -55996,6 +62378,9 @@ export class UpdateMJReportInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -56174,6 +62559,9 @@ export class CreateMJResourceLinkInput {
 
     @Field({ nullable: true })
     FolderID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -56199,6 +62587,9 @@ export class UpdateMJResourceLinkInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -56336,6 +62727,10 @@ export class MJResourcePermission_ {
     @MaxLength(20)
     Status: string;
         
+    @Field({nullable: true, description: `The user who granted this permission. NULL when the share pre-dates this column or when the grantor is unknown (e.g., a system-seeded permission).`}) 
+    @MaxLength(36)
+    SharedByUserID?: string;
+        
     @Field() 
     @MaxLength(255)
     ResourceType: string;
@@ -56347,6 +62742,10 @@ export class MJResourcePermission_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     User?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    SharedByUser?: string;
         
 }
 
@@ -56384,6 +62783,12 @@ export class CreateMJResourcePermissionInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    SharedByUserID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -56422,8 +62827,14 @@ export class UpdateMJResourcePermissionInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    SharedByUserID?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -56604,6 +63015,9 @@ export class CreateMJResourceTypeInput {
 
     @Field({ nullable: true })
     DriverClass: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -56638,6 +63052,9 @@ export class UpdateMJResourceTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -56817,6 +63234,12 @@ export class MJRole_ {
     @Field(() => [MJMCPServerConnectionPermission_])
     MJMCPServerConnectionPermissions_RoleIDArray: MJMCPServerConnectionPermission_[]; // Link to MJMCPServerConnectionPermissions
     
+    @Field(() => [MJFileStorageAccountPermission_])
+    MJFileStorageAccountPermissions_RoleIDArray: MJFileStorageAccountPermission_[]; // Link to MJFileStorageAccountPermissions
+    
+    @Field(() => [MJApplicationRole_])
+    MJApplicationRoles_RoleIDArray: MJApplicationRole_[]; // Link to MJApplicationRoles
+    
     @Field(() => [MJAIAgentPermission_])
     MJAIAgentPermissions_RoleIDArray: MJAIAgentPermission_[]; // Link to MJAIAgentPermissions
     
@@ -56841,6 +63264,9 @@ export class CreateMJRoleInput {
 
     @Field({ nullable: true })
     SQLName: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -56866,6 +63292,9 @@ export class UpdateMJRoleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -57005,6 +63434,26 @@ export class MJRoleResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJFileStorageAccountPermission_])
+    async MJFileStorageAccountPermissions_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: File Storage Account Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFileStorageAccountPermissions')} WHERE ${provider.QuoteIdentifier('RoleID')}='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: File Storage Account Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: File Storage Account Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJApplicationRole_])
+    async MJApplicationRoles_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Application Roles', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwApplicationRoles')} WHERE ${provider.QuoteIdentifier('RoleID')}='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Application Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Application Roles', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIAgentPermission_])
     async MJAIAgentPermissions_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Permissions', userPayload);
@@ -57099,6 +63548,9 @@ export class CreateMJRowLevelSecurityFilterInput {
 
     @Field({ nullable: true })
     FilterText: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -57121,6 +63573,9 @@ export class UpdateMJRowLevelSecurityFilterInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -57324,6 +63779,9 @@ export class CreateMJScheduledActionParamInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -57352,6 +63810,9 @@ export class UpdateMJScheduledActionParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -57515,6 +63976,9 @@ export class MJScheduledAction_ {
     @Field(() => [MJScheduledActionParam_])
     MJScheduledActionParams_ScheduledActionIDArray: MJScheduledActionParam_[]; // Link to MJScheduledActionParams
     
+    @Field(() => [MJContentSource_])
+    MJContentSources_ScheduledActionIDArray: MJContentSource_[]; // Link to MJContentSources
+    
 }
 
 //****************************************************************************
@@ -57563,6 +64027,9 @@ export class CreateMJScheduledActionInput {
 
     @Field({ nullable: true })
     CustomCronExpression: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -57615,6 +64082,9 @@ export class UpdateMJScheduledActionInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -57681,6 +64151,16 @@ export class MJScheduledActionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwScheduledActionParams')} WHERE ${provider.QuoteIdentifier('ScheduledActionID')}='${mjscheduledaction_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Action Params', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentSource_])
+    async MJContentSources_ScheduledActionIDArray(@Root() mjscheduledaction_: MJScheduledAction_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentSources')} WHERE ${provider.QuoteIdentifier('ScheduledActionID')}='${mjscheduledaction_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Sources', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -57808,6 +64288,9 @@ export class CreateMJScheduledJobRunInput {
 
     @Field({ nullable: true })
     QueuedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -57848,6 +64331,9 @@ export class UpdateMJScheduledJobRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -58023,6 +64509,9 @@ export class CreateMJScheduledJobTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     NotificationsAvailable?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -58054,6 +64543,9 @@ export class UpdateMJScheduledJobTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -58354,6 +64846,9 @@ export class CreateMJScheduledJobInput {
 
     @Field({ nullable: true })
     ConcurrencyMode?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -58442,6 +64937,9 @@ export class UpdateMJScheduledJobInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -58619,6 +65117,9 @@ export class CreateMJSchemaInfoInput {
 
     @Field({ nullable: true })
     EntityNameSuffix: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -58653,6 +65154,9 @@ export class UpdateMJSchemaInfoInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -58742,6 +65246,255 @@ export class MJSchemaInfoResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Search Providers
+//****************************************************************************
+@ObjectType()
+export class MJSearchProvider_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Display name for this search provider (e.g., "Vector Search", "Algolia")`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Human-readable description of what this provider searches and how it works`}) 
+    Description?: string;
+        
+    @Field({description: `ClassFactory key used with @RegisterClass(ISearchProvider, DriverClass) to instantiate the provider at runtime`}) 
+    @MaxLength(500)
+    DriverClass: string;
+        
+    @Field({description: `Provider lifecycle status: Pending (not yet activated), Active (in use), Terminated (disabled)`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field(() => Int, {description: `Execution priority (lower = higher priority). Controls provider ordering and can influence RRF weighting. Must be >= 0.`}) 
+    Priority: number;
+        
+    @Field(() => Boolean, {description: `Whether this provider should run during fast preview/autocomplete searches. Expensive providers (external APIs) may set this to 0.`}) 
+    SupportsPreview: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Optional per-provider cap on the number of results to return. Useful for rate-limited or pay-per-query external APIs. When NULL, uses the SearchEngine default.`}) 
+    MaxResultsOverride?: number;
+        
+    @Field({nullable: true, description: `Optional JSON configuration blob for provider-specific settings (e.g., API endpoints, index names, tuning parameters). Schema is provider-defined.`}) 
+    ProviderConfig?: string;
+        
+    @Field({nullable: true, description: `Optional FK to the Credential entity for providers that require authentication (e.g., Algolia API key, external service credentials)`}) 
+    @MaxLength(36)
+    CredentialID?: string;
+        
+    @Field({nullable: true, description: `UI display name for this provider shown in filter facets and result grouping (e.g., "Database", "Semantic Search"). When NULL, falls back to the Name column.`}) 
+    @MaxLength(200)
+    DisplayName?: string;
+        
+    @Field({nullable: true, description: `CSS icon class for UI display in filter facets and result badges (e.g., "fa-solid fa-database", "fa-solid fa-brain"). Supports any CSS-based icon library. When NULL, a default icon is used.`}) 
+    @MaxLength(200)
+    Icon?: string;
+        
+    @Field({nullable: true, description: `Free-form notes about this provider configuration`}) 
+    Comments?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Credential?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Search Providers
+//****************************************************************************
+@InputType()
+export class CreateMJSearchProviderInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPreview?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxResultsOverride: number | null;
+
+    @Field({ nullable: true })
+    ProviderConfig: string | null;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
+
+    @Field({ nullable: true })
+    Icon: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Search Providers
+//****************************************************************************
+@InputType()
+export class UpdateMJSearchProviderInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPreview?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxResultsOverride?: number | null;
+
+    @Field({ nullable: true })
+    ProviderConfig?: string | null;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Search Providers
+//****************************************************************************
+@ObjectType()
+export class RunMJSearchProviderViewResult {
+    @Field(() => [MJSearchProvider_])
+    Results: MJSearchProvider_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJSearchProvider_)
+export class MJSearchProviderResolver extends ResolverBase {
+    @Query(() => RunMJSearchProviderViewResult)
+    async RunMJSearchProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSearchProviderViewResult)
+    async RunMJSearchProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSearchProviderViewResult)
+    async RunMJSearchProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Search Providers';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJSearchProvider_, { nullable: true })
+    async MJSearchProvider(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSearchProvider_ | null> {
+        this.CheckUserReadPermissions('MJ: Search Providers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchProviders')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Search Providers', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJSearchProvider_)
+    async CreateMJSearchProvider(
+        @Arg('input', () => CreateMJSearchProviderInput) input: CreateMJSearchProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Search Providers', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJSearchProvider_)
+    async UpdateMJSearchProvider(
+        @Arg('input', () => UpdateMJSearchProviderInput) input: UpdateMJSearchProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Search Providers', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJSearchProvider_)
+    async DeleteMJSearchProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Search Providers', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Skills
 //****************************************************************************
 @ObjectType({ description: `A hierarchical list of possible skills that are linked to Employees and can also be linked to any other entity` })
@@ -58793,6 +65546,9 @@ export class CreateMJSkillInput {
 
     @Field({ nullable: true })
     ParentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -58812,6 +65568,9 @@ export class UpdateMJSkillInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -59015,6 +65774,9 @@ export class CreateMJSQLDialectInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -59052,6 +65814,9 @@ export class UpdateMJSQLDialectInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -59161,6 +65926,599 @@ export class MJSQLDialectResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: State Provinces
+//****************************************************************************
+@ObjectType({ description: `Reference table for states, provinces, and first-level administrative divisions. Linked to Country via FK. Seeded with ~5,000 records with ISO 3166-2 codes, centroids, and optional boundary GeoJSON.` })
+export class MJStateProvince_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to Country. Establishes the parent country for this state/province.`}) 
+    @MaxLength(36)
+    CountryID: string;
+        
+    @Field({description: `Full state/province name (e.g., "California", "Ontario").`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({description: `Short code within the country (e.g., "CA", "ON"). Unique per country via compound constraint.`}) 
+    @MaxLength(10)
+    Code: string;
+        
+    @Field({description: `ISO 3166-2 subdivision code (e.g., "US-CA", "CA-ON"). Globally unique.`}) 
+    @MaxLength(10)
+    ISO3166_2: string;
+        
+    @Field(() => Float, {nullable: true, description: `Geographic centroid latitude. Used as fallback point for state-level geocoding.`}) 
+    Latitude?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Geographic centroid longitude. Used as fallback point for state-level geocoding.`}) 
+    Longitude?: number;
+        
+    @Field({nullable: true, description: `Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable. Total ~15-20MB for all states/provinces worldwide.`}) 
+    BoundaryGeoJSON?: string;
+        
+    @Field({nullable: true, description: `JSON array of common aliases (e.g., ["Calif.","California","Cal"]). Used by GeoResolver for fuzzy text-to-state matching.`}) 
+    CommonAliases?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    Country: string;
+        
+    @Field(() => [MJRecordGeoCode_])
+    MJRecordGeoCodes_StateProvinceIDArray: MJRecordGeoCode_[]; // Link to MJRecordGeoCodes
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: State Provinces
+//****************************************************************************
+@InputType()
+export class CreateMJStateProvinceInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    CountryID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Code?: string;
+
+    @Field({ nullable: true })
+    ISO3166_2?: string;
+
+    @Field(() => Float, { nullable: true })
+    Latitude: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude: number | null;
+
+    @Field({ nullable: true })
+    BoundaryGeoJSON: string | null;
+
+    @Field({ nullable: true })
+    CommonAliases: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: State Provinces
+//****************************************************************************
+@InputType()
+export class UpdateMJStateProvinceInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    CountryID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Code?: string;
+
+    @Field({ nullable: true })
+    ISO3166_2?: string;
+
+    @Field(() => Float, { nullable: true })
+    Latitude?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude?: number | null;
+
+    @Field({ nullable: true })
+    BoundaryGeoJSON?: string | null;
+
+    @Field({ nullable: true })
+    CommonAliases?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: State Provinces
+//****************************************************************************
+@ObjectType()
+export class RunMJStateProvinceViewResult {
+    @Field(() => [MJStateProvince_])
+    Results: MJStateProvince_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJStateProvince_)
+export class MJStateProvinceResolver extends ResolverBase {
+    @Query(() => RunMJStateProvinceViewResult)
+    async RunMJStateProvinceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJStateProvinceViewResult)
+    async RunMJStateProvinceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJStateProvinceViewResult)
+    async RunMJStateProvinceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: State Provinces';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJStateProvince_, { nullable: true })
+    async MJStateProvince(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJStateProvince_ | null> {
+        this.CheckUserReadPermissions('MJ: State Provinces', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwStateProvinces')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: State Provinces', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: State Provinces', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJRecordGeoCode_])
+    async MJRecordGeoCodes_StateProvinceIDArray(@Root() mjstateprovince_: MJStateProvince_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Geo Codes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordGeoCodes')} WHERE ${provider.QuoteIdentifier('StateProvinceID')}='${mjstateprovince_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Geo Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Geo Codes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJStateProvince_)
+    async CreateMJStateProvince(
+        @Arg('input', () => CreateMJStateProvinceInput) input: CreateMJStateProvinceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: State Provinces', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJStateProvince_)
+    async UpdateMJStateProvince(
+        @Arg('input', () => UpdateMJStateProvinceInput) input: UpdateMJStateProvinceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: State Provinces', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJStateProvince_)
+    async DeleteMJStateProvince(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: State Provinces', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tag Audit Logs
+//****************************************************************************
+@ObjectType({ description: `Immutable audit trail for all tag taxonomy changes. Each row records a single action with before/after details in JSON.` })
+export class MJTagAuditLog_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `The tag that was acted upon.`}) 
+    @MaxLength(36)
+    TagID: string;
+        
+    @Field({description: `The type of action performed: Created, Renamed, Moved (parent changed), Merged (into RelatedTagID), Split (from RelatedTagID), Deprecated, Reactivated, Deleted, DescriptionChanged.`}) 
+    @MaxLength(30)
+    Action: string;
+        
+    @Field({nullable: true, description: `JSON object with action-specific details. For Renamed: {"OldName":"...","NewName":"..."}. For Moved: {"OldParentID":"...","NewParentID":"..."}. For Merged: {"ItemsMoved":42}.`}) 
+    Details?: string;
+        
+    @Field({description: `User who performed the action.`}) 
+    @MaxLength(36)
+    PerformedByUserID: string;
+        
+    @Field({nullable: true, description: `For Merged actions: the surviving tag. For Split actions: the source tag. NULL for other actions.`}) 
+    @MaxLength(36)
+    RelatedTagID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Tag: string;
+        
+    @Field() 
+    @MaxLength(100)
+    PerformedByUser: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    RelatedTag?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tag Audit Logs
+//****************************************************************************
+@InputType()
+export class CreateMJTagAuditLogInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TagID?: string;
+
+    @Field({ nullable: true })
+    Action?: string;
+
+    @Field({ nullable: true })
+    Details: string | null;
+
+    @Field({ nullable: true })
+    PerformedByUserID?: string;
+
+    @Field({ nullable: true })
+    RelatedTagID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tag Audit Logs
+//****************************************************************************
+@InputType()
+export class UpdateMJTagAuditLogInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TagID?: string;
+
+    @Field({ nullable: true })
+    Action?: string;
+
+    @Field({ nullable: true })
+    Details?: string | null;
+
+    @Field({ nullable: true })
+    PerformedByUserID?: string;
+
+    @Field({ nullable: true })
+    RelatedTagID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tag Audit Logs
+//****************************************************************************
+@ObjectType()
+export class RunMJTagAuditLogViewResult {
+    @Field(() => [MJTagAuditLog_])
+    Results: MJTagAuditLog_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTagAuditLog_)
+export class MJTagAuditLogResolver extends ResolverBase {
+    @Query(() => RunMJTagAuditLogViewResult)
+    async RunMJTagAuditLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTagAuditLogViewResult)
+    async RunMJTagAuditLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTagAuditLogViewResult)
+    async RunMJTagAuditLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tag Audit Logs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTagAuditLog_, { nullable: true })
+    async MJTagAuditLog(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTagAuditLog_ | null> {
+        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTagAuditLog_)
+    async CreateMJTagAuditLog(
+        @Arg('input', () => CreateMJTagAuditLogInput) input: CreateMJTagAuditLogInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tag Audit Logs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTagAuditLog_)
+    async UpdateMJTagAuditLog(
+        @Arg('input', () => UpdateMJTagAuditLogInput) input: UpdateMJTagAuditLogInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tag Audit Logs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTagAuditLog_)
+    async DeleteMJTagAuditLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tag Audit Logs', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tag Co Occurrences
+//****************************************************************************
+@ObjectType({ description: `Materialized co-occurrence counts for tag pairs. Records how many content items share both tags. Used for taxonomy health analysis, merge suggestions, and cross-entity intelligence. Recomputed periodically by the pipeline.` })
+export class MJTagCoOccurrence_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `First tag in the canonical pair (TagAID < TagBID ensures each pair is stored exactly once).`}) 
+    @MaxLength(36)
+    TagAID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    TagBID: string;
+        
+    @Field(() => Int, {description: `Number of content items (or entity records via TaggedItem) that are tagged with both TagA and TagB.`}) 
+    CoOccurrenceCount: number;
+        
+    @Field() 
+    LastComputedAt: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    TagA: string;
+        
+    @Field() 
+    @MaxLength(255)
+    TagB: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tag Co Occurrences
+//****************************************************************************
+@InputType()
+export class CreateMJTagCoOccurrenceInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TagAID?: string;
+
+    @Field({ nullable: true })
+    TagBID?: string;
+
+    @Field(() => Int, { nullable: true })
+    CoOccurrenceCount?: number;
+
+    @Field({ nullable: true })
+    LastComputedAt?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tag Co Occurrences
+//****************************************************************************
+@InputType()
+export class UpdateMJTagCoOccurrenceInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TagAID?: string;
+
+    @Field({ nullable: true })
+    TagBID?: string;
+
+    @Field(() => Int, { nullable: true })
+    CoOccurrenceCount?: number;
+
+    @Field({ nullable: true })
+    LastComputedAt?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tag Co Occurrences
+//****************************************************************************
+@ObjectType()
+export class RunMJTagCoOccurrenceViewResult {
+    @Field(() => [MJTagCoOccurrence_])
+    Results: MJTagCoOccurrence_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTagCoOccurrence_)
+export class MJTagCoOccurrenceResolver extends ResolverBase {
+    @Query(() => RunMJTagCoOccurrenceViewResult)
+    async RunMJTagCoOccurrenceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTagCoOccurrenceViewResult)
+    async RunMJTagCoOccurrenceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTagCoOccurrenceViewResult)
+    async RunMJTagCoOccurrenceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tag Co Occurrences';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTagCoOccurrence_, { nullable: true })
+    async MJTagCoOccurrence(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTagCoOccurrence_ | null> {
+        this.CheckUserReadPermissions('MJ: Tag Co Occurrences', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagCoOccurrences')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Co Occurrences', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tag Co Occurrences', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTagCoOccurrence_)
+    async CreateMJTagCoOccurrence(
+        @Arg('input', () => CreateMJTagCoOccurrenceInput) input: CreateMJTagCoOccurrenceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tag Co Occurrences', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTagCoOccurrence_)
+    async UpdateMJTagCoOccurrence(
+        @Arg('input', () => UpdateMJTagCoOccurrenceInput) input: UpdateMJTagCoOccurrenceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tag Co Occurrences', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTagCoOccurrence_)
+    async DeleteMJTagCoOccurrence(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tag Co Occurrences', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Tagged Items
 //****************************************************************************
 @ObjectType({ description: `Tracks the links between any record in any entity with Tags` })
@@ -59186,6 +66544,9 @@ export class MJTaggedItem_ {
         
     @Field() 
     _mj__UpdatedAt: Date;
+        
+    @Field(() => Float, {description: `Relevance weight of this tag association (0.0 to 1.0). 1.0 indicates the tag is highly relevant or was manually applied. Lower values indicate decreasing relevance as determined by LLM autotagging. Default 1.0 for manually applied tags.`}) 
+    Weight: number;
         
     @Field() 
     @MaxLength(255)
@@ -59213,6 +66574,12 @@ export class CreateMJTaggedItemInput {
 
     @Field({ nullable: true })
     RecordID?: string;
+
+    @Field(() => Float, { nullable: true })
+    Weight?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -59233,8 +66600,14 @@ export class UpdateMJTaggedItemInput {
     @Field({ nullable: true })
     RecordID?: string;
 
+    @Field(() => Float, { nullable: true })
+    Weight?: number;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -59353,19 +66726,53 @@ export class MJTag_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Lifecycle status of the tag: Active (in use), Merged (consolidated into another tag), Deprecated (no longer assigned but preserved), Deleted (soft-deleted).`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `When Status is Merged, points to the surviving tag this tag was merged into. All TaggedItem and ContentItemTag references are re-pointed during merge.`}) 
+    @MaxLength(36)
+    MergedIntoTagID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(255)
+    MergedIntoTag?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootMergedIntoTagID?: string;
         
     @Field(() => [MJTag_])
     MJTags_ParentIDArray: MJTag_[]; // Link to MJTags
     
     @Field(() => [MJTaggedItem_])
     MJTaggedItems_TagIDArray: MJTaggedItem_[]; // Link to MJTaggedItems
+    
+    @Field(() => [MJTagCoOccurrence_])
+    MJTagCoOccurrences_TagBIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
+    
+    @Field(() => [MJContentItemTag_])
+    MJContentItemTags_TagIDArray: MJContentItemTag_[]; // Link to MJContentItemTags
+    
+    @Field(() => [MJTagAuditLog_])
+    MJTagAuditLogs_RelatedTagIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
+    
+    @Field(() => [MJTagCoOccurrence_])
+    MJTagCoOccurrences_TagAIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
+    
+    @Field(() => [MJTag_])
+    MJTags_MergedIntoTagIDArray: MJTag_[]; // Link to MJTags
+    
+    @Field(() => [MJTagAuditLog_])
+    MJTagAuditLogs_TagIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
     
 }
 
@@ -59388,6 +66795,15 @@ export class CreateMJTagInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    MergedIntoTagID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -59411,8 +66827,17 @@ export class UpdateMJTagInput {
     @Field({ nullable: true })
     Description?: string | null;
 
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    MergedIntoTagID?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -59489,6 +66914,66 @@ export class MJTagResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTaggedItems')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tagged Items', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTagCoOccurrence_])
+    async MJTagCoOccurrences_TagBIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tag Co Occurrences', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagCoOccurrences')} WHERE ${provider.QuoteIdentifier('TagBID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Co Occurrences', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Co Occurrences', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentItemTag_])
+    async MJContentItemTags_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Item Tags', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemTags')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Tags', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTagAuditLog_])
+    async MJTagAuditLogs_RelatedTagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('RelatedTagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTagCoOccurrence_])
+    async MJTagCoOccurrences_TagAIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tag Co Occurrences', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagCoOccurrences')} WHERE ${provider.QuoteIdentifier('TagAID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Co Occurrences', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Co Occurrences', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTag_])
+    async MJTags_MergedIntoTagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tags', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTags')} WHERE ${provider.QuoteIdentifier('MergedIntoTagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tags', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTagAuditLog_])
+    async MJTagAuditLogs_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -59574,6 +67059,9 @@ export class CreateMJTaskDependencyInput {
 
     @Field({ nullable: true })
     DependencyType?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -59596,6 +67084,9 @@ export class UpdateMJTaskDependencyInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -59724,6 +67215,9 @@ export class CreateMJTaskTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -59743,6 +67237,9 @@ export class UpdateMJTaskTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -59998,6 +67495,9 @@ export class CreateMJTaskInput {
 
     @Field({ nullable: true })
     CompletedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -60053,6 +67553,9 @@ export class UpdateMJTaskInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -60240,6 +67743,9 @@ export class CreateMJTemplateCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -60265,6 +67771,9 @@ export class UpdateMJTemplateCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -60420,6 +67929,9 @@ export class CreateMJTemplateContentTypeInput {
 
     @Field({ nullable: true })
     CodeType?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -60442,6 +67954,9 @@ export class UpdateMJTemplateContentTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -60607,6 +68122,9 @@ export class CreateMJTemplateContentInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -60635,6 +68153,9 @@ export class UpdateMJTemplateContentInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -60855,6 +68376,9 @@ export class CreateMJTemplateParamInput {
 
     @Field({ nullable: true })
     TemplateContentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -60907,6 +68431,9 @@ export class UpdateMJTemplateParamInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -61096,6 +68623,9 @@ export class CreateMJTemplateInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -61133,6 +68663,9 @@ export class UpdateMJTemplateInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -61355,6 +68888,9 @@ export class CreateMJTestRubricInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -61389,6 +68925,9 @@ export class UpdateMJTestRubricInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -61553,6 +69092,9 @@ export class CreateMJTestRunFeedbackInput {
 
     @Field({ nullable: true })
     ReviewedAt?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -61587,6 +69129,9 @@ export class UpdateMJTestRunFeedbackInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -61715,6 +69260,9 @@ export class CreateMJTestRunOutputTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -61734,6 +69282,9 @@ export class UpdateMJTestRunOutputTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -61946,6 +69497,9 @@ export class CreateMJTestRunOutputInput {
 
     @Field({ nullable: true })
     Metadata: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -61998,6 +69552,9 @@ export class UpdateMJTestRunOutputInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -62329,6 +69886,9 @@ export class CreateMJTestRunInput {
 
     @Field({ nullable: true })
     ResolvedVariables: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -62429,6 +69989,9 @@ export class UpdateMJTestRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -62779,6 +70342,9 @@ export class CreateMJTestSuiteRunInput {
 
     @Field({ nullable: true })
     ResolvedVariables: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -62870,6 +70436,9 @@ export class UpdateMJTestSuiteRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -63033,6 +70602,9 @@ export class CreateMJTestSuiteTestInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -63061,6 +70633,9 @@ export class UpdateMJTestSuiteTestInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -63241,6 +70816,9 @@ export class CreateMJTestSuiteInput {
 
     @Field({ nullable: true })
     Variables: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -63278,6 +70856,9 @@ export class UpdateMJTestSuiteInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -63459,6 +71040,9 @@ export class CreateMJTestTypeInput {
 
     @Field({ nullable: true })
     VariablesSchema: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -63487,6 +71071,9 @@ export class UpdateMJTestTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -63716,6 +71303,9 @@ export class CreateMJTestInput {
 
     @Field({ nullable: true })
     Variables: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -63771,6 +71361,9 @@ export class UpdateMJTestInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -63935,6 +71528,9 @@ export class CreateMJUserApplicationEntityInput {
 
     @Field(() => Int, { nullable: true })
     Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -63957,6 +71553,9 @@ export class UpdateMJUserApplicationEntityInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -64106,6 +71705,9 @@ export class CreateMJUserApplicationInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -64131,6 +71733,9 @@ export class UpdateMJUserApplicationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -64286,6 +71891,9 @@ export class CreateMJUserFavoriteInput {
 
     @Field({ nullable: true })
     RecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -64308,6 +71916,9 @@ export class UpdateMJUserFavoriteInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -64466,6 +72077,9 @@ export class CreateMJUserNotificationPreferenceInput {
 
     @Field(() => Boolean, { nullable: true })
     Enabled?: boolean | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -64497,6 +72111,9 @@ export class UpdateMJUserNotificationPreferenceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -64701,6 +72318,9 @@ export class CreateMJUserNotificationTypeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -64750,6 +72370,9 @@ export class UpdateMJUserNotificationTypeInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -64953,6 +72576,9 @@ export class CreateMJUserNotificationInput {
 
     @Field({ nullable: true })
     NotificationTypeID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -64993,6 +72619,9 @@ export class UpdateMJUserNotificationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -65168,6 +72797,9 @@ export class CreateMJUserRecordLogInput {
 
     @Field(() => Int, { nullable: true })
     TotalCount?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -65199,6 +72831,9 @@ export class UpdateMJUserRecordLogInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -65333,6 +72968,9 @@ export class CreateMJUserRoleInput {
 
     @Field({ nullable: true })
     RoleID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -65352,6 +72990,9 @@ export class UpdateMJUserRoleInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -65498,6 +73139,9 @@ export class CreateMJUserSettingInput {
 
     @Field({ nullable: true })
     Value: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -65520,6 +73164,9 @@ export class UpdateMJUserSettingInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -65688,6 +73335,9 @@ export class CreateMJUserViewCategoryInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -65716,6 +73366,9 @@ export class UpdateMJUserViewCategoryInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -65870,6 +73523,9 @@ export class CreateMJUserViewRunDetailInput {
 
     @Field({ nullable: true })
     RecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -65889,6 +73545,9 @@ export class UpdateMJUserViewRunDetailInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -66032,6 +73691,9 @@ export class CreateMJUserViewRunInput {
 
     @Field({ nullable: true })
     RunByUserID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -66054,6 +73716,9 @@ export class UpdateMJUserViewRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -66333,6 +73998,9 @@ export class CreateMJUserViewInput {
 
     @Field({ nullable: true })
     DisplayState: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -66406,6 +74074,9 @@ export class UpdateMJUserViewInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -66797,11 +74468,32 @@ export class MJUser_ {
     @Field(() => [MJOAuthAuthorizationState_])
     MJOAuthAuthorizationStates_UserIDArray: MJOAuthAuthorizationState_[]; // Link to MJOAuthAuthorizationStates
     
+    @Field(() => [MJOpenApp_])
+    MJOpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJOpenApps
+    
     @Field(() => [MJOpenAppInstallHistory_])
     MJOpenAppInstallHistories_ExecutedByUserIDArray: MJOpenAppInstallHistory_[]; // Link to MJOpenAppInstallHistories
     
-    @Field(() => [MJOpenApp_])
-    MJOpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJOpenApps
+    @Field(() => [MJContentItemDuplicate_])
+    MJContentItemDuplicates_ResolvedByUserIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
+    
+    @Field(() => [MJContentProcessRun_])
+    MJContentProcessRuns_StartedByUserIDArray: MJContentProcessRun_[]; // Link to MJContentProcessRuns
+    
+    @Field(() => [MJKnowledgeHubSavedSearch_])
+    MJKnowledgeHubSavedSearches_UserIDArray: MJKnowledgeHubSavedSearch_[]; // Link to MJKnowledgeHubSavedSearches
+    
+    @Field(() => [MJTagAuditLog_])
+    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
+    
+    @Field(() => [MJArchiveConfiguration_])
+    MJArchiveConfigurations_CreatedByUserIDArray: MJArchiveConfiguration_[]; // Link to MJArchiveConfigurations
+    
+    @Field(() => [MJMCPToolFavorite_])
+    MJMCPToolFavorites_UserIDArray: MJMCPToolFavorite_[]; // Link to MJMCPToolFavorites
+    
+    @Field(() => [MJResourcePermission_])
+    MJResourcePermissions_SharedByUserIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
     
     @Field(() => [MJResourcePermission_])
     MJResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
@@ -66847,6 +74539,12 @@ export class MJUser_ {
     
     @Field(() => [MJDuplicateRun_])
     MJDuplicateRuns_ApprovedByUserIDArray: MJDuplicateRun_[]; // Link to MJDuplicateRuns
+    
+    @Field(() => [MJFileStorageAccountPermission_])
+    MJFileStorageAccountPermissions_UserIDArray: MJFileStorageAccountPermission_[]; // Link to MJFileStorageAccountPermissions
+    
+    @Field(() => [MJArchiveRun_])
+    MJArchiveRuns_UserIDArray: MJArchiveRun_[]; // Link to MJArchiveRuns
     
     @Field(() => [MJAIAgentRun_])
     MJAIAgentRuns_UserIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
@@ -66920,6 +74618,9 @@ export class CreateMJUserInput {
 
     @Field({ nullable: true })
     UserImageIconClass: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -66972,6 +74673,9 @@ export class UpdateMJUserInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -67621,6 +75325,16 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJOpenApp_])
+    async MJOpenApps_InstalledByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Open Apps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOpenApps')} WHERE ${provider.QuoteIdentifier('InstalledByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open Apps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open Apps', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJOpenAppInstallHistory_])
     async MJOpenAppInstallHistories_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Open App Install Histories', userPayload);
@@ -67631,13 +75345,73 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJOpenApp_])
-    async MJOpenApps_InstalledByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Open Apps', userPayload);
+    @FieldResolver(() => [MJContentItemDuplicate_])
+    async MJContentItemDuplicates_ResolvedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Item Duplicates', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOpenApps')} WHERE ${provider.QuoteIdentifier('InstalledByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open Apps', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemDuplicates')} WHERE ${provider.QuoteIdentifier('ResolvedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Duplicates', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open Apps', rows, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Duplicates', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentProcessRun_])
+    async MJContentProcessRuns_StartedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Process Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRuns')} WHERE ${provider.QuoteIdentifier('StartedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Process Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJKnowledgeHubSavedSearch_])
+    async MJKnowledgeHubSavedSearches_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Knowledge Hub Saved Searches', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwKnowledgeHubSavedSearches')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Knowledge Hub Saved Searches', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Knowledge Hub Saved Searches', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTagAuditLog_])
+    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJArchiveConfiguration_])
+    async MJArchiveConfigurations_CreatedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Configurations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveConfigurations')} WHERE ${provider.QuoteIdentifier('CreatedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Configurations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Configurations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMCPToolFavorite_])
+    async MJMCPToolFavorites_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: MCP Tool Favorites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPToolFavorites')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Tool Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Tool Favorites', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJResourcePermission_])
+    async MJResourcePermissions_SharedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Resource Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwResourcePermissions')} WHERE ${provider.QuoteIdentifier('SharedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Resource Permissions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -67791,6 +75565,26 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJFileStorageAccountPermission_])
+    async MJFileStorageAccountPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: File Storage Account Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFileStorageAccountPermissions')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: File Storage Account Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: File Storage Account Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJArchiveRun_])
+    async MJArchiveRuns_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Archive Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArchiveRuns')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Archive Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Archive Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIAgentRun_])
     async MJAIAgentRuns_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
@@ -67930,6 +75724,17 @@ export class MJVectorDatabase_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON configuration settings for this vector database provider. Stores provider-specific connection settings like custom host URLs, authentication configuration, timeouts, retry policies, and batch size limits. NULL means use defaults from environment variables or provider defaults.`}) 
+    Configuration?: string;
+        
+    @Field({nullable: true, description: `Optional link to a stored credential containing the API key and any other authentication details for this vector database provider. When set, the Credential Engine decrypts and supplies the key at runtime. When NULL, the system falls back to the environment variable AI_VENDOR_API_KEY__<ClassKey>.`}) 
+    @MaxLength(36)
+    CredentialID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Credential?: string;
+        
     @Field(() => [MJVectorIndex_])
     MJVectorIndexes_VectorDatabaseIDArray: MJVectorIndex_[]; // Link to MJVectorIndexes
     
@@ -67957,6 +75762,15 @@ export class CreateMJVectorDatabaseInput {
 
     @Field({ nullable: true })
     ClassKey: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -67980,8 +75794,17 @@ export class UpdateMJVectorDatabaseInput {
     @Field({ nullable: true })
     ClassKey?: string | null;
 
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -68120,6 +75943,20 @@ export class MJVectorIndex_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The provider's native identifier for this index. For Pinecone this is the index name; for other providers it may be a separate UUID or identifier. Used for syncing operations between MJ metadata and the remote vector database.`}) 
+    @MaxLength(500)
+    ExternalID?: string;
+        
+    @Field(() => Int, {nullable: true, description: `The number of dimensions for vectors stored in this index. Determined by the embedding model (e.g., 1536 for text-embedding-3-small, 768 for all-mpnet-base-v2). Set automatically when the index is created via the vector database provider.`}) 
+    Dimensions?: number;
+        
+    @Field({nullable: true, description: `The distance metric used for similarity calculations in this index. Common values: cosine (default, measures angular similarity), euclidean (L2 distance), dotproduct (inner product). Must match what the vector database provider was configured with.`}) 
+    @MaxLength(50)
+    Metric?: string;
+        
+    @Field({nullable: true, description: `JSON object containing provider-specific configuration for this index. For Pinecone serverless: {"cloud":"aws","region":"us-east-1"}. For pod-based: {"environment":"us-east1-gcp","podType":"p1.x1","replicas":1}. Stored as a flexible JSON bag to support any provider without schema changes.`}) 
+    ProviderConfig?: string;
+        
     @Field() 
     @MaxLength(100)
     VectorDatabase: string;
@@ -68130,6 +75967,15 @@ export class MJVectorIndex_ {
         
     @Field(() => [MJEntityRecordDocument_])
     MJEntityRecordDocuments_VectorIndexIDArray: MJEntityRecordDocument_[]; // Link to MJEntityRecordDocuments
+    
+    @Field(() => [MJEntityDocument_])
+    MJEntityDocuments_VectorIndexIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
+    
+    @Field(() => [MJContentType_])
+    MJContentTypes_VectorIndexIDArray: MJContentType_[]; // Link to MJContentTypes
+    
+    @Field(() => [MJContentSource_])
+    MJContentSources_VectorIndexIDArray: MJContentSource_[]; // Link to MJContentSources
     
 }
 
@@ -68152,6 +75998,21 @@ export class CreateMJVectorIndexInput {
 
     @Field({ nullable: true })
     EmbeddingModelID?: string;
+
+    @Field({ nullable: true })
+    ExternalID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Dimensions: number | null;
+
+    @Field({ nullable: true })
+    Metric: string | null;
+
+    @Field({ nullable: true })
+    ProviderConfig: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -68175,8 +76036,23 @@ export class UpdateMJVectorIndexInput {
     @Field({ nullable: true })
     EmbeddingModelID?: string;
 
+    @Field({ nullable: true })
+    ExternalID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Dimensions?: number | null;
+
+    @Field({ nullable: true })
+    Metric?: string | null;
+
+    @Field({ nullable: true })
+    ProviderConfig?: string | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -68243,6 +76119,36 @@ export class MJVectorIndexResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityRecordDocuments')} WHERE ${provider.QuoteIdentifier('VectorIndexID')}='${mjvectorindex_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Record Documents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityDocument_])
+    async MJEntityDocuments_VectorIndexIDArray(@Root() mjvectorindex_: MJVectorIndex_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Documents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityDocuments')} WHERE ${provider.QuoteIdentifier('VectorIndexID')}='${mjvectorindex_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Documents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentType_])
+    async MJContentTypes_VectorIndexIDArray(@Root() mjvectorindex_: MJVectorIndex_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentTypes')} WHERE ${provider.QuoteIdentifier('VectorIndexID')}='${mjvectorindex_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentSource_])
+    async MJContentSources_VectorIndexIDArray(@Root() mjvectorindex_: MJVectorIndex_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentSources')} WHERE ${provider.QuoteIdentifier('VectorIndexID')}='${mjvectorindex_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Sources', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -68353,6 +76259,9 @@ export class CreateMJVersionInstallationInput {
 
     @Field({ nullable: true })
     Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -68390,6 +76299,9 @@ export class UpdateMJVersionInstallationInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -68514,6 +76426,7 @@ export class MJVersionLabelItem_ {
     VersionLabel: string;
         
     @Field() 
+    @MaxLength(750)
     RecordChange: string;
         
     @Field() 
@@ -68541,6 +76454,9 @@ export class CreateMJVersionLabelItemInput {
 
     @Field({ nullable: true })
     RecordID?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -68566,6 +76482,9 @@ export class UpdateMJVersionLabelItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -68754,6 +76673,9 @@ export class CreateMJVersionLabelRestoreInput {
 
     @Field({ nullable: true })
     PreRestoreLabelID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -68797,6 +76719,9 @@ export class UpdateMJVersionLabelRestoreInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -69011,6 +76936,9 @@ export class CreateMJVersionLabelInput {
 
     @Field(() => Int, { nullable: true })
     CreationDurationMS?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -69057,6 +76985,9 @@ export class UpdateMJVersionLabelInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -69239,6 +77170,9 @@ export class CreateMJWorkflowEngineInput {
 
     @Field({ nullable: true })
     DriverClass?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -69264,6 +77198,9 @@ export class UpdateMJWorkflowEngineInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -69433,6 +77370,9 @@ export class CreateMJWorkflowRunInput {
 
     @Field({ nullable: true })
     Results: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -69464,6 +77404,9 @@ export class UpdateMJWorkflowRunInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -69638,6 +77581,9 @@ export class CreateMJWorkflowInput {
 
     @Field({ nullable: true })
     SubclassName: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -69675,6 +77621,9 @@ export class UpdateMJWorkflowInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -69861,6 +77810,9 @@ export class CreateMJWorkspaceItemInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -69895,6 +77847,9 @@ export class UpdateMJWorkspaceItemInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************
@@ -70040,6 +77995,9 @@ export class CreateMJWorkspaceInput {
 
     @Field({ nullable: true })
     Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 
@@ -70065,6 +78023,9 @@ export class UpdateMJWorkspaceInput {
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
 }
     
 //****************************************************************************

@@ -1,13 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
+import { MJButtonDirective, MJDatepickerComponent, MJWindowComponent, MJWindowTitlebarComponent, MJDropdownComponent, MJComboboxComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -17,11 +11,19 @@ import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 import { VersionsModule } from '@memberjunction/ng-versions';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
+import { NgTreesModule } from '@memberjunction/ng-trees';
+import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 
 // Core components — eagerly loaded, most-visited pages
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
+import { ActionPinConfigDialogComponent } from './Home/action-pin-config-dialog.component';
+import { ActionPinRunnerDialogComponent } from './Home/action-pin-runner-dialog.component';
+// HomeApplication is a non-Angular class registered via @RegisterClass(BaseApplication, 'HomeApplication').
+// It must be imported here so ESBuild includes it in this chunk, making it discoverable
+// via the lazy loading system when ApplicationManager calls CreateInstanceAsync.
+import { HomeApplication } from './Home/home-application';
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
 import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
 import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
@@ -34,6 +36,12 @@ import { APIKeyListComponent } from './APIKeys/api-key-list.component';
 import { APIApplicationsPanelComponent } from './APIKeys/api-applications-panel.component';
 import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
 import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
+// Application Roles
+import { ApplicationRolesResourceComponent } from './ApplicationRoles/application-roles-resource.component';
+// Permissions (Phase 2a/b/c — unified permissions admin); three independent resources
+import { PermissionsUserAccessResourceComponent } from './Permissions/user-access-resource.component';
+import { PermissionsResourceAccessResourceComponent } from './Permissions/resource-access-resource.component';
+import { PermissionsAuditLogResourceComponent } from './Permissions/audit-log-resource.component';
 // Version History
 import { VersionHistoryLabelsResourceComponent } from './VersionHistory/components/labels-resource.component';
 import { VersionHistoryDiffResourceComponent } from './VersionHistory/components/diff-resource.component';
@@ -48,6 +56,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
   declarations: [
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
+    ActionPinConfigDialogComponent,
+    ActionPinRunnerDialogComponent,
     SystemDiagnosticsComponent,
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
@@ -60,6 +70,12 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     APIApplicationsPanelComponent,
     APIScopesPanelComponent,
     APIUsagePanelComponent,
+    // Application Roles
+    ApplicationRolesResourceComponent,
+    // Permissions admin — three independent resource tabs
+    PermissionsUserAccessResourceComponent,
+    PermissionsResourceAccessResourceComponent,
+    PermissionsAuditLogResourceComponent,
     // Version History
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
@@ -70,14 +86,12 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    ButtonsModule,
-    GridModule,
-    DropDownsModule,
-    InputsModule,
-    IndicatorsModule,
-    DateInputsModule,
-    DialogsModule,
-    WindowModule,
+    MJButtonDirective,
+    MJDatepickerComponent,
+    MJWindowComponent,
+    MJWindowTitlebarComponent,
+    MJDropdownComponent,
+    MJComboboxComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     CodeEditorModule,
@@ -87,6 +101,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     DashboardViewerModule,
     VersionsModule,
     ExportServiceModule,
+    NgTreesModule,
+    ResourcePermissionsModule,
     SharedPipesModule
   ],
   exports: [
@@ -103,6 +119,10 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     APIApplicationsPanelComponent,
     APIScopesPanelComponent,
     APIUsagePanelComponent,
+    ApplicationRolesResourceComponent,
+    PermissionsUserAccessResourceComponent,
+    PermissionsResourceAccessResourceComponent,
+    PermissionsAuditLogResourceComponent,
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryRestoreResourceComponent,
@@ -113,5 +133,9 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
 export class CoreDashboardsModule { }
 
 // Re-export types needed by consumers via subpath import
-export type { ShareDialogResult, UserSharePermission } from './DashboardBrowser/dashboard-share-dialog.component';
+export type { ShareDialogResult } from './DashboardBrowser/dashboard-share-dialog.component';
 export { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';
+
+// Re-export HomeApplication so it's reachable from this subpath for lazy loading.
+// The @RegisterClass decorator fires on import, registering it with ClassFactory.
+export { HomeApplication } from './Home/home-application';

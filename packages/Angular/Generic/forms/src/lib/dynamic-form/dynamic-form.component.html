@@ -5,8 +5,8 @@
       <div class="simple-choice-buttons">
         @for (option of GetOptions(FormDefinition.questions[0]); track TrackByValue($index, option)) {
           <button
-            kendoButton
-            [themeColor]="IsSimpleChoiceSelected(option.value) ? 'primary' : 'base'"
+            mjButton
+            [variant]="IsSimpleChoiceSelected(option.value) ? 'primary' : 'secondary'"
             [disabled]="Disabled"
             (click)="OnSimpleChoiceClick(option.value)"
             class="choice-button"
@@ -53,9 +53,9 @@
           @if (FooterChoiceQuestion) {
             @for (option of GetOptions(FooterChoiceQuestion); track TrackByValue($index, option)) {
               <button
-                kendoButton
+                mjButton
                 type="button"
-                [themeColor]="IsFooterChoiceSelected(option.value) ? 'primary' : 'base'"
+                [variant]="IsFooterChoiceSelected(option.value) ? 'primary' : 'secondary'"
                 [disabled]="Disabled"
                 (click)="OnFooterChoiceClick(option.value)"
                 class="footer-choice-button"
@@ -75,9 +75,9 @@
           <!-- Standard Submit Button (when no footer choice) -->
           @if (ShowSubmitButton) {
             <button
-              kendoButton
+              mjButton
               type="submit"
-              [themeColor]="'primary'"
+              variant="primary"
               [disabled]="Disabled || IsSubmitting || FormGroup.invalid"
               class="submit-button"
               >

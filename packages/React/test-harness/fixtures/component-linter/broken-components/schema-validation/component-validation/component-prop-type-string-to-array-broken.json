@@ -1,0 +1,38 @@
+{
+  "name": "ComponentPropTypeStringToArrayBroken",
+  "type": "generic",
+  "title": "Component Property Type String to Array - Broken Pattern",
+  "description": "Tests linter detection of passing string to array property",
+  "code": "function ComponentPropTypeStringToArrayBroken({ utilities, components }) {\n  const [fieldNames, setFieldNames] = useState('FirstName,Email,Title');\n  const { DataTable } = components;\n  const [employees, setEmployees] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Employees' });\n      if (result?.Success) {\n        setEmployees(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Employees</h3>\n      {/* ❌ columns expects array, passing comma-separated string */}\n      <DataTable data={employees} columns={fieldNames} />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "components": [{
+      "name": "DataTable",
+      "properties": [
+        {"name": "data", "type": "array", "isRequired": true},
+        {"name": "columns", "type": "array", "isRequired": false}
+      ]
+    }]
+  },
+  "dependencies": [
+    {
+      "name": "DataTable",
+      "location": "registry",
+      "type": "table",
+      "title": "Data Table",
+      "description": "Displays data in a configurable table with pagination and sorting",
+      "code": "",
+      "functionalRequirements": "",
+      "technicalDesign": "",
+      "exampleUsage": "<DataTable data={employees} columns={['FirstName', 'Email']} />",
+      "properties": [
+        {"name": "data", "type": "array", "required": true, "description": "Array of records to display in the table"},
+        {"name": "columns", "type": "array", "required": false, "description": "Array of column names or column definitions to display"}
+      ]
+    }
+  ]
+}

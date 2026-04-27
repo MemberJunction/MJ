@@ -11,7 +11,7 @@
 
 import { MJAIPromptRunEntity, MJAIConfigurationEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
 import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
 
@@ -19,6 +19,29 @@ import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
  * Modality types for multi-modal outputs
  */
 export type MediaModality = 'Image' | 'Audio' | 'Video';
+
+/**
+ * A file artifact that may be attached natively to a prompt when the
+ * resolved LLM driver supports the MIME type.
+ */
+export interface NativeFileInput {
+  /** Display name of the artifact (used in logging) */
+  Name: string;
+  /** MIME type (e.g. 'application/pdf', 'image/png') */
+  MimeType: string;
+  /** Base64-encoded file content (or data-URL) */
+  Base64Content: string;
+  /** File size in bytes — used by the resolver for limit checks */
+  SizeBytes: number;
+  /**
+   * Pre-extracted text content for fallback when the driver doesn't support
+   * native file input. Populated eagerly by ArtifactToolManager so the
+   * Prompts package doesn't need binary parsing dependencies (pdfjs, etc.).
+   * When present and the driver rejects the file, this text is injected
+   * as a plain text block in the user message instead.
+   */
+  TextContent?: string;
+}
 
 /**
  * Represents a media item generated during prompt execution.
@@ -679,6 +702,25 @@ export class AIPromptParams {
    * @see {@link https://docs.memberjunction.org/ai-authentication AI Authentication Guide}
    */
   credentialId?: string;
+
+  /**
+   * Optional per-request metadata provider for multi-user server isolation.
+   * Set by BaseAgent when invoking prompts so prompt run records are saved
+   * via the same isolated provider as the rest of the agent execution.
+   * When omitted, falls back to the global Metadata.Provider.
+   */
+  provider?: IMetadataProvider;
+
+  /**
+   * Optional file artifacts that may be attached as native content blocks
+   * when the resolved LLM driver supports the file's MIME type natively.
+   *
+   * The AIPromptRunner checks each entry against the driver's FileCapabilities
+   * after model selection. Files that pass the resolver are injected as
+   * content blocks in the last user message; others are left for artifact
+   * tool-based exploration.
+   */
+  nativeFileInputs?: NativeFileInput[];
 }
 
 

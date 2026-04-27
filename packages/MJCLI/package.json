@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/cli",
   "type": "module",
-  "version": "5.19.0",
+  "version": "5.29.0",
   "description": "MemberJunction command line tools",
   "keywords": [
     "oclif"
@@ -38,7 +38,8 @@
     "commands": "./dist/commands",
     "hooks": {
       "init": "./dist/hooks/init",
-      "prerun": "./dist/hooks/prerun"
+      "prerun": "./dist/hooks/prerun",
+      "postrun": "./dist/hooks/postrun"
     },
     "dirname": "mj",
     "topicSeparator": " ",
@@ -53,19 +54,20 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
-    "@memberjunction/ai-cli": "5.19.0",
-    "@memberjunction/codegen-lib": "5.19.0",
-    "@memberjunction/config": "5.19.0",
-    "@memberjunction/core": "5.19.0",
-    "@memberjunction/installer": "5.19.0",
-    "@memberjunction/db-auto-doc": "5.19.0",
-    "@memberjunction/metadata-sync": "5.19.0",
-    "@memberjunction/query-gen": "5.19.0",
-    "@memberjunction/server-bootstrap-lite": "5.19.0",
+    "@memberjunction/ai-cli": "5.29.0",
+    "@memberjunction/codegen-lib": "5.29.0",
+    "@memberjunction/config": "5.29.0",
+    "@memberjunction/core": "5.29.0",
+    "@memberjunction/installer": "5.29.0",
+    "@memberjunction/db-auto-doc": "5.29.0",
+    "@memberjunction/metadata-sync": "5.29.0",
+    "@memberjunction/open-app-engine": "5.29.0",
+    "@memberjunction/query-gen": "5.29.0",
+    "@memberjunction/server-bootstrap-lite": "5.29.0",
     "@memberjunction/skyway-core": "^0.5.3",
-    "@memberjunction/sql-converter": "5.19.0",
-    "@memberjunction/sqlserver-dataprovider": "5.19.0",
-    "@memberjunction/testing-cli": "5.19.0",
+    "@memberjunction/sql-converter": "5.29.0",
+    "@memberjunction/sqlserver-dataprovider": "5.29.0",
+    "@memberjunction/testing-cli": "5.29.0",
     "@oclif/core": "^3.27.0",
     "@oclif/plugin-help": "^6.2.37",
     "@oclif/plugin-version": "^2.2.36",

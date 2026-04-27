@@ -1,5 +1,269 @@
 # @memberjunction/ai-cli
 
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+- Updated dependencies [98bad3a]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities-server@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-agents@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/ai-prompts@5.29.0
+  - @memberjunction/core-actions@5.29.0
+  - @memberjunction/actions@5.29.0
+  - @memberjunction/sqlserver-dataprovider@5.29.0
+  - @memberjunction/ai@5.29.0
+  - @memberjunction/ai-anthropic@5.29.0
+  - @memberjunction/ai-betty-bot@5.29.0
+  - @memberjunction/ai-cerebras@5.29.0
+  - @memberjunction/ai-groq@5.29.0
+  - @memberjunction/ai-mistral@5.29.0
+  - @memberjunction/ai-openai@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [fdab4bb]
+- Updated dependencies [115e4da]
+  - @memberjunction/ai-prompts@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/core-actions@5.28.0
+  - @memberjunction/ai-agents@5.28.0
+  - @memberjunction/actions@5.28.0
+  - @memberjunction/core-entities-server@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/ai-anthropic@5.28.0
+  - @memberjunction/ai-betty-bot@5.28.0
+  - @memberjunction/ai-cerebras@5.28.0
+  - @memberjunction/ai-groq@5.28.0
+  - @memberjunction/ai-mistral@5.28.0
+  - @memberjunction/ai-openai@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@5.27.1
+- @memberjunction/ai@5.27.1
+- @memberjunction/ai-core-plus@5.27.1
+- @memberjunction/ai-prompts@5.27.1
+- @memberjunction/ai-anthropic@5.27.1
+- @memberjunction/ai-betty-bot@5.27.1
+- @memberjunction/ai-cerebras@5.27.1
+- @memberjunction/ai-groq@5.27.1
+- @memberjunction/ai-mistral@5.27.1
+- @memberjunction/ai-openai@5.27.1
+- @memberjunction/core-actions@5.27.1
+- @memberjunction/actions@5.27.1
+- @memberjunction/core@5.27.1
+- @memberjunction/core-entities@5.27.1
+- @memberjunction/core-entities-server@5.27.1
+- @memberjunction/sqlserver-dataprovider@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- Updated dependencies [4357090]
+  - @memberjunction/core-entities-server@5.27.0
+  - @memberjunction/core-actions@5.27.0
+  - @memberjunction/sqlserver-dataprovider@5.27.0
+  - @memberjunction/ai-agents@5.27.0
+  - @memberjunction/ai@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/ai-prompts@5.27.0
+  - @memberjunction/ai-anthropic@5.27.0
+  - @memberjunction/ai-betty-bot@5.27.0
+  - @memberjunction/ai-cerebras@5.27.0
+  - @memberjunction/ai-groq@5.27.0
+  - @memberjunction/ai-mistral@5.27.0
+  - @memberjunction/ai-openai@5.27.0
+  - @memberjunction/actions@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/ai-agents@5.26.0
+  - @memberjunction/core-actions@5.26.0
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/ai-prompts@5.26.0
+  - @memberjunction/actions@5.26.0
+  - @memberjunction/core-entities-server@5.26.0
+  - @memberjunction/sqlserver-dataprovider@5.26.0
+  - @memberjunction/ai@5.26.0
+  - @memberjunction/ai-anthropic@5.26.0
+  - @memberjunction/ai-betty-bot@5.26.0
+  - @memberjunction/ai-cerebras@5.26.0
+  - @memberjunction/ai-groq@5.26.0
+  - @memberjunction/ai-mistral@5.26.0
+  - @memberjunction/ai-openai@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [62af878]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/core-entities-server@5.25.0
+  - @memberjunction/actions@5.25.0
+  - @memberjunction/ai-agents@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/ai-prompts@5.25.0
+  - @memberjunction/core-actions@5.25.0
+  - @memberjunction/sqlserver-dataprovider@5.25.0
+  - @memberjunction/ai@5.25.0
+  - @memberjunction/ai-anthropic@5.25.0
+  - @memberjunction/ai-betty-bot@5.25.0
+  - @memberjunction/ai-cerebras@5.25.0
+  - @memberjunction/ai-groq@5.25.0
+  - @memberjunction/ai-mistral@5.25.0
+  - @memberjunction/ai-openai@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-agents@5.24.0
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/ai-prompts@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/core-entities-server@5.24.0
+  - @memberjunction/core-actions@5.24.0
+  - @memberjunction/actions@5.24.0
+  - @memberjunction/sqlserver-dataprovider@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/ai-anthropic@5.24.0
+  - @memberjunction/ai-betty-bot@5.24.0
+  - @memberjunction/ai-cerebras@5.24.0
+  - @memberjunction/ai-groq@5.24.0
+  - @memberjunction/ai-mistral@5.24.0
+  - @memberjunction/ai-openai@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/core-entities-server@5.23.0
+  - @memberjunction/ai-agents@5.23.0
+  - @memberjunction/ai-prompts@5.23.0
+  - @memberjunction/sqlserver-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/core-actions@5.23.0
+  - @memberjunction/actions@5.23.0
+  - @memberjunction/ai@5.23.0
+  - @memberjunction/ai-anthropic@5.23.0
+  - @memberjunction/ai-betty-bot@5.23.0
+  - @memberjunction/ai-cerebras@5.23.0
+  - @memberjunction/ai-groq@5.23.0
+  - @memberjunction/ai-mistral@5.23.0
+  - @memberjunction/ai-openai@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [21e0b69]
+- Updated dependencies [a42aba6]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ai-prompts@5.22.0
+  - @memberjunction/ai-agents@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/core-actions@5.22.0
+  - @memberjunction/actions@5.22.0
+  - @memberjunction/core-entities-server@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/sqlserver-dataprovider@5.22.0
+  - @memberjunction/ai@5.22.0
+  - @memberjunction/ai-anthropic@5.22.0
+  - @memberjunction/ai-betty-bot@5.22.0
+  - @memberjunction/ai-cerebras@5.22.0
+  - @memberjunction/ai-groq@5.22.0
+  - @memberjunction/ai-mistral@5.22.0
+  - @memberjunction/ai-openai@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+- Updated dependencies [b29716c]
+- Updated dependencies [76cd2bc]
+- Updated dependencies [845c980]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/core-entities-server@5.21.0
+  - @memberjunction/ai-agents@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/ai-prompts@5.21.0
+  - @memberjunction/sqlserver-dataprovider@5.21.0
+  - @memberjunction/core-actions@5.21.0
+  - @memberjunction/actions@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/ai@5.21.0
+  - @memberjunction/ai-anthropic@5.21.0
+  - @memberjunction/ai-betty-bot@5.21.0
+  - @memberjunction/ai-cerebras@5.21.0
+  - @memberjunction/ai-groq@5.21.0
+  - @memberjunction/ai-mistral@5.21.0
+  - @memberjunction/ai-openai@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [7ab01a8]
+- Updated dependencies [2298f8a]
+  - @memberjunction/ai-agents@5.20.0
+  - @memberjunction/core@5.20.0
+  - @memberjunction/core-actions@5.20.0
+  - @memberjunction/core-entities-server@5.20.0
+  - @memberjunction/sqlserver-dataprovider@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/ai-prompts@5.20.0
+  - @memberjunction/actions@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/ai-anthropic@5.20.0
+  - @memberjunction/ai-betty-bot@5.20.0
+  - @memberjunction/ai-cerebras@5.20.0
+  - @memberjunction/ai-groq@5.20.0
+  - @memberjunction/ai-mistral@5.20.0
+  - @memberjunction/ai-openai@5.20.0
+
 ## 5.19.0
 
 ### Patch Changes

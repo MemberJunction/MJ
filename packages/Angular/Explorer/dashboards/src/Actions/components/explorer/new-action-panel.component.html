@@ -6,8 +6,8 @@
           <i class="fa-solid fa-bolt"></i>
           New Action
         </h2>
-        <button kendoButton
-          [fillMode]="'flat'"
+        <button mjButton
+          variant="flat"
           (click)="onClose()">
           <i class="fa-solid fa-times"></i>
         </button>
@@ -48,13 +48,12 @@
           <label for="actionName" class="form-label required">
             Action Name
           </label>
-          <kendo-textbox
+          <input type="text" class="mj-input"
             id="actionName"
             [(ngModel)]="Name"
-            [placeholder]="'Enter action name'"
+            placeholder="Enter action name"
             [maxlength]="425"
-            [class.invalid]="Errors['name']">
-          </kendo-textbox>
+            [class.invalid]="Errors['name']" />
           @if (Errors['name']) {
             <span class="error-text">{{ Errors['name'] }}</span>
           }
@@ -64,27 +63,25 @@
           <label for="actionDescription" class="form-label">
             Description
           </label>
-          <kendo-textarea
+          <textarea class="mj-textarea"
             id="actionDescription"
             [(ngModel)]="Description"
-            [placeholder]="'Describe what this action does'"
-            [rows]="3">
-          </kendo-textarea>
+            placeholder="Describe what this action does"
+            [rows]="3"></textarea>
         </div>
 
         <div class="form-group">
           <label for="actionCategory" class="form-label required">
             Category
           </label>
-          <kendo-dropdownlist
-            id="actionCategory"
+          <mj-dropdown
             [(ngModel)]="CategoryID"
-            [data]="getCategoryOptions()"
-            textField="text"
-            valueField="value"
-            [valuePrimitive]="true"
+            [Data]="getCategoryOptions()"
+            TextField="text"
+            ValueField="value"
+            [ValuePrimitive]="true"
             [class.invalid]="Errors['category']">
-          </kendo-dropdownlist>
+          </mj-dropdown>
           @if (Errors['category']) {
             <span class="error-text">{{ Errors['category'] }}</span>
           }
@@ -100,9 +97,8 @@
       </div>
 
       <div class="panel-footer">
-        <button kendoButton
-          [fillMode]="'solid'"
-          [themeColor]="'primary'"
+        <button mjButton
+          variant="primary"
           [disabled]="IsSaving"
           (click)="onSave()">
           @if (IsSaving) {
@@ -113,8 +109,8 @@
             Create Action
           }
         </button>
-        <button kendoButton
-          [fillMode]="'outline'"
+        <button mjButton
+          variant="outline"
           [disabled]="IsSaving"
           (click)="onClose()">
           Cancel

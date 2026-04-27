@@ -1,5 +1,5 @@
 import { EntityInfo, CompositeKey } from '@memberjunction/core';
-import { ViewGridState } from '@memberjunction/core-entities';
+import { ViewGridState } from '../types';
 
 /**
  * Build a CompositeKey from a plain record using EntityInfo PK fields.
@@ -75,6 +75,23 @@ export function computeFieldsList(entityInfo: EntityInfo, gridState?: ViewGridSt
     // Include __mj timestamp fields (commonly used for sort and display)
     fields.add('__mj_CreatedAt');
     fields.add('__mj_UpdatedAt');
+
+    // Include geo-related fields when the entity supports geocoding
+    // Virtual lat/lng fields for map rendering
+    if (entityInfo.Fields.some(f => f.Name === '__mj_Latitude')) {
+        fields.add('__mj_Latitude');
+    }
+    if (entityInfo.Fields.some(f => f.Name === '__mj_Longitude')) {
+        fields.add('__mj_Longitude');
+    }
+    // Include address/geo fields for map grouping (Regions mode needs Country, State, etc.)
+    // These are fields with Geo* ExtendedType values
+    const geoExtTypes = ['Geo', 'GeoAddress', 'GeoCity', 'GeoStateProvince', 'GeoCountry', 'GeoPostalCode'];
+    for (const f of entityInfo.Fields) {
+        if (f.ExtendedType && geoExtTypes.includes(f.ExtendedType)) {
+            fields.add(f.Name);
+        }
+    }
 
     return Array.from(fields);
 }

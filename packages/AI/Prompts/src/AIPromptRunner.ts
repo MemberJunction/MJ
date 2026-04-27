@@ -1,6 +1,7 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy } from '@memberjunction/ai';
+import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
-import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
+import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -92,7 +93,7 @@ interface ModelVendorCandidate {
   effortLevel?: number;
   isPreferredVendor: boolean;
   priority: number; // Higher is better
-  source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank';
+  source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank' | 'power-match-fallback';
 }
 
 
@@ -126,13 +127,23 @@ export class AIPromptRunner {
   private _executionPlanner: ExecutionPlanner;
   private _parallelCoordinator: ParallelExecutionCoordinator;
   private _jsonValidator: JSONValidator;
-  
+  private _modelRunner: AIModelRunner;
+
   constructor() {
     this._metadata = new Metadata();
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
     this._parallelCoordinator = new ParallelExecutionCoordinator();
     this._jsonValidator = new JSONValidator();
+    this._modelRunner = new AIModelRunner();
+  }
+
+  /**
+   * Access the underlying AIModelRunner for embedding and other non-LLM model calls.
+   * Use this when you need tracked embedding execution with AIPromptRun record creation.
+   */
+  public get ModelRunner(): AIModelRunner {
+    return this._modelRunner;
   }
 
   /**
@@ -903,6 +914,17 @@ export class AIPromptRunner {
       validationResult: parsedResult.validationResult,
       validationAttempts,
       combinedTokensUsed: (cumulativeTokens.promptTokens + cumulativeTokens.completionTokens) || ((usage?.promptTokens || 0) + (usage?.completionTokens || 0)),
+      // modelInfo: the parallel path populates this; we were silently skipping
+      // it here, so callers (e.g., the Runtime-action bridge) saw `undefined`
+      // and surfaced `modelUsed: null` on every single-model prompt run.
+      modelInfo: selectedModel
+        ? {
+            modelId: selectedModel.ID,
+            modelName: selectedModel.Name,
+            vendorId: modelSelectionInfo?.vendorSelected?.ID,
+            vendorName: selectedModel.Vendor
+          }
+        : undefined,
       modelSelectionInfo // Include model selection info if available
     };
   }
@@ -1285,6 +1307,8 @@ export class AIPromptRunner {
           });
           
           if (!childRenderResult.Success) {
+            console.error(`[ChildTemplateRender] FAILED for "${childPrompt.Name}": ${childRenderResult.Message}`);
+            console.error(`[ChildTemplateRender] Data keys: ${Object.keys(mergedChildData).join(', ')}`);
             throw new Error(`Failed to render child template for prompt ${childPrompt.Name}: ${childRenderResult.Message}`);
           }
           
@@ -1561,6 +1585,8 @@ export class AIPromptRunner {
         selectionReason = `Selected based on model type filtering`;
       } else if (selected.source === 'power-rank') {
         selectionReason = `Selected by power rank (${selected.model.PowerRank || 0})`;
+      } else if (selected.source === 'power-match-fallback') {
+        selectionReason = `Fallback: selected ${selected.model.Name} (PowerRank ${selected.model.PowerRank || 0}) as closest match to configured models' power level`;
       }
 
       if (selected.isPreferredVendor) {
@@ -1703,7 +1729,22 @@ export class AIPromptRunner {
     // Build candidates maintaining order
     const candidates = this.buildCandidatesFromPromptModels(sortedPromptModels);
 
-    // Strategy='Specific' requires explicit configuration
+    // If RequireSpecificModels is true (or no candidates at all), enforce strict behavior
+    if (candidates.length === 0 && prompt.RequireSpecificModels) {
+      const configInfo = configurationId ? ` with configuration "${configurationId}"` : '';
+      throw new Error(
+        `SelectionStrategy is 'Specific' but no valid AIPromptModel candidates found for prompt "${prompt.Name}"${configInfo}. ` +
+        `Please configure AIPromptModel records for this prompt.`
+      );
+    }
+
+    // When RequireSpecificModels is false, append power-matched fallback candidates
+    // so that if none of the specific models have valid credentials, the system
+    // gracefully falls back to other available models at a similar power level.
+    if (!prompt.RequireSpecificModels) {
+      this.appendPowerMatchedFallbackCandidates(candidates, prompt, sortedPromptModels, verbose);
+    }
+
     if (candidates.length === 0) {
       const configInfo = configurationId ? ` with configuration "${configurationId}"` : '';
       throw new Error(
@@ -1717,6 +1758,101 @@ export class AIPromptRunner {
     }
 
     return candidates;
+  }
+
+  /**
+   * Appends fallback candidates from the global model pool, sorted by proximity to the
+   * average power rank of the originally configured models. This ensures that when
+   * specific models lack credentials, the fallback uses models of similar capability
+   * rather than defaulting to the most or least powerful available model.
+   *
+   * Fallback candidates are given lower priority than any specific candidate so
+   * configured models are always preferred when their credentials are available.
+   */
+  private appendPowerMatchedFallbackCandidates(
+    candidates: ModelVendorCandidate[],
+    prompt: MJAIPromptEntityExtended,
+    configuredPromptModels: MJAIPromptModelEntity[],
+    verbose?: boolean
+  ): void {
+    // Compute target power rank from the configured models
+    const targetPowerRank = this.computeTargetPowerRank(configuredPromptModels);
+
+    // Get all active models matching the prompt's model type, excluding already-present models
+    const existingModelIds = new Set(candidates.map(c => c.model.ID));
+    const fallbackPool = AIEngine.Instance.Models.filter(
+      m => m.IsActive &&
+           !existingModelIds.has(m.ID) &&
+           (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID))
+    );
+
+    if (fallbackPool.length === 0) return;
+
+    // Sort by proximity to the target power rank
+    const sorted = this.sortByPowerProximity(fallbackPool, targetPowerRank);
+
+    // Assign priorities below the lowest specific candidate
+    const lowestSpecificPriority = candidates.length > 0
+      ? Math.min(...candidates.map(c => c.priority))
+      : 1000;
+    const fallbackBasePriority = lowestSpecificPriority - 100;
+
+    sorted.forEach((model, index) => {
+      const modelCandidates = this.createCandidatesForModel(
+        model,
+        fallbackBasePriority - index * 10,
+        'power-match-fallback'
+      );
+      candidates.push(...modelCandidates);
+    });
+
+    if (verbose && sorted.length > 0) {
+      LogStatus(
+        `Appended ${sorted.length} power-matched fallback models (target PowerRank: ${targetPowerRank}) ` +
+        `for prompt "${prompt.Name}" since RequireSpecificModels is false`
+      );
+    }
+  }
+
+  /**
+   * Computes the target power rank from configured AIPromptModel records.
+   * Uses the weighted average (by priority) of the configured models' power ranks,
+   * so higher-priority models have more influence on the target.
+   * Falls back to simple average if priorities are all zero.
+   */
+  private computeTargetPowerRank(promptModels: MJAIPromptModelEntity[]): number {
+    if (promptModels.length === 0) return 0;
+
+    const modelsWithPower = promptModels
+      .map(pm => {
+        const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, pm.ModelID));
+        return { powerRank: model?.PowerRank ?? 0, priority: pm.Priority || 1 };
+      });
+
+    const totalWeight = modelsWithPower.reduce((sum, m) => sum + m.priority, 0);
+    if (totalWeight === 0) {
+      // All priorities are 0, use simple average
+      return Math.round(modelsWithPower.reduce((sum, m) => sum + m.powerRank, 0) / modelsWithPower.length);
+    }
+
+    const weightedSum = modelsWithPower.reduce((sum, m) => sum + m.powerRank * m.priority, 0);
+    return Math.round(weightedSum / totalWeight);
+  }
+
+  /**
+   * Sorts models by proximity to a target power rank (closest first).
+   * When two models are equidistant, the higher-powered one is preferred.
+   */
+  private sortByPowerProximity(
+    models: MJAIModelEntityExtended[],
+    targetPowerRank: number
+  ): MJAIModelEntityExtended[] {
+    return [...models].sort((a, b) => {
+      const distA = Math.abs((a.PowerRank ?? 0) - targetPowerRank);
+      const distB = Math.abs((b.PowerRank ?? 0) - targetPowerRank);
+      if (distA !== distB) return distA - distB; // Closer to target first
+      return (b.PowerRank ?? 0) - (a.PowerRank ?? 0); // Tie-break: higher power first
+    });
   }
 
   /**
@@ -2412,7 +2548,8 @@ export class AIPromptRunner {
     vendorId?: string,
     modelSelectionInfo?: any
   ): Promise<MJAIPromptRunEntityExtended> {
-    const promptRun = await this._metadata.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
+    const provider: IMetadataProvider = params.provider || Metadata.Provider;
+    const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
     try {
       promptRun.NewRecord();
 
@@ -3190,6 +3327,10 @@ export class AIPromptRunner {
       // Build message array with rendered prompt and conversation messages
       chatParams.messages = this.buildMessageArray(renderedPrompt, conversationMessages, templateMessageRole);
 
+      // Resolve native file inputs: check each file against the driver's capabilities
+      // and inject qualifying files as content blocks in the last user message.
+      this.injectNativeFileInputs(params, llm, chatParams, verbose);
+
       // Apply assistant prefill (native or fallback) based on prompt config and provider support
       this.applyAssistantPrefill(chatParams, prompt, model, vendorId, llm);
 
@@ -3230,6 +3371,57 @@ export class AIPromptRunner {
   /**
    * Builds the message array combining rendered prompt with conversation messages
    */
+  /**
+   * Checks each nativeFileInput against the resolved driver's FileCapabilities
+   * and injects qualifying files as content blocks in the last user message.
+   */
+  private injectNativeFileInputs(params: AIPromptParams, llm: BaseLLM, chatParams: ChatParams, verbose: boolean): void {
+    if (!params.nativeFileInputs?.length) return;
+
+    const caps = llm.GetFileCapabilities();
+    let nativeCount = 0;
+    const fileBlocks: { type: 'file_url'; content: string; mimeType: string; fileName?: string }[] = [];
+    const textFallbackBlocks: { type: 'text'; content: string }[] = [];
+
+    for (const file of params.nativeFileInputs) {
+      const strategy = ResolveFileInputStrategy(file.MimeType, file.SizeBytes, caps, null, nativeCount);
+      if (strategy.UseNativeFileInput) {
+        const dataUrl = file.Base64Content.startsWith('data:')
+          ? file.Base64Content
+          : 'data:' + file.MimeType + ';base64,' + file.Base64Content;
+        fileBlocks.push({ type: 'file_url', content: dataUrl, mimeType: file.MimeType, fileName: file.Name });
+        nativeCount++;
+        this.logStatus('[NativeFileInput] Attaching \'' + file.Name + '\' (' + file.MimeType + ') natively to prompt', verbose, params);
+      } else if (file.TextContent) {
+        // Driver doesn't support this file type natively — fall back to
+        // injecting pre-extracted text so the LLM can still see the content.
+        textFallbackBlocks.push({
+          type: 'text',
+          content: `--- File: ${file.Name} (${file.MimeType}) ---\n${file.TextContent}\n--- End of file ---`,
+        });
+        this.logStatus('[NativeFileInput] Text fallback for \'' + file.Name + '\' (' + file.MimeType + '): ' + strategy.Reason, verbose, params);
+      } else {
+        this.logStatus('[NativeFileInput] Skipping \'' + file.Name + '\': ' + strategy.Reason + ' (no text fallback available)', verbose, params);
+      }
+    }
+
+    if (fileBlocks.length === 0 && textFallbackBlocks.length === 0) return;
+
+    // Find the last user message and convert its content to content blocks
+    for (let i = chatParams.messages.length - 1; i >= 0; i--) {
+      const msg = chatParams.messages[i];
+      if (msg.role === 'user') {
+        const textContent = typeof msg.content === 'string' ? msg.content : '';
+        msg.content = [
+          ...fileBlocks,
+          ...textFallbackBlocks,
+          { type: 'text', content: textContent },
+        ];
+        break;
+      }
+    }
+  }
+
   private buildMessageArray(renderedPrompt: string, conversationMessages?: ChatMessage[], templateMessageRole: TemplateMessageRole = 'system'): ChatMessage[] {
     const messages: ChatMessage[] = [];
 

@@ -9,7 +9,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -62,8 +62,8 @@
       "ID": "96BCAE1C-B1F0-4FC4-9988-54B067BC962A"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:37.710Z",
-      "checksum": "021015c54be4aa61b1061611b835a0e4680bde57b6bb62ca387aed82a6cb01a0"
+      "lastModified": "2026-04-20T23:53:33.305Z",
+      "checksum": "6f57d1102cf1709e29a7e1c0395f9bb493eeb8fac42d7956152a4d29b09ed0fc"
     }
   },
   {
@@ -76,7 +76,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -129,8 +129,8 @@
       "ID": "B41F7FAD-49F5-4897-92C9-4904C79DD5F5"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:37.720Z",
-      "checksum": "ad452301ef8c8995e0900b13c6b07148e37fb9f7f500c977ffb7c10e9f55cbae"
+      "lastModified": "2026-04-20T23:53:33.330Z",
+      "checksum": "dc31eb81107a2b11245cde960f3d7dcfeb5e9d4db62e6911a9e57f85a892f541"
     }
   },
   {
@@ -143,7 +143,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -196,8 +196,8 @@
       "ID": "2B405BA2-A446-4F1E-9402-D88C51CC8F9F"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:37.729Z",
-      "checksum": "955c5c24fd04c7ce82bca5cf6095a6440d634f0161693e78f4aa8d0ffb7004bd"
+      "lastModified": "2026-04-20T23:53:33.357Z",
+      "checksum": "bb2df7ea08cc67ab93fe88445e43beea541d8c6a77444b7393aa024d8fb8036f"
     }
   },
   {
@@ -210,7 +210,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -278,8 +278,8 @@
       "ID": "FA0031BB-4838-4C16-A161-ED670E9A147B"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:37.735Z",
-      "checksum": "6ef511f6be3608cce6c3f4b5ddc154ebc0cb5a6d3b222e28ef1fb6bf4f60062e"
+      "lastModified": "2026-04-20T23:53:33.379Z",
+      "checksum": "e006d08fa86c536fc49b74e49d466f8731251af6b3c06bfb5272023ffdc61060"
     }
   }
 ]

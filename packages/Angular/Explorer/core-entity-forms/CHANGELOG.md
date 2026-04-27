@@ -1,5 +1,451 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.29.0
+
+### Patch Changes
+
+- e02e24e: Query rendering pipeline redesign: fix Bug D (Nunjucks expression inside SQL string literal breaks ORDER BY detection), consolidate duplicated ORDER BY logic into shared analyzer, add RenderPipeline entry point with diagnostic tracing, introduce structural parser and symbol table for composition IR, and integrate SQL dialect objects throughout the parser removing all hardcoded dialect switch statements. SQL comments are now stripped before template evaluation instead of escaped. Production callers (RunQuery, TestQuerySQL) delegate to RenderPipeline. 65+ new tests including recursive CTEs, PostgreSQL dialect variants, and comment-stripping coverage.
+
+  Query dashboard and form UI improvements: replace flat category dropdowns with hierarchical tree dropdowns, default new query category to active folder context, add per-folder create buttons, expose Reusable/CacheEnabled/AuditQueryRuns fields in entity form Details panel, add saving indicator with spinner overlay, fix sub-entity delete by reloading fresh entity copies, and fix tree dropdown not showing pre-selected text for branch-only configurations. Fix extraction pipeline not cleaning up stale Query Fields and Query Entities when extraction produces no results, with 9 regression tests.
+
+- Updated dependencies [e77233c]
+- Updated dependencies [e02e24e]
+- Updated dependencies [914a6ad]
+- Updated dependencies [7006276]
+  - @memberjunction/ng-ai-test-harness@5.29.0
+  - @memberjunction/core@5.29.0
+  - @memberjunction/ng-trees@5.29.0
+  - @memberjunction/ng-deep-diff@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ng-action-gallery@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/actions-base@5.29.0
+  - @memberjunction/ng-base-application@5.29.0
+  - @memberjunction/ng-link-directives@5.29.0
+  - @memberjunction/ng-shared@5.29.0
+  - @memberjunction/ng-testing@5.29.0
+  - @memberjunction/ng-actions@5.29.0
+  - @memberjunction/ng-agents@5.29.0
+  - @memberjunction/ng-base-forms@5.29.0
+  - @memberjunction/ng-code-editor@5.29.0
+  - @memberjunction/ng-entity-relationship-diagram@5.29.0
+  - @memberjunction/ng-entity-viewer@5.29.0
+  - @memberjunction/ng-flow-editor@5.29.0
+  - @memberjunction/ng-join-grid@5.29.0
+  - @memberjunction/ng-list-management@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/ng-timeline@5.29.0
+  - @memberjunction/ng-versions@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/templates-base-types@5.29.0
+  - @memberjunction/ng-tabstrip@5.29.0
+  - @memberjunction/ai@5.29.0
+  - @memberjunction/ng-markdown@5.29.0
+  - @memberjunction/ng-ui-components@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [2542615]
+- Updated dependencies [115e4da]
+  - @memberjunction/ng-shared@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-link-directives@5.28.0
+  - @memberjunction/ng-testing@5.28.0
+  - @memberjunction/ng-agents@5.28.0
+  - @memberjunction/ng-ai-test-harness@5.28.0
+  - @memberjunction/ng-join-grid@5.28.0
+  - @memberjunction/ng-list-management@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/ng-base-application@5.28.0
+  - @memberjunction/ng-action-gallery@5.28.0
+  - @memberjunction/ng-actions@5.28.0
+  - @memberjunction/ng-base-forms@5.28.0
+  - @memberjunction/ng-code-editor@5.28.0
+  - @memberjunction/ng-deep-diff@5.28.0
+  - @memberjunction/ng-entity-relationship-diagram@5.28.0
+  - @memberjunction/ng-entity-viewer@5.28.0
+  - @memberjunction/ng-flow-editor@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/ng-timeline@5.28.0
+  - @memberjunction/ng-trees@5.28.0
+  - @memberjunction/ng-versions@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/templates-base-types@5.28.0
+  - @memberjunction/ng-tabstrip@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/ng-markdown@5.28.0
+  - @memberjunction/ng-ui-components@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ai-engine-base@5.27.1
+  - @memberjunction/ai@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/ng-base-application@5.27.1
+  - @memberjunction/ng-shared@5.27.1
+  - @memberjunction/ng-testing@5.27.1
+  - @memberjunction/ng-action-gallery@5.27.1
+  - @memberjunction/ng-actions@5.27.1
+  - @memberjunction/ng-agents@5.27.1
+  - @memberjunction/ng-ai-test-harness@5.27.1
+  - @memberjunction/ng-base-forms@5.27.1
+  - @memberjunction/ng-code-editor@5.27.1
+  - @memberjunction/ng-deep-diff@5.27.1
+  - @memberjunction/ng-entity-relationship-diagram@5.27.1
+  - @memberjunction/ng-entity-viewer@5.27.1
+  - @memberjunction/ng-flow-editor@5.27.1
+  - @memberjunction/ng-join-grid@5.27.1
+  - @memberjunction/ng-list-management@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/ng-trees@5.27.1
+  - @memberjunction/ng-versions@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/templates-base-types@5.27.1
+  - @memberjunction/ng-link-directives@5.27.1
+  - @memberjunction/ng-tabstrip@5.27.1
+  - @memberjunction/ng-timeline@5.27.1
+  - @memberjunction/ng-markdown@5.27.1
+  - @memberjunction/ng-ui-components@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- Updated dependencies [35cf7d4]
+  - @memberjunction/ng-trees@5.27.0
+  - @memberjunction/ai-engine-base@5.27.0
+  - @memberjunction/ai@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/actions-base@5.27.0
+  - @memberjunction/ng-base-application@5.27.0
+  - @memberjunction/ng-link-directives@5.27.0
+  - @memberjunction/ng-shared@5.27.0
+  - @memberjunction/ng-testing@5.27.0
+  - @memberjunction/ng-action-gallery@5.27.0
+  - @memberjunction/ng-actions@5.27.0
+  - @memberjunction/ng-agents@5.27.0
+  - @memberjunction/ng-ai-test-harness@5.27.0
+  - @memberjunction/ng-base-forms@5.27.0
+  - @memberjunction/ng-code-editor@5.27.0
+  - @memberjunction/ng-deep-diff@5.27.0
+  - @memberjunction/ng-entity-relationship-diagram@5.27.0
+  - @memberjunction/ng-entity-viewer@5.27.0
+  - @memberjunction/ng-flow-editor@5.27.0
+  - @memberjunction/ng-join-grid@5.27.0
+  - @memberjunction/ng-list-management@5.27.0
+  - @memberjunction/ng-markdown@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/ng-tabstrip@5.27.0
+  - @memberjunction/ng-timeline@5.27.0
+  - @memberjunction/ng-ui-components@5.27.0
+  - @memberjunction/ng-versions@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/templates-base-types@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- 55de456: Fix missing dependencies across 17 packages that accumulated while knip dependency checking was silently broken. Repair knip infrastructure: disable crashing vitest plugin, harden CI workflow to fail-fast on tool crashes instead of silently passing, and fix hardcoded Angular version in auto-fix script.
+- a1002f4: - Entities now expose AllowCaching as the runtime source of truth for
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/ng-action-gallery@5.26.0
+  - @memberjunction/ng-code-editor@5.26.0
+  - @memberjunction/ng-entity-relationship-diagram@5.26.0
+  - @memberjunction/ng-shared-generic@5.26.0
+  - @memberjunction/ng-ui-components@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-engine-base@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/actions-base@5.26.0
+  - @memberjunction/ng-base-application@5.26.0
+  - @memberjunction/ng-shared@5.26.0
+  - @memberjunction/ng-testing@5.26.0
+  - @memberjunction/ng-actions@5.26.0
+  - @memberjunction/ng-agents@5.26.0
+  - @memberjunction/ng-ai-test-harness@5.26.0
+  - @memberjunction/ng-base-forms@5.26.0
+  - @memberjunction/ng-entity-viewer@5.26.0
+  - @memberjunction/ng-flow-editor@5.26.0
+  - @memberjunction/ng-join-grid@5.26.0
+  - @memberjunction/ng-list-management@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/ng-trees@5.26.0
+  - @memberjunction/ng-versions@5.26.0
+  - @memberjunction/graphql-dataprovider@5.26.0
+  - @memberjunction/templates-base-types@5.26.0
+  - @memberjunction/ng-link-directives@5.26.0
+  - @memberjunction/ng-deep-diff@5.26.0
+  - @memberjunction/ng-timeline@5.26.0
+  - @memberjunction/ng-tabstrip@5.26.0
+  - @memberjunction/ai@5.26.0
+  - @memberjunction/ng-markdown@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- Updated dependencies [fc8cd52]
+- Updated dependencies [a24ff53]
+- Updated dependencies [d6370e8]
+- Updated dependencies [7ddf732]
+- Updated dependencies [1eb9f6e]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/ng-ai-test-harness@5.25.0
+  - @memberjunction/ng-entity-viewer@5.25.0
+  - @memberjunction/ai-engine-base@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/actions-base@5.25.0
+  - @memberjunction/ng-base-application@5.25.0
+  - @memberjunction/ng-link-directives@5.25.0
+  - @memberjunction/ng-shared@5.25.0
+  - @memberjunction/ng-testing@5.25.0
+  - @memberjunction/ng-action-gallery@5.25.0
+  - @memberjunction/ng-actions@5.25.0
+  - @memberjunction/ng-agents@5.25.0
+  - @memberjunction/ng-base-forms@5.25.0
+  - @memberjunction/ng-code-editor@5.25.0
+  - @memberjunction/ng-deep-diff@5.25.0
+  - @memberjunction/ng-entity-relationship-diagram@5.25.0
+  - @memberjunction/ng-flow-editor@5.25.0
+  - @memberjunction/ng-join-grid@5.25.0
+  - @memberjunction/ng-list-management@5.25.0
+  - @memberjunction/ng-notifications@5.25.0
+  - @memberjunction/ng-shared-generic@5.25.0
+  - @memberjunction/ng-timeline@5.25.0
+  - @memberjunction/templates-base-types@5.25.0
+  - @memberjunction/ng-tabstrip@5.25.0
+  - @memberjunction/ai@5.25.0
+  - @memberjunction/ng-markdown@5.25.0
+  - @memberjunction/ng-ui-components@5.25.0
+  - @memberjunction/global@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/ng-agents@5.24.0
+  - @memberjunction/graphql-dataprovider@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/ai-engine-base@5.24.0
+  - @memberjunction/ng-ai-test-harness@5.24.0
+  - @memberjunction/ng-base-forms@5.24.0
+  - @memberjunction/ng-shared@5.24.0
+  - @memberjunction/ng-testing@5.24.0
+  - @memberjunction/ng-actions@5.24.0
+  - @memberjunction/ng-notifications@5.24.0
+  - @memberjunction/actions-base@5.24.0
+  - @memberjunction/ng-base-application@5.24.0
+  - @memberjunction/ng-link-directives@5.24.0
+  - @memberjunction/ng-action-gallery@5.24.0
+  - @memberjunction/ng-code-editor@5.24.0
+  - @memberjunction/ng-deep-diff@5.24.0
+  - @memberjunction/ng-entity-relationship-diagram@5.24.0
+  - @memberjunction/ng-entity-viewer@5.24.0
+  - @memberjunction/ng-flow-editor@5.24.0
+  - @memberjunction/ng-join-grid@5.24.0
+  - @memberjunction/ng-list-management@5.24.0
+  - @memberjunction/ng-shared-generic@5.24.0
+  - @memberjunction/ng-timeline@5.24.0
+  - @memberjunction/templates-base-types@5.24.0
+  - @memberjunction/ng-tabstrip@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/ng-markdown@5.24.0
+  - @memberjunction/ng-ui-components@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [37dc301]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [58af481]
+- Updated dependencies [fb0c69f]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ng-base-application@5.23.0
+  - @memberjunction/ng-base-forms@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ng-ui-components@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/ai-engine-base@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/ng-link-directives@5.23.0
+  - @memberjunction/ng-shared@5.23.0
+  - @memberjunction/ng-testing@5.23.0
+  - @memberjunction/ng-action-gallery@5.23.0
+  - @memberjunction/ng-actions@5.23.0
+  - @memberjunction/ng-agents@5.23.0
+  - @memberjunction/ng-ai-test-harness@5.23.0
+  - @memberjunction/ng-code-editor@5.23.0
+  - @memberjunction/ng-deep-diff@5.23.0
+  - @memberjunction/ng-entity-relationship-diagram@5.23.0
+  - @memberjunction/ng-entity-viewer@5.23.0
+  - @memberjunction/ng-flow-editor@5.23.0
+  - @memberjunction/ng-join-grid@5.23.0
+  - @memberjunction/ng-list-management@5.23.0
+  - @memberjunction/ng-notifications@5.23.0
+  - @memberjunction/ng-shared-generic@5.23.0
+  - @memberjunction/ng-timeline@5.23.0
+  - @memberjunction/templates-base-types@5.23.0
+  - @memberjunction/ai@5.23.0
+  - @memberjunction/ng-tabstrip@5.23.0
+  - @memberjunction/ng-markdown@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ng-agents@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ng-base-application@5.22.0
+  - @memberjunction/ai-engine-base@5.22.0
+  - @memberjunction/ng-ai-test-harness@5.22.0
+  - @memberjunction/graphql-dataprovider@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/ng-link-directives@5.22.0
+  - @memberjunction/ng-shared@5.22.0
+  - @memberjunction/ng-testing@5.22.0
+  - @memberjunction/ng-action-gallery@5.22.0
+  - @memberjunction/ng-actions@5.22.0
+  - @memberjunction/ng-base-forms@5.22.0
+  - @memberjunction/ng-code-editor@5.22.0
+  - @memberjunction/ng-deep-diff@5.22.0
+  - @memberjunction/ng-entity-relationship-diagram@5.22.0
+  - @memberjunction/ng-entity-viewer@5.22.0
+  - @memberjunction/ng-flow-editor@5.22.0
+  - @memberjunction/ng-join-grid@5.22.0
+  - @memberjunction/ng-list-management@5.22.0
+  - @memberjunction/ng-notifications@5.22.0
+  - @memberjunction/ng-shared-generic@5.22.0
+  - @memberjunction/ng-timeline@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/templates-base-types@5.22.0
+  - @memberjunction/ai@5.22.0
+  - @memberjunction/ng-tabstrip@5.22.0
+  - @memberjunction/ng-markdown@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+- Updated dependencies [76cd2bc]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/ai-engine-base@5.21.0
+  - @memberjunction/actions-base@5.21.0
+  - @memberjunction/ng-base-application@5.21.0
+  - @memberjunction/ng-link-directives@5.21.0
+  - @memberjunction/ng-shared@5.21.0
+  - @memberjunction/ng-testing@5.21.0
+  - @memberjunction/ng-action-gallery@5.21.0
+  - @memberjunction/ng-actions@5.21.0
+  - @memberjunction/ng-agents@5.21.0
+  - @memberjunction/ng-ai-test-harness@5.21.0
+  - @memberjunction/ng-base-forms@5.21.0
+  - @memberjunction/ng-code-editor@5.21.0
+  - @memberjunction/ng-deep-diff@5.21.0
+  - @memberjunction/ng-entity-relationship-diagram@5.21.0
+  - @memberjunction/ng-entity-viewer@5.21.0
+  - @memberjunction/ng-flow-editor@5.21.0
+  - @memberjunction/ng-join-grid@5.21.0
+  - @memberjunction/ng-list-management@5.21.0
+  - @memberjunction/ng-notifications@5.21.0
+  - @memberjunction/ng-shared-generic@5.21.0
+  - @memberjunction/ng-timeline@5.21.0
+  - @memberjunction/graphql-dataprovider@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/templates-base-types@5.21.0
+  - @memberjunction/ng-tabstrip@5.21.0
+  - @memberjunction/ai@5.21.0
+  - @memberjunction/ng-markdown@5.21.0
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ai-engine-base@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/actions-base@5.20.0
+  - @memberjunction/ng-base-application@5.20.0
+  - @memberjunction/ng-link-directives@5.20.0
+  - @memberjunction/ng-shared@5.20.0
+  - @memberjunction/ng-testing@5.20.0
+  - @memberjunction/ng-action-gallery@5.20.0
+  - @memberjunction/ng-actions@5.20.0
+  - @memberjunction/ng-agents@5.20.0
+  - @memberjunction/ng-ai-test-harness@5.20.0
+  - @memberjunction/ng-base-forms@5.20.0
+  - @memberjunction/ng-code-editor@5.20.0
+  - @memberjunction/ng-deep-diff@5.20.0
+  - @memberjunction/ng-entity-relationship-diagram@5.20.0
+  - @memberjunction/ng-entity-viewer@5.20.0
+  - @memberjunction/ng-flow-editor@5.20.0
+  - @memberjunction/ng-join-grid@5.20.0
+  - @memberjunction/ng-list-management@5.20.0
+  - @memberjunction/ng-notifications@5.20.0
+  - @memberjunction/ng-shared-generic@5.20.0
+  - @memberjunction/ng-timeline@5.20.0
+  - @memberjunction/graphql-dataprovider@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/templates-base-types@5.20.0
+  - @memberjunction/ng-tabstrip@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/ng-markdown@5.20.0
+  - @memberjunction/global@5.20.0
+
 ## 5.19.0
 
 ### Patch Changes

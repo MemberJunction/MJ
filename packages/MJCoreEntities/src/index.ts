@@ -10,6 +10,7 @@ export * from './custom/MJEntityFieldEntityExtended';
 export * from './custom/MJComponentEntityExtended';
 export * from './custom/MJEnvironmentEntityExtended';
 export * from './custom/MJTemplateEntityExtended';
+export * from './custom/MJConversationDetailEntityExtended';
 
 export * from './custom/ResourcePermissions/ResourcePermissionEngine';
 export * from './custom/ResourcePermissions/MJResourcePermissionEntityExtended';
@@ -25,6 +26,20 @@ export * from './engines/UserViewEngine';
 export * from './engines/FileStorageEngine';
 export * from './engines/MCPEngine';
 export * from './engines/QueryEngine';
+export * from './engines/conversations';
+export * from './engines/knowledgeHubMetadata';
+export * from './engines/InstanceConfigEngine';
+export * from './engines/SearchEngineBase';
+export * from './engines/GeoDataEngine';
+export * from './engines/PermissionEngine';
+
+export * from './custom/PermissionProviders';
+export * from './custom/Permissions';
 
 export * from './artifact-extraction/artifact-extract-rules';
 export * from './artifact-extraction/artifact-extractor';
+
+import { LoadPermissionProviders } from './custom/PermissionProviders';
+import { LoadPermissionEntityExtensions } from './custom/Permissions';
+LoadPermissionProviders();
+LoadPermissionEntityExtensions();

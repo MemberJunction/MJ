@@ -7,7 +7,7 @@
   @else {
   <div class="vertical-full-width">
     @if(AllowNew) {
-      <button kendoButton (click)="createNewRecord()"><span class="fa-solid fa-plus"></span> New</button>
+      <button mjButton (click)="createNewRecord()"><span class="fa-solid fa-plus"></span> New</button>
     }
     <table class="grid">
       <thead class="sticky-header">
@@ -67,36 +67,38 @@
 }
 
 @if(deleteRecordDialogVisible && AllowDelete) {
-  <kendo-dialog
-    [title]="'Delete ' + EntityName + '?'"
-    [width]="450"
-    [height]="200"
-    (close)="closeDeleteDialog('No')" >
+  <mj-dialog
+    [Visible]="true"
+    [Title]="'Delete ' + EntityName + '?'"
+    [Width]="450"
+    [Height]="200"
+    (Close)="closeDeleteDialog('No')" >
     <div>
       Are you sure you want to delete '{{getRecordName(deleteRecordItem!)}}'?
     </div>
-    <kendo-dialog-actions>
-      <button kendoButton (click)="closeDeleteDialog('Yes')"  themeColor="primary">Yes</button>
-      <button kendoButton (click)="closeDeleteDialog('No')">No</button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    <mj-dialog-actions>
+      <button mjButton variant="primary" (click)="closeDeleteDialog('Yes')">Yes</button>
+      <button mjButton (click)="closeDeleteDialog('No')">No</button>
+    </mj-dialog-actions>
+  </mj-dialog>
 }
 
 @if(customActionDialogVisible && AllowCustomAction) {
-  <kendo-dialog
-    [title]="CustomActionDialogTitle"
-    [width]="450"
-    [height]="200"
-    (close)="closeCustomActionDialog('No')" >
+  <mj-dialog
+    [Visible]="true"
+    [Title]="CustomActionDialogTitle"
+    [Width]="450"
+    [Height]="200"
+    (Close)="closeCustomActionDialog('No')" >
     <div>
       {{ CustomActionDialogMessage.replace('{{recordName}}', getRecordName(customActionItem!)) }}
       @if(CustomActionDialogInfo) {
         <p>{{ CustomActionDialogInfo }}</p>
       }
     </div>
-    <kendo-dialog-actions>
-      <button kendoButton (click)="closeCustomActionDialog('Yes')" themeColor="primary">Yes</button>
-      <button kendoButton (click)="closeCustomActionDialog('No')">No</button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    <mj-dialog-actions>
+      <button mjButton variant="primary" (click)="closeCustomActionDialog('Yes')">Yes</button>
+      <button mjButton (click)="closeCustomActionDialog('No')">No</button>
+    </mj-dialog-actions>
+  </mj-dialog>
 }

@@ -550,10 +550,13 @@ flowchart TB
 | Method | Returns | Description |
 |---|---|---|
 | `Register(baseClass, subClass, key?, priority?, skipNullKeyWarning?, autoRegisterWithRootClass?)` | `void` | Register a subclass for a base class and optional key |
-| `CreateInstance<T>(baseClass, key?, ...params)` | `T \| null` | Create an instance of the highest-priority registered subclass |
-| `GetRegistration(baseClass, key?)` | `ClassRegistration \| null` | Get the highest-priority registration |
+| `CreateInstance<T>(baseClass, key?, ...params)` | `T \| null` | Create an instance of the highest-priority registered subclass (sync) |
+| `CreateInstanceAsync<T>(baseClass, key?, ...params)` | `Promise<T \| null>` | Async version that triggers lazy loaders if registration not found |
+| `GetRegistration(baseClass, key?)` | `ClassRegistration \| null` | Get the highest-priority registration (sync) |
+| `GetRegistrationAsync(baseClass, key?)` | `Promise<ClassRegistration \| null>` | Async version that triggers lazy loaders if registration not found |
 | `GetAllRegistrations(baseClass, key?)` | `ClassRegistration[]` | Get all registrations for a base class and optional key |
 | `GetRegistrationsByRootClass(rootClass, key?)` | `ClassRegistration[]` | Get registrations by root class in the hierarchy |
+| `RegisterLazyLoader(loader)` | `void` | Register a callback `(baseClassName, key) => Promise<boolean>` called when a registration is not found. Multiple loaders can be registered and are called in order. |
 
 ### RegisterClass Decorator
 

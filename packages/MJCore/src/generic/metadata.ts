@@ -1,10 +1,10 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, IRunViewProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType, FullTextSearchParams, FullTextSearchResult } from "./interfaces";
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
 import { LogError, LogStatus } from "./logging";
 import { LibraryInfo } from "./libraryInfo";
@@ -17,6 +17,30 @@ import { RunView } from "../views/runView";
  */
 export class Metadata {
     private static _globalProviderKey: string = 'MJ_MetadataProvider';
+    private _entityMapByName = new Map<string, EntityInfo>();
+    private _entityMapByID = new Map<string, EntityInfo>();
+    private _entityMapPopulated = false;
+
+    /**
+     * Bolt Optimization: Populate entity maps on demand to ensure O(1) hash map lookups
+     * in EntityByName and EntityByID instead of O(N) array scans.
+     */
+    private PopulateEntityMaps() {
+        if (this._entityMapPopulated) return;
+
+        const entities = this.Entities;
+        if (!entities || entities.length === 0) return;
+
+        this._entityMapByName.clear();
+        this._entityMapByID.clear();
+        for (const e of entities) {
+            this._entityMapByName.set(e.Name.toLowerCase().trim(), e);
+            if (e.ID) {
+                this._entityMapByID.set(NormalizeUUID(e.ID), e);
+            }
+        }
+        this._entityMapPopulated = true;
+    }
     /**
      * When an application initializes, the Provider package that is being used for that application will handle setting the provider globally via this static property. 
      * This is done so that the provider can be accessed from anywhere in the application without having to pass it around. This pattern is used sparingly in MJ.
@@ -41,6 +65,7 @@ export class Metadata {
      * @returns 
      */
     public async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
+        this._entityMapPopulated = false;
         return await Metadata.Provider.Refresh(providerToUse);
     }
 
@@ -69,8 +94,15 @@ export class Metadata {
             if (p?.EntityByName) {
                 return p.EntityByName(entityName);
             }
-        } catch { /* Provider not set — fall through to linear search */ }
+        } catch { /* Provider not set — fall through to search */ }
+
         const key = entityName.trim().toLowerCase();
+        this.PopulateEntityMaps();
+
+        if (this._entityMapPopulated) {
+            return this._entityMapByName.get(key);
+        }
+
         return this.Entities.find(e => e.Name.toLowerCase().trim() === key);
     }
     /**
@@ -79,12 +111,21 @@ export class Metadata {
      * @returns
      */
     public EntityByID(entityID: string): EntityInfo {
+        if (!entityID) return undefined;
         try {
             const p = Metadata.Provider;
             if (p?.EntityByID) {
                 return p.EntityByID(entityID);
             }
-        } catch { /* Provider not set — fall through to linear search */ }
+        } catch { /* Provider not set — fall through to search */ }
+
+        const key = NormalizeUUID(entityID);
+        this.PopulateEntityMaps();
+
+        if (this._entityMapPopulated) {
+            return this._entityMapByID.get(key);
+        }
+
         return this.Entities.find(e => UUIDsEqual(e.ID, entityID));
     }
 
@@ -571,6 +612,44 @@ export class Metadata {
      */
     get ConfigData(): ProviderConfigDataBase {
         return Metadata.Provider.ConfigData;
+    }
+
+    /**
+     * Performs a full-text search across all entities with FullTextSearchEnabled=true.
+     * Uses the database-native full-text search capabilities through the provider stack.
+     *
+     * @param params Search parameters — SearchText is required, EntityNames and MaxRowsPerEntity are optional
+     * @param contextUser Optional user context for permissions
+     * @returns Search results with title, snippet, and relevance score per match
+     *
+     * @example
+     * ```typescript
+     * const md = new Metadata();
+     * const results = await md.FullTextSearch({
+     *     SearchText: 'claude',
+     *     MaxRowsPerEntity: 5
+     * });
+     * // results.Results contains matches across all FTS-enabled entities
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Search only specific entities
+     * const results = await md.FullTextSearch({
+     *     SearchText: 'quarterly report',
+     *     EntityNames: ['MJ: AI Models', 'MJ: AI Prompts'],
+     *     MaxRowsPerEntity: 10
+     * }, contextUser);
+     * ```
+     *
+     * @see /packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md
+     */
+    public async FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult> {
+        const provider = Metadata.Provider as unknown as IRunViewProvider;
+        if (!provider.FullTextSearch) {
+            return { Success: false, ErrorMessage: 'Provider does not support FullTextSearch', Results: [], TotalCount: 0, EntitiesSearched: 0, ElapsedMs: 0 };
+        }
+        return provider.FullTextSearch(params, contextUser);
     }
 
 }

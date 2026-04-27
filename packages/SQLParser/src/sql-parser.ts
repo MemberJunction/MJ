@@ -17,6 +17,7 @@ import NodeSqlParser from 'node-sql-parser';
 const { Parser } = NodeSqlParser;
 import { MJLexer } from './mj-lexer.js';
 import { MJPlaceholderSubstitution } from './mj-placeholder.js';
+import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import {
     MJToken,
     MJTemplateExpr,
@@ -124,8 +125,8 @@ export interface SQLParseResult {
 export interface SQLParseOptions {
     /** The SQL string to parse */
     sql: string;
-    /** SQL dialect (default: 'TransactSQL') */
-    dialect?: string;
+    /** SQL dialect for parsing and identifier quoting */
+    dialect?: SQLParserDialect;
 }
 
 // ═══════════════════════════════════════════════════
@@ -142,6 +143,15 @@ export interface SQLParseOptions {
  * All methods are static — no instance state is needed.
  */
 export class SQLParser {
+    /**
+     * Fixes a known node-sql-parser bug where CAST(x AS NVARCHAR(MAX)) is
+     * serialized as CAST(x AS NVARCHARmax). Applies to NVARCHAR, VARCHAR,
+     * and VARBINARY — all SQL Server types that accept (MAX).
+     */
+    private static fixMaxTypeSerialization(sql: string): string {
+        return sql.replace(/\b(N?VARCHAR|VARBINARY)max\b/gi, '$1(MAX)');
+    }
+
     // ─── Core Pipeline ─────────────────────────────────
 
     /**
@@ -155,11 +165,12 @@ export class SQLParser {
      * @param sql The MJ SQL string to parse
      * @param dialect SQL dialect ('TransactSQL' | 'PostgresQL', default: 'TransactSQL')
      */
-    static Astify(sql: string, dialect: string = 'TransactSQL'): MJAstifyResult {
+    static Astify(sql: string, dialect: SQLParserDialect): MJAstifyResult {
+        const parserDialect = dialect.ParserDialect;
         const mjParse = MJLexer.Parse(sql);
 
         if (!mjParse.hasMJExtensions) {
-            const ast = SQLParser.parseSQL(sql, dialect);
+            const ast = SQLParser.parseSQL(sql, parserDialect);
             return {
                 ast,
                 mjParse,
@@ -167,12 +178,12 @@ export class SQLParser {
                 strippedTokens: [],
                 cleanSQL: sql,
                 astParsed: ast !== null,
-                dialect,
+                dialect: parserDialect,
             };
         }
 
         const { cleanSQL, positionMap, strippedTokens } = MJPlaceholderSubstitution.Substitute(sql);
-        const ast = SQLParser.parseSQL(cleanSQL, dialect);
+        const ast = SQLParser.parseSQL(cleanSQL, parserDialect);
 
         return {
             ast,
@@ -181,7 +192,7 @@ export class SQLParser {
             strippedTokens,
             cleanSQL,
             astParsed: ast !== null,
-            dialect,
+            dialect: parserDialect,
         };
     }
 
@@ -195,7 +206,8 @@ export class SQLParser {
         if (!result.mjParse.hasMJExtensions && result.ast) {
             const parser = new Parser();
             const astToSqlify = Array.isArray(result.ast) ? result.ast[0] : result.ast;
-            return parser.sqlify(astToSqlify, { database: result.dialect });
+            const sql = parser.sqlify(astToSqlify, { database: result.dialect });
+            return SQLParser.fixMaxTypeSerialization(sql);
         }
 
         return result.mjParse.tokens.map(t => t.raw).join('');
@@ -208,17 +220,18 @@ export class SQLParser {
      * Handles FOR XML multi-directive workaround automatically.
      * Returns null if parsing fails.
      */
-    static ParseSQL(sql: string, dialect: string = 'TransactSQL'): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
-        return SQLParser.parseSQL(sql, dialect);
+    static ParseSQL(sql: string, dialect: SQLParserDialect): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
+        return SQLParser.parseSQL(sql, dialect.ParserDialect);
     }
 
     /**
      * Convert a node-sql-parser AST (or array of ASTs) back to a SQL string.
      * This is a thin wrapper around node-sql-parser's sqlify.
      */
-    static SqlifyAST(ast: NodeSqlParser.AST | NodeSqlParser.AST[], dialect: string = 'TransactSQL'): string {
+    static SqlifyAST(ast: NodeSqlParser.AST | NodeSqlParser.AST[], dialect: SQLParserDialect): string {
         const parser = new Parser();
-        return parser.sqlify(Array.isArray(ast) ? ast[0] : ast, { database: dialect });
+        const sql = parser.sqlify(Array.isArray(ast) ? ast[0] : ast, { database: dialect.ParserDialect });
+        return SQLParser.fixMaxTypeSerialization(sql);
     }
 
     /**
@@ -226,21 +239,16 @@ export class SQLParser {
      * Useful for extracting ORDER BY terms, column expressions, etc.
      *
      * node-sql-parser's exprToSQL always produces backtick-quoted identifiers
-     * regardless of dialect. This method converts to the appropriate quoting:
-     * - TransactSQL: backticks → square brackets
-     * - PostgresQL: backticks → double quotes
+     * regardless of dialect. This method converts backticks to the dialect's
+     * native identifier quoting via `dialect.QuoteIdentifier()`.
      */
-    static ExprToSQL(expr: unknown, dialect: string = 'TransactSQL'): string {
+    static ExprToSQL(expr: unknown, dialect: SQLParserDialect): string {
         const parser = new Parser();
-        const sql = parser.exprToSQL(expr);
+        let sql = parser.exprToSQL(expr);
+        sql = SQLParser.fixMaxTypeSerialization(sql);
 
-        if (dialect === 'TransactSQL') {
-            return sql.replace(/`([^`]+)`/g, '[$1]');
-        }
-        if (dialect === 'PostgresQL') {
-            return sql.replace(/`([^`]+)`/g, '"$1"');
-        }
-        return sql;
+        // node-sql-parser emits `backtick` quoting; convert to dialect-native quoting
+        return sql.replace(/`([^`]+)`/g, (_match, name: string) => dialect.QuoteIdentifier(name));
     }
 
     // ─── Tokenization ──────────────────────────────────
@@ -287,7 +295,7 @@ export class SQLParser {
      *
      * @param options Parse options, or just a SQL string for backward compatibility
      */
-    static Parse(options: SQLParseOptions | string, dialect?: string): SQLParseResult {
+    static Parse(options: SQLParseOptions | string, dialect?: SQLParserDialect): SQLParseResult {
         const { sql, parserDialect } = SQLParser.resolveParseArgs(options, dialect);
         if (!sql || sql.trim().length === 0) {
             return { Tables: [], Columns: [], UsedASTParsing: false };
@@ -325,7 +333,7 @@ export class SQLParser {
      *
      * @param options Parse options, or just a SQL string for backward compatibility
      */
-    static ParseWithTemplatePreprocessing(options: SQLParseOptions | string, dialect?: string): SQLParseResult {
+    static ParseWithTemplatePreprocessing(options: SQLParseOptions | string, dialect?: SQLParserDialect): SQLParseResult {
         return SQLParser.Parse(options, dialect);
     }
 
@@ -335,11 +343,12 @@ export class SQLParser {
      * Extract all table/view references from SQL.
      * Handles Nunjucks templates via placeholder substitution before AST parsing.
      */
-    static ExtractTableRefs(sql: string, dialect: string = 'TransactSQL'): SQLTableReference[] {
+    static ExtractTableRefs(sql: string, dialect?: SQLParserDialect): SQLTableReference[] {
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
-        const astResult = SQLParser.extractTablesViaAST(cleanSQL, dialect);
+        const parserDialect = dialect?.ParserDialect || 'TransactSQL';
+        const astResult = SQLParser.extractTablesViaAST(cleanSQL, parserDialect);
         if (astResult) return astResult;
 
         return SQLParser.extractTablesViaRegex(cleanSQL);
@@ -349,16 +358,17 @@ export class SQLParser {
      * Extract all column references from SQL.
      * Handles Nunjucks templates via placeholder substitution before AST parsing.
      */
-    static ExtractColumnRefs(sql: string, dialect: string = 'TransactSQL'): SQLColumnReference[] {
+    static ExtractColumnRefs(sql: string, dialect?: SQLParserDialect): SQLColumnReference[] {
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
+        const parserDialect = dialect?.ParserDialect || 'TransactSQL';
         const tableAliasMap = new Map<string, { schemaName: string; tableName: string }>();
         const columnRefs = new Set<string>();
 
         try {
             const parser = new Parser();
-            const ast = parser.astify(cleanSQL, { database: dialect });
+            const ast = parser.astify(cleanSQL, { database: parserDialect });
             const statements = Array.isArray(ast) ? ast : [ast];
             for (const statement of statements) {
                 SQLParser.walkAST(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
@@ -380,14 +390,14 @@ export class SQLParser {
      *   - Expressions: `COUNT(*)` → { OutputName: "COUNT(*)", SourceColumn: "COUNT(*)", IsExpression: true }
      *   - MJ template tokens are replaced with placeholders before AST parsing.
      */
-    static ExtractSelectColumns(sql: string, dialect: string = 'TransactSQL'): SQLSelectColumn[] {
+    static ExtractSelectColumns(sql: string, dialect: SQLParserDialect): SQLSelectColumn[] {
         if (!sql || sql.trim().length === 0) return [];
 
         const cleanSQL = SQLParser.getCleanSQL(sql);
 
         try {
             const parser = new Parser();
-            const ast = parser.astify(cleanSQL, { database: dialect });
+            const ast = parser.astify(cleanSQL, { database: dialect.ParserDialect });
             const statements = Array.isArray(ast) ? ast : [ast];
             const columns: SQLSelectColumn[] = [];
 
@@ -490,14 +500,46 @@ export class SQLParser {
      * Uses AST parsing first (produces bracket-quoted identifiers for SQL Server),
      * falls back to paren-depth scanning if AST fails (e.g., Nunjucks-templated SQL).
      */
-    static ExtractCTEs(sql: string, dialect: string = 'TransactSQL'): SQLCTEExtraction | null {
-        const trimmed = sql.trimStart();
-        if (!/^WITH\s/i.test(trimmed)) return null;
+    static ExtractCTEs(sql: string, dialect: SQLParserDialect): SQLCTEExtraction | null {
+        // Strip leading whitespace + SQL comments (/* */ and --) so that
+        // queries with a descriptive header block are recognized as CTEs.
+        // The AST parser handles comments natively, but when it fails
+        // (e.g. TRY_CAST, Nunjucks templates) the regex fallback needs
+        // the comments gone to see the WITH keyword.
+        const stripped = SQLParser.skipLeadingCommentsAndWhitespace(sql);
+        if (!/^WITH\s/i.test(stripped)) return null;
 
-        const astResult = SQLParser.extractCTEsViaAST(trimmed, dialect);
+        const astResult = SQLParser.extractCTEsViaAST(stripped, dialect.ParserDialect);
         if (astResult) return astResult;
 
-        return SQLParser.extractCTEsViaRegex(trimmed);
+        return SQLParser.extractCTEsViaRegex(stripped);
+    }
+
+    /**
+     * Strips leading whitespace AND SQL comments from a string.
+     * Handles block comments and line comments (-- ...).
+     * Returns the remainder starting at the first non-whitespace, non-comment character.
+     */
+    private static skipLeadingCommentsAndWhitespace(sql: string): string {
+        let i = 0;
+        const len = sql.length;
+        while (i < len) {
+            const ch = sql[i];
+            if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') { i++; continue; }
+            if (ch === '/' && i + 1 < len && sql[i + 1] === '*') {
+                i += 2;
+                while (i < len - 1 && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
+                if (i < len - 1) i += 2; else i = len;
+                continue;
+            }
+            if (ch === '-' && i + 1 < len && sql[i + 1] === '-') {
+                i += 2;
+                while (i < len && sql[i] !== '\n') i++;
+                continue;
+            }
+            break;
+        }
+        return sql.substring(i);
     }
 
     // ─── MJ Template Extraction ────────────────────────
@@ -685,31 +727,124 @@ export class SQLParser {
 
     /**
      * Extract parameter metadata from template expressions.
+     *
+     * Walks tokens with a lexical-scope stack so that loop-local variables
+     * introduced by `{% for X in Y %}` blocks are NOT registered as query
+     * parameters (they're rebound on each iteration; callers can't supply
+     * them). The iterable side of `{% for %}` (`Y`) IS registered as a
+     * parameter — typically `array` and required, unless wrapped in
+     * `{% if Y %}` which makes it optional.
+     *
+     * Skip-Brain Bug B: previously this function treated `{{ kw }}` inside
+     * `{% for kw in OrgKeywords %}` as a required parameter and failed to
+     * register `OrgKeywords` at all. See `__tests__/extract-parameter-info-loops.test.ts`
+     * and `SKIP-QUERY-RENDERING-BUGS.md` (Bug B) at the repo root.
+     *
      * Infers type from filters, isRequired from conditional block context.
      */
     static ExtractParameterInfo(sql: string): MJParameterInfo[] {
         const tokens = MJLexer.Tokenize(sql);
         const paramMap = new Map<string, MJParameterInfo>();
 
+        // Lexical scope stack: each entry is the set of loop-local variable
+        // names introduced by an enclosing {% for %} block.
+        const loopScopes: Set<string>[] = [];
+        // Set of every loop-local identifier ever introduced during the walk
+        // (across all scopes). Used to filter out names that
+        // `findConditionalVariables` may have picked up from {% if %} guards
+        // surrounding a {{ loopLocal }} expression.
+        const everSeenLoopLocals = new Set<string>();
+        const isLoopLocal = (variable: string): boolean => {
+            // Match the root identifier (e.g. `kw` in `kw.foo`, `kw` in `kw|filter`).
+            const root = variable.split(/[.\s|]/, 1)[0];
+            for (const scope of loopScopes) {
+                if (scope.has(root)) return true;
+            }
+            return false;
+        };
+
+        // Track which iterables appear in {% for X in Y %} so we can register
+        // them as array parameters even if Y is never used in a {{ }} expression.
+        // Maps iterable name → whether it appears outside a containing {% if %}
+        // block (used only to differentiate required vs optional later).
+        const loopIterables = new Map<string, { isRequired: boolean }>();
+        let conditionalDepth = 0;
+
         for (const token of tokens) {
-            if (token.type === 'MJ_TEMPLATE_EXPR') {
-                const parsed = token.parsed as MJTemplateExprContent;
-                const varName = parsed.variable;
-
-                if (!paramMap.has(varName)) {
-                    paramMap.set(varName, {
-                        name: varName,
-                        type: SQLParser.inferTypeFromFilters(parsed.filters),
-                        isRequired: true,
-                        defaultValue: SQLParser.extractDefaultValue(parsed.filters),
-                        filters: parsed.filters,
-                        usageLocations: [],
-                    });
+            switch (token.type) {
+                case 'MJ_FOR_OPEN': {
+                    const parsed = token.parsed as MJBlockTagContent;
+                    loopScopes.push(new Set(parsed.loopVariable ? [parsed.loopVariable] : []));
+                    if (parsed.loopVariable) {
+                        everSeenLoopLocals.add(parsed.loopVariable);
+                    }
+                    if (parsed.loopIterable) {
+                        // Iterable identifier — strip filters/whitespace so
+                        // `tags | sort` becomes `tags`.
+                        const iterableName = parsed.loopIterable.split(/[.\s|]/, 1)[0];
+                        if (iterableName && !SQLParser.JINJA_KEYWORDS.has(iterableName.toLowerCase())) {
+                            const existing = loopIterables.get(iterableName);
+                            // Required only when the for tag is at the top level
+                            // (not wrapped in any {% if %}). If wrapped, the iterable
+                            // becomes optional — same convention as condition-only vars.
+                            const isRequired = existing
+                                ? existing.isRequired || conditionalDepth === 0
+                                : conditionalDepth === 0;
+                            loopIterables.set(iterableName, { isRequired });
+                        }
+                    }
+                    break;
                 }
+                case 'MJ_ENDFOR':
+                    loopScopes.pop();
+                    break;
+                case 'MJ_IF_OPEN':
+                    conditionalDepth++;
+                    break;
+                case 'MJ_ENDIF':
+                    conditionalDepth = Math.max(0, conditionalDepth - 1);
+                    break;
+                case 'MJ_TEMPLATE_EXPR': {
+                    const parsed = token.parsed as MJTemplateExprContent;
+                    const varName = parsed.variable;
 
-                paramMap.get(varName)!.usageLocations.push(token.raw);
+                    // Skip if the variable's root is a loop local, or if the
+                    // variable is a Nunjucks built-in (loop, loop.last, etc.).
+                    if (isLoopLocal(varName)) break;
+                    const root = varName.split(/[.\s]/, 1)[0];
+                    if (root.toLowerCase() === 'loop') break;
+
+                    if (!paramMap.has(varName)) {
+                        paramMap.set(varName, {
+                            name: varName,
+                            type: SQLParser.inferTypeFromFilters(parsed.filters),
+                            isRequired: true,
+                            defaultValue: SQLParser.extractDefaultValue(parsed.filters),
+                            filters: parsed.filters,
+                            usageLocations: [],
+                        });
+                    }
+
+                    paramMap.get(varName)!.usageLocations.push(token.raw);
+                    break;
+                }
             }
         }
+
+        // Predicates used to filter out names that look like parameters but
+        // are actually loop locals or Nunjucks built-ins.
+        const isLoopBuiltin = (varName: string): boolean => {
+            const root = varName.split(/[.\s]/, 1)[0].toLowerCase();
+            // `loop` is the Nunjucks-provided namespace inside {% for %} blocks
+            // (`loop.last`, `loop.first`, `loop.index`, etc.). Members of the
+            // namespace get extracted as bare identifiers (`last`, `first`,
+            // `index`) by addConditionVariables's regex split.
+            return root === 'loop'
+                || root === 'last' || root === 'first'
+                || root === 'index' || root === 'index0'
+                || root === 'revindex' || root === 'revindex0'
+                || root === 'length' || root === 'cycle';
+        };
 
         const conditionalVars = SQLParser.findConditionalVariables(tokens);
         for (const [varName, param] of paramMap) {
@@ -721,12 +856,43 @@ export class SQLParser {
         // Variables that appear only in {% if %}/{% elif %} condition expressions
         // (never in a {{ }} template expression) still need to be surfaced as
         // optional parameters so callers can supply them at runtime.
+        // EXCEPT: loop locals (introduced by {% for %}), Nunjucks loop built-ins
+        // (loop, loop.last, etc.), and identifiers we've already classified as
+        // loop iterables.
         for (const varName of conditionalVars.onlyInConditional) {
-            if (!paramMap.has(varName)) {
-                paramMap.set(varName, {
-                    name: varName,
-                    type: 'string',
-                    isRequired: false,
+            if (paramMap.has(varName)) continue;
+            const root = varName.split(/[.\s]/, 1)[0];
+            if (everSeenLoopLocals.has(root)) continue;
+            if (isLoopBuiltin(varName)) continue;
+            if (loopIterables.has(varName)) continue;
+            paramMap.set(varName, {
+                name: varName,
+                type: 'string',
+                isRequired: false,
+                defaultValue: null,
+                filters: [],
+                usageLocations: [],
+            });
+        }
+
+        // Register loop iterables that aren't already in the param map.
+        // If the iterable is also referenced as a {{ }} expression elsewhere
+        // (already in paramMap), keep its existing entry but ensure it's marked
+        // as array type — the {% for %} usage is a stronger type signal.
+        for (const [iterableName, { isRequired }] of loopIterables) {
+            const existing = paramMap.get(iterableName);
+            if (existing) {
+                existing.type = 'array';
+                // If the iterable also appears inside an {% if %} guard, keep
+                // it optional; if it's at top level somewhere, mark required.
+                if (!conditionalVars.onlyInConditional.has(iterableName)) {
+                    existing.isRequired = existing.isRequired && isRequired;
+                }
+            } else {
+                paramMap.set(iterableName, {
+                    name: iterableName,
+                    type: 'array',
+                    isRequired,
                     defaultValue: null,
                     filters: [],
                     usageLocations: [],
@@ -1026,12 +1192,12 @@ export class SQLParser {
     /** Resolves overloaded Parse() args: (string, dialect?) or (options) */
     private static resolveParseArgs(
         options: SQLParseOptions | string,
-        dialect?: string
+        dialect?: SQLParserDialect
     ): { sql: string; parserDialect: string } {
         if (typeof options === 'string') {
-            return { sql: options, parserDialect: dialect || 'TransactSQL' };
+            return { sql: options, parserDialect: dialect?.ParserDialect || 'TransactSQL' };
         }
-        return { sql: options.sql, parserDialect: options.dialect || 'TransactSQL' };
+        return { sql: options.sql, parserDialect: options.dialect?.ParserDialect || 'TransactSQL' };
     }
     private static parseSQL(sql: string, dialect: string): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
         try {
@@ -1212,12 +1378,16 @@ export class SQLParser {
             for (const cte of singleAst.with as unknown[]) {
                 const cteRecord = cte as { name: { value: string }; stmt: { ast: unknown } };
                 const cteName = cteRecord.name.value;
-                const bodySQL = parser.sqlify(cteRecord.stmt.ast as NodeSqlParser.AST, { database: dialect });
+                const bodySQL = SQLParser.fixMaxTypeSerialization(
+                    parser.sqlify(cteRecord.stmt.ast as NodeSqlParser.AST, { database: dialect })
+                );
                 cteDefinitions.push(`${cteName} AS (\n${bodySQL}\n)`);
             }
 
             const mainAst = { ...singleAst, with: null } as unknown as NodeSqlParser.AST;
-            const mainStatement = parser.sqlify(mainAst, { database: dialect });
+            const mainStatement = SQLParser.fixMaxTypeSerialization(
+                parser.sqlify(mainAst, { database: dialect })
+            );
 
             return { CTEDefinitions: cteDefinitions, MainStatement: mainStatement, UsedASTParsing: true };
         } catch {

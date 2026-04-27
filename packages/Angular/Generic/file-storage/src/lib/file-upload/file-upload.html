@@ -1,14 +1,28 @@
 <div>
-  <kendo-fileselect [disabled]="IsUploading || disabled" [multiple]="false" (select)="SelectEventHandler($event)"> </kendo-fileselect>
-  @if (ConfirmQueue.length > 0) {
-    <kendo-dialog title="Please confirm" (close)="CancelConfirm()" [minWidth]="250" [width]="450">
-      <p style="margin: 30px; text-align: center">
-        This will overwrite an existing file named '{{ConfirmQueue[0][0].name}}'. Are you sure you want to continue?
+  <label class="mj-file-select" [class.disabled]="IsUploading || disabled">
+    <i class="fa-solid fa-upload"></i>
+    <span>Select file to upload</span>
+    <input
+      type="file"
+      class="mj-file-input"
+      [disabled]="IsUploading || disabled"
+      (change)="OnFileSelected($event)" />
+  </label>
+
+  <mj-dialog
+    [Visible]="ConfirmQueue.length > 0"
+    Title="Please confirm"
+    [Width]="450"
+    [MinWidth]="250"
+    (Close)="CancelConfirm()">
+    @if (ConfirmQueue.length > 0) {
+      <p class="confirm-message">
+        This will overwrite an existing file named '{{ ConfirmQueue[0][0].name }}'. Are you sure you want to continue?
       </p>
-      <kendo-dialog-actions>
-        <button kendoButton (click)="CancelConfirm()">Cancel</button>
-        <button kendoButton (click)="Confirm()" themeColor="primary">Overwrite</button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  }
+    }
+    <mj-dialog-actions>
+      <button mjButton variant="primary" (click)="Confirm()">Overwrite</button>
+      <button mjButton (click)="CancelConfirm()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
 </div>

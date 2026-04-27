@@ -1,0 +1,194 @@
+@if (IsLoading) {
+    <div class="results-loading">
+        <mj-loading text="Searching..." size="medium"></mj-loading>
+    </div>
+} @else if ((DisplayMode === 'flat' ? FlatResults.length : ResultGroups.length) === 0 && TotalCount === 0) {
+    <div class="results-empty">
+        <i class="fa-solid fa-search results-empty-icon"></i>
+        <p class="results-empty-text">No results to display</p>
+    </div>
+} @else {
+    <!-- Results summary -->
+    @if (ShowSummary) {
+        <div class="results-summary">
+            <span>{{ TotalCount }} results</span>
+            @if (ElapsedMs > 0) {
+                <span class="results-summary-time"> in {{ FormatTime(ElapsedMs) }}</span>
+            }
+        </div>
+    }
+
+    @if (DisplayMode === 'flat') {
+        <!-- ══════ FLAT BLENDED LIST (sorted by score) ══════ -->
+        <div class="results-scroll-area">
+            @for (result of PagedResults; track result.ID) {
+                <ng-container *ngTemplateOutlet="resultCardTpl; context: { $implicit: result }"></ng-container>
+            }
+        </div>
+
+        <!-- Google-style pagination (sticky at bottom) -->
+        @if (TotalPages > 1) {
+            <div class="results-pager">
+                <button class="pager-btn pager-prev" [disabled]="CurrentPage === 1"
+                        (click)="GoToPage(CurrentPage - 1)" aria-label="Previous page">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                @for (p of PageNumbers; track $index) {
+                    @if (p === -1) {
+                        <span class="pager-ellipsis">...</span>
+                    } @else {
+                        <button class="pager-btn pager-num" [class.pager-active]="p === CurrentPage"
+                                (click)="GoToPage(p)">{{ p }}</button>
+                    }
+                }
+                <button class="pager-btn pager-next" [disabled]="CurrentPage === TotalPages"
+                        (click)="GoToPage(CurrentPage + 1)" aria-label="Next page">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+        }
+    } @else {
+        <!-- ══════ GROUPED BY SOURCE TYPE ══════ -->
+        @for (group of ResultGroups; track group.SourceType) {
+            <div class="results-group">
+                <div class="results-group-header" (click)="ToggleGroup(group.SourceType)">
+                    @if (ShowSourceIcons) {
+                        <i [class]="group.Icon + ' results-group-icon'"></i>
+                    }
+                    <span class="results-group-label">{{ group.Label }}</span>
+                    <span class="results-group-count">({{ group.TotalCount }})</span>
+                    <i class="fa-solid results-group-chevron"
+                       [class.fa-chevron-down]="!IsGroupExpanded(group.SourceType)"
+                       [class.fa-chevron-up]="IsGroupExpanded(group.SourceType)"></i>
+                </div>
+
+                @for (result of GetVisibleResults(group); track result.ID) {
+                    <ng-container *ngTemplateOutlet="resultCardTpl; context: { $implicit: result }"></ng-container>
+                }
+
+                @if (HasMoreResults(group)) {
+                    <button class="results-show-more" (click)="ToggleGroup(group.SourceType)">
+                        <i class="fa-solid fa-chevron-down"></i>
+                        Show {{ GetHiddenCount(group) }} more results
+                    </button>
+                }
+            </div>
+        }
+    }
+}
+
+<!-- ═══ Shared result card template ═══ -->
+<ng-template #resultCardTpl let-result>
+    <div class="result-card" [class.result-card-expanded]="IsExpanded(result.ID)">
+        <!-- Main row -->
+        <div class="result-card-main" (click)="ToggleExpand(result)">
+            <div class="result-card-icon-wrap">
+                <i [class]="result.EntityIcon || result.SourceIcon || 'fa-solid fa-database'"></i>
+            </div>
+            <div class="result-card-body">
+                <div class="result-card-title" [innerHTML]="HighlightMatch(result.RecordName || result.Title)"></div>
+                <div class="result-card-entity" [innerHTML]="HighlightMatch(result.EntityName)"></div>
+                @if (result.Tags && result.Tags.length > 0) {
+                    <div class="result-card-tags">
+                        @for (tag of result.Tags.slice(0, 5); track tag) {
+                            <span class="result-tag-chip" [innerHTML]="HighlightMatch(tag)"></span>
+                        }
+                        @if (result.Tags.length > 5) {
+                            <span class="result-tag-more">+{{ result.Tags.length - 5 }}</span>
+                        }
+                    </div>
+                }
+            </div>
+            @if (ShowScores) {
+                <div class="result-card-score">
+                    <div class="score-circle" [class.score-high]="result.Score >= 0.40" [class.score-medium]="result.Score >= 0.15 && result.Score < 0.40" [class.score-low]="result.Score < 0.15">
+                        <span class="score-value">{{ FormatScore(result.Score) }}</span>
+                    </div>
+                </div>
+            }
+            <div class="result-card-actions">
+                <button class="result-open-btn" (click)="OnOpenRecord(result, $event)"
+                        [title]="result.ResultType === 'storage-file' ? 'Open file' : 'Open record'"
+                        [attr.aria-label]="result.ResultType === 'storage-file' ? 'Open file' : 'Open record'">
+                    <i [class]="result.ResultType === 'storage-file' ? 'fa-solid fa-external-link' : 'fa-solid fa-arrow-up-right-from-square'"></i>
+                </button>
+                <button class="result-expand-btn" (click)="ToggleExpand(result, $event)" title="Expand details" aria-label="Expand details">
+                    <i class="fa-solid" [class.fa-chevron-down]="!IsExpanded(result.ID)"
+                       [class.fa-chevron-up]="IsExpanded(result.ID)"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Expanded detail -->
+        @if (IsExpanded(result.ID)) {
+            <div class="result-card-detail">
+                @if (result.Snippet) {
+                    <div class="detail-section">
+                        <span class="detail-label">Preview</span>
+                        <p class="detail-snippet" [innerHTML]="HighlightMatch(result.Snippet)"></p>
+                    </div>
+                }
+                <div class="detail-meta">
+                    <div class="detail-meta-item">
+                        <i class="fa-solid fa-layer-group"></i>
+                        <span>{{ result.EntityName }}</span>
+                    </div>
+                    <div class="detail-meta-item">
+                        <i class="fa-solid fa-fingerprint"></i>
+                        <span class="detail-record-id">{{ result.RecordID }}</span>
+                    </div>
+                    <!-- SR-1: Show overall score consistently -->
+                    <div class="detail-meta-item">
+                        <i class="fa-solid fa-signal"></i>
+                        <span>Relevance: {{ FormatScore(result.Score) }}</span>
+                    </div>
+                    @if (result.ScoreBreakdown) {
+                        <div class="detail-meta-item">
+                            <i class="fa-solid fa-chart-bar"></i>
+                            <span>
+                                @if (result.ScoreBreakdown.Vector) { Vector: {{ FormatScore(result.ScoreBreakdown.Vector) }} }
+                                @if (result.ScoreBreakdown.FullText) { FTS: {{ FormatScore(result.ScoreBreakdown.FullText) }} }
+                            </span>
+                        </div>
+                    }
+                </div>
+                @if (ShowTags && result.Tags.length > 0) {
+                    <div class="detail-tags">
+                        @for (tag of result.Tags; track tag) {
+                            <span class="result-card-tag" [innerHTML]="HighlightMatch(tag)"></span>
+                        }
+                    </div>
+                }
+                @if (GetResolvedLinks(result).length > 0) {
+                    <div class="detail-links">
+                        @for (link of GetResolvedLinks(result); track link.Value) {
+                            @if (link.Type === 'URL') {
+                                <a [href]="link.Value" target="_blank" class="detail-link" (click)="$event.stopPropagation()">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                    {{ TruncateUrl(link.Value) }}
+                                </a>
+                            } @else if (link.Type === 'Email') {
+                                <a [href]="'mailto:' + link.Value" class="detail-link detail-link-email" (click)="$event.stopPropagation()">
+                                    <i class="fa-solid fa-envelope"></i>
+                                    {{ link.Value }}
+                                </a>
+                            }
+                        }
+                    </div>
+                }
+                <div class="detail-actions">
+                    <button class="detail-open-btn" (click)="OnOpenRecord(result, $event)">
+                        @if (result.ResultType === 'storage-file') {
+                            <i class="fa-solid fa-external-link"></i> Open File
+                        } @else {
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Record
+                        }
+                    </button>
+                    <button class="detail-similar-btn" (click)="OnMoreLikeThis(result, $event)">
+                        <i class="fa-solid fa-shuffle"></i> See Similar Items
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</ng-template>

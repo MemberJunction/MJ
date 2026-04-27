@@ -1,5 +1,164 @@
 # @memberjunction/ng-workspace-initializer
 
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [5c7a57f]
+- Updated dependencies [e02e24e]
+  - @memberjunction/ng-explorer-core@5.29.0
+  - @memberjunction/core@5.29.0
+  - @memberjunction/ng-auth-services@5.29.0
+  - @memberjunction/ng-shared@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [2542615]
+- Updated dependencies [115e4da]
+  - @memberjunction/ng-shared@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/ng-explorer-core@5.28.0
+  - @memberjunction/ng-auth-services@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ng-explorer-core@5.27.1
+  - @memberjunction/ng-auth-services@5.27.1
+  - @memberjunction/ng-shared@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/core@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- Updated dependencies [6fd2886]
+  - @memberjunction/ng-explorer-core@5.27.0
+  - @memberjunction/ng-auth-services@5.27.0
+  - @memberjunction/ng-shared@5.27.0
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/global@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/ng-shared-generic@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ng-explorer-core@5.26.0
+  - @memberjunction/ng-shared@5.26.0
+  - @memberjunction/graphql-dataprovider@5.26.0
+  - @memberjunction/ng-auth-services@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [a24ff53]
+- Updated dependencies [5e2a64f]
+- Updated dependencies [1eb9f6e]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/ng-explorer-core@5.25.0
+  - @memberjunction/ng-auth-services@5.25.0
+  - @memberjunction/ng-shared@5.25.0
+  - @memberjunction/ng-shared-generic@5.25.0
+  - @memberjunction/global@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [3a35955]
+- Updated dependencies [1912726]
+  - @memberjunction/ng-explorer-core@5.24.0
+  - @memberjunction/graphql-dataprovider@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/ng-auth-services@5.24.0
+  - @memberjunction/ng-shared@5.24.0
+  - @memberjunction/ng-shared-generic@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ng-explorer-core@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/ng-auth-services@5.23.0
+  - @memberjunction/ng-shared@5.23.0
+  - @memberjunction/ng-shared-generic@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [e5993ff]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ng-explorer-core@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/graphql-dataprovider@5.22.0
+  - @memberjunction/ng-auth-services@5.22.0
+  - @memberjunction/ng-shared@5.22.0
+  - @memberjunction/ng-shared-generic@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ng-auth-services@5.21.0
+  - @memberjunction/ng-explorer-core@5.21.0
+  - @memberjunction/ng-shared@5.21.0
+  - @memberjunction/ng-shared-generic@5.21.0
+  - @memberjunction/graphql-dataprovider@5.21.0
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ng-auth-services@5.20.0
+  - @memberjunction/ng-explorer-core@5.20.0
+  - @memberjunction/ng-shared@5.20.0
+  - @memberjunction/ng-shared-generic@5.20.0
+  - @memberjunction/graphql-dataprovider@5.20.0
+  - @memberjunction/global@5.20.0
+
 ## 5.19.0
 
 ### Patch Changes

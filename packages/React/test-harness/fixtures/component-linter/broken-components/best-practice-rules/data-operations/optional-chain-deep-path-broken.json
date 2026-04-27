@@ -1,0 +1,24 @@
+{
+  "name": "OptionalChainDeepPathBroken",
+  "type": "generic",
+  "title": "Optional Chain Deep Path - Broken Pattern",
+  "description": "Tests optional chaining on deep path with invalid nested field (may fail until linter refactor)",
+  "code": "function OptionalChainDeepPathBroken({ utilities }) {\n  const [actionDetail, setActionDetail] = useState('');\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Action Log Details',\n        CategoryPath: 'Admin/Reports'\n      });\n      if (result?.Success) {\n        // ❌ Accessing nested ExecutionContext.Environment that doesn't exist\n        const detail = result.Results?.[0]?.ExecutionContext?.Environment || '';\n        setActionDetail(detail);\n      }\n    }\n    loadData();\n  }, []);\n\n  return <div>Detail: {actionDetail}</div>;\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "Action Log Details",
+      "categoryPath": "Admin/Reports",
+      "fields": [
+        {"name": "ActionID", "type": "uniqueidentifier"},
+        {"name": "Action", "type": "nvarchar"},
+        {"name": "StartedAt", "type": "datetimeoffset"},
+        {"name": "ResultCode", "type": "nvarchar"}
+      ]
+    }]
+  }
+}

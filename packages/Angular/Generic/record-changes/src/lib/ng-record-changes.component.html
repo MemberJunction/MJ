@@ -83,7 +83,8 @@
           </div>
         </div>
 
-        <!-- Filter Bar -->
+        <!-- Filter Bar — chips render only for change types/sources actually present in loaded data.
+             When more than 2 conditional chips would render, they collapse into a "More filters" popover. -->
         <div class="rc-filter-bar">
           <div class="rc-search-wrap">
             <i class="fa-solid fa-search" aria-hidden="true"></i>
@@ -96,18 +97,68 @@
               aria-label="Search record changes"
             />
           </div>
-          <button class="rc-filter-pill" [class.active]="!selectedType" (click)="SetTypeFilter('')">
+
+          <button class="rc-filter-pill" [class.active]="IsAllSelected" (click)="SelectAllPill()" type="button">
             <i class="fa-solid fa-layer-group" aria-hidden="true"></i> All
           </button>
-          <button class="rc-filter-pill" [class.active]="selectedType === 'Update'" (click)="SetTypeFilter('Update')">
-            <i class="fa-solid fa-pen" aria-hidden="true"></i> Updates
-          </button>
-          <button class="rc-filter-pill" [class.active]="selectedType === 'Create'" (click)="SetTypeFilter('Create')">
-            <i class="fa-solid fa-plus" aria-hidden="true"></i> Creates
-          </button>
-          <button class="rc-filter-pill" [class.active]="selectedType === 'Delete'" (click)="SetTypeFilter('Delete')">
-            <i class="fa-solid fa-trash" aria-hidden="true"></i> Deletes
-          </button>
+
+          @if (HasConditionalPills) {
+            @if (!UseOverflowPopover) {
+              <!-- 1-2 conditional pills: render inline -->
+              @for (pill of ConditionalPills; track pill.Key) {
+                <button class="rc-filter-pill"
+                  [class.active]="ChipSelections[pill.Key]"
+                  [class.rc-filter-pill-restore]="pill.Variant === 'restore'"
+                  (click)="TogglePill(pill.Key)"
+                  type="button">
+                  <i class="fa-solid {{ pill.Icon }}" aria-hidden="true"></i>
+                  {{ pill.Label }}
+                  <span class="rc-filter-pill-count">{{ pill.Count }}</span>
+                </button>
+              }
+            } @else {
+              <!-- 3+ conditional pills: overflow popover -->
+              <div class="rc-filter-overflow-wrap">
+                <button class="rc-filter-pill rc-filter-pill-overflow"
+                  [class.active]="SelectedConditionalCount > 0"
+                  (click)="ToggleFilterOverflow()"
+                  type="button">
+                  <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                  More filters
+                  @if (SelectedConditionalCount > 0) {
+                    <span class="rc-filter-pill-count">{{ SelectedConditionalCount }}</span>
+                  }
+                  <i class="fa-solid fa-chevron-down rc-filter-overflow-caret" aria-hidden="true"></i>
+                </button>
+
+                @if (ShowFilterOverflow) {
+                  <!-- Backdrop: clicks close the popover -->
+                  <div class="rc-filter-overflow-backdrop" (click)="CloseFilterOverflow()"></div>
+                  <div class="rc-filter-overflow-popover" role="menu">
+                    <div class="rc-filter-overflow-header">Filter by</div>
+                    @for (pill of ConditionalPills; track pill.Key) {
+                      <label class="rc-filter-overflow-row" [class.rc-filter-overflow-row-restore]="pill.Variant === 'restore'">
+                        <input type="checkbox"
+                          [checked]="ChipSelections[pill.Key]"
+                          (change)="TogglePill(pill.Key)" />
+                        <i class="fa-solid {{ pill.Icon }}" aria-hidden="true"></i>
+                        <span class="rc-filter-overflow-label">{{ pill.Label }}</span>
+                        <span class="rc-filter-overflow-count">{{ pill.Count }}</span>
+                      </label>
+                    }
+                    <div class="rc-filter-overflow-actions">
+                      <button class="rc-filter-overflow-clear" (click)="SelectAllPill(); CloseFilterOverflow()" type="button">
+                        Clear all
+                      </button>
+                      <button class="rc-filter-overflow-done" (click)="CloseFilterOverflow()" type="button">
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          }
         </div>
 
         @if (filteredData.length !== viewData.length) {
@@ -135,8 +186,11 @@
                 @for (change of group.changes; track change.ID) {
                   <div
                     class="rc-card"
+                    [attr.data-change-id]="change.ID"
                     [class]="getChangeTypeCardClass(change.Type)"
                     [class.expanded]="expandedItems.has(change.ID)"
+                    [class.rc-card-restore]="isRestoreRow(change)"
+                    [class.rc-card-highlight]="HighlightedChangeID === change.ID"
                     [attr.tabindex]="0"
                     [attr.aria-expanded]="expandedItems.has(change.ID)"
                     [attr.aria-label]="getTimelineItemLabel(change)"
@@ -145,8 +199,30 @@
                     <!-- Card Header -->
                     <div class="rc-card-header" (click)="toggleExpansion(change.ID)">
                       <div class="rc-card-header-left">
-                        <span class="rc-card-type-badge">{{ getChangeTypeBadgeText(change.Type) }}</span>
+                        <span class="rc-card-type-badge"
+                              [class.rc-card-type-badge-restore]="isRestoreRow(change)">{{ getEffectiveBadgeText(change) }}</span>
                         <span class="rc-card-summary">{{ getChangeSummary(change) }}</span>
+
+                        <!-- Lineage chip — visible when this row was produced by a restore -->
+                        @if (isRestoreRow(change)) {
+                          @if (getRestoredFromSourceChange(change); as srcChange) {
+                            <a class="rc-restored-chip"
+                              (click)="JumpToSourceChange(srcChange, $event)"
+                              [title]="'Jump to source version (' + formatFullDateTime(srcChange.ChangedAt) + ')'">
+                              <i class="fa-solid fa-link" aria-hidden="true"></i>
+                              Restored from {{ formatTime(srcChange.ChangedAt) }} {{ srcChange.ChangedAt ? 'on ' + (srcChange.ChangedAt | date:'mediumDate') : '' }}
+                              @if (srcChange.User) {
+                                by {{ getUserDisplayName(srcChange.User) }}
+                              }
+                            </a>
+                          } @else {
+                            <span class="rc-restored-chip rc-restored-chip-orphan"
+                              title="Source version was not loaded into this view">
+                              <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                              Restored from earlier version
+                            </span>
+                          }
+                        }
                       </div>
                       <div class="rc-card-meta">
                         <div class="rc-card-user">
@@ -163,8 +239,19 @@
                     <!-- Card Body (expanded) -->
                     @if (expandedItems.has(change.ID)) {
                       <div class="rc-card-body">
+                        <!-- Restore reason (when present) — Notion/Linear-style
+                             blockquote: a thin violet left bar + italic text,
+                             with a tiny "Reason" prefix. No box, no header,
+                             no large vertical footprint. Reads as a
+                             justification note rather than a callout. -->
+                        @if (getRestoreReason(change); as reason) {
+                          <blockquote class="rc-restore-reason">
+                            <span class="rc-restore-reason-label">Reason</span>
+                            <span class="rc-restore-reason-text">{{ reason }}</span>
+                          </blockquote>
+                        }
+
                         @if (change.Type === 'Create') {
-                          <!-- Created record fields -->
                           @if (change.FullRecordJSON) {
                             @for (field of getCreatedFields(change); track field.name) {
                               <div class="rc-field-row">
@@ -181,13 +268,12 @@
                             This record was permanently removed from the system.
                           </div>
                         } @else {
-                          <!-- Update: type-aware field changes -->
+                          <!-- Update / Snapshot / Restore: type-aware field changes -->
                           @for (fc of getFieldChanges(change); track fc.field) {
                             <div class="rc-field-row">
                               <div class="rc-field-label">{{ fc.displayName }}</div>
                               <div class="rc-field-values">
                                 @if (fc.fieldType === 'boolean') {
-                                  <!-- Boolean: dot indicators -->
                                   <div class="rc-bool-change">
                                     <span class="rc-bool-dot" [class.on]="fc.oldValue === 'true' || fc.oldValue === '1'" [class.off]="fc.oldValue !== 'true' && fc.oldValue !== '1'"></span>
                                     <span class="rc-bool-label old">{{ fc.oldValue === 'true' || fc.oldValue === '1' ? 'Yes' : 'No' }}</span>
@@ -196,17 +282,14 @@
                                     <span class="rc-bool-label new" [class.active]="fc.newValue === 'true' || fc.newValue === '1'" [class.inactive]="fc.newValue !== 'true' && fc.newValue !== '1'">{{ fc.newValue === 'true' || fc.newValue === '1' ? 'Yes' : 'No' }}</span>
                                   </div>
                                 } @else if (fc.fieldType === 'date' || fc.fieldType === 'number') {
-                                  <!-- Atomic: old → new -->
                                   <div class="rc-atomic-change">
                                     <span class="rc-val-old">{{ fc.oldValue || '(empty)' }}</span>
                                     <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
                                     <span class="rc-val-new">{{ fc.newValue || '(empty)' }}</span>
                                   </div>
                                 } @else if (fc.diffHtml) {
-                                  <!-- Text: word/char diff -->
                                   <div class="rc-text-diff" [innerHTML]="fc.diffHtml"></div>
                                 } @else {
-                                  <!-- Fallback: old → new -->
                                   <div class="rc-atomic-change">
                                     <span class="rc-val-old">{{ fc.oldValue || '(empty)' }}</span>
                                     <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
@@ -231,6 +314,20 @@
                             <pre class="rc-error-log">{{ change.ErrorLog }}</pre>
                           </div>
                         }
+
+                        <!-- Restore action: shown for Update, Create, and Snapshot rows.
+                             Hidden on Delete rows (handled via the Recycle Bin path)
+                             and on the most recent change (restoring to current state is a no-op). -->
+                        @if (AllowRestore && change.Type !== 'Delete' && !isMostRecentChange(change)) {
+                          <div class="rc-restore-action">
+                            <button class="rc-restore-btn"
+                              (click)="OnRestoreVersion(change, $event)"
+                              title="Restore the entire record to its state at this version">
+                              <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                              Restore record to this version
+                            </button>
+                          </div>
+                        }
                       </div>
                     }
                   </div>
@@ -242,6 +339,16 @@
       }
     </div>
   }
+
+  <!-- Restore preview slide-in (reusable component) -->
+  <mj-restore-preview-panel
+    [Visible]="RestorePreviewVisible"
+    [Mode]="'live'"
+    [RecordChange]="RestorePreviewChange"
+    [LiveRecord]="record"
+    (RestoreConfirmed)="OnRestorePanelConfirmed($event)"
+    (RestoreCancelled)="OnRestorePanelCancelled()">
+  </mj-restore-preview-panel>
 
   @if (ShowCreateWizard) {
     <div class="rc-wizard-overlay" (click)="OnLabelCreateCancelled()">

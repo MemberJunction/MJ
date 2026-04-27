@@ -1,0 +1,233 @@
+/* ================================================================
+   MJ Entity Card — Design Token Compliant
+   ================================================================ */
+
+.mj-entity-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    position: relative;
+}
+
+.mj-entity-card:hover {
+    border-color: var(--mj-border-strong);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
+}
+
+/* ── Compact variant ────────────────────────────────── */
+
+.mj-entity-card--compact {
+    padding: 8px 10px;
+    gap: 8px;
+    border-radius: 6px;
+}
+
+.mj-entity-card--compact .mj-ec-title {
+    font-size: 0.85rem;
+}
+
+.mj-entity-card--compact .mj-ec-fields {
+    gap: 4px;
+}
+
+.mj-entity-card--compact .mj-ec-field-value {
+    font-size: 0.75rem;
+}
+
+/* ── Card variant (default) ─────────────────────────── */
+
+.mj-entity-card--card {
+    padding: 14px;
+}
+
+/* ── Detail variant ─────────────────────────────────── */
+
+.mj-entity-card--detail {
+    padding: 16px;
+    flex-direction: column;
+    gap: 14px;
+    cursor: default;
+}
+
+.mj-entity-card--detail .mj-ec-avatar-area {
+    align-self: flex-start;
+}
+
+.mj-entity-card--detail .mj-ec-content {
+    width: 100%;
+}
+
+.mj-entity-card--detail .mj-ec-fields {
+    flex-direction: column;
+    gap: 8px;
+}
+
+.mj-entity-card--detail .mj-ec-field {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.mj-entity-card--detail .mj-ec-field:last-child {
+    border-bottom: none;
+}
+
+.mj-entity-card--detail .mj-ec-field-label {
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    min-width: 120px;
+    flex-shrink: 0;
+}
+
+.mj-entity-card--detail .mj-ec-field-value {
+    text-align: right;
+    word-break: break-word;
+}
+
+/* ── Avatar ─────────────────────────────────────────── */
+
+.mj-ec-avatar-area {
+    flex-shrink: 0;
+}
+
+.mj-ec-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--mj-text-inverse, white);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.mj-ec-thumbnail {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.mj-ec-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ── Content ────────────────────────────────────────── */
+
+.mj-ec-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.mj-ec-header {
+    margin-bottom: 4px;
+}
+
+.mj-ec-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mj-ec-entity {
+    font-size: 0.72rem;
+    color: var(--mj-brand-primary);
+    font-weight: 500;
+    margin-top: 1px;
+}
+
+.mj-ec-subtitle {
+    font-size: 0.8rem;
+    color: var(--mj-text-secondary);
+    margin-bottom: 6px;
+}
+
+.mj-ec-description {
+    font-size: 0.82rem;
+    color: var(--mj-text-secondary);
+    line-height: 1.45;
+    margin-bottom: 8px;
+}
+
+/* ── Display Fields ─────────────────────────────────── */
+
+.mj-ec-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-top: 6px;
+}
+
+.mj-ec-fields--labeled .mj-ec-field {
+    flex-direction: column;
+    gap: 1px;
+}
+
+.mj-ec-field {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.mj-ec-field-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--mj-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.mj-ec-field-value {
+    font-size: 0.82rem;
+    color: var(--mj-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+
+/* ── Open Button ────────────────────────────────────── */
+
+.mj-ec-open-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+    font-size: 0.75rem;
+}
+
+.mj-entity-card:hover .mj-ec-open-btn {
+    opacity: 1;
+}
+
+.mj-ec-open-btn:hover {
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}

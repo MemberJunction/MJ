@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Puerto Rico",
+      "Code": "PR",
+      "ISO3166_2": "PR-PR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Puerto Rico"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PR"
+    },
+    "primaryKey": {
+      "ID": "1EC50B08-D6CC-4AE7-80C9-952D9D1221B5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.235Z",
+      "checksum": "50bb719c9747c63964e964e5028b8d7849aa535d3132563d06b473536320e9ec"
+    }
+  }
+]

@@ -1,0 +1,527 @@
+[
+  {
+    "fields": {
+      "Name": "Amazonas",
+      "Code": "AMA",
+      "ISO3166_2": "PE-AMA",
+      "Latitude": -5.0485,
+      "Longitude": -77.9695,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-AMA.geojson",
+      "CommonAliases": [
+        "Amazonas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "3E40FA78-BFFA-4D37-8DC8-5BBA73B5BD2D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.039Z",
+      "checksum": "534ad72d67762656783faed7b1b531e6718f325744bf87a817fc5ffddd159747"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ancash",
+      "Code": "ANC",
+      "ISO3166_2": "PE-ANC",
+      "Latitude": -9.54,
+      "Longitude": -77.6571,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-ANC.geojson",
+      "CommonAliases": [
+        "Ancash"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "1625EEEA-EFD6-43AF-AB5B-1653A7A5F086"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.056Z",
+      "checksum": "a881bf92f7be8b698aaf63ac5813e5eed39ba2e9676aea70d182148549c3b89a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Apurímac",
+      "Code": "APU",
+      "ISO3166_2": "PE-APU",
+      "Latitude": -14.0317,
+      "Longitude": -72.9662,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-APU.geojson",
+      "CommonAliases": [
+        "Apurímac"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "851418CB-223B-4785-B8E7-B85BC3C851EE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.072Z",
+      "checksum": "4dc52bd0b8285ed384a5b994fc2eef0772a97001c1b886dd69e7f4f3018766cd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Arequipa",
+      "Code": "ARE",
+      "ISO3166_2": "PE-ARE",
+      "Latitude": -15.8757,
+      "Longitude": -72.4209,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-ARE.geojson",
+      "CommonAliases": [
+        "Arequipa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "D6852B5D-8FFA-49A6-9FC8-B1CA1B7731CA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.090Z",
+      "checksum": "fec7e772f16bf6be8a91b7e919cd6c1cd84421f8f74d4b03c4ba203069c12784"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ayacucho",
+      "Code": "AYA",
+      "ISO3166_2": "PE-AYA",
+      "Latitude": -13.9245,
+      "Longitude": -73.9838,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-AYA.geojson",
+      "CommonAliases": [
+        "Ayacucho"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "C422EF73-4967-4DE8-A08D-7425A0EB79D1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.107Z",
+      "checksum": "9edbcc48d734d7bfe6e8ff42a94d2230f4217c68df8b92c778977eecf6f29941"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cajamarca",
+      "Code": "CAJ",
+      "ISO3166_2": "PE-CAJ",
+      "Latitude": -6.8177,
+      "Longitude": -78.6091,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-CAJ.geojson",
+      "CommonAliases": [
+        "Cajamarca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "85D22470-E15A-4345-8176-440756E85987"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.124Z",
+      "checksum": "8131395562c5a91a10f2ec0fa06229870877bf4b7d02796190c79186890c55c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cuzco [Cusco]",
+      "Code": "CUS",
+      "ISO3166_2": "PE-CUS",
+      "Latitude": -13.1633,
+      "Longitude": -72.2479,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-CUS.geojson",
+      "CommonAliases": [
+        "Cuzco [Cusco]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "5CC7EDEA-A4A4-4F3F-8CA0-B65C395391C9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.142Z",
+      "checksum": "12f3b52cd0c76c7ac54183f1e8236a01f16a356c958f4a5ecaf043301b9fff46"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Callao",
+      "Code": "CAL",
+      "ISO3166_2": "PE-CAL",
+      "Latitude": -12.0859,
+      "Longitude": -77.2248,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-CAL.geojson",
+      "CommonAliases": [
+        "El Callao"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "28EF373C-A095-4061-B0F6-85D9F7AA7D77"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.158Z",
+      "checksum": "c76ea30d809304fecc554bcd2f8eb1e49013d510c2d8721fe6c1af89a73a96af"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Huancavelica",
+      "Code": "HUV",
+      "ISO3166_2": "PE-HUV",
+      "Latitude": -13.0523,
+      "Longitude": -75.0416,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-HUV.geojson",
+      "CommonAliases": [
+        "Huancavelica"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "20FC7D55-BCC6-47C7-ABC9-718AC3FB5D2C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.175Z",
+      "checksum": "c6bfb468948150b38807a9189748e50fb6fad5d0dd20897df5da0716a425c655"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Huánuco",
+      "Code": "HUC",
+      "ISO3166_2": "PE-HUC",
+      "Latitude": -9.592,
+      "Longitude": -75.9161,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-HUC.geojson",
+      "CommonAliases": [
+        "Huánuco"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "BAE5C5F2-9D13-43A5-8910-43846831EACF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.189Z",
+      "checksum": "d2ab00fe6e39d454c6acea3b460945c4faa2101e7fa36217adad5f99fd670ad3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ica",
+      "Code": "ICA",
+      "ISO3166_2": "PE-ICA",
+      "Latitude": -14.2257,
+      "Longitude": -75.6773,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-ICA.geojson",
+      "CommonAliases": [
+        "Ica"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "C8543AFF-12B8-4B68-975E-A1F5DC09AF93"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.244Z",
+      "checksum": "ee5ed67fd911292907fb2c1b4624672a3eed2cc0d05fed0d84f6bf33b95f2510"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Junín",
+      "Code": "JUN",
+      "ISO3166_2": "PE-JUN",
+      "Latitude": -11.3744,
+      "Longitude": -74.9642,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-JUN.geojson",
+      "CommonAliases": [
+        "Junín"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "0A3B15C8-353E-446F-BAF7-B4B22F86A57A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.262Z",
+      "checksum": "a19cccdf430453ed429af489a5b5546e053fcafd9273ec667d28f1934e6e3290"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Libertad",
+      "Code": "LAL",
+      "ISO3166_2": "PE-LAL",
+      "Latitude": -8.2133,
+      "Longitude": -78.2813,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-LAL.geojson",
+      "CommonAliases": [
+        "La Libertad"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "FBF94038-3329-41A1-A89A-DC9ACC1AF7E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.281Z",
+      "checksum": "42dc22f1ce5008eb9a8ce863af77fe55b3e44622816e77f9bdf2c227efb4dae9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lambayeque",
+      "Code": "LAM",
+      "ISO3166_2": "PE-LAM",
+      "Latitude": -6.2514,
+      "Longitude": -79.8994,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-LAM.geojson",
+      "CommonAliases": [
+        "Lambayeque"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "B4B5C262-D5BF-4B30-ABB8-0A91CF67F951"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.300Z",
+      "checksum": "f65b44f2596b6a1881db6a4b1981915f1132fa62e17d83c5ffc59cd92d8ba097"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lima",
+      "Code": "LIM",
+      "ISO3166_2": "PE-LIM",
+      "Latitude": -12.1124,
+      "Longitude": -76.9236,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-LIM.geojson",
+      "CommonAliases": [
+        "Lima"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "3A322DAC-8249-44BA-A514-AAFE172051EC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.319Z",
+      "checksum": "41df66f8cceeca58643cf36d631cc9a8ef4c9a51eccb23fd73a4fe3fb1104b83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Loreto",
+      "Code": "LOR",
+      "ISO3166_2": "PE-LOR",
+      "Latitude": -4.2747,
+      "Longitude": -73.8868,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-LOR.geojson",
+      "CommonAliases": [
+        "Loreto"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "D4285003-4470-4461-BD27-7DED7171F2DC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.341Z",
+      "checksum": "496ee335d916500843672c7f85af0bb241d4abadb9864668c295bd0a87d4591d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madre de Dios",
+      "Code": "MDD",
+      "ISO3166_2": "PE-MDD",
+      "Latitude": -11.8726,
+      "Longitude": -70.6831,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-MDD.geojson",
+      "CommonAliases": [
+        "Madre de Dios"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "B29C6A62-33A4-4A69-9529-42AA61B7226B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.358Z",
+      "checksum": "2311c08878a5a2bf6f8712bf36fbc631956a71c930ccdd7106e6f10caf19119d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moquegua",
+      "Code": "MOQ",
+      "ISO3166_2": "PE-MOQ",
+      "Latitude": -16.6807,
+      "Longitude": -70.7546,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-MOQ.geojson",
+      "CommonAliases": [
+        "Moquegua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "CDEDDA14-EE31-44D7-902F-0FB9C3CCC616"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.376Z",
+      "checksum": "aad6933aaab530d9e23d53528443bca82727d22bb81d8ed20d47abb68e5ea22a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pasco",
+      "Code": "PAS",
+      "ISO3166_2": "PE-PAS",
+      "Latitude": -10.3457,
+      "Longitude": -75.4586,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-PAS.geojson",
+      "CommonAliases": [
+        "Pasco"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "E86817E4-FDDC-4568-9D64-1A7D0BE34753"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.395Z",
+      "checksum": "d58bdc2c7a4f811b0ac813e560f78307be6db5fb8c2bdfe47622ac2025002d3e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Piura",
+      "Code": "PIU",
+      "ISO3166_2": "PE-PIU",
+      "Latitude": -5.0995,
+      "Longitude": -80.2868,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-PIU.geojson",
+      "CommonAliases": [
+        "Piura"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "FAC887DC-5BFA-4A32-9914-93F39D885C5D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.409Z",
+      "checksum": "0dc518c20bb1b49bf2a04de48f84d2b94ded699aae00d0216a7f5cc28681fbc9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Puno",
+      "Code": "PUN",
+      "ISO3166_2": "PE-PUN",
+      "Latitude": -15.1677,
+      "Longitude": -69.9802,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-PUN.geojson",
+      "CommonAliases": [
+        "Puno"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "BFF0C658-101A-4382-B628-C661DC863C13"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.451Z",
+      "checksum": "ef14a1aa4f552937b2da6646c2634b2e61ccdc521965b2aa6da57486fc17c207"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Martín",
+      "Code": "SAM",
+      "ISO3166_2": "PE-SAM",
+      "Latitude": -7.3085,
+      "Longitude": -76.6238,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-SAM.geojson",
+      "CommonAliases": [
+        "San Martín"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "01DAFEE4-2AB2-4825-BE6A-39B1CAAFACC6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.468Z",
+      "checksum": "8102eab045194999c460fed2ebde3ba49532a5572f80d64554d932ba98201f77"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tacna",
+      "Code": "TAC",
+      "ISO3166_2": "PE-TAC",
+      "Latitude": -17.5742,
+      "Longitude": -70.3423,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-TAC.geojson",
+      "CommonAliases": [
+        "Tacna"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "A990C122-455D-4BE0-88C5-49E71D66742E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.485Z",
+      "checksum": "d2776d805f77765d8a2024af98da3026464987543732d94846ac6ed289d2b537"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tumbes",
+      "Code": "TUM",
+      "ISO3166_2": "PE-TUM",
+      "Latitude": -3.8849,
+      "Longitude": -80.6135,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-TUM.geojson",
+      "CommonAliases": [
+        "Tumbes"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "A68E29E9-4079-4436-9D92-BEAFE03D8206"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.503Z",
+      "checksum": "ce4b1c173d5e29551848d83ece7b9b1e23cd5e44b3a3b98a04ac1835f373d6b5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ucayali",
+      "Code": "UCA",
+      "ISO3166_2": "PE-UCA",
+      "Latitude": -9.9982,
+      "Longitude": -73.2493,
+      "BoundaryGeoJSON": "@file:by-country/PE/boundaries/PE-UCA.geojson",
+      "CommonAliases": [
+        "Ucayali"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PE"
+    },
+    "primaryKey": {
+      "ID": "2EA9E9BF-E03E-40F4-A984-7FB9B878EAC7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.520Z",
+      "checksum": "8e31ae8cee1f6b065248ef3c6090efee60a26f86a4b4701ed72dcdc1661b2a89"
+    }
+  }
+]

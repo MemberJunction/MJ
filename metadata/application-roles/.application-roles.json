@@ -1,0 +1,227 @@
+[
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "E78CE32B-E48C-48B1-80CA-7EB94B8C0E88"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T21:04:04.651Z",
+      "checksum": "b9eccd974aa567156e5ad8520b7728be27b665bc3d8160db333b7cfd43eabbe5"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Admin",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "0F9C0499-17FA-46B4-820B-CBF4DE47F0D6"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:56:14.811Z",
+      "checksum": "8ad5606328ec6388a845aadaf736161bd49b7c9db476f242bbfe684107b66bf5"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Home",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanAccess": true,
+      "CanAdmin": false
+    },
+    "primaryKey": {
+      "ID": "46FE3B1A-20E3-483F-A3D5-3842B4EFF6B5"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T21:04:04.676Z",
+      "checksum": "5f7706b6ca406666aca4cfcc0d7242e07abc184c67d35f3e881fa229b4e36495"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Home",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "529B91E2-0D40-4C40-8D4E-5677A3E5FCEC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T21:04:04.689Z",
+      "checksum": "75dcf2125d36637a80da154fabe8fa486ddcfe1129b5c1df02551581129b07eb"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Home",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "7A6353E0-1A25-49FF-91EA-5EBA1262122F"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:56:14.823Z",
+      "checksum": "edd22a6f6ba722a3b532026f3388d6cd77d4a73396023403840f24c6b84d97c0"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Data Explorer",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanAccess": true,
+      "CanAdmin": false
+    },
+    "primaryKey": {
+      "ID": "73204B80-F757-4895-90B9-4C879DDF6110"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T21:04:04.713Z",
+      "checksum": "05be04344a9374c95a79bb675f355aa0edba5a152a07f13dcd625112bb25d6ac"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Data Explorer",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "CFA9FF51-3423-4B3E-B9CC-9F894E0CBBC5"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T21:04:04.725Z",
+      "checksum": "cfc40b4c754ba7f8da00af357642f1125e10e215d09c8aa72be23f25b11a5e26"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Data Explorer",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "73972EC5-10F8-40C7-90E4-039A51F25992"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:56:14.833Z",
+      "checksum": "cbe29efc5110227d043c54a6e8db2e636868534bbc6d382abb15b5f52d460016"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Chat",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanAccess": true,
+      "CanAdmin": false
+    },
+    "primaryKey": {
+      "ID": "79A67D74-4194-4C52-8349-F06701638D49"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T21:04:04.750Z",
+      "checksum": "7972d3e458b1060eda40e5c2f31d24fb794e13bfac9a225f52e33daf26741348"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Chat",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "17E7273C-7A38-41AE-A797-2519FE989EE5"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T21:04:04.762Z",
+      "checksum": "7846e6eb82a5fa4d3d9459904ce2cb13d78d36d38d1e06966ad0e389a5835aff"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Chat",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "252A858A-989E-47E9-AFFC-B42DAE7F8FFF"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:56:14.870Z",
+      "checksum": "e47ccca5637db717b99782ba4b020fb8689d70082bc07c568e8b1809ea7400e3"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=AI",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "52DDC938-0D51-429D-A3BE-36157382482D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T21:04:04.786Z",
+      "checksum": "b5534e8cd07b609550c6aa3f1b478d319b84b25004be4f70bf522c75d440f38e"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=AI",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "DEB066E1-4635-45D6-9593-CB6A7654870B"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:56:14.909Z",
+      "checksum": "7f89c17722dcc8f191026feb6ca8371edd06cfdec3ee2ff56153fd29e039c5ce"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Permissions",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "E3A60BED-C451-4369-A3C6-9D191BF87C50"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T00:51:50.193Z",
+      "checksum": "25494a9c488fb79dd3264984fbac0c45bdcae91528e8eedf6ff3c415fe90abe4"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Permissions",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "98CC6138-E264-4FFA-AA55-0442FF99E853"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T00:51:50.194Z",
+      "checksum": "aa821cad060f340abaec89734cffa0b1b2632d633633fbac1557b36e4c401da1"
+    }
+  }
+]

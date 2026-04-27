@@ -1,0 +1,38 @@
+{
+  "name": "DataGridEntityFieldNonexistentBroken",
+  "type": "generic",
+  "title": "DataGrid Entity Field Nonexistent - Broken Pattern",
+  "description": "Tests linter detection of non-existent field in EntityGrid columns",
+  "code": "function DataGridEntityFieldNonexistentBroken({ utilities, components }) {\n  const { EntityGrid } = components;\n\n  return (\n    <div>\n      <h3>Employee Directory</h3>\n      {/* ❌ Department field doesn't exist on Employees entity */}\n      <EntityGrid \n        entityName=\"MJ: Employees\" \n        fields={['ID', 'FirstName', 'LastName', 'Department', 'Email']} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [{
+      "name": "MJ: Employees",
+      "type": "view",
+      "fieldMetadata": [
+        {"name": "ID", "type": "uniqueidentifier"},
+        {"name": "FirstName", "type": "nvarchar"},
+        {"name": "LastName", "type": "nvarchar"},
+        {"name": "Email", "type": "nvarchar"},
+        {"name": "Phone", "type": "nvarchar"},
+        {"name": "Title", "type": "nvarchar"},
+        {"name": "Active", "type": "bit"},
+        {"name": "CompanyID", "type": "uniqueidentifier"},
+        {"name": "SupervisorID", "type": "uniqueidentifier"},
+        {"name": "FirstLast", "type": "nvarchar"},
+        {"name": "Supervisor", "type": "nvarchar"},
+        {"name": "SupervisorEmail", "type": "nvarchar"},
+        {"name": "SupervisorFirstName", "type": "nvarchar"},
+        {"name": "SupervisorLastName", "type": "nvarchar"},
+        {"name": "BCMID", "type": "uniqueidentifier"},
+        {"name": "__mj_CreatedAt", "type": "datetimeoffset"},
+        {"name": "__mj_UpdatedAt", "type": "datetimeoffset"}
+      ]
+    }]
+  }
+}

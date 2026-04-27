@@ -8,7 +8,7 @@ import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContex
 import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
-import { ManageMetadataBase } from './manage-metadata';
+import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
@@ -279,8 +279,19 @@ export class SQLCodeGenBase {
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
             // we CAN skip the entity field values part because that wouldn't change from the first time we ran it
             // Run advanced generation here in case new virtual fields added, so we do NOT run advanced geneartion in the main manageMetadata() call
+            //
+            // Pass 1 (in manage-metadata.ts) already discovered all changes and populated _newEntityList ∪ _modifiedEntityList.
+            // Pass 2 (this call) only re-runs to pick up new virtual fields from regenerated views and to apply advanced
+            // generation. Scoping to changed entities collapses the SP scans to seeks; an empty list means no work to do.
+            // forceRegeneration override skips the scoping so all entities get reprocessed (used when prompts change, etc.).
+            const pass2EntityFilter: string[] | undefined = configInfo.forceRegeneration?.enabled
+                ? undefined
+                : [...new Set([
+                    ...ManageMetadataBase.newEntityList,
+                    ...ManageMetadataBase.modifiedEntityList,
+                ])];
             startSpinner('Managing entity fields metadata...');
-            if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false)) {
+            if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false, false, pass2EntityFilter)) {
                 failSpinner('Failed to manage entity fields');
                 overallSuccess = false;
             }
@@ -288,6 +299,57 @@ export class SQLCodeGenBase {
                 succeedSpinner('Entity fields metadata updated');
             }
             // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
+
+            // STEP 3.5 - Late-phase view regeneration
+            // Some late-phase changes (e.g., SupportsGeoCoding toggled during advanced generation)
+            // affect view structure but happen AFTER views were already generated in Step 2.
+            // Regenerate ONLY those entities' views, then re-sync their fields to pick up new virtual columns.
+            const regenList = ManageMetadataBase.EntitiesRequiringViewRegen;
+            if (regenList.length > 0) {
+                const uniqueEntityNames = [...new Set(regenList.map(e => e.EntityName))];
+                startSpinner(`Regenerating ${uniqueEntityNames.length} entities with late-phase view changes...`);
+
+                // Refresh metadata to pick up DB changes from Step 3 (e.g., SupportsGeoCoding = 1)
+                const regenMd = new Metadata();
+                await regenMd.Refresh();
+
+                // Resolve entity names to EntityInfo objects from the refreshed metadata
+                const entitiesToRegen = uniqueEntityNames
+                    .map(name => { try { return regenMd.EntityByName(name); } catch { return null; } })
+                    .filter((e): e is EntityInfo => e !== null);
+
+                if (entitiesToRegen.length > 0) {
+                    // Regenerate views + SPs for affected entities only
+                    const regenResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
+                        pool,
+                        entities: entitiesToRegen,
+                        directory,
+                        onlyPermissions: false,
+                        skipExecution: false,
+                        writeFiles: true,
+                        batchSize: 1,
+                        enableSQLLoggingForNewOrModifiedEntities: true
+                    });
+
+                    if (regenResult.Success) {
+                        // Re-sync entity fields to pick up new virtual columns (e.g., __mj_Latitude, __mj_Longitude)
+                        // No LLM needed — just detect new/changed fields from the regenerated views.
+                        // Scope to the late-regen entities only — they're the only ones whose views just changed.
+                        const lateRegenFilter = entitiesToRegen.map(e => e.Name);
+                        await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, true, false, lateRegenFilter);
+
+                        // Apply reason-specific fixups
+                        await this.applyLatePhaseFixups(pool, regenList, entitiesToRegen);
+
+                        succeedSpinner(`Regenerated ${entitiesToRegen.length} late-phase entities`);
+                    } else {
+                        failSpinner('Late-phase view regeneration failed');
+                        overallSuccess = false;
+                    }
+                } else {
+                    succeedSpinner('No valid entities to regenerate');
+                }
+            }
 
             // STEP 4- Apply permissions, executing all .permissions files
             startSpinner('Applying permissions...');
@@ -330,6 +392,36 @@ export class SQLCodeGenBase {
             // Clean up temp batch files on error
             TempBatchFile.cleanup();
             return false;
+        }
+    }
+
+    /**
+     * Apply reason-specific fixups after late-phase view regeneration.
+     * Each regen reason may require additional SQL to be executed and logged
+     * to the migration output file.
+     */
+    protected async applyLatePhaseFixups(
+        pool: CodeGenConnection,
+        regenList: ViewRegenEntry[],
+        regenEntities: EntityInfo[]
+    ): Promise<void> {
+        // Geocoding fixup: set ExtendedType on virtual __mj_Latitude / __mj_Longitude fields
+        const geoEntities = regenEntities.filter(e =>
+            regenList.some(r => r.EntityName === e.Name && r.Reason === 'Geocoding')
+        );
+        if (geoEntities.length > 0) {
+            const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
+            const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
+            const entityIds = geoEntities.map(e => `'${e.ID}'`).join(',');
+
+            const latSQL = `UPDATE ${qs(mjCoreSchema, 'EntityField')} SET ${qi('ExtendedType')} = 'GeoLatitude' WHERE ${qi('Name')} = '__mj_Latitude' AND ${qi('ExtendedType')} IS NULL AND ${qi('EntityID')} IN (${entityIds})`;
+            const lngSQL = `UPDATE ${qs(mjCoreSchema, 'EntityField')} SET ${qi('ExtendedType')} = 'GeoLongitude' WHERE ${qi('Name')} = '__mj_Longitude' AND ${qi('ExtendedType')} IS NULL AND ${qi('EntityID')} IN (${entityIds})`;
+
+            // Execute and log to migration output
+            SQLLogging.appendToSQLLogFile(latSQL, 'Set ExtendedType=GeoLatitude on virtual geo fields');
+            await pool.query(latSQL);
+            SQLLogging.appendToSQLLogFile(lngSQL, 'Set ExtendedType=GeoLongitude on virtual geo fields');
+            await pool.query(lngSQL);
         }
     }
 
@@ -1290,8 +1382,20 @@ export class SQLCodeGenBase {
     async generateBaseView(pool: CodeGenConnection, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
         const classNameFirstChar: string = entity.BaseTableCodeName.charAt(0).toLowerCase();
-        const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
+        let relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
+
+        // Geo support: add __mj_Latitude and __mj_Longitude virtual fields for geo-enabled entities
+        // Skip for Record Geo Codes itself to avoid circular self-reference in the view
+        if (entity.SupportsGeoCoding && entity.Name.trim().toLowerCase() !== 'mj: record geo codes') {
+            const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
+            const geoFieldsSelect = this.hasNativeGeoFields(entity.Fields)
+                ? this.generateNativeGeoFields(entity.Fields, classNameFirstChar, qi)
+                : this.generateRecordGeoCodeFields(qi);
+            if (geoFieldsSelect) {
+                relatedFieldsString += (relatedFieldsString ? ',\n' : '') + geoFieldsSelect;
+            }
+        }
         const permissions: string = this.generateViewPermissions(entity);
         const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
         const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE
@@ -1341,7 +1445,76 @@ export class SQLCodeGenBase {
                 sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER' } JOIN\n    ${qs(ef.RelatedEntitySchemaName, relatedTable)} AS ${ef._RelatedEntityTableAlias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(ef.Name)} = ${ef._RelatedEntityTableAlias}.${qi(ef.RelatedEntityFieldName)}`;
             }
         }
+
+        // Geo support: add LEFT JOIN to vwRecordGeoCodes for entities with SupportsGeoCoding = 1
+        // that don't have native GeoLatitude/GeoLongitude fields (those get aliased directly).
+        // Skip for Record Geo Codes itself to avoid circular self-reference in the view.
+        if (entity.SupportsGeoCoding && !this.hasNativeGeoFields(entityFields) && entity.Name.trim().toLowerCase() !== 'mj: record geo codes') {
+            const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
+            const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
+            sOutput += (sOutput === '' ? '' : '\n');
+
+            // Build RecordID expression that handles both single and composite primary keys.
+            // Format: for single PK → CAST(e.ID AS NVARCHAR(450))
+            //         for composite PK → e.Field1 + '||' + e.Field2 (concatenated with || separator)
+            // This must match the format used by GeoCodeSyncService when storing RecordGeoCode rows.
+            const pkFields = entity.PrimaryKeys;
+            let recordIdExpr: string;
+            if (pkFields.length === 1) {
+                recordIdExpr = `CAST(${qi(classNameFirstChar)}.${qi(pkFields[0].Name)} AS NVARCHAR(450))`;
+            } else {
+                // Composite key: concatenate all PK values with || separator
+                const parts = pkFields.map(pk =>
+                    `CAST(${qi(classNameFirstChar)}.${qi(pk.Name)} AS NVARCHAR(200))`
+                );
+                recordIdExpr = parts.join(` + '||' + `);
+            }
+
+            sOutput += `LEFT OUTER JOIN\n    ${qs(mjCoreSchema, 'vwRecordGeoCodes')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = ${recordIdExpr}\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;
+        }
+
         return sOutput;
+    }
+
+    /**
+     * Check if an entity has native latitude/longitude fields marked with GeoLatitude/GeoLongitude ExtendedType.
+     * If both exist, the view should alias them directly instead of joining to RecordGeoCode.
+     *
+     * MUST exclude virtual fields. The view-introspection pass creates virtual
+     * EntityField rows for the `__mj_Latitude`/`__mj_Longitude` SELECT aliases
+     * the JOIN path emits, then auto-assigns ExtendedType=GeoLatitude/Longitude
+     * by name-pattern. Without this filter the next view regen flips to the
+     * native path and tries to SELECT `e.__mj_Longitude` from the base table —
+     * the column doesn't exist on the table, only on the view itself, so view
+     * creation fails with "Invalid column name '__mj_Longitude'". This recurs
+     * on any geo-eligible entity whose RecordGeoCode-based view ran once.
+     */
+    protected hasNativeGeoFields(entityFields: EntityFieldInfo[]): boolean {
+        const hasLat = entityFields.some(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
+        const hasLng = entityFields.some(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
+        return hasLat && hasLng;
+    }
+
+    /**
+     * Generate SELECT aliases for native lat/lng fields → __mj_Latitude / __mj_Longitude.
+     * Virtual fields are excluded — see hasNativeGeoFields for the rationale.
+     */
+    protected generateNativeGeoFields(
+        entityFields: EntityFieldInfo[],
+        classNameFirstChar: string,
+        qi: (name: string) => string
+    ): string {
+        const latField = entityFields.find(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
+        const lngField = entityFields.find(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
+        if (!latField || !lngField) return '';
+        return `    ${qi(classNameFirstChar)}.${qi(latField.Name)} AS ${qi('__mj_Latitude')},\n    ${qi(classNameFirstChar)}.${qi(lngField.Name)} AS ${qi('__mj_Longitude')}`;
+    }
+
+    /**
+     * Generate SELECT aliases from the RecordGeoCode LEFT JOIN → __mj_Latitude / __mj_Longitude.
+     */
+    protected generateRecordGeoCodeFields(qi: (name: string) => string): string {
+        return `    __mj_rgc.${qi('Latitude')} AS ${qi('__mj_Latitude')},\n    __mj_rgc.${qi('Longitude')} AS ${qi('__mj_Longitude')}`;
     }
 
     async generateBaseViewRelatedFieldsString(pool: CodeGenConnection, entityFields: EntityFieldInfo[]): Promise<string> {

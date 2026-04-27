@@ -180,7 +180,7 @@ describe('GitHubReleaseProvider', () => {
       expect(result).toEqual([]);
     });
 
-    it('should use bootstrap download URL for tags in the fallback path', async () => {
+    it('should use bootstrap ZIP URL for tags in the fallback path (distribution mode)', async () => {
       // First call: releases returns empty
       mockFetch.mockResolvedValueOnce(jsonResponse([]));
 
@@ -195,10 +195,9 @@ describe('GitHubReleaseProvider', () => {
 
       const result = await provider.ListReleases();
       expect(result[0].DownloadUrl).toContain('Distributions/MemberJunction_Code_Bootstrap.zip');
-      expect(result[0].DownloadUrl).not.toContain('zipball');
     });
 
-    it('should prefer uploaded .zip asset URL over zipball_url', async () => {
+    it('should use bootstrap ZIP when no .zip asset is available (distribution mode)', async () => {
       const releases = [
         makeGitHubRelease({
           tag_name: 'v5.2.0',
@@ -214,11 +213,10 @@ describe('GitHubReleaseProvider', () => {
       mockFetch.mockResolvedValueOnce(jsonResponse(releases));
 
       const result = await provider.ListReleases();
-      expect(result[0].DownloadUrl).toContain('releases/download');
-      expect(result[0].DownloadUrl).not.toContain('zipball');
+      expect(result[0].DownloadUrl).toContain('Distributions/MemberJunction_Code_Bootstrap.zip');
     });
 
-    it('should use bootstrap ZIP URL when no .zip asset is available', async () => {
+    it('should not use zipball_url in distribution mode', async () => {
       const releases = [
         makeGitHubRelease({
           tag_name: 'v5.2.0',
@@ -231,7 +229,6 @@ describe('GitHubReleaseProvider', () => {
       const result = await provider.ListReleases();
       expect(result[0].DownloadUrl).toContain('Distributions/MemberJunction_Code_Bootstrap.zip');
       expect(result[0].DownloadUrl).toContain('v5.2.0');
-      expect(result[0].DownloadUrl).not.toContain('zipball');
     });
 
     it('should truncate release notes to 500 characters with ellipsis', async () => {

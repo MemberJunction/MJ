@@ -1,0 +1,485 @@
+[
+  {
+    "fields": {
+      "Name": "Béja",
+      "Code": "31",
+      "ISO3166_2": "TN-31",
+      "Latitude": 36.5828,
+      "Longitude": 9.3761,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-31.geojson",
+      "CommonAliases": [
+        "Béja"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "F90A2B1F-D693-461C-B13A-20CD91565897"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.858Z",
+      "checksum": "9543b02384d00d5e8150d2b16d5f40b5cd91d2d1e0273a6ef18dc0eac2353444"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ben Arous",
+      "Code": "13",
+      "ISO3166_2": "TN-13",
+      "Latitude": 36.6125,
+      "Longitude": 10.1941,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-13.geojson",
+      "CommonAliases": [
+        "Ben Arous"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "20C334AC-3DCA-4DFE-9F41-C00686B5F271"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.873Z",
+      "checksum": "da01a7082d83ee7e122909f209ba7589fdeeceee8ecf9bf32a1fb1d215d1ed18"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bizerte",
+      "Code": "23",
+      "ISO3166_2": "TN-23",
+      "Latitude": 37.1109,
+      "Longitude": 9.6733,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-23.geojson",
+      "CommonAliases": [
+        "Bizerte"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "01CD5E20-9919-4267-9BD6-D38228C529E0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.890Z",
+      "checksum": "b9fac8d1ced09904bd35e05fee4ccb439cf32491d7685926bb7d872527249917"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gabès",
+      "Code": "81",
+      "ISO3166_2": "TN-81",
+      "Latitude": 33.7571,
+      "Longitude": 9.8599,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-81.geojson",
+      "CommonAliases": [
+        "Gabès"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "DC0F12A6-CA19-4C61-B709-E22EAB745A0B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.907Z",
+      "checksum": "4390af31593ac53f2a07699181e31747f804a4d5034f98512a088bc68fa8ca7c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gafsa",
+      "Code": "71",
+      "ISO3166_2": "TN-71",
+      "Latitude": 34.4233,
+      "Longitude": 8.7952,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-71.geojson",
+      "CommonAliases": [
+        "Gafsa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "226A58CE-52CB-4D5C-AFFC-A0BA147861E2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.923Z",
+      "checksum": "afdec2128d5c5c4f7ca9dd6ef3c928c5babaeb7a6b5cc8d64bfc46fd30b4f519"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jendouba",
+      "Code": "32",
+      "ISO3166_2": "TN-32",
+      "Latitude": 36.6155,
+      "Longitude": 8.6206,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-32.geojson",
+      "CommonAliases": [
+        "Jendouba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "BF65C938-E937-40E2-BCFE-9663F4C1EDC8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.939Z",
+      "checksum": "28101d7041f32c8d23fcb89aa7db59735daad1250ece255fcf34af97ae8f0be2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kairouan",
+      "Code": "41",
+      "ISO3166_2": "TN-41",
+      "Latitude": 35.6154,
+      "Longitude": 9.7889,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-41.geojson",
+      "CommonAliases": [
+        "Kairouan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "2334EA7C-AF2E-4E73-915F-FF7467D61409"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.955Z",
+      "checksum": "30961c14bdeeac6652d41439db75779343515c52f537af40e9eabc65b2ec90fd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kasserine",
+      "Code": "42",
+      "ISO3166_2": "TN-42",
+      "Latitude": 35.2529,
+      "Longitude": 8.7877,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-42.geojson",
+      "CommonAliases": [
+        "Kasserine"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "BC62D544-DC13-4CE8-BC57-CDEAC80503E8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.971Z",
+      "checksum": "a6d6c671c3d511121cd6bd002a08354c09c426e066b8f764f9eeffb0fd1b2e82"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kebili",
+      "Code": "73",
+      "ISO3166_2": "TN-73",
+      "Latitude": 33.3621,
+      "Longitude": 8.8479,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-73.geojson",
+      "CommonAliases": [
+        "Kebili"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "5364B4CF-F575-4B63-9F6A-06D1543B2946"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.988Z",
+      "checksum": "1fb0a9752c94349d7186c558c6098604afba8f49cb73a2048f70c19ffc40e9cc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "L'Ariana",
+      "Code": "12",
+      "ISO3166_2": "TN-12",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "L'Ariana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "C635588D-12FE-4CEF-B460-642F8FA0BE0B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.002Z",
+      "checksum": "ac7d4cec6e610c1586b9b2894120efa12cce19b1e307ea04d1dfcd85aea04b8b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Le Kef",
+      "Code": "33",
+      "ISO3166_2": "TN-33",
+      "Latitude": 36.0965,
+      "Longitude": 8.6957,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-33.geojson",
+      "CommonAliases": [
+        "Le Kef"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "2973CF8E-E27B-4B00-9053-975DDDA128A5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.057Z",
+      "checksum": "2e7e3ceed375d1c09b272d15b4a675f502c971470617a5748edbcd765933043f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mahdia",
+      "Code": "53",
+      "ISO3166_2": "TN-53",
+      "Latitude": 35.3594,
+      "Longitude": 10.6621,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-53.geojson",
+      "CommonAliases": [
+        "Mahdia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "8E01A456-D4EC-4F40-A620-0018F5844782"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.074Z",
+      "checksum": "a1d3a60acac6adbf5ee762110114f1b14ac2788d1c371fb1cb3d953b45f182e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Medenine",
+      "Code": "82",
+      "ISO3166_2": "TN-82",
+      "Latitude": 33.4403,
+      "Longitude": 10.6522,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-82.geojson",
+      "CommonAliases": [
+        "Medenine"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "3156A7A8-F40A-4724-9812-4E55501412F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.090Z",
+      "checksum": "ac3d1237d31edad2807fd047d05d75306396aaad2bd7043740cfe71ae398e49b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Monastir",
+      "Code": "52",
+      "ISO3166_2": "TN-52",
+      "Latitude": 35.6225,
+      "Longitude": 10.7538,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-52.geojson",
+      "CommonAliases": [
+        "Monastir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "30E41D7F-9F97-456B-907D-3A4DCA7A8577"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.106Z",
+      "checksum": "3f4f6c85da619df8c51daa6f7f9d5fc1f386bd125fe25f551b6cc2238a7a9f85"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nabeul",
+      "Code": "21",
+      "ISO3166_2": "TN-21",
+      "Latitude": 36.6794,
+      "Longitude": 10.7319,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-21.geojson",
+      "CommonAliases": [
+        "Nabeul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "2F210A35-DAF0-433B-98E8-77B61F76E18F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.122Z",
+      "checksum": "d8580bc9496d522ee3fe8246dc2a4983334c94d0a5ebfc255bbc68f6b5edc123"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sfax",
+      "Code": "61",
+      "ISO3166_2": "TN-61",
+      "Latitude": 34.6495,
+      "Longitude": 11.0329,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-61.geojson",
+      "CommonAliases": [
+        "Sfax"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "59758B5B-0D08-4DAB-8883-2BFC033A0357"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.138Z",
+      "checksum": "27dc03870eb64517a2d48d0c687d30abb2b6c7e940fe8759307558b98f4cf688"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sidi Bouzid",
+      "Code": "43",
+      "ISO3166_2": "TN-43",
+      "Latitude": 34.9757,
+      "Longitude": 9.4333,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-43.geojson",
+      "CommonAliases": [
+        "Sidi Bouzid"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "B7C6D42D-BE76-457B-B1D0-BB9B93B67166"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.155Z",
+      "checksum": "ece9dac85bed0ca82f7c86d5dc5ba220d1ad70978c43cec2e1c651e39c14fab3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Siliana",
+      "Code": "34",
+      "ISO3166_2": "TN-34",
+      "Latitude": 35.5597,
+      "Longitude": 9.3375,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-34.geojson",
+      "CommonAliases": [
+        "Siliana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "5A4DBDD5-45C5-4DC4-AF0F-7C8E45E6AD50"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.172Z",
+      "checksum": "b62cc8a37106cb8bedd38ddfbe1b29112c3afbc42278f299287dfd636fcdbf36"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sousse",
+      "Code": "51",
+      "ISO3166_2": "TN-51",
+      "Latitude": 35.9323,
+      "Longitude": 10.4255,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-51.geojson",
+      "CommonAliases": [
+        "Sousse"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "4F63E144-793A-4EF4-9EDB-3E14AB8A9DAB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.189Z",
+      "checksum": "9e4ff8674ad1f0c74eb0b0b09abbe4ea7c9e8af8b230f5d8e85bcdc1da0ed04b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tataouine",
+      "Code": "83",
+      "ISO3166_2": "TN-83",
+      "Latitude": 32.154,
+      "Longitude": 9.8851,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-83.geojson",
+      "CommonAliases": [
+        "Tataouine"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "4634E2DB-ED59-497C-AEFE-9DEE14CE2105"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.203Z",
+      "checksum": "cc206b150d1b0cd84b6ccd252a1e579ef64eb8665133f272951369128f582d3e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tozeur",
+      "Code": "72",
+      "ISO3166_2": "TN-72",
+      "Latitude": 33.9476,
+      "Longitude": 8.0743,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-72.geojson",
+      "CommonAliases": [
+        "Tozeur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "8FCE023C-D9C9-475C-AC38-8CDB4AB6EC1B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.239Z",
+      "checksum": "0c842135d7bbe4e11b5093b4a41e49ca5c81b0c04f6e35da06a22e68159f3713"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tunis",
+      "Code": "11",
+      "ISO3166_2": "TN-11",
+      "Latitude": 36.7791,
+      "Longitude": 10.1724,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-11.geojson",
+      "CommonAliases": [
+        "Tunis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "B23CB0AE-6D00-44EE-8422-8D279B081143"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.255Z",
+      "checksum": "4c0b2764889b15c99fa93009957c82b5b8adb8c8ab77c9fc30ceb41975d62cec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zaghouan",
+      "Code": "22",
+      "ISO3166_2": "TN-22",
+      "Latitude": 36.3427,
+      "Longitude": 9.9692,
+      "BoundaryGeoJSON": "@file:by-country/TN/boundaries/TN-22.geojson",
+      "CommonAliases": [
+        "Zaghouan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TN"
+    },
+    "primaryKey": {
+      "ID": "F04F3B88-5BE1-407F-AE73-E3C4DFAB4CBE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.269Z",
+      "checksum": "f26102b2acc2ac0512ee652b63befa1175d117aa72306c18c8b6816cf4b9886e"
+    }
+  }
+]

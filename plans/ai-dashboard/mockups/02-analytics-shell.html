@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analytics Shell + Executive Summary — 3 Options</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="shared-tokens.css">
+<style>
+/* Shared shell styles */
+.analytics-shell {
+  display: flex;
+  height: calc(100vh - 78px);
+  background: var(--mj-bg-page);
+}
+
+/* ============ LEFT NAV — Shared across options ============ */
+.left-nav {
+  width: 220px;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-default);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.nav-header {
+  padding: 20px 16px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--mj-text-disabled);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.nav-item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.nav-item.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-weight: 600;
+  border-left-color: var(--mj-brand-primary);
+}
+
+.nav-item i {
+  width: 18px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.nav-item .nav-badge {
+  margin-left: auto;
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.nav-divider {
+  height: 1px;
+  background: var(--mj-border-subtle);
+  margin: 8px 16px;
+}
+
+/* Content area */
+.content-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* ============ SHARED FILTER BAR ============ */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-bar .filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mj-text-muted);
+  margin-right: 4px;
+}
+
+.filter-select {
+  padding: 6px 12px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-primary);
+  cursor: pointer;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+.time-chips {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.time-chip {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-muted);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.time-chip:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.time-chip.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+
+.filter-bar .compare-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  transition: all 0.15s;
+}
+
+.filter-bar .compare-toggle:hover {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+
+/* ============ KPI ROW ============ */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 12px;
+  padding: 16px;
+  border-left: 3px solid transparent;
+  transition: all 0.25s;
+  cursor: pointer;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.kpi-card.kpi-primary { border-left-color: var(--mj-brand-primary); }
+.kpi-card.kpi-success { border-left-color: var(--mj-status-success); }
+.kpi-card.kpi-warning { border-left-color: var(--mj-status-warning); }
+.kpi-card.kpi-info { border-left-color: var(--mj-brand-accent); }
+.kpi-card.kpi-violet { border-left-color: var(--mj-color-violet-500); }
+.kpi-card.kpi-error { border-left-color: var(--mj-status-error); }
+
+.kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mj-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 6px;
+}
+
+.kpi-value-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kpi-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--mj-text-primary);
+  line-height: 1;
+}
+
+.kpi-sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 24px;
+}
+
+.kpi-spark-bar {
+  width: 4px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+
+.kpi-delta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.kpi-delta.up { color: var(--mj-status-success); }
+.kpi-delta.down { color: var(--mj-status-error); }
+.kpi-delta.flat { color: var(--mj-text-disabled); }
+
+.kpi-delta .period { color: var(--mj-text-disabled); font-weight: 400; margin-left: 2px; }
+
+/* ============ PANELS GRID ============ */
+.panels-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.panel {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.panel-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-title i { color: var(--mj-brand-primary); font-size: 13px; }
+
+.panel-action {
+  font-size: 11px;
+  color: var(--mj-text-link);
+  cursor: pointer;
+  font-weight: 600;
+  background: none;
+  border: none;
+  transition: color 0.15s;
+}
+
+.panel-action:hover { color: var(--mj-brand-primary-hover); }
+
+.panel-body { padding: 16px 18px; }
+
+/* Top Consumers */
+.consumer-list { display: flex; flex-direction: column; gap: 0; }
+
+.consumer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.consumer-item:last-child { border-bottom: none; }
+
+.consumer-rank {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
+  flex-shrink: 0;
+}
+
+.consumer-rank.top { background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+
+.consumer-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mj-text-primary);
+}
+
+.consumer-type {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.consumer-type.prompt { background: color-mix(in srgb, var(--mj-brand-accent) 12%, var(--mj-bg-surface)); color: var(--mj-brand-accent); }
+.consumer-type.agent { background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface)); color: var(--mj-status-success); }
+
+.consumer-metric {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mj-text-secondary);
+  min-width: 60px;
+  text-align: right;
+}
+
+.consumer-bar-wrap {
+  width: 80px;
+  height: 6px;
+  background: var(--mj-bg-surface-sunken);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.consumer-bar {
+  height: 100%;
+  background: var(--mj-brand-primary);
+  border-radius: 3px;
+}
+
+/* Error Hotspots */
+.error-list { display: flex; flex-direction: column; gap: 0; }
+
+.error-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.error-item:last-child { border-bottom: none; }
+
+.error-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error);
+  font-size: 12px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.error-info { flex: 1; }
+
+.error-source {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  margin-bottom: 2px;
+}
+
+.error-msg {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  line-height: 1.4;
+}
+
+.error-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mj-status-error);
+  white-space: nowrap;
+}
+
+/* Trends chart placeholder */
+.chart-placeholder {
+  height: 200px;
+  background: var(--mj-bg-surface-card);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mj-text-disabled);
+  font-size: 13px;
+  position: relative;
+  overflow: hidden;
+}
+
+.chart-placeholder .chart-line {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+}
+
+.chart-placeholder svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Full width panel */
+.panel-full { grid-column: span 2; }
+
+/* ============ OPTION B SPECIFIC — Compact Side-by-Side ============ */
+.layout-b .kpi-row { grid-template-columns: repeat(3, 1fr); }
+
+.layout-b .panels-grid {
+  grid-template-columns: 2fr 1fr;
+}
+
+.layout-b .side-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ============ OPTION C SPECIFIC — Bento Grid ============ */
+.layout-c .bento-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: auto auto auto;
+  gap: 14px;
+}
+
+.layout-c .bento-kpi {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.layout-c .bento-wide { grid-column: span 2; }
+.layout-c .bento-tall { grid-row: span 2; }
+.layout-c .bento-full { grid-column: span 4; }
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .kpi-row { grid-template-columns: repeat(3, 1fr) !important; }
+  .panels-grid { grid-template-columns: 1fr !important; }
+  .panel-full { grid-column: span 1; }
+  .layout-c .bento-grid { grid-template-columns: repeat(2, 1fr); }
+  .layout-c .bento-full { grid-column: span 2; }
+}
+
+@media (max-width: 768px) {
+  .analytics-shell { flex-direction: column; }
+  .left-nav { width: 100%; flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--mj-border-default); }
+  .nav-header { display: none; }
+  .nav-item { padding: 10px 14px; white-space: nowrap; border-left: none; border-bottom: 3px solid transparent; }
+  .nav-item.active { border-left-color: transparent; border-bottom-color: var(--mj-brand-primary); }
+  .nav-divider { display: none; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr) !important; }
+  .content-area { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="mockup-label">MOCKUP: Analytics Shell + Executive Summary — 3 Design Options</div>
+<div class="option-tabs">
+  <button class="option-tab active" onclick="showOption('a')">Option A — Classic Dashboard</button>
+  <button class="option-tab" onclick="showOption('b')">Option B — Wide Charts + Sidebar</button>
+  <button class="option-tab" onclick="showOption('c')">Option C — Bento Grid</button>
+</div>
+
+<div class="options-container">
+
+<!-- ==================== OPTION A — Classic 6-KPI + 2-Column Panels ==================== -->
+<div id="option-a" class="option-content active">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item active"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item"><i class="fa-solid fa-comment-dots"></i> Prompt Runs <span class="nav-badge">New</span></div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+
+  <div class="content-area">
+    <div class="filter-bar">
+      <span class="filter-label">Filters:</span>
+      <select class="filter-select"><option>All Models</option></select>
+      <select class="filter-select"><option>All Agents</option></select>
+      <select class="filter-select"><option>All Prompts</option></select>
+      <select class="filter-select"><option>All Statuses</option></select>
+      <button class="compare-toggle"><i class="fa-solid fa-code-compare"></i> Compare</button>
+      <div class="time-chips">
+        <button class="time-chip">1H</button>
+        <button class="time-chip">6H</button>
+        <button class="time-chip active">24H</button>
+        <button class="time-chip">7D</button>
+        <button class="time-chip">30D</button>
+      </div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi-card kpi-primary">
+        <div class="kpi-label">Total Executions</div>
+        <div class="kpi-value-row">
+          <span class="kpi-value">2,847</span>
+          <div class="kpi-sparkline">
+            <div class="kpi-spark-bar" style="height:40%"></div>
+            <div class="kpi-spark-bar" style="height:60%"></div>
+            <div class="kpi-spark-bar" style="height:45%"></div>
+            <div class="kpi-spark-bar" style="height:80%"></div>
+            <div class="kpi-spark-bar" style="height:70%"></div>
+            <div class="kpi-spark-bar" style="height:90%"></div>
+            <div class="kpi-spark-bar" style="height:100%"></div>
+          </div>
+        </div>
+        <div class="kpi-delta up"><i class="fa-solid fa-arrow-up"></i> 12.3% <span class="period">vs prev 24h</span></div>
+      </div>
+
+      <div class="kpi-card kpi-warning">
+        <div class="kpi-label">Total Cost</div>
+        <div class="kpi-value-row">
+          <span class="kpi-value">$12.34</span>
+          <div class="kpi-sparkline">
+            <div class="kpi-spark-bar" style="height:30%;background:color-mix(in srgb, var(--mj-status-warning) 30%, transparent)"></div>
+            <div class="kpi-spark-bar" style="height:50%;background:color-mix(in srgb, var(--mj-status-warning) 30%, transparent)"></div>
+            <div class="kpi-spark-bar" style="height:45%;background:color-mix(in srgb, var(--mj-status-warning) 30%, transparent)"></div>
+            <div class="kpi-spark-bar" style="height:70%;background:color-mix(in srgb, var(--mj-status-warning) 30%, transparent)"></div>
+            <div class="kpi-spark-bar" style="height:60%;background:color-mix(in srgb, var(--mj-status-warning) 30%, transparent)"></div>
+            <div class="kpi-spark-bar" style="height:85%;background:color-mix(in srgb, var(--mj-status-warning) 30%, transparent)"></div>
+            <div class="kpi-spark-bar" style="height:100%;background:color-mix(in srgb, var(--mj-status-warning) 30%, transparent)"></div>
+          </div>
+        </div>
+        <div class="kpi-delta down"><i class="fa-solid fa-arrow-up"></i> 18.1% <span class="period">vs prev 24h</span></div>
+      </div>
+
+      <div class="kpi-card kpi-success">
+        <div class="kpi-label">Success Rate</div>
+        <div class="kpi-value-row"><span class="kpi-value">98.2%</span></div>
+        <div class="kpi-delta up"><i class="fa-solid fa-arrow-up"></i> 0.3% <span class="period">vs prev 24h</span></div>
+      </div>
+
+      <div class="kpi-card kpi-info">
+        <div class="kpi-label">Avg Latency</div>
+        <div class="kpi-value-row"><span class="kpi-value">1.82s</span></div>
+        <div class="kpi-delta up"><i class="fa-solid fa-arrow-down"></i> 12% <span class="period">faster</span></div>
+      </div>
+
+      <div class="kpi-card kpi-violet">
+        <div class="kpi-label">Token Usage</div>
+        <div class="kpi-value-row"><span class="kpi-value">1.2M</span></div>
+        <div class="kpi-delta flat"><i class="fa-solid fa-minus"></i> 0.4% <span class="period">vs prev 24h</span></div>
+      </div>
+
+      <div class="kpi-card kpi-error">
+        <div class="kpi-label">Errors</div>
+        <div class="kpi-value-row"><span class="kpi-value">51</span></div>
+        <div class="kpi-delta down"><i class="fa-solid fa-arrow-up"></i> 8 more <span class="period">vs prev 24h</span></div>
+      </div>
+    </div>
+
+    <!-- Trends Chart — Full Width -->
+    <div class="panel panel-full" style="margin-bottom:16px">
+      <div class="panel-header">
+        <span class="panel-title"><i class="fa-solid fa-chart-line"></i> Execution Trends</span>
+        <button class="panel-action">View Details <i class="fa-solid fa-arrow-right" style="font-size:10px"></i></button>
+      </div>
+      <div class="panel-body">
+        <div class="chart-placeholder">
+          <svg viewBox="0 0 800 160" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="grad1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--mj-brand-primary)" stop-opacity="0.2"/>
+                <stop offset="100%" stop-color="var(--mj-brand-primary)" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M0,120 L50,100 L100,110 L150,80 L200,90 L250,60 L300,70 L350,40 L400,50 L450,30 L500,45 L550,25 L600,35 L650,20 L700,30 L750,15 L800,20 L800,160 L0,160Z" fill="url(#grad1)"/>
+            <path d="M0,120 L50,100 L100,110 L150,80 L200,90 L250,60 L300,70 L350,40 L400,50 L450,30 L500,45 L550,25 L600,35 L650,20 L700,30 L750,15 L800,20" fill="none" stroke="var(--mj-brand-primary)" stroke-width="2"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Two-column panels -->
+    <div class="panels-grid">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title"><i class="fa-solid fa-ranking-star"></i> Top Consumers</span>
+          <button class="panel-action">See All</button>
+        </div>
+        <div class="panel-body">
+          <div class="consumer-list">
+            <div class="consumer-item">
+              <div class="consumer-rank top">1</div>
+              <span class="consumer-type agent">Agent</span>
+              <span class="consumer-name">Data Analysis Agent</span>
+              <span class="consumer-metric">$3.42</span>
+              <div class="consumer-bar-wrap"><div class="consumer-bar" style="width:100%"></div></div>
+            </div>
+            <div class="consumer-item">
+              <div class="consumer-rank top">2</div>
+              <span class="consumer-type prompt">Prompt</span>
+              <span class="consumer-name">Summarize Content</span>
+              <span class="consumer-metric">$2.18</span>
+              <div class="consumer-bar-wrap"><div class="consumer-bar" style="width:64%"></div></div>
+            </div>
+            <div class="consumer-item">
+              <div class="consumer-rank top">3</div>
+              <span class="consumer-type agent">Agent</span>
+              <span class="consumer-name">Skip Conductor</span>
+              <span class="consumer-metric">$1.94</span>
+              <div class="consumer-bar-wrap"><div class="consumer-bar" style="width:57%"></div></div>
+            </div>
+            <div class="consumer-item">
+              <div class="consumer-rank">4</div>
+              <span class="consumer-type prompt">Prompt</span>
+              <span class="consumer-name">Classify Entity</span>
+              <span class="consumer-metric">$1.56</span>
+              <div class="consumer-bar-wrap"><div class="consumer-bar" style="width:46%"></div></div>
+            </div>
+            <div class="consumer-item">
+              <div class="consumer-rank">5</div>
+              <span class="consumer-type agent">Agent</span>
+              <span class="consumer-name">Report Builder</span>
+              <span class="consumer-metric">$1.23</span>
+              <div class="consumer-bar-wrap"><div class="consumer-bar" style="width:36%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title"><i class="fa-solid fa-triangle-exclamation"></i> Error Hotspots</span>
+          <button class="panel-action">View All Errors</button>
+        </div>
+        <div class="panel-body">
+          <div class="error-list">
+            <div class="error-item">
+              <div class="error-icon"><i class="fa-solid fa-times"></i></div>
+              <div class="error-info">
+                <div class="error-source">Classification Agent + GPT-4o</div>
+                <div class="error-msg">Rate limit exceeded: 429 Too Many Requests</div>
+              </div>
+              <div class="error-count">23x</div>
+            </div>
+            <div class="error-item">
+              <div class="error-icon"><i class="fa-solid fa-times"></i></div>
+              <div class="error-info">
+                <div class="error-source">Summarize Content + Claude Sonnet</div>
+                <div class="error-msg">Context length exceeded: max 200K tokens</div>
+              </div>
+              <div class="error-count">12x</div>
+            </div>
+            <div class="error-item">
+              <div class="error-icon"><i class="fa-solid fa-times"></i></div>
+              <div class="error-info">
+                <div class="error-source">Data Extraction + Gemini Pro</div>
+                <div class="error-msg">JSON parse error: unexpected token at position 1247</div>
+              </div>
+              <div class="error-count">9x</div>
+            </div>
+            <div class="error-item">
+              <div class="error-icon"><i class="fa-solid fa-times"></i></div>
+              <div class="error-info">
+                <div class="error-source">Report Builder + Claude Opus</div>
+                <div class="error-msg">Timeout: request exceeded 120s limit</div>
+              </div>
+              <div class="error-count">7x</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== OPTION B — Wide Chart + Sidebar ==================== -->
+<div id="option-b" class="option-content">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item active"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item"><i class="fa-solid fa-comment-dots"></i> Prompt Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+
+  <div class="content-area layout-b">
+    <div class="filter-bar">
+      <span class="filter-label">Filters:</span>
+      <select class="filter-select"><option>All Models</option></select>
+      <select class="filter-select"><option>All Agents</option></select>
+      <select class="filter-select"><option>All Statuses</option></select>
+      <button class="compare-toggle"><i class="fa-solid fa-code-compare"></i> Compare</button>
+      <div class="time-chips">
+        <button class="time-chip">1H</button>
+        <button class="time-chip">6H</button>
+        <button class="time-chip active">24H</button>
+        <button class="time-chip">7D</button>
+        <button class="time-chip">30D</button>
+      </div>
+    </div>
+
+    <!-- 3-column KPIs — larger -->
+    <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="kpi-card kpi-primary">
+        <div class="kpi-label">Total Executions</div>
+        <div class="kpi-value-row">
+          <span class="kpi-value" style="font-size:28px">2,847</span>
+          <div class="kpi-sparkline" style="height:32px">
+            <div class="kpi-spark-bar" style="height:40%"></div><div class="kpi-spark-bar" style="height:60%"></div>
+            <div class="kpi-spark-bar" style="height:80%"></div><div class="kpi-spark-bar" style="height:70%"></div>
+            <div class="kpi-spark-bar" style="height:90%"></div><div class="kpi-spark-bar" style="height:100%"></div>
+          </div>
+        </div>
+        <div class="kpi-delta up"><i class="fa-solid fa-arrow-up"></i> 12.3% <span class="period">vs prev 24h</span></div>
+      </div>
+      <div class="kpi-card kpi-warning">
+        <div class="kpi-label">Total Cost</div>
+        <div class="kpi-value-row"><span class="kpi-value" style="font-size:28px">$12.34</span></div>
+        <div class="kpi-delta down"><i class="fa-solid fa-arrow-up"></i> 18.1% <span class="period">vs prev 24h</span></div>
+      </div>
+      <div class="kpi-card kpi-success">
+        <div class="kpi-label">Success Rate</div>
+        <div class="kpi-value-row"><span class="kpi-value" style="font-size:28px">98.2%</span></div>
+        <div class="kpi-delta up"><i class="fa-solid fa-arrow-up"></i> 0.3% <span class="period">vs prev 24h</span></div>
+      </div>
+    </div>
+
+    <!-- Main: Wide chart + Right sidebar panels -->
+    <div style="display:grid; grid-template-columns: 2fr 1fr; gap: 16px;">
+      <!-- Left: Big chart + bottom panels -->
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title"><i class="fa-solid fa-chart-area"></i> Execution Trends &amp; Cost</span>
+            <button class="panel-action">Expand</button>
+          </div>
+          <div class="panel-body">
+            <div class="chart-placeholder" style="height:280px">
+              <svg viewBox="0 0 800 240" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="grad2" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="var(--mj-brand-primary)" stop-opacity="0.15"/>
+                    <stop offset="100%" stop-color="var(--mj-brand-primary)" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M0,180 L80,160 L160,170 L240,120 L320,140 L400,90 L480,100 L560,60 L640,70 L720,40 L800,50 L800,240 L0,240Z" fill="url(#grad2)"/>
+                <path d="M0,180 L80,160 L160,170 L240,120 L320,140 L400,90 L480,100 L560,60 L640,70 L720,40 L800,50" fill="none" stroke="var(--mj-brand-primary)" stroke-width="2.5"/>
+                <!-- Cost line -->
+                <path d="M0,200 L80,190 L160,185 L240,170 L320,175 L400,150 L480,155 L560,130 L640,140 L720,120 L800,125" fill="none" stroke="var(--mj-status-warning)" stroke-width="2" stroke-dasharray="6,3"/>
+              </svg>
+              <div style="position:absolute;bottom:12px;right:16px;display:flex;gap:16px;font-size:11px;">
+                <span style="color:var(--mj-brand-primary)"><i class="fa-solid fa-circle" style="font-size:8px"></i> Executions</span>
+                <span style="color:var(--mj-status-warning)"><i class="fa-solid fa-circle" style="font-size:8px"></i> Cost</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title"><i class="fa-solid fa-ranking-star"></i> Top Consumers by Cost</span>
+          </div>
+          <div class="panel-body">
+            <div class="consumer-list">
+              <div class="consumer-item">
+                <div class="consumer-rank top">1</div>
+                <span class="consumer-type agent">Agent</span>
+                <span class="consumer-name">Data Analysis Agent</span>
+                <span class="consumer-metric">$3.42</span>
+                <div class="consumer-bar-wrap"><div class="consumer-bar" style="width:100%"></div></div>
+              </div>
+              <div class="consumer-item">
+                <div class="consumer-rank top">2</div>
+                <span class="consumer-type prompt">Prompt</span>
+                <span class="consumer-name">Summarize Content</span>
+                <span class="consumer-metric">$2.18</span>
+                <div class="consumer-bar-wrap"><div class="consumer-bar" style="width:64%"></div></div>
+              </div>
+              <div class="consumer-item">
+                <div class="consumer-rank top">3</div>
+                <span class="consumer-type agent">Agent</span>
+                <span class="consumer-name">Skip Conductor</span>
+                <span class="consumer-metric">$1.94</span>
+                <div class="consumer-bar-wrap"><div class="consumer-bar" style="width:57%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right sidebar -->
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <!-- Quick stats -->
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-bolt"></i> Right Now</span></div>
+          <div class="panel-body">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--mj-bg-surface-card);border-radius:6px;">
+                <span style="font-size:12px;color:var(--mj-text-muted)">Active</span>
+                <span style="font-size:18px;font-weight:800;color:var(--mj-brand-primary)">3</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--mj-bg-surface-card);border-radius:6px;">
+                <span style="font-size:12px;color:var(--mj-text-muted)">Avg Latency</span>
+                <span style="font-size:18px;font-weight:800;color:var(--mj-text-primary)">1.82s</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--mj-bg-surface-card);border-radius:6px;">
+                <span style="font-size:12px;color:var(--mj-text-muted)">Tokens</span>
+                <span style="font-size:18px;font-weight:800;color:var(--mj-text-primary)">1.2M</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-triangle-exclamation"></i> Errors</span></div>
+          <div class="panel-body">
+            <div class="error-list">
+              <div class="error-item">
+                <div class="error-icon"><i class="fa-solid fa-times"></i></div>
+                <div class="error-info">
+                  <div class="error-source">Classification + GPT-4o</div>
+                  <div class="error-msg">Rate limit exceeded</div>
+                </div>
+                <div class="error-count">23x</div>
+              </div>
+              <div class="error-item">
+                <div class="error-icon"><i class="fa-solid fa-times"></i></div>
+                <div class="error-info">
+                  <div class="error-source">Summarize + Sonnet</div>
+                  <div class="error-msg">Context length exceeded</div>
+                </div>
+                <div class="error-count">12x</div>
+              </div>
+              <div class="error-item">
+                <div class="error-icon"><i class="fa-solid fa-times"></i></div>
+                <div class="error-info">
+                  <div class="error-source">Extract + Gemini</div>
+                  <div class="error-msg">JSON parse error</div>
+                </div>
+                <div class="error-count">9x</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== OPTION C — Bento Grid ==================== -->
+<div id="option-c" class="option-content">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item active"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item"><i class="fa-solid fa-comment-dots"></i> Prompt Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+
+  <div class="content-area layout-c">
+    <div class="filter-bar">
+      <span class="filter-label">Filters:</span>
+      <select class="filter-select"><option>All Models</option></select>
+      <select class="filter-select"><option>All Agents</option></select>
+      <button class="compare-toggle"><i class="fa-solid fa-code-compare"></i> Compare</button>
+      <div class="time-chips">
+        <button class="time-chip">1H</button>
+        <button class="time-chip active">24H</button>
+        <button class="time-chip">7D</button>
+        <button class="time-chip">30D</button>
+      </div>
+    </div>
+
+    <div class="bento-grid">
+      <!-- Row 1: 4 KPI tiles -->
+      <div class="bento-kpi">
+        <div class="kpi-label">Executions</div>
+        <div class="kpi-value" style="font-size:26px;margin:6px 0">2,847</div>
+        <div class="kpi-delta up"><i class="fa-solid fa-arrow-up"></i> 12.3%</div>
+      </div>
+      <div class="bento-kpi">
+        <div class="kpi-label">Cost</div>
+        <div class="kpi-value" style="font-size:26px;margin:6px 0">$12.34</div>
+        <div class="kpi-delta down"><i class="fa-solid fa-arrow-up"></i> 18.1%</div>
+      </div>
+      <div class="bento-kpi">
+        <div class="kpi-label">Success Rate</div>
+        <div class="kpi-value" style="font-size:26px;margin:6px 0">98.2%</div>
+        <div class="kpi-delta up"><i class="fa-solid fa-arrow-up"></i> 0.3%</div>
+      </div>
+      <div class="bento-kpi">
+        <div class="kpi-label">Avg Latency</div>
+        <div class="kpi-value" style="font-size:26px;margin:6px 0">1.82s</div>
+        <div class="kpi-delta up"><i class="fa-solid fa-arrow-down"></i> 12% faster</div>
+      </div>
+
+      <!-- Row 2: Wide chart + Tall error panel -->
+      <div class="panel bento-wide" style="grid-column:span 3">
+        <div class="panel-header">
+          <span class="panel-title"><i class="fa-solid fa-chart-line"></i> Execution Trends</span>
+          <button class="panel-action">Expand</button>
+        </div>
+        <div class="panel-body">
+          <div class="chart-placeholder" style="height:200px">
+            <svg viewBox="0 0 800 160" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="grad3" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--mj-brand-primary)" stop-opacity="0.2"/>
+                  <stop offset="100%" stop-color="var(--mj-brand-primary)" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,120 L100,100 L200,80 L300,90 L400,50 L500,60 L600,30 L700,40 L800,20 L800,160 L0,160Z" fill="url(#grad3)"/>
+              <path d="M0,120 L100,100 L200,80 L300,90 L400,50 L500,60 L600,30 L700,40 L800,20" fill="none" stroke="var(--mj-brand-primary)" stroke-width="2.5"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error hotspots — 1 col, tall -->
+      <div class="panel" style="grid-row:span 2">
+        <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-triangle-exclamation"></i> Errors</span></div>
+        <div class="panel-body">
+          <div class="error-list">
+            <div class="error-item">
+              <div class="error-icon"><i class="fa-solid fa-times"></i></div>
+              <div class="error-info">
+                <div class="error-source">Classification + GPT-4o</div>
+                <div class="error-msg">Rate limit exceeded</div>
+              </div>
+              <div class="error-count">23x</div>
+            </div>
+            <div class="error-item">
+              <div class="error-icon"><i class="fa-solid fa-times"></i></div>
+              <div class="error-info">
+                <div class="error-source">Summarize + Sonnet</div>
+                <div class="error-msg">Context length exceeded</div>
+              </div>
+              <div class="error-count">12x</div>
+            </div>
+            <div class="error-item">
+              <div class="error-icon"><i class="fa-solid fa-times"></i></div>
+              <div class="error-info">
+                <div class="error-source">Extract + Gemini</div>
+                <div class="error-msg">JSON parse error</div>
+              </div>
+              <div class="error-count">9x</div>
+            </div>
+            <div class="error-item">
+              <div class="error-icon"><i class="fa-solid fa-times"></i></div>
+              <div class="error-info">
+                <div class="error-source">Report + Opus</div>
+                <div class="error-msg">Timeout exceeded</div>
+              </div>
+              <div class="error-count">7x</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Top Consumers + Model Leaderboard -->
+      <div class="panel" style="grid-column:span 2">
+        <div class="panel-header">
+          <span class="panel-title"><i class="fa-solid fa-ranking-star"></i> Top Consumers</span>
+          <button class="panel-action">See All</button>
+        </div>
+        <div class="panel-body">
+          <div class="consumer-list">
+            <div class="consumer-item">
+              <div class="consumer-rank top">1</div>
+              <span class="consumer-type agent">Agent</span>
+              <span class="consumer-name">Data Analysis Agent</span>
+              <span class="consumer-metric">$3.42</span>
+              <div class="consumer-bar-wrap"><div class="consumer-bar" style="width:100%"></div></div>
+            </div>
+            <div class="consumer-item">
+              <div class="consumer-rank top">2</div>
+              <span class="consumer-type prompt">Prompt</span>
+              <span class="consumer-name">Summarize Content</span>
+              <span class="consumer-metric">$2.18</span>
+              <div class="consumer-bar-wrap"><div class="consumer-bar" style="width:64%"></div></div>
+            </div>
+            <div class="consumer-item">
+              <div class="consumer-rank">3</div>
+              <span class="consumer-type agent">Agent</span>
+              <span class="consumer-name">Skip Conductor</span>
+              <span class="consumer-metric">$1.94</span>
+              <div class="consumer-bar-wrap"><div class="consumer-bar" style="width:57%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Model Leaderboard -->
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-trophy"></i> Top Models</span></div>
+        <div class="panel-body">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--mj-bg-surface-card);border-radius:6px;">
+              <span style="font-size:12px;font-weight:600;color:var(--mj-text-primary)">Claude Sonnet 4</span>
+              <span style="font-size:12px;font-weight:700;color:var(--mj-brand-primary)">1,204 runs</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--mj-bg-surface-card);border-radius:6px;">
+              <span style="font-size:12px;font-weight:600;color:var(--mj-text-primary)">GPT-4o</span>
+              <span style="font-size:12px;font-weight:700;color:var(--mj-brand-primary)">892 runs</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--mj-bg-surface-card);border-radius:6px;">
+              <span style="font-size:12px;font-weight:600;color:var(--mj-text-primary)">Claude Opus 4</span>
+              <span style="font-size:12px;font-weight:700;color:var(--mj-brand-primary)">412 runs</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<script>
+function showOption(id) {
+  document.querySelectorAll('.option-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.option-tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('option-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
