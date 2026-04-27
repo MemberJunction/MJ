@@ -142,6 +142,36 @@
         }
       </g>
 
+      <!-- Edge labels — FK field names rendered along edges.  Only shown
+           when zoom is high enough for the text to be legible, and only
+           when config.showRelationshipLabels resolves true. -->
+      @if (showEdgeLabels) {
+        <g class="erd-edge-labels">
+          @for (edge of layout.edges; track trackByEdge($index, edge)) {
+            @let pos = edgeLabelPosition(edge);
+            @if (pos) {
+              <g
+                class="erd-edge-label"
+                [class.erd-edge-label-active]="isEdgeActive(edge)"
+                [class.erd-edge-label-dimmed]="isEdgeDimmed(edge)">
+                <rect
+                  [attr.x]="pos.x - pos.w / 2 - 4"
+                  [attr.y]="pos.y - 8"
+                  [attr.width]="pos.w + 8"
+                  height="16"
+                  rx="3"
+                  class="erd-edge-label-bg" />
+                <text
+                  [attr.x]="pos.x"
+                  [attr.y]="pos.y + 4"
+                  text-anchor="middle"
+                  class="erd-edge-label-text">{{ edge.sourceField.name }}</text>
+              </g>
+            }
+          }
+        </g>
+      }
+
       <!-- Nodes -->
       <g class="erd-nodes">
         @for (node of layout.nodes; track trackByNode($index, node)) {

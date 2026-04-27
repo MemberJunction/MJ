@@ -579,6 +579,53 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         return pointsToPath(edge.points);
     }
 
+    /**
+     * Whether to render FK field labels along edges.  Defaults differ by
+     * layout (off in schema-grid, on in dagre — matches user expectations
+     * for each style) and labels are suppressed below a zoom threshold so
+     * they don't pollute zoomed-out views with illegible text.
+     */
+    public get showEdgeLabels(): boolean {
+        const explicit = this.config.showRelationshipLabels;
+        const enabled = explicit ?? (this.activeLayout === 'dagre');
+        if (!enabled) return false;
+        return this.transform.k >= 0.55;
+    }
+
+    /**
+     * Pick a point along the edge polyline for a label and approximate
+     * its width.  Returns null for self-loops (no good place to put text).
+     * Uses the longest horizontal segment when one exists; falls back to
+     * the segment midpoint otherwise.
+     */
+    public edgeLabelPosition(edge: LaidOutEdge): { x: number; y: number; w: number } | null {
+        if (edge.selfReference) return null;
+        const pts = edge.points;
+        if (pts.length < 2) return null;
+
+        // Find the longest horizontal segment so the label sits on a
+        // straight portion, not over a corner.
+        let bestIdx = 0;
+        let bestLen = 0;
+        for (let i = 0; i < pts.length - 1; i++) {
+            const [x1, y1] = pts[i];
+            const [x2, y2] = pts[i + 1];
+            if (Math.abs(y2 - y1) > 0.5) continue; // skip vertical segs
+            const len = Math.abs(x2 - x1);
+            if (len > bestLen) { bestLen = len; bestIdx = i; }
+        }
+
+        const [x1, y1] = pts[bestIdx];
+        const [x2, y2] = pts[bestIdx + 1];
+        const x = (x1 + x2) / 2;
+        const y = (y1 + y2) / 2;
+
+        // 6.5 px per char is a good approximation for the 11px mono we
+        // use for labels — only used to size the background rect.
+        const w = Math.max(20, edge.sourceField.name.length * 6.5);
+        return { x, y, w };
+    }
+
     /** Whether a node should appear dimmed (highlight mode active, node not in set). */
     public isDimmed(nodeId: string): boolean {
         return !!this.highlightSet && !this.highlightSet.has(nodeId);

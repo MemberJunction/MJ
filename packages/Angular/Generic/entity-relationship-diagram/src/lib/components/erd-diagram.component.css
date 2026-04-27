@@ -271,6 +271,35 @@
 
 .erd-edge-dimmed { opacity: 0.18; }
 
+/* Edge labels — FK field name on a small chip along the edge.
+   Background uses surface so the text is legible over crossings. */
+.erd-edge-label {
+  pointer-events: none;
+  transition: opacity .15s;
+}
+
+.erd-edge-label-bg {
+  fill: var(--mj-bg-surface);
+  stroke: var(--mj-border-default);
+  stroke-width: 0.75;
+}
+
+.erd-edge-label-text {
+  font-family: var(--erd-mono);
+  font-size: 11px;
+  fill: var(--mj-text-secondary);
+}
+
+.erd-edge-label-active .erd-edge-label-bg {
+  stroke: var(--mj-brand-primary);
+}
+
+.erd-edge-label-active .erd-edge-label-text {
+  fill: var(--mj-brand-primary);
+}
+
+.erd-edge-label-dimmed { opacity: 0.18; }
+
 /* Edge markers (crow's-foot and arrow) */
 .erd-marker { fill: var(--mj-border-strong); }
 .erd-marker-active,
