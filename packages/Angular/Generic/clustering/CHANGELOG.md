@@ -1,5 +1,12 @@
 # @memberjunction/ng-clustering
 
+## 5.30.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.30.0
+- @memberjunction/ng-entity-card@5.30.0
+
 ## 5.29.0
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # @memberjunction/interactive-component-types
 
+## 5.30.0
+
+### Patch Changes
+
+- 00b5c26: Extract shared map-core library from Angular and React map components into a single source of truth. Add boundary render mode for per-record GeoJSON polygon rendering. Expose GeoDataEngine on React runtime utilities.
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/core@5.30.0
+  - @memberjunction/ai-vectors-memory@5.30.0
+
 ## 5.29.0
 
 ### Patch Changes
