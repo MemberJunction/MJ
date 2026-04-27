@@ -146,6 +146,28 @@ export const CRUDType = {
 export type CRUDType = (typeof CRUDType)[keyof typeof CRUDType];
 
 /**
+ * One missing CRUD routine reported by the post-generation validator. The
+ * validator (see `CodeGenDatabaseProvider.validateExpectedCRUDFunctions`)
+ * cross-checks the entity-level Allow*API/sp*Generated configuration against
+ * what's actually present in the target database after CodeGen finishes. Each
+ * entry represents a routine the runtime will try to invoke at Save/Delete
+ * time but which doesn't exist — i.e. a silent generation gap that would
+ * otherwise be invisible until the first user-driven mutation crashed.
+ */
+export interface CRUDValidationMissing {
+    /** Entity.Name (e.g. "MJ: AI Agents") */
+    entity: string;
+    /** Entity.SchemaName (e.g. "__mj") */
+    schema: string;
+    /** Operation whose routine is missing. */
+    type: 'create' | 'update' | 'delete';
+    /** Routine the runtime will look up — custom name from entity.spCreate/Update/Delete
+     *  if set, otherwise the dialect-generated default (e.g. `spCreateUser` for SQL Server,
+     *  `fn_create_user` for PostgreSQL). */
+    expectedRoutine: string;
+}
+
+/**
  * Result from full-text search SQL generation.
  */
 export interface FullTextSearchResult {
@@ -706,6 +728,9 @@ export abstract class CodeGenDatabaseProvider {
      * routes the view phase through the 42P16 capture/restore fallback.
      *
      * Phasing contract:
+     *   Phase 0 = TVF DDL (tvfSQL) — root-ID functions for recursive FKs that
+     *             the base view references. Must run before phase 1 or PG
+     *             rejects the view with `function does not exist`.
      *   Phase 1 = view DDL (viewSQL) — may invoke provider-specific recovery.
      *   Phase 2 = CRUD function DDL — ONLY runs if phase 1 succeeded.
      *   Phase 3 = view permissions (viewPermSQL) — runs only if phase 2 succeeded.
@@ -714,6 +739,9 @@ export abstract class CodeGenDatabaseProvider {
      */
     executeEntityPhased?(opts: {
         entity: EntityInfo;
+        /** Root-ID TVF DDL emitted ahead of the view. Empty when the entity
+         *  has no recursive ParentID FKs. */
+        tvfSQL: string;
         viewSQL: string;
         crudCreateSQL: string;
         crudUpdateSQL: string;
@@ -721,6 +749,118 @@ export abstract class CodeGenDatabaseProvider {
         viewPermSQL: string;
         willRegenerate?: Set<string>;
     }): Promise<PhasedExecutionResult>;
+
+    // ─── POST-RUN VALIDATION ─────────────────────────────────────────────
+
+    /**
+     * Returns a SQL query that lists every stored procedure / function name in
+     * the given schemas. Used by the post-run CRUD validator to diff expected
+     * vs actual routine presence in one round trip.
+     *
+     * The result set must contain exactly two columns:
+     *   `schema_name` — the schema the routine lives in
+     *   `routine_name` — the proc/function name as stored in the catalog
+     *
+     * SQL Server: queries `sys.objects` for procedures and functions.
+     * PostgreSQL: queries `pg_proc` joined to `pg_namespace`.
+     *
+     * Default: returns empty string. Providers that don't implement this opt
+     * out of the post-run CRUD validator (the validator returns no missing
+     * when this returns empty), preserving backwards compatibility for
+     * downstream subclasses that haven't been updated.
+     *
+     * @param schemas List of schemas to scan. Empty array returns no rows.
+     */
+    getRoutineNamesBySchemaSQL(_schemas: string[]): string {
+        return '';
+    }
+
+    /**
+     * Cross-checks the entity-level Allow*API/sp*Generated/sp* configuration
+     * against the routines actually present in the database after CodeGen
+     * finishes. Returns one entry per missing routine.
+     *
+     * **Why this exists:** silent generation gaps (e.g. an entity dropped
+     * because an upstream batch errored, or stale entity-field metadata
+     * causing the PK check to fail) historically reported success at the
+     * pipeline level while leaving runtime CRUD broken. This validator turns
+     * that into a loud, actionable failure list before the install pipeline
+     * exits.
+     *
+     * **What's expected per entity:**
+     * - Skip virtual entities (no DB-backed routines).
+     * - For each of Create / Update / Delete:
+     *   - Skip when the corresponding `Allow{Type}API` flag is false.
+     *   - Look up the routine name via `getCRUDRoutineName` (which honors
+     *     `entity.spCreate`/`spUpdate`/`spDelete` overrides; otherwise returns
+     *     the dialect-generated default).
+     *   - Report it as missing when not found in the DB catalog.
+     *
+     * Schema-level case sensitivity: SQL Server is case-insensitive,
+     * PostgreSQL is case-preserving. Both lookups normalize via lowercase to
+     * keep the validator dialect-agnostic.
+     *
+     * Default implementation works for both dialects via the
+     * `getRoutineNamesBySchemaSQL` helper. Providers may override to add
+     * platform-specific shortcuts (e.g. checking only `sys.procedures` on
+     * SQL Server) but the default is fine for all current dialects.
+     */
+    async validateExpectedCRUDFunctions(
+        pool: CodeGenConnection,
+        entities: EntityInfo[],
+    ): Promise<CRUDValidationMissing[]> {
+        // Build the expected list: one entry per entity × Create/Update/Delete
+        // where the entity opts in via Allow{Type}API and isn't a virtual entity.
+        const expected: CRUDValidationMissing[] = [];
+        const schemas = new Set<string>();
+        for (const entity of entities) {
+            if (entity.VirtualEntity) continue;
+            schemas.add(entity.SchemaName);
+            if (entity.AllowCreateAPI) {
+                expected.push({
+                    entity: entity.Name,
+                    schema: entity.SchemaName,
+                    type: 'create',
+                    expectedRoutine: this.getCRUDRoutineName(entity, CRUDType.Create),
+                });
+            }
+            if (entity.AllowUpdateAPI) {
+                expected.push({
+                    entity: entity.Name,
+                    schema: entity.SchemaName,
+                    type: 'update',
+                    expectedRoutine: this.getCRUDRoutineName(entity, CRUDType.Update),
+                });
+            }
+            if (entity.AllowDeleteAPI) {
+                expected.push({
+                    entity: entity.Name,
+                    schema: entity.SchemaName,
+                    type: 'delete',
+                    expectedRoutine: this.getCRUDRoutineName(entity, CRUDType.Delete),
+                });
+            }
+        }
+
+        if (expected.length === 0) return [];
+
+        // One round-trip to fetch every routine in the relevant schemas.
+        const sql = this.getRoutineNamesBySchemaSQL(Array.from(schemas));
+        if (!sql || !sql.trim()) return [];
+        const result = await pool.query(sql);
+        const existing = new Set<string>();
+        for (const row of result.recordset) {
+            const schemaName = String(row.schema_name ?? '').toLowerCase();
+            const routineName = String(row.routine_name ?? '').toLowerCase();
+            if (schemaName && routineName) {
+                existing.add(`${schemaName}.${routineName}`);
+            }
+        }
+
+        return expected.filter(e =>
+            !existing.has(`${e.schema.toLowerCase()}.${e.expectedRoutine.toLowerCase()}`)
+        );
+    }
 }
 
 /**
@@ -731,7 +871,7 @@ export interface PhasedExecutionResult {
     /** True only when every requested phase succeeded. */
     success: boolean;
     /** Which phase failed. Null when `success` is true. */
-    phase: 'view' | 'functions' | 'permissions' | null;
+    phase: 'tvf' | 'view' | 'functions' | 'permissions' | null;
     /** Underlying error when `success` is false. */
     error?: Error;
 }

@@ -114,12 +114,41 @@ ${whereClause};
     // ─── CRUD CREATE ─────────────────────────────────────────────────────
 
     /**
+     * Emits a `DO` block that drops every existing overload of `<schema>.<fnName>`.
+     * Run before each `CREATE OR REPLACE FUNCTION` to prevent PG's "function name is
+     * not unique" error when the parameter list grows (e.g. a new column adds a new
+     * `DEFAULT NULL` parameter — old + new overloads become call-ambiguous and PG
+     * refuses both `CREATE OR REPLACE` and any caller dispatch). Iterating overloads
+     * via `pg_proc` is the only way to drop without knowing the exact prior signature.
+     */
+    private generateDropAllOverloadsBlock(schemaName: string, fnName: string): string {
+        // Single quotes inside the DO block need to escape the surrounding quoting.
+        // We use dollar-quoted strings to keep the body readable.
+        return `DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = '${fnName}'
+               AND pronamespace = '${schemaName}'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+`;
+    }
+
+    /**
      * Generates a PostgreSQL `CREATE OR REPLACE FUNCTION` for inserting a new record.
      * The function accepts typed parameters for each writable field, performs an `INSERT`
      * into the base table, and returns the newly created row from the base view via
      * `RETURN QUERY SELECT`. Handles auto-increment PKs (using `RETURNING ... INTO`),
      * UUID PKs (with `COALESCE` to gen_random_uuid()), and composite PKs. Also emits
      * `GRANT EXECUTE` permissions for authorized roles.
+     *
+     * Prepends a DROP-all-overloads block (see `generateDropAllOverloadsBlock`) so
+     * adding/removing a column doesn't trigger PG's overload-ambiguity error.
      */
     generateCRUDCreate(entity: EntityInfo): string {
         const fnName = this.getCRUDRoutineName(entity, CRUDType.Create);
@@ -147,6 +176,7 @@ ${whereClause};
 ------------------------------------------------------------
 ----- CREATE FUNCTION FOR ${entity.BaseTable}
 ------------------------------------------------------------
+${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramString}
 ) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
@@ -196,6 +226,7 @@ ${permissions}
 ------------------------------------------------------------
 ----- UPDATE FUNCTION FOR ${entity.BaseTable}
 ------------------------------------------------------------
+${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramString}
 ) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
@@ -249,6 +280,7 @@ ${trigger}
 ------------------------------------------------------------
 ----- DELETE FUNCTION FOR ${entity.BaseTable}
 ------------------------------------------------------------
+${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramDecl}
 ) RETURNS ${returnType} AS $$
@@ -1160,6 +1192,21 @@ ORDER BY ordinal_position`;
         }
     }
 
+    /** @inheritdoc */
+    getRoutineNamesBySchemaSQL(schemas: string[]): string {
+        if (schemas.length === 0) return '';
+        // pg_proc holds every function (PL/pgSQL, SQL, C, etc.). prokind filters:
+        //   'f' = normal function, 'p' = procedure, 'a' = aggregate, 'w' = window.
+        // CodeGen emits 'f' (CRUD functions, root-ID TVFs, FTS functions) and 'p'
+        // is unused on PG today but cheap to include in case we add procedures later.
+        const inList = schemas.map(s => `'${s.replace(/'/g, "''")}'`).join(', ');
+        return `SELECT n.nspname AS schema_name, p.proname AS routine_name
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE p.prokind IN ('f', 'p')
+  AND n.nspname IN (${inList});`;
+    }
+
     /**
      * PG-specific base-view regeneration with 42P16 recovery.
      *
@@ -1228,6 +1275,7 @@ ORDER BY ordinal_position`;
      */
     override async executeEntityPhased(opts: {
         entity: EntityInfo;
+        tvfSQL: string;
         viewSQL: string;
         crudCreateSQL: string;
         crudUpdateSQL: string;
@@ -1258,6 +1306,23 @@ ORDER BY ordinal_position`;
 
         await client.connect();
         try {
+            // ── Phase 0: root-ID TVFs ────────────────────────────────────
+            // The base view references these helper functions; PG rejects
+            // CREATE VIEW with `function does not exist` if they aren't
+            // installed first. Run as a single batch — these are independent
+            // CREATE OR REPLACE FUNCTION statements separated by GO.
+            if (opts.tvfSQL && opts.tvfSQL.trim()) {
+                try {
+                    await client.query(opts.tvfSQL);
+                } catch (e) {
+                    return {
+                        success: false,
+                        phase: 'tvf',
+                        error: e instanceof Error ? e : new Error(String(e)),
+                    };
+                }
+            }
+
             // ── Phase 1: base view (fallback-aware for 42P16) ────────────
             if (opts.viewSQL && opts.viewSQL.trim()) {
                 try {

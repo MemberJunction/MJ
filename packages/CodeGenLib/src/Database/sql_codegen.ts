@@ -701,6 +701,16 @@ export class SQLCodeGenBase {
         // Pieces needed for the phased executor. Empty string when the entity
         // doesn't warrant that phase's DDL (e.g. virtual entities don't have
         // views; entities with AllowCreateAPI=false don't get fn_create_*).
+
+        // Root-ID TVFs — entities with self-referencing ParentID FKs need a
+        // recursive helper function (fn_<table>_<field>_get_root_id) that the
+        // base view references. These MUST exist before phase 1 (view) runs;
+        // otherwise PG raises `function does not exist` and phase 2 (CRUD)
+        // gets gated off.
+        const tvfSQL = entity.BaseViewGenerated && !entity.VirtualEntity
+            ? this.generateRecursiveFKTVFs(entity)
+            : '';
+
         const viewPieces = entity.BaseViewGenerated && !entity.VirtualEntity
             ? await this.generateBaseViewPieces(pool, entity)
             : { viewSQL: '', viewPermSQL: '' };
@@ -720,6 +730,7 @@ export class SQLCodeGenBase {
 
         return this._dbProvider.executeEntityPhased!({
             entity,
+            tvfSQL,
             viewSQL: viewPieces.viewSQL,
             crudCreateSQL,
             crudUpdateSQL,
@@ -727,6 +738,25 @@ export class SQLCodeGenBase {
             viewPermSQL: viewPieces.viewPermSQL,
             willRegenerate,
         });
+    }
+
+    /**
+     * Concatenates the root-ID TVF SQL for every recursive ParentID-style FK
+     * on this entity. Mirrors the inline TVF generation in
+     * `generateSingleEntitySQLToSeparateFiles` so the phased executor can run
+     * the same DDL ahead of the base view.
+     */
+    private generateRecursiveFKTVFs(entity: EntityInfo): string {
+        const recursiveFKs = this.detectRecursiveForeignKeys(entity);
+        if (recursiveFKs.length === 0) return '';
+        let combined = '';
+        for (const field of recursiveFKs) {
+            const functionName = `fn${entity.BaseTable}${field.Name}_GetRootID`;
+            combined += this.generateSingleEntitySQLFileHeader(entity, functionName)
+                + this.generateRootIDFunction(entity, field)
+                + '\n' + this._dbProvider.BatchSeparator + '\n';
+        }
+        return combined;
     }
 
     /**

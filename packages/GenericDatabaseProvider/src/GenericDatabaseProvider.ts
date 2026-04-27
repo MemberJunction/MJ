@@ -1363,7 +1363,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         sParam = field.UserSearchParamFormatAPI.replace('{0}', safeUserSearchString);
                     else
                         sParam = ` LIKE '%${safeUserSearchString}%'`;
-                    sUserSearchSQL += `(${field.Name} ${sParam})`;
+                    sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
                 }
             }
             if (sUserSearchSQL.length > 0) sUserSearchSQL = '(' + sUserSearchSQL + ')';
