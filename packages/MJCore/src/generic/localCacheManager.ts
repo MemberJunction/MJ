@@ -1124,6 +1124,32 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
+        // Short-circuit: if the entity has AllowCaching = false, do not write to the cache.
+        // The invalidation path (HandleBaseEntityEvent line 552) already short-circuits for
+        // these entities, so any entry we write here would never be invalidated and would
+        // serve stale data on subsequent reads. This was causing the "newly created
+        // Channel Actions / Organization Actions don't show up in the UI" bug.
+        //
+        // Note: during startup the Metadata provider may not be ready yet (md.Entities
+        // undefined or empty). In that case we fall through and write — startup-time
+        // writes are for system/metadata entities that are expected to be cacheable
+        // anyway, and we don't want to block legitimate caching during init.
+        if (params.EntityName) {
+            try {
+                const md = new Metadata();
+                if (md.Entities && md.Entities.length > 0) {
+                    const entity = md.Entities.find(e => e.Name === params.EntityName);
+                    if (entity && !this.IsCachingEnabledForEntity(entity)) {
+                        LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for non-cacheable entity "${params.EntityName}" (AllowCaching=false)`, verboseOnly: true });
+                        return;
+                    }
+                }
+            } catch (err) {
+                // fall through and write — fail-open is safer than fail-closed here
+                // (an unexpected exception shouldn't break caching for valid entities)
+            }
+        }
+
         // Persist results, maxUpdatedAt, aggregateResults, and totalRowCount
         const data: CachedRunViewData = { results, maxUpdatedAt };
         if (aggregateResults && aggregateResults.length > 0) {
