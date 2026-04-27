@@ -78,11 +78,9 @@
 }
 
 <!-- ── CANVAS ──────────────────────────────────────────────────────────── -->
-<div
-  class="erd-canvas-wrap"
-  (mousemove)="onBackgroundMouseMove($event)"
-  (mouseup)="onBackgroundMouseUp()"
-  (mouseleave)="onBackgroundMouseUp()">
+<!-- Pan handling is window-level once mousedown fires (see component) so
+     dragging continues even if the cursor leaves the canvas-wrap. -->
+<div class="erd-canvas-wrap">
 
   <svg
     #canvasRef

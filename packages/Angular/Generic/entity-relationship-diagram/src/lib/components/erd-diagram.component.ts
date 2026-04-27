@@ -177,6 +177,17 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     // cursor attribute to it; treat as internal state.
     public panning = false;
     private panStart: { x: number; y: number } | null = null;
+    /** Raw mousedown coords — used to compute drag distance for the
+     *  pan-vs-click threshold. */
+    private dragOrigin: { clientX: number; clientY: number } | null = null;
+    /** True once movement crossed the drag threshold — used to suppress
+     *  the synthetic click that follows the mouseup. */
+    private dragMoved = false;
+    /** Pixels of movement before mousedown is treated as a drag. */
+    private static readonly DRAG_THRESHOLD = 4;
+    /** Bound window listeners — kept on the instance so we can detach. */
+    private boundWindowMove?: (e: MouseEvent) => void;
+    private boundWindowUp?: (e: MouseEvent) => void;
 
     private resizeObserver?: ResizeObserver;
 
@@ -237,6 +248,9 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
 
     public ngOnDestroy(): void {
         this.resizeObserver?.disconnect();
+        // Detach any pan listeners still bound from an in-progress drag.
+        if (this.boundWindowMove) window.removeEventListener('mousemove', this.boundWindowMove);
+        if (this.boundWindowUp) window.removeEventListener('mouseup', this.boundWindowUp);
     }
 
     // ─── RECOMPUTATION ────────────────────────────────────────────────────
@@ -327,22 +341,40 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
 
     // ─── PAN / ZOOM / FIT ────────────────────────────────────────────────
 
+    /**
+     * Mousedown anywhere on the SVG (background OR a node card).  We
+     * arm a potential pan and attach window-level move/up listeners so
+     * the drag continues even if the cursor leaves the canvas (passes
+     * over the focus card, scrollbars, the chrome, etc.).
+     *
+     * The actual `panning = true` flip happens in the move handler once
+     * the cursor crosses `DRAG_THRESHOLD` — that way short clicks still
+     * register as clicks on cards (no accidental selection-toggle from
+     * a tiny mouse jitter).
+     */
     public onBackgroundMouseDown(e: MouseEvent): void {
         if (e.button !== 0) return;
-        const target = e.target as Element;
-        if (target.closest('.erd-node')) return;
-        this.panning = true;
+        this.dragOrigin = { clientX: e.clientX, clientY: e.clientY };
+        this.dragMoved = false;
         this.panStart = { x: e.clientX - this.transform.x, y: e.clientY - this.transform.y };
-        // Intentionally do NOT deselect on background mousedown — users
-        // commonly need to drag the canvas while an entity is focused (to
-        // see a neighbour off-screen), and that shouldn't clear the
-        // highlight.  Deselect happens only via (a) clicking the focused
-        // entity again to toggle it off, or (b) the close button on the
-        // focus details card.
+
+        this.boundWindowMove = (ev: MouseEvent) => this.onWindowMouseMove(ev);
+        this.boundWindowUp = (ev: MouseEvent) => this.onWindowMouseUp(ev);
+        window.addEventListener('mousemove', this.boundWindowMove);
+        window.addEventListener('mouseup', this.boundWindowUp);
     }
 
-    public onBackgroundMouseMove(e: MouseEvent): void {
-        if (!this.panning || !this.panStart) return;
+    private onWindowMouseMove(e: MouseEvent): void {
+        if (!this.dragOrigin || !this.panStart) return;
+
+        if (!this.panning) {
+            const dx = e.clientX - this.dragOrigin.clientX;
+            const dy = e.clientY - this.dragOrigin.clientY;
+            if (Math.hypot(dx, dy) < ERDDiagramComponent.DRAG_THRESHOLD) return;
+            this.panning = true;
+            this.dragMoved = true;
+        }
+
         this.transform = {
             ...this.transform,
             x: e.clientX - this.panStart.x,
@@ -352,9 +384,32 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         this.cdr.markForCheck();
     }
 
-    public onBackgroundMouseUp(): void {
+    private onWindowMouseUp(_e: MouseEvent): void {
+        // If a drag actually happened, swallow the synthetic click that
+        // browsers fire on mouseup so it doesn't reach the node click
+        // handler and toggle the focus.  We use capture phase + once so
+        // we only catch the immediate next click from this mouse-up.
+        if (this.dragMoved) {
+            const swallow = (ev: MouseEvent) => {
+                ev.stopPropagation();
+                ev.preventDefault();
+            };
+            window.addEventListener('click', swallow, { capture: true, once: true });
+        }
+
         this.panning = false;
         this.panStart = null;
+        this.dragOrigin = null;
+        this.dragMoved = false;
+
+        if (this.boundWindowMove) {
+            window.removeEventListener('mousemove', this.boundWindowMove);
+            this.boundWindowMove = undefined;
+        }
+        if (this.boundWindowUp) {
+            window.removeEventListener('mouseup', this.boundWindowUp);
+            this.boundWindowUp = undefined;
+        }
     }
 
     public onWheel(e: WheelEvent): void {
