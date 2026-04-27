@@ -272,9 +272,20 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
       }, this.currentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
-        // Delete this version association
+        // Delete all version associations atomically
+        const md = new Metadata();
+        const tg = await md.CreateTransactionGroup();
         for (const joinRecord of result.Results) {
+          joinRecord.TransactionGroup = tg;
           await joinRecord.Delete();
+        }
+        const success = await tg.Submit();
+        if (!success) {
+          MJNotificationService.Instance.CreateSimpleNotification(
+            `Failed to remove ${versionLabel} from collection`,
+            'error'
+          );
+          return;
         }
         await this.loadArtifacts();
         this.cdr.detectChanges();

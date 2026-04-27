@@ -933,15 +933,50 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const defaultSchema = rsuConfig.DefaultSchema;
     const resolvedSQL = sql.replace(/\$\{flyway:defaultSchema\}/g, defaultSchema);
 
-    // Split on GO batch separators (SQL Server SSMS convention, not valid T-SQL)
-    const batches = resolvedSQL
+    // Primary split: GO batch separators (SQL Server SSMS convention, not
+    // valid T-SQL). Many CodeGen-generated migrations include them between
+    // logical blocks and we want one ExecuteSQL call per block.
+    const goBatches = resolvedSQL
       .split(/^\s*GO\s*$/gim)
       .map((b) => b.trim())
       .filter((b) => b.length > 0);
 
+    // Secondary chunking: bulk RSU migrations (e.g. Salesforce 1100+ tables)
+    // can produce a single 1.7MB+ batch with ~17K ALTER TABLE statements
+    // and zero GO separators. Sending that as ONE mssql request hits the
+    // 30s client request timeout and the migration fails — even though the
+    // SQL itself is valid and would run in a few minutes if chunked. Split
+    // any oversized batch on statement boundaries (`;` followed by EOL) and
+    // group into smaller batches. Each chunk gets its own ExecuteSQL call,
+    // resetting the request-timeout clock.
+    // Each ALTER TABLE on a wide table acquires a schema-modification lock.
+    // Empirically, 200 ALTER TABLEs serially still exceeds mssql's 30s
+    // client request timeout. 25 statements per chunk keeps each request
+    // comfortably under the timeout. Threshold lowered to 32KB so chunking
+    // engages aggressively.
+    const STATEMENTS_PER_CHUNK = 25;
+    const CHUNK_THRESHOLD_BYTES = 32 * 1024;
+    const finalBatches: string[] = [];
+    for (const batch of goBatches) {
+      if (batch.length < CHUNK_THRESHOLD_BYTES) {
+        finalBatches.push(batch);
+        continue;
+      }
+      // Split on statement-ending `;` (preserve the `;`) and re-group.
+      const statements = batch.split(/;\s*\n/g)
+        .map(s => s.trim())
+        .filter(s => s.length > 0)
+        .map(s => s.endsWith(';') ? s : s + ';');
+      this.rsuLog(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
+      for (let i = 0; i < statements.length; i += STATEMENTS_PER_CHUNK) {
+        finalBatches.push(statements.slice(i, i + STATEMENTS_PER_CHUNK).join('\n'));
+      }
+    }
+
     try {
-      for (const batch of batches) {
-        this.rsuLog(`  Executing batch (${batch.length} chars)`);
+      for (let i = 0; i < finalBatches.length; i++) {
+        const batch = finalBatches[i];
+        this.rsuLog(`  Executing batch ${i + 1}/${finalBatches.length} (${batch.length} chars)`);
         await this.getDBProvider().ExecuteSQL(batch, undefined, { isMutation: true, description: 'RSU migration' });
       }
     } catch (err: unknown) {

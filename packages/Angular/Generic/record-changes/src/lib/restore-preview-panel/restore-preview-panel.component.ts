@@ -161,9 +161,23 @@ export class RestorePreviewPanelComponent implements OnInit {
 
   /**
    * Controls panel visibility. Setting to true opens the slide-in;
-   * setting to false closes it.
+   * setting to false closes it. On every closed→open transition the
+   * panel auto-resets its transient state (`IsRestoring`, `Reason`,
+   * `ShowUnchanged`, row checks) so the host doesn't have to remember
+   * to call `Reset()` after a restore completes.
    */
-  @Input() Visible = false;
+  private _visible = false;
+  @Input()
+  set Visible(value: boolean) {
+    const prev = this._visible;
+    this._visible = value;
+    if (!prev && value && this.isInitialized) {
+      this.Reset();
+    }
+  }
+  get Visible(): boolean {
+    return this._visible;
+  }
 
   /**
    * Operating mode — `'live'` for restoring an existing record from a
@@ -263,7 +277,14 @@ export class RestorePreviewPanelComponent implements OnInit {
 
   ngOnInit(): void {
     this.isInitialized = true;
-    this.rebuildRows();
+    // If the panel was opened synchronously during host bootstrap, the
+    // Visible setter ran before `isInitialized` was true and skipped the
+    // auto-reset. Do it here once so the first open is always clean.
+    if (this._visible) {
+      this.Reset();
+    } else {
+      this.rebuildRows();
+    }
   }
 
   // ─── Public methods ─────────────────────────────────────────────

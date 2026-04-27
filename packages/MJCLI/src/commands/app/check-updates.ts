@@ -1,4 +1,5 @@
 import { Command } from '@oclif/core';
+import { ListInstalledApps, GetLatestVersion } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { buildContextUser } from '../../utils/open-app-context.js';
@@ -21,7 +22,6 @@ export default class AppCheckUpdates extends Command {
     const spinner = ora('Checking for updates...').start();
 
     try {
-      const { ListInstalledApps, GetLatestVersion } = await import('@memberjunction/open-app-engine');
       const config = getValidatedConfig();
 
       const contextUser = await buildContextUser();

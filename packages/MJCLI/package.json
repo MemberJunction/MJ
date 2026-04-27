@@ -38,7 +38,8 @@
     "commands": "./dist/commands",
     "hooks": {
       "init": "./dist/hooks/init",
-      "prerun": "./dist/hooks/prerun"
+      "prerun": "./dist/hooks/prerun",
+      "postrun": "./dist/hooks/postrun"
     },
     "dirname": "mj",
     "topicSeparator": " ",
@@ -60,6 +61,7 @@
     "@memberjunction/installer": "5.29.0",
     "@memberjunction/db-auto-doc": "5.29.0",
     "@memberjunction/metadata-sync": "5.29.0",
+    "@memberjunction/open-app-engine": "5.29.0",
     "@memberjunction/query-gen": "5.29.0",
     "@memberjunction/server-bootstrap-lite": "5.29.0",
     "@memberjunction/skyway-core": "^0.5.3",

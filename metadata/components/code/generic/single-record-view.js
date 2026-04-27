@@ -27,8 +27,6 @@ function SingleRecordView({
   
   // Handle open record button click with cancelable event - moved outside useMemo
   const handleOpenRecordClick = React.useCallback((recordToOpen, entityNameToOpen) => {
-    console.log('handleOpenRecordClick called for:', entityNameToOpen, recordToOpen);
-    
     // Get primary keys from entity metadata
     let primaryKeys = [];
     if (entityInfo) {

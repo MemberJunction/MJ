@@ -1360,9 +1360,9 @@ ORDER BY
      *    PK, and unique key detection.
      * 3. **Cleanup**: Drops the temp tables.
      */
-    getPendingEntityFieldsSQL(mjCoreSchema: string): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
         return this.buildPendingFieldsTempTables(mjCoreSchema) +
-            this.buildPendingFieldsMainQuery(mjCoreSchema) +
+            this.buildPendingFieldsMainQuery(mjCoreSchema, entityIDs) +
             this.buildPendingFieldsCleanup();
     }
 
@@ -1398,7 +1398,13 @@ FROM [${schema}].[vwTableUniqueKeys];
      * Uses MaxSequences CTE to calculate proper field ordering and NumberedRows
      * CTE to deduplicate results.
      */
-    private buildPendingFieldsMainQuery(schema: string): string {
+    private buildPendingFieldsMainQuery(schema: string, entityIDs?: string[]): string {
+        // When scoped, narrow the scan to specific entities. SQL injection isn't a concern
+        // here — entityIDs are MJ-internal UUIDs from the metadata cache, not user input —
+        // but we quote each ID anyway for SQL Server's UUID literal syntax.
+        const scopeFilter = entityIDs && entityIDs.length > 0
+            ? `AND sf.EntityID IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
         return `WITH MaxSequences AS (
    SELECT
       EntityID,
@@ -1457,6 +1463,7 @@ NumberedRows AS (
       ON e.BaseTable = uk.TableName AND sf.FieldName = uk.ColumnName AND e.SchemaName = uk.SchemaName
    WHERE
       EntityFieldID IS NULL
+      ${scopeFilter}
    )
    SELECT *
    FROM NumberedRows

@@ -1739,25 +1739,23 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     try {
       const md = new Metadata();
+      const tg = await md.CreateTransactionGroup();
 
-      // Create the list
+      // Queue the list plus all of its initial detail records in a single transaction.
+      // NewRecord() assigns a client-side UUID so the details can reference list.ID
+      // before the list actually persists.
       const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
+      list.NewRecord();
       list.Name = this.newListName;
       list.Description = this.newListDescription || null;
       list.EntityID = entityId;
       list.UserID = md.CurrentUser!.ID;
-
-      const saved = await list.Save();
-      if (!saved) {
-        this.notificationService.CreateSimpleNotification('Failed to create list', 'error', 4000);
-        return;
-      }
-
-      // Add records to the list using transaction group
-      const tg = await md.CreateTransactionGroup();
+      list.TransactionGroup = tg;
+      await list.Save();
 
       for (const recordId of this.recordsToAdd) {
         const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
+        detail.NewRecord();
         detail.ListID = list.ID;
         detail.RecordID = recordId;
         detail.Sequence = 0;
@@ -1765,21 +1763,20 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         await detail.Save();
       }
 
-      const success = await tg.Submit();
-
-      if (success) {
+      if (!await tg.Submit()) {
         this.notificationService.CreateSimpleNotification(
-          `Created "${this.newListName}" with ${this.recordsToAdd.length} items`,
-          'success',
-          3000
-        );
-      } else {
-        this.notificationService.CreateSimpleNotification(
-          `Created list but failed to add some records`,
-          'warning',
+          'Failed to create list — all changes have been rolled back',
+          'error',
           4000
         );
+        return;
       }
+
+      this.notificationService.CreateSimpleNotification(
+        `Created "${this.newListName}" with ${this.recordsToAdd.length} items`,
+        'success',
+        3000
+      );
 
       this.cancelCreateDialog();
 
