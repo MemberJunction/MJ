@@ -42,10 +42,10 @@
     {
       "name": "renderMode",
       "type": "string",
-      "description": "Map rendering mode: 'point' for individual markers with clustering, 'heatmap' for density circles via spatial clustering, 'choropleth' for GeoJSON country polygons loaded from MJ: Countries entity.",
+      "description": "Map rendering mode: 'point' for individual markers with clustering, 'heatmap' for density circles via spatial clustering, 'choropleth' for GeoJSON country polygons loaded from MJ: Countries entity, 'boundary' for rendering one GeoJSON polygon per record using the boundaryField prop.",
       "required": false,
       "defaultValue": "point",
-      "possibleValues": ["point", "choropleth", "heatmap"]
+      "possibleValues": ["point", "choropleth", "heatmap", "boundary"]
     },
     {
       "name": "clusterMarkers",
@@ -106,6 +106,12 @@
       "defaultValue": "Country"
     },
     {
+      "name": "boundaryField",
+      "type": "string",
+      "description": "Field name containing GeoJSON boundary data on each record. Used with renderMode='boundary' to render one polygon per record. If a record lacks boundary data, falls back to a centroid marker using lat/lng fields.",
+      "required": false
+    },
+    {
       "name": "maxPopupRecords",
       "type": "number",
       "description": "Maximum number of records to show as clickable links in cluster/region popups before showing 'and X more...' overflow text.",
@@ -150,6 +156,11 @@
       "name": "leaflet",
       "version": "1.9.4",
       "globalVariable": "L"
+    },
+    {
+      "name": "geo-maps",
+      "version": "^5",
+      "globalVariable": "MapCore"
     }
   ],
   "code": "@file:../../code/generic/simple-map.js",
