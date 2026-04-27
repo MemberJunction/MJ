@@ -1,5 +1,30 @@
 # @memberjunction/archiving-action
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/actions@5.30.1
+- @memberjunction/archiving-engine@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/global@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/core@5.30.0
+  - @memberjunction/actions-base@5.30.0
+  - @memberjunction/actions@5.30.0
+  - @memberjunction/archiving-engine@5.30.0
+  - @memberjunction/global@5.30.0
+
 ## 5.29.0
 
 ### Minor Changes
