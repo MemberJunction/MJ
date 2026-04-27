@@ -97,29 +97,7 @@
       "default": []
     }
   ],
-  "events": [
-    {
-      "name": "onToggleCollapse",
-      "description": "Fired when the panel is collapsed or expanded",
-      "parameters": [
-        {
-          "name": "collapsed",
-          "type": "boolean",
-          "description": "The new collapsed state"
-        }
-      ]
-    },
-    {
-      "name": "onCopy",
-      "description": "Fired when content is copied to clipboard",
-      "parameters": []
-    },
-    {
-      "name": "onExport",
-      "description": "Fired when content is exported as markdown",
-      "parameters": []
-    }
-  ],
+  "events": [],
   "libraries": [
     {
       "name": "marked",

@@ -1,6 +1,4 @@
-import _traverse, { NodePath } from '@babel/traverse';
-type TraverseModule = typeof _traverse & { default?: typeof _traverse };
-const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
+import { traverse, NodePath, isNullOrUndefined, isStringLike, isNumberLike, isArrayLike } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -64,52 +62,6 @@ await utilities.rq.RunQuery({
 // - QueryName (required)
 // - CategoryPath, CategoryID, Parameters (optional)`,
 };
-
-// ── Type-check helpers ──────────────────────────────────────────────
-
-function isNullOrUndefined(node: t.Node): boolean {
-  return t.isNullLiteral(node) || (t.isIdentifier(node) && node.name === 'undefined');
-}
-
-function isStringLike(node: t.Node, depth: number = 0): boolean {
-  if (depth > 3) return false;
-  if (t.isConditionalExpression(node)) {
-    const consequentOk = isStringLike(node.consequent, depth + 1) || isNullOrUndefined(node.consequent);
-    const alternateOk = isStringLike(node.alternate, depth + 1) || isNullOrUndefined(node.alternate);
-    return consequentOk && alternateOk;
-  }
-  if (t.isObjectExpression(node) || t.isArrayExpression(node)) return false;
-  return (
-    t.isStringLiteral(node) ||
-    t.isTemplateLiteral(node) ||
-    t.isBinaryExpression(node) ||
-    t.isIdentifier(node) ||
-    t.isCallExpression(node) ||
-    t.isMemberExpression(node)
-  );
-}
-
-function isNumberLike(node: t.Node): boolean {
-  return (
-    t.isNumericLiteral(node) ||
-    t.isBinaryExpression(node) ||
-    t.isUnaryExpression(node) ||
-    t.isConditionalExpression(node) ||
-    t.isIdentifier(node) ||
-    t.isCallExpression(node) ||
-    t.isMemberExpression(node)
-  );
-}
-
-function isArrayLike(node: t.Node): boolean {
-  return (
-    t.isArrayExpression(node) ||
-    t.isIdentifier(node) ||
-    t.isCallExpression(node) ||
-    t.isMemberExpression(node) ||
-    t.isConditionalExpression(node)
-  );
-}
 
 // ── Helpers for invalid-property messages ────────────────────────────
 
