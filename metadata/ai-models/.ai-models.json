@@ -12866,5 +12866,66 @@
       "lastModified": "2026-04-20T23:52:27.368Z",
       "checksum": "f17b8c46d3836739905ad42b6e5fdc706dfaaae84fd8a033e54e1ace2c43e18b"
     }
+  },
+  {
+    "fields": {
+      "Name": "Mercury 2",
+      "PowerRank": 15,
+      "Description": "Inception Labs' most powerful model, positioned as the fastest reasoning LLM. Uses a diffusion-based architecture to achieve 1000+ tokens per second on commercial NVIDIA GPUs while supporting reasoning, tool use, and structured output. Features a 128K token context window and is well-suited for rapid coding iteration, workflow subagents, customer support, realtime voice, and enterprise search. Released April 23, 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "InceptionLLM",
+            "APIName": "mercury-2",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 50000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "StartedAt": "2026-04-23T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.25,
+            "OutputPricePerUnit": 0.75,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Mercury 2 pricing on Inception Labs as of April 2026. $0.25/M input, $0.75/M output. Cached input is $0.025/M (90% discount on cache hits)."
+          }
+        }
+      ]
+    }
   }
 ]
