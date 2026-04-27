@@ -294,10 +294,24 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
      * Switch between the schema-grid and dagre hierarchical layouts at
      * runtime.  Emits a state change so the consumer can persist the
      * user's preference (via `userStateChange` on `mj-erd-composite`).
+     *
+     * Also clears the current focus/selection — switching layouts moves
+     * cards to entirely new positions, so the previously-selected entity
+     * would otherwise stay highlighted in a different spot with the side
+     * panel still open, which is jarring.  A clean slate is better.
      */
     public setLayoutAlgorithm(algo: 'schema-grid' | 'dagre'): void {
         if (this.activeLayout === algo) return;
         this.activeLayout = algo;
+
+        const hadSelection = !!(this.focusNodeId || this.selectedNodeId);
+        this.focusNodeId = null;
+        this.selectedNodeId = null;
+        this.hoverNodeId = null;
+        this.updateHighlightSet();
+        this.updateSelectedEntity();
+        if (hadSelection) this.nodeDeselected.emit();
+
         this.recompute();
         queueMicrotask(() => this.fitToView());
         this.stateChange.emit(this.getState());
