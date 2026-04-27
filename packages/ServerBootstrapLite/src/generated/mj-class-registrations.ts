@@ -370,7 +370,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-actions (113 classes)
+// @memberjunction/core-actions (114 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -463,6 +463,7 @@ import {
     RunAdhocQueryAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
+    ScopedSearchAction,
     SearchAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
@@ -487,7 +488,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (335 classes)
+// @memberjunction/core-entities (341 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -518,6 +519,7 @@ import {
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
+    MJAIAgentSearchScopeEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -771,6 +773,11 @@ import {
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJSearchProviderEntity,
+    MJSearchScopeEntity,
+    MJSearchScopeEntityEntity,
+    MJSearchScopeExternalIndexEntity,
+    MJSearchScopeProviderEntity,
+    MJSearchScopeStorageAccountEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
@@ -888,10 +895,11 @@ import {
     MJScheduledJobEntityExtended,
 } from '@memberjunction/scheduling-engine-base';
 
-// @memberjunction/search-engine (4 classes)
+// @memberjunction/search-engine (5 classes)
 import {
     EntitySearchProvider,
     FullTextSearchProvider,
+    NoopReRanker,
     StorageSearchProvider,
     VectorSearchProvider,
 } from '@memberjunction/search-engine';
@@ -1204,6 +1212,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     RunAdhocQueryAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
+    ScopedSearchAction,
     SearchAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
@@ -1255,6 +1264,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
+    MJAIAgentSearchScopeEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -1508,6 +1518,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJSearchProviderEntity,
+    MJSearchScopeEntity,
+    MJSearchScopeEntityEntity,
+    MJSearchScopeExternalIndexEntity,
+    MJSearchScopeProviderEntity,
+    MJSearchScopeStorageAccountEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
@@ -1597,6 +1612,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobEntityExtended,
     EntitySearchProvider,
     FullTextSearchProvider,
+    NoopReRanker,
     StorageSearchProvider,
     VectorSearchProvider,
     TagEngineBase,
@@ -1609,7 +1625,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 685;
+export const CLASS_REGISTRATIONS_COUNT = 693;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

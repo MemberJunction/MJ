@@ -7639,7 +7639,7 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Default Value: getutcdate()`),
     ArchiveRun: z.date().describe(`
         * * Field Name: ArchiveRun
-        * * Display Name: Archive Run Timestamp
+        * * Display Name: Archive Run
         * * SQL Data Type: datetimeoffset`),
     Entity: z.string().describe(`
         * * Field Name: Entity
@@ -31618,7 +31618,7 @@ export class MJAIAgentPermissionEntity extends BaseEntity<MJAIAgentPermissionEnt
     		result.Errors.push(new ValidationErrorInfo(
     			"RoleID/UserID",
     			"You must specify either a Role or a User, but not both and not neither.",
-    			`RoleID: $${this.RoleID}, UserID: $${this.UserID}`,
+    			`RoleID: $[neutralized], UserID: $[neutralized]`,
     			ValidationErrorType.Failure
     		));
     	}
@@ -46756,7 +46756,7 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
 
     /**
     * * Field Name: ArchiveRun
-    * * Display Name: Archive Run Timestamp
+    * * Display Name: Archive Run
     * * SQL Data Type: datetimeoffset
     */
     get ArchiveRun(): Date {
