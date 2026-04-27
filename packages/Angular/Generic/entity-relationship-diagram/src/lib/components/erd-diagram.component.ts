@@ -69,11 +69,6 @@ interface SchemaChip {
     active: boolean;
 }
 
-interface FocusReference {
-    entity: ERDNode;
-    field: ERDField;
-}
-
 /** 2D transform (pan x/y + zoom scale) for the SVG stage. */
 interface Transform {
     x: number;
@@ -607,26 +602,6 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         this.refreshRequested.emit();
     }
 
-    public onCloseFocusCard(): void {
-        this.focusNodeId = null;
-        this.selectedNodeId = null;
-        this.updateHighlightSet();
-        this.updateSelectedEntity();
-        this.nodeDeselected.emit();
-        this.cdr.markForCheck();
-    }
-
-    public onNavigateToEntity(entityId: string): void {
-        this.focusNodeId = entityId;
-        this.selectedNodeId = entityId;
-        const entity = this.nodes.find(n => n.id === entityId) ?? null;
-        if (entity) this.nodeSelected.emit(entity);
-        this.updateHighlightSet();
-        this.updateSelectedEntity();
-        this.centerOn(entityId);
-        this.cdr.markForCheck();
-    }
-
     // ─── DERIVED DATA FOR TEMPLATE ───────────────────────────────────────
 
     /** Path string for an edge — uses the orthogonal polyline from layout. */
@@ -706,33 +681,6 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         return !!this.highlightSet && !this.isEdgeActive(edge);
     }
 
-    /**
-     * Incoming FK references for a given entity (i.e. "who points to me").
-     * Used by the focus details card.
-     */
-    public incomingReferences(entityId: string): FocusReference[] {
-        const result: FocusReference[] = [];
-        for (const n of this.nodes) {
-            for (const f of n.fields) {
-                if (f.relatedNodeId === entityId) result.push({ entity: n, field: f });
-            }
-        }
-        return result;
-    }
-
-    /**
-     * Outgoing FK references for a given entity (i.e. "what do I point at").
-     */
-    public outgoingReferences(entity: ERDNode): FocusReference[] {
-        const result: FocusReference[] = [];
-        for (const f of entity.fields) {
-            if (!f.relatedNodeId) continue;
-            const target = this.nodes.find(n => n.id === f.relatedNodeId);
-            if (target) result.push({ entity: target, field: f });
-        }
-        return result;
-    }
-
     /** Zoom percentage string for the toolbar readout. */
     public get zoomPercent(): string {
         return Math.round(this.transform.k * 100) + '%';
@@ -745,12 +693,12 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         return n.toString();
     }
 
-    /** Number of PK fields — used in focus meta. */
+    /** Number of PK fields — handy aggregate (kept for external API parity). */
     public pkCount(entity: ERDNode): number {
         return entity.fields.filter(f => f.isPrimaryKey).length;
     }
 
-    /** Number of FK fields — used in focus meta. */
+    /** Number of FK fields — handy aggregate (kept for external API parity). */
     public fkCount(entity: ERDNode): number {
         return entity.fields.filter(f => !!f.relatedNodeId).length;
     }
@@ -820,5 +768,4 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     public trackByNode = (_: number, n: LaidOutNode) => n.id;
     public trackByField = (_: number, f: ERDField) => f.id || f.name;
     public trackByChip = (_: number, c: SchemaChip) => c.name;
-    public trackByReference = (_: number, r: FocusReference) => r.entity.id + '|' + r.field.name;
 }

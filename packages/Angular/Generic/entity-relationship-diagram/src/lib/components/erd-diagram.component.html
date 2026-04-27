@@ -256,70 +256,9 @@
     </g>
   </svg>
 
-  <!-- ── Focus details card ───────────────────────────────────────────── -->
-  @if (selectedEntity && focusNodeId) {
-    <aside class="erd-focus-card" role="dialog" aria-label="Entity details">
-      <header class="erd-focus-header">
-        @if (selectedEntity.schemaName) {
-          <span class="erd-focus-schema">
-            {{ selectedEntity.schemaName }}
-          </span>
-        }
-        <h3 class="erd-focus-title">{{ selectedEntity.name }}</h3>
-        <button type="button" class="erd-focus-close" (click)="onCloseFocusCard()" aria-label="Close details">×</button>
-      </header>
-
-      <div class="erd-focus-meta">
-        @if (selectedEntity.customData && $any(selectedEntity.customData).rows != null) {
-          <div>
-            <span class="erd-focus-meta-label">Rows</span>
-            <span class="erd-focus-meta-val">{{ $any(selectedEntity.customData).rows.toLocaleString() }}</span>
-          </div>
-        }
-        <div>
-          <span class="erd-focus-meta-label">Fields</span>
-          <span class="erd-focus-meta-val">{{ selectedEntity.fields.length }}</span>
-        </div>
-        <div>
-          <span class="erd-focus-meta-label">Keys</span>
-          <span class="erd-focus-meta-val">{{ pkCount(selectedEntity) }} PK · {{ fkCount(selectedEntity) }} FK</span>
-        </div>
-      </div>
-
-      @let outgoing = outgoingReferences(selectedEntity);
-      @if (outgoing.length > 0) {
-        <section class="erd-focus-section">
-          <div class="erd-focus-section-title">
-            References
-            <span class="erd-focus-section-count">{{ outgoing.length }}</span>
-          </div>
-          @for (ref of outgoing; track trackByReference($index, ref)) {
-            <button type="button" class="erd-focus-row" (click)="onNavigateToEntity(ref.entity.id)">
-              <span class="erd-focus-row-arrow">→</span>
-              <span class="erd-focus-row-field">{{ ref.field.name }}</span>
-              <span class="erd-focus-row-target">{{ ref.entity.name }}</span>
-            </button>
-          }
-        </section>
-      }
-
-      @let incoming = incomingReferences(selectedEntity.id);
-      @if (incoming.length > 0) {
-        <section class="erd-focus-section">
-          <div class="erd-focus-section-title">
-            Referenced by
-            <span class="erd-focus-section-count">{{ incoming.length }}</span>
-          </div>
-          @for (ref of incoming; track trackByReference($index, ref)) {
-            <button type="button" class="erd-focus-row" (click)="onNavigateToEntity(ref.entity.id)">
-              <span class="erd-focus-row-arrow">←</span>
-              <span class="erd-focus-row-field">{{ ref.entity.name }}.{{ ref.field.name }}</span>
-            </button>
-          }
-        </section>
-      }
-    </aside>
-  }
+  <!-- Focus details are rendered by the consumer's side panel
+       (mj-entity-details inside mj-erd-composite); the in-canvas
+       floating focus card was removed as it duplicated that content. -->
 
   <!-- ── Empty state ─────────────────────────────────────────────────── -->
   @if (visibleCount === 0) {
