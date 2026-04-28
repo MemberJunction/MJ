@@ -125,6 +125,7 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
         @Ctx() { userPayload }: AppContext = {} as AppContext,
     ): Promise<SearchStreamStartResult> {
         const streamID = uuidv4();
+        const startTime = Date.now();
         try {
             const currentUser = this.GetUserFromPayload(userPayload);
             if (!currentUser) {
@@ -137,6 +138,16 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
             if (scopeIDs && scopeIDs.length) {
                 const denial = await this.rejectForbiddenScopes(scopeIDs, currentUser, agentID);
                 if (denial) {
+                    // Mirror the synchronous resolver: surface denied attempts in
+                    // the analytics dashboard so an admin tuning permissions can
+                    // see them. Best-effort — failures are swallowed by the helper.
+                    await SearchEngine.Instance.LogForbiddenSearch({
+                        Query: query,
+                        ScopeIDs: scopeIDs,
+                        FailureReason: denial,
+                        StartTime: startTime,
+                        ContextUser: currentUser,
+                    });
                     return { Success: false, StreamID: streamID, ErrorMessage: denial };
                 }
             }
