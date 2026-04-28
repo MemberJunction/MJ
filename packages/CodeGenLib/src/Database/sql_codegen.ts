@@ -190,6 +190,16 @@ export class SQLCodeGenBase {
                 .map(id => includedEntities.find(e => UUIDsEqual(e.ID, id)))
                 .filter(e => e !== undefined) as EntityInfo[];
 
+            // Track per-batch success without short-circuiting. Historically,
+            // any single batch failure here returned `false` immediately, which
+            // skipped the cascade-regen and excluded-perms batches and left
+            // their entities with no SQL emitted at all. The post-run CRUD
+            // validator (in runCodeGen.ts) is the authoritative ship-gate now,
+            // so we want every batch to attempt its work and surface the
+            // complete picture of what's missing — partial generation is
+            // strictly more useful than nothing.
+            let entityGenSuccess = true;
+
             // Generate SQL for entities that don't need cascade delete regeneration
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
                 pool,
@@ -204,10 +214,10 @@ export class SQLCodeGenBase {
                 enableSQLLoggingForNewOrModifiedEntities: true
             }); // enable sql logging for NEW entities....
             if (!genResult.Success) {
-                failSpinner('Failed to generate entity SQL files');
-                return false;
+                logError('Main entity SQL generation batch had failures — continuing with cascade-regen and excluded-perms batches; validator will report any missing routines.');
+                entityGenSuccess = false;
             }
-            
+
             // Generate SQL for cascade delete regenerations in dependency order (sequentially)
             if (entitiesForCascadeRegeneration.length > 0) {
                 updateSpinner(`Regenerating ${entitiesForCascadeRegeneration.length} delete SPs in dependency order...`);
@@ -222,8 +232,8 @@ export class SQLCodeGenBase {
                     enableSQLLoggingForNewOrModifiedEntities: true
                 });
                 if (!cascadeGenResult.Success) {
-                    failSpinner('Failed to regenerate cascade delete SPs');
-                    return false;
+                    logError('Cascade-regen batch had failures — continuing; validator will report any missing routines.');
+                    entityGenSuccess = false;
                 }
                 genResult.Files.push(...cascadeGenResult.Files);
             }
@@ -231,9 +241,9 @@ export class SQLCodeGenBase {
             // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
             updateSpinner(`Generating permissions for ${excludedEntities.length} excluded entities...`);
             const genResult2 = await this.generateAndExecuteEntitySQLToSeparateFiles({
-                pool, 
-                entities: excludedEntities, 
-                directory, 
+                pool,
+                entities: excludedEntities,
+                directory,
                 onlyPermissions: true,
                 skipExecution: true, // skip execution because we execute it all in a giant batch below
                 batchSize: 5,
@@ -241,10 +251,14 @@ export class SQLCodeGenBase {
                 enableSQLLoggingForNewOrModifiedEntities: false /*don't log this stuff, it is just permissions for excluded entities*/
             });
             if (!genResult2.Success) {
-                failSpinner('Failed to generate permissions for excluded entities');
-                return false;
+                logError('Excluded-entities permissions batch had failures — continuing; validator will report any missing routines.');
+                entityGenSuccess = false;
             }
-            succeedSpinner(`Entity generation completed (${(new Date().getTime() - step2StartTime.getTime())/1000}s)`);
+            if (entityGenSuccess) {
+                succeedSpinner(`Entity generation completed (${(new Date().getTime() - step2StartTime.getTime())/1000}s)`);
+            } else {
+                failSpinner(`Entity generation completed with batch failures (${(new Date().getTime() - step2StartTime.getTime())/1000}s) — see post-run CRUD validator for the authoritative gap report`);
+            }
 
             // STEP 2(d) now that we've generated the SQL, let's create a combined file in each schema sub-directory for convenience for a DBA
             startSpinner('Creating combined SQL files...');
@@ -279,7 +293,9 @@ export class SQLCodeGenBase {
                 executionSuccess = await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false);
             }
 
-            let overallSuccess = true;
+            // Initialize from entityGenSuccess so any per-batch failures from
+            // STEP 2(b)/(c) carry forward instead of being lost. Bug 2 fix.
+            let overallSuccess = entityGenSuccess;
             if (!executionSuccess) {
                 failSpinner('Failed to execute entity SQL files');
                 TempBatchFile.cleanup(); // Cleanup on error
