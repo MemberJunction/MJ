@@ -226,6 +226,16 @@ export class SearchKnowledgeResolver extends ResolverBase {
             if (scopeIDs && scopeIDs.length) {
                 const denied = await this.rejectForbiddenScopes(scopeIDs, currentUser, agentID);
                 if (denied) {
+                    // Emit a Status='Forbidden' SearchExecutionLog row so the
+                    // analytics dashboard surfaces denied attempts. Best-effort
+                    // — failures are swallowed by the helper.
+                    await SearchEngine.Instance.LogForbiddenSearch({
+                        Query: query,
+                        ScopeIDs: scopeIDs,
+                        FailureReason: denied,
+                        StartTime: startTime,
+                        ContextUser: currentUser,
+                    });
                     return this.errorResult(denied, startTime);
                 }
             }

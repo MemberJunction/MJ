@@ -1073,6 +1073,34 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
     /** Build an error SearchResult */
     /**
+     * Public hook for callers (e.g. the GraphQL resolver) to emit a
+     * Status='Forbidden' SearchExecutionLog row when they reject a request
+     * before delegating to {@link Search}. Without this, forbidden invocations
+     * never reach the analytics dashboard — exactly the signal admins need
+     * to spot users / agents trying to access scopes they shouldn't.
+     */
+    public async LogForbiddenSearch(input: {
+        Query: string;
+        ScopeIDs?: string[];
+        FailureReason: string;
+        StartTime: number;
+        ContextUser: UserInfo;
+    }): Promise<void> {
+        await this.logSearchExecution({
+            Status: 'Forbidden',
+            FailureReason: input.FailureReason,
+            Query: input.Query,
+            ScopeIDs: input.ScopeIDs,
+            StartTime: input.StartTime,
+            ResultCount: 0,
+            RerankerName: null,
+            RerankerCostCents: null,
+            SourceCounts: undefined,
+            ContextUser: input.ContextUser,
+        });
+    }
+
+    /**
      * Best-effort hook (P3.2) that writes one MJSearchExecutionLog row per
      * SearchEngine.Search call. Captures query, timing, scope, result count,
      * reranker info, status, and a per-source-count breakdown for the analytics
