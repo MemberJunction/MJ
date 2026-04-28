@@ -45,3 +45,40 @@
     border-radius: 3px;
     font-size: 0.74rem;
 }
+
+.reranker-export-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.4rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--mj-border-subtle);
+}
+
+.reranker-export-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.reranker-export-btn:hover:not(:disabled) {
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+}
+
+.reranker-export-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.reranker-export-hint {
+    color: var(--mj-text-muted);
+    font-size: 0.74rem;
+}

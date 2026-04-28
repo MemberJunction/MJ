@@ -23,7 +23,8 @@
  * Phase 2D configuration surface.
  */
 import { Component } from '@angular/core';
-import { MJSearchScopeEntity } from '@memberjunction/core-entities';
+import { LogError, RunView } from '@memberjunction/core';
+import { MJSearchScopeEntity, MJSearchExecutionLogEntityType } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { MJSearchScopeFormComponent } from '../../generated/Entities/MJSearchScope/mjsearchscope.form.component';
@@ -113,6 +114,86 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
     public get SelectedRerankerHasCost(): boolean {
         const driver = this.SelectedRerankerDriverClass;
         return BUILT_IN_RERANKERS.find(r => r.DriverClass === driver)?.HasCost ?? false;
+    }
+
+    /**
+     * Whether the CSV export is currently running. Drives the button's disabled
+     * state + spinner.
+     */
+    public IsExportingTuningCsv = false;
+
+    /**
+     * P3.4 — export the last 500 SearchExecutionLog rows for this scope as CSV.
+     * Used by scope authors for offline tuning analysis (open in a spreadsheet,
+     * pivot by reranker / status / latency, etc.). Filtered to this scope's ID
+     * so multi-tenant deployments don't leak other scopes' query history.
+     */
+    public async ExportTuningCsv(): Promise<void> {
+        if (!this.record?.ID || this.IsExportingTuningCsv) return;
+        this.IsExportingTuningCsv = true;
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<MJSearchExecutionLogEntityType>({
+                EntityName: 'MJ: Search Execution Logs',
+                ExtraFilter: `SearchScopeID='${this.record.ID.replace(/'/g, "''")}'`,
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 500,
+                ResultType: 'simple',
+            });
+            if (!result.Success) {
+                LogError(`SearchScope CSV export failed: ${result.ErrorMessage ?? 'unknown error'}`);
+                return;
+            }
+            const rows = (result.Results ?? []) as MJSearchExecutionLogEntityType[];
+            this.downloadCsv(rows);
+        } finally {
+            this.IsExportingTuningCsv = false;
+        }
+    }
+
+    private downloadCsv(rows: MJSearchExecutionLogEntityType[]): void {
+        const headers = [
+            'CreatedAt', 'Status', 'Query', 'ResultCount', 'TotalDurationMs',
+            'RerankerName', 'RerankerCostCents', 'FailureReason', 'UserID', 'AIAgentID',
+        ];
+        const lines = [headers.join(',')];
+        for (const r of rows) {
+            const cells = [
+                this.escapeCsv(String(r.__mj_CreatedAt ?? '')),
+                this.escapeCsv(String(r.Status ?? '')),
+                this.escapeCsv(String(r.Query ?? '')),
+                String(r.ResultCount ?? 0),
+                String(r.TotalDurationMs ?? 0),
+                this.escapeCsv(String(r.RerankerName ?? '')),
+                String(r.RerankerCostCents ?? ''),
+                this.escapeCsv(String(r.FailureReason ?? '')),
+                String(r.UserID ?? ''),
+                String(r.AIAgentID ?? ''),
+            ];
+            lines.push(cells.join(','));
+        }
+        const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        const name = (this.record?.Name ?? 'scope').replace(/[^\w\-]+/g, '_');
+        link.setAttribute('download', `searchscope-tuning-${name}-${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    private escapeCsv(value: string): string {
+        if (value == null) return '';
+        // Quote when the value contains a comma, quote, newline, or starts with
+        // formula-injection characters. Inside a quoted value, escape inner
+        // quotes by doubling.
+        if (/[",\n\r]/.test(value) || /^[=+\-@]/.test(value)) {
+            return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
     }
 
     private parseScopeConfig(): Record<string, unknown> | null {

@@ -192,6 +192,25 @@
                 [EditMode]="EditMode"
                 [FormContext]="formContext"
             ></mj-form-field>
+
+            <!-- P3.4 — per-scope tuning CSV export.
+                 Pulls the last 500 rows from MJ: Search Execution Logs filtered
+                 to this scope's ID and downloads as CSV for offline analysis. -->
+            <div class="reranker-export-row">
+                <button class="mj-input reranker-export-btn"
+                        type="button"
+                        [disabled]="!record?.ID || IsExportingTuningCsv"
+                        (click)="ExportTuningCsv()">
+                    @if (IsExportingTuningCsv) {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <span>Exporting…</span>
+                    } @else {
+                        <i class="fa-solid fa-download"></i>
+                        <span>Export tuning data (CSV)</span>
+                    }
+                </button>
+                <span class="reranker-export-hint">Last 500 search invocations against this scope.</span>
+            </div>
         </div>
     </mj-collapsible-panel>
 
