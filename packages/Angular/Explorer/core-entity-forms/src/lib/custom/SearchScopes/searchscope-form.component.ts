@@ -22,11 +22,13 @@
  * The dropdown above + budget input below give scope authors the full
  * Phase 2D configuration surface.
  */
-import { Component } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { LogError, RunView } from '@memberjunction/core';
 import { MJSearchScopeEntity, MJSearchExecutionLogEntityType } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { SearchService, SearchResultItem, StreamingProviderStatus } from '@memberjunction/ng-search';
 import { MJSearchScopeFormComponent } from '../../generated/Entities/MJSearchScope/mjsearchscope.form.component';
 
 interface FusionWeightRow {
@@ -72,10 +74,87 @@ const BUILT_IN_RERANKERS: RerankerOption[] = [
     templateUrl: './searchscope-form.component.html',
     styleUrls: ['./searchscope-form.component.css'],
 })
-export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormComponent {
+export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormComponent implements OnDestroy {
     public override record!: MJSearchScopeEntity;
 
     public readonly AvailableRerankers: RerankerOption[] = BUILT_IN_RERANKERS;
+
+    /** Live-preview state (P4.1). */
+    public PreviewQuery = '';
+    public PreviewIsRunning = false;
+    public PreviewResults: SearchResultItem[] = [];
+    public PreviewProviders: StreamingProviderStatus[] = [];
+    public PreviewElapsedMs: number | null = null;
+    public PreviewError: string | null = null;
+    private previewSubscription: Subscription | null = null;
+    private searchService = new SearchService();
+
+    public override ngOnDestroy(): void {
+        this.previewSubscription?.unsubscribe();
+        this.previewSubscription = null;
+    }
+
+    /**
+     * P4.1 — run a streaming preview against this scope. Uses the same
+     * SearchService.StreamSearch path the production search UI uses, scoped
+     * to just this scope's ID. Renders progressively as each provider
+     * reports back so authors can see chip-by-chip what each tuning change
+     * actually affects.
+     */
+    public RunPreview(): void {
+        if (!this.record?.ID || this.PreviewIsRunning) return;
+        const query = this.PreviewQuery.trim();
+        if (!query) return;
+
+        // Tear down any previous run before starting a new one.
+        this.previewSubscription?.unsubscribe();
+        this.PreviewIsRunning = true;
+        this.PreviewResults = [];
+        this.PreviewProviders = [];
+        this.PreviewElapsedMs = null;
+        this.PreviewError = null;
+
+        this.previewSubscription = this.searchService.StreamSearch({
+            Query: query,
+            MaxResults: 25,
+            ActiveFilters: {},
+            IncludeSources: ['vector', 'fulltext', 'entity', 'storage'],
+            ScopeIDs: [this.record.ID],
+        }).subscribe({
+            next: (event) => {
+                if (event.Phase === 'provider' && event.ProviderName) {
+                    this.PreviewProviders = [
+                        ...this.PreviewProviders,
+                        {
+                            Name: event.ProviderName,
+                            Count: event.Results?.length ?? 0,
+                            ElapsedMs: event.ElapsedMs ?? 0,
+                            State: 'Completed',
+                        },
+                    ];
+                    if (event.Results) {
+                        this.PreviewResults = [...this.PreviewResults, ...event.Results].sort((a, b) => b.Score - a.Score);
+                    }
+                } else if (event.Phase === 'final' && event.Results) {
+                    this.PreviewResults = [...event.Results].sort((a, b) => b.Score - a.Score);
+                    this.PreviewElapsedMs = event.ElapsedMs ?? null;
+                }
+            },
+            error: (err: Error) => {
+                this.PreviewError = err.message ?? String(err);
+                this.PreviewIsRunning = false;
+            },
+            complete: () => {
+                this.PreviewIsRunning = false;
+            },
+        });
+    }
+
+    public CancelPreview(): void {
+        this.previewSubscription?.unsubscribe();
+        this.previewSubscription = null;
+        this.PreviewIsRunning = false;
+    }
 
     /**
      * Override the section list to include the new "Reranker" section before
@@ -92,6 +171,7 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
             { sectionKey: 'technicalConfiguration', sectionName: 'Technical Configuration', isExpanded: false },
             { sectionKey: 'fusionWeights', sectionName: 'Fusion Weights', isExpanded: false },
             { sectionKey: 'reranker', sectionName: 'Reranker', isExpanded: false },
+            { sectionKey: 'livePreview', sectionName: 'Live Preview', isExpanded: false },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJSearchScopeTestQueries', sectionName: 'Search Scope Test Queries', isExpanded: false },

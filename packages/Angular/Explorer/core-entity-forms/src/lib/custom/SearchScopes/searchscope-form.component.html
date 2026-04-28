@@ -250,6 +250,89 @@
         </div>
     </mj-collapsible-panel>
 
+    <!-- Live Preview Section (custom — P4.1).
+         Streaming search against this scope, rendered with chip-strip + result
+         list so authors can see how each tuning change (reranker, fusion
+         weights, scope template) affects the actual ranked output. -->
+    <mj-collapsible-panel
+        SectionKey="livePreview"
+        SectionName="Live Preview"
+        Icon="fa fa-flask"
+        [Form]="this"
+        [FormContext]="formContext">
+        <div class="live-preview">
+            <div class="live-preview-input-row">
+                <input
+                    class="mj-input live-preview-input"
+                    type="text"
+                    placeholder="Type a sample query and press Run…"
+                    [disabled]="!record?.ID || PreviewIsRunning"
+                    [value]="PreviewQuery"
+                    (input)="PreviewQuery = $any($event.target).value"
+                    (keydown.enter)="RunPreview()" />
+                @if (!PreviewIsRunning) {
+                    <button class="mj-input live-preview-btn"
+                            type="button"
+                            [disabled]="!record?.ID || !PreviewQuery.trim()"
+                            (click)="RunPreview()">
+                        <i class="fa-solid fa-play"></i> Run
+                    </button>
+                } @else {
+                    <button class="mj-input live-preview-btn live-preview-btn-cancel"
+                            type="button"
+                            (click)="CancelPreview()">
+                        <i class="fa-solid fa-stop"></i> Cancel
+                    </button>
+                }
+            </div>
+
+            @if (PreviewError) {
+                <p class="live-preview-error">
+                    <i class="fa-solid fa-circle-exclamation"></i> {{ PreviewError }}
+                </p>
+            }
+
+            @if (PreviewIsRunning || PreviewProviders.length > 0) {
+                <div class="live-preview-chips">
+                    @if (PreviewIsRunning && PreviewProviders.length === 0) {
+                        <span class="live-preview-chip live-preview-chip-pending">
+                            <i class="fa-solid fa-circle-notch fa-spin"></i> Streaming…
+                        </span>
+                    }
+                    @for (p of PreviewProviders; track p.Name) {
+                        <span class="live-preview-chip live-preview-chip-completed">
+                            <i class="fa-solid fa-check"></i>
+                            <strong>{{ p.Name }}</strong>
+                            <span class="live-preview-chip-count">{{ p.Count }}</span>
+                            <span class="live-preview-chip-time">{{ p.ElapsedMs }}ms</span>
+                        </span>
+                    }
+                </div>
+            }
+
+            @if (PreviewResults.length > 0) {
+                <div class="live-preview-results">
+                    <div class="live-preview-results-header">
+                        {{ PreviewResults.length }} result(s)
+                        @if (PreviewElapsedMs !== null) { in {{ PreviewElapsedMs }}ms }
+                    </div>
+                    @for (r of PreviewResults; track r.ID; let i = $index) {
+                        @if (i < 10) {
+                            <div class="live-preview-result">
+                                <span class="live-preview-result-score">{{ (r.Score * 100) | number:'1.0-0' }}%</span>
+                                <span class="live-preview-result-title">{{ r.Title }}</span>
+                                <span class="live-preview-result-entity">{{ r.EntityName }}</span>
+                            </div>
+                        }
+                    }
+                    @if (PreviewResults.length > 10) {
+                        <p class="live-preview-truncated">…and {{ PreviewResults.length - 10 }} more (preview shows top 10).</p>
+                    }
+                </div>
+            }
+        </div>
+    </mj-collapsible-panel>
+
     <!-- Details Section (kept empty — RerankerBudgetCents now lives in the
          Reranker section above where it semantically belongs) -->
     <mj-collapsible-panel
