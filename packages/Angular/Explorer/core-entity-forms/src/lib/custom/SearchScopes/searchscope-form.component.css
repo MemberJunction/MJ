@@ -82,3 +82,80 @@
     color: var(--mj-text-muted);
     font-size: 0.74rem;
 }
+
+.fusion-weights {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.4rem 0;
+}
+
+.fusion-weights-load-btn {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.fusion-weights-load-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.fusion-weights-empty,
+.fusion-weights-help {
+    color: var(--mj-text-muted);
+    font-size: 0.78rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.fusion-weights-help code {
+    background: var(--mj-bg-surface-sunken);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.74rem;
+}
+
+.fusion-weight-row {
+    display: grid;
+    grid-template-columns: 160px 1fr 56px 16px;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.fusion-weight-row:last-of-type {
+    border-bottom: none;
+}
+
+.fusion-weight-label {
+    font-size: 0.85rem;
+    color: var(--mj-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fusion-weight-slider {
+    width: 100%;
+}
+
+.fusion-weight-value {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--mj-text-secondary);
+    font-size: 0.82rem;
+}
+
+.fusion-weight-spinner {
+    color: var(--mj-text-muted);
+}

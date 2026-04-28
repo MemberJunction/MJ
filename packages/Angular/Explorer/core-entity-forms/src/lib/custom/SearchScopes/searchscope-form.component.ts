@@ -29,6 +29,23 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { MJSearchScopeFormComponent } from '../../generated/Entities/MJSearchScope/mjsearchscope.form.component';
 
+interface FusionWeightRow {
+    /** Source-type key the SearchEngine matches against (e.g. 'vector', 'fulltext'). */
+    Key: string;
+    /** Friendly label for the slider — same value as Key today, kept separate for future i18n. */
+    Label: string;
+    /** Working value of the slider (1-decimal precision) — bound via two-way. */
+    Weight: number;
+}
+
+/**
+ * Built-in source types the SearchEngine ships. New 3rd-party provider
+ * SourceTypes (e.g. external clusters) won't appear here unless the scope
+ * author adds them via the JSON Scope Config block — by design, since the
+ * fusion-weights UI is for the four canonical built-ins.
+ */
+const BUILT_IN_SOURCE_TYPES: string[] = ['vector', 'fulltext', 'entity', 'storage'];
+
 interface RerankerOption {
     DriverClass: string;
     Name: string;
@@ -73,6 +90,7 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
             { sectionKey: 'accessControl', sectionName: 'Access Control', isExpanded: false },
             { sectionKey: 'lifecycleManagement', sectionName: 'Lifecycle Management', isExpanded: false },
             { sectionKey: 'technicalConfiguration', sectionName: 'Technical Configuration', isExpanded: false },
+            { sectionKey: 'fusionWeights', sectionName: 'Fusion Weights', isExpanded: false },
             { sectionKey: 'reranker', sectionName: 'Reranker', isExpanded: false },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
@@ -121,6 +139,55 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
      * state + spinner.
      */
     public IsExportingTuningCsv = false;
+
+    /**
+     * P4.2 — fusion weight sliders for each canonical SearchEngine source type.
+     * Backed by `SearchScope.ScopeConfig.fusionWeights` JSON (the runtime path
+     * — see RAG_plan.md §8 Multi-Scope RRF Fusion). Plan task originally
+     * proposed `SearchScopeProvider.Weight` but that column doesn't exist in
+     * Phase 1; the JSON path is the actual contract the SearchEngine reads.
+     */
+    private _fusionWeights: FusionWeightRow[] | null = null;
+
+    public get FusionWeights(): FusionWeightRow[] {
+        if (!this._fusionWeights) {
+            const cfg = this.parseScopeConfig();
+            const stored = (cfg?.['fusionWeights'] as Record<string, unknown> | undefined) ?? {};
+            this._fusionWeights = BUILT_IN_SOURCE_TYPES.map(key => {
+                const value = stored[key];
+                const weight = typeof value === 'number' && Number.isFinite(value) ? value : 1;
+                return { Key: key, Label: key, Weight: weight };
+            });
+        }
+        return this._fusionWeights;
+    }
+
+    /**
+     * Persist a fusion weight change back to `ScopeConfig.fusionWeights`. The
+     * caller is the slider's `(change)` event so writes happen only on
+     * slide-end, not on every drag tick.
+     */
+    public OnFusionWeightChanged(row: FusionWeightRow, raw: number | string): void {
+        const value = typeof raw === 'number' ? raw : Number(raw);
+        if (!Number.isFinite(value)) return;
+        row.Weight = value;
+
+        const cfg = this.parseScopeConfig() ?? {};
+        const weights = (cfg['fusionWeights'] as Record<string, unknown> | undefined) ?? {};
+        if (Math.abs(value - 1) < 0.001) {
+            // Default value — drop the explicit override so future engine-default
+            // changes flow through naturally.
+            delete weights[row.Key];
+        } else {
+            weights[row.Key] = +value.toFixed(2);
+        }
+        if (Object.keys(weights).length > 0) {
+            cfg['fusionWeights'] = weights;
+        } else {
+            delete cfg['fusionWeights'];
+        }
+        this.record.ScopeConfig = JSON.stringify(cfg, null, 2);
+    }
 
     /**
      * P3.4 — export the last 500 SearchExecutionLog rows for this scope as CSV.
