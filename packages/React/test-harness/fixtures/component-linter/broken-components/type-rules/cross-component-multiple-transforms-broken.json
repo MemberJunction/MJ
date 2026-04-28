@@ -3,16 +3,32 @@
   "type": "generic",
   "title": "Cross-Component Multiple Transforms - Broken Pattern",
   "description": "Tests multiple transformations that lose field needed by final component (may fail until linter refactor)",
-  "code": "function CrossComponentMultipleTransformsBroken({ utilities, components }) {\n  const [chartData, setChartData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Orders' });\n      if (result?.Success) {\n        // First transformation: add computed field\n        const withMonth = result.Results.map(o => ({\n          ...o,\n          Month: o.OrderDate.substring(0, 7)\n        }));\n        \n        // ❌ Second transformation: loses TotalAmount\n        const grouped = withMonth.map(o => ({\n          Month: o.Month,\n          CustomerName: o.CustomerName\n        }));\n        \n        setChartData(grouped);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Orders Chart</h3>\n      {/* Chart needs TotalAmount but it was removed */}\n      <SimpleChart data={chartData} groupBy=\"Month\" valueField=\"TotalAmount\" />\n    </div>\n  );\n}",
+  "code": "function CrossComponentMultipleTransformsBroken({ utilities, components }) {\n  const [chartData, setChartData] = useState([]);\n  const { SimpleChart } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Action Execution Logs' });\n      if (result?.Success) {\n        // First transformation: add computed field\n        const withDate = result.Results.map(o => ({\n          ...o,\n          DateKey: o.StartedAt.substring(0, 10)\n        }));\n        \n        // ❌ Second transformation: loses RetentionPeriod\n        const grouped = withDate.map(o => ({\n          DateKey: o.DateKey,\n          Action: o.Action\n        }));\n        \n        setChartData(grouped);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Execution Chart</h3>\n      {/* Chart needs RetentionPeriod but it was removed */}\n      <SimpleChart data={chartData} groupBy=\"DateKey\" valueField=\"RetentionPeriod\" />\n    </div>\n  );\n}",
   "location": "embedded",
   "namespace": "test/fixtures/type-rules",
   "version": "1.0.0",
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
+    "mode": "views",
     "entities": [{
-      "name": "Orders",
-      "fields": ["ID", "OrderDate", "CustomerName", "TotalAmount"]
+      "name": "MJ: Action Execution Logs",
+      "type": "view",
+      "fieldMetadata": [
+        {"name": "ID", "type": "uniqueidentifier"},
+        {"name": "ActionID", "type": "uniqueidentifier"},
+        {"name": "Action", "type": "nvarchar"},
+        {"name": "UserID", "type": "uniqueidentifier"},
+        {"name": "User", "type": "nvarchar"},
+        {"name": "StartedAt", "type": "datetimeoffset"},
+        {"name": "EndedAt", "type": "datetimeoffset"},
+        {"name": "Params", "type": "nvarchar"},
+        {"name": "ResultCode", "type": "nvarchar"},
+        {"name": "Message", "type": "nvarchar"},
+        {"name": "RetentionPeriod", "type": "int"},
+        {"name": "__mj_CreatedAt", "type": "datetimeoffset"},
+        {"name": "__mj_UpdatedAt", "type": "datetimeoffset"}
+      ]
     }]
   }
 }

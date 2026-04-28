@@ -1,4 +1,4 @@
-import { UserInfo, Metadata, RunView, LogStatus, LogError } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, DatabaseProviderBase, LogStatus, LogError } from '@memberjunction/core';
 import { RegisterClass, NormalizeUUID } from '@memberjunction/global';
 import { AutotagBase, AutotagProgressCallback } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';

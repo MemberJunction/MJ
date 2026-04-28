@@ -59,15 +59,14 @@
       "name": "icon",
       "type": "string",
       "description": "Icon to show (emoji or unicode)",
-      "required": false,
-      "defaultValue": "📂"
+      "required": false
     },
     {
       "name": "showIcon",
       "type": "boolean",
       "description": "Whether to show the icon",
       "required": false,
-      "defaultValue": true
+      "defaultValue": false
     },
     {
       "name": "fullWidth",

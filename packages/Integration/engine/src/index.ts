@@ -35,6 +35,7 @@ export type {
     SourceObjectInfo,
     SourceFieldInfo,
     SourceRelationshipInfo,
+    IntrospectSchemaOptions,
     CRUDContext,
     CreateRecordContext,
     UpdateRecordContext,

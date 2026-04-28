@@ -279,8 +279,19 @@ export class SQLCodeGenBase {
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
             // we CAN skip the entity field values part because that wouldn't change from the first time we ran it
             // Run advanced generation here in case new virtual fields added, so we do NOT run advanced geneartion in the main manageMetadata() call
+            //
+            // Pass 1 (in manage-metadata.ts) already discovered all changes and populated _newEntityList ∪ _modifiedEntityList.
+            // Pass 2 (this call) only re-runs to pick up new virtual fields from regenerated views and to apply advanced
+            // generation. Scoping to changed entities collapses the SP scans to seeks; an empty list means no work to do.
+            // forceRegeneration override skips the scoping so all entities get reprocessed (used when prompts change, etc.).
+            const pass2EntityFilter: string[] | undefined = configInfo.forceRegeneration?.enabled
+                ? undefined
+                : [...new Set([
+                    ...ManageMetadataBase.newEntityList,
+                    ...ManageMetadataBase.modifiedEntityList,
+                ])];
             startSpinner('Managing entity fields metadata...');
-            if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false)) {
+            if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false, false, pass2EntityFilter)) {
                 failSpinner('Failed to manage entity fields');
                 overallSuccess = false;
             }
@@ -322,8 +333,10 @@ export class SQLCodeGenBase {
 
                     if (regenResult.Success) {
                         // Re-sync entity fields to pick up new virtual columns (e.g., __mj_Latitude, __mj_Longitude)
-                        // No LLM needed — just detect new/changed fields from the regenerated views
-                        await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, true, false);
+                        // No LLM needed — just detect new/changed fields from the regenerated views.
+                        // Scope to the late-regen entities only — they're the only ones whose views just changed.
+                        const lateRegenFilter = entitiesToRegen.map(e => e.Name);
+                        await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, true, false, lateRegenFilter);
 
                         // Apply reason-specific fixups
                         await this.applyLatePhaseFixups(pool, regenList, entitiesToRegen);
@@ -1466,23 +1479,33 @@ export class SQLCodeGenBase {
     /**
      * Check if an entity has native latitude/longitude fields marked with GeoLatitude/GeoLongitude ExtendedType.
      * If both exist, the view should alias them directly instead of joining to RecordGeoCode.
+     *
+     * MUST exclude virtual fields. The view-introspection pass creates virtual
+     * EntityField rows for the `__mj_Latitude`/`__mj_Longitude` SELECT aliases
+     * the JOIN path emits, then auto-assigns ExtendedType=GeoLatitude/Longitude
+     * by name-pattern. Without this filter the next view regen flips to the
+     * native path and tries to SELECT `e.__mj_Longitude` from the base table —
+     * the column doesn't exist on the table, only on the view itself, so view
+     * creation fails with "Invalid column name '__mj_Longitude'". This recurs
+     * on any geo-eligible entity whose RecordGeoCode-based view ran once.
      */
     protected hasNativeGeoFields(entityFields: EntityFieldInfo[]): boolean {
-        const hasLat = entityFields.some(f => f.ExtendedType === 'GeoLatitude');
-        const hasLng = entityFields.some(f => f.ExtendedType === 'GeoLongitude');
+        const hasLat = entityFields.some(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
+        const hasLng = entityFields.some(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
         return hasLat && hasLng;
     }
 
     /**
      * Generate SELECT aliases for native lat/lng fields → __mj_Latitude / __mj_Longitude.
+     * Virtual fields are excluded — see hasNativeGeoFields for the rationale.
      */
     protected generateNativeGeoFields(
         entityFields: EntityFieldInfo[],
         classNameFirstChar: string,
         qi: (name: string) => string
     ): string {
-        const latField = entityFields.find(f => f.ExtendedType === 'GeoLatitude');
-        const lngField = entityFields.find(f => f.ExtendedType === 'GeoLongitude');
+        const latField = entityFields.find(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
+        const lngField = entityFields.find(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
         if (!latField || !lngField) return '';
         return `    ${qi(classNameFirstChar)}.${qi(latField.Name)} AS ${qi('__mj_Latitude')},\n    ${qi(classNameFirstChar)}.${qi(lngField.Name)} AS ${qi('__mj_Longitude')}`;
     }

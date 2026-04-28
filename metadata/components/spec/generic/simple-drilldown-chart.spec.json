@@ -188,7 +188,7 @@
       "parameters": [
         {
           "name": "clickData",
-          "type": "{ seriesName: string; value: number; label: string; records: Array<object>; chartType: string; percentage?: number }",
+          "type": "{ series: string; value: number; label: string; records: Array<object>; chartType: string; percentage?: number }",
           "description": "Click data from the chart including label, value, and records"
         }
       ]

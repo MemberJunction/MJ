@@ -305,18 +305,23 @@ export class APIKeyEditPanelComponent implements OnChanges {
             const toAdd = allScopes.filter(s => s.selected && !s.originallySelected);
             const toRemove = allScopes.filter(s => !s.selected && s.originallySelected);
 
-            // Add new scope assignments
+            if (toAdd.length === 0 && toRemove.length === 0) {
+                this.HasScopeChanges = false;
+                return;
+            }
+
+            const tg = await this.md.CreateTransactionGroup();
+            const rv = new RunView();
+
             for (const item of toAdd) {
                 const keyScope = await this.md.GetEntityObject<MJAPIKeyScopeEntity>('MJ: API Key Scopes');
                 keyScope.NewRecord();
                 keyScope.APIKeyID = this.APIKey.ID;
                 keyScope.ScopeID = item.scope.ID;
+                keyScope.TransactionGroup = tg;
                 await keyScope.Save();
-                item.originallySelected = true;
             }
 
-            // Remove scope assignments
-            const rv = new RunView();
             for (const item of toRemove) {
                 const result = await rv.RunView<MJAPIKeyScopeEntity>({
                     EntityName: 'MJ: API Key Scopes',
@@ -324,10 +329,19 @@ export class APIKeyEditPanelComponent implements OnChanges {
                     ResultType: 'entity_object'
                 });
                 if (result.Success && result.Results.length > 0) {
+                    result.Results[0].TransactionGroup = tg;
                     await result.Results[0].Delete();
                 }
-                item.originallySelected = false;
             }
+
+            if (!await tg.Submit()) {
+                this.ErrorMessage = 'Failed to update permissions — all changes have been rolled back';
+                return;
+            }
+
+            // Commit succeeded — update client-side state to match
+            for (const item of toAdd) item.originallySelected = true;
+            for (const item of toRemove) item.originallySelected = false;
 
             this.HasScopeChanges = false;
             this.SuccessMessage = 'Permissions updated successfully';

@@ -1,13 +1,6 @@
 import { BaseInfo } from "./baseInfo";
 import { IMetadataProvider } from "./interfaces";
 import { LogError } from "./logging";
-// NOTE: Circular import with metadata.ts is intentional and safe.
-// Both modules reference each other at the type/getter level only;
-// all cross-module calls happen inside function bodies (never at
-// class-field initialisation time), so the modules are fully
-// evaluated before any getter is invoked.  This is the same
-// pattern already used by queryInfo.ts ↔ metadata.ts.
-import { Metadata } from "./metadata";
 import { DatabasePlatform } from "./platformSQL";
 import { ParsePlatformVariants, PlatformVariantsJSON, ResolvePlatformVariant } from "./platformVariants";
 import { UUIDsEqual } from "@memberjunction/global";
@@ -420,77 +413,81 @@ export class AuthorizationInfo extends BaseInfo {
      */
     Parent: string
 
-    /**
-     * Returns the role assignments for this authorization.
-     *
-     * **Lazy resolution** — filters from the global `Metadata.Provider.AuthorizationRoles`
-     * collection on every call, like `QueryInfo.Permissions` filters from
-     * `Metadata.Provider.QueryPermissions`.  No result caching is applied because
-     * `AuthorizationRoleInfo` objects are lightweight and the collection is small; if
-     * caching becomes necessary, follow the `QueryInfo.Fields` pattern (null-sentinel +
-     * cache-on-first-access).  This design means:
-     *  - No pre-processing is needed in `GetAllMetadata` (the hardcoded post-processing
-     *    block previously required has been removed).
-     *  - `AllAuthorizationRoles` is a proper first-class member of `AllMetadata`/
-     *    `IMetadataProvider`, loaded via the standard `AllMetadataArrays` loop.
-     *  - The result is always fresh — if metadata is refreshed the next call
-     *    automatically reflects the updated role list.
-     */
-    public get Roles(): AuthorizationRoleInfo[] {
-        return Metadata.Provider?.AuthorizationRoles?.filter(
-            ar => UUIDsEqual(ar.AuthorizationID, this.ID)
-        ) ?? [];
+    private _AuthorizationRoles: AuthorizationRoleInfo[] = []
+    get Roles(): AuthorizationRoleInfo[] {
+        return this._AuthorizationRoles
+    }
+
+    constructor (md: IMetadataProvider, initData: any = null) {
+        super()
+        this.copyInitData(initData)
+        if (initData) 
+            this.SetupAuthorizationRoles(md, initData.AuthorizationRoles || initData._AuthorizationRoles)
     }
 
     /**
-     * @param initData - Raw data row from the metadata dataset / database view.
-     *   `copyInitData` maps this into the typed properties (ID, Name, ParentID, etc.).
-     * @param _md - Accepted but unused; retained so the signature matches the universal
-     *   `new m.class(dataRow, metadataProvider)` convention used by
-     *   `ProviderBase.MetadataFromSimpleObjectWithoutUser`.
-     *
-     * ### Role resolution
-     * Role assignments are resolved lazily via `Metadata.Provider.AuthorizationRoles`
-     * (see the {@link Roles} getter) — no eager wiring is needed in the constructor.
+     * Sets up the roles associated with this authorization using the provided metadata and initial data.
+     * 
+     * @param {IMetadataProvider} md - The metadata provider to fetch role information.
+     * @param {AuthorizationRoleInfo[]} authorizationRoles - An array of `AuthorizationRoleInfo` instances or equivalent data to be associated with this authorization.
      */
-    constructor (initData: any = null, _md?: IMetadataProvider) {
-        super()
-        this.copyInitData(initData)
+    public SetupAuthorizationRoles(md: IMetadataProvider, authorizationRoles: AuthorizationRoleInfo[]) {
+        if (authorizationRoles) {
+            const mdRoles = md.Roles;
+            this._AuthorizationRoles=  [];
+            for (let i = 0; i < authorizationRoles.length; i++) {
+                // 
+                const ari = new AuthorizationRoleInfo(authorizationRoles[i])
+                this._AuthorizationRoles.push(ari)
+    
+                const match = mdRoles.find(r => UUIDsEqual(r.ID, ari.RoleID))
+                if (match)
+                    ari._setRole(match)
+            }
+        }
     }
 
     /**
      * Determines if a given user can execute actions under this authorization based on their roles.
-     * 
+     *
+     * Evaluation rules (fixed in Phase 2b):
+     * - Match by `AuthorizationRoleInfo.RoleID` (the FK to Roles), not the authorization-role PK.
+     * - Honour the `Type` column: any matching Deny row wins; without a Deny, at least one Allow is required.
+     *
      * @param {UserInfo} user - The user to check for execution rights.
-     * @returns {boolean} True if the user can execute actions under this authorization, otherwise false.
+     * @returns {boolean} True if the user has a matching Allow role and no matching Deny role; false otherwise.
      */
     public UserCanExecute(user: UserInfo): boolean {
-        if (this.IsActive && user && user.UserRoles) {
-            for (let i = 0; i < user.UserRoles.length; i++) {
-                // Compare r.RoleID (FK pointing to the actual Role record) against the user's role.
-                // NOTE: r.ID is the AuthorizationRole join-table PK — a different UUID that never
-                // matches a role ID. The correct field is r.RoleID.
-                const matchingRole = this.Roles.find(r => UUIDsEqual(r.RoleID, user.UserRoles[i].RoleID))
-                if (matchingRole)
-                    return true; // bail out as soon as any of the user's roles has this authorization
+        if (!this.IsActive || !user || !user.UserRoles) return false;
+        let hasAllow = false;
+        for (const userRole of user.UserRoles) {
+            const matchingAuthRoles = this.Roles.filter(r => UUIDsEqual(r.RoleID, userRole.RoleID));
+            for (const ar of matchingAuthRoles) {
+                if (ar.AuthorizationType() === AuthorizationRoleType.Deny) return false; // Deny wins globally
+                if (ar.AuthorizationType() === AuthorizationRoleType.Allow) hasAllow = true;
             }
         }
-        return false
+        return hasAllow;
     }
 
     /**
      * Determines if a given role can execute actions under this authorization.
-     * 
+     *
+     * Phase 2b also honours Deny semantics for consistency with {@link UserCanExecute}.
+     *
      * @param {RoleInfo} role - The role to check for execution rights.
-     * @returns {boolean} True if the role can execute actions under this authorization, otherwise false.
+     * @returns {boolean} True if an Allow authorization-role exists for this role and no Deny does.
      */
     public RoleCanExecute(role: RoleInfo): boolean {
-        if (this.IsActive) {
-            // Compare r.RoleID (FK to the Role) against role.ID. r.ID is the join-record PK
-            // and must not be used here — it will never match a RoleInfo.ID.
-            return this.Roles.find(r => UUIDsEqual(r.RoleID, role.ID)) != null
+        if (!this.IsActive) return false;
+        const matchingAuthRoles = this.Roles.filter(r => UUIDsEqual(r.RoleID, role.ID));
+        if (matchingAuthRoles.length === 0) return false;
+        let hasAllow = false;
+        for (const ar of matchingAuthRoles) {
+            if (ar.AuthorizationType() === AuthorizationRoleType.Deny) return false;
+            if (ar.AuthorizationType() === AuthorizationRoleType.Allow) hasAllow = true;
         }
-        return false
+        return hasAllow;
     }
 }
 
@@ -548,27 +545,14 @@ export class AuthorizationRoleInfo extends BaseInfo {
     Role: string
 
     private _RoleInfo: RoleInfo = null
-
-    /**
-     * The resolved `RoleInfo` object for this assignment.
-     *
-     * Checks the explicitly-set value first (via `_setRole`), then falls back to
-     * a lazy lookup in `Metadata.Provider.Roles` — the same pattern used by
-     * `QuerySQLInfo.SQLDialectInfo`.  The result is cached in `_RoleInfo` so the
-     * lookup only runs once per instance.
-     */
     public get RoleInfo(): RoleInfo {
-        if (this._RoleInfo) return this._RoleInfo;
-        const match = Metadata.Provider?.Roles?.find(r => UUIDsEqual(r.ID, this.RoleID));
-        if (match) this._RoleInfo = match;
-        return this._RoleInfo;
+        return this._RoleInfo
     }
 
     public AuthorizationType(): AuthorizationRoleType {
         return this.Type.trim().toLowerCase() === 'allow' ? AuthorizationRoleType.Allow : AuthorizationRoleType.Deny
     }
 
-    /** Explicitly wires a pre-resolved RoleInfo; primarily used in tests. */
     _setRole(role: RoleInfo) {
         this._RoleInfo = role
     }
