@@ -1,10 +1,10 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, Float, InputType, ID } from 'type-graphql';
 import { GraphQLJSON } from 'graphql-type-json';
 import { AppContext } from '../types.js';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { SearchEngine, SearchResult as SearchEngineResult, SearchResultItem as SearchEngineResultItem, SearchProviderInfo, SearchContext } from '@memberjunction/search-engine';
-import { SearchEngineBase } from '@memberjunction/core-entities';
+import { SearchEngine, SearchResult as SearchEngineResult, SearchResultItem as SearchEngineResultItem, SearchProviderInfo, SearchContext, SearchScopePermissionResolver } from '@memberjunction/search-engine';
+import { SearchEngineBase, MJAIAgentEntity } from '@memberjunction/core-entities';
 
 /* ───── GraphQL types ───── */
 
@@ -207,6 +207,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
         @Arg('minScore', () => Float, { nullable: true }) minScore: number | undefined,
         @Arg('scopeIDs', () => [ID], { nullable: true }) scopeIDs: string[] | undefined,
         @Arg('searchContext', () => SearchContextInput, { nullable: true }) searchContext: SearchContextInput | undefined,
+        @Arg('agentID', () => ID, { nullable: true }) agentID: string | undefined,
         @Ctx() { userPayload }: AppContext = {} as AppContext
     ): Promise<SearchKnowledgeResult> {
         const startTime = Date.now();
@@ -214,6 +215,18 @@ export class SearchKnowledgeResolver extends ResolverBase {
             const currentUser = this.GetUserFromPayload(userPayload);
             if (!currentUser) {
                 return this.errorResult('Unable to determine current user', startTime);
+            }
+
+            // Phase 2A enforcement: every scope the caller wants to use must
+            // resolve to an Allowed permission for this user (and optionally
+            // this agent). Reject the whole call on the first denial — we
+            // don't silently drop forbidden scopes because that masks bugs
+            // in scope authoring and surprises agents.
+            if (scopeIDs && scopeIDs.length) {
+                const denied = await this.rejectForbiddenScopes(scopeIDs, currentUser, agentID);
+                if (denied) {
+                    return this.errorResult(denied, startTime);
+                }
             }
 
             const mappedContext: SearchContext | undefined = searchContext
@@ -246,13 +259,64 @@ export class SearchKnowledgeResolver extends ResolverBase {
     }
 
     /**
+     * Returns a rejection message if any of the requested scopes are not
+     * accessible to (user, agent), or undefined if all are permitted.
+     * Resolution goes through SearchScopePermissionResolver — see its docs
+     * for the rule order.
+     */
+    private async rejectForbiddenScopes(
+        scopeIDs: string[],
+        user: UserInfo,
+        agentID: string | undefined,
+    ): Promise<string | undefined> {
+        const agent = await this.loadAgent(agentID, user);
+        const resolver = new SearchScopePermissionResolver();
+        for (const scopeID of scopeIDs) {
+            const verdict = await resolver.ResolveEffectivePermission({
+                User: user,
+                SearchScopeID: scopeID,
+                Agent: agent,
+                ContextUser: user,
+            });
+            if (!verdict.Allowed) {
+                LogStatus(`SearchKnowledge denied: ${verdict.Reason} (scope=${scopeID}, source=${verdict.Source})`);
+                return `Forbidden: ${verdict.Reason}`;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Loads the AIAgent record by ID for the agent-fallback path. Returns
+     * null if no agentID was supplied, or if the lookup fails (which we
+     * treat as "no agent context" rather than as an error so a malformed
+     * input can't escalate privilege).
+     */
+    private async loadAgent(agentID: string | undefined, contextUser: UserInfo): Promise<MJAIAgentEntity | null> {
+        if (!agentID) return null;
+        try {
+            const md = new Metadata();
+            const agent = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
+            const loaded = await agent.Load(agentID);
+            return loaded ? agent : null;
+        } catch (err) {
+            LogError(`SearchKnowledge: failed to load agent ${agentID}: ${err instanceof Error ? err.message : String(err)}`);
+            return null;
+        }
+    }
+
+    /**
      * Returns the list of search scopes the current user can see and use.
      *
-     * Phase 1 returns all active scopes plus personal scopes owned by the caller.
-     * Phase 2 will layer `SearchScopePermission` filtering on top.
+     * Phase 2A: filters the active scope list through
+     * SearchScopePermissionResolver — only scopes that resolve to Allowed
+     * (Read or higher) for the caller appear in the response. Personal
+     * scopes owned by the caller bypass the resolver because ownership is
+     * itself an implicit Manage grant.
      */
     @Query(() => [SearchScopeInfo])
     async SearchScopes(
+        @Arg('agentID', () => ID, { nullable: true }) agentID: string | undefined,
         @Ctx() { userPayload }: AppContext = {} as AppContext
     ): Promise<SearchScopeInfo[]> {
         try {
@@ -263,22 +327,48 @@ export class SearchKnowledgeResolver extends ResolverBase {
             const scopes = SearchEngineBase.Instance.ActiveScopes;
             const userID = currentUser.ID;
 
-            return scopes
-                .filter(s => !s.OwnerUserID || s.OwnerUserID === userID)
-                .map(s => ({
-                    ID: s.ID,
-                    Name: s.Name,
-                    Description: s.Description ?? undefined,
-                    Icon: s.Icon ?? undefined,
-                    IsGlobal: !!s.IsGlobal,
-                    IsDefault: !!s.IsDefault,
-                    IsPersonal: !!s.OwnerUserID
-                }));
+            const ownedOrUnowned = scopes.filter(s => !s.OwnerUserID || s.OwnerUserID === userID);
+            const agent = await this.loadAgent(agentID, currentUser);
+            const resolver = new SearchScopePermissionResolver();
+
+            const visible: SearchScopeInfo[] = [];
+            for (const s of ownedOrUnowned) {
+                // Personal scopes owned by the caller are implicitly visible.
+                if (s.OwnerUserID && s.OwnerUserID === userID) {
+                    visible.push(this.toScopeInfo(s));
+                    continue;
+                }
+                // Otherwise, defer to the permission resolver. A scope with
+                // no permission rows AND no agent fallback is invisible to
+                // non-owners — this is the intended Phase 2A default.
+                const verdict = await resolver.ResolveEffectivePermission({
+                    User: currentUser,
+                    SearchScopeID: s.ID,
+                    Agent: agent,
+                    ContextUser: currentUser,
+                });
+                if (verdict.Allowed) {
+                    visible.push(this.toScopeInfo(s));
+                }
+            }
+            return visible;
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`SearchScopes query failed: ${msg}`);
             return [];
         }
+    }
+
+    private toScopeInfo(s: { ID: string; Name: string; Description?: string | null; Icon?: string | null; IsGlobal?: boolean; IsDefault?: boolean; OwnerUserID?: string | null }): SearchScopeInfo {
+        return {
+            ID: s.ID,
+            Name: s.Name,
+            Description: s.Description ?? undefined,
+            Icon: s.Icon ?? undefined,
+            IsGlobal: !!s.IsGlobal,
+            IsDefault: !!s.IsDefault,
+            IsPersonal: !!s.OwnerUserID,
+        };
     }
 
     @Mutation(() => SearchKnowledgeResult)
