@@ -12,13 +12,20 @@ vi.mock('@memberjunction/global', async () => {
 });
 
 const searchSpy = vi.fn();
+const permissionResolveSpy = vi.fn();
 
-// Mock the SearchEngine singleton
+// Mock the SearchEngine singleton + the SearchScopePermissionResolver class.
+// The resolver mock returns Allowed=true by default so existing tests that
+// did not care about Phase 2A enforcement keep passing; tests that exercise
+// the denial path override the spy.
 vi.mock('@memberjunction/search-engine', () => ({
     SearchEngine: {
         Instance: {
             Search: (...args: unknown[]) => searchSpy(...args),
         }
+    },
+    SearchScopePermissionResolver: class {
+        ResolveEffectivePermission = (...args: unknown[]) => permissionResolveSpy(...args);
     }
 }));
 
@@ -86,6 +93,7 @@ describe('ScopedSearchAction', () => {
         searchSpy.mockReset();
         getAgentScopesSpy.mockReset();
         getActiveScopeByIDSpy.mockReset();
+        permissionResolveSpy.mockReset();
         loadedAgentStub.SearchScopeAccess = 'All';
         // Default: successful empty-result search
         searchSpy.mockResolvedValue({
@@ -95,6 +103,15 @@ describe('ScopedSearchAction', () => {
             ElapsedMs: 1,
             SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
             Providers: []
+        });
+        // Default: permission resolver allows. Tests that need a denial
+        // override this in the test body.
+        permissionResolveSpy.mockResolvedValue({
+            Allowed: true,
+            Level: 'Search',
+            Source: 'DirectGrant',
+            Reason: 'mock allow',
+            toSqlPredicate: () => '1=1',
         });
     });
 
@@ -203,5 +220,70 @@ describe('ScopedSearchAction', () => {
         expect(result.Success).toBe(true);
         const callArgs = searchSpy.mock.calls[0][0];
         expect(callArgs.ScopeIDs).toEqual(['scope-allowed']);
+    });
+
+    describe('Phase 2A — SearchScopePermissionResolver enforcement', () => {
+        it('rejects when the permission resolver denies the user even if the agent allows the scope', async () => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            getActiveScopeByIDSpy.mockReturnValue({ ID: 'scope-locked', Name: 'Locked' });
+            permissionResolveSpy.mockResolvedValueOnce({
+                Allowed: false,
+                Level: 'None',
+                Source: 'NoGrant',
+                Reason: 'User has no direct grant, no qualifying role grant, and no agent-side fallback for this scope.',
+                toSqlPredicate: () => '1=0',
+            });
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'ScopeID', Value: 'scope-locked' }
+            ]));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('PERMISSION_DENIED');
+            expect(result.Message).toContain('Forbidden:');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
+        it('reports ACCESS_DENIED when the resolver source is AgentNone', async () => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            getActiveScopeByIDSpy.mockReturnValue({ ID: 'scope-x', Name: 'X' });
+            permissionResolveSpy.mockResolvedValueOnce({
+                Allowed: false,
+                Level: 'None',
+                Source: 'AgentNone',
+                Reason: "Agent has SearchScopeAccess='None'; refused.",
+                toSqlPredicate: () => '1=0',
+            });
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'ScopeID', Value: 'scope-x' }
+            ]));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('ACCESS_DENIED');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
+        it('passes through to search when the resolver allows', async () => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            getActiveScopeByIDSpy.mockReturnValue({ ID: 'scope-ok', Name: 'OK' });
+            // Default permissionResolveSpy already returns Allowed=true.
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'ScopeID', Value: 'scope-ok' }
+            ]));
+            expect(result.Success).toBe(true);
+            expect(searchSpy).toHaveBeenCalledOnce();
+            // Resolver was called with the right inputs.
+            expect(permissionResolveSpy).toHaveBeenCalledWith(expect.objectContaining({
+                SearchScopeID: 'scope-ok',
+                User: expect.objectContaining({ ID: 'u1' }),
+                Agent: expect.objectContaining({ ID: 'agent-1' }),
+            }));
+        });
     });
 });

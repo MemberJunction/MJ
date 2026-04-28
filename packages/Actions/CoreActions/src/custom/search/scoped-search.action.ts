@@ -5,7 +5,8 @@ import { LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import {
     SearchEngine,
     SearchResult,
-    SearchResultItem
+    SearchResultItem,
+    SearchScopePermissionResolver
 } from "@memberjunction/search-engine";
 import {
     SearchEngineBase,
@@ -104,6 +105,28 @@ export class ScopedSearchAction extends BaseAction {
                 return this.createErrorResult(scopeResolution.errorMessage!, scopeResolution.errorCode!);
             }
             const { scope, scopeID } = scopeResolution;
+
+            // 5b. Phase 2A: validate per-user/role permission on the scope.
+            //     SearchScopeAccess is the agent-side gate (handled in
+            //     resolveScope above). The resolver below adds the user-side
+            //     gate so a low-trust user can't ride an 'All' agent into a
+            //     scope they have no business reading.
+            if (scopeID) {
+                const permResolver = new SearchScopePermissionResolver();
+                const verdict = await permResolver.ResolveEffectivePermission({
+                    User: params.ContextUser,
+                    SearchScopeID: scopeID,
+                    Agent: agent,
+                    ContextUser: params.ContextUser,
+                });
+                if (!verdict.Allowed) {
+                    LogStatus(`ScopedSearchAction denied: ${verdict.Reason} (scope=${scopeID}, source=${verdict.Source})`);
+                    return this.createErrorResult(
+                        `Forbidden: ${verdict.Reason}`,
+                        verdict.Source === 'AgentNone' ? 'ACCESS_DENIED' : 'PERMISSION_DENIED'
+                    );
+                }
+            }
 
             // 6. Run the search --------------------------------------------
             const maxResults = this.getNumericParam(params, "maxresults", 25);
