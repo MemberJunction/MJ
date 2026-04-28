@@ -146,7 +146,7 @@ export class DatabaseCreateWizardComponent implements OnDestroy {
     }
 
     public OnRelationshipsChanged(fks: ForeignKeySpec[]): void {
-        this.WizardState.UpdateRelationships(fks);
+        this.WizardState.UpdateRelationshipsAndAutoColumns(fks);
     }
 
     // ─── Navigation ────────────────────────────────────────────────────────
@@ -185,6 +185,17 @@ export class DatabaseCreateWizardComponent implements OnDestroy {
 
     public OnCancel(): void {
         this.Cancelled.emit();
+    }
+
+    /** Re-run server-side schema validation without advancing the step. */
+    public async OnRetryValidation(): Promise<void> {
+        await this.WizardState.ValidateSchema();
+    }
+
+    /** Clear the current validation errors without re-running validation. */
+    public OnDismissErrors(): void {
+        this.ValidationErrors = [];
+        this.cdr.markForCheck();
     }
 
     // ─── Pipeline events ───────────────────────────────────────────────────

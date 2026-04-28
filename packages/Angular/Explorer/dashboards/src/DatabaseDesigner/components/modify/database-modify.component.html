@@ -58,29 +58,10 @@
       </button>
     </div>
 
-    <!-- Tab content -->
-    <div class="tab-content">
+    <!-- Tab content: Fields + Review get a live preview pane on the right; Apply takes full width -->
+    @if (ActiveTab === 'apply') {
 
-      <!-- Fields tab -->
-      @if (ActiveTab === 'fields') {
-        <mj-database-fields-grid
-          [Columns]="EditedColumns"
-          Mode="modify"
-          (ColumnsChanged)="OnColumnsChanged($event)">
-        </mj-database-fields-grid>
-      }
-
-      <!-- Review tab -->
-      @if (ActiveTab === 'review') {
-        <mj-database-review-panel
-          [TableDefinition]="CurrentTableSpec"
-          ModificationType="alter"
-          [ExistingColumns]="ExistingColumns">
-        </mj-database-review-panel>
-      }
-
-      <!-- Apply tab -->
-      @if (ActiveTab === 'apply') {
+      <div class="tab-content tab-content-full">
         <div class="apply-tab">
           <mj-database-pipeline-panel
             [TableDefinition]="CurrentTableSpec"
@@ -90,8 +71,45 @@
             (Errored)="OnPipelineErrored($event)">
           </mj-database-pipeline-panel>
         </div>
-      }
-    </div>
+      </div>
+
+    } @else {
+
+      <as-split direction="horizontal" class="modify-split" gutterSize="6">
+
+        <as-split-area [size]="55" [minSize]="40">
+          <div class="tab-content">
+
+            @if (ActiveTab === 'fields') {
+              <mj-database-fields-grid
+                [Columns]="EditedColumns"
+                Mode="modify"
+                (ColumnsChanged)="OnColumnsChanged($event)">
+              </mj-database-fields-grid>
+            }
+
+            @if (ActiveTab === 'review') {
+              <mj-database-review-panel
+                [TableDefinition]="CurrentTableSpec"
+                ModificationType="alter"
+                [ExistingColumns]="ExistingColumns">
+              </mj-database-review-panel>
+            }
+
+          </div>
+        </as-split-area>
+
+        <as-split-area [size]="45" [minSize]="25">
+          <mj-database-preview-pane
+            class="modify-preview"
+            [TableDefinition]="CurrentTableSpec ?? {}"
+            [IsAlter]="true">
+          </mj-database-preview-pane>
+        </as-split-area>
+
+      </as-split>
+
+    }
 
     <!-- Footer -->
     <div class="modify-footer">

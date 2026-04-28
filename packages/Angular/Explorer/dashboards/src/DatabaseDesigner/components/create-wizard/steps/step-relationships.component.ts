@@ -139,18 +139,33 @@ export class StepRelationshipsComponent {
             return;
         }
         const entity = new Metadata().Entities.find(e => UUIDsEqual(e.ID, entityId));
-        this.rows = this.rows.map(r =>
-            r.rowIndex === rowIndex
-                ? {
-                    ...r,
-                    ReferencedTable: entity?.BaseTable ?? '',
-                    ReferencedColumn: DEFAULT_PK_COLUMN,
-                    selectedEntityId: entityId,
-                    referencedColumnType: undefined,
-                }
-                : r
-        );
+        this.rows = this.rows.map(r => {
+            if (r.rowIndex !== rowIndex) return r;
+            // Auto-name the source FK column if the user hasn't chosen one — the
+            // wizard state service will materialize this as a real UUID column.
+            const autoSourceName = !r.ColumnName && entity?.BaseTable
+                ? this.defaultFkColumnName(entity.BaseTable)
+                : r.ColumnName;
+            return {
+                ...r,
+                ColumnName: autoSourceName,
+                ReferencedTable: entity?.BaseTable ?? '',
+                ReferencedColumn: DEFAULT_PK_COLUMN,
+                selectedEntityId: entityId,
+                referencedColumnType: undefined,
+            };
+        });
         this.emit();
+    }
+
+    /** "CustomerOrders" → "CustomerOrderID"; "People" → "PersonID". Best-effort singularizer. */
+    private defaultFkColumnName(tableName: string): string {
+        const base = tableName.endsWith('ies')
+            ? tableName.slice(0, -3) + 'y'
+            : tableName.endsWith('s') && !tableName.endsWith('ss')
+                ? tableName.slice(0, -1)
+                : tableName;
+        return `${base}ID`;
     }
 
     /**
@@ -197,13 +212,21 @@ export class StepRelationshipsComponent {
     public AddRelationship(): void {
         const schemas = this.AvailableSchemas;
         const defaultSchema = schemas.includes('__mj_UDT') ? '__mj_UDT' : (schemas[0] ?? '');
-        // Default to first available column (any type), not just UUID
-        const firstColumn = this.AllColumns[0]?.Name ?? '';
+
+        // Default the new row's source column to the first Step 2 column
+        // that isn't already used by another FK row.  This honours the
+        // "give the user a sensible default of any type" intent from
+        // f842848683 while avoiding the multi-FK source-column collision
+        // bug fixed in 8e52898ec6 — when every existing column is already
+        // wired up, we fall through to OnTableChange's auto-naming
+        // (mints a unique "<TargetTable>ID" once the user picks a table).
+        const usedColumns = new Set(this.rows.map(r => r.ColumnName).filter(Boolean));
+        const firstFreeColumn = this.AllColumns.find(c => !usedColumns.has(c.Name))?.Name ?? '';
 
         this.rows = [
             ...this.rows,
             {
-                ColumnName: firstColumn,
+                ColumnName: firstFreeColumn,
                 ReferencedSchema: defaultSchema,
                 ReferencedTable: '',
                 ReferencedColumn: DEFAULT_PK_COLUMN,

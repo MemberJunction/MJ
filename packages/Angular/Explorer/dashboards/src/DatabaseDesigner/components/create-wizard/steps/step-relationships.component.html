@@ -3,15 +3,8 @@
   <p class="step-info">
     <i class="fa-solid fa-circle-info"></i>
     Optionally define foreign key relationships to other entities.
-    Leave empty if this entity stands alone.
+    Picking a target table auto-creates the UUID source column for you — or you can reuse an existing UUID column via the Source Column dropdown.
   </p>
-
-  @if (AvailableColumns.length === 0) {
-    <div class="no-fk-hint">
-      <i class="fa-solid fa-link-slash"></i>
-      <p>No columns defined yet — go back to Step 2 and add at least one column to use as a foreign key.</p>
-    </div>
-  }
 
   @if (rows.length > 0) {
     <div class="fk-rows">
@@ -33,7 +26,7 @@
               <select class="mj-input"
                       [value]="row.ColumnName"
                       (change)="OnSourceColumnChange(row.rowIndex, $any($event.target).value)">
-                <option value="">— select column —</option>
+                <option value="">— auto-create {{ row.ColumnName || '—' }} —</option>
                 @for (col of AllColumns; track col.Name) {
                   <option [value]="col.Name">{{ col.Name }}</option>
                 }
@@ -100,8 +93,6 @@
 
   <div class="add-bar">
     <button mjButton buttonStyle="secondary" type="button"
-            [disabled]="AvailableColumns.length === 0"
-            [title]="AvailableColumns.length === 0 ? 'Add a column in Step 2 first' : ''"
             (click)="AddRelationship()">
       <i class="fa-solid fa-plus"></i>
       Add Relationship

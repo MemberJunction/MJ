@@ -113,6 +113,39 @@ export class EntityWizardStateService {
         this._tableDefinition.next({ ...this._tableDefinition.value, ForeignKeys: fks });
     }
 
+    /**
+     * Update relationships and auto-create UUID source columns for any FK whose
+     * `ColumnName` does not yet exist in `Columns`.  Fixes the "Step 3 dead-end"
+     * where a user can add a relationship but has no valid UUID column to back it.
+     *
+     * An auto-created column is marked with `Description: 'Auto-generated FK to {Table}'`
+     * so the user can tell what the wizard added for them.  The column can still
+     * be renamed or deleted from Step 2.
+     */
+    public UpdateRelationshipsAndAutoColumns(fks: ForeignKeySpec[]): void {
+        const existing = this._tableDefinition.value.Columns ?? [];
+        const existingNames = new Set(existing.map(c => c.Name.toLowerCase()));
+
+        const newColumns: ColumnSpec[] = [];
+        for (const fk of fks) {
+            if (!fk.ColumnName) continue;
+            if (existingNames.has(fk.ColumnName.toLowerCase())) continue;
+            existingNames.add(fk.ColumnName.toLowerCase());
+            newColumns.push({
+                Name: fk.ColumnName,
+                Type: 'uuid',
+                IsNullable: true,
+                Description: `Auto-generated FK to ${fk.ReferencedSchema}.${fk.ReferencedTable}`,
+            });
+        }
+
+        this._tableDefinition.next({
+            ...this._tableDefinition.value,
+            Columns: newColumns.length ? [...existing, ...newColumns] : existing,
+            ForeignKeys: fks,
+        });
+    }
+
     // ─── Server round-trips ────────────────────────────────────────────────
 
     /**
