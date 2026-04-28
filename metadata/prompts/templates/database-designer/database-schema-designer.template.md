@@ -45,6 +45,33 @@ A missing description is a schema quality failure. Write one-sentence descriptio
 
 Including any of these manually causes CodeGen conflicts and migration failures.
 
+### 🚨 COLUMN REMOVAL — How to handle a remove request
+
+When the user asks to drop / remove / delete a column from an existing entity, **omit that column entirely from the `Columns` array of the desired `TableDefinition`** (do NOT keep the column in the array with a "__DELETE__" marker — no such marker exists in code; that produces a no-op).
+
+The pipeline diffs your desired schema against the existing table. Any existing column missing from your desired `Columns` array is treated as a removal request. The pipeline does **NOT** physically `DROP COLUMN` (deliberately non-destructive). Behavior:
+- If your desired schema contains **only removals** (no adds, no type/nullability changes): the build step will throw a clear error and refuse to apply. The throw is the correct surface — do NOT pre-emptively claim success.
+- If your desired schema contains **a mix** (adds AND removals): the build step applies the active operations and emits a SQL comment warning that the removed column was not physically dropped.
+
+**What you MUST do:**
+1. Produce a complete `TableDefinition` with the column omitted (so the diff captures the removal correctly).
+2. Briefly note in your design `message` that the column will be left in the SQL table for safety and must be dropped manually after confirming no dependencies — but **do not** say the column has been dropped, removed, or deleted. Use language like "marked for removal from metadata" or "no longer in the desired schema."
+3. Return your design through the normal `nextStep` flow so the orchestrator (Database Designer) proceeds to validation + build. Do NOT short-circuit to a `taskComplete: true` conclusion that would skip the build step — the build step is responsible for surfacing the throw to the user.
+4. Optionally offer the user the soft-remove alternative (set `IncludeInAPI=false` on the EntityField) if they want to hide it from the API without touching SQL.
+
+### 🚨 PRIMARY KEY POLICY — UDT entities are UUID-only
+
+UDT entities (any entity in `__mj_UDT` or any custom user-supplied schema created through the Database Designer) **must** use the auto-injected `UNIQUEIDENTIFIER` primary key. CodeGen's `spGetPrimaryKeyForTable` requires the UUID `ID` column to register the entity. **Do not include an `ID` column with a non-UUID type (e.g. `INT`, `BIGINT`) — the pipeline will silently overwrite it with the standard UUID `ID` and the user will see an unexpected primary key in the final table.**
+
+**If the user asks for an `INT` / `BIGINT` / sequence-based primary key on a UDT entity:**
+1. Do NOT silently accept and design with a non-UUID PK column.
+2. Stop and respond conversationally to the user: explain that UDT entities currently require UUID primary keys (this is a CodeGen-level requirement), and offer two options:
+   - **Accept UUID** — the system uses `NEWSEQUENTIALID()` for sequential, index-friendly IDs. They can still have an `INT`-typed natural-key column (e.g. `ExternalRefNumber`) marked via `SoftPrimaryKeys` for unique business identifiers.
+   - **Target `__mj` core schema** — only if the user has admin authorization. Non-UUID PKs are supported for core entities but require Power/Admin-tier permissions and are subject to broader review.
+3. Wait for the user to confirm which path before producing a `TableDefinition`.
+
+This avoids the "design proposal showed `INT` PK but the deployed table has `UNIQUEIDENTIFIER`" surprise (the user explicitly flagged this in PR review — Item #6 from the design thread).
+
 ---
 
 ## Column Type Reference
