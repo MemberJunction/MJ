@@ -35,6 +35,14 @@ import { SearchResultItem } from './search.types';
  * unchanged and serves as the wiring verification point — the SearchEngine's re-rank
  * stage always resolves a concrete class, even when no real re-ranker is configured.
  */
+/**
+ * Optional per-call cost-reporting callback. Real-provider rerankers (Cohere, Voyage,
+ * OpenAI) invoke this with the actual cents charged for a single Rerank call so the
+ * SearchEngine / scope-level budget guard can accumulate spend and short-circuit
+ * runaway agents. NoopReRanker and BGE (local) report 0.
+ */
+export type ReRankerCostReporter = (cents: number) => void;
+
 export abstract class BaseReRanker {
     /**
      * The `DriverClass` key used by `@RegisterClass(BaseReRanker, 'DriverClassName')` so
@@ -42,6 +50,65 @@ export abstract class BaseReRanker {
      * `ScopeConfig.reRanker.driverClass` value.
      */
     public abstract get DriverClass(): string;
+
+    /**
+     * Human-friendly display name. Defaults to `DriverClass` so subclasses don't have to
+     * override unless they want a different label in UI dropdowns / cost reports.
+     */
+    public get Name(): string {
+        return this.DriverClass;
+    }
+
+    /**
+     * Reranker semantic version (independent of the package version). Bump this on a
+     * subclass when the prompt, scoring formula, or upstream model identifier changes
+     * in a way that invalidates cached scores. Defaults to `'1'`.
+     */
+    public get Version(): string {
+        return '1';
+    }
+
+    /**
+     * Maximum number of candidates a single Rerank call can score. Real providers cap
+     * this (Cohere: 1000, Voyage: 1000, OpenAI: varies). The SearchEngine should respect
+     * this cap by chunking large candidate lists. Defaults to `Number.MAX_SAFE_INTEGER`
+     * (no cap) — subclasses should override.
+     */
+    public GetMaxResultCount(): number {
+        return Number.MAX_SAFE_INTEGER;
+    }
+
+    /**
+     * Pre-call cost estimate in cents for reranking the given candidate count. Used by
+     * the budget guard to short-circuit BEFORE making the call when the projected cost
+     * exceeds `SearchScope.RerankerBudgetCents`.
+     *
+     * Default: 0 (free / local). Real-provider subclasses override based on their pricing.
+     *
+     * @param resultCount - The number of candidates to be reranked.
+     * @returns Estimated cost in cents (whole + fractional, e.g. `0.25` for ¼¢).
+     */
+    public EstimateCostCents(resultCount: number): number {
+        void resultCount;
+        return 0;
+    }
+
+    /**
+     * Optional cost reporter. When set, the reranker invokes it after each successful
+     * Rerank call with the actual cents charged. The SearchEngine wires this from the
+     * `RerankerBudgetGuard` to the scope-level spend tracker — see Phase 2D.6.
+     */
+    public CostReporter: ReRankerCostReporter | null = null;
+
+    /**
+     * Helper for subclasses: report a cost AND record it on the optional callback. Always
+     * safe to call even when no callback is set.
+     */
+    protected reportCost(cents: number): void {
+        if (cents > 0 && this.CostReporter) {
+            this.CostReporter(cents);
+        }
+    }
 
     /**
      * Score and re-order candidates against the query.

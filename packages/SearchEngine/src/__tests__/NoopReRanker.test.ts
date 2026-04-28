@@ -77,4 +77,35 @@ describe('NoopReRanker', () => {
         await rr.ReRank('q', items, 1, fakeUser);
         expect(items).toHaveLength(2);
     });
+
+    describe('P2D.1 contract additions', () => {
+        it('exposes Name (defaults to DriverClass) and Version', () => {
+            const rr = new NoopReRanker();
+            expect(rr.Name).toBe('NoopReRanker');
+            expect(rr.Version).toBe('1');
+        });
+
+        it('reports zero estimated cost regardless of result count', () => {
+            const rr = new NoopReRanker();
+            expect(rr.EstimateCostCents(0)).toBe(0);
+            expect(rr.EstimateCostCents(1000)).toBe(0);
+        });
+
+        it('returns Number.MAX_SAFE_INTEGER for GetMaxResultCount (no cap)', () => {
+            const rr = new NoopReRanker();
+            expect(rr.GetMaxResultCount()).toBe(Number.MAX_SAFE_INTEGER);
+        });
+
+        it('CostReporter callback defaults to null and can be set externally', () => {
+            const rr = new NoopReRanker();
+            expect(rr.CostReporter).toBeNull();
+            const sink: number[] = [];
+            rr.CostReporter = (c) => sink.push(c);
+            // NoopReRanker doesn't charge so reportCost is never invoked internally —
+            // verifying the property assignment + callable contract is enough here.
+            expect(typeof rr.CostReporter).toBe('function');
+            rr.CostReporter(0.25);
+            expect(sink).toEqual([0.25]);
+        });
+    });
 });
