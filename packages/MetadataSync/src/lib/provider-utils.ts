@@ -129,7 +129,7 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
       MinConnections: 1,
     },
     coreSchema,
-    0,
+    1, // must be > 0 to trigger initial metadata load (AllowRefresh gate in PostgreSQLDataProvider)
   );
 
   const provider = new PostgreSQLDataProvider();
