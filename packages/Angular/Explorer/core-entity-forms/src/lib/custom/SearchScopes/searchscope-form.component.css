@@ -1,0 +1,47 @@
+.reranker-config {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.5rem 0;
+}
+
+.reranker-config-label {
+    font-weight: 500;
+    color: var(--mj-text-primary);
+    font-size: 0.85rem;
+}
+
+.reranker-driver-select {
+    max-width: 480px;
+}
+
+.reranker-cost-hint {
+    background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-status-warning-border);
+    color: var(--mj-status-warning-text);
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.reranker-cost-hint i {
+    color: var(--mj-status-warning);
+}
+
+.reranker-help-hint {
+    color: var(--mj-text-muted);
+    font-size: 0.78rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.reranker-help-hint code {
+    background: var(--mj-bg-surface-sunken);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.74rem;
+}
