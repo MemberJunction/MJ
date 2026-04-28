@@ -38,14 +38,20 @@ export class AlterTableRule implements IConversionRule {
     // Convert ALTER COLUMN ... TYPE NOT NULL → ALTER COLUMN ... SET NOT NULL
     result = this.convertAlterColumnNotNull(result);
 
+    // Convert ALTER COLUMN ... TYPE NULL → ALTER COLUMN ... DROP NOT NULL
+    // (mirror of convertAlterColumnNotNull above for the SQL-Server-allows-NULL-again form)
+    result = this.convertAlterColumnDropNotNull(result);
+
     // Convert DEFAULT (val) FOR col → ALTER COLUMN col SET DEFAULT val
     result = this.convertDefaultFor(result);
 
-    // Remove inline FOREIGN KEY keyword in ADD COLUMN (keep just REFERENCES)
-    result = this.removeInlineForeignKey(result);
-
-    // Convert multi-column ADD to PG ADD COLUMN syntax
+    // Convert multi-column ADD to PG ADD COLUMN syntax (must run BEFORE removeInlineForeignKey
+    // so synthesized ADD COLUMN entries on trailing columns are also subject to FK removal —
+    // SQL Server allows trailing columns in a multi-column ALTER TABLE to omit the leading ADD).
     result = this.convertMultiColumnAdd(result);
+
+    // Remove inline FOREIGN KEY keyword in column-level FK constraints (keep just REFERENCES).
+    result = this.removeInlineForeignKey(result);
 
     // Make FK constraints DEFERRABLE INITIALLY DEFERRED
     if (/FOREIGN\s+KEY/i.test(result)) {
@@ -378,6 +384,26 @@ export class AlterTableRule implements IConversionRule {
     return sql.replace(
       /(CONSTRAINT\s+"?\w+"?\s+)FOREIGN\s+KEY\s+(REFERENCES\b)/gi,
       '$1$2'
+    );
+  }
+
+  /**
+   * Convert ALTER COLUMN col TYPE NULL → ALTER COLUMN "col" DROP NOT NULL.
+   * SQL Server: `ALTER TABLE t ALTER COLUMN col TYPE NULL` (re-allows NULLs)
+   * PostgreSQL: `ALTER TABLE t ALTER COLUMN "col" DROP NOT NULL`
+   *
+   * Mirror of convertAlterColumnNotNull above which handles the NOT NULL form.
+   * Without this rule, the literal `ALTER COLUMN col TYPE NULL` reaches PG and
+   * raises a syntax error (PG has no `TYPE NULL` form — nullability is a
+   * separate clause).
+   */
+  private convertAlterColumnDropNotNull(sql: string): string {
+    return sql.replace(
+      /ALTER\s+COLUMN\s+("?\w+"?)\s+\w+(?:\s*\([^)]*\))?\s+NULL\b/gi,
+      (_match, col: string) => {
+        const quotedCol = col.startsWith('"') ? col : `"${col}"`;
+        return `ALTER COLUMN ${quotedCol} DROP NOT NULL`;
+      }
     );
   }
 
