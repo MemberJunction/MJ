@@ -107,6 +107,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJFileStorageAccountPermissions', sectionName: 'File Storage Account Permissions', isExpanded: false },
             { sectionKey: 'mJArchiveRuns', sectionName: 'Archive Runs', isExpanded: false },
             { sectionKey: 'mJSearchScopePermissions', sectionName: 'Search Scope Permissions', isExpanded: false },
+            { sectionKey: 'mJSearchExecutionLogs', sectionName: 'Search Execution Logs', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJAIAgentPermissions', sectionName: 'AI Agent Permissions', isExpanded: false },
             { sectionKey: 'mJCollectionPermissionsSharedByUserID', sectionName: 'Collection Permissions (Shared By User ID)', isExpanded: false },

@@ -941,6 +941,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Search Execution Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchExecutionLogs"
+        SectionName="Search Execution Logs"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchExecutionLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Execution Logs','AIAgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Execution Logs')"
+                [AllowLoad]="IsSectionExpanded('mJSearchExecutionLogs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchExecutionLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AIAgent Notes Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentNotes"

@@ -22229,6 +22229,105 @@ export const MJSchemaInfoSchema = z.object({
 export type MJSchemaInfoEntityType = z.infer<typeof MJSchemaInfoSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Search Execution Logs
+ */
+export const MJSearchExecutionLogSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SearchScopeID: z.string().nullable().describe(`
+        * * Field Name: SearchScopeID
+        * * Display Name: Search Scope ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+        * * Description: The SearchScope this invocation targeted. NULL for unscoped global search.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The User who initiated the search. NULL for system / unauthenticated callers.`),
+    AIAgentID: z.string().nullable().describe(`
+        * * Field Name: AIAgentID
+        * * Display Name: AI Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: The AIAgent identity if the search was invoked from an agent (e.g. ScopedSearchAction). NULL for direct human-initiated searches.`),
+    Query: z.string().describe(`
+        * * Field Name: Query
+        * * Display Name: Query
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Raw query string the user / agent submitted. NVARCHAR(MAX) because some queries are long (full sentences, snippets). Stored verbatim for analytics — do NOT rely on this for permission decisions.`),
+    TotalDurationMs: z.number().describe(`
+        * * Field Name: TotalDurationMs
+        * * Display Name: Total Duration Ms
+        * * SQL Data Type: int
+        * * Description: End-to-end search duration in milliseconds, measured at the SearchEngine.search call boundary (provider runs + fusion + rerank + permission filter + enrichment).`),
+    ResultCount: z.number().describe(`
+        * * Field Name: ResultCount
+        * * Display Name: Result Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of results returned to the caller after permission filtering, deduplication, and score-threshold trimming. Use this as the hit-rate denominator (rows where ResultCount > 0).`),
+    RerankerName: z.string().nullable().describe(`
+        * * Field Name: RerankerName
+        * * Display Name: Reranker Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: BaseReRanker.Name of the reranker that ran (e.g. 'Cohere', 'Voyage', 'OpenAI', 'BGE', 'NoopReRanker'). NULL when no rerank stage executed for this invocation.`),
+    RerankerCostCents: z.number().nullable().describe(`
+        * * Field Name: RerankerCostCents
+        * * Display Name: Reranker Cost Cents
+        * * SQL Data Type: decimal(10, 4)
+        * * Description: Total reranker spend in cents for this invocation, populated from the BaseReRanker.CostReporter callback via RerankerBudgetGuard. NULL when no rerank ran or no real-provider cost was incurred (Noop / BGE).`),
+    Status: z.union([z.literal('Failure'), z.literal('Forbidden'), z.literal('Success')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failure
+    *   * Forbidden
+    *   * Success
+        * * Description: Outcome of the search: 'Success' (results returned, possibly empty), 'Failure' (an exception bubbled out — see FailureReason), 'Forbidden' (the caller lacked SearchScopePermission for the requested scope). Constrained by CK_SearchExecutionLog_Status.`),
+    FailureReason: z.string().nullable().describe(`
+        * * Field Name: FailureReason
+        * * Display Name: Failure Reason
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Short human-readable failure reason when Status = 'Failure' or 'Forbidden'. NULL on success.`),
+    ProvidersJSON: z.string().nullable().describe(`
+        * * Field Name: ProvidersJSON
+        * * Display Name: Providers JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of per-provider breakdown entries: [{"Provider":"Vector","DurationMs":123,"ResultCount":5,"ErrorMessage":null}, ...]. Used by the analytics dashboard for p50/p95 latency-by-provider charts and to spot consistently slow providers.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    SearchScope: z.string().nullable().describe(`
+        * * Field Name: SearchScope
+        * * Display Name: Search Scope
+        * * SQL Data Type: nvarchar(200)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    AIAgent: z.string().nullable().describe(`
+        * * Field Name: AIAgent
+        * * Display Name: AI Agent
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJSearchExecutionLogEntityType = z.infer<typeof MJSearchExecutionLogSchema>;
+
+/**
  * zod schema definition for the entity MJ: Search Providers
  */
 export const MJSearchProviderSchema = z.object({
@@ -84490,6 +84589,250 @@ export class MJSchemaInfoEntity extends BaseEntity<MJSchemaInfoEntityType> {
     }
     set EntityNameSuffix(value: string | null) {
         this.Set('EntityNameSuffix', value);
+    }
+}
+
+
+/**
+ * MJ: Search Execution Logs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SearchExecutionLog
+ * * Base View: vwSearchExecutionLogs
+ * * @description One row per SearchEngine.search invocation. Populated by SearchEngine's post-fusion logging hook (Phase 3.2). Read by the Knowledge Hub Search Analytics dashboard (Phase 3.3) and the per-scope tuning CSV export (Phase 3.4).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Search Execution Logs')
+export class MJSearchExecutionLogEntity extends BaseEntity<MJSearchExecutionLogEntityType> {
+    /**
+    * Loads the MJ: Search Execution Logs record from the database
+    * @param ID: string - primary key value to load the MJ: Search Execution Logs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSearchExecutionLogEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SearchScopeID
+    * * Display Name: Search Scope ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+    * * Description: The SearchScope this invocation targeted. NULL for unscoped global search.
+    */
+    get SearchScopeID(): string | null {
+        return this.Get('SearchScopeID');
+    }
+    set SearchScopeID(value: string | null) {
+        this.Set('SearchScopeID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The User who initiated the search. NULL for system / unauthenticated callers.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: AIAgentID
+    * * Display Name: AI Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: The AIAgent identity if the search was invoked from an agent (e.g. ScopedSearchAction). NULL for direct human-initiated searches.
+    */
+    get AIAgentID(): string | null {
+        return this.Get('AIAgentID');
+    }
+    set AIAgentID(value: string | null) {
+        this.Set('AIAgentID', value);
+    }
+
+    /**
+    * * Field Name: Query
+    * * Display Name: Query
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Raw query string the user / agent submitted. NVARCHAR(MAX) because some queries are long (full sentences, snippets). Stored verbatim for analytics — do NOT rely on this for permission decisions.
+    */
+    get Query(): string {
+        return this.Get('Query');
+    }
+    set Query(value: string) {
+        this.Set('Query', value);
+    }
+
+    /**
+    * * Field Name: TotalDurationMs
+    * * Display Name: Total Duration Ms
+    * * SQL Data Type: int
+    * * Description: End-to-end search duration in milliseconds, measured at the SearchEngine.search call boundary (provider runs + fusion + rerank + permission filter + enrichment).
+    */
+    get TotalDurationMs(): number {
+        return this.Get('TotalDurationMs');
+    }
+    set TotalDurationMs(value: number) {
+        this.Set('TotalDurationMs', value);
+    }
+
+    /**
+    * * Field Name: ResultCount
+    * * Display Name: Result Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of results returned to the caller after permission filtering, deduplication, and score-threshold trimming. Use this as the hit-rate denominator (rows where ResultCount > 0).
+    */
+    get ResultCount(): number {
+        return this.Get('ResultCount');
+    }
+    set ResultCount(value: number) {
+        this.Set('ResultCount', value);
+    }
+
+    /**
+    * * Field Name: RerankerName
+    * * Display Name: Reranker Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: BaseReRanker.Name of the reranker that ran (e.g. 'Cohere', 'Voyage', 'OpenAI', 'BGE', 'NoopReRanker'). NULL when no rerank stage executed for this invocation.
+    */
+    get RerankerName(): string | null {
+        return this.Get('RerankerName');
+    }
+    set RerankerName(value: string | null) {
+        this.Set('RerankerName', value);
+    }
+
+    /**
+    * * Field Name: RerankerCostCents
+    * * Display Name: Reranker Cost Cents
+    * * SQL Data Type: decimal(10, 4)
+    * * Description: Total reranker spend in cents for this invocation, populated from the BaseReRanker.CostReporter callback via RerankerBudgetGuard. NULL when no rerank ran or no real-provider cost was incurred (Noop / BGE).
+    */
+    get RerankerCostCents(): number | null {
+        return this.Get('RerankerCostCents');
+    }
+    set RerankerCostCents(value: number | null) {
+        this.Set('RerankerCostCents', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failure
+    *   * Forbidden
+    *   * Success
+    * * Description: Outcome of the search: 'Success' (results returned, possibly empty), 'Failure' (an exception bubbled out — see FailureReason), 'Forbidden' (the caller lacked SearchScopePermission for the requested scope). Constrained by CK_SearchExecutionLog_Status.
+    */
+    get Status(): 'Failure' | 'Forbidden' | 'Success' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Failure' | 'Forbidden' | 'Success') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: FailureReason
+    * * Display Name: Failure Reason
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Short human-readable failure reason when Status = 'Failure' or 'Forbidden'. NULL on success.
+    */
+    get FailureReason(): string | null {
+        return this.Get('FailureReason');
+    }
+    set FailureReason(value: string | null) {
+        this.Set('FailureReason', value);
+    }
+
+    /**
+    * * Field Name: ProvidersJSON
+    * * Display Name: Providers JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of per-provider breakdown entries: [{"Provider":"Vector","DurationMs":123,"ResultCount":5,"ErrorMessage":null}, ...]. Used by the analytics dashboard for p50/p95 latency-by-provider charts and to spot consistently slow providers.
+    */
+    get ProvidersJSON(): string | null {
+        return this.Get('ProvidersJSON');
+    }
+    set ProvidersJSON(value: string | null) {
+        this.Set('ProvidersJSON', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SearchScope
+    * * Display Name: Search Scope
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SearchScope(): string | null {
+        return this.Get('SearchScope');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: AIAgent
+    * * Display Name: AI Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIAgent(): string | null {
+        return this.Get('AIAgent');
     }
 }
 

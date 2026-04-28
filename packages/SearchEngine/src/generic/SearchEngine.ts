@@ -25,6 +25,7 @@ import {
     SearchEngineBase,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
+    MJSearchExecutionLogEntity,
     ScopeBundle
 } from '@memberjunction/core-entities';
 import { BaseSingleton, MJGlobal, NormalizeUUID } from '@memberjunction/global';
@@ -203,9 +204,24 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      */
     public async Search(params: SearchParams, contextUser: UserInfo): Promise<SearchResult> {
         const startTime = Date.now();
+        // Per-invocation tracking for the post-search SearchExecutionLog row (P3.2).
+        let invocationBudgetGuard: RerankerBudgetGuard | null = null;
+        let invocationRerankerName: string | null = null;
 
         try {
             if (!params.Query.trim()) {
+                this.logSearchExecution({
+                    Status: 'Failure',
+                    FailureReason: 'Query cannot be empty',
+                    Query: params.Query,
+                    ScopeIDs: params.ScopeIDs,
+                    StartTime: startTime,
+                    ResultCount: 0,
+                    RerankerName: null,
+                    RerankerCostCents: null,
+                    SourceCounts: undefined,
+                    ContextUser: contextUser,
+                });
                 return this.buildErrorResult('Query cannot be empty', startTime);
             }
 
@@ -287,12 +303,14 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 // RerankerBudgetCents. Pulled from the same scope that supplied the
                 // reranker config — keeping the policy local to the scope that opted in.
                 const budgetCents = this.pickRerankerBudgetCents(resolvedScopes);
+                invocationBudgetGuard = new RerankerBudgetGuard(budgetCents);
+                invocationRerankerName = reRankerConfig.driverClass;
                 fusedResults = await this.runReRanker(
                     params.Query,
                     fusedResults,
                     reRankerConfig,
                     contextUser,
-                    new RerankerBudgetGuard(budgetCents)
+                    invocationBudgetGuard,
                 );
             }
 
@@ -325,6 +343,19 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
             LogStatus(`SearchEngine: Search complete in ${Date.now() - startTime}ms - ${results.length} result(s)${resolvedScopes.length ? ` across ${resolvedScopes.length} scope(s)` : ''}`);
 
+            this.logSearchExecution({
+                Status: 'Success',
+                FailureReason: null,
+                Query: params.Query,
+                ScopeIDs: params.ScopeIDs,
+                StartTime: startTime,
+                ResultCount: results.length,
+                RerankerName: invocationRerankerName,
+                RerankerCostCents: invocationBudgetGuard ? invocationBudgetGuard.Spent : null,
+                SourceCounts: sourceCounts,
+                ContextUser: contextUser,
+            });
+
             return {
                 Success: true,
                 Results: results,
@@ -336,6 +367,18 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`SearchEngine: Search failed: ${msg}`);
+            this.logSearchExecution({
+                Status: 'Failure',
+                FailureReason: msg,
+                Query: params.Query,
+                ScopeIDs: params.ScopeIDs,
+                StartTime: startTime,
+                ResultCount: 0,
+                RerankerName: invocationRerankerName,
+                RerankerCostCents: invocationBudgetGuard ? invocationBudgetGuard.Spent : null,
+                SourceCounts: undefined,
+                ContextUser: contextUser,
+            });
             return this.buildErrorResult(msg, startTime);
         }
     }
@@ -1029,6 +1072,68 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     /** Build an error SearchResult */
+    /**
+     * Best-effort hook (P3.2) that writes one MJSearchExecutionLog row per
+     * SearchEngine.Search call. Captures query, timing, scope, result count,
+     * reranker info, status, and a per-source-count breakdown for the analytics
+     * dashboard (P3.3) and tuning CSV export (P3.4).
+     *
+     * Errors during the write are swallowed and logged — observability is the
+     * point of this hook, not a load-bearing dependency. A logger that brings
+     * down search would be the worst possible outcome.
+     */
+    private async logSearchExecution(input: {
+        Status: 'Success' | 'Failure' | 'Forbidden';
+        FailureReason: string | null;
+        Query: string;
+        ScopeIDs?: string[];
+        StartTime: number;
+        ResultCount: number;
+        RerankerName: string | null;
+        RerankerCostCents: number | null;
+        SourceCounts?: { Vector: number; FullText: number; Entity: number; Storage: number };
+        ContextUser: UserInfo;
+    }): Promise<void> {
+        try {
+            const md = new Metadata();
+            const log = await md.GetEntityObject<MJSearchExecutionLogEntity>(
+                'MJ: Search Execution Logs',
+                input.ContextUser,
+            );
+            log.SearchScopeID = input.ScopeIDs && input.ScopeIDs.length > 0 ? input.ScopeIDs[0] : null;
+            log.UserID = input.ContextUser.ID ?? null;
+            log.AIAgentID = null; // Plumb through when ScopedSearchAction passes the agent identity (Phase 3 follow-up)
+            log.Query = input.Query;
+            log.TotalDurationMs = Date.now() - input.StartTime;
+            log.ResultCount = input.ResultCount;
+            log.RerankerName = input.RerankerName;
+            log.RerankerCostCents = input.RerankerCostCents;
+            log.Status = input.Status;
+            log.FailureReason = input.FailureReason;
+            // ProvidersJSON: per-source breakdown. Per-provider per-call timings
+            // require deeper plumbing through the provider-run loop — deferred to a
+            // later Phase 3 pass. For now, capture the source counts which the
+            // dashboard's hit-rate / volume charts already need.
+            log.ProvidersJSON = input.SourceCounts
+                ? JSON.stringify({
+                    Vector: { ResultCount: input.SourceCounts.Vector },
+                    FullText: { ResultCount: input.SourceCounts.FullText },
+                    Entity: { ResultCount: input.SourceCounts.Entity },
+                    Storage: { ResultCount: input.SourceCounts.Storage },
+                })
+                : null;
+
+            const saved = await log.Save();
+            if (!saved) {
+                LogError(`SearchEngine: SearchExecutionLog write returned false: ${log.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        } catch (err) {
+            // Swallow — this is best-effort observability and must never affect search latency / availability.
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`SearchEngine: SearchExecutionLog write threw: ${msg}`);
+        }
+    }
+
     private buildErrorResult(message: string, startTime: number): SearchResult {
         return {
             Success: false,
