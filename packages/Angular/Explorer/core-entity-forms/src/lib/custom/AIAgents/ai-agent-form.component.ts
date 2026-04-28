@@ -274,6 +274,91 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         { Field: 'IsDefault', Label: 'Default', Type: 'checkbox', Width: '80px' },
     ];
 
+    /**
+     * Read-only summary of SearchScopePermission rows that apply to the
+     * scopes this agent is assigned to. Drives a small audit table inside
+     * the agent form's Search section so an agent owner can see at a glance
+     * who has access to the scopes their agent uses, without navigating
+     * away to the Knowledge Hub Config dashboard's full audit surface.
+     *
+     * Each entry pairs a scope name with a list of permission rows
+     * (principal type + name + level). Rebuilt whenever the agent's
+     * AIAgentSearchScope assignments change.
+     */
+    public PermissionSummary: Array<{
+        ScopeName: string;
+        ScopeID: string;
+        Permissions: Array<{
+            Principal: string;
+            PrincipalType: 'User' | 'Role';
+            Level: string;
+        }>;
+    }> = [];
+
+    public IsLoadingPermissions = false;
+
+    /**
+     * Loads the permission summary for the scopes currently assigned to
+     * this agent. Called on agent load and after AIAgentSearchScope edits.
+     */
+    public async LoadPermissionSummary(): Promise<void> {
+        if (!this.record?.ID) {
+            this.PermissionSummary = [];
+            return;
+        }
+        this.IsLoadingPermissions = true;
+        try {
+            const rv = new RunView();
+            // 1. Fetch the agent's assigned scope IDs.
+            const assigned = await rv.RunView<{ SearchScopeID: string; SearchScope?: string }>({
+                EntityName: 'MJ: AI Agent Search Scopes',
+                ExtraFilter: `AgentID='${this.record.ID}'`,
+                Fields: ['SearchScopeID', 'SearchScope'],
+                ResultType: 'simple',
+            });
+            if (!assigned.Success || !assigned.Results?.length) {
+                this.PermissionSummary = [];
+                return;
+            }
+            const scopeIds = assigned.Results.map(r => r.SearchScopeID);
+            const scopeNames = new Map<string, string>(
+                assigned.Results.map(r => [r.SearchScopeID, r.SearchScope ?? r.SearchScopeID])
+            );
+
+            // 2. Fetch all permission rows for those scopes in one batch.
+            const idList = scopeIds.map(id => `'${id}'`).join(',');
+            const perms = await rv.RunView<{
+                SearchScopeID: string;
+                UserID: string | null;
+                RoleID: string | null;
+                User?: string;
+                Role?: string;
+                PermissionLevel: string;
+            }>({
+                EntityName: 'MJ: Search Scope Permissions',
+                ExtraFilter: `SearchScopeID IN (${idList})`,
+                Fields: ['SearchScopeID', 'UserID', 'RoleID', 'User', 'Role', 'PermissionLevel'],
+                ResultType: 'simple',
+            });
+            const rows = perms.Success ? (perms.Results ?? []) : [];
+
+            // 3. Group by scope.
+            this.PermissionSummary = scopeIds.map(scopeId => ({
+                ScopeID: scopeId,
+                ScopeName: scopeNames.get(scopeId) ?? scopeId,
+                Permissions: rows
+                    .filter(r => UUIDsEqual(r.SearchScopeID, scopeId))
+                    .map(r => ({
+                        Principal: r.UserID ? (r.User ?? 'unknown user') : (r.Role ?? 'unknown role'),
+                        PrincipalType: (r.UserID ? 'User' : 'Role') as 'User' | 'Role',
+                        Level: r.PermissionLevel,
+                    })),
+            }));
+        } finally {
+            this.IsLoadingPermissions = false;
+        }
+    }
+
     // === User Preferences ===
     private static readonly PREFS_KEY = 'ai-agent-form/preferences';
     private preferencesLoaded = false;
@@ -615,15 +700,20 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         if (this.record?.ID) {
             await this.loadRelatedCounts(false); // no need to force refresh on initial load
             await this.loadCurrentAgentType();
-            
+
+            // Phase 2A: load the permission summary for the scopes this
+            // agent is assigned to. Fire-and-forget — the panel renders an
+            // IsLoadingPermissions skeleton while it resolves.
+            void this.LoadPermissionSummary();
+
             // Schedule change detection - safer than manual detectChanges()
             this.cdr.markForCheck();
-            
+
             // Defer custom section loading to next tick after DOM updates
             this.setTrackedTimeout(() => {
                 this.loadCustomFormSection();
             }, 0);
-            
+
             // Start background timer for running time updates
             this.startRunningTimeUpdater();
         }
