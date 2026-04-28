@@ -843,7 +843,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * 3. If the user is exempt from RLS, all results pass through.
      * 4. If RLS applies, a RunView validates which record IDs the user can read.
      */
-    private async filterByPermissions(
+    protected async filterByPermissions(
         results: SearchResultItem[],
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
