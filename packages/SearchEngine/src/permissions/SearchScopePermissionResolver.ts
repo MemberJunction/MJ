@@ -183,6 +183,11 @@ export class SearchScopePermissionResolver {
             EntityName: 'MJ: Search Scope Permissions',
             ExtraFilter: `SearchScopeID='${searchScopeID}'`,
             ResultType: 'simple',
+            // Permission decisions must NEVER read stale cache — a freshly-revoked grant
+            // or a freshly-granted permission must take effect immediately. Skipping
+            // the server-side RunView cache adds one DB query per resolver call but
+            // eliminates the security-correctness risk of a delayed permission update.
+            BypassCache: true,
         }, contextUser);
         if (!result.Success) {
             // Fail closed: an unreadable permissions table cannot be treated
