@@ -103,6 +103,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         { ID: 'embedding', Label: 'Embedding Models', Icon: 'fa-solid fa-microchip', Description: 'Select and configure embedding models' },
         { ID: 'thresholds', Label: 'Thresholds', Icon: 'fa-solid fa-sliders', Description: 'Set scoring thresholds for search and deduplication' },
         { ID: 'search-scopes', Label: 'Search Scopes', Icon: 'fa-solid fa-compass-drafting', Description: 'Define reusable search scopes — which providers, entities, external indexes, and storage accounts participate in scoped search' },
+        { ID: 'search-analytics', Label: 'Search Analytics', Icon: 'fa-solid fa-chart-line', Description: 'Per-scope query volume, p50/p95 latency, hit rate, top failures, and reranker spend (driven by SearchExecutionLog)' },
         { ID: 'scheduling', Label: 'Scheduling', Icon: 'fa-solid fa-clock', Description: 'Manage automated pipeline schedules' },
     ];
 
@@ -267,7 +268,127 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         if (sectionId === 'search-scopes' && this.SearchScopes.length === 0) {
             void this.LoadSearchScopes();
         }
+        if (sectionId === 'search-analytics' && !this.AnalyticsLoaded && !this.AnalyticsLoading) {
+            void this.LoadSearchAnalytics();
+        }
         this.cdr.detectChanges();
+    }
+
+    // ─── Search Analytics (P3.3) ──────────────────────────────────────────────
+
+    public AnalyticsLoaded = false;
+    public AnalyticsLoading = false;
+    public AnalyticsTotalRuns = 0;
+    public AnalyticsSuccessRate = 0;
+    public AnalyticsAvgLatencyMs = 0;
+    public AnalyticsP95LatencyMs = 0;
+    public AnalyticsTotalRerankerCostCents = 0;
+    public AnalyticsHitRate = 0;
+    public AnalyticsTopScopes: Array<{ ScopeID: string; Name: string; Count: number; AvgLatencyMs: number }> = [];
+    public AnalyticsTopFailures: Array<{ Reason: string; Count: number }> = [];
+    public AnalyticsRerankerSpend: Array<{ Reranker: string; Count: number; TotalCents: number }> = [];
+
+    public async LoadSearchAnalytics(): Promise<void> {
+        this.AnalyticsLoading = true;
+        this.cdr.detectChanges();
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<{
+                ID: string;
+                SearchScopeID: string | null;
+                Status: string;
+                Query: string;
+                ResultCount: number;
+                TotalDurationMs: number;
+                RerankerName: string | null;
+                RerankerCostCents: number | null;
+                FailureReason: string | null;
+            }>({
+                EntityName: 'MJ: Search Execution Logs',
+                Fields: ['ID', 'SearchScopeID', 'Status', 'ResultCount', 'TotalDurationMs', 'RerankerName', 'RerankerCostCents', 'FailureReason'],
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 5000,
+                ResultType: 'simple',
+            });
+            if (!result.Success) {
+                LogError(`KnowledgeConfig: LoadSearchAnalytics failed: ${result.ErrorMessage}`);
+                return;
+            }
+            const rows = result.Results ?? [];
+            this.AnalyticsTotalRuns = rows.length;
+            const successRows = rows.filter(r => r.Status === 'Success');
+            this.AnalyticsSuccessRate = rows.length > 0 ? Math.round((successRows.length / rows.length) * 100) : 0;
+            this.AnalyticsHitRate = successRows.length > 0
+                ? Math.round((successRows.filter(r => (r.ResultCount ?? 0) > 0).length / successRows.length) * 100)
+                : 0;
+
+            const latencies = successRows.map(r => r.TotalDurationMs ?? 0).sort((a, b) => a - b);
+            this.AnalyticsAvgLatencyMs = latencies.length > 0
+                ? Math.round(latencies.reduce((s, x) => s + x, 0) / latencies.length)
+                : 0;
+            this.AnalyticsP95LatencyMs = latencies.length > 0
+                ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))]
+                : 0;
+
+            this.AnalyticsTotalRerankerCostCents = rows.reduce((s, r) => s + (r.RerankerCostCents ?? 0), 0);
+
+            // Per-scope rollup (lookup scope name from already-loaded list when available)
+            const byScope = new Map<string, { Count: number; LatencySum: number; ScopeID: string }>();
+            for (const r of rows) {
+                const id = r.SearchScopeID ?? '__unscoped__';
+                const cur = byScope.get(id) ?? { Count: 0, LatencySum: 0, ScopeID: id };
+                cur.Count++;
+                cur.LatencySum += r.TotalDurationMs ?? 0;
+                byScope.set(id, cur);
+            }
+            // Make sure we have scope names — fetch when missing
+            const scopeNameMap = new Map(this.SearchScopes.map(s => [s.ID, s.Name]));
+            if (this.SearchScopes.length === 0 && byScope.size > 0) {
+                await this.LoadSearchScopes();
+                this.SearchScopes.forEach(s => scopeNameMap.set(s.ID, s.Name));
+            }
+            this.AnalyticsTopScopes = Array.from(byScope.values())
+                .map(g => ({
+                    ScopeID: g.ScopeID,
+                    Name: scopeNameMap.get(g.ScopeID) ?? (g.ScopeID === '__unscoped__' ? '— unscoped —' : `(${g.ScopeID.slice(0, 8)}…)`),
+                    Count: g.Count,
+                    AvgLatencyMs: Math.round(g.LatencySum / g.Count),
+                }))
+                .sort((a, b) => b.Count - a.Count)
+                .slice(0, 10);
+
+            // Top failure reasons
+            const byFailure = new Map<string, number>();
+            for (const r of rows) {
+                if (r.Status !== 'Success' && r.FailureReason) {
+                    byFailure.set(r.FailureReason, (byFailure.get(r.FailureReason) ?? 0) + 1);
+                }
+            }
+            this.AnalyticsTopFailures = Array.from(byFailure.entries())
+                .map(([Reason, Count]) => ({ Reason, Count }))
+                .sort((a, b) => b.Count - a.Count)
+                .slice(0, 5);
+
+            // Reranker spend rollup
+            const byReranker = new Map<string, { Count: number; TotalCents: number }>();
+            for (const r of rows) {
+                if (!r.RerankerName) continue;
+                const cur = byReranker.get(r.RerankerName) ?? { Count: 0, TotalCents: 0 };
+                cur.Count++;
+                cur.TotalCents += r.RerankerCostCents ?? 0;
+                byReranker.set(r.RerankerName, cur);
+            }
+            this.AnalyticsRerankerSpend = Array.from(byReranker.entries())
+                .map(([Reranker, v]) => ({ Reranker, Count: v.Count, TotalCents: +v.TotalCents.toFixed(4) }))
+                .sort((a, b) => b.TotalCents - a.TotalCents);
+
+            this.AnalyticsLoaded = true;
+        } catch (err) {
+            LogError(`KnowledgeConfig: LoadSearchAnalytics threw: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            this.AnalyticsLoading = false;
+            this.cdr.detectChanges();
+        }
     }
 
     // ─── Search Scopes ────────────────────────────────────────────────────────

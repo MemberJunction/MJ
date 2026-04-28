@@ -605,6 +605,113 @@
                 </div>
             }
 
+            <!-- Search Analytics Section (P3.3) — driven by SearchExecutionLog -->
+            @if (ActiveSection === 'search-analytics') {
+                <div class="config-section-content">
+                    <h2 class="config-section-title"><i class="fa-solid fa-chart-line"></i> Search Analytics</h2>
+                    <p class="config-section-desc">Aggregated metrics over the last 5,000 search invocations from <code>MJ: Search Execution Logs</code>. Use this to spot slow scopes, high-failure queries, or runaway reranker spend.</p>
+
+                    @if (AnalyticsLoading) {
+                        <mj-loading text="Loading analytics…" size="medium"></mj-loading>
+                    } @else if (!AnalyticsLoaded) {
+                        <button class="mj-input" type="button" (click)="LoadSearchAnalytics()">
+                            <i class="fa-solid fa-arrows-rotate"></i> Load analytics
+                        </button>
+                    } @else {
+                        <div class="search-analytics-kpi-grid">
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">Total runs</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsTotalRuns | number }}</span>
+                            </div>
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">Success rate</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsSuccessRate }}%</span>
+                            </div>
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">Hit rate</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsHitRate }}%</span>
+                                <span class="search-analytics-kpi-hint">% of successful runs that returned ≥1 result</span>
+                            </div>
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">Avg latency</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsAvgLatencyMs }}ms</span>
+                            </div>
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">P95 latency</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsP95LatencyMs }}ms</span>
+                            </div>
+                            <div class="search-analytics-kpi">
+                                <span class="search-analytics-kpi-label">Reranker spend</span>
+                                <span class="search-analytics-kpi-value">{{ AnalyticsTotalRerankerCostCents | number:'1.0-2' }}¢</span>
+                            </div>
+                        </div>
+
+                        <h3 class="search-analytics-h3">Top scopes by volume</h3>
+                        @if (AnalyticsTopScopes.length === 0) {
+                            <p class="search-analytics-empty">No runs in the window.</p>
+                        } @else {
+                            <table class="search-analytics-table">
+                                <thead>
+                                    <tr><th>Scope</th><th>Runs</th><th>Avg latency</th></tr>
+                                </thead>
+                                <tbody>
+                                    @for (s of AnalyticsTopScopes; track s.ScopeID) {
+                                        <tr>
+                                            <td>{{ s.Name }}</td>
+                                            <td>{{ s.Count | number }}</td>
+                                            <td>{{ s.AvgLatencyMs }}ms</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        <h3 class="search-analytics-h3">Reranker spend by driver</h3>
+                        @if (AnalyticsRerankerSpend.length === 0) {
+                            <p class="search-analytics-empty">No rerank invocations in the window.</p>
+                        } @else {
+                            <table class="search-analytics-table">
+                                <thead>
+                                    <tr><th>Reranker</th><th>Calls</th><th>Total cents</th></tr>
+                                </thead>
+                                <tbody>
+                                    @for (r of AnalyticsRerankerSpend; track r.Reranker) {
+                                        <tr>
+                                            <td>{{ r.Reranker }}</td>
+                                            <td>{{ r.Count | number }}</td>
+                                            <td>{{ r.TotalCents | number:'1.0-2' }}¢</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        <h3 class="search-analytics-h3">Top failure reasons</h3>
+                        @if (AnalyticsTopFailures.length === 0) {
+                            <p class="search-analytics-empty">No failures in the window.</p>
+                        } @else {
+                            <table class="search-analytics-table">
+                                <thead>
+                                    <tr><th>Reason</th><th>Count</th></tr>
+                                </thead>
+                                <tbody>
+                                    @for (f of AnalyticsTopFailures; track f.Reason) {
+                                        <tr>
+                                            <td>{{ f.Reason }}</td>
+                                            <td>{{ f.Count | number }}</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        <button class="mj-input search-analytics-refresh" type="button" (click)="LoadSearchAnalytics()">
+                            <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                        </button>
+                    }
+                </div>
+            }
+
             <!-- Scheduling Section -->
             @if (ActiveSection === 'scheduling') {
                 <div class="config-section-content">

@@ -1132,3 +1132,97 @@
     border-radius: 4px;
     padding: 8px;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Search Analytics section (P3.3)
+   ────────────────────────────────────────────────────────────────────────── */
+.search-analytics-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.search-analytics-kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+}
+
+.search-analytics-kpi-label {
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.search-analytics-kpi-value {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.search-analytics-kpi-hint {
+    color: var(--mj-text-muted);
+    font-size: 0.72rem;
+}
+
+.search-analytics-h3 {
+    margin: 22px 0 8px;
+    font-size: 1rem;
+    color: var(--mj-text-primary);
+}
+
+.search-analytics-empty {
+    color: var(--mj-text-muted);
+    font-size: 0.85rem;
+    margin: 4px 0 14px;
+}
+
+.search-analytics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+}
+
+.search-analytics-table thead th {
+    text-align: left;
+    border-bottom: 1px solid var(--mj-border-default);
+    padding: 6px 10px;
+    color: var(--mj-text-muted);
+    font-weight: 500;
+}
+
+.search-analytics-table tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    font-variant-numeric: tabular-nums;
+}
+
+.search-analytics-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.search-analytics-refresh {
+    margin-top: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.82rem;
+}
+
+.search-analytics-refresh:hover {
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+}
