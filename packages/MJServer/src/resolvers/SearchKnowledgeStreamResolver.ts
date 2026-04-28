@@ -32,6 +32,7 @@ import {
     SearchStreamEvent,
 } from '@memberjunction/search-engine';
 import { MJAIAgentEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { SearchKnowledgeResultItem, SearchScoreBreakdown, SearchSourceCounts } from './SearchKnowledgeResolver.js';
 
 const SEARCH_STREAM_TOPIC = 'SEARCH_STREAM';
@@ -97,7 +98,7 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
     @Subscription(() => SearchStreamNotification, {
         topics: SEARCH_STREAM_TOPIC,
         filter: ({ payload, args }: { payload: SearchStreamNotification; args: { streamID: string } }) =>
-            payload.StreamID === args.streamID,
+            UUIDsEqual(payload.StreamID, args.streamID),
     })
     SearchStreamEvents(
         @Root() notification: SearchStreamNotification,

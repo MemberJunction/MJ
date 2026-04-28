@@ -5,6 +5,7 @@ import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunctio
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { SearchEngine, SearchResult as SearchEngineResult, SearchResultItem as SearchEngineResultItem, SearchProviderInfo, SearchContext, SearchScopePermissionResolver } from '@memberjunction/search-engine';
 import { SearchEngineBase, MJAIAgentEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /* ───── GraphQL types ───── */
 
@@ -327,14 +328,14 @@ export class SearchKnowledgeResolver extends ResolverBase {
             const scopes = SearchEngineBase.Instance.ActiveScopes;
             const userID = currentUser.ID;
 
-            const ownedOrUnowned = scopes.filter(s => !s.OwnerUserID || s.OwnerUserID === userID);
+            const ownedOrUnowned = scopes.filter(s => !s.OwnerUserID || UUIDsEqual(s.OwnerUserID, userID));
             const agent = await this.loadAgent(agentID, currentUser);
             const resolver = new SearchScopePermissionResolver();
 
             const visible: SearchScopeInfo[] = [];
             for (const s of ownedOrUnowned) {
                 // Personal scopes owned by the caller are implicitly visible.
-                if (s.OwnerUserID && s.OwnerUserID === userID) {
+                if (s.OwnerUserID && UUIDsEqual(s.OwnerUserID, userID)) {
                     visible.push(this.toScopeInfo(s));
                     continue;
                 }
