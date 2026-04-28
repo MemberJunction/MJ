@@ -248,10 +248,16 @@ export class RunCodeGenBase {
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
         updateSpinner('Managing Metadata...');
         const metadataSuccess = await manageMD.manageMetadata(conn, currentUser);
+        // Refresh in-memory metadata UNCONDITIONALLY after manageMetadata, even when it returned
+        // false. manageMetadata can return false on non-fatal sub-failures (e.g. failed validator
+        // generation for one CHECK constraint) while still having created/updated EntityField
+        // rows for newly-discovered entities. Skipping Refresh here causes the SQL-gen entity
+        // loop to use stale snapshots and silently drop CRUD for those entities — Bug 1 in the
+        // 3-bug chain, observed first-run on PG for entities like SystemEvent.
+        await provider.Refresh();
         if (!metadataSuccess) {
-          failSpinner('ERROR managing metadata');
+          failSpinner('ERROR managing metadata (refresh applied; downstream will use latest available state)');
         } else {
-          await provider.Refresh();
           succeedSpinner('Metadata management completed');
         }
 
