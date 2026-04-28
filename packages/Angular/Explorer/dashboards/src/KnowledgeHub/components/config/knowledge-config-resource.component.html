@@ -468,6 +468,7 @@
                                     <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'indexes'" (click)="SelectScopeTab('indexes')">External Indexes</button>
                                     <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'entities'" (click)="SelectScopeTab('entities')">Entities</button>
                                     <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'storage'" (click)="SelectScopeTab('storage')">Storage</button>
+                                    <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'permissions'" (click)="SelectScopeTab('permissions')">Permissions</button>
                                     <div class="scope-manager-tab-spacer"></div>
                                     <button type="button" class="scope-manager-save-btn" (click)="SaveActiveScope()">
                                         <i class="fa-solid fa-save"></i> Save
@@ -569,6 +570,29 @@
                                         [Columns]="ScopeStorageColumns"
                                         AddButtonLabel="+ Add storage folder"
                                         EmptyMessage="No storage accounts linked to this scope.">
+                                    </mj-search-scope-child-grid>
+                                }
+
+                                @if (ActiveScopeTab === 'permissions') {
+                                    <div class="scope-permissions-help" style="margin-bottom: 12px; padding: 8px 12px; background: var(--mj-bg-surface-card); border-left: 3px solid var(--mj-brand-primary); border-radius: 4px;">
+                                        <p style="margin: 0; font-size: 0.95em;">
+                                            <i class="fa-solid fa-shield-halved" style="color: var(--mj-brand-primary);"></i>
+                                            <strong>Per-user / per-role grants on this scope.</strong>
+                                            Each row binds <em>either</em> a User <em>or</em> a Role (not both). Levels:
+                                            <code>None</code> = explicit deny that overrides role grants,
+                                            <code>Read</code> = view scope metadata,
+                                            <code>Search</code> = invoke ScopedSearchAction,
+                                            <code>Manage</code> = full edit including authoring permissions.
+                                            Combined with <code>AIAgent.SearchScopeAccess</code> via the resolver — see the spec for the full resolution order.
+                                        </p>
+                                    </div>
+                                    <mj-search-scope-child-grid
+                                        [ParentID]="ActiveScopeID"
+                                        ChildEntityName="MJ: Search Scope Permissions"
+                                        ParentFieldName="SearchScopeID"
+                                        [Columns]="ScopePermissionColumns"
+                                        AddButtonLabel="+ Grant access"
+                                        EmptyMessage="No explicit grants. Access falls back to agent SearchScopeAccess only.">
                                     </mj-search-scope-child-grid>
                                 }
                             } @else {

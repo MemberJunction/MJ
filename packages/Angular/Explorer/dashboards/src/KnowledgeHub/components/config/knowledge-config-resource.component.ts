@@ -188,7 +188,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public ActiveScopeID: string | null = null;
     public IsLoadingScopes = false;
     /** Which sub-tab of the selected scope is open. */
-    public ActiveScopeTab: 'definition' | 'providers' | 'indexes' | 'entities' | 'storage' = 'definition';
+    public ActiveScopeTab: 'definition' | 'providers' | 'indexes' | 'entities' | 'storage' | 'permissions' = 'definition';
 
     /** Column spec for the Providers child grid. */
     public readonly ScopeProviderColumns: SearchScopeChildGridColumn[] = [
@@ -224,6 +224,24 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public readonly ScopeStorageColumns: SearchScopeChildGridColumn[] = [
         { Field: 'StorageAccountID', Label: 'Storage Account', Type: 'lookup', LookupEntityName: 'Storage Providers', Width: '220px' },
         { Field: 'FolderPath', Label: 'Folder Path (Nunjucks)', Type: 'code', Placeholder: '/tenants/{{ context.PrimaryScopeRecordID }}/hr/policies/' },
+    ];
+
+    /**
+     * Column spec for the SearchScopePermission child grid (Phase 2A).
+     * Editable surface — admins author per-user / per-role grants here.
+     * Each row binds either a User or a Role (XOR enforced by the DB CHECK
+     * constraint, surfaced as a save-time error for now). Resolution order
+     * lives in SearchScopePermissionResolver.
+     */
+    public readonly ScopePermissionColumns: SearchScopeChildGridColumn[] = [
+        { Field: 'UserID', Label: 'User', Type: 'lookup', LookupEntityName: 'Users', LookupFilter: "IsActive=1", Width: '240px' },
+        { Field: 'RoleID', Label: 'Role', Type: 'lookup', LookupEntityName: 'Roles', Width: '200px' },
+        { Field: 'PermissionLevel', Label: 'Level', Type: 'select', Options: [
+            { Label: 'None (explicit deny)', Value: 'None' },
+            { Label: 'Read (view only)', Value: 'Read' },
+            { Label: 'Search (invoke)', Value: 'Search' },
+            { Label: 'Manage (edit + grant)', Value: 'Manage' },
+        ], Width: '200px' },
     ];
 
     ngAfterViewInit(): void {
@@ -285,7 +303,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.cdr.detectChanges();
     }
 
-    public SelectScopeTab(tab: 'definition' | 'providers' | 'indexes' | 'entities' | 'storage'): void {
+    public SelectScopeTab(tab: 'definition' | 'providers' | 'indexes' | 'entities' | 'storage' | 'permissions'): void {
         this.ActiveScopeTab = tab;
         this.cdr.detectChanges();
     }
