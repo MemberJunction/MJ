@@ -711,6 +711,26 @@ protected generateSingleOperation(operation: Operation): string {
 - **NEVER** directly instantiate entity classes with `new EntityClass()`
 - **NEVER** look up entity names at runtime - they are fixed in the schema
 
+### Looking Up an EntityInfo by Name — ALWAYS use `EntityByName`
+
+When you need to find an `EntityInfo` from the metadata, **always use `md.EntityByName(name)`**, never `md.Entities.find(...)`.
+
+```typescript
+// ✅ CORRECT — case-insensitive, trim-handling, O(1) lookup via the entity-by-name map
+const entity = new Metadata().EntityByName(params.EntityName);
+if (entity && !this.IsCachingEnabledForEntity(entity)) { ... }
+
+// ❌ WRONG — case-sensitive, whitespace-sensitive, O(N) array scan
+const entity = md.Entities.find(e => e.Name === params.EntityName);
+```
+
+**Why:**
+- `Entities.find(e => e.Name === ...)` is **case-sensitive** and **whitespace-sensitive** by string equality. Real-world callers pass `'channel actions'`, `'Channel Actions'`, or `' Channel Actions '` interchangeably; `find` only matches the exact registered casing. Bugs from this skew slip through code review easily.
+- `EntityByName` lowercases and trims internally, then uses the pre-populated `_entityMapByName` for O(1) resolution. It also handles the unset-Provider case (returns `undefined`) so your code can fail-open on boot.
+- `EntityByName` returns `EntityInfo | undefined`, so always guard with `if (entity)` before dereferencing.
+
+This rule applies to any code that needs to look up a single entity by name. Use `Entities` (the array) only when you genuinely need to iterate over all entities (e.g. to filter by `SchemaName`).
+
 ### 🚨 CRITICAL: Entity Naming Convention Warning
 
 **ALWAYS** use the correct entity names with the "MJ: " prefix where required. To prevent naming collisions on client systems, all new core entities use the "MJ: " prefix, while older entities do not.

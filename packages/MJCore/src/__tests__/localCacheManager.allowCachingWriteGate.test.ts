@@ -483,14 +483,15 @@ describe('LocalCacheManager AllowCaching write gate (PR #2475)', () => {
     });
 
     // -----------------------------------------------------------------------
-    // Behavioral edges: name matching is strict (case-sensitive, whitespace-sensitive)
+    // Behavioral edges: name matching is case-insensitive and trim-handling
+    // (gate uses Metadata.EntityByName per code review feedback)
     // -----------------------------------------------------------------------
-    describe('Entity name matching is strict (find() uses ===)', () => {
-        it('Mismatched casing → entity not found → fall-open → write proceeds', async () => {
-            // Document: the gate uses `e.Name === params.EntityName`, NOT a case-insensitive
-            // lookup like Metadata.EntityByName. If callers pass mixed casing they'll bypass
-            // the gate. This is a deliberate behavior of the current gate; if/when this is
-            // tightened, this test should fail and be updated.
+    describe('Entity name matching is case-insensitive and trim-handling (via EntityByName)', () => {
+        it('Mismatched casing still resolves the same entity → gate fires → write skipped', async () => {
+            // The gate uses Metadata.EntityByName which lowercases and trims internally.
+            // Caller passing 'channel actions' resolves to the same entity registered as
+            // 'Channel Actions', so the gate correctly identifies AllowCaching=false and
+            // skips the write.
             restoreMetadata = setMetadataProvider([makeEntity('Channel Actions', false)]);
             mockStorage.resetCallCounts();
 
@@ -501,11 +502,24 @@ describe('LocalCacheManager AllowCaching write gate (PR #2475)', () => {
                 '2026-01-01T00:00:00Z'
             );
 
-            // Lowercase EntityName doesn't match registered "Channel Actions" → write proceeds.
-            expect(mockStorage.setCallCount).toBe(1);
+            expect(mockStorage.setCallCount).toBe(0);
         });
 
-        it('Leading/trailing whitespace in EntityName → not matched → fall-open → write proceeds', async () => {
+        it('ALL-CAPS EntityName resolves the same registered entity → gate fires → write skipped', async () => {
+            restoreMetadata = setMetadataProvider([makeEntity('Channel Actions', false)]);
+            mockStorage.resetCallCounts();
+
+            await cacheManager.SetRunViewResult(
+                `CHANNEL ACTIONS|fp|case2`,
+                { EntityName: 'CHANNEL ACTIONS' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: '1' }],
+                '2026-01-01T00:00:00Z'
+            );
+
+            expect(mockStorage.setCallCount).toBe(0);
+        });
+
+        it('Leading/trailing whitespace in EntityName is trimmed → gate fires → write skipped', async () => {
             restoreMetadata = setMetadataProvider([makeEntity('Channel Actions', false)]);
             mockStorage.resetCallCounts();
 
@@ -516,7 +530,38 @@ describe('LocalCacheManager AllowCaching write gate (PR #2475)', () => {
                 '2026-01-01T00:00:00Z'
             );
 
-            // Whitespace breaks strict equality → write proceeds. Same caveat as the casing test.
+            expect(mockStorage.setCallCount).toBe(0);
+        });
+
+        it('Combined casing + whitespace differences still resolve to the same entity', async () => {
+            restoreMetadata = setMetadataProvider([makeEntity('Channel Actions', false)]);
+            mockStorage.resetCallCounts();
+
+            await cacheManager.SetRunViewResult(
+                `weird|fp|combined`,
+                { EntityName: '  channel actions  ' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: '1' }],
+                '2026-01-01T00:00:00Z'
+            );
+
+            expect(mockStorage.setCallCount).toBe(0);
+        });
+
+        it('Whitespace-only EntityName → EntityByName throws → caught by try/catch → write proceeds (fail-open)', async () => {
+            // EntityByName throws on empty/whitespace-only input. The wrapping try/catch
+            // catches it and we fall open. Document this so future changes don't regress.
+            restoreMetadata = setMetadataProvider([makeEntity('Channel Actions', false)]);
+            mockStorage.resetCallCounts();
+
+            await cacheManager.SetRunViewResult(
+                `   |fp|wsonly`,
+                { EntityName: '   ' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [{ ID: '1' }],
+                '2026-01-01T00:00:00Z'
+            );
+
+            // Whitespace-only is truthy → enters the gate → EntityByName throws →
+            // caught → fall-open → write proceeds.
             expect(mockStorage.setCallCount).toBe(1);
         });
     });

@@ -1130,19 +1130,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // serve stale data on subsequent reads. This was causing the "newly created
         // Channel Actions / Organization Actions don't show up in the UI" bug.
         //
-        // Note: during startup the Metadata provider may not be ready yet (md.Entities
-        // undefined or empty). In that case we fall through and write — startup-time
-        // writes are for system/metadata entities that are expected to be cacheable
-        // anyway, and we don't want to block legitimate caching during init.
+        // Use Metadata.EntityByName for the lookup — it's case-insensitive, trims whitespace,
+        // and uses the O(1) entity-by-name map. During startup the Metadata provider may not
+        // be ready yet, in which case EntityByName returns undefined; we fall through and
+        // write to avoid blocking legitimate boot-time caching of system/metadata entities.
         if (params.EntityName) {
             try {
-                const md = new Metadata();
-                if (md.Entities && md.Entities.length > 0) {
-                    const entity = md.Entities.find(e => e.Name === params.EntityName);
-                    if (entity && !this.IsCachingEnabledForEntity(entity)) {
-                        LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for non-cacheable entity "${params.EntityName}" (AllowCaching=false)`, verboseOnly: true });
-                        return;
-                    }
+                const entity = new Metadata().EntityByName(params.EntityName);
+                if (entity && !this.IsCachingEnabledForEntity(entity)) {
+                    LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for non-cacheable entity "${params.EntityName}" (AllowCaching=false)`, verboseOnly: true });
+                    return;
                 }
             } catch (err) {
                 // fall through and write — fail-open is safer than fail-closed here
