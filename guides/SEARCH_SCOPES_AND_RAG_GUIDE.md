@@ -347,20 +347,270 @@ Key signals to watch:
 
 ---
 
-## 12. Phase 1 Implementation Status
+## 12. Implementation Status
 
-Completed surfaces (see `plans/search-scopes-rag-plus.md` for per-task state):
-- **1A** — Schema + CodeGen + metadata seeds (Global scope, Search Result Set artifact type, `__Scoped_Search` action).
-- **1B** — `SearchEngine` scope resolution, `ScopeConstraints`, Nunjucks-rendered templates, per-provider push-down, cross-scope RRF, optional `BaseReRanker` + `NoopReRanker`.
-- **1C** — `AgentPreExecutionRAG` + `BaseAgent.InjectPreExecutionRAG()` wired into Phase 2; Data Snapshot artifact payload builder.
-- **1D** — `ScopedSearchAction` (`__Scoped_Search`) with full `SearchScopeAccess` enforcement.
-- **1E** — GraphQL resolver (`SearchKnowledge` + `SearchScopes`), `GraphQLSearchClient.ExecuteSearch({ ScopeIDs })`, Angular `SearchScopeSelectorComponent`.
-- **1F** — This guide.
-- **1G** — Multi-tenant `SearchContext` wired inline with 1B (same runtime path, zero additional code).
-- **1H** — UX mockups under `plans/search-scopes-rag-plus/mockups/`.
+The plan-doc at `plans/search-scopes-rag-plus.md` carries the canonical
+Phase-2-onward delivery log. Quick status here:
 
-Not yet in scope (Phase 2):
-- Scope-level `SearchScopePermission` entity.
-- Search-specific artifact tool library (`SearchResultSetToolLibrary`).
-- Progressive/streaming search results.
+- **Phase 1** (entities, runtime, providers, RAG hook, ScopedSearchAction, GraphQL, Angular, dashboards) — shipped.
+- **Phase 2A** (per-user permissions) — `SearchScopePermission` table, `SearchScopePermissionResolver`, GraphQL + Action enforcement, child-grid UIs, RLS safety-net test (PM-01–PM-10) — shipped.
+- **Phase 2B** (`SearchResultSetToolLibrary`) — re-parented onto Data Snapshot, 5 search-specific tools (`filterByScore`, `groupBySourceProvider`, `getMatchingChunks`, `followSourceLink`, `rerankInline`) — shipped.
+- **Phase 2C** (streaming) — `SearchEngine.streamSearch` async iterable, `StreamScopedSearch` mutation + `SearchStreamEvents` subscription, `AgentPreExecutionRAG` partials, `ScopedSearchAction.streamingMode`, Angular UI with per-provider chip strip (opt-in via `?stream=1`) — shipped.
+- **Phase 2D** (reranker catalog) — `BaseReRanker` contract additions (Name, Version, GetMaxResultCount, EstimateCostCents, CostReporter), CohereReRanker, VoyageReRanker, OpenAIReRanker (chat-judge), BGEReRanker, `RerankerBudgetGuard` + `SearchScope.RerankerBudgetCents` — shipped (server). Form dropdown + budget field UI owed.
+- **Phase 3** (observability) — `SearchExecutionLog` entity + logging hook in `SearchEngine.Search` — shipped (server). Analytics dashboard tab + per-scope CSV export owed.
+- **Phase 4** (tuning UI) — fully owed (Angular session): live preview side-panel, fusion weight sliders, reranker A/B comparison with Kendall-tau / RBO, `SearchScopeTestQuery` per-scope canonical queries.
+- **Phase 5** (external providers) — `ElasticsearchSearchProvider`, `TypesenseSearchProvider`, `AzureAISearchProvider`, `OpenSearchSearchProvider`, plus `BaseSearchProvider.GetAvailableProviders()` discovery helper — shipped (server). Form provider dropdown owed.
+- **Phase 6** (cleanup) — UUIDsEqual sweep, ChildGrid audit, metadata-tripwire test for Search Result Set ParentID, this delivery log — shipped. Guide updates (this doc), fresh-DB migration audit owed.
+
+---
+
+## 13. Per-User Permissions (Phase 2A)
+
+`SearchScopePermission` (table `__mj.SearchScopePermission`) grants or
+restricts access to a scope on a per-user OR per-role basis. Each row
+authorizes exactly one principal (UserID OR RoleID, never both — enforced
+by `CK_SearchScopePermission_Principal`) at one of four levels:
+`'None' | 'Read' | 'Search' | 'Manage'`.
+
+### Resolution order
+
+`SearchScopePermissionResolver.ResolveEffectivePermission(input)` evaluates:
+
+1. **Direct user grant** — `UserID = caller.ID` rows in `SearchScopePermission`.
+2. **Role grants** — rows where `RoleID` matches any role the caller belongs to. The highest-level grant across roles wins.
+3. **AIAgent.SearchScopeAccess fallback** — when an agent context is present, `'All'` lets the agent search any scope (granted as `'Search'`); `'None'` blocks; `'Assigned'` requires an explicit grant above.
+
+`'None'` entries at any tier mean "no-grant from this tier" — they fall through to the next tier rather than terminating.
+
+### Push-down vs safety-net
+
+The resolver's `toSqlPredicate()` returns either `'1=1'` (allowed) or `'1=0'`
+(rejected) — providers must compose this into their WHERE clause / filter so
+forbidden records never reach fusion. As a backstop,
+`SearchEngine.filterByPermissions()` runs after fusion and drops any row the
+provider missed (entity-level RLS check via `RunView`). When the late-filter
+removes more than a handful of rows, that's a signal the responsible provider's
+push-down is incomplete and should be tightened.
+
+### Worked example
+
+```typescript
+const resolver = new SearchScopePermissionResolver();
+const result = await resolver.ResolveEffectivePermission({
+  User: contextUser,
+  SearchScopeID: scopeID,
+  Agent: maybeAgent,
+});
+if (!result.Allowed) {
+  throw new ForbiddenError(`Search scope access denied: ${result.Reason}`);
+}
+// result.Level === 'Read' | 'Search' | 'Manage'
+// result.Source === 'DirectGrant' | 'RoleGrant' | 'AgentUnscopedAll' | 'NoGrant'
+```
+
+---
+
+## 14. Streaming Search (Phase 2C)
+
+The synchronous `SearchEngine.Search()` call blocks until every provider has
+returned and fusion + reranking complete. `streamSearch()` yields events as
+each provider reports, letting agents reason about partials and the UI render
+progressively.
+
+### GraphQL surface
+
+Two-step protocol:
+
+1. **`StreamScopedSearch` mutation** — kicks off the run, returns
+   `{ Success, StreamID, ErrorMessage }`. The server starts the search in
+   the background, keyed by StreamID.
+2. **`SearchStreamEvents(streamID)` subscription** — delivers events:
+   `{ phase: 'provider', providerName, results, durationMs }`,
+   `{ phase: 'fused', results }`, `{ phase: 'reranked', results }`,
+   `{ phase: 'final', results }`, `{ phase: 'error', errorMessage }`.
+
+The Angular `GraphQLSearchClient.StreamSearch(params)` returns an `Observable`
+that wraps the two steps so component code only sees a single subscribe point.
+
+### Angular consumer (P2C.5)
+
+`SearchOverlayComponent` and `SearchResultsResource` both opt in via
+`EnableStreaming` (Input on the overlay; URL query param `?stream=1` on the
+resource page during rollout). On opt-in, both components subscribe to
+`SearchService.StreamSearch(request)`, append per-provider results to the
+list as 'provider' events arrive, and replace partials with the canonical
+fused list on 'final'. A small status chip strip above the results renders
+each provider's name + count + latency (or error message).
+
+Defaulting `EnableStreaming` to `false` preserves Phase 1 request-response UX.
+When the team is ready to flip the default, change the `false` to `true`
+in the consuming component.
+
+### Agent consumer
+
+`AgentPreExecutionRAG` consumes `streamSearch` and appends partials to the
+agent's scratchpad as markdown (not JSON — markdown's lower token cost +
+better LLM accuracy is the standing convention). The `'reranked'` and
+`'final'` events are flushed into the prompt at logical boundaries.
+
+---
+
+## 15. Reranker Catalog (Phase 2D)
+
+Five rerankers ship today:
+
+| Driver Class | Provider | Cost model | Notes |
+|---|---|---|---|
+| `NoopReRanker` | n/a | $0 | Default pass-through; preserves RRF order |
+| `CohereReRanker` | Cohere `rerank-v3.5` (or `rerank-multilingual-v3.0`) | $2.00 / 1k searches (1 search = up to 100 docs) | Most accurate for English; multilingual variant via `config.model` |
+| `VoyageReRanker` | Voyage `rerank-2` (or `rerank-2-lite`) | $0.05 / 1M tokens (`rerank-2`); $0.02 / 1M tokens (`rerank-2-lite`) | Per-token billing; exact `usage.total_tokens` reported |
+| `OpenAIReRanker` | gpt-4o-mini chat-judge (no first-party endpoint as of 2026-04) | $0.15 / 1M input + $0.60 / 1M output (`gpt-4o-mini`) | Override model via `config.model`; revisit when OpenAI ships first-party rerank |
+| `BGEReRanker` | Local `Xenova/bge-reranker-base` (or `-large`, `-v2-m3`) | $0 — local model | Lazy-loads weights via `@xenova/transformers`; never bundle weights |
+
+### Configuring a scope to use a reranker
+
+Set `SearchScope.ScopeConfig.reRanker.driverClass = 'CohereReRanker'` (etc.).
+Optional `config.model` overrides the default model for the chosen driver.
+
+### Cost tracking + budget guard
+
+`SearchScope.RerankerBudgetCents` (nullable INT) caps real-provider rerank
+spend per search invocation. NULL = uncapped (existing behavior preserved).
+When set, `RerankerBudgetGuard`:
+
+1. **Pre-call** — asks each reranker for `EstimateCostCents(N)` and
+   short-circuits the rerank if the projected cost exceeds the remaining
+   budget. The unranked top-N is returned and the skip is logged.
+2. **Post-call** — wires `BaseReRanker.CostReporter` so the reranker's
+   actual cost (Cohere: per-search × 0.2¢; Voyage / OpenAI: usage tokens
+   × per-token price; BGE / Noop: 0) accumulates into `Spent`. Subsequent
+   `EstimateCostCents` checks see the real burn rate.
+
+### Observability
+
+Each invocation writes a `MJSearchExecutionLog` row (Phase 3) with the
+reranker driver-class name and `RerankerCostCents` populated.
+
+---
+
+## 16. Search Analytics (Phase 3)
+
+`__mj.SearchExecutionLog` carries one row per `SearchEngine.Search`
+invocation. Read by the Knowledge Hub Search Analytics dashboard (P3.3 —
+owed), the per-scope tuning CSV export (P3.4 — owed), and direct
+SQL queries.
+
+### Schema (CodeGen-generated entity wrapper: `MJSearchExecutionLogEntity`)
+
+| Column | Purpose |
+|---|---|
+| `ID`, `SearchScopeID`, `UserID`, `AIAgentID` | Identity (FKs all nullable for unscoped / unauthenticated / human-direct calls) |
+| `Query` | Raw query text (`NVARCHAR(MAX)` — long natural-language queries) |
+| `TotalDurationMs`, `ResultCount` | Per-run timing + final result count |
+| `RerankerName`, `RerankerCostCents` | Populated when a reranker ran |
+| `Status` | `'Success' \| 'Failure' \| 'Forbidden'` |
+| `FailureReason` | Short message when not Success |
+| `ProvidersJSON` | Per-source breakdown — feeds dashboard charts |
+
+### Write semantics
+
+The hook in `SearchEngine.logSearchExecution()` is best-effort: errors during
+the write are swallowed and logged, never propagated. Observability must
+never bring down search.
+
+---
+
+## 17. External Search Providers (Phase 5)
+
+Four external providers ship today:
+
+| Driver Class | Engine | Auth | Notes |
+|---|---|---|---|
+| `ElasticsearchSearchProvider` | Elasticsearch | apiKey OR username+password OR cloudId | SDK via optional peer `@elastic/elasticsearch` |
+| `TypesenseSearchProvider` | Typesense | apiKey | Direct REST, parallel per-collection queries |
+| `AzureAISearchProvider` | Azure AI Search | api-key | OData `$filter` push-down |
+| `OpenSearchSearchProvider` | OpenSearch (incl. Amazon OpenSearch Service) | username+password OR pre-signed AWS SigV4 header | OS query DSL = ES 7.x compatible |
+
+Each consumes `SearchScope.ExternalIndexes` rows with the matching
+`IndexType`. The scope's rendered `MetadataFilter` (a JSON object or string in
+the engine's native filter DSL — already-rendered with SearchContext via
+Nunjucks) composes into the engine's filter clause for permission / tenant
+push-down. Per-engine connection options live on `SearchProvider.ProviderConfig`.
+
+---
+
+## 18. How-to Templates
+
+### How to add a new search provider
+
+```typescript
+// packages/SearchEngine/src/providers/my-search-provider.ts
+import { RegisterClass } from '@memberjunction/global';
+import { BaseSearchProvider, SearchProviderConfig } from '../generic/ISearchProvider';
+
+@RegisterClass(BaseSearchProvider, 'MySearchProvider')
+export class MySearchProvider extends BaseSearchProvider {
+    public readonly SourceType: SearchSource = 'fulltext'; // or 'vector' | 'entity' | 'storage'
+
+    public override async Initialize(config: SearchProviderConfig, contextUser: UserInfo): Promise<void> {
+        await super.Initialize(config, contextUser);
+        // Pull connection details from config.ProviderConfig (already-parsed JSON)
+    }
+
+    public async Search(query, topK, filters, contextUser, scopeConstraints?): Promise<SearchResultItem[]> {
+        // 1. If scopeConstraints?.ExternalIndexes is set, filter to your IndexType
+        // 2. If scopeConstraints?.QueryTransforms?.[this.SourceType] is set, use that as the query
+        // 3. Push permission predicate (scope.MetadataFilter / equivalent) into your engine's WHERE clause
+        // 4. Map results to SearchResultItem[]
+        return [];
+    }
+}
+```
+
+Then seed a `MJ: Search Provider` row with `DriverClass = 'MySearchProvider'`.
+The provider auto-appears in the discovery dropdown via
+`BaseSearchProvider.GetAvailableProviders()`.
+
+### How to add a new reranker
+
+```typescript
+// packages/SearchEngine/src/rerankers/MyReRanker.ts
+import { RegisterClass } from '@memberjunction/global';
+import { BaseReRanker } from '../generic/BaseReRanker';
+
+@RegisterClass(BaseReRanker, 'MyReRanker')
+export class MyReRanker extends BaseReRanker {
+    public get DriverClass(): string { return 'MyReRanker'; }
+    public override get Name(): string { return 'My'; }
+    public override get Version(): string { return '1'; }
+    public override GetMaxResultCount(): number { return 1000; }
+    public override EstimateCostCents(n: number): number { /* ... */ return 0; }
+
+    protected override getAIReranker(config, contextUser) {
+        // Return a configured @memberjunction/ai BaseReranker instance, OR
+        // override `ReRank()` directly to bypass the AI layer.
+        return null;
+    }
+}
+```
+
+Configure via `SearchScope.ScopeConfig.reRanker.driverClass = 'MyReRanker'`.
+Auto-appears in `BaseReRanker.GetAvailableRerankers()`.
+
+### How to add a new artifact tool library
+
+See `packages/AI/Agents/src/artifact-tools/SearchResultSetToolLibrary.ts` for
+the canonical example. Pattern: `@RegisterClass(BaseArtifactToolLibrary, 'My
+Artifact Type')`, override `getToolDefinitions()`, register the artifact type
+in `metadata/artifact-types/.artifact-types.json` with `ParentID`
+pointing at a parent type that supplies inherited tools (e.g.
+`@lookup:MJ: Artifact Types.Name=Data Snapshot`).
+
+### Alpha-sequence IDs in agent prompts
+
+When an agent needs to refer back to a result row in a tool call, use
+`A`, `B`, `C` … `AA`, `AB` (base-26) instead of UUIDs. UUIDs in prompts
+waste tokens, are noisy in tool-call output, and tempt the model to
+hallucinate them. The artifact tool library maps alpha-sequence IDs back
+to internal UUIDs without leaking those UUIDs to the prompt.
 - Re-ranker catalog entity + visual configuration UI.
