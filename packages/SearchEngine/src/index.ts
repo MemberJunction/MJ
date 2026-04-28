@@ -10,3 +10,4 @@ export * from './generic/SearchEngine';
 export * from './generic/BaseReRanker';
 export * from './generic/NoopReRanker';
 export * from './generic/ScopeTemplateRenderer';
+export * from './permissions/SearchScopePermissionResolver';
