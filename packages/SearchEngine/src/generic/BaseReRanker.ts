@@ -22,8 +22,27 @@
  */
 
 import { LogError, UserInfo } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
 import { BaseReranker as AIBaseReranker, RerankDocument, RerankResult } from '@memberjunction/ai';
 import { SearchResultItem } from './search.types';
+
+/**
+ * Lightweight catalog entry for a registered reranker, returned by
+ * `BaseReRanker.GetAvailableRerankers()`. Designed for UI dropdown population on
+ * the SearchScope form (P2D.7) — a single call gives the form everything it
+ * needs to render selectable options without separately instantiating each
+ * registered class.
+ */
+export interface RegisteredReRankerInfo {
+    /** ClassFactory registration key — what goes into ScopeConfig.reRanker.driverClass */
+    DriverClass: string;
+    /** Human-friendly label for UI display (BaseReRanker.Name) */
+    Name: string;
+    /** Reranker version (BaseReRanker.Version) */
+    Version: string;
+    /** Whether this reranker incurs API cost (true) or runs free locally (false) */
+    HasCost: boolean;
+}
 
 /**
  * Abstract primitive for a search re-ranker. Provides a default implementation of
@@ -108,6 +127,46 @@ export abstract class BaseReRanker {
         if (cents > 0 && this.CostReporter) {
             this.CostReporter(cents);
         }
+    }
+
+    /**
+     * Enumerate every reranker currently registered with ClassFactory under
+     * `BaseReRanker`. Designed for the SearchScope form's reranker dropdown (P2D.7) —
+     * the form populates the dropdown from this single call rather than hardcoding
+     * a list, so any ClassFactory-registered reranker (including third-party ones
+     * published as separate packages) shows up automatically.
+     *
+     * Each entry includes the driver-class registration key, the friendly Name,
+     * Version, and a `HasCost` flag (true when EstimateCostCents(1) > 0). Sorted
+     * by Name for stable UI ordering.
+     */
+    public static GetAvailableRerankers(): RegisteredReRankerInfo[] {
+        const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseReRanker);
+        const seen = new Set<string>();
+        const out: RegisteredReRankerInfo[] = [];
+        for (const reg of registrations) {
+            const key = reg.Key;
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            try {
+                const Ctor = reg.SubClass as unknown as new () => BaseReRanker;
+                const instance = new Ctor();
+                out.push({
+                    DriverClass: key,
+                    Name: instance.Name,
+                    Version: instance.Version,
+                    HasCost: instance.EstimateCostCents(1) > 0,
+                });
+            } catch (err) {
+                // Some rerankers may require args we can't supply at enumeration time.
+                // Fall back to the registration key alone — the UI still gets an
+                // option, it just lacks the friendly label.
+                LogError(`BaseReRanker.GetAvailableRerankers: could not introspect "${key}" — ${err instanceof Error ? err.message : String(err)}`);
+                out.push({ DriverClass: key, Name: key, Version: '?', HasCost: false });
+            }
+        }
+        out.sort((a, b) => a.Name.localeCompare(b.Name));
+        return out;
     }
 
     /**

@@ -108,4 +108,22 @@ describe('NoopReRanker', () => {
             expect(sink).toEqual([0.25]);
         });
     });
+
+    describe('BaseReRanker.GetAvailableRerankers (P2D.7 dropdown helper)', () => {
+        it('introspects manually-registered subclasses and reports DriverClass / Name / HasCost', async () => {
+            // The file's vitest mock replaces @RegisterClass with a no-op so the decorator
+            // doesn't auto-register NoopReRanker against the real ClassFactory. To exercise
+            // GetAvailableRerankers we register the class explicitly here against the real
+            // factory.
+            const realGlobal = await vi.importActual<typeof import('@memberjunction/global')>('@memberjunction/global');
+            const { BaseReRanker } = await import('../generic/BaseReRanker');
+            realGlobal.MJGlobal.Instance.ClassFactory.Register(BaseReRanker, NoopReRanker, 'NoopReRanker', 0);
+
+            const list = BaseReRanker.GetAvailableRerankers();
+            const noop = list.find(e => e.DriverClass === 'NoopReRanker');
+            expect(noop).toBeDefined();
+            expect(noop?.Name).toBe('NoopReRanker');
+            expect(noop?.HasCost).toBe(false);
+        });
+    });
 });
