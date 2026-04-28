@@ -12,7 +12,17 @@
       "ExecutionCostRank": 3,
       "UsesTemplate": true
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/calculate-ai-agent-run-cost.pg.sql"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "1ED5F808-5B12-45DB-A376-324CF65B0CAF"
     },

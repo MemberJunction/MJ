@@ -12,6 +12,17 @@
       "ExecutionCostRank": 3,
       "UsesTemplate": true
     },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/get-conversations-for-memory-manager.pg.sql"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "574FD9D5-AB9E-4FA5-A36C-C25E7D3F63FC"
     },

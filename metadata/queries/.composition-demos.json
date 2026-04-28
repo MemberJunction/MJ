@@ -34,7 +34,17 @@
       "Reusable": true,
       "UsesTemplate": true
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/demos/recent-entity-changes.pg.sql"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "C3F7F066-789A-42A2-ACFD-2C113B5D2E30"
     },

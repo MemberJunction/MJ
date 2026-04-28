@@ -12,6 +12,17 @@
       "ExecutionCostRank": 2,
       "UsesTemplate": true
     },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/get-conversation-complete.pg.sql"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "8F84DFB4-C38E-4B8D-80E7-9CCF30039E77"
     },
