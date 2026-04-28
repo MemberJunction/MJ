@@ -12,8 +12,23 @@
  * @module @memberjunction/search-engine
  */
 
-import { UserInfo } from '@memberjunction/core';
+import { LogError, UserInfo } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
 import { SearchSource, SearchFilters, SearchResultItem, ScopeConstraints } from './search.types';
+
+/**
+ * Lightweight catalog entry for a registered search provider, returned by
+ * `BaseSearchProvider.GetAvailableProviders()`. Designed for UI dropdown
+ * population on the SearchScope form (P5.5) — a single call gives the form
+ * everything it needs to render selectable options without separately
+ * instantiating each registered class.
+ */
+export interface RegisteredSearchProviderInfo {
+    /** ClassFactory registration key — the SearchProvider.DriverClass column value */
+    DriverClass: string;
+    /** SearchSource the provider implements ('vector' | 'fulltext' | 'entity' | 'storage') */
+    SourceType: SearchSource;
+}
 
 /**
  * Configuration passed to a search provider during initialization.
@@ -119,6 +134,38 @@ export abstract class BaseSearchProvider {
         contextUser: UserInfo,
         scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]>;
+
+    /**
+     * Enumerate every search provider currently registered with ClassFactory under
+     * `BaseSearchProvider`. Designed for the SearchScope form's provider dropdown
+     * (P5.5) — populates the dropdown from this single call rather than hardcoding
+     * a list, so any ClassFactory-registered provider (including third-party ones)
+     * shows up automatically.
+     *
+     * Each entry includes the driver-class registration key (writes into
+     * `SearchProvider.DriverClass`) and the SourceType the provider implements.
+     * Sorted by DriverClass for stable UI ordering.
+     */
+    public static GetAvailableProviders(): RegisteredSearchProviderInfo[] {
+        const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseSearchProvider);
+        const seen = new Set<string>();
+        const out: RegisteredSearchProviderInfo[] = [];
+        for (const reg of registrations) {
+            const key = reg.Key;
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            try {
+                const Ctor = reg.SubClass as unknown as new () => BaseSearchProvider;
+                const instance = new Ctor();
+                out.push({ DriverClass: key, SourceType: instance.SourceType });
+            } catch (err) {
+                LogError(`BaseSearchProvider.GetAvailableProviders: could not introspect "${key}" — ${err instanceof Error ? err.message : String(err)}`);
+                out.push({ DriverClass: key, SourceType: 'entity' });
+            }
+        }
+        out.sort((a, b) => a.DriverClass.localeCompare(b.DriverClass));
+        return out;
+    }
 }
 
 /**
