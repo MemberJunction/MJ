@@ -4230,3 +4230,52 @@ COMMENT ON COLUMN __mj."AIModelVendor"."PrefillFallbackText" IS 'Model-specific 
 /* spUpdate Permissions for MJ: AI Model Vendors */
 
 /* spUpdate Permissions for MJ: AI Prompts */
+
+
+-- ===================== Refresh hand-rolled view to expose SupportsPrefill =====================
+-- The SupportsPrefill column was added to __mj."AIModel", __mj."AIModelType", and
+-- __mj."AIModelVendor" earlier in this migration. vwAIModelTypes and vwAIModelVendors are
+-- auto-generated (CodeGen regenerates them on next run) but __mj."vwAIModels" is hand-rolled
+-- (BaseViewGenerated=FALSE) so CodeGen does not regenerate it. SQL Server's counterpart uses
+-- EXEC sp_refreshview; PG has no equivalent for hand-rolled views. Plain CREATE OR REPLACE
+-- VIEW with the column appended at the end (PG accepts a superset column list as long as
+-- existing columns are preserved).
+CREATE OR REPLACE VIEW __mj."vwAIModels" AS
+ SELECT m."ID",
+    m."Name",
+    m."Description",
+    m."AIModelTypeID",
+    m."PowerRank",
+    m."IsActive",
+    m."__mj_CreatedAt",
+    m."__mj_UpdatedAt",
+    m."SpeedRank",
+    m."CostRank",
+    m."ModelSelectionInsights",
+    m."InheritTypeModalities",
+    m."PriorVersionID",
+    amt."Name" AS "AIModelType",
+    v."Name" AS "Vendor",
+    mv."DriverClass",
+    mv."DriverImportPath",
+    mv."APIName",
+    mv."MaxInputTokens" AS "InputTokenLimit",
+    mv."SupportedResponseFormats",
+    mv."SupportsEffortLevel",
+    -- New column appended (v5.15.x): expose SupportsPrefill from AIModel base table.
+    m."SupportsPrefill"
+   FROM __mj."AIModel" m
+     JOIN __mj."AIModelType" amt ON m."AIModelTypeID" = amt."ID"
+     LEFT JOIN LATERAL ( SELECT amv."ModelID",
+            amv."DriverClass",
+            amv."DriverImportPath",
+            amv."APIName",
+            amv."MaxInputTokens",
+            amv."SupportedResponseFormats",
+            amv."SupportsEffortLevel",
+            amv."VendorID"
+           FROM __mj."vwAIModelVendors" amv
+          WHERE amv."ModelID" = m."ID" AND amv."Status"::text = 'Active'::text AND amv."Type"::text = 'Inference Provider'::text
+          ORDER BY amv."Priority" DESC
+         LIMIT 1) mv ON true
+     LEFT JOIN __mj."AIVendor" v ON mv."VendorID" = v."ID";

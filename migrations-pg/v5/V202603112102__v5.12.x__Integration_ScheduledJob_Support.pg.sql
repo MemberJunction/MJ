@@ -1278,3 +1278,34 @@ COMMENT ON COLUMN __mj."CompanyIntegration"."ScheduledJobID" IS 'Associates this
 /* spUpdate Permissions for MJ: Company Integration Runs */
 
 /* spUpdate Permissions for MJ: Company Integrations */
+
+
+-- ===================== Refresh hand-rolled view to expose ScheduledJobRunID =====================
+-- The ScheduledJobRunID column was added to __mj."CompanyIntegrationRun" earlier in this
+-- migration, but __mj."vwCompanyIntegrationRuns" is hand-rolled (BaseViewGenerated=FALSE) so
+-- CodeGen does not regenerate it. SQL Server's counterpart uses EXEC sp_refreshview; PG has
+-- no equivalent for hand-rolled views. Plain CREATE OR REPLACE VIEW with the column appended
+-- at the end (PG accepts a superset column list as long as existing columns are preserved).
+CREATE OR REPLACE VIEW __mj."vwCompanyIntegrationRuns" AS
+ SELECT cir."ID",
+    cir."CompanyIntegrationID",
+    cir."RunByUserID",
+    cir."StartedAt",
+    cir."EndedAt",
+    cir."TotalRecords",
+    cir."Comments",
+    cir."__mj_CreatedAt",
+    cir."__mj_UpdatedAt",
+    cir."Status",
+    cir."ErrorLog",
+    cir."ConfigData",
+    i."Name" AS "Integration",
+    c."Name" AS "Company",
+    u."Name" AS "RunByUser",
+    -- New column appended (v5.12.x): expose ScheduledJobRunID added to CompanyIntegrationRun above.
+    cir."ScheduledJobRunID"
+   FROM __mj."CompanyIntegrationRun" cir
+     JOIN __mj."CompanyIntegration" ci ON cir."CompanyIntegrationID" = ci."ID"
+     JOIN __mj."Company" c ON ci."CompanyID" = c."ID"
+     JOIN __mj."User" u ON cir."RunByUserID" = u."ID"
+     JOIN __mj."Integration" i ON ci."IntegrationID" = i."ID";

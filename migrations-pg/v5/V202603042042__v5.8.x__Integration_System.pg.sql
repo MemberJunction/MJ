@@ -9081,3 +9081,47 @@ COMMENT ON COLUMN __mj."CompanyIntegration"."Configuration" IS 'JSON configurati
 /* spUpdate Permissions for MJ: Company Integration Field Maps */
 
 /* spUpdate Permissions for MJ: Company Integration Sync Watermarks */
+
+
+-- ===================== Refresh hand-rolled view to expose SourceTypeID =====================
+-- The SourceTypeID column was added to __mj."CompanyIntegration" earlier in this migration,
+-- but __mj."vwCompanyIntegrations" is hand-rolled (BaseViewGenerated=FALSE) so CodeGen does
+-- not regenerate it. SQL Server's counterpart of this migration uses EXEC sp_refreshview;
+-- PG has no sp_refreshview equivalent for hand-rolled views, so we must rewrite the view
+-- explicitly. Plain CREATE OR REPLACE VIEW with the column appended at the end — PG accepts
+-- the new column list as a superset of the old as long as existing column positions/types/
+-- names are preserved. No 42P16, no DROP CASCADE, no dependent disturbance.
+CREATE OR REPLACE VIEW __mj."vwCompanyIntegrations" AS
+ SELECT ci."ID",
+    ci."CompanyID",
+    ci."IntegrationID",
+    ci."IsActive",
+    ci."AccessToken",
+    ci."RefreshToken",
+    ci."TokenExpirationDate",
+    ci."APIKey",
+    ci."ExternalSystemID",
+    ci."IsExternalSystemReadOnly",
+    ci."ClientID",
+    ci."ClientSecret",
+    ci."CustomAttribute1",
+    ci."__mj_CreatedAt",
+    ci."__mj_UpdatedAt",
+    ci."Name",
+    c."Name" AS "Company",
+    i."Name" AS "Integration",
+    i."ClassName" AS "DriverClassName",
+    i."ImportPath" AS "DriverImportPath",
+    cir."ID" AS "LastRunID",
+    cir."StartedAt" AS "LastRunStartedAt",
+    cir."EndedAt" AS "LastRunEndedAt",
+    -- New column appended (v5.8.x): expose SourceTypeID added to CompanyIntegration above.
+    ci."SourceTypeID"
+   FROM __mj."CompanyIntegration" ci
+     JOIN __mj."Company" c ON ci."CompanyID" = c."ID"
+     JOIN __mj."Integration" i ON ci."IntegrationID" = i."ID"
+     LEFT JOIN __mj."CompanyIntegrationRun" cir ON ci."ID" = cir."CompanyIntegrationID" AND cir."ID" = (( SELECT cirinner."ID"
+           FROM __mj."CompanyIntegrationRun" cirinner
+          WHERE cirinner."CompanyIntegrationID" = ci."ID"
+          ORDER BY cirinner."StartedAt" DESC
+         LIMIT 1));
