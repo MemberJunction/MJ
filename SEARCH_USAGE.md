@@ -61,32 +61,66 @@ into seven groups:
 Follow this if you want to see the whole feature in one sitting. Each later
 section drills into the same controls.
 
+### The two surfaces
+
+There are **two** UI surfaces for SearchScopes and you need to know about
+both:
+
+- **Dashboard view** at `/app/knowledge-hub/Configuration` → **Search Scopes**
+  tab. A master-detail page: scopes listed in a left sidebar, the selected
+  scope's editor in the right pane. The right pane has six tabs (Definition,
+  Providers, External Indexes, Entities, Storage, Permissions) and a **Save**
+  button. Good for quick authoring of the metadata fields.
+- **Full custom form** at `/resource/record/MJ: Search Scopes/{id}`. The
+  full BaseForm-derived custom form. This is where every Phase 2D / Phase 4
+  feature lives — Fusion Weights sliders, Reranker dropdown, Reranker Budget
+  Cents, Live Preview, Export tuning data, Search Scope Test Queries panel,
+  Search Execution Logs panel. There is no link from the dashboard view to
+  the full form; you navigate by URL using the scope's ID.
+
+### The tour
+
 1. Open `http://localhost:4200/app/knowledge-hub/Configuration`. Click the
-   **Search Scopes** tab. You see a left sidebar with one or more existing
-   scopes plus a **+ New** button.
-2. Click an existing scope (e.g. `P4 Verify Scope` if the workbench seed is
-   present). The right pane shows a definition form with Status, Scope Config
-   JSON, and other fields.
-3. Click "Open Full Form" or copy the scope ID and navigate to
-   `/resource/record/MJ: Search Scopes/{id}` to see the full custom form.
-4. Scroll the right-side panel list. You'll see, in order: Scope Definition,
-   Scope Configuration, Access Control, Lifecycle Management, Technical
-   Configuration, **Fusion Weights** (4 sliders), **Reranker** (dropdown +
-   budget), Export tuning data button, **Live Preview** (text input + Run),
-   Details, System Metadata, then related panels (Test Queries, Storage
-   Accounts, Entities, External Indexes, Providers, AI Agent Search Scopes,
-   Permissions, Search Execution Logs).
-5. Type `agent` into the Live Preview textbox and click **Run**. Within ~1s you
-   see top results with relevance scores and a "X result(s) in Yms" footer.
-6. Run the same query again. The second run shows "100% similar to last run"
-   thanks to Kendall-tau ranking comparison.
-7. Switch to the **Search Analytics** tab on the Knowledge Hub Config page.
-   You see KPI cards (Total Runs, Success Rate, Avg Latency, etc.) and three
-   tables (Top scopes by volume, Reranker spend by driver, Top failure reasons).
-   Your two runs from step 5–6 should appear in Top scopes.
-8. Back on the SearchScope form, click **Export tuning data (CSV)**. A
-   `searchscope-tuning-{name}-{date}.csv` file downloads with one row per
-   recent search.
+   **Search Scopes** tab. You see a left sidebar labeled "SCOPES (N)" with
+   one or more existing scopes plus a **+ New** button. Click an existing
+   scope (e.g. `P4 Verify Scope` if the workbench seed is present). The
+   right pane populates with the Definition tab: Name, Icon, Description,
+   Status, Start at, End at, Default checkbox, Global checkbox, Scope Config
+   (JSON), Search Context Config (JSON), and Save / Delete scope buttons.
+2. Switch tabs (Providers / External Indexes / Entities / Storage /
+   Permissions) to see each child collection. Each tab is its own grid with
+   its own add affordance.
+3. Now navigate to the full custom form: copy the scope's ID from the URL
+   bar's window state or by inspecting the right pane's network requests,
+   and open `http://localhost:4200/resource/record/MJ: Search Scopes/{id}`
+   (URL-encode the colon and space if you prefer:
+   `MJ%3A%20Search%20Scopes`).
+4. The full form renders ~18 collapsible panels. In top-to-bottom order:
+   Scope Definition, Scope Configuration, Access Control, Lifecycle
+   Management, Technical Configuration, **Fusion Weights** (4 sliders),
+   **Reranker** (dropdown + Reranker Budget Cents + **Export tuning data
+   (CSV)** button), **Live Preview** (text input + Run), Details, System
+   Metadata, then related-entity panels: Search Scope Test Queries, Search
+   Scope Storage Accounts, Search Scope Entities, Search Scope External
+   Indexes, Search Scope Providers, AI Agent Search Scopes, Search Scope
+   Permissions, Search Execution Logs.
+5. Type `agent` into the Live Preview textbox and click **Run**. Within ~1s
+   the result area below the Run button populates with the top 10 results,
+   each with a relevance score (e.g. `80%`), a record name, and the entity
+   it came from. A footer line reads "X result(s) in Yms".
+6. Run the same query again. The footer of the second run reads
+   "X result(s) in Yms · 100% similar to last run" — that's the Kendall-tau
+   comparison against the previous run.
+7. Switch back to the Knowledge Hub Configuration page (browser back) and
+   click the **Search Analytics** tab. The page renders six KPI cards (Total
+   Runs, Success Rate, Hit Rate, Avg Latency, P95 Latency, Reranker Spend)
+   plus three tables (Top scopes by volume, Reranker spend by driver, Top
+   failure reasons). Your two runs from step 5–6 appear in Top scopes by
+   volume against the scope you used.
+8. Back on the full custom form, in the **Reranker** section, click
+   **Export tuning data (CSV)**. Your browser downloads
+   `searchscope-tuning-{scope-name}-{YYYY-MM-DD}.csv` with one row per
+   recent search invocation against this scope.
 
 That's it. The rest of this doc walks each feature in detail.
 
@@ -107,20 +141,25 @@ use it.
 **Steps:**
 1. Navigate to `/app/knowledge-hub/Configuration`.
 2. Click the **Search Scopes** tab.
-3. In the left sidebar, click **+ New**.
-4. Fill **Name** (e.g. `My Demo Scope`), **Description** (free text). Leave
-   **Status** at `Active` and **Is Default** unchecked.
+3. In the left sidebar, click **+ New**. The right pane immediately
+   populates with a template: Name=`New Search Scope`, Icon=`fa-solid
+   fa-filter`, Description=`New scope — configure providers, entities, or
+   storage below.`
+4. Edit **Name** (e.g. `My Demo Scope`) and **Description** to your liking.
+   Leave **Status** at `Active`. Leave the **Default scope — picked when
+   users/agents don't specify one** checkbox unchecked. The **Global**
+   checkbox is disabled (reserved for the built-in Global scope).
 5. The **Scope Config (JSON)** field accepts an object with optional keys:
    - `fusionWeights` — per-source weight overrides
-   - `reRanker.driverClass` — registered reranker class name (filled by the
-     Reranker dropdown on the full form)
-   - `searchContext` — multi-tenant context defaults
+   - `reRanker.driverClass` — registered reranker class name (the Reranker
+     dropdown on the full form writes this for you)
    Leave it as `{}` for now.
 6. Click **Save**. The scope appears in the left sidebar.
 
 **What you should see:** the new scope is selected in the sidebar with its
-form populated. Scroll to the bottom to see related-entity panels with all
-zero counts.
+form populated. Switch to the full custom form
+(`/resource/record/MJ: Search Scopes/{new id}`) to see the related-entity
+panels — all zero counts.
 
 **Optional audit:**
 ```sql
@@ -145,20 +184,22 @@ ProviderConfigOverride.
 1. Open the scope in its full form: `/resource/record/MJ: Search Scopes/{id}`.
 2. Scroll to the **Search Scope Providers** panel near the bottom.
 3. Click the **New** button on the panel toolbar.
-4. A new tab opens. The **Search Scope Name** field is pre-populated with
-   your scope's name.
+4. A new tab opens with five labelled fields: **Search Scope Name** (pre-
+   populated with your scope's name), **Search Provider Name**, **Enabled**
+   (checkbox, on by default), **Max Results Override**, **Provider
+   Configuration Override**. There's also a hidden Query Processing section
+   for **Query Transform Template** (FK to a Nunjucks template).
 5. Click into **Search Provider Name** and type a partial provider name
-   (e.g. `data` for "Database" or "Database Full-Text"). The lookup shows
-   matching SearchProvider records.
+   (e.g. `data` for "Database" or "Database Full-Text"). A small dropdown
+   appears below the input listing matching SearchProvider records.
 6. Pick `Database`. Leave Enabled checked. Optionally set **Max Results
    Override** or **Provider Configuration Override** (JSON).
 7. Click **Save Changes**.
-8. Navigate back to the parent scope's record form. The Providers panel now
-   shows count `1` and the new row appears.
+8. Return to the SearchScope form. The Providers panel count is `1` and the
+   new row appears in the grid.
 
 **What you should see:** the panel's count badge updated from 0 to 1; the row
-shows `Database` with `EntitySearchProvider` (visible if you reveal the
-DriverClass column via the grid's column controls) and Enabled=true.
+shows the SearchProvider's name (e.g. `Database`) and `Enabled=true`.
 
 **Optional audit:**
 ```sql
@@ -177,32 +218,58 @@ named entities so the scope only matches `MJ: Actions`, for example.
 
 **Steps:**
 1. On the SearchScope record form, scroll to **Search Scope Entities**.
-2. Click **New**.
-3. The new tab opens with the parent scope pre-set. Type into **Entity** and
-   pick `MJ: Actions` (or any entity in your DB).
-4. Optionally fill **MetadataFilter** (JSON-shaped scope template fragment).
+2. Click **New** on the panel toolbar.
+3. The new tab opens with the parent scope pre-populated. Set **Entity** by
+   typing into the lookup (e.g. `Actions` resolves `MJ: Actions`).
+4. Optionally fill **Extra Filter** (extra SQL `WHERE` predicate that gets
+   AND-ed into the EntitySearchProvider's query) or **User Search String**
+   (a Nunjucks template the provider uses for the user-facing match string).
 5. Save Changes.
 6. Return to the parent scope. The Entities panel count is `1`.
 
 **What you should see:** count badge 1; row visible.
 
-**Cross-reference:** RAG_plan §1.1 Phase 1.
+**Cross-reference:** RAG_plan §1.1 Phase 1. Schema columns are in
+`__mj.SearchScopeEntity` — `EntityID`, `ExtraFilter`, `UserSearchString`.
 
 ### 3.4 Wire up external indexes
 
 External-index providers (Elasticsearch, Typesense, etc.) consume scope rows
-in the **Search Scope External Indexes** panel. This panel is the same
-shape as 3.3 — click New on the panel toolbar, pick an IndexType, fill the
-ExternalIndexName, save.
+in the **Search Scope External Indexes** panel.
+
+**Steps:**
+1. On the SearchScope record form, scroll to **Search Scope External
+   Indexes**.
+2. Click **New**.
+3. The form fields: **Index Type** (lookup; pick e.g. `Elasticsearch`),
+   **Vector Index** (optional FK to an MJ Vector Index record), **External
+   Index Name** (e.g. `prod-knowledge`), **External Index Config** (JSON
+   the provider parses for query-time options), **Metadata Filter** (JSON
+   filter DSL pushed into the provider's query for permission / tenant
+   scoping).
+4. Save.
 
 **Note:** without the matching peer dep installed and a real cluster
 configured (see Section 8), the external provider self-disables at runtime.
 The row stays valid metadata; it's just inert.
 
+**Cross-reference:** RAG_plan §1.1 Phase 1, P5.x. Schema columns are in
+`__mj.SearchScopeExternalIndex`.
+
 ### 3.5 Wire up storage accounts
 
-**Search Scope Storage Accounts** panel (same shape) lets the
-StorageSearchProvider scope to specific File Storage accounts.
+The **Search Scope Storage Accounts** panel lets the StorageSearchProvider
+limit which File Storage accounts (Box / Google Drive / SharePoint /
+Dropbox / etc.) participate in this scope.
+
+**Steps:**
+1. Scroll to **Search Scope Storage Accounts**.
+2. Click **New**.
+3. Set **File Storage Account** (lookup). Optionally restrict via **Folder
+   Path** (e.g. `/policies` to scope to one subtree).
+4. Save.
+
+**Cross-reference:** Schema columns are in `__mj.SearchScopeStorageAccount`.
 
 ---
 
@@ -219,8 +286,9 @@ Rank Fusion.
 lower it and full-text wins.
 
 **Steps:**
-1. On the SearchScope record form, click **Edit this Record** at the top
-   (icon in the toolbar — pencil with title "Edit this Record").
+1. On the SearchScope record form, click the **Edit this Record** icon
+   button in the toolbar at the top of the page (a pen-to-square icon —
+   hover to confirm the title is "Edit this Record").
 2. Scroll to the **Fusion Weights** section.
 3. Drag the `vector` slider from 1.0 to 2.5. The Scope Config JSON above
    updates to `{"fusionWeights": {"vector": 2.5}}`.
@@ -395,9 +463,11 @@ WHERE SearchScopeID = '{your scope ID}';
 a single scope.
 
 **Steps:**
-1. On the SearchScope record form, scroll to find the **Export tuning data
-   (CSV)** button (just above the Live Preview section).
-2. Click it.
+1. On the SearchScope record form, scroll to the **Reranker** section. The
+   **Export tuning data (CSV)** button sits below the Reranker dropdown
+   and Reranker Budget Cents field, with a small caption "Last 500 search
+   invocations against this scope."
+2. Click the button.
 3. Your browser downloads a file named
    `searchscope-tuning-{scope-name}-{YYYY-MM-DD}.csv`.
 
@@ -499,9 +569,18 @@ fix), commit `ed4180d466` (streaming-resolver logging fix).
 
 ### 5.5 Auditing permissions
 
-The Permissions panel on the SearchScope form is the audit surface — a single
-grid with all permission rows for this scope. The Knowledge Hub
-Configuration → Permissions subtab (when present) provides a cross-scope view.
+There are two audit surfaces:
+
+- **Per-scope, on the full custom form:** the **Search Scope Permissions**
+  related panel at the bottom of the form lists every permission row keyed
+  to that scope. Use this when investigating "who can use this one scope."
+- **Per-scope, on the Knowledge Hub Configuration page:** under the **Search
+  Scopes** tab, with a scope selected, the right pane has a **Permissions**
+  sub-tab. Same data as above, just the dashboard rendering.
+
+There is no cross-scope permissions audit page in this branch. To query
+"every permission row across all scopes," run the SQL in the optional audit
+block of §5.1 without the `WHERE` clause.
 
 ---
 
@@ -511,30 +590,37 @@ Agents use SearchScopes via two surfaces: an `AIAgent.SearchScopeAccess`
 column (None/All/Assigned), and an `MJ: AI Agent Search Scopes` child grid
 that lists the scopes the agent uses for pre-execution RAG.
 
-### 6.1 SearchScopeAccess on AIAgent
+### 6.1 SearchScopeAccess on the AIAgent form
 
 **What you're demonstrating:** the per-agent access policy. Setting
-`SearchScopeAccess='None'` on an agent prevents it from invoking
+SearchScopeAccess to `None` on an agent prevents it from invoking
 `ScopedSearchAction` regardless of any user-side grants.
 
 **Steps:**
 1. Navigate to `/resource/record/MJ: AI Agents/{agent-id}` (e.g.
    `/resource/record/MJ: AI Agents/a1575099-1576-45e9-a6fd-88102fb7e510` for
    the Memory Manager agent on the workbench).
-2. Click **Edit this Record**.
-3. Find the **SearchScopeAccess** dropdown in the Details section. The three
-   options are:
-   - `None` — agent cannot invoke search at all (default for existing agents)
-   - `All` — agent can search any scope without per-scope membership (use for
-     trusted system agents)
-   - `Assigned` — agent can only search scopes it has an
-     `AI Agent Search Scopes` row for
-4. Pick a value. Save.
+2. Find and click the **Search** expandable section on the agent form (it
+   sits between Notes and Payload Management — the agent form's section
+   list reads roughly: Execution History, Actions, Sub-Agents, Prompts,
+   Learning Cycles, Notes, **Search**, Payload Management, Execution
+   Guardrails, Configuration).
+3. The Search section shows a description ("Control this agent's access to
+   Scoped Search and assign the scopes it can use for pre-execution RAG or
+   agent-invoked search.") followed by three radio-button cards:
+   - **All** — Can use any scope including Global. No scope restriction.
+   - **Assigned** — Can use ONLY scopes listed below. Other scopes are
+     rejected with ACCESS_DENIED.
+   - **None** — No search capability. The Scoped Search action is disabled
+     for this agent.
+4. Click **Edit this Record** in the toolbar at the top, then pick one of
+   the three cards. Click **Save Changes**.
 
-**What you should see:** the field saves and is reflected in subsequent
-search invocations. With `None`, calling `StreamScopedSearch` with this
-agent's ID returns `Forbidden: Agent '<name>' has SearchScopeAccess='None';
-refused without consulting per-scope grants.`
+**What you should see:** the chosen card persists across reloads. With
+`None`, any call to `StreamScopedSearch` or `SearchKnowledge` that includes
+this agent's `agentID` returns
+`Forbidden: Agent '<name>' has SearchScopeAccess='None'; refused without
+consulting per-scope grants.`
 
 **Optional audit:**
 ```sql
@@ -545,21 +631,35 @@ SELECT Name, SearchScopeAccess FROM __mj.AIAgent WHERE ID = '{agent ID}';
 
 ### 6.2 Wiring an agent to a scope
 
-**What you're demonstrating:** assigning specific scopes to an agent so it
-can use them with `SearchScopeAccess='Assigned'` or for pre-execution RAG.
+There are two paths to create an `MJ: AI Agent Search Scopes` row. Both
+write to the same table.
 
-**Steps:**
-1. On the SearchScope record form, scroll to **AI Agent Search Scopes**.
-2. Click **New** on the toolbar.
-3. The new tab opens with the parent scope pre-populated.
-4. Click into **Agent** and pick the agent (e.g. Memory Manager).
-5. Set **Phase** to `Both` (agent can invoke + pre-execution RAG fires).
-   Other options: `PreExecution`, `AgentInvoked`.
-6. Optional: set **Priority** (lower = runs first), **MaxResults**,
-   **MinScore**, **FusionWeightsOverride**.
-7. Save Changes.
+**Path A — from the SearchScope full form (most fields exposed):**
+1. Open the scope at `/resource/record/MJ: Search Scopes/{id}`.
+2. Scroll to **AI Agent Search Scopes** related panel.
+3. Click **New** on the panel toolbar.
+4. The new tab opens with **Search Scope Name** pre-populated. Set
+   **Agent Name** (lookup), **Phase** (combobox: PreExecution,
+   AgentInvoked, Both), and optionally **Priority** (lower = runs first),
+   **Status**, **MaxResults**, **MinScore**, **FusionWeightsOverride**
+   (JSON), **QueryTemplate**, **IsDefault**.
+5. Click **Save Changes**.
 
-**What you should see:** the AI Agent Search Scopes panel count is `1`.
+**Path B — from the AIAgent form's Search section (compact in-form grid):**
+1. On the AIAgent form, expand **Search** and click **Edit this Record**.
+2. Pick the **Assigned** card. The form reveals an "Assigned Scopes" grid
+   with columns SCOPE, PHASE, PRIORITY, MAX RESULTS, MIN SCORE, QUERY
+   TEMPLATE, FUSION WEIGHTS OVERRIDE, DEFAULT, plus a **+ Assign another
+   scope** button.
+3. Click **+ Assign another scope** and fill the row.
+4. Click **Save Changes**.
+
+**What you should see (either path):** a new row in
+`__mj.AIAgentSearchScope`. Confirm via
+```sql
+SELECT * FROM __mj.AIAgentSearchScope
+WHERE AgentID = '{agent ID}' AND SearchScopeID = '{scope ID}';
+```
 
 **Cross-reference:** RAG_plan §1.1 Phase 1 (the entity itself), §3 Phase 2A
 (the integration).
@@ -572,38 +672,52 @@ can use them with `SearchScopeAccess='Assigned'` or for pre-execution RAG.
 | `AgentInvoked` | The agent must explicitly call `ScopedSearchAction` (or the streaming variant) and pass this scope's ID. |
 | `Both` | All of the above. |
 
+The AIAgent form's Search section also exposes an **Effective scope
+permissions** rollup directly under the Assigned Scopes grid. This shows
+which users and roles can actually use the scopes you've assigned (per
+the SearchScopePermission rules from §5). Empty state text: "No scopes
+assigned yet — permissions will appear here once you add scopes above."
+The rollup says explicitly that you edit grants in
+"Knowledge Hub Config → Search Scopes → Permissions" — i.e. it's a
+read-only view, not an editor.
+
 ### 6.4 Watching a Forbidden agent rejection in the log
 
+There is no GraphQL playground UI on MJAPI — the server returns JSON only
+with `{"error":"Authentication failed"}` for unauthenticated browser
+visits to `/`. Use a tool like Postman, `curl`, or DevTools' fetch to
+post mutations against `http://localhost:4001/`.
+
 **Steps:**
-1. Set the agent's `SearchScopeAccess` to `None` (Section 6.1).
-2. Open the GraphQL playground at `http://localhost:4001/`.
-3. Run:
-   ```graphql
-   mutation {
-     StreamScopedSearch(
-       query: "test"
-       scopeIDs: ["{your scope ID}"]
-       agentID: "{your agent ID}"
-     ) {
-       Success StreamID ErrorMessage
-     }
-   }
+1. Set the agent's SearchScopeAccess to `None` (Section 6.1).
+2. Get an auth token: open DevTools on a working MJExplorer tab, copy the
+   `Authorization: Bearer ...` header from any GraphQL request in the
+   Network panel.
+3. Run the following from your terminal (replace placeholders):
+   ```bash
+   curl -X POST http://localhost:4001/ \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer <token>" \
+     -d '{"query":"mutation { StreamScopedSearch(query: \"test\", scopeIDs: [\"{scope ID}\"], agentID: \"{agent ID}\") { Success ErrorMessage } }"}'
    ```
-   (You'll need an `Authorization: Bearer <token>` header — easiest is to
-   copy from a network request in MJExplorer's DevTools.)
-4. The response is `Success: false, ErrorMessage: "Forbidden: Agent
-   '...' has SearchScopeAccess='None'; refused..."`.
+4. The response body is
+   ```json
+   {"data":{"StreamScopedSearch":{
+     "Success":false,
+     "ErrorMessage":"Forbidden: Agent '<name>' has SearchScopeAccess='None'; refused without consulting per-scope grants."
+   }}}
+   ```
 5. Query the log:
    ```sql
    SELECT TOP 1 Status, AIAgentID, FailureReason
    FROM __mj.SearchExecutionLog
    ORDER BY __mj_CreatedAt DESC;
    ```
-6. The row's `AIAgentID` is the agent you used and `Status='Forbidden'`.
+6. The row's AIAgentID is the agent you used and Status='Forbidden'.
 
-**What you should see:** the AIAgentID column is populated (this was a real
-fix in commit `2e4d1e18a3` — the column had been hardcoded to NULL pending a
-"Phase 3 follow-up" that never landed).
+**What you should see:** the AIAgentID column is populated (commit
+`2e4d1e18a3` plumbed it through from the GraphQL agentID arg into the log
+write).
 
 **Cross-reference:** RAG_plan §3 Phase 2A, commit `2e4d1e18a3`.
 
@@ -646,20 +760,23 @@ Previews and refresh.
 
 ### 7.3 Top scopes by volume
 
-The first table aggregates by `SearchScopeID`, showing scope name + run count
-+ avg latency. Scope name `— unscoped —` represents searches with no scope
-(callers passing `scopeIDs: undefined`).
+Columns: **Scope**, **Runs**, **Avg latency**. Aggregates by
+`SearchScopeID`. Scope name `— unscoped —` represents searches with no
+scope ID (callers passing `scopeIDs: undefined`).
 
 ### 7.4 Top failure reasons
 
-The third table aggregates `FailureReason` strings on rows where
-`Status='Forbidden'` or `'Failure'`. This is the canonical surface for
-spotting users / agents trying to access scopes they shouldn't.
+Columns: **Reason**, **Count**. Aggregates `FailureReason` strings on rows
+where Status='Forbidden' or 'Failure'. This is the canonical surface for
+spotting users / agents trying to access scopes they shouldn't. Empty
+state: "No failures in the window."
 
 ### 7.5 Reranker spend by driver
 
-The middle table aggregates `RerankerCostCents` by `RerankerName`. Empty when
-no scope on the workbench has a paid reranker configured.
+Columns: **Reranker**, **Calls**, **Total cents**. Aggregates
+RerankerCostCents grouped by RerankerName. Empty state: "No rerank
+invocations in the window." A workbench with the Cohere reranker
+configured and one preview run shows e.g. `CohereReRanker / 1 / 0.2¢`.
 
 ---
 
@@ -680,9 +797,11 @@ appear in the SearchScope Providers dropdown and can be selected.
 **Steps:**
 1. On a SearchScope record form, scroll to **Search Scope Providers**.
 2. Click **New**.
-3. In the new permission tab's **Search Provider Name** lookup, type `elast`.
+3. In the new SearchScopeProvider tab, click into **Search Provider Name**
+   and type `elast`.
 4. The autocomplete resolves `Elasticsearch` (DriverClass=`ElasticsearchSearchProvider`).
-5. Type `type`, `azure`, `open` to confirm the other three are also discoverable.
+5. Clear and type `type`, `azure`, `open` to confirm the other three are
+   also discoverable.
 
 **What you should see:** all four external provider records resolve via
 typeahead. Selecting and saving one adds it to the scope's Providers list.
@@ -713,8 +832,8 @@ that made the registrations actually run), `metadata/search-providers/.search-pr
 
 ## 9. Streaming results behavior
 
-The Live Preview consumes `StreamScopedSearch` via a GraphQL subscription, so
-results stream in as each provider returns rather than blocking on the
+The Live Preview consumes `StreamScopedSearch` via a GraphQL subscription,
+so results stream in as each provider returns rather than blocking on the
 slowest one.
 
 ### 9.1 What streaming looks like
@@ -722,37 +841,48 @@ slowest one.
 **Steps:**
 1. On the SearchScope record form, type a query into Live Preview.
 2. Click **Run**.
-3. Watch the result area carefully.
+3. Watch the area between the input row and the results.
 
-**What you should see:**
-- A small per-provider status row appears at the top showing each enabled
-  provider's name and a tiny progress indicator.
-- Each provider's results pop in as it returns — usually the entity
-  provider first, then full-text, then any external indexes.
-- Once all providers have reported, the fused list re-orders.
-- If a reranker is configured, the list re-orders one more time.
-- Final state: top 10 results sorted by post-rerank score, with a footer
-  showing total count and elapsed milliseconds.
+**What you should see, in order:**
 
-On a workbench with only fast providers (Database, Database Full-Text), the
-streaming completes in <100ms — the UI may render only the final state.
-To see clear streaming, configure a slow provider (e.g. `VectorSearchProvider`
-with a misconfigured embedding endpoint that times out) or add an artificial
-delay in dev.
+- The **Run** button is replaced by a red **Cancel** button (stop icon)
+  while the search is in flight.
+- A row of **provider chips** appears below the input. Initially: a single
+  pending chip reading `🔄 Streaming…` (spinner). As each provider returns,
+  a green-checkmark chip replaces or joins it: e.g.
+  `✓ Entity 19 0ms`. Each chip shows the provider name, its result count,
+  and how long it took.
+- The **results list** populates once results are available. Each row
+  shows the percent score, the matched record's title, and the entity it
+  came from.
+- The **header above the results** reads `X result(s) in Yms` and, on the
+  second and later runs, also `· Z% similar to last run` (the Kendall-tau
+  similarity to the previous run; bold red when the percentage drops below
+  70%).
+- The list is capped at the top 10 visually; below row 10 you see
+  `…and N more (preview shows top 10).`
 
-### 9.2 Skeleton rows
+On the workbench with only fast providers (Database, Database Full-Text)
+enabled, the whole sequence completes in <100ms and the chips may flash
+by faster than you can see. To deliberately slow it down for a demo,
+configure the Semantic provider on the scope without an active embedding
+endpoint, or add an artificial delay in a forked provider's `Search`
+implementation.
 
-Before any provider returns, the result area shows skeleton placeholders so
-the UI doesn't jump when content arrives. These are pure presentation; they
-don't represent real candidates.
+### 9.2 No skeleton rows
 
-### 9.3 Final fused/reranked results
+There are no skeleton-row placeholders in the current implementation. Until
+results arrive the area is empty. The provider chips (above) are the
+only "in flight" cue.
 
-The footer changes through the search:
-- During streaming: `Searching...` or per-provider progress
-- After fusion: `X result(s) — fusing...`
-- After reranking (if configured): `X result(s) — reranking...`
-- Final: `X result(s) in Yms[ · Z% similar to last run]`
+### 9.3 Cancel mid-stream
+
+While a search is in flight, the Run button is replaced by a red **Cancel**
+button. Clicking it unsubscribes the client from the GraphQL subscription
+and the UI returns to its idle state with whatever provider chips had
+already arrived left in place. The server-side stream may have already
+written a log row by the time the client cancels — check the per-scope
+`Search Execution Logs` panel to see what was recorded.
 
 **Cross-reference:** RAG_plan P2C.0-5. The streaming mechanism choice
 (GraphQL subscriptions over WebSocket) is documented in
@@ -817,12 +947,22 @@ subscription($streamID: ID!) {
 }
 
 # Run an agent (which may use scope-based pre-execution RAG)
+# Required args: agentId, messages (a JSON-stringified array), sessionId.
 mutation {
-  RunAIAgent(input: { AgentID: "..." Message: "Find me agents" }) {
-    Success Result
+  RunAIAgent(
+    agentId: "..."
+    messages: "[{\"role\":\"user\",\"content\":\"Find me agents\"}]"
+    sessionId: "demo-session-1"
+  ) {
+    Success ErrorMessage
   }
 }
 ```
+
+The full mutation signature has additional optional args (`data`,
+`payload`, `templateData`, `lastRunId`, etc.) — see
+`packages/MJServer/src/resolvers/RunAIAgentResolver.ts` for the exact
+definition.
 
 ### 10.3 Troubleshooting
 
