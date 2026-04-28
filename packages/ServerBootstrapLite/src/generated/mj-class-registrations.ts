@@ -183,7 +183,7 @@ import {
     PlanningDesignerAgent,
 } from '@memberjunction/ai-agent-manager';
 
-// @memberjunction/ai-agents (11 classes)
+// @memberjunction/ai-agents (12 classes)
 import {
     DataSnapshotToolLibrary,
     DocxToolLibrary,
@@ -195,6 +195,7 @@ import {
     MemoryManagerAgent,
     PDFToolLibrary,
     QueryBuilderAgent,
+    SearchResultSetToolLibrary,
     TextToolLibrary,
 } from '@memberjunction/ai-agents';
 
@@ -1073,6 +1074,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MemoryManagerAgent,
     PDFToolLibrary,
     QueryBuilderAgent,
+    SearchResultSetToolLibrary,
     TextToolLibrary,
     AnthropicLLM,
     AzureEmbedding,
@@ -1627,7 +1629,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 694;
+export const CLASS_REGISTRATIONS_COUNT = 695;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

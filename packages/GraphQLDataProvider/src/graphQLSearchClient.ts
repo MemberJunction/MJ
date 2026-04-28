@@ -1,6 +1,7 @@
 import { LogError } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
+import { Observable, Subscription } from "rxjs";
 
 // =========================================================================
 // Type Definitions
@@ -567,6 +568,105 @@ export class GraphQLSearchClient {
             LogError(`GraphQLSearchClient.GetSearchScopes failed: ${e instanceof Error ? e.message : String(e)}`);
             return [];
         }
+    }
+
+    /**
+     * Phase 2C streaming search. Two-step protocol matching the resolver:
+     *
+     *   1. Invoke the StreamScopedSearch mutation. The server returns
+     *      `{ Success, StreamID }` and starts the search in the background.
+     *   2. Subscribe to `SearchStreamEvents(streamID)`. Events arrive over
+     *      the existing WebSocket subscription transport until a 'final' or
+     *      'error' phase, after which the caller should unsubscribe.
+     *
+     * Returns an Observable that emits SearchStreamNotification objects.
+     * The first emission is always the mutation acknowledgement (with
+     * Phase='start' and the StreamID); subsequent emissions are the
+     * server-pushed events. Callers should:
+     *
+     *   - filter on `Phase === 'final'` for the canonical result set
+     *   - listen for `Phase === 'error'` to surface failures to the user
+     *   - call `.unsubscribe()` after the terminal event
+     */
+    public StreamSearch(params: SearchClientParams): Observable<{
+        StreamID: string;
+        Phase: string;
+        ProviderName?: string;
+        DurationMs?: number;
+        Results?: SearchClientResultItem[];
+        SourceCounts?: { Vector: number; FullText: number; Entity: number; Storage: number };
+        ElapsedMs?: number;
+        ErrorMessage?: string;
+    }> {
+        return new Observable(observer => {
+            // Step 1: kick off the stream. We don't have an existing helper
+            // that combines mutation + subscription, so we invoke them
+            // sequentially using the provider's primitives.
+            const startMutation = gql`
+                mutation StreamScopedSearch(
+                    $query: String!,
+                    $maxResults: Float,
+                    $minScore: Float,
+                    $scopeIDs: [ID!],
+                    $searchContext: JSON,
+                    $agentID: ID
+                ) {
+                    StreamScopedSearch(
+                        query: $query,
+                        maxResults: $maxResults,
+                        minScore: $minScore,
+                        scopeIDs: $scopeIDs,
+                        searchContext: $searchContext,
+                        agentID: $agentID
+                    ) {
+                        Success
+                        StreamID
+                        ErrorMessage
+                    }
+                }`;
+            const variables = this.prepareSearchVariables(params);
+
+            let inner: Subscription | null = null;
+            this._dataProvider.ExecuteGQL(startMutation, variables).then((result) => {
+                const start = (result?.StreamScopedSearch as { Success: boolean; StreamID: string; ErrorMessage?: string } | undefined);
+                if (!start?.Success) {
+                    observer.error(new Error(start?.ErrorMessage ?? 'StreamScopedSearch failed to start'));
+                    return;
+                }
+
+                // Step 2: subscribe to events filtered by streamID.
+                const subQuery = gql`
+                    subscription SearchStream($streamID: ID!) {
+                        SearchStreamEvents(streamID: $streamID) {
+                            StreamID
+                            Phase
+                            ProviderName
+                            DurationMs
+                            Results { ID EntityName RecordID SourceType Title Snippet Score Tags MatchedAt ProviderId ProviderLabel ProviderIcon }
+                            SourceCounts { Vector FullText Entity Storage }
+                            ElapsedMs
+                            ErrorMessage
+                        }
+                    }`;
+                inner = this._dataProvider.subscribe(subQuery, { streamID: start.StreamID }).subscribe({
+                    next: (data: Record<string, unknown>) => {
+                        const ev = data?.['SearchStreamEvents'] as { StreamID: string; Phase: string; ProviderName?: string; DurationMs?: number; Results?: SearchClientResultItem[]; SourceCounts?: { Vector: number; FullText: number; Entity: number; Storage: number }; ElapsedMs?: number; ErrorMessage?: string } | undefined;
+                        if (!ev) return;
+                        observer.next(ev);
+                        if (ev.Phase === 'final') {
+                            observer.complete();
+                            inner?.unsubscribe();
+                        } else if (ev.Phase === 'error') {
+                            observer.error(new Error(ev.ErrorMessage ?? 'Stream error'));
+                            inner?.unsubscribe();
+                        }
+                    },
+                    error: (err: unknown) => observer.error(err),
+                });
+            }).catch(err => observer.error(err));
+
+            return () => { inner?.unsubscribe(); };
+        });
     }
 
     /**

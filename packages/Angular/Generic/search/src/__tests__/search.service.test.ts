@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { Subject } from 'rxjs';
 import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLSearchClient } from '@memberjunction/graphql-dataprovider';
 import { SearchService, RecentSearch } from '../lib/search.service';
@@ -124,6 +125,116 @@ describe('SearchService', () => {
             }
 
             expect(service.RecentSearches$.value.length).toBeLessThanOrEqual(20);
+        });
+    });
+
+    describe('StreamSearch', () => {
+        it('forwards Phase, ProviderName, and ElapsedMs unchanged and maps client results through mapClientResultItem', () => {
+            const stream$ = new Subject<{
+                StreamID: string;
+                Phase: string;
+                ProviderName?: string;
+                Results?: ReturnType<typeof makeClientResultItem>[];
+                ElapsedMs?: number;
+                ErrorMessage?: string;
+            }>();
+            vi.spyOn(GraphQLSearchClient.prototype, 'StreamSearch').mockReturnValue(stream$);
+
+            const events: Array<{ Phase: string; ProviderName?: string; Results?: SearchResultItem[]; ElapsedMs?: number }> = [];
+            const sub = service.StreamSearch({
+                Query: 'streamed query',
+                MaxResults: 10,
+                ActiveFilters: {},
+                IncludeSources: ['vector', 'fulltext']
+            }).subscribe({
+                next: ev => events.push(ev),
+            });
+
+            stream$.next({ StreamID: 'sid-1', Phase: 'provider', ProviderName: 'Vector', Results: [makeClientResultItem('a', 'fast-row')], ElapsedMs: 12 });
+            stream$.next({ StreamID: 'sid-1', Phase: 'fused', Results: [makeClientResultItem('a', 'fast-row'), makeClientResultItem('b', 'slow-row')], ElapsedMs: 50 });
+            stream$.next({ StreamID: 'sid-1', Phase: 'final', Results: [makeClientResultItem('a', 'fast-row'), makeClientResultItem('b', 'slow-row')], ElapsedMs: 75 });
+
+            expect(events).toHaveLength(3);
+            expect(events[0].Phase).toBe('provider');
+            expect(events[0].ProviderName).toBe('Vector');
+            expect(events[0].ElapsedMs).toBe(12);
+            // mapClientResultItem prefers RecordName over Title and unwraps RawMetadata; assert one mapped field
+            expect(events[0].Results?.[0].Title).toBe('fast-row');
+            expect(events[0].Results?.[0].MatchedAt).toBeInstanceOf(Date);
+
+            expect(events[1].Phase).toBe('fused');
+            expect(events[1].Results).toHaveLength(2);
+            expect(events[2].Phase).toBe('final');
+            expect(events[2].ElapsedMs).toBe(75);
+
+            sub.unsubscribe();
+        });
+
+        it('omits Results from emitted event when the wire frame has no Results', () => {
+            const stream$ = new Subject<{ StreamID: string; Phase: string; ElapsedMs?: number }>();
+            vi.spyOn(GraphQLSearchClient.prototype, 'StreamSearch').mockReturnValue(stream$);
+
+            const events: Array<{ Phase: string; Results?: SearchResultItem[] }> = [];
+            const sub = service.StreamSearch({
+                Query: 'no-results phase',
+                MaxResults: 5,
+                ActiveFilters: {},
+                IncludeSources: ['vector']
+            }).subscribe({
+                next: ev => events.push(ev),
+            });
+
+            // 'reranked' phase server-side may carry no Results (it just signals the rerank step ran)
+            stream$.next({ StreamID: 'sid-2', Phase: 'reranked', ElapsedMs: 30 });
+
+            expect(events).toHaveLength(1);
+            expect(events[0].Phase).toBe('reranked');
+            expect(events[0].Results).toBeUndefined();
+
+            sub.unsubscribe();
+        });
+
+        it('propagates errors from the underlying client observable', () => {
+            const stream$ = new Subject<{ StreamID: string; Phase: string }>();
+            vi.spyOn(GraphQLSearchClient.prototype, 'StreamSearch').mockReturnValue(stream$);
+
+            let captured: Error | null = null;
+            const sub = service.StreamSearch({
+                Query: 'error path',
+                MaxResults: 5,
+                ActiveFilters: {},
+                IncludeSources: ['vector']
+            }).subscribe({
+                next: () => { /* ignore */ },
+                error: err => { captured = err as Error; },
+            });
+
+            stream$.error(new Error('upstream blew up'));
+
+            expect(captured).not.toBeNull();
+            expect((captured as unknown as Error).message).toBe('upstream blew up');
+
+            sub.unsubscribe();
+        });
+
+        it('errors when no GraphQL provider is available (e.g., Metadata.Provider not yet bootstrapped)', () => {
+            (Metadata as unknown as Record<string, unknown>)['Provider'] = {}; // not a GraphQLDataProvider
+
+            let captured: Error | null = null;
+            const sub = service.StreamSearch({
+                Query: 'no provider',
+                MaxResults: 5,
+                ActiveFilters: {},
+                IncludeSources: ['vector']
+            }).subscribe({
+                next: () => { /* ignore */ },
+                error: err => { captured = err as Error; },
+            });
+
+            expect(captured).not.toBeNull();
+            expect((captured as unknown as Error).message).toBe('GraphQL provider not available');
+
+            sub.unsubscribe();
         });
     });
 
@@ -412,5 +523,23 @@ function createMockResult(
         Tags: tags,
         SourceIcon: 'fa-solid fa-database',
         MatchedAt: new Date()
+    };
+}
+
+function makeClientResultItem(id: string, title: string) {
+    return {
+        ID: id,
+        EntityName: 'Contacts',
+        RecordID: `rec-${id}`,
+        SourceType: 'entity',
+        Title: title,
+        Snippet: `snippet for ${id}`,
+        Score: 0.91,
+        ScoreBreakdown: { Vector: 0.9, FullText: 0.92 },
+        Tags: ['streaming'],
+        EntityIcon: 'fa-solid fa-database',
+        RecordName: title,
+        MatchedAt: new Date().toISOString(),
+        ResultType: 'entity-record',
     };
 }
