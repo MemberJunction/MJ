@@ -7844,7 +7844,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgent]
     @CategoryID uniqueidentifier,
     @AllowEphemeralClientTools bit,
     @DefaultStorageAccountID uniqueidentifier,
-    @SearchScopeAccess nvarchar(20)
+    @SearchScopeAccess nvarchar(20) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -7912,7 +7912,7 @@ BEGIN
         [CategoryID] = @CategoryID,
         [AllowEphemeralClientTools] = @AllowEphemeralClientTools,
         [DefaultStorageAccountID] = @DefaultStorageAccountID,
-        [SearchScopeAccess] = @SearchScopeAccess
+        [SearchScopeAccess] = COALESCE(@SearchScopeAccess, [SearchScopeAccess])
     WHERE
         [ID] = @ID
 
