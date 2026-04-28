@@ -25,6 +25,7 @@ export * from './artifact-tools/TextToolLibrary';
 export * from './artifact-tools/PDFToolLibrary';
 export * from './artifact-tools/ExcelToolLibrary';
 export * from './artifact-tools/DocxToolLibrary';
+export * from './artifact-tools/SearchResultSetToolLibrary';
 export * from './PayloadChangeAnalyzer';
 export * from './PayloadFeedbackManager';
 export * from './types/payload-operations';
