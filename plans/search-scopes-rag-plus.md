@@ -1621,3 +1621,85 @@ erDiagram
 | Search Service (Angular) | `packages/Angular/Generic/search/src/lib/search.service.ts` | Angular search client |
 | Entity Subclasses | `packages/MJCoreEntities/src/generated/entity_subclasses.ts` | Generated entity classes (for entity name lookup) |
 | DB Provider | `packages/GenericDatabaseProvider/src/GenericDatabaseProvider.ts` | `createViewUserSearchSQL()` — how UserSearchString becomes SQL |
+
+---
+
+## Phase 2 onward delivery log
+
+Tracks every Phase 2+ task from the active execution plan (`RAG_plan.md` at the
+repo root and `~/.claude/plans/make-a-plan-for-buzzing-sky.md`) against actual
+commits on `amith-nagarajan/search-scopes-rag-plus`.
+
+### Phase 2A — Per-user permission gate
+
+- [x] **P2A.1** — `AIAgent.SearchScopeAccess` already shipped in Phase 1 (`'All'|'Assigned'|'None'`); the canonical plan replaced the originally-proposed `CanSearchUnscoped` BIT with this richer column. No new migration needed.
+- [x] **P2A.2** — Migration `V202604280730__v5.30.x__Add_SearchScopePermission.sql`. Commit `c41fe8ea8d`.
+- [x] **P2A.3** — `SearchScopePermissionResolver` in `packages/SearchEngine/src/permissions/`. Commit `2c9d444d77`.
+- [x] **P2A.4** — GraphQL resolver enforcement in `SearchKnowledgeResolver`. Commit `0581546ec2`.
+- [x] **P2A.5** — `ScopedSearchAction` enforcement. Commit `bd44e1d319`.
+- [x] **P2A.6** — Permission summary panel on AIAgent form. Commit `397f9f3bc0`.
+- [x] **P2A.7** — Permissions sub-tab on Knowledge Hub Config. Commit `28b8c137c2`.
+- [x] **P2A.8** — RAG_plan.md §5.4 PM-01–PM-09 unit tests in `SearchScopePermissionResolver.test.ts`; PM-10 RLS safety-net + "no forbidden record reaches results" assertion in `SearchEngine.permissions.test.ts` (commit `385184a9c4`). Pre-fusion per-provider push-down audit owed as a Phase 6 follow-up.
+
+### Phase 2B — `SearchResultSetToolLibrary`
+
+- [x] **P2B.1** — Re-parented Search Result Set onto Data Snapshot via metadata sync. Commit `d3200d0978`.
+- [x] **P2B.2 – P2B.7** — `SearchResultSetToolLibrary` + 5 tools (`filterByScore`, `groupBySourceProvider`, `getMatchingChunks`, `followSourceLink`, `rerankInline`). Commit `4f2b68e806`.
+- [x] **P2B.8** — Integration test at `packages/AI/Agents/src/__tests__/SearchResultSetToolLibrary.test.ts` (verified inside the existing P2B.2-7 commit).
+
+### Phase 2C — Streaming search results
+
+- [x] **P2C.0** — Streaming-mechanism decision doc at `plans/search-scopes-rag-plus/streaming-mechanism-decision.md`. Commit `9167471a52`.
+- [x] **P2C.1** — `SearchEngine.streamSearch` async iterable. Commit `080fb7745d`.
+- [x] **P2C.2** — `StreamScopedSearch` mutation + `SearchStreamEvents` subscription. Commit `974aa8282c`.
+- [x] **P2C.3** — `AgentPreExecutionRAG` streaming consumer. Commit `ecf5b96baa`.
+- [x] **P2C.4** — `ScopedSearchAction.streamingMode`. Commit `59fcbd452b`.
+- [x] **P2C.5** — Angular UI streaming (SearchOverlayComponent + SearchResultsResource), per-provider chip strip, `?stream=1` opt-in. Commit `80a02584e4`. Chrome-verified end-to-end.
+
+### Phase 2D — Reranker catalog
+
+- [x] **P2D.1** — `BaseReRanker` contract additions (Name, Version, GetMaxResultCount, EstimateCostCents, CostReporter). Commit `bd55fc580e`.
+- [x] **P2D.2** — `CohereReRanker` via Cohere rerank v3. Commit `b7936db35b`.
+- [x] **P2D.3** — `VoyageReRanker` via Voyage v1/rerank. Commit `e02b53f5a8`.
+- [x] **P2D.4** — `OpenAIReRanker` chat-judge fallback (decision recorded inline: no first-party endpoint as of 2026-04). Commit `12fdb81f39`.
+- [x] **P2D.5** — `BGEReRanker` via local `@xenova/transformers`. Commit `9bc502a73f`.
+- [x] **P2D.6** — Migration `V202604281100__v5.30.x__Add_SearchScope_RerankerBudget.sql` + `RerankerBudgetGuard` + SearchEngine integration. Commit `a9af7a35d8`.
+- [x] **P2D.7 (server half)** — `BaseReRanker.GetAvailableRerankers()` discovery helper. Commit `9a5849a2b6`.
+- [ ] **P2D.7 (Angular half)** — Custom SearchScope form section: reranker dropdown + RerankerBudgetCents field. Pairs with the Phase 3 / Phase 4 / Phase 5 Angular form-section work.
+
+### Phase 3 — Observability and analytics
+
+- [x] **P3.1** — Migration `V202604281130__v5.30.x__Add_SearchExecutionLog.sql`. Commit `8e7f8e30fe`.
+- [x] **P3.2** — Logging hook in `SearchEngine.Search` (best-effort, fail-quiet). Commit `8e7f8e30fe`. Chrome-verified: row written to `MJ_SearchScopes_Rebase` via UI search.
+- [ ] **P3.3** — Search Analytics dashboard tab (Knowledge Hub Config). Angular dashboard work.
+- [ ] **P3.4** — Per-scope tuning data CSV export. Angular form-button work.
+
+### Phase 4 — Tuning UI for scope authors
+
+- [ ] **P4.1** — Live-preview side panel on SearchScope form (consumes Phase 2C streaming).
+- [ ] **P4.2** — Fusion weight sliders persisted to `SearchScopeProvider.Weight`.
+- [ ] **P4.3** — Reranker A/B comparison with Kendall-tau or RBO ordering similarity.
+- [ ] **P4.4** — `SearchScopeTestQuery` entity + form section (per-scope canonical test queries).
+
+### Phase 5 — External index providers
+
+- [x] **P5.1** — `ElasticsearchSearchProvider`. Commit `0720d627d2`.
+- [x] **P5.2** — `TypesenseSearchProvider`. Commit `c7a89c5900`.
+- [x] **P5.3** — `AzureAISearchProvider`. Commit `e584d6f451`.
+- [x] **P5.4** — `OpenSearchSearchProvider`. Commit `3839a8613b`.
+- [x] **P5.5 (server half)** — `BaseSearchProvider.GetAvailableProviders()` discovery helper. Commit `a70b4f2563`.
+- [ ] **P5.5 (Angular half)** — Custom SearchScope form provider dropdown. Pairs with the Phase 2D Angular work.
+
+### Phase 6 — Cross-cutting cleanup, doc updates, tech debt
+
+- [x] **P6.1** — UUIDsEqual sweep across resolvers. Commit `76a3d10c90`.
+- [x] **P6.2** — `SearchScopeChildGridComponent` audit: no change required (`.Get`/`.Set` are correct under CLAUDE.md rule #2b's generic-component exception).
+- [x] **P6.3** — Metadata-validation test asserting Search Result Set ParentID. Commit `25bcfe35aa`.
+- [ ] **P6.4** — `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` updates (Permissions, Streaming, Reranker catalog, Analytics, External providers, Tuning UI, plus how-tos).
+- [x] **P6.5** — This delivery log (this section).
+- [ ] **P6.6** — Migration sequencing audit on a fresh DB (mj migrate from scratch, verify monotonic timestamps).
+
+### Standing follow-ups
+
+- **Per-task DevTools verification gate** (canonical-plan rigor): every commit with a user-observable surface must be Chrome-verified before declaring "done." See `~/.claude/projects/.../memory/feedback_chrome_verify_after_each.md`.
+- **Pre-fusion per-provider push-down audit**: each provider (Vector, FullText, Entity, Storage, Elasticsearch, Typesense, AzureAISearch, OpenSearch) must be verified to compose the permission predicate into its WHERE clause / filter, so no forbidden record ever reaches fusion. The post-fusion safety net (`SearchEngine.filterByPermissions`) is the last line of defense, not the first.
