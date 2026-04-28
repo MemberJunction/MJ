@@ -290,6 +290,33 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
+    <!-- Search Scope Test Queries Section (P4.4) — canonical test queries for
+         offline tuning. Authors save representative queries here, re-run them
+         after a config change, and compare results. -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeTestQueries"
+        SectionName="Search Scope Test Queries"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeTestQueries')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Test Queries','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Test Queries')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeTestQueries')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeTestQueries', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Search Scope Storage Accounts Section -->
     <mj-collapsible-panel
         SectionKey="mJSearchScopeStorageAccounts"

@@ -22724,6 +22724,64 @@ export const MJSearchScopeStorageAccountSchema = z.object({
 export type MJSearchScopeStorageAccountEntityType = z.infer<typeof MJSearchScopeStorageAccountSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Search Scope Test Queries
+ */
+export const MJSearchScopeTestQuerySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SearchScopeID: z.string().describe(`
+        * * Field Name: SearchScopeID
+        * * Display Name: Search Scope ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+        * * Description: The SearchScope this test query belongs to. Cascade-restricted via FK so accidental scope deletion preserves test history.`),
+    Label: z.string().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Short human-readable label for the test query, shown in the form's test-query grid (e.g. "VIP customer escalation", "expense reimbursement policy").`),
+    Query: z.string().describe(`
+        * * Field Name: Query
+        * * Display Name: Query
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The query text itself. NVARCHAR(MAX) because canonical queries can be full sentences or chunks of natural-language context.`),
+    ExpectedTopResultEntity: z.string().nullable().describe(`
+        * * Field Name: ExpectedTopResultEntity
+        * * Display Name: Expected Top Result Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional MJ entity name (e.g. "Contacts", "Documents") of the expected top result. When set together with ExpectedTopResultRecordID, lets the test runner assert that the tuned scope returns the right record at rank #1 — a regression tripwire for fusion / reranker changes.`),
+    ExpectedTopResultRecordID: z.string().nullable().describe(`
+        * * Field Name: ExpectedTopResultRecordID
+        * * Display Name: Expected Top Result Record ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Optional record ID of the expected top result, paired with ExpectedTopResultEntity. NULL = no assertion (the query is exploratory).`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form notes explaining why this query is canonical or what edge case it represents.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    SearchScope: z.string().describe(`
+        * * Field Name: SearchScope
+        * * Display Name: Search Scope
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJSearchScopeTestQueryEntityType = z.infer<typeof MJSearchScopeTestQuerySchema>;
+
+/**
  * zod schema definition for the entity MJ: Search Scopes
  */
 export const MJSearchScopeSchema = z.object({
@@ -85899,6 +85957,159 @@ export class MJSearchScopeStorageAccountEntity extends BaseEntity<MJSearchScopeS
     */
     get FileStorageAccount(): string {
         return this.Get('FileStorageAccount');
+    }
+}
+
+
+/**
+ * MJ: Search Scope Test Queries - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SearchScopeTestQuery
+ * * Base View: vwSearchScopeTestQueries
+ * * @description Canonical test queries owned by a SearchScope. Used by scope authors to validate tuning changes — re-run a saved query after swapping the reranker or adjusting fusion weights and compare results to the prior run.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Search Scope Test Queries')
+export class MJSearchScopeTestQueryEntity extends BaseEntity<MJSearchScopeTestQueryEntityType> {
+    /**
+    * Loads the MJ: Search Scope Test Queries record from the database
+    * @param ID: string - primary key value to load the MJ: Search Scope Test Queries record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSearchScopeTestQueryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SearchScopeID
+    * * Display Name: Search Scope ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+    * * Description: The SearchScope this test query belongs to. Cascade-restricted via FK so accidental scope deletion preserves test history.
+    */
+    get SearchScopeID(): string {
+        return this.Get('SearchScopeID');
+    }
+    set SearchScopeID(value: string) {
+        this.Set('SearchScopeID', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Short human-readable label for the test query, shown in the form's test-query grid (e.g. "VIP customer escalation", "expense reimbursement policy").
+    */
+    get Label(): string {
+        return this.Get('Label');
+    }
+    set Label(value: string) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: Query
+    * * Display Name: Query
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The query text itself. NVARCHAR(MAX) because canonical queries can be full sentences or chunks of natural-language context.
+    */
+    get Query(): string {
+        return this.Get('Query');
+    }
+    set Query(value: string) {
+        this.Set('Query', value);
+    }
+
+    /**
+    * * Field Name: ExpectedTopResultEntity
+    * * Display Name: Expected Top Result Entity
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional MJ entity name (e.g. "Contacts", "Documents") of the expected top result. When set together with ExpectedTopResultRecordID, lets the test runner assert that the tuned scope returns the right record at rank #1 — a regression tripwire for fusion / reranker changes.
+    */
+    get ExpectedTopResultEntity(): string | null {
+        return this.Get('ExpectedTopResultEntity');
+    }
+    set ExpectedTopResultEntity(value: string | null) {
+        this.Set('ExpectedTopResultEntity', value);
+    }
+
+    /**
+    * * Field Name: ExpectedTopResultRecordID
+    * * Display Name: Expected Top Result Record ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Optional record ID of the expected top result, paired with ExpectedTopResultEntity. NULL = no assertion (the query is exploratory).
+    */
+    get ExpectedTopResultRecordID(): string | null {
+        return this.Get('ExpectedTopResultRecordID');
+    }
+    set ExpectedTopResultRecordID(value: string | null) {
+        this.Set('ExpectedTopResultRecordID', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form notes explaining why this query is canonical or what edge case it represents.
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SearchScope
+    * * Display Name: Search Scope
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SearchScope(): string {
+        return this.Get('SearchScope');
     }
 }
 
