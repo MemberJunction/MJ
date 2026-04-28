@@ -398,7 +398,7 @@
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Test Queries','SearchScopeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Search Scope Test Queries')"
                 [AllowLoad]="IsSectionExpanded('mJSearchScopeTestQueries')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSearchScopeTestQueries', $event.totalRowCount)"
                 >
