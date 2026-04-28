@@ -488,7 +488,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (341 classes)
+// @memberjunction/core-entities (342 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -776,6 +776,7 @@ import {
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
+    MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSkillEntity,
@@ -1521,6 +1522,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
+    MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSkillEntity,
@@ -1625,7 +1627,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 693;
+export const CLASS_REGISTRATIONS_COUNT = 694;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

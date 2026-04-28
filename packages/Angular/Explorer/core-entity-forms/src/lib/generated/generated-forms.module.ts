@@ -279,6 +279,7 @@ import { MJSchemaInfoFormComponent } from "./Entities/MJSchemaInfo/mjschemainfo.
 import { MJSearchProviderFormComponent } from "./Entities/MJSearchProvider/mjsearchprovider.form.component";
 import { MJSearchScopeEntityFormComponent } from "./Entities/MJSearchScopeEntity/mjsearchscopeentity.form.component";
 import { MJSearchScopeExternalIndexFormComponent } from "./Entities/MJSearchScopeExternalIndex/mjsearchscopeexternalindex.form.component";
+import { MJSearchScopePermissionFormComponent } from "./Entities/MJSearchScopePermission/mjsearchscopepermission.form.component";
 import { MJSearchScopeProviderFormComponent } from "./Entities/MJSearchScopeProvider/mjsearchscopeprovider.form.component";
 import { MJSearchScopeStorageAccountFormComponent } from "./Entities/MJSearchScopeStorageAccount/mjsearchscopestorageaccount.form.component";
 import { MJSearchScopeFormComponent } from "./Entities/MJSearchScope/mjsearchscope.form.component";
@@ -809,6 +810,7 @@ declarations: [
     MJSearchProviderFormComponent,
     MJSearchScopeEntityFormComponent,
     MJSearchScopeExternalIndexFormComponent,
+    MJSearchScopePermissionFormComponent,
     MJSearchScopeProviderFormComponent,
     MJSearchScopeStorageAccountFormComponent,
     MJSearchScopeFormComponent,
@@ -823,8 +825,7 @@ declarations: [
     MJTaskTypeFormComponent,
     MJTaskFormComponent,
     MJTemplateCategoryFormComponent,
-    MJTemplateContentTypeFormComponent,
-    MJTemplateContentFormComponent],
+    MJTemplateContentTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -841,6 +842,7 @@ export class GeneratedForms_SubModule_13 { }
 
 @NgModule({
 declarations: [
+    MJTemplateContentFormComponent,
     MJTemplateParamFormComponent,
     MJTemplateFormComponent,
     MJTestRubricFormComponent,
@@ -859,8 +861,7 @@ declarations: [
     MJUserNotificationPreferenceFormComponent,
     MJUserNotificationTypeFormComponent,
     MJUserNotificationFormComponent,
-    MJUserRecordLogFormComponent,
-    MJUserRoleFormComponent],
+    MJUserRecordLogFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -877,6 +878,7 @@ export class GeneratedForms_SubModule_14 { }
 
 @NgModule({
 declarations: [
+    MJUserRoleFormComponent,
     MJUserSettingFormComponent,
     MJUserViewCategoryFormComponent,
     MJUserViewRunDetailFormComponent,

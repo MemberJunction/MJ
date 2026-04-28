@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (341 classes)
+// @memberjunction/core-entities (342 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -329,6 +329,7 @@ import {
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
+    MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSkillEntity,
@@ -858,6 +859,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
+    MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSkillEntity,
@@ -1049,7 +1051,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 485;
+export const CLASS_REGISTRATIONS_COUNT = 486;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -22447,6 +22447,71 @@ export const MJSearchScopeExternalIndexSchema = z.object({
 export type MJSearchScopeExternalIndexEntityType = z.infer<typeof MJSearchScopeExternalIndexSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Search Scope Permissions
+ */
+export const MJSearchScopePermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key. Auto-generated.`),
+    SearchScopeID: z.string().describe(`
+        * * Field Name: SearchScopeID
+        * * Display Name: Search Scope ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+        * * Description: The SearchScope this permission row applies to.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user this permission applies to. Mutually exclusive with RoleID — exactly one must be set.`),
+    RoleID: z.string().nullable().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: The role this permission applies to. Mutually exclusive with UserID — exactly one must be set. Permissions granted via roles flow to all users in that role.`),
+    PermissionLevel: z.union([z.literal('Manage'), z.literal('None'), z.literal('Read'), z.literal('Search')]).describe(`
+        * * Field Name: PermissionLevel
+        * * Display Name: Permission Level
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Manage
+    *   * None
+    *   * Read
+    *   * Search
+        * * Description: Capability granted on this SearchScope. None = explicit deny (overrides role grants), Read = view scope metadata, Search = invoke ScopedSearchAction, Manage = full edit including authoring of permission rows. The resolver picks the highest level when multiple grants apply (direct + role).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    SearchScope: z.string().describe(`
+        * * Field Name: SearchScope
+        * * Display Name: Search Scope
+        * * SQL Data Type: nvarchar(200)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJSearchScopePermissionEntityType = z.infer<typeof MJSearchScopePermissionSchema>;
+
+/**
  * zod schema definition for the entity MJ: Search Scope Providers
  */
 export const MJSearchScopeProviderSchema = z.object({
@@ -85038,6 +85103,160 @@ export class MJSearchScopeExternalIndexEntity extends BaseEntity<MJSearchScopeEx
     */
     get VectorIndex(): string | null {
         return this.Get('VectorIndex');
+    }
+}
+
+
+/**
+ * MJ: Search Scope Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SearchScopePermission
+ * * Base View: vwSearchScopePermissions
+ * * @description Per-user or per-role permission grant on a SearchScope. Exactly one of UserID or RoleID is set on each row; the other is NULL. PermissionLevel is one of None, Read, Search, Manage. Combined with AIAgent.SearchScopeAccess for agent-side fallbacks via the SearchScopePermissionResolver.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Search Scope Permissions')
+export class MJSearchScopePermissionEntity extends BaseEntity<MJSearchScopePermissionEntityType> {
+    /**
+    * Loads the MJ: Search Scope Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Search Scope Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSearchScopePermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key. Auto-generated.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SearchScopeID
+    * * Display Name: Search Scope ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+    * * Description: The SearchScope this permission row applies to.
+    */
+    get SearchScopeID(): string {
+        return this.Get('SearchScopeID');
+    }
+    set SearchScopeID(value: string) {
+        this.Set('SearchScopeID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user this permission applies to. Mutually exclusive with RoleID — exactly one must be set.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: The role this permission applies to. Mutually exclusive with UserID — exactly one must be set. Permissions granted via roles flow to all users in that role.
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: PermissionLevel
+    * * Display Name: Permission Level
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Manage
+    *   * None
+    *   * Read
+    *   * Search
+    * * Description: Capability granted on this SearchScope. None = explicit deny (overrides role grants), Read = view scope metadata, Search = invoke ScopedSearchAction, Manage = full edit including authoring of permission rows. The resolver picks the highest level when multiple grants apply (direct + role).
+    */
+    get PermissionLevel(): 'Manage' | 'None' | 'Read' | 'Search' {
+        return this.Get('PermissionLevel');
+    }
+    set PermissionLevel(value: 'Manage' | 'None' | 'Read' | 'Search') {
+        this.Set('PermissionLevel', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SearchScope
+    * * Display Name: Search Scope
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SearchScope(): string {
+        return this.Get('SearchScope');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
     }
 }
 
