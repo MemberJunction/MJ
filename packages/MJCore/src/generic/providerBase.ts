@@ -2405,8 +2405,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         // first, let's check to see if we have an existing Metadata.Provider registered, if so
-        // unless our data.IgnoreExistingMetadata is set to true, we will not refresh the metadata
-        if (Metadata.Provider && !data.IgnoreExistingMetadata) {
+        // unless our data.IgnoreExistingMetadata is set to true, we will not refresh the metadata.
+        //
+        // ALSO bypass this fast-path when `this._refresh` is set — that flag means the caller
+        // explicitly invoked Refresh() to force a re-fetch (e.g. CodeGen runs Refresh after
+        // manageMetadata mutates the EntityField rows in the DB). Without this guard, Refresh()
+        // calls on the *same instance that's also Metadata.Provider* (the common case after
+        // SetProvider has been called) would short-circuit here and never re-read from the
+        // server, leaving in-memory metadata permanently stale relative to subsequent DB writes.
+        // This was Bug 1 of the 3-bug chain that caused first-run CodeGen on PG to silently
+        // drop CRUD for newly-created entities like SystemEvent — its EntityField rows existed
+        // in the DB but the in-memory snapshot used by the entity-loop never picked them up.
+        if (Metadata.Provider && !data.IgnoreExistingMetadata && !this._refresh) {
             // we have an existing globally registered provider AND we are not
             // requested to ignore the existing metadata, so we will not refresh it
             if (this.CopyMetadataFromGlobalProvider()) {
