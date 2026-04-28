@@ -48,6 +48,7 @@ import { SearchEnricher } from './SearchEnricher';
 import { FullTextSearchProvider } from './FullTextSearchProvider';
 import { BaseReRanker } from './BaseReRanker';
 import { NoopReRanker, LoadNoopReRanker } from './NoopReRanker';
+import { RerankerBudgetGuard } from '../rerankers/RerankerBudgetGuard';
 import { RenderScopeTemplate, RenderScopeJsonTemplate } from './ScopeTemplateRenderer';
 
 // Keep the default re-ranker registration alive under tree-shaking
@@ -282,11 +283,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // ──────────────────────────────────────────────────────────
             const reRankerConfig = this.pickReRankerConfig(resolvedScopes);
             if (reRankerConfig?.driverClass) {
+                // Budget guard (P2D.6): cap real-provider rerank spend at the scope's
+                // RerankerBudgetCents. Pulled from the same scope that supplied the
+                // reranker config — keeping the policy local to the scope that opted in.
+                const budgetCents = this.pickRerankerBudgetCents(resolvedScopes);
                 fusedResults = await this.runReRanker(
                     params.Query,
                     fusedResults,
                     reRankerConfig,
-                    contextUser
+                    contextUser,
+                    new RerankerBudgetGuard(budgetCents)
                 );
             }
 
@@ -648,11 +654,25 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         return undefined;
     }
 
+    /**
+     * Pick the first scope's `RerankerBudgetCents` value to apply to the reranker
+     * run. Mirrors `pickReRankerConfig` — the leading scope's policy wins. NULL
+     * (uncapped) is the default when no scope sets a budget.
+     */
+    private pickRerankerBudgetCents(resolvedScopes: ScopeBundle[]): number | null {
+        for (const bundle of resolvedScopes) {
+            const cents = bundle.Scope.RerankerBudgetCents;
+            if (cents != null) return cents;
+        }
+        return null;
+    }
+
     private async runReRanker(
         query: string,
         candidates: SearchResultItem[],
         cfg: ReRankerConfig,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        budgetGuard?: RerankerBudgetGuard,
     ): Promise<SearchResultItem[]> {
         if (!cfg.driverClass || candidates.length === 0) return candidates;
 
@@ -665,8 +685,24 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             const inputTopN = cfg.inputTopN ?? Math.min(100, candidates.length);
             const outputTopN = cfg.outputTopN ?? Math.min(20, inputTopN);
             const trimmed = candidates.slice(0, inputTopN);
+
+            // P2D.6 — pre-call budget short-circuit. When the projected cost would
+            // exceed the remaining budget, skip rerank entirely and return the
+            // unranked top-N. Reported via LogStatus so observability reflects the
+            // skip without surfacing as a failure.
+            if (budgetGuard) {
+                const estimate = reRanker.EstimateCostCents(trimmed.length);
+                if (!budgetGuard.CanSpend(estimate)) {
+                    LogStatus(`SearchEngine: Re-ranker "${cfg.driverClass}" skipped — projected cost ${estimate.toFixed(4)}¢ exceeds remaining budget ${(budgetGuard.Remaining() ?? 0).toFixed(4)}¢ (Spent ${budgetGuard.Spent.toFixed(4)}¢ / Budget ${budgetGuard.Budget ?? 'uncapped'}¢).`);
+                    return trimmed.slice(0, outputTopN);
+                }
+                // Wire post-call cost reporting through the guard so subsequent
+                // EstimateCostCents queries reflect accumulated spend.
+                reRanker.CostReporter = budgetGuard.AsCostReporter();
+            }
+
             const ranked = await reRanker.ReRank(query, trimmed, outputTopN, contextUser, cfg.config);
-            LogStatus(`SearchEngine: Re-ranker "${cfg.driverClass}" returned ${ranked.length} result(s) (input=${trimmed.length}, outputTopN=${outputTopN})`);
+            LogStatus(`SearchEngine: Re-ranker "${cfg.driverClass}" returned ${ranked.length} result(s) (input=${trimmed.length}, outputTopN=${outputTopN}${budgetGuard ? `, spent=${budgetGuard.Spent.toFixed(4)}¢` : ''})`);
             return ranked;
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);

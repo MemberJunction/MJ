@@ -66803,6 +66803,9 @@ export class MJSearchScope_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Int, {nullable: true, description: `Optional cap on reranker spend (in cents) per search invocation against this scope. NULL means uncapped — existing behavior. When set, the SearchEngine's budget guard short-circuits any reranker call whose projected cost would push the run total past this value, and accumulates actual post-call cost via each reranker's CostReporter callback (BaseReRanker.CostReporter). Real-provider rerankers (Cohere, Voyage, OpenAI) report cost; NoopReRanker and BGEReRanker report zero (local / pass-through).`}) 
+    RerankerBudgetCents?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     OwnerUser?: string;
@@ -66868,6 +66871,9 @@ export class CreateMJSearchScopeInput {
     @Field({ nullable: true })
     SearchContextConfig: string | null;
 
+    @Field(() => Int, { nullable: true })
+    RerankerBudgetCents: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -66913,6 +66919,9 @@ export class UpdateMJSearchScopeInput {
 
     @Field({ nullable: true })
     SearchContextConfig?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RerankerBudgetCents?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

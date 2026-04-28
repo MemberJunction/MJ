@@ -22706,6 +22706,11 @@ export const MJSearchScopeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RerankerBudgetCents: z.number().nullable().describe(`
+        * * Field Name: RerankerBudgetCents
+        * * Display Name: Reranker Budget Cents
+        * * SQL Data Type: int
+        * * Description: Optional cap on reranker spend (in cents) per search invocation against this scope. NULL means uncapped — existing behavior. When set, the SearchEngine's budget guard short-circuits any reranker call whose projected cost would push the run total past this value, and accumulates actual post-call cost via each reranker's CostReporter callback (BaseReRanker.CostReporter). Real-provider rerankers (Cohere, Voyage, OpenAI) report cost; NoopReRanker and BGEReRanker report zero (local / pass-through).`),
     OwnerUser: z.string().nullable().describe(`
         * * Field Name: OwnerUser
         * * Display Name: Owner User
@@ -85767,6 +85772,19 @@ export class MJSearchScopeEntity extends BaseEntity<MJSearchScopeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RerankerBudgetCents
+    * * Display Name: Reranker Budget Cents
+    * * SQL Data Type: int
+    * * Description: Optional cap on reranker spend (in cents) per search invocation against this scope. NULL means uncapped — existing behavior. When set, the SearchEngine's budget guard short-circuits any reranker call whose projected cost would push the run total past this value, and accumulates actual post-call cost via each reranker's CostReporter callback (BaseReRanker.CostReporter). Real-provider rerankers (Cohere, Voyage, OpenAI) report cost; NoopReRanker and BGEReRanker report zero (local / pass-through).
+    */
+    get RerankerBudgetCents(): number | null {
+        return this.Get('RerankerBudgetCents');
+    }
+    set RerankerBudgetCents(value: number | null) {
+        this.Set('RerankerBudgetCents', value);
     }
 
     /**

@@ -21,6 +21,7 @@ export class MJSearchScopeFormComponent extends BaseFormComponent {
             { sectionKey: 'accessControl', sectionName: 'Access Control', isExpanded: false },
             { sectionKey: 'lifecycleManagement', sectionName: 'Lifecycle Management', isExpanded: false },
             { sectionKey: 'technicalConfiguration', sectionName: 'Technical Configuration', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJSearchScopeStorageAccounts', sectionName: 'Search Scope Storage Accounts', isExpanded: false },
             { sectionKey: 'mJSearchScopeEntities', sectionName: 'Search Scope Entities', isExpanded: false },
