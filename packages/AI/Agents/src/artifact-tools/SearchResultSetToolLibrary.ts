@@ -107,13 +107,57 @@ function parseSpec(artifactContent: string | Buffer): SearchResultSetSpec {
     } catch (err) {
         throw new Error(`Search Result Set artifact is not valid JSON: ${err instanceof Error ? err.message : String(err)}`);
     }
-    if (!parsed || typeof parsed !== 'object' || !('Results' in parsed) || !Array.isArray((parsed as { Results: unknown }).Results)) {
-        throw new Error('Search Result Set artifact missing a Results array.');
+    if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Search Result Set artifact must be a JSON object.');
     }
-    const spec = parsed as SearchResultSetSpec;
-    // Stamp alpha IDs deterministically — same row order produces same handles.
-    spec.Results.forEach((r, i) => { r.AlphaID = r.AlphaID ?? toAlphaId(i); });
-    return spec;
+
+    // Two accepted shapes:
+    //   1. Native Search Result Set: { Query, Results: [...] }
+    //   2. Data-Snapshot-compatible (the shape AgentPreExecutionRAG.BuildArtifactPayload
+    //      produces): { tables: [{ rows: [...] }], queries: [...], ... }. We adapt rows
+    //      from the first table by mapping lowercase BuildArtifactPayload fields to the
+    //      uppercase shape `Results: SearchResultRow[]` expects.
+    if ('Results' in parsed && Array.isArray((parsed as { Results: unknown }).Results)) {
+        const spec = parsed as SearchResultSetSpec;
+        spec.Results.forEach((r, i) => { r.AlphaID = r.AlphaID ?? toAlphaId(i); });
+        return spec;
+    }
+
+    if ('tables' in parsed && Array.isArray((parsed as { tables: unknown }).tables)) {
+        const tables = (parsed as { tables: Array<{ rows?: unknown[] }> }).tables;
+        const firstTable = tables[0];
+        const rawRows = Array.isArray(firstTable?.rows) ? firstTable.rows : [];
+        const queries = (parsed as { queries?: Array<{ query?: string }> }).queries ?? [];
+        const scopeIDs = (parsed as { scopeIDs?: string[] }).scopeIDs ?? [];
+
+        const Results: SearchResultRow[] = rawRows.map((rawRow, i) => {
+            const row = (rawRow ?? {}) as Record<string, unknown>;
+            const recordID = String(row['recordID'] ?? row['RecordID'] ?? row['id'] ?? row['ID'] ?? '');
+            return {
+                ID: String(row['id'] ?? row['ID'] ?? recordID),
+                AlphaID: toAlphaId(i),
+                EntityName: String(row['entity'] ?? row['EntityName'] ?? ''),
+                RecordID: recordID,
+                Title: String(row['title'] ?? row['Title'] ?? ''),
+                Snippet: String(row['snippet'] ?? row['Snippet'] ?? ''),
+                Score: typeof row['score'] === 'number' ? row['score'] as number
+                    : typeof row['Score'] === 'number' ? row['Score'] as number : 0,
+                SourceProvider: (row['source'] ?? row['SourceProvider']) as string | undefined,
+                SourceType: (row['source'] ?? row['SourceType']) as string | undefined,
+                SourceUrl: (row['sourceUrl'] ?? row['SourceUrl']) as string | undefined,
+                Chunk: (row['chunk'] ?? row['Chunk']) as string | undefined,
+                EmbeddingMetadata: (row['embeddingMetadata'] ?? row['EmbeddingMetadata']) as Record<string, unknown> | undefined,
+            };
+        });
+
+        return {
+            Query: queries[0]?.query ?? '',
+            ScopeIDs: scopeIDs,
+            Results,
+        };
+    }
+
+    throw new Error('Search Result Set artifact missing both a Results array and a tables[] structure.');
 }
 
 function findRowByAlphaId(spec: SearchResultSetSpec, alphaId: string): SearchResultRow | undefined {

@@ -4,6 +4,13 @@ import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } f
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 
+// Side-effect imports — force the @RegisterClass decorators on the production
+// libraries to run so the P2B.8 parent-chain tests can resolve them via ClassFactory
+// the way the runtime does.
+import '../artifact-tools/JSONToolLibrary';
+import '../artifact-tools/DataSnapshotToolLibrary';
+import '../artifact-tools/SearchResultSetToolLibrary';
+
 function makeArtifact(name: string, typeName: string, content: string): InputArtifact {
     return { name, typeName, content };
 }
@@ -235,6 +242,109 @@ describe('ArtifactToolManager', () => {
             ]);
             const resultText = manager.GetPendingResults();
             expect(resultText).toContain('"handledBy": "parent"');
+        });
+    });
+
+    describe('Search Result Set parent-chain (P2B.8)', () => {
+        // Real Search Result Set → Data Snapshot → Data chain that ships in production
+        // metadata. Asserts ArtifactToolManager merges SearchResultSetToolLibrary's 5
+        // search-specific tools with DataSnapshotToolLibrary's 6 tabular tools when an
+        // agent loads a Search Result Set artifact.
+        const dataTypeId = '11111111-aaaa-1111-aaaa-111111111111';
+        const dataSnapshotTypeId = '22222222-aaaa-2222-aaaa-222222222222';
+        const searchResultSetTypeId = '33333333-aaaa-3333-aaaa-333333333333';
+
+        // Use the canonical Data-Snapshot-shaped artifact content that
+        // AgentPreExecutionRAG.BuildArtifactPayload actually produces in
+        // production. Both DataSnapshot's inherited tabular tools (get_tables,
+        // get_rows, etc.) AND SearchResultSetToolLibrary's search-specific tools
+        // (filterByScore, etc.) operate on this same content via parseSpec's
+        // tables[]→Results adapter.
+        const minimalSearchResultSetContent = JSON.stringify({
+            title: 'Pre-execution RAG (1 scope(s))',
+            tables: [
+                {
+                    name: 'results',
+                    columns: [
+                        { field: 'id' }, { field: 'recordID' }, { field: 'entity' },
+                        { field: 'title' }, { field: 'snippet' }, { field: 'score' },
+                        { field: 'source' },
+                    ],
+                    rows: [
+                        { id: 'row-1', recordID: 'rec-1', entity: 'Document', title: 'Doc One', snippet: 'lorem', score: 0.91, source: 'vector' },
+                        { id: 'row-2', recordID: 'rec-2', entity: 'Document', title: 'Doc Two', snippet: 'ipsum', score: 0.62, source: 'vector' },
+                    ],
+                },
+            ],
+            queries: [{ scopeID: 'scope-1', scopeName: 'Knowledge', query: 'how do I file expenses?' }],
+            scopeIDs: ['scope-1'],
+        });
+
+        beforeEach(() => {
+            const engineAny = ArtifactMetadataEngine.Instance as unknown as {
+                _artifactTypes: Array<Record<string, unknown>>;
+            };
+            engineAny._artifactTypes = [
+                { ID: dataTypeId, Name: 'Data', ParentID: null, ToolLibraryClass: 'JSONToolLibrary' },
+                { ID: dataSnapshotTypeId, Name: 'Data Snapshot', ParentID: dataTypeId, ToolLibraryClass: 'DataSnapshotToolLibrary' },
+                { ID: searchResultSetTypeId, Name: 'Search Result Set', ParentID: dataSnapshotTypeId, ToolLibraryClass: 'SearchResultSetToolLibrary' },
+            ];
+        });
+
+        afterEach(() => {
+            const engineAny = ArtifactMetadataEngine.Instance as unknown as {
+                _artifactTypes: Array<Record<string, unknown>>;
+            };
+            engineAny._artifactTypes = [];
+        });
+
+        it('exposes the 5 SearchResultSet-specific tools when a Search Result Set artifact is loaded', () => {
+            manager.Initialize([
+                makeArtifact('Q1 Search', 'Search Result Set', minimalSearchResultSetContent),
+            ]);
+            const docs = manager.GetToolDocumentation();
+            // The 5 spec-mandated tools from SearchResultSetToolLibrary
+            for (const t of ['filterByScore', 'groupBySourceProvider', 'getMatchingChunks', 'followSourceLink', 'rerankInline']) {
+                expect(docs).toContain(t);
+            }
+        });
+
+        it('inherits DataSnapshot tabular tools through the parent chain', () => {
+            manager.Initialize([
+                makeArtifact('Q1 Search', 'Search Result Set', minimalSearchResultSetContent),
+            ]);
+            const docs = manager.GetToolDocumentation();
+            // The 6 tabular tools DataSnapshotToolLibrary contributes
+            for (const t of ['get_tables', 'get_schema', 'get_rows', 'search_rows', 'aggregate', 'get_full']) {
+                expect(docs).toContain(t);
+            }
+        });
+
+        it('dispatches a SearchResultSet-specific tool (filterByScore) to its own library, not Data Snapshot', async () => {
+            manager.Initialize([
+                makeArtifact('Q1 Search', 'Search Result Set', minimalSearchResultSetContent),
+            ]);
+            await manager.ExecuteToolCalls([
+                { artifactId: 'A', tool: 'filterByScore', input: { minScore: 0.7 } },
+            ]);
+            // Should succeed (the search-specific tool is the leaf in the chain)
+            const log = manager.GetAccessLog();
+            expect(log).toHaveLength(1);
+            expect(log[0].tool).toBe('filterByScore');
+            expect(log[0].success).toBe(true);
+        });
+
+        it('dispatches an inherited DataSnapshot tool (get_tables) to DataSnapshotToolLibrary through the parent chain', async () => {
+            manager.Initialize([
+                makeArtifact('Q1 Search', 'Search Result Set', minimalSearchResultSetContent),
+            ]);
+            await manager.ExecuteToolCalls([
+                { artifactId: 'A', tool: 'get_tables', input: {} },
+            ]);
+            const log = manager.GetAccessLog();
+            expect(log).toHaveLength(1);
+            expect(log[0].tool).toBe('get_tables');
+            expect(log[0].success).toBe(true);
         });
     });
 
