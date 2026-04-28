@@ -60,6 +60,21 @@ export interface AgentPreExecutionRAGParams {
     secondaryScopes?: Record<string, SecondaryScopeValue>;
     /** Calling user — threaded through to SearchEngine + Metadata. */
     contextUser: UserInfo;
+    /**
+     * Phase 2C: when true, consume SearchEngine.streamSearch() instead of
+     * the synchronous Search() per scope. The final aggregate is identical
+     * — what changes is that intermediate provider traces are written to
+     * `streamingTrace` (when supplied) so the agent's pre-execution
+     * scratchpad can show "while you wait" progress. Default false.
+     */
+    streamingEnabled?: boolean;
+    /**
+     * Optional sink for streamingEnabled traces. Caller pushes nothing
+     * itself — the RAG hook appends one markdown line per provider event
+     * per scope. Caller decides what to do with the lines (typically
+     * concat into the agent's pre-prompt scratchpad).
+     */
+    streamingTrace?: string[];
 }
 
 /** Structured result of a single scope's search, used for formatting + artifact persistence. */
@@ -135,15 +150,62 @@ export class AgentPreExecutionRAG {
             const maxResults = row.MaxResults ?? 10;
 
             try {
-                const sr = await SearchEngine.Instance.Search({
-                    Query: query,
-                    MaxResults: maxResults,
-                    MinScore: minScore,
-                    ScopeIDs: [scope.ID],
-                    SearchContext: hasContext ? searchContext : undefined,
-                    FusionWeightsOverride: fusionWeights,
-                    Mode: 'full'
-                }, params.contextUser);
+                // Phase 2C: when params.streamingEnabled is true, consume
+                // SearchEngine.streamSearch() instead of Search() and append
+                // a markdown trace line to the scratchpad as each provider
+                // returns. The aggregate result (the 'final' event) is the
+                // same as Search() returns synchronously, so downstream
+                // fusion/formatting is unchanged. Markdown over JSON for
+                // the prompt-injection trail per RAG_plan §2.2.
+                let sr: Awaited<ReturnType<typeof SearchEngine.Instance.Search>>;
+                if (params.streamingEnabled) {
+                    let finalResults: SearchResultItem[] = [];
+                    let sourceCounts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
+                    let elapsedMs = 0;
+                    let errorMsg: string | undefined;
+                    const traces: string[] = [];
+                    for await (const ev of SearchEngine.Instance.streamSearch({
+                        Query: query,
+                        MaxResults: maxResults,
+                        MinScore: minScore,
+                        ScopeIDs: [scope.ID],
+                        SearchContext: hasContext ? searchContext : undefined,
+                        FusionWeightsOverride: fusionWeights,
+                        Mode: 'full'
+                    }, params.contextUser)) {
+                        if (ev.phase === 'provider') {
+                            traces.push(`### Provider \`${ev.providerName}\` returned ${ev.results.length} rows in ${ev.durationMs}ms`);
+                        } else if (ev.phase === 'final') {
+                            finalResults = ev.results;
+                            sourceCounts = ev.sourceCounts;
+                            elapsedMs = ev.elapsedMs;
+                        } else if (ev.phase === 'error') {
+                            errorMsg = ev.error;
+                        }
+                    }
+                    if (params.streamingTrace) {
+                        params.streamingTrace.push(...traces);
+                    }
+                    sr = {
+                        Success: !errorMsg,
+                        Results: finalResults,
+                        TotalCount: finalResults.length,
+                        ElapsedMs: elapsedMs,
+                        SourceCounts: sourceCounts,
+                        Providers: [],
+                        ErrorMessage: errorMsg,
+                    };
+                } else {
+                    sr = await SearchEngine.Instance.Search({
+                        Query: query,
+                        MaxResults: maxResults,
+                        MinScore: minScore,
+                        ScopeIDs: [scope.ID],
+                        SearchContext: hasContext ? searchContext : undefined,
+                        FusionWeightsOverride: fusionWeights,
+                        Mode: 'full'
+                    }, params.contextUser);
+                }
 
                 if (sr.Success && sr.Results.length > 0) {
                     perScopeResults.push({
