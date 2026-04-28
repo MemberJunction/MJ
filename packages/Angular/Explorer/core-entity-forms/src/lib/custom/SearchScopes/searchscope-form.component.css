@@ -292,3 +292,12 @@
     font-size: 0.76rem;
     margin: 0.3rem 0 0;
 }
+
+.live-preview-similarity {
+    color: var(--mj-status-success-text);
+    font-weight: 500;
+}
+
+.live-preview-similarity-low {
+    color: var(--mj-status-warning-text);
+}

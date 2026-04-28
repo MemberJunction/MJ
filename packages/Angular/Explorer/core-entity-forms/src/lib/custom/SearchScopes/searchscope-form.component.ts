@@ -89,6 +89,16 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
     private previewSubscription: Subscription | null = null;
     private searchService = new SearchService();
 
+    /**
+     * P4.3 — A/B comparison via Kendall-tau between consecutive preview runs.
+     * After RunPreview completes, the previous run's RecordIDs are diffed
+     * against the current run and the rank-correlation similarity is shown
+     * inline ("82% similar to last run"). Authors use this to immediately
+     * see how much a reranker swap or fusion-weight tweak shifted the ranking.
+     */
+    private PreviousRunRecordIDs: string[] = [];
+    public LastRunSimilarityPercent: number | null = null;
+
     public override ngOnDestroy(): void {
         this.previewSubscription?.unsubscribe();
         this.previewSubscription = null;
@@ -146,6 +156,22 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
             },
             complete: () => {
                 this.PreviewIsRunning = false;
+                // Compute Kendall-tau against the prior run, then capture this
+                // run's order as the next baseline.
+                const currentIDs = this.PreviewResults.map(r => r.RecordID);
+                if (this.PreviousRunRecordIDs.length > 0 && currentIDs.length > 0) {
+                    const tau = MJSearchScopeFormComponentExtended.kendallTauOnSharedItems(
+                        this.PreviousRunRecordIDs,
+                        currentIDs,
+                    );
+                    if (tau !== null) {
+                        // Map [-1, 1] tau onto a [0, 100] "% similar" gauge so non-stats
+                        // authors can read it. -1 (reverse) = 0%, 0 (uncorrelated) = 50%,
+                        // +1 (identical) = 100%.
+                        this.LastRunSimilarityPercent = Math.round((tau + 1) * 50);
+                    }
+                }
+                this.PreviousRunRecordIDs = currentIDs;
             },
         });
     }
@@ -154,6 +180,38 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
         this.previewSubscription?.unsubscribe();
         this.previewSubscription = null;
         this.PreviewIsRunning = false;
+    }
+
+    /**
+     * Compute Kendall-tau rank correlation on the items present in both lists.
+     * Items only in one list are ignored (partial-overlap handling). Returns
+     * null when the shared overlap is too small (< 2 items) to be meaningful.
+     *
+     * Tau formula: (concordant - discordant) / (N * (N-1) / 2)
+     * where concordant = pairs ranked in the same order in both lists,
+     * discordant = pairs ranked in opposite order, N = shared item count.
+     */
+    private static kendallTauOnSharedItems(listA: string[], listB: string[]): number | null {
+        const rankA = new Map(listA.map((id, i) => [id, i]));
+        const rankB = new Map(listB.map((id, i) => [id, i]));
+        const shared = listA.filter(id => rankB.has(id));
+        const n = shared.length;
+        if (n < 2) return null;
+        let concordant = 0;
+        let discordant = 0;
+        for (let i = 0; i < n; i++) {
+            for (let j = i + 1; j < n; j++) {
+                const a = (rankA.get(shared[i])! - rankA.get(shared[j])!);
+                const b = (rankB.get(shared[i])! - rankB.get(shared[j])!);
+                const product = a * b;
+                if (product > 0) concordant++;
+                else if (product < 0) discordant++;
+                // Ties (product === 0) ignored — items at same rank
+            }
+        }
+        const totalPairs = (n * (n - 1)) / 2;
+        if (totalPairs === 0) return null;
+        return (concordant - discordant) / totalPairs;
     }
 
     /**

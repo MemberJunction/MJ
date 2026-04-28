@@ -315,6 +315,13 @@
                     <div class="live-preview-results-header">
                         {{ PreviewResults.length }} result(s)
                         @if (PreviewElapsedMs !== null) { in {{ PreviewElapsedMs }}ms }
+                        @if (LastRunSimilarityPercent !== null) {
+                            <span class="live-preview-similarity"
+                                  [class.live-preview-similarity-low]="LastRunSimilarityPercent < 70"
+                                  title="Kendall-tau rank correlation against the previous run, mapped to [0%, 100%].">
+                                · {{ LastRunSimilarityPercent }}% similar to last run
+                            </span>
+                        }
                     </div>
                     @for (r of PreviewResults; track r.ID; let i = $index) {
                         @if (i < 10) {
