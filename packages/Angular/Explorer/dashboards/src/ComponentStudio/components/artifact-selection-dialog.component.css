@@ -115,12 +115,12 @@
     margin-top: 15px;
 }
 
-.new-artifact-form kendo-textbox {
+.new-artifact-form .mj-input {
     width: 100%;
     margin-bottom: 10px;
 }
 
-.new-artifact-form kendo-textarea {
+.new-artifact-form .mj-textarea {
     width: 100%;
     height: 60px;
 }

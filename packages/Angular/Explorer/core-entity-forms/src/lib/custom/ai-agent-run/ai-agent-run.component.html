@@ -149,9 +149,9 @@
       <!-- Timeline Tab -->
       @if (activeTab === 'timeline') {
         <div class="tab-content" style="height: 100%;">
-          <kendo-splitter style="height: 100%;" orientation="horizontal">
+          <as-split direction="horizontal" style="height: 100%;">
             <!-- Timeline Pane -->
-            <kendo-splitter-pane [min]="'400px'">
+            <as-split-area [size]="selectedTimelineItem ? 55 : 100">
               <mj-ai-agent-run-timeline
                 [aiAgentRunId]="record.ID"
                 [dataHelper]="dataHelper"
@@ -161,17 +161,19 @@
                 (navigateToEntity)="navigateToEntityRecord($event)"
                 (agentRunCompleted)="onAgentRunCompleted($event)">
               </mj-ai-agent-run-timeline>
-            </kendo-splitter-pane>
+            </as-split-area>
             <!-- JSON Detail Pane -->
-            <kendo-splitter-pane [size]="'45%'" [min]="'300px'" [collapsed]="!selectedTimelineItem">
-              <mj-ai-agent-run-step-detail
-                [selectedTimelineItem]="selectedTimelineItem"
-                (closePanel)="closeJsonPanel()"
-                (navigateToActionLog)="navigateToActionLog($event)"
-                (copyToClipboard)="copyToClipboard($event)">
-              </mj-ai-agent-run-step-detail>
-            </kendo-splitter-pane>
-          </kendo-splitter>
+            @if (selectedTimelineItem) {
+              <as-split-area [size]="45">
+                <mj-ai-agent-run-step-detail
+                  [selectedTimelineItem]="selectedTimelineItem"
+                  (closePanel)="closeJsonPanel()"
+                  (navigateToActionLog)="navigateToActionLog($event)"
+                  (copyToClipboard)="copyToClipboard($event)">
+                </mj-ai-agent-run-step-detail>
+              </as-split-area>
+            }
+          </as-split>
         </div>
       }
 
@@ -205,9 +207,10 @@
       <!-- Details Tab -->
       @if (activeTab === 'details') {
         <div class="tab-content">
-          <kendo-panelbar [keepItemContent]="true">
-            <kendo-panelbar-item title="General Information" [expanded]="true">
-              <ng-template kendoPanelBarContent>
+          <mj-accordion-panel [Expanded]="true">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-info-circle"></i> General Information
+            </ng-template>
                 <div class="details-grid">
                   <div class="detail-item">
                     <label>Agent</label>
@@ -270,10 +273,11 @@
                     </span>
                   </div>
                 </div>
-              </ng-template>
-            </kendo-panelbar-item>
-            <kendo-panelbar-item title="Execution Settings">
-              <ng-template kendoPanelBarContent>
+          </mj-accordion-panel>
+          <mj-accordion-panel [Expanded]="false">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-cogs"></i> Execution Settings
+            </ng-template>
                 <div class="details-grid">
                   <div class="detail-item">
                     <label>Override Model</label>
@@ -306,10 +310,11 @@
                     <span>{{ record.Verbose ? 'Yes' : 'No' }}</span>
                   </div>
                 </div>
-              </ng-template>
-            </kendo-panelbar-item>
-            <kendo-panelbar-item title="Execution Status">
-              <ng-template kendoPanelBarContent>
+          </mj-accordion-panel>
+          <mj-accordion-panel [Expanded]="false">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-tasks"></i> Execution Status
+            </ng-template>
                 <div class="details-grid">
                   <div class="detail-item">
                     <label>Status</label>
@@ -323,29 +328,30 @@
                       <span>In Progress</span>
                     }
                     @else if (record.Success) {
-                    <span class="success">Yes</span>
+                      <span class="success">Yes</span>
+                    }
+                    @else {
+                      <span class="error-message">No</span>
+                    }
+                  </div>
+                  @if (record.Message) {
+                    <div class="detail-item full-width">
+                      <label>Message</label>
+                      <div class="message">{{ record.Message }}</div>
+                    </div>
                   }
-                  @else {
-                  <span class="error-message">No</span>
-                }
-              </div>
-              @if (record.Message) {
-                <div class="detail-item full-width">
-                  <label>Message</label>
-                  <div class="message">{{ record.Message }}</div>
+                  @if (record.ErrorMessage) {
+                    <div class="detail-item full-width">
+                      <label>Error Message</label>
+                      <div class="error-message">{{ record.ErrorMessage }}</div>
+                    </div>
+                  }
                 </div>
-              }
-              @if (record.ErrorMessage) {
-                <div class="detail-item full-width">
-                  <label>Error Message</label>
-                  <div class="error-message">{{ record.ErrorMessage }}</div>
-                </div>
-              }
-            </div>
-          </ng-template>
-        </kendo-panelbar-item>
-        <kendo-panelbar-item title="Usage & Cost">
-          <ng-template kendoPanelBarContent>
+          </mj-accordion-panel>
+          <mj-accordion-panel [Expanded]="false">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-dollar-sign"></i> Usage &amp; Cost
+            </ng-template>
             <div class="details-grid">
               <div class="detail-item">
                 <label>Total Tokens Used</label>
@@ -368,11 +374,12 @@
                 <span>{{ record.TotalPromptIterations != null ? (record.TotalPromptIterations | number:'1.0-0') : 'N/A' }}</span>
               </div>
             </div>
-          </ng-template>
-        </kendo-panelbar-item>
-        @if (record.Result) {
-          <kendo-panelbar-item title="Result">
-            <ng-template kendoPanelBarContent>
+          </mj-accordion-panel>
+          @if (record.Result) {
+            <mj-accordion-panel [Expanded]="false">
+              <ng-template mjAccordionTitle>
+                <i class="fas fa-code"></i> Result
+              </ng-template>
               <div class="result-viewer">
                 @if (isParsingComplete) {
                   <mj-code-editor
@@ -382,17 +389,18 @@
                     style="height: 300px; width: 100%;">
                   </mj-code-editor>
                 } @else {
-                  <div style="padding: 20px; text-align: center; color: #666;">
+                  <div style="padding: 20px; text-align: center; color: var(--mj-text-muted);">
                     <i class="fas fa-spinner fa-spin"></i> Loading result data...
                   </div>
                 }
               </div>
-            </ng-template>
-          </kendo-panelbar-item>
-        }
-        @if (record.StartingPayload) {
-          <kendo-panelbar-item title="Starting Payload">
-            <ng-template kendoPanelBarContent>
+            </mj-accordion-panel>
+          }
+          @if (record.StartingPayload) {
+            <mj-accordion-panel [Expanded]="false">
+              <ng-template mjAccordionTitle>
+                <i class="fas fa-upload"></i> Starting Payload
+              </ng-template>
               <div class="result-viewer">
                 @if (isParsingComplete) {
                   <mj-code-editor
@@ -402,17 +410,18 @@
                     style="height: 300px; width: 100%;">
                   </mj-code-editor>
                 } @else {
-                  <div style="padding: 20px; text-align: center; color: #666;">
+                  <div style="padding: 20px; text-align: center; color: var(--mj-text-muted);">
                     <i class="fas fa-spinner fa-spin"></i> Loading payload data...
                   </div>
                 }
               </div>
-            </ng-template>
-          </kendo-panelbar-item>
-        }
-        @if (record.Data) {
-          <kendo-panelbar-item title="Execution Data">
-            <ng-template kendoPanelBarContent>
+            </mj-accordion-panel>
+          }
+          @if (record.Data) {
+            <mj-accordion-panel [Expanded]="false">
+              <ng-template mjAccordionTitle>
+                <i class="fas fa-database"></i> Execution Data
+              </ng-template>
               <div class="result-viewer">
                 @if (isParsingComplete) {
                   <mj-code-editor
@@ -422,17 +431,18 @@
                     style="height: 300px; width: 100%;">
                   </mj-code-editor>
                 } @else {
-                  <div style="padding: 20px; text-align: center; color: #666;">
+                  <div style="padding: 20px; text-align: center; color: var(--mj-text-muted);">
                     <i class="fas fa-spinner fa-spin"></i> Loading execution data...
                   </div>
                 }
               </div>
-            </ng-template>
-          </kendo-panelbar-item>
-        }
-        @if (record.FinalPayload) {
-          <kendo-panelbar-item title="Final Payload">
-            <ng-template kendoPanelBarContent>
+            </mj-accordion-panel>
+          }
+          @if (record.FinalPayload) {
+            <mj-accordion-panel [Expanded]="false">
+              <ng-template mjAccordionTitle>
+                <i class="fas fa-download"></i> Final Payload
+              </ng-template>
               <div class="result-viewer">
                 @if (isParsingComplete) {
                   <mj-code-editor
@@ -442,18 +452,19 @@
                     style="height: 300px; width: 100%;">
                   </mj-code-editor>
                 } @else {
-                  <div style="padding: 20px; text-align: center; color: #666;">
+                  <div style="padding: 20px; text-align: center; color: var(--mj-text-muted);">
                     <i class="fas fa-spinner fa-spin"></i> Loading final payload data...
                   </div>
                 }
               </div>
-            </ng-template>
-          </kendo-panelbar-item>
-        }
-        @if (showPayloadDiff) {
-          <kendo-panelbar-item title="Payload Diff">
-            <ng-template kendoPanelBarContent>
-              <div style="padding: 20px; background: #f8f9fa;">
+            </mj-accordion-panel>
+          }
+          @if (showPayloadDiff) {
+            <mj-accordion-panel [Expanded]="false">
+              <ng-template mjAccordionTitle>
+                <i class="fas fa-code-compare"></i> Payload Diff
+              </ng-template>
+              <div style="padding: 20px; background: var(--mj-bg-surface-card);">
                 @if (isParsingComplete) {
                   <mj-deep-diff
                     [oldValue]="startingPayloadObject"
@@ -467,15 +478,13 @@
                     [treatNullAsUndefined]="true">
                   </mj-deep-diff>
                 } @else {
-                  <div style="padding: 20px; text-align: center; color: #666;">
+                  <div style="padding: 20px; text-align: center; color: var(--mj-text-muted);">
                     <i class="fas fa-spinner fa-spin"></i> Loading payload diff...
                   </div>
                 }
               </div>
-            </ng-template>
-          </kendo-panelbar-item>
-        }
-      </kendo-panelbar>
+            </mj-accordion-panel>
+          }
     </div>
   }
 </div>

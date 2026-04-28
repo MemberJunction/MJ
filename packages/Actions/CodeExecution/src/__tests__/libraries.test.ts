@@ -118,22 +118,18 @@ describe('Libraries', () => {
       expect(typeof source).toBe('string');
     });
 
-    it('should return lodash source with expected functions', () => {
+    it('should return bundled lodash wrapped in module-shim IIFE', () => {
+      // NOTE: fs.readFileSync is mocked at the top of this test file, so the
+      // "source" we get here is our IIFE wrapper around the stub content —
+      // NOT the real ~73KB lodash bundle. We assert the shape of the wrapper
+      // (proves we switched away from the old hand-coded subset). End-to-end
+      // behavior of real lodash is exercised by Runtime action integration
+      // tests, not here.
       const source = getLibrarySource('lodash')!;
-      expect(source).toContain('chunk');
-      expect(source).toContain('compact');
-      expect(source).toContain('flatten');
-      expect(source).toContain('uniq');
-      expect(source).toContain('groupBy');
-      expect(source).toContain('keyBy');
-      expect(source).toContain('sortBy');
-      expect(source).toContain('pick');
-      expect(source).toContain('omit');
-      expect(source).toContain('get');
-      expect(source).toContain('set');
-      expect(source).toContain('sum');
-      expect(source).toContain('mean');
-      expect(source).toContain('cloneDeep');
+      expect(source).toContain('const module = { exports: {} }');
+      expect(source).toContain('return module.exports');
+      // Old subset signature absent — we no longer wire up getLodashSource().
+      expect(source).not.toContain('chunk: function(array');
     });
 
     it('should return date-fns source with expected functions', () => {
@@ -173,9 +169,9 @@ describe('Libraries', () => {
 
     it('should return wrapped IIFE for inline libraries', () => {
       const lodashSource = getLibrarySource('lodash')!;
-      // Should be wrapped in an IIFE that returns the object
+      // Lodash is now the bundled UMD wrapped in our module-shim IIFE.
       expect(lodashSource).toMatch(/^\(function\(\)/);
-      expect(lodashSource).toContain('return _');
+      expect(lodashSource).toContain('return module.exports');
 
       const dateFnsSource = getLibrarySource('date-fns')!;
       expect(dateFnsSource).toMatch(/^\(function\(\)/);

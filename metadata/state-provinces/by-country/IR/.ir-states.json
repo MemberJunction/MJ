@@ -1,0 +1,548 @@
+[
+  {
+    "fields": {
+      "Name": "Ardabīl",
+      "Code": "03",
+      "ISO3166_2": "IR-03",
+      "Latitude": 38.9113,
+      "Longitude": 47.7241,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-03.geojson",
+      "CommonAliases": [
+        "Ardabīl"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "265FC2D7-2E4D-44E2-BCF8-4482E68D7DFF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.759Z",
+      "checksum": "ae25d7fa8b2eef11bc6eae325e22dd3abfbd7240649072e863d73e78bc1b99e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Āzarbāyjān-e-Gharbī",
+      "Code": "02",
+      "ISO3166_2": "IR-02",
+      "Latitude": 36.6666,
+      "Longitude": 45.6734,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-02.geojson",
+      "CommonAliases": [
+        "Āzarbāyjān-e-Gharbī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "6D2A30CC-91E8-477B-859E-AD2A60C74CA1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.776Z",
+      "checksum": "c5fb3ee52ce11edd8b0a982fe95b76385a1a4df213c0b3c5befa4214f409339a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Āzarbāyjān-e-Sharqī",
+      "Code": "01",
+      "ISO3166_2": "IR-01",
+      "Latitude": 37.8501,
+      "Longitude": 46.7723,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-01.geojson",
+      "CommonAliases": [
+        "Āzarbāyjān-e-Sharqī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "BEDB760D-DEDB-4339-AC94-1A1CD5A7454E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.793Z",
+      "checksum": "b3ff04c93484eee64f66e898019a4e3b9dacd54fc429c40c6ed9fa5c9823ff8d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Būshehr",
+      "Code": "06",
+      "ISO3166_2": "IR-06",
+      "Latitude": 28.8273,
+      "Longitude": 51.4225,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-06.geojson",
+      "CommonAliases": [
+        "Būshehr"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "8EC4059E-D51C-43CF-94E0-94C74B65CC13"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.810Z",
+      "checksum": "5320480ea9e9afd0d3aecebf93dc298e534c2f693386f7dbcff34953eddeca23"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chahār Maḩāll vā Bakhtīārī",
+      "Code": "08",
+      "ISO3166_2": "IR-08",
+      "Latitude": 31.9975,
+      "Longitude": 50.5298,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-08.geojson",
+      "CommonAliases": [
+        "Chahār Maḩāll vā Bakhtīārī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "B1D97FC7-543C-4ADE-A21A-47F23E02BB50"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.826Z",
+      "checksum": "3dd2855e163f5c63ec94fc1698b5087044c50c5d3fa861b28a73877207f24765"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eşfahān",
+      "Code": "04",
+      "ISO3166_2": "IR-04",
+      "Latitude": 32.9837,
+      "Longitude": 52.4195,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-04.geojson",
+      "CommonAliases": [
+        "Eşfahān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "7B02491C-7333-4025-906F-8F4A8A2BB68F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.843Z",
+      "checksum": "2c2840fbcee7bf16a3bbeaad712df20047403f5f77f8b422013777e22a8ab369"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fārs",
+      "Code": "14",
+      "ISO3166_2": "IR-14",
+      "Latitude": 29.4007,
+      "Longitude": 53.0793,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-14.geojson",
+      "CommonAliases": [
+        "Fārs"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "384AB783-3A38-4682-B645-1C6EBF1DFC4D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.860Z",
+      "checksum": "a66401fb2029315bf6b15242d37ac6709fe62ed4b29337dc68c3a32dca443117"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gīlān",
+      "Code": "19",
+      "ISO3166_2": "IR-19",
+      "Latitude": 37.0503,
+      "Longitude": 49.5162,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-19.geojson",
+      "CommonAliases": [
+        "Gīlān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "68BCA521-88EB-428C-826A-613761888DCC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.877Z",
+      "checksum": "a05affda2676f3fa2d7d51aeb7033c5355f5c5a8123cf99ae4685aa3d2430151"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hamadān",
+      "Code": "24",
+      "ISO3166_2": "IR-24",
+      "Latitude": 34.8342,
+      "Longitude": 48.5738,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-24.geojson",
+      "CommonAliases": [
+        "Hamadān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "64E1EC6D-478C-43A5-AE86-2FA422A4F2B4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.896Z",
+      "checksum": "cb491be03a69d9fba7bd27de6ab295b4761df1abc35657bda0933da79ca18d9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hormozgān",
+      "Code": "23",
+      "ISO3166_2": "IR-23",
+      "Latitude": 27.6455,
+      "Longitude": 56.2505,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-23.geojson",
+      "CommonAliases": [
+        "Hormozgān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "B187CE94-1CC5-45D1-A3BA-371FE284A1CE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.909Z",
+      "checksum": "95a614edb0c23ed784242376cc13cee0bef087e115bac27e3c1e95cc9fc72c65"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Īlām",
+      "Code": "05",
+      "ISO3166_2": "IR-05",
+      "Latitude": 33.2369,
+      "Longitude": 46.8116,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-05.geojson",
+      "CommonAliases": [
+        "Īlām"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "912AC063-5D90-4003-8A26-994DD61B6899"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.964Z",
+      "checksum": "bd76fece5534ddb0c6ddef9e2d5069564072abe57168acf388abb59106d61197"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kermān",
+      "Code": "15",
+      "ISO3166_2": "IR-15",
+      "Latitude": 30.1234,
+      "Longitude": 56.9567,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-15.geojson",
+      "CommonAliases": [
+        "Kermān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "2DB5EB40-67AC-4A66-A8BD-A02ABE7D2ADD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.980Z",
+      "checksum": "3f912ad30ba95b1cd8657c573655596a5ad9b7713e444df6132ff61363ab1eaa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kermānshāhān",
+      "Code": "17",
+      "ISO3166_2": "IR-17",
+      "Latitude": 34.2796,
+      "Longitude": 46.6893,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-17.geojson",
+      "CommonAliases": [
+        "Kermānshāhān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "ECCD3D30-A409-4F4D-8162-EF6DDAFB3D17"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:06.996Z",
+      "checksum": "694004b9bb0f128215da5e66d3b3f68c2ae7d82d3b159c23f30f591b880a2b42"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khorāsān",
+      "Code": "09",
+      "ISO3166_2": "IR-09",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khorāsān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "F5790A1A-A4E1-4BC9-8B9B-4B0282D1B772"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.011Z",
+      "checksum": "f7e061afffbd81a32c0a26298e14697728a888921674e63df5f65af2496e374d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khūzestān",
+      "Code": "10",
+      "ISO3166_2": "IR-10",
+      "Latitude": 31.3484,
+      "Longitude": 48.7558,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-10.geojson",
+      "CommonAliases": [
+        "Khūzestān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "307DED23-780F-47AE-AE1A-6CCCB4E520C2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.028Z",
+      "checksum": "d2281d3d4d5da0aeac0e66e960ed7708448559f776d19279c91539f0e60272f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kohkīlūyeh va Būyer Aḩmadī",
+      "Code": "18",
+      "ISO3166_2": "IR-18",
+      "Latitude": 30.6977,
+      "Longitude": 50.7947,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-18.geojson",
+      "CommonAliases": [
+        "Kohkīlūyeh va Būyer Aḩmadī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "FC6B3597-1CBC-4782-9EE9-FBE7A201165C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.044Z",
+      "checksum": "0b04d56419d91f1770c14f496b100a1edf1f562120a2169311bd6006c4ab57ee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kordestān",
+      "Code": "16",
+      "ISO3166_2": "IR-16",
+      "Latitude": 35.5778,
+      "Longitude": 46.8636,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-16.geojson",
+      "CommonAliases": [
+        "Kordestān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "78DE6CF5-E1C1-46FB-9256-07BD5A8F8636"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.061Z",
+      "checksum": "35b28ace4773d611170f4505a83992af2e55f389407e903ed32c04ec5a730444"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lorestān",
+      "Code": "20",
+      "ISO3166_2": "IR-20",
+      "Latitude": 33.5323,
+      "Longitude": 48.4141,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-20.geojson",
+      "CommonAliases": [
+        "Lorestān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "2FF4BE1D-308E-440F-AE91-D01B3CD1AB41"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.079Z",
+      "checksum": "c81724f57a28f1ca2ddd9adc348e100cb64796107cd64818a5a57220028583bf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Markazī",
+      "Code": "22",
+      "ISO3166_2": "IR-22",
+      "Latitude": 34.5595,
+      "Longitude": 49.964,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-22.geojson",
+      "CommonAliases": [
+        "Markazī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "EA223CBF-8AB5-492B-B4E2-93D9A19A309E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.096Z",
+      "checksum": "2f4713c16003b18cb53917cbc671830d632d0989566b42614b8b6c8070d0e95f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Māzandarān",
+      "Code": "21",
+      "ISO3166_2": "IR-21",
+      "Latitude": 36.231,
+      "Longitude": 52.2123,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-21.geojson",
+      "CommonAliases": [
+        "Māzandarān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "007F3D4E-8C52-4C61-9BF7-BD8E2E0A1AE7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.113Z",
+      "checksum": "bc1dcb2a86f86a4b91c7725073274481bbe6e60c942f32233c40d4a1548645b4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qom",
+      "Code": "26",
+      "ISO3166_2": "IR-26",
+      "Latitude": 34.6662,
+      "Longitude": 50.978,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-26.geojson",
+      "CommonAliases": [
+        "Qom"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "C8EE903F-7E55-4E90-A3FC-30131AFCE92E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.158Z",
+      "checksum": "a9500ad48a752b68deebacd7babf3622eb69fc9ae59d8c16fd7e76e7bd5a3ed7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Semnān",
+      "Code": "12",
+      "ISO3166_2": "IR-12",
+      "Latitude": 35.4243,
+      "Longitude": 54.4381,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-12.geojson",
+      "CommonAliases": [
+        "Semnān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "24688355-3E29-4D5E-B036-4E17EA77DEA4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.174Z",
+      "checksum": "4f054a2ffe074bf1b41bb17860d0a60a8dd5cc74250bf4db1b8e09f3c46d96c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sīstān va Balūchestān",
+      "Code": "13",
+      "ISO3166_2": "IR-13",
+      "Latitude": 27.4268,
+      "Longitude": 61.0471,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-13.geojson",
+      "CommonAliases": [
+        "Sīstān va Balūchestān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "E19D8DD4-B0C0-4CC8-9B93-F8DEADEFF34A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.192Z",
+      "checksum": "94d0a6f6b6b668dc5b32b8cad1b5819f6691bf03267c176a395822b7cb484ebb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tehrān",
+      "Code": "07",
+      "ISO3166_2": "IR-07",
+      "Latitude": 35.9651,
+      "Longitude": 50.7848,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-07.geojson",
+      "CommonAliases": [
+        "Tehrān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "762421D2-55A2-436E-A33A-76F6D732555F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.211Z",
+      "checksum": "8be5747145aab3af42d079fd629b1f069d5275d882dd2a5421d90cadf2098f0a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yazd",
+      "Code": "25",
+      "ISO3166_2": "IR-25",
+      "Latitude": 32.7074,
+      "Longitude": 55.5242,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-25.geojson",
+      "CommonAliases": [
+        "Yazd"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "EF68DB03-3F6A-4867-B9B7-F1E3AB19AE58"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.231Z",
+      "checksum": "d03c1ec40546196920970a8852794a87772ab2379b29789ba67616c091977811"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zanjān",
+      "Code": "11",
+      "ISO3166_2": "IR-11",
+      "Latitude": 36.3989,
+      "Longitude": 48.2959,
+      "BoundaryGeoJSON": "@file:by-country/IR/boundaries/IR-11.geojson",
+      "CommonAliases": [
+        "Zanjān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IR"
+    },
+    "primaryKey": {
+      "ID": "AC2F9CF8-6599-4E6E-BBF8-7EBFA8DCF907"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.249Z",
+      "checksum": "a6b72e7bdacfd7bf526839e57ac1a02f10a3583d1162f0b70a16619cfa2d0d2a"
+    }
+  }
+]

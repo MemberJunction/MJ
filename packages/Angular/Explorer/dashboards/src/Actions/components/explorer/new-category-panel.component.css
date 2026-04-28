@@ -81,17 +81,6 @@
   color: var(--mj-status-error);
 }
 
-.form-group kendo-textbox,
-.form-group kendo-textarea,
-.form-group kendo-dropdownlist {
-  width: 100%;
-}
-
-.form-group kendo-textbox.invalid,
-.form-group kendo-textarea.invalid {
-  border-color: var(--mj-status-error);
-}
-
 .error-text {
   display: block;
   margin-top: 4px;

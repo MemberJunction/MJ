@@ -1,7 +1,8 @@
 import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad } from "@memberjunction/ai-core-plus";
+import { ArtifactToolCall } from "../ArtifactToolManager";
 
 // Re-export universal types for backward compatibility
-export type { ForEachOperation, WhileOperation };
+export type { ForEachOperation, WhileOperation, ArtifactToolCall };
 
 /**
  * Response structure for Loop Agent Type
@@ -52,6 +53,14 @@ export interface LoopAgentResponse<P = any> {
     scratchpad?: AgentScratchpad;
 
     /**
+     * Artifact tool invocations — explore input artifacts without
+     * dumping full content into context. Processed inline on the same
+     * turn as other response fields (zero turn cost). Results are
+     * injected into the next turn's prompt via _ARTIFACT_TOOL_RESULTS.
+     */
+    artifactToolCalls?: ArtifactToolCall[];
+
+    /**
      * Internal reasoning for debugging
      */
     reasoning?: string;
@@ -66,9 +75,9 @@ export interface LoopAgentResponse<P = any> {
      */
     nextStep?: {
         /**
-         * Operation type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While'
+         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While'
          */
-        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While';
+        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While';
 
         /**
          * Actions to execute (when type='Actions')
@@ -112,6 +121,21 @@ export interface LoopAgentResponse<P = any> {
              */
             terminateAfter: boolean;
         };
+
+        /**
+         * Client tools to invoke (when type='ClientTools').
+         * Supports both PascalCase (spec) and camelCase (LLM convenience).
+         */
+        clientTools?: Array<{
+            Name?: string;
+            name?: string;
+            Params?: Record<string, unknown>;
+            params?: Record<string, unknown>;
+            TimeoutMs?: number;
+            timeoutMs?: number;
+            Description?: string;
+            description?: string;
+        }>;
 
         /**
          * ForEach operation details (when type='ForEach')

@@ -146,6 +146,24 @@ const FILTER_IMPLEMENTATIONS: Record<string, (value: any) => any> = {
         return `(${escaped.join(', ')})`;
     },
     
+    sqlLikeContains: (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const escaped = String(value).replace(/'/g, "''").replace(/%/g, '[%]').replace(/_/g, '[_]');
+        return `'%${escaped}%'`;
+    },
+
+    sqlLikeBegins: (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const escaped = String(value).replace(/'/g, "''").replace(/%/g, '[%]').replace(/_/g, '[_]');
+        return `'${escaped}%'`;
+    },
+
+    sqlLikeEnds: (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const escaped = String(value).replace(/'/g, "''").replace(/%/g, '[%]').replace(/_/g, '[_]');
+        return `'%${escaped}'`;
+    },
+
     sqlNoKeywordsExpression: (value: any) => {
         if (!value) {
             throw new Error('SQL expression cannot be empty');
@@ -245,6 +263,43 @@ function createPlatformSqlIdentifier(platform: DatabasePlatform): (value: unknow
 }
 
 /**
+ * Escapes literal % and _ characters inside a LIKE value in a platform-aware way.
+ * SQL Server uses bracket escaping [%] [_]; PostgreSQL uses backslash escaping \% \_.
+ */
+function escapeLikeValue(value: string, platform: DatabasePlatform): string {
+    const escaped = value.replace(/'/g, "''");
+    if (platform === 'postgresql') {
+        return escaped.replace(/%/g, '\\%').replace(/_/g, '\\_');
+    }
+    return escaped.replace(/%/g, '[%]').replace(/_/g, '[_]');
+}
+
+/**
+ * Creates platform-aware sqlLike filter implementations.
+ * SQL Server escapes with [%]/[_], PostgreSQL escapes with \%/\_.
+ */
+function createPlatformSqlLikeContains(platform: DatabasePlatform): (value: any) => string {
+    return (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        return `'%${escapeLikeValue(String(value), platform)}%'`;
+    };
+}
+
+function createPlatformSqlLikeBegins(platform: DatabasePlatform): (value: any) => string {
+    return (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        return `'${escapeLikeValue(String(value), platform)}%'`;
+    };
+}
+
+function createPlatformSqlLikeEnds(platform: DatabasePlatform): (value: any) => string {
+    return (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        return `'%${escapeLikeValue(String(value), platform)}'`;
+    };
+}
+
+/**
  * Singleton class for managing RunQuery SQL filters with implementations.
  * Supports platform-specific filter behavior via SetPlatform().
  *
@@ -288,6 +343,18 @@ export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterMan
         const idFilter = this._filters.get('sqlIdentifier');
         if (idFilter) {
             idFilter.implementation = createPlatformSqlIdentifier(this._platform);
+        }
+        const likeContainsFilter = this._filters.get('sqlLikeContains');
+        if (likeContainsFilter) {
+            likeContainsFilter.implementation = createPlatformSqlLikeContains(this._platform);
+        }
+        const likeBeginsFilter = this._filters.get('sqlLikeBegins');
+        if (likeBeginsFilter) {
+            likeBeginsFilter.implementation = createPlatformSqlLikeBegins(this._platform);
+        }
+        const likeEndsFilter = this._filters.get('sqlLikeEnds');
+        if (likeEndsFilter) {
+            likeEndsFilter.implementation = createPlatformSqlLikeEnds(this._platform);
         }
     }
 

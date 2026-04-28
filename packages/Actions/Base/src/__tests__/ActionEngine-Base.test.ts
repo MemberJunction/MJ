@@ -66,9 +66,38 @@ vi.mock('@memberjunction/core-entities', () => ({
     }
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target
-}));
+vi.mock('@memberjunction/global', () => {
+    // Minimal BaseSingleton stub. `RuntimeActionBridgeBuilder` (reached from
+    // `src/index.ts`) extends BaseSingleton; without it in the mock, the test
+    // suite fails to load at import time with "No BaseSingleton export".
+    class BaseSingleton<T> {
+        protected static getInstance<U>(this: new () => U): U {
+            const key = '__mjTestBaseSingleton_' + this.name;
+            const g = globalThis as Record<string, unknown>;
+            if (!g[key]) g[key] = new this();
+            return g[key] as U;
+        }
+    }
+    return {
+        BaseSingleton,
+        RegisterClass: () => (target: unknown) => target,
+        // Basic case-insensitive UUID equality — sufficient for tests that
+        // pass matching UUIDs. EntityActionEngineBase.GetActionsByEntityID
+        // uses this to compare the requested entity ID against cached rows.
+        UUIDsEqual: (a: unknown, b: unknown): boolean =>
+            typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase(),
+        NormalizeUUID: (value: unknown): string =>
+            typeof value === 'string' ? value.toLowerCase() : String(value),
+        MJGlobal: {
+            Instance: {
+                ClassFactory: {
+                    CreateInstance: () => undefined,
+                    Register: () => undefined
+                }
+            }
+        }
+    };
+});
 
 import {
     ActionEngineBase,

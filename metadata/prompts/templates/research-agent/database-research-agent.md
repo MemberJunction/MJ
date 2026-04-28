@@ -454,6 +454,8 @@ Package ALL rows from a query into ONE finding with CSV data:
 
 {@include _codesmith-integration.md}
 
+{@include ../_includes/geo-context.md}
+
 **CRITICAL Rules:**
 - Do NOT add `findings` or `sources` at the top level of your response. They MUST be inside `payloadChangeRequest.newElements` or `payloadChangeRequest.updateElements`.
 - **ONE finding per query result set** - put all rows in CSV `data` property, NOT one finding per row

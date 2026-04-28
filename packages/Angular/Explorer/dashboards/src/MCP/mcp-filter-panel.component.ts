@@ -22,12 +22,20 @@ export class MCPFilterPanelComponent {
     serverStatus: 'all',
     connectionStatus: 'all',
     toolStatus: 'all',
-    logStatus: 'all'
+    logStatus: 'all',
+    toolsServer: 'all',
+    toolsCategory: 'all',
+    favoritesOnly: false
   };
 
   @Input() activeTab: MCPDashboardTab = 'servers';
   @Input() totalCount = 0;
   @Input() filteredCount = 0;
+
+  /** Part 3.3 — available servers for the Tools tab server-filter dropdown */
+  @Input() availableServers: Array<{ ID: string; Name: string }> = [];
+  /** Part 3.3 — available categories (derived from snake_case tool-name prefix) with counts */
+  @Input() availableCategories: Array<{ category: string; count: number }> = [];
 
   @Output() filtersChange = new EventEmitter<MCPDashboardFilters>();
   @Output() closePanel = new EventEmitter<void>();
@@ -87,15 +95,47 @@ export class MCPFilterPanelComponent {
     this.onFilterChange();
   }
 
+  public onToolsServerChange(value: string): void {
+    this.filters = { ...this.filters, toolsServer: value };
+    this.onFilterChange();
+  }
+
+  public onToolsCategoryChange(value: string): void {
+    this.filters = { ...this.filters, toolsCategory: value };
+    this.onFilterChange();
+  }
+
+  public onFavoritesOnlyChange(checked: boolean): void {
+    this.filters = { ...this.filters, favoritesOnly: checked };
+    this.onFilterChange();
+  }
+
   public resetAllFilters(): void {
     this.filters = {
       searchTerm: '',
       serverStatus: 'all',
       connectionStatus: 'all',
       toolStatus: 'all',
-      logStatus: 'all'
+      logStatus: 'all',
+      toolsServer: 'all',
+      toolsCategory: 'all',
+      favoritesOnly: false
     };
     this.onFilterChange();
+  }
+
+  /** Part 3.3 — count of non-default filter dimensions, used for "Filters (N)" badge */
+  public get activeFilterCount(): number {
+    let n = 0;
+    if (this.filters.searchTerm) n++;
+    if (this.filters.serverStatus && this.filters.serverStatus !== 'all') n++;
+    if (this.filters.connectionStatus && this.filters.connectionStatus !== 'all') n++;
+    if (this.filters.toolStatus && this.filters.toolStatus !== 'all') n++;
+    if (this.filters.logStatus && this.filters.logStatus !== 'all') n++;
+    if (this.filters.toolsServer && this.filters.toolsServer !== 'all') n++;
+    if (this.filters.toolsCategory && this.filters.toolsCategory !== 'all') n++;
+    if (this.filters.favoritesOnly) n++;
+    return n;
   }
 
   public toggleFilterPanel(): void {

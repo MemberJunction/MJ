@@ -1,0 +1,254 @@
+[
+  {
+    "fields": {
+      "Name": "‘Ajlūn",
+      "Code": "AJ",
+      "ISO3166_2": "JO-AJ",
+      "Latitude": 32.2932,
+      "Longitude": 35.761,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-AJ.geojson",
+      "CommonAliases": [
+        "‘Ajlūn"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "172BA408-594E-4269-9F47-A668C1BE59D6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.635Z",
+      "checksum": "4843da97bf435f6bb0f21c064603c4784bbae191a35b1f09cf6bef9df2bb553f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "‘Ammān",
+      "Code": "AM",
+      "ISO3166_2": "JO-AM",
+      "Latitude": 31.6211,
+      "Longitude": 36.4418,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-AM.geojson",
+      "CommonAliases": [
+        "‘Ammān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "021DC5A6-15B8-415A-9968-DB6D85A0E090"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.654Z",
+      "checksum": "044fbdfe9b00eb91ea671b49b6c0488ccb92b26ec4708ffd1a5c46d497356f2c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al 'Aqaba",
+      "Code": "AQ",
+      "ISO3166_2": "JO-AQ",
+      "Latitude": 29.6276,
+      "Longitude": 35.3449,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-AQ.geojson",
+      "CommonAliases": [
+        "Al 'Aqaba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "50B0BA1A-BB6B-4DC1-A532-C8FF99DF080F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.670Z",
+      "checksum": "c6be2af51daf132395d1532edd71e7d52beeaa72d5d7005bf34bc9ccb3fdb909"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Balqā'",
+      "Code": "BA",
+      "ISO3166_2": "JO-BA",
+      "Latitude": 31.8345,
+      "Longitude": 35.7216,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-BA.geojson",
+      "CommonAliases": [
+        "Al Balqā'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "C3EF2846-F4A8-4446-88DB-CC326072DB95"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.684Z",
+      "checksum": "7a8a33bc2e4e6c10b038c3c28473859cf7bc801fc7141beab5c1cde477375456"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Karak",
+      "Code": "KA",
+      "ISO3166_2": "JO-KA",
+      "Latitude": 31.1753,
+      "Longitude": 35.7693,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-KA.geojson",
+      "CommonAliases": [
+        "Al Karak"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "83F4E0DD-6446-40B4-8BD6-C510A12B42F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.698Z",
+      "checksum": "50713b5a2fe30392617faf535ae01acc04f637e0c6bfeaa36eef96fffb0ecfc2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Mafraq",
+      "Code": "MA",
+      "ISO3166_2": "JO-MA",
+      "Latitude": 32.2481,
+      "Longitude": 37.6195,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-MA.geojson",
+      "CommonAliases": [
+        "Al Mafraq"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "24848740-47E0-483F-9662-864D9D9FC1F9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.712Z",
+      "checksum": "3f3d61c18838d195a3fb3eb4a2917d84bd6dd84e08922d05dcc838e30dc75a42"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aţ Ţafīlah",
+      "Code": "AT",
+      "ISO3166_2": "JO-AT",
+      "Latitude": 30.7879,
+      "Longitude": 35.6436,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-AT.geojson",
+      "CommonAliases": [
+        "Aţ Ţafīlah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "51B412CA-4B65-40E7-BE5D-7DCE141E12E0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.726Z",
+      "checksum": "3c75412a6fd94f16a7ae1dba67c81458c0b22a85304df29b646763ef821979f9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Az Zarqā'",
+      "Code": "AZ",
+      "ISO3166_2": "JO-AZ",
+      "Latitude": 31.8095,
+      "Longitude": 36.8284,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-AZ.geojson",
+      "CommonAliases": [
+        "Az Zarqā'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "A3632225-F5FC-43AB-A4FF-DD68B4D1D6CC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.740Z",
+      "checksum": "ad675d53c39dc325c028c2ed405d942a8534f28261504ababefe95a5e092796e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Irbid",
+      "Code": "IR",
+      "ISO3166_2": "JO-IR",
+      "Latitude": 32.5559,
+      "Longitude": 35.8195,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-IR.geojson",
+      "CommonAliases": [
+        "Irbid"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "0F3DE03E-ADAB-4CCF-B07A-CFF4195C32A5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.767Z",
+      "checksum": "81e937ce99c3766d2cee5d1a0779134447f35c78fd032c74ca537298eb0bc65d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jarash",
+      "Code": "JA",
+      "ISO3166_2": "JO-JA",
+      "Latitude": 32.2186,
+      "Longitude": 35.856,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-JA.geojson",
+      "CommonAliases": [
+        "Jarash"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "0E2BF301-29E4-4DF8-BF2D-1D9539B4492C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.786Z",
+      "checksum": "d242e585299d406a477891639f207baeab9ca97446c6d996be6ad8f84737fa32"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ma‘ān",
+      "Code": "MN",
+      "ISO3166_2": "JO-MN",
+      "Latitude": 30.492,
+      "Longitude": 36.6401,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-MN.geojson",
+      "CommonAliases": [
+        "Ma‘ān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "02861907-7881-4853-B405-5CCBA29DB006"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.812Z",
+      "checksum": "09d06fc2cd276294b57ecf23a5af68f9fa1bcff95165f664ac0ba23c0ab45c4b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mādaba",
+      "Code": "MD",
+      "ISO3166_2": "JO-MD",
+      "Latitude": 31.5852,
+      "Longitude": 35.6722,
+      "BoundaryGeoJSON": "@file:by-country/JO/boundaries/JO-MD.geojson",
+      "CommonAliases": [
+        "Mādaba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JO"
+    },
+    "primaryKey": {
+      "ID": "72775A93-FB09-499A-A401-361C39D2454E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.828Z",
+      "checksum": "cf748c9d29747d95a595c125b2c2ab52eccc656750d9b798f86ccca28e13aceb"
+    }
+  }
+]

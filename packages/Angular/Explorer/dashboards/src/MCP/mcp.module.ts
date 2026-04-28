@@ -8,12 +8,16 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 
-// Kendo UI Modules
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DialogModule } from '@progress/kendo-angular-dialog';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { InputsModule } from '@progress/kendo-angular-inputs';
+// MJ UI Components
+import {
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJDropdownComponent,
+    MJNumericInputComponent
+} from '@memberjunction/ng-ui-components';
 
 // MemberJunction Modules
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -46,10 +50,12 @@ import { MCPLogDetailPanelComponent } from './components/mcp-log-detail-panel.co
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
-        ButtonsModule,
-        DialogModule,
-        DropDownsModule,
-        InputsModule,
+        ScrollingModule,
+        MJButtonDirective,
+        MJDialogComponent,
+        MJDialogActionsComponent,
+        MJDropdownComponent,
+        MJNumericInputComponent,
         SharedGenericModule,
         CredentialsModule,
         CodeEditorModule,

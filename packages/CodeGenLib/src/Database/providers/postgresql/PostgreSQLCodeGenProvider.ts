@@ -9,9 +9,8 @@ import {
 } from '../../codeGenDatabaseProvider';
 import { configInfo } from '../../../Config/config';
 import { logError, logWarning } from '../../../Misc/status_logging';
-import { logIf } from '../../../Misc/util';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
-import { spawn } from 'child_process';
+import * as fs from 'fs';
 import path from 'path';
 
 const pgDialect = new PostgreSQLDialect();
@@ -1043,9 +1042,9 @@ ORDER BY ordinal_position`;
     // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
 
     /** @inheritdoc */
-    getPendingEntityFieldsSQL(mjCoreSchema: string): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
         const qs = pgDialect.QuoteSchema.bind(pgDialect);
-        return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs);
+        return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs, entityIDs);
     }
 
     /** @inheritdoc */
@@ -1069,14 +1068,15 @@ ORDER BY ordinal_position`;
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
 
     /**
-     * Executes a SQL file against the PostgreSQL database using the `psql` CLI tool.
-     * Reads connection parameters from environment variables (`PG_HOST`, `PG_PORT`,
-     * `PG_DATABASE`, `PG_USERNAME`, `PG_PASSWORD`) with fallback to `configInfo` values.
-     * Resolves the file path to an absolute path before passing it to psql.
+     * Executes a SQL file against the PostgreSQL database using an in-process `pg` client.
+     * Mirrors the SQL Server provider's in-process approach so CodeGen does not depend on
+     * the `psql` CLI being installed on the host. Reads connection parameters from
+     * environment variables (`PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USERNAME`,
+     * `PG_PASSWORD`) with fallback to `configInfo` values.
      */
     async executeSQLFileViaShell(filePath: string): Promise<boolean> {
         const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
-        const pgPort = process.env.PG_PORT ?? String(configInfo.dbPort ?? 5432);
+        const pgPort = Number(process.env.PG_PORT ?? configInfo.dbPort ?? 5432);
         const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
         const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
         const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
@@ -1086,7 +1086,41 @@ ORDER BY ordinal_position`;
         }
 
         const absoluteFilePath = path.resolve(process.cwd(), filePath);
-        return this.executePsqlCommand(absoluteFilePath, pgHost, pgPort, pgUser, pgDatabase, pgPassword);
+        let sql: string;
+        try {
+            sql = fs.readFileSync(absoluteFilePath, 'utf-8');
+        } catch (e) {
+            logError(`[CodeGen] Failed to read SQL file ${absoluteFilePath}: ${e instanceof Error ? e.message : e}`);
+            return false;
+        }
+        if (!sql.trim()) return true;
+
+        const pgModule = await import('pg');
+        const client = new pgModule.default.Client({
+            host: pgHost,
+            port: pgPort,
+            user: pgUser,
+            password: pgPassword,
+            database: pgDatabase,
+        });
+
+        try {
+            await client.connect();
+            // Postgres can execute multi-statement scripts in a single query call.
+            // On error, the full batch rolls back to last savepoint; we log and continue.
+            try {
+                await client.query(sql);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                logWarning(`[CodeGen] SQL warning in ${path.basename(absoluteFilePath)}: ${msg.substring(0, 200)}`);
+            }
+            return true;
+        } catch (e) {
+            logError(`[CodeGen] Failed to execute SQL file ${absoluteFilePath}: ${e instanceof Error ? e.message : e}`);
+            return false;
+        } finally {
+            try { await client.end(); } catch { /* best-effort cleanup */ }
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1525,8 +1559,14 @@ ORDER BY ordinal_position`;
      */
     private buildPendingEntityFieldsQuery(
         schema: string,
-        qs: (schema: string, name: string) => string
+        qs: (schema: string, name: string) => string,
+        entityIDs?: string[]
     ): string {
+        // PG uses lowercase UUIDs; entity IDs from the metadata cache are already
+        // normalized so direct string interpolation is safe (internal IDs, not user input).
+        const scopeFilter = entityIDs && entityIDs.length > 0
+            ? `AND sf."EntityID" IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
         return `
 WITH fk_cache AS (
    SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema"
@@ -1592,6 +1632,7 @@ numbered_rows AS (
       uk_cache uk ON e."BaseTable" = uk."TableName" AND sf."FieldName" = uk."ColumnName" AND e."SchemaName" = uk."SchemaName"
    WHERE
       "EntityFieldID" IS NULL
+      ${scopeFilter}
 )
 SELECT *
 FROM numbered_rows
@@ -1643,106 +1684,4 @@ WHERE vf."IsVirtual" = true
   AND vf."AllowsNull" != fk."AllowsNull"`;
     }
 
-    // ─── SHELL EXECUTION HELPERS ─────────────────────────────────────
-
-    /**
-     * Executes a SQL file using the psql CLI.
-     */
-    private async executePsqlCommand(
-        absoluteFilePath: string,
-        pgHost: string,
-        pgPort: string,
-        pgUser: string,
-        pgDatabase: string,
-        pgPassword: string
-    ): Promise<boolean> {
-        const args = [
-            '-h', pgHost,
-            '-p', pgPort,
-            '-U', pgUser,
-            '-d', pgDatabase,
-            '-v', 'ON_ERROR_STOP=1',
-            '-f', absoluteFilePath,
-        ];
-
-        logIf(configInfo.verboseOutput, `Executing SQL file (psql): ${absoluteFilePath} as ${pgUser}@${pgHost}:${pgPort}/${pgDatabase}`);
-
-        try {
-            const result = await this.spawnPsql(args, pgPassword);
-            this.logPsqlOutput(result.stdout, result.stderr);
-            return true;
-        } catch (e: unknown) {
-            this.logPsqlError(e, pgPassword);
-            return false;
-        }
-    }
-
-    /**
-     * Spawns a psql child process and returns its output.
-     */
-    private spawnPsql(args: string[], pgPassword: string): Promise<{ stdout: string; stderr: string }> {
-        return new Promise((resolve, reject) => {
-            const child = spawn('psql', args, {
-                shell: false,
-                env: { ...process.env, PGPASSWORD: pgPassword },
-            });
-
-            let stdout = '';
-            let stderr = '';
-
-            child.stdout?.on('data', (data: Buffer) => {
-                stdout += data.toString();
-            });
-            child.stderr?.on('data', (data: Buffer) => {
-                stderr += data.toString();
-            });
-            child.on('error', (error: Error) => {
-                reject(error);
-            });
-            child.on('close', (code: number | null) => {
-                if (code === 0) {
-                    resolve({ stdout, stderr });
-                } else {
-                    const error = new Error(`psql exited with code ${code}`);
-                    Object.assign(error, { stdout, stderr, code });
-                    reject(error);
-                }
-            });
-        });
-    }
-
-    /**
-     * Logs psql stdout/stderr output, filtering out informational NOTICE messages.
-     */
-    private logPsqlOutput(stdout: string, stderr: string): void {
-        if (stdout && stdout.trim().length > 0) {
-            logIf(configInfo.verboseOutput, `PostgreSQL output: ${stdout.trim()}`);
-        }
-        if (stderr && stderr.trim().length > 0) {
-            const nonNoticeLines = stderr.split('\n').filter(
-                (l: string) => !l.trim().startsWith('NOTICE:') && !l.trim().startsWith('psql:') && l.trim().length > 0
-            );
-            if (nonNoticeLines.length > 0) {
-                logWarning(`PostgreSQL stderr: ${nonNoticeLines.join('\n')}`);
-            }
-        }
-    }
-
-    /**
-     * Logs psql execution errors with password masking.
-     */
-    private logPsqlError(e: unknown, pgPassword: string): void {
-        let message = (e instanceof Error) ? e.message : String(e);
-
-        const errRecord = e as Record<string, unknown>;
-        if (errRecord.stdout) {
-            message += `\n PostgreSQL output: ${errRecord.stdout}`;
-        }
-        if (errRecord.stderr) {
-            message += `\n PostgreSQL error: ${errRecord.stderr}`;
-        }
-
-        const errorMessage = pgPassword ? message.replace(pgPassword, 'XXXXX') : message;
-        logError('Error executing PostgreSQL SQL file: ' + errorMessage);
-    }
 }

@@ -36,17 +36,17 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     @ViewChild('categoryEditPanel') categoryEditPanel!: CredentialCategoryEditPanelComponent;
 
     constructor(
-        private cdr: ChangeDetectorRef,
-        private navigationService: NavigationService
-    ) {
+        private cdr: ChangeDetectorRef) {
         super();
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         // Cleanup if needed
     }
 

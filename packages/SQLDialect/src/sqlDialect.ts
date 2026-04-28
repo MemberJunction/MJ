@@ -130,13 +130,35 @@ export interface IndexOptions {
 }
 
 /**
+ * Minimal dialect interface consumed by `@memberjunction/sql-parser`.
+ *
+ * SQLParser needs only these properties to be dialect-aware. The full
+ * {@link SQLDialect} class implements this interface plus 80+ additional
+ * methods for DDL/DML generation, data type mapping, etc.
+ *
+ * When adding a new database platform, implement at minimum this interface
+ * for parser support. Implement the full `SQLDialect` for complete MJ support.
+ */
+export interface SQLParserDialect {
+    /** node-sql-parser dialect string (e.g., 'TransactSQL', 'PostgresQL', 'MySQL') */
+    ParserDialect: string;
+    /** Quotes a database identifier. SQL Server: [name], PostgreSQL: "name", MySQL: `name` */
+    QuoteIdentifier(name: string): string;
+    /** Whether ORDER BY is legal inside CTE definitions on this platform */
+    AllowsOrderByInCTE: boolean;
+    /** Default ORDER BY expression for paging when no ORDER BY exists.
+     *  SQL Server: '(SELECT NULL)', PostgreSQL: '1' */
+    DefaultPagingOrderBy: string;
+}
+
+/**
  * Abstract base class for SQL dialect implementations.
  *
  * Encapsulates ALL database-specific SQL syntax patterns into a single,
  * testable abstraction. This is a pure string/logic layer with zero
  * database driver dependencies.
  */
-export abstract class SQLDialect {
+export abstract class SQLDialect implements SQLParserDialect {
     /**
      * The platform key identifying this dialect.
      */
@@ -296,6 +318,12 @@ export abstract class SQLDialect {
      * PostgreSQL: true (ORDER BY in CTEs is always legal)
      */
     abstract get AllowsOrderByInCTE(): boolean;
+
+    /**
+     * Default ORDER BY expression for paging when no user-specified ORDER BY exists.
+     * SQL Server: '(SELECT NULL)', PostgreSQL: '1'
+     */
+    abstract get DefaultPagingOrderBy(): string;
 
     // ─── Data Types ──────────────────────────────────────────────────
 

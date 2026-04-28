@@ -1,6 +1,5 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, Output, EventEmitter } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJTemplateEntity, MJAIPromptTypeEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
@@ -73,8 +72,9 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
   // Template state
   templateMode: 'new' | 'existing' = 'new';
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef,
     private aiPromptManagementService: AIPromptManagementService
   ) {
@@ -247,7 +247,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       };
 
       this.result.next(result);
-      this.dialogRef.close();
+      this.DialogClose.emit();
 
     } catch (error) {
       console.error('Error preparing prompt for creation:', error);
@@ -263,7 +263,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
 
   public cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   /**

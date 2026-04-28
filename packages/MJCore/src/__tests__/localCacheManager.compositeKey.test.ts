@@ -50,10 +50,10 @@ describe('LocalCacheManager CompositeKey Support', () => {
 
     describe('UpsertSingleEntity with CompositeKey', () => {
         it('should upsert a record using a single-field CompositeKey', async () => {
-            const fp = 'Users|_|_|-1|0|_';
+            const fp = 'MJ: Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
-                { EntityName: 'Users' } as SetParams,
+                { EntityName: 'MJ: Users' } as SetParams,
                 [{ ID: '1', Name: 'Alice' }, { ID: '2', Name: 'Bob' }],
                 '2024-01-01T00:00:00Z'
             );
@@ -190,10 +190,10 @@ describe('LocalCacheManager CompositeKey Support', () => {
 
     describe('RemoveSingleEntity with CompositeKey', () => {
         it('should remove a record using a single-field CompositeKey', async () => {
-            const fp = 'Users|_|_|-1|0|_';
+            const fp = 'MJ: Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
-                { EntityName: 'Users' } as SetParams,
+                { EntityName: 'MJ: Users' } as SetParams,
                 [{ ID: '1', Name: 'Alice' }, { ID: '2', Name: 'Bob' }],
                 '2024-01-01T00:00:00Z'
             );
@@ -270,10 +270,10 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should update registry rowCount after removal', async () => {
-            const fp = 'Users|_|_|-1|0|_';
+            const fp = 'MJ: Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
-                { EntityName: 'Users' } as SetParams,
+                { EntityName: 'MJ: Users' } as SetParams,
                 [{ ID: '1' }, { ID: '2' }, { ID: '3' }],
                 '2024-01-01T00:00:00Z'
             );
@@ -305,6 +305,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
                     EntityInfo: {
                         Name: options.entityName,
                         PrimaryKeys: options.primaryKeys,
+                        AllowCaching: true,
                     },
                     Get: (fieldName: string) => options.fields[fieldName],
                     GetAll: () => ({ ...options.fields }),
@@ -463,16 +464,16 @@ describe('LocalCacheManager CompositeKey Support', () => {
         // We mock it minimally — the event needs entityName in the payload.
 
         it('should upsert record data on remote save event', async () => {
-            const fp = 'Users|_|_|-1|0|_';
+            const fp = 'MJ: Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
-                { EntityName: 'Users' } as SetParams,
+                { EntityName: 'MJ: Users' } as SetParams,
                 [{ ID: '1', Name: 'Alice' }],
                 '2024-01-01T00:00:00Z'
             );
 
             // Mock entity metadata lookup
-            const md = { Entities: [{ Name: 'Users', PrimaryKeys: [{ Name: 'ID' }] }] };
+            const md = { Entities: [{ Name: 'MJ: Users', AllowCaching: true, PrimaryKeys: [{ Name: 'ID' }] }] };
             const originalMetadata = (await import('../generic/metadata')).Metadata;
             const metaProto = originalMetadata.prototype;
             const origEntities = Object.getOwnPropertyDescriptor(metaProto, 'Entities');
@@ -484,7 +485,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
             try {
                 const event = {
                     type: 'remote-invalidate',
-                    entityName: 'Users',
+                    entityName: 'MJ: Users',
                     payload: {
                         action: 'save',
                         recordData: JSON.stringify({ ID: '1', Name: 'Alice Remote Update' }),
@@ -506,15 +507,15 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should remove record on remote delete event', async () => {
-            const fp = 'Users|_|_|-1|0|_';
+            const fp = 'MJ: Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
-                { EntityName: 'Users' } as SetParams,
+                { EntityName: 'MJ: Users' } as SetParams,
                 [{ ID: '1', Name: 'Alice' }, { ID: '2', Name: 'Bob' }],
                 '2024-01-01T00:00:00Z'
             );
 
-            const md = { Entities: [{ Name: 'Users', PrimaryKeys: [{ Name: 'ID' }] }] };
+            const md = { Entities: [{ Name: 'MJ: Users', AllowCaching: true, PrimaryKeys: [{ Name: 'ID' }] }] };
             const originalMetadata = (await import('../generic/metadata')).Metadata;
             const metaProto = originalMetadata.prototype;
             const origEntities = Object.getOwnPropertyDescriptor(metaProto, 'Entities');
@@ -526,7 +527,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
             try {
                 const event = {
                     type: 'remote-invalidate',
-                    entityName: 'Users',
+                    entityName: 'MJ: Users',
                     payload: {
                         action: 'delete',
                         primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: '1' }]),
@@ -561,6 +562,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
             const md = {
                 Entities: [{
                     Name: 'UserRoles',
+                    AllowCaching: true,
                     PrimaryKeys: [{ Name: 'UserID' }, { Name: 'RoleID' }],
                 }],
             };
@@ -633,15 +635,15 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should invalidate when primaryKeyValues JSON is malformed on delete', async () => {
-            const fp = 'Users|_|_|-1|0|_';
+            const fp = 'MJ: Users|_|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp,
-                { EntityName: 'Users' } as SetParams,
+                { EntityName: 'MJ: Users' } as SetParams,
                 [{ ID: '1' }],
                 '2024-01-01T00:00:00Z'
             );
 
-            const md = { Entities: [{ Name: 'Users', PrimaryKeys: [{ Name: 'ID' }] }] };
+            const md = { Entities: [{ Name: 'MJ: Users', AllowCaching: true, PrimaryKeys: [{ Name: 'ID' }] }] };
             const originalMetadata = (await import('../generic/metadata')).Metadata;
             const metaProto = originalMetadata.prototype;
             const origEntities = Object.getOwnPropertyDescriptor(metaProto, 'Entities');
@@ -653,7 +655,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
             try {
                 const event = {
                     type: 'remote-invalidate',
-                    entityName: 'Users',
+                    entityName: 'MJ: Users',
                     payload: {
                         action: 'delete',
                         primaryKeyValues: 'not-json!!!',
@@ -673,7 +675,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should do nothing when entityName has no cached fingerprints', async () => {
-            const md = { Entities: [{ Name: 'Users', PrimaryKeys: [{ Name: 'ID' }] }] };
+            const md = { Entities: [{ Name: 'MJ: Users', AllowCaching: true, PrimaryKeys: [{ Name: 'ID' }] }] };
             const originalMetadata = (await import('../generic/metadata')).Metadata;
             const metaProto = originalMetadata.prototype;
             const origEntities = Object.getOwnPropertyDescriptor(metaProto, 'Entities');
@@ -685,7 +687,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
             try {
                 const event = {
                     type: 'remote-invalidate',
-                    entityName: 'Users',
+                    entityName: 'MJ: Users',
                     payload: {
                         action: 'save',
                         recordData: JSON.stringify({ ID: '1', Name: 'Test' }),

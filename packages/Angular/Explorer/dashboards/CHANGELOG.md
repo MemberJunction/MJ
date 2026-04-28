@@ -1,5 +1,646 @@
 # @memberjunction/ng-dashboards
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/api-keys-base@5.30.1
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/ng-base-application@5.30.1
+- @memberjunction/ng-core-entity-forms@5.30.1
+- @memberjunction/ng-explorer-settings@5.30.1
+- @memberjunction/ng-shared@5.30.1
+- @memberjunction/ng-testing@5.30.1
+- @memberjunction/ng-action-gallery@5.30.1
+- @memberjunction/ng-actions@5.30.1
+- @memberjunction/ng-agent-requests@5.30.1
+- @memberjunction/ng-agents@5.30.1
+- @memberjunction/ng-ai-test-harness@5.30.1
+- @memberjunction/ng-archive-manager@5.30.1
+- @memberjunction/ng-clustering@5.30.1
+- @memberjunction/ng-code-editor@5.30.1
+- @memberjunction/ng-container-directives@5.30.1
+- @memberjunction/ng-conversations@5.30.1
+- @memberjunction/ng-credentials@5.30.1
+- @memberjunction/ng-dashboard-viewer@5.30.1
+- @memberjunction/ng-entity-relationship-diagram@5.30.1
+- @memberjunction/ng-entity-viewer@5.30.1
+- @memberjunction/ng-export-service@5.30.1
+- @memberjunction/ng-filter-builder@5.30.1
+- @memberjunction/ng-list-management@5.30.1
+- @memberjunction/ng-markdown@5.30.1
+- @memberjunction/ng-map-view@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-query-viewer@5.30.1
+- @memberjunction/ng-react@5.30.1
+- @memberjunction/ng-resource-permissions@5.30.1
+- @memberjunction/ng-scheduling@5.30.1
+- @memberjunction/ng-search@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-trees@5.30.1
+- @memberjunction/ng-ui-components@5.30.1
+- @memberjunction/ng-versions@5.30.1
+- @memberjunction/ng-word-cloud@5.30.1
+- @memberjunction/credentials@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/integration-engine-base@5.30.1
+- @memberjunction/interactive-component-types@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/export-engine@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/skip-types@5.30.1
+- @memberjunction/templates-base-types@5.30.1
+- @memberjunction/testing-engine-base@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- 735a618: Component linter bug fixes and new rules: fix false positives on multi-component tree query delegation, SQL injection detection, datagrid computed fields, and optional chaining; consolidate duplicated utilities into shared lint-utils; add event-parameter-validation rule that catches wrong event property access (e.g., e.data vs e.record); replace substring SQL keyword matching with structural pattern detection.
+- 11df18d: Add `aria-label` attributes to icon-only close/back/drill-open buttons in the autotagging pipeline slide-over panels, Knowledge Hub analytics drill-down dialogs, and the dashboard-viewer add-panel dialog so screen readers announce their purpose ("Close form", "Close item detail", "Close source detail", "Close warning", "Close drill-down", "Open record", "Close dialog", "Go back").
+- 9154ac7: feat(integration): Salesforce + Sage Intacct pipeline hardening
+
+  **This is in-progress work — not ready to merge.** PR is open for incremental review and discussion.
+
+  ### Sage Intacct connector
+  - Range-chunked walk over `RECORDNO` for numeric-PK objects, replacing the previous PK-cursor strategy that silently dropped records when SI's natural scan order wasn't PK-ascending.
+  - Upper-bound discovery via exponential probe so termination is exact (not heuristic).
+  - Sub-range verification on every completed chunk (independent count of two halves must sum to the parent's count) to catch SI inconsistencies that would otherwise silently undercount.
+  - Discovery-probe retry with backoff for transport-only errors; immediate fail-stop on SI API errors (permissions, schema, syntax).
+  - `WHENMODIFIED` filter values normalized to SI's `MM/DD/YYYY HH:mm:ss` format — the engine sometimes passes ISO 8601 which SI rejects with `DL02000001`.
+  - Bumped `DEFAULT_PAGE_SIZE` from 100 to 1000 (proven safe via probing); legacy single-pull path now hard-fails on full-page-no-resultId instead of silently dropping records via PK-cursor.
+
+  ### Salesforce connector
+  - Removed dead `queryLocator` member field. `if (this.queryLocator && ctx.CurrentCursor)` was always false (member never assigned), so every "next batch" call re-executed the original SOQL and returned the same first page until the engine's duplicate-batch guard aborted the entity. Continuation now uses `ctx.CurrentCursor` directly via `FetchNextPage`.
+  - Per-batch dedup by `Id` for system metadata sObjects (TabDefinition, FormulaFunctionAllowedType) where SF returns multiple records sharing the placeholder Id `000000000000000AAA`. Drops are logged once per object instead of producing N per-record `UQ_<table>_PK` constraint violations.
+  - Removed the over-aggressive `!obj.createable` filter on `isUserRelevantSObject`. Many SF objects are flagged non-createable but carry real customer data (rollups, attachment-link junctions, history-style records).
+  - `BuildSOQLQuery` no longer emits `LIMIT batchSize` — that was silently capping every full result set at the page size. Pagination is via SF's native `done` / `nextRecordsUrl`.
+  - Watermark comparison uses `>=` instead of `>` so records modified at exactly the watermark instant aren't dropped on the next sync.
+
+  ### IntegrationEngine
+  - New typed `SchemaNotGeneratedError` (and `detectSchemaNotGenerated` helper) — `CreateRecord`/`UpdateRecord` now detect the SQL Server `Could not find stored procedure` pattern, throw the typed error, and `ProcessPullSync` fail-stops the entire EntityMap with one `[CONFIGURATION_ERROR]` log line + remaining records marked skipped. Previously every record produced an identical per-record error, drowning sync reports in O(records) duplicates.
+
+  ### Picker → ApplyAll resolver fixes (`IntegrationDiscoveryResolver`)
+  - New `resolveSourceObjectsToNames` per-item ID/Name fallback resolver. The old `resolveSourceObjectNames` only honored the IDs path and silently discarded any selection that arrived with `SourceObjectName` only (typical for newly-discovered objects with no IntegrationObject row yet). Real-world impact: 1,156 picker selections were collapsing to 420 IntegrationObjects to 181 generated tables. `LogError` now fires on truly unresolvable selections.
+  - `buildTargetConfigs` collects every silent skip into three buckets (`notInSchema`, `noFields`, `noPK`) and emits a single summary line per call: `[buildTargetConfigs summary] requested=X, accepted=Y, dropped=Z (...)`. Lossy stages in the pipeline are now greppable.
+
+  ### SchemaEngine RSU pipeline
+  - `executeMigration` chunks oversized migration SQL (>32KB) into batches of 25 statements per `ExecuteSQL` call. Salesforce-class schemas (1100+ tables) produce migrations with 17K+ ALTER TABLE statements as a single batch, which exceeded mssql's client request timeout (30s). Each chunk now resets the timeout clock.
+
+  ### Other
+  - `IntegrationSchemaSync` and `IntegrationApplyAllBatch` plumbing for filtered IntrospectSchema flow (Salesforce-only path that describes selected objects rather than a full-org probe).
+  - Integration dashboard UI tweaks (connections page rendering for high-FK supertype entities).
+
+- a00af98: no migration/metadata
+- c199f3b: Phase 2 of the unified permissions architecture: introduces the `IPermissionProvider` interface with 9 domain providers (Entity, Application Role, Dashboard, Resource, Artifact, AI Agent, Collection, Query, Access Control Rule) aggregated by a new `PermissionEngine` singleton, adds explicit Allow/Deny support to `EntityPermission`, and ships the Permissions admin dashboard. Includes migrations for the Permission Domain catalog, EntityPermission.Type column, Dashboard FK cascade delete, ResourcePermission.SharedByUserID, and UI role permission fixes.
+- 216ddc3: Wrap sequential Save/Delete looops in atomic transcatoins (TransactionGroup client-side BeginTransaction/Commit/Rollback server-side)
+- Updated dependencies [901e81b]
+- Updated dependencies [8980b38]
+- Updated dependencies [c2c5892]
+- Updated dependencies [11df18d]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [9154ac7]
+- Updated dependencies [00b5c26]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+- Updated dependencies [216ddc3]
+  - @memberjunction/ng-search@5.30.0
+  - @memberjunction/ng-core-entity-forms@5.30.0
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/ng-dashboard-viewer@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/actions-base@5.30.0
+  - @memberjunction/ai-core-plus@5.30.0
+  - @memberjunction/graphql-dataprovider@5.30.0
+  - @memberjunction/ng-map-view@5.30.0
+  - @memberjunction/ng-react@5.30.0
+  - @memberjunction/interactive-component-types@5.30.0
+  - @memberjunction/ai-engine-base@5.30.0
+  - @memberjunction/ng-conversations@5.30.0
+  - @memberjunction/ng-resource-permissions@5.30.0
+  - @memberjunction/ng-explorer-settings@5.30.0
+  - @memberjunction/api-keys-base@5.30.0
+  - @memberjunction/ng-base-application@5.30.0
+  - @memberjunction/ng-shared@5.30.0
+  - @memberjunction/ng-testing@5.30.0
+  - @memberjunction/ng-action-gallery@5.30.0
+  - @memberjunction/ng-actions@5.30.0
+  - @memberjunction/ng-agent-requests@5.30.0
+  - @memberjunction/ng-agents@5.30.0
+  - @memberjunction/ng-ai-test-harness@5.30.0
+  - @memberjunction/ng-archive-manager@5.30.0
+  - @memberjunction/ng-code-editor@5.30.0
+  - @memberjunction/ng-credentials@5.30.0
+  - @memberjunction/ng-entity-viewer@5.30.0
+  - @memberjunction/ng-list-management@5.30.0
+  - @memberjunction/ng-notifications@5.30.0
+  - @memberjunction/ng-query-viewer@5.30.0
+  - @memberjunction/ng-scheduling@5.30.0
+  - @memberjunction/ng-shared-generic@5.30.0
+  - @memberjunction/ng-trees@5.30.0
+  - @memberjunction/ng-versions@5.30.0
+  - @memberjunction/credentials@5.30.0
+  - @memberjunction/integration-engine-base@5.30.0
+  - @memberjunction/templates-base-types@5.30.0
+  - @memberjunction/testing-engine-base@5.30.0
+  - @memberjunction/ng-container-directives@5.30.0
+  - @memberjunction/ng-entity-relationship-diagram@5.30.0
+  - @memberjunction/ng-filter-builder@5.30.0
+  - @memberjunction/skip-types@5.30.0
+  - @memberjunction/ng-clustering@5.30.0
+  - @memberjunction/ng-export-service@5.30.0
+  - @memberjunction/ng-markdown@5.30.0
+  - @memberjunction/ng-ui-components@5.30.0
+  - @memberjunction/ng-word-cloud@5.30.0
+  - @memberjunction/export-engine@5.30.0
+  - @memberjunction/global@5.30.0
+
+## 5.29.0
+
+### Minor Changes
+
+- 90a0fec: MCP Dashboard: add tool favorites (per-user pinning), bidirectional Zapier
+  integration polish, and a self-contained `v5.28` migration for the new
+  `MCPToolFavorite` entity (table DDL + extended properties + appended CodeGen
+  output so reset-and-rebuild stays a single step).
+
+### Patch Changes
+
+- e02e24e: Query rendering pipeline redesign: fix Bug D (Nunjucks expression inside SQL string literal breaks ORDER BY detection), consolidate duplicated ORDER BY logic into shared analyzer, add RenderPipeline entry point with diagnostic tracing, introduce structural parser and symbol table for composition IR, and integrate SQL dialect objects throughout the parser removing all hardcoded dialect switch statements. SQL comments are now stripped before template evaluation instead of escaped. Production callers (RunQuery, TestQuerySQL) delegate to RenderPipeline. 65+ new tests including recursive CTEs, PostgreSQL dialect variants, and comment-stripping coverage.
+
+  Query dashboard and form UI improvements: replace flat category dropdowns with hierarchical tree dropdowns, default new query category to active folder context, add per-folder create buttons, expose Reusable/CacheEnabled/AuditQueryRuns fields in entity form Details panel, add saving indicator with spinner overlay, fix sub-entity delete by reloading fresh entity copies, and fix tree dropdown not showing pre-selected text for branch-only configurations. Fix extraction pipeline not cleaning up stale Query Fields and Query Entities when extraction produces no results, with 9 regression tests.
+
+- 7006276: Extend MCPEngine with a cached `Favorites` property (`MJ: MCP Tool Favorites`) backed by BaseEngine's `CacheLocal` + event-driven cache sync. Adds `GetFavoritesByUser(userId)` and `GetFavoriteByUserAndTool(userId, toolId)` helpers. MCP Dashboard's `loadFavorites` and `toggleFavorite` paths now read the engine cache instead of issuing per-call RunViews against `MJ: MCP Tool Favorites`; Save/Delete on the favorite entity still flows through BaseEntity so the cache stays consistent across tabs via auto-invalidation.
+- Updated dependencies [e77233c]
+- Updated dependencies [1b0e04f]
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+- Updated dependencies [98bad3a]
+  - @memberjunction/ng-ai-test-harness@5.29.0
+  - @memberjunction/ng-archive-manager@5.29.0
+  - @memberjunction/core@5.29.0
+  - @memberjunction/ng-core-entity-forms@5.29.0
+  - @memberjunction/ng-trees@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ng-conversations@5.29.0
+  - @memberjunction/ng-action-gallery@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/api-keys-base@5.29.0
+  - @memberjunction/actions-base@5.29.0
+  - @memberjunction/ng-base-application@5.29.0
+  - @memberjunction/ng-explorer-settings@5.29.0
+  - @memberjunction/ng-shared@5.29.0
+  - @memberjunction/ng-testing@5.29.0
+  - @memberjunction/ng-actions@5.29.0
+  - @memberjunction/ng-agent-requests@5.29.0
+  - @memberjunction/ng-agents@5.29.0
+  - @memberjunction/ng-code-editor@5.29.0
+  - @memberjunction/ng-container-directives@5.29.0
+  - @memberjunction/ng-credentials@5.29.0
+  - @memberjunction/ng-dashboard-viewer@5.29.0
+  - @memberjunction/ng-entity-relationship-diagram@5.29.0
+  - @memberjunction/ng-entity-viewer@5.29.0
+  - @memberjunction/ng-filter-builder@5.29.0
+  - @memberjunction/ng-list-management@5.29.0
+  - @memberjunction/ng-map-view@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/ng-query-viewer@5.29.0
+  - @memberjunction/ng-react@5.29.0
+  - @memberjunction/ng-scheduling@5.29.0
+  - @memberjunction/ng-search@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/ng-versions@5.29.0
+  - @memberjunction/credentials@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/integration-engine-base@5.29.0
+  - @memberjunction/interactive-component-types@5.29.0
+  - @memberjunction/skip-types@5.29.0
+  - @memberjunction/templates-base-types@5.29.0
+  - @memberjunction/testing-engine-base@5.29.0
+  - @memberjunction/ng-clustering@5.29.0
+  - @memberjunction/ng-export-service@5.29.0
+  - @memberjunction/ng-markdown@5.29.0
+  - @memberjunction/ng-ui-components@5.29.0
+  - @memberjunction/ng-word-cloud@5.29.0
+  - @memberjunction/export-engine@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- 2542615: Pin Actions as quick-launch cards on the Home dashboard with a configurable title, accent color, FA icon, preset parameter values, and a list of parameters to prompt for at runtime. Adds Configure and Runner dialogs and extends HomeAppPinService with an 'Actions' ResourceType dedup case.
+- Updated dependencies [2542615]
+- Updated dependencies [115e4da]
+  - @memberjunction/ng-shared@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-core-entity-forms@5.28.0
+  - @memberjunction/ng-explorer-settings@5.28.0
+  - @memberjunction/ng-testing@5.28.0
+  - @memberjunction/ng-agents@5.28.0
+  - @memberjunction/ng-ai-test-harness@5.28.0
+  - @memberjunction/ng-list-management@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/api-keys-base@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/ng-base-application@5.28.0
+  - @memberjunction/ng-action-gallery@5.28.0
+  - @memberjunction/ng-actions@5.28.0
+  - @memberjunction/ng-agent-requests@5.28.0
+  - @memberjunction/ng-code-editor@5.28.0
+  - @memberjunction/ng-container-directives@5.28.0
+  - @memberjunction/ng-conversations@5.28.0
+  - @memberjunction/ng-credentials@5.28.0
+  - @memberjunction/ng-dashboard-viewer@5.28.0
+  - @memberjunction/ng-entity-relationship-diagram@5.28.0
+  - @memberjunction/ng-entity-viewer@5.28.0
+  - @memberjunction/ng-filter-builder@5.28.0
+  - @memberjunction/ng-map-view@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-query-viewer@5.28.0
+  - @memberjunction/ng-react@5.28.0
+  - @memberjunction/ng-scheduling@5.28.0
+  - @memberjunction/ng-search@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/ng-trees@5.28.0
+  - @memberjunction/ng-versions@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/integration-engine-base@5.28.0
+  - @memberjunction/interactive-component-types@5.28.0
+  - @memberjunction/skip-types@5.28.0
+  - @memberjunction/templates-base-types@5.28.0
+  - @memberjunction/testing-engine-base@5.28.0
+  - @memberjunction/ng-clustering@5.28.0
+  - @memberjunction/ng-export-service@5.28.0
+  - @memberjunction/ng-markdown@5.28.0
+  - @memberjunction/ng-ui-components@5.28.0
+  - @memberjunction/ng-word-cloud@5.28.0
+  - @memberjunction/export-engine@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ng-search@5.27.1
+  - @memberjunction/ng-dashboard-viewer@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ai-engine-base@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/api-keys-base@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/ng-base-application@5.27.1
+  - @memberjunction/ng-core-entity-forms@5.27.1
+  - @memberjunction/ng-explorer-settings@5.27.1
+  - @memberjunction/ng-shared@5.27.1
+  - @memberjunction/ng-testing@5.27.1
+  - @memberjunction/ng-action-gallery@5.27.1
+  - @memberjunction/ng-actions@5.27.1
+  - @memberjunction/ng-agent-requests@5.27.1
+  - @memberjunction/ng-agents@5.27.1
+  - @memberjunction/ng-ai-test-harness@5.27.1
+  - @memberjunction/ng-code-editor@5.27.1
+  - @memberjunction/ng-container-directives@5.27.1
+  - @memberjunction/ng-conversations@5.27.1
+  - @memberjunction/ng-credentials@5.27.1
+  - @memberjunction/ng-entity-relationship-diagram@5.27.1
+  - @memberjunction/ng-entity-viewer@5.27.1
+  - @memberjunction/ng-list-management@5.27.1
+  - @memberjunction/ng-map-view@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/ng-query-viewer@5.27.1
+  - @memberjunction/ng-react@5.27.1
+  - @memberjunction/ng-scheduling@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/ng-trees@5.27.1
+  - @memberjunction/ng-versions@5.27.1
+  - @memberjunction/integration-engine-base@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/skip-types@5.27.1
+  - @memberjunction/templates-base-types@5.27.1
+  - @memberjunction/testing-engine-base@5.27.1
+  - @memberjunction/ng-clustering@5.27.1
+  - @memberjunction/interactive-component-types@5.27.1
+  - @memberjunction/ng-filter-builder@5.27.1
+  - @memberjunction/ng-export-service@5.27.1
+  - @memberjunction/ng-markdown@5.27.1
+  - @memberjunction/ng-ui-components@5.27.1
+  - @memberjunction/ng-word-cloud@5.27.1
+  - @memberjunction/export-engine@5.27.1
+
+## 5.27.0
+
+### Minor Changes
+
+- 348decb: metadata bump so minor
+
+### Patch Changes
+
+- 4357090: Repair three query composition pipeline regressions surfaced by Skip-Brain, clear test feedback dialog state when switching conversations, strip tag IDs from taxonomy context injected into LLM prompts, exclude in-progress runs from last-run-date lookups, and replace direct UUID equality checks with `UUIDsEqual()` in the AI analytics dashboards to comply with the cross-platform UUID compliance test.
+- 6fd2886: Add server connectivity heartbeat service with warning banner that alerts users when the API connection is lost.
+- Updated dependencies [35cf7d4]
+- Updated dependencies [a642e3f]
+- Updated dependencies [4357090]
+  - @memberjunction/ng-trees@5.27.0
+  - @memberjunction/ng-search@5.27.0
+  - @memberjunction/ng-conversations@5.27.0
+  - @memberjunction/ng-core-entity-forms@5.27.0
+  - @memberjunction/ng-dashboard-viewer@5.27.0
+  - @memberjunction/ai-engine-base@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/api-keys-base@5.27.0
+  - @memberjunction/actions-base@5.27.0
+  - @memberjunction/ng-base-application@5.27.0
+  - @memberjunction/ng-explorer-settings@5.27.0
+  - @memberjunction/ng-shared@5.27.0
+  - @memberjunction/ng-testing@5.27.0
+  - @memberjunction/ng-action-gallery@5.27.0
+  - @memberjunction/ng-actions@5.27.0
+  - @memberjunction/ng-agent-requests@5.27.0
+  - @memberjunction/ng-agents@5.27.0
+  - @memberjunction/ng-ai-test-harness@5.27.0
+  - @memberjunction/ng-clustering@5.27.0
+  - @memberjunction/ng-code-editor@5.27.0
+  - @memberjunction/ng-container-directives@5.27.0
+  - @memberjunction/ng-credentials@5.27.0
+  - @memberjunction/ng-entity-relationship-diagram@5.27.0
+  - @memberjunction/ng-entity-viewer@5.27.0
+  - @memberjunction/ng-export-service@5.27.0
+  - @memberjunction/ng-filter-builder@5.27.0
+  - @memberjunction/ng-list-management@5.27.0
+  - @memberjunction/ng-markdown@5.27.0
+  - @memberjunction/ng-map-view@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/ng-query-viewer@5.27.0
+  - @memberjunction/ng-react@5.27.0
+  - @memberjunction/ng-scheduling@5.27.0
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/ng-ui-components@5.27.0
+  - @memberjunction/ng-versions@5.27.0
+  - @memberjunction/ng-word-cloud@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/integration-engine-base@5.27.0
+  - @memberjunction/interactive-component-types@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/export-engine@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/skip-types@5.27.0
+  - @memberjunction/templates-base-types@5.27.0
+  - @memberjunction/testing-engine-base@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- 55de456: Fix missing dependencies across 17 packages that accumulated while knip dependency checking was silently broken. Repair knip infrastructure: disable crashing vitest plugin, harden CI workflow to fail-fast on tool crashes instead of silently passing, and fix hardcoded Angular version in auto-fix script.
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/ng-action-gallery@5.26.0
+  - @memberjunction/ng-code-editor@5.26.0
+  - @memberjunction/ng-core-entity-forms@5.26.0
+  - @memberjunction/ng-dashboard-viewer@5.26.0
+  - @memberjunction/ng-entity-relationship-diagram@5.26.0
+  - @memberjunction/ng-shared-generic@5.26.0
+  - @memberjunction/ng-ui-components@5.26.0
+  - @memberjunction/skip-types@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-engine-base@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/api-keys-base@5.26.0
+  - @memberjunction/actions-base@5.26.0
+  - @memberjunction/ng-base-application@5.26.0
+  - @memberjunction/ng-explorer-settings@5.26.0
+  - @memberjunction/ng-shared@5.26.0
+  - @memberjunction/ng-testing@5.26.0
+  - @memberjunction/ng-actions@5.26.0
+  - @memberjunction/ng-agent-requests@5.26.0
+  - @memberjunction/ng-agents@5.26.0
+  - @memberjunction/ng-ai-test-harness@5.26.0
+  - @memberjunction/ng-conversations@5.26.0
+  - @memberjunction/ng-credentials@5.26.0
+  - @memberjunction/ng-entity-viewer@5.26.0
+  - @memberjunction/ng-list-management@5.26.0
+  - @memberjunction/ng-map-view@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/ng-query-viewer@5.26.0
+  - @memberjunction/ng-react@5.26.0
+  - @memberjunction/ng-scheduling@5.26.0
+  - @memberjunction/ng-search@5.26.0
+  - @memberjunction/ng-trees@5.26.0
+  - @memberjunction/ng-versions@5.26.0
+  - @memberjunction/graphql-dataprovider@5.26.0
+  - @memberjunction/integration-engine-base@5.26.0
+  - @memberjunction/templates-base-types@5.26.0
+  - @memberjunction/testing-engine-base@5.26.0
+  - @memberjunction/ng-container-directives@5.26.0
+  - @memberjunction/ng-filter-builder@5.26.0
+  - @memberjunction/interactive-component-types@5.26.0
+  - @memberjunction/ng-clustering@5.26.0
+  - @memberjunction/ng-export-service@5.26.0
+  - @memberjunction/ng-markdown@5.26.0
+  - @memberjunction/ng-word-cloud@5.26.0
+  - @memberjunction/export-engine@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- a24ff53: no metadata/migration
+- 5e2a64f: no migration
+- 1eb9f6e: no migration/metadata
+- Updated dependencies [fc8cd52]
+- Updated dependencies [a24ff53]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [e96f683]
+- Updated dependencies [1eb9f6e]
+- Updated dependencies [cbcf477]
+- Updated dependencies [c5426c5]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/interactive-component-types@5.25.0
+  - @memberjunction/ng-conversations@5.25.0
+  - @memberjunction/ng-core-entity-forms@5.25.0
+  - @memberjunction/ng-query-viewer@5.25.0
+  - @memberjunction/skip-types@5.25.0
+  - @memberjunction/ng-ai-test-harness@5.25.0
+  - @memberjunction/ng-dashboard-viewer@5.25.0
+  - @memberjunction/ng-search@5.25.0
+  - @memberjunction/ng-entity-viewer@5.25.0
+  - @memberjunction/ng-trees@5.25.0
+  - @memberjunction/ai-engine-base@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/api-keys-base@5.25.0
+  - @memberjunction/actions-base@5.25.0
+  - @memberjunction/ng-base-application@5.25.0
+  - @memberjunction/ng-explorer-settings@5.25.0
+  - @memberjunction/ng-shared@5.25.0
+  - @memberjunction/ng-testing@5.25.0
+  - @memberjunction/ng-action-gallery@5.25.0
+  - @memberjunction/ng-actions@5.25.0
+  - @memberjunction/ng-agent-requests@5.25.0
+  - @memberjunction/ng-agents@5.25.0
+  - @memberjunction/ng-code-editor@5.25.0
+  - @memberjunction/ng-container-directives@5.25.0
+  - @memberjunction/ng-credentials@5.25.0
+  - @memberjunction/ng-entity-relationship-diagram@5.25.0
+  - @memberjunction/ng-filter-builder@5.25.0
+  - @memberjunction/ng-list-management@5.25.0
+  - @memberjunction/ng-notifications@5.25.0
+  - @memberjunction/ng-react@5.25.0
+  - @memberjunction/ng-scheduling@5.25.0
+  - @memberjunction/ng-shared-generic@5.25.0
+  - @memberjunction/ng-versions@5.25.0
+  - @memberjunction/integration-engine-base@5.25.0
+  - @memberjunction/templates-base-types@5.25.0
+  - @memberjunction/testing-engine-base@5.25.0
+  - @memberjunction/ng-clustering@5.25.0
+  - @memberjunction/ng-export-service@5.25.0
+  - @memberjunction/ng-markdown@5.25.0
+  - @memberjunction/ng-ui-components@5.25.0
+  - @memberjunction/ng-word-cloud@5.25.0
+  - @memberjunction/export-engine@5.25.0
+  - @memberjunction/global@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [f9792d1]
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ng-react@5.24.0
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/ng-agents@5.24.0
+  - @memberjunction/graphql-dataprovider@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/ai-engine-base@5.24.0
+  - @memberjunction/ng-core-entity-forms@5.24.0
+  - @memberjunction/ng-agent-requests@5.24.0
+  - @memberjunction/ng-ai-test-harness@5.24.0
+  - @memberjunction/ng-conversations@5.24.0
+  - @memberjunction/skip-types@5.24.0
+  - @memberjunction/ng-clustering@5.24.0
+  - @memberjunction/interactive-component-types@5.24.0
+  - @memberjunction/ng-explorer-settings@5.24.0
+  - @memberjunction/ng-shared@5.24.0
+  - @memberjunction/ng-testing@5.24.0
+  - @memberjunction/ng-actions@5.24.0
+  - @memberjunction/ng-notifications@5.24.0
+  - @memberjunction/ng-versions@5.24.0
+  - @memberjunction/api-keys-base@5.24.0
+  - @memberjunction/actions-base@5.24.0
+  - @memberjunction/ng-base-application@5.24.0
+  - @memberjunction/ng-action-gallery@5.24.0
+  - @memberjunction/ng-code-editor@5.24.0
+  - @memberjunction/ng-container-directives@5.24.0
+  - @memberjunction/ng-credentials@5.24.0
+  - @memberjunction/ng-dashboard-viewer@5.24.0
+  - @memberjunction/ng-entity-relationship-diagram@5.24.0
+  - @memberjunction/ng-entity-viewer@5.24.0
+  - @memberjunction/ng-filter-builder@5.24.0
+  - @memberjunction/ng-list-management@5.24.0
+  - @memberjunction/ng-query-viewer@5.24.0
+  - @memberjunction/ng-scheduling@5.24.0
+  - @memberjunction/ng-search@5.24.0
+  - @memberjunction/ng-shared-generic@5.24.0
+  - @memberjunction/ng-trees@5.24.0
+  - @memberjunction/integration-engine-base@5.24.0
+  - @memberjunction/templates-base-types@5.24.0
+  - @memberjunction/testing-engine-base@5.24.0
+  - @memberjunction/ng-export-service@5.24.0
+  - @memberjunction/ng-markdown@5.24.0
+  - @memberjunction/ng-ui-components@5.24.0
+  - @memberjunction/ng-word-cloud@5.24.0
+  - @memberjunction/export-engine@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- 1d1e02e: Knowledge Hub Phase 2: autotagging pipeline, duplicate detection dashboards, and client tool invocation system.
+
+  Autotagging: Run Pipeline button with real-time progress, direct vectorization of content items (bypasses entity documents), pipeline stage visualization, Gemini 3 Flash tagging.
+
+  Duplicate Detection: Run Detection button with entity document picker, progress via PubSub, Kanban approve/reject with persistence.
+
+  Client Tools: New 'ClientTools' step type in BaseAgent enabling browser-side tool invocation (navigation, UI display, tab switching) during agent execution. Includes ClientToolRequestManager server singleton, GraphQL subscription transport, runtime tool decoration, three-level timeout, loop agent integration, and 646-line documentation guide.
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [58af481]
+- Updated dependencies [fb0c69f]
+- Updated dependencies [1d1e02e]
+- Updated dependencies [c17be20]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ng-base-application@5.23.0
+  - @memberjunction/ng-dashboard-viewer@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ng-ui-components@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/ng-react@5.23.0
+  - @memberjunction/ai-engine-base@5.23.0
+  - @memberjunction/api-keys-base@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/ng-core-entity-forms@5.23.0
+  - @memberjunction/ng-explorer-settings@5.23.0
+  - @memberjunction/ng-shared@5.23.0
+  - @memberjunction/ng-testing@5.23.0
+  - @memberjunction/ng-action-gallery@5.23.0
+  - @memberjunction/ng-actions@5.23.0
+  - @memberjunction/ng-agent-requests@5.23.0
+  - @memberjunction/ng-agents@5.23.0
+  - @memberjunction/ng-ai-test-harness@5.23.0
+  - @memberjunction/ng-code-editor@5.23.0
+  - @memberjunction/ng-container-directives@5.23.0
+  - @memberjunction/ng-conversations@5.23.0
+  - @memberjunction/ng-credentials@5.23.0
+  - @memberjunction/ng-entity-relationship-diagram@5.23.0
+  - @memberjunction/ng-entity-viewer@5.23.0
+  - @memberjunction/ng-filter-builder@5.23.0
+  - @memberjunction/ng-list-management@5.23.0
+  - @memberjunction/ng-notifications@5.23.0
+  - @memberjunction/ng-query-viewer@5.23.0
+  - @memberjunction/ng-scheduling@5.23.0
+  - @memberjunction/ng-search@5.23.0
+  - @memberjunction/ng-shared-generic@5.23.0
+  - @memberjunction/ng-trees@5.23.0
+  - @memberjunction/ng-versions@5.23.0
+  - @memberjunction/integration-engine-base@5.23.0
+  - @memberjunction/interactive-component-types@5.23.0
+  - @memberjunction/skip-types@5.23.0
+  - @memberjunction/templates-base-types@5.23.0
+  - @memberjunction/testing-engine-base@5.23.0
+  - @memberjunction/ng-clustering@5.23.0
+  - @memberjunction/ng-export-service@5.23.0
+  - @memberjunction/ng-markdown@5.23.0
+  - @memberjunction/export-engine@5.23.0
+
 ## 5.22.0
 
 ### Patch Changes

@@ -1,0 +1,25 @@
+[
+  {
+    "fields": {
+      "Name": "Tags For Entity Record",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Tags",
+      "UserQuestion": "What tags are assigned to a given record?",
+      "Description": "Returns all active tags assigned to a specific entity record, including tag hierarchy (parent tag) and relevance weight. Composable — join via RecordID to enrich any entity with its tag metadata.",
+      "SQL": "@file:SQL/tags-for-entity-record.sql",
+      "TechnicalDescription": "Joins vwTaggedItems to vwTags (and parent tag via LEFT JOIN) filtered by entity name and record ID. Only returns Active tags. Parameters: entityName (entity display name e.g. \"Members\"), recordID (the record primary key value).",
+      "Status": "Approved",
+      "QualityRank": 8,
+      "ExecutionCostRank": 1,
+      "Reusable": true,
+      "UsesTemplate": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A9EB7B0C-20D6-46BF-8215-49FF6863841D"
+    },
+    "sync": {
+      "lastModified": "2026-04-12T21:47:41.576Z",
+      "checksum": "75bce1f7b6be16492322e2b597580dfdadfc2b97fecf2cb7a87c3f83d4f08d76"
+    }
+  }
+]

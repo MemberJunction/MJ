@@ -345,10 +345,10 @@
   overflow: auto;
 }
 
-/* Details tab specific */
-.tab-content[ng-reflect-ng-if="true"] > kendo-panelbar {
-  height: 100%;
-  overflow-y: auto;
+/* Details tab accordion panels */
+.tab-content mj-accordion-panel {
+  display: block;
+  margin-bottom: 8px;
 }
 
 /* JSON Detail Pane */

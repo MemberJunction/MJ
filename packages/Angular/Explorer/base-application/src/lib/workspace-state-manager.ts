@@ -337,9 +337,21 @@ export class WorkspaceStateManager {
     });
 
     if (existingTab) {
-      // Focus existing tab
+      // Focus existing tab AND update its title and configuration.
+      // Title and config must be refreshed because in single-resource mode,
+      // the same tab gets reused for different nav items within an app.
+      const updatedTabs = config.tabs.map(tab =>
+        tab.id === existingTab.id
+          ? {
+              ...tab,
+              title: request.Title,
+              configuration: { ...tab.configuration, ...request.Configuration }
+            }
+          : tab
+      );
       const updatedConfig = {
         ...config,
+        tabs: updatedTabs,
         activeTabId: existingTab.id
       };
       this.UpdateConfiguration(updatedConfig);

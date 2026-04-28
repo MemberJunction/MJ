@@ -8,6 +8,9 @@
 import { describe, it, expect } from 'vitest';
 import { SQLParser } from '@memberjunction/sql-parser';
 import type { MJParameterInfo, SQLSelectColumn } from '@memberjunction/sql-parser';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
+
+const tsqlDialect = new SQLServerDialect();
 
 // ═══════════════════════════════════════════════════
 // Test the deterministic extraction via SQLParser
@@ -135,6 +138,49 @@ WHERE Limit = {{ Limit | default(25) | sqlNumber }}
             const region = params.find(p => p.name === 'Region')!;
             expect(region.defaultValue).toBe('US');
             expect(region.type).toBe('string');
+        });
+
+        // Regression test for Skip-Brain Bug B (run 0FEF1C47).
+        // Verifies the integration: when a query SQL contains a `{% for X in Y %}`
+        // loop, the deterministic extractor (consumed by parse.ts → enrich.ts →
+        // sync.ts) registers the iterable Y as a parameter and skips the loop
+        // local X. Without this, Save() would create a stale `kw` parameter
+        // record and reject every actual save attempt with
+        // "Required parameter 'kw' is missing; Unknown parameter: 'OrgKeywords'".
+        it('should register the iterable as an array parameter and skip the loop local (Skip Bug B)', () => {
+            const sql = `SELECT *
+FROM [Sessions]
+WHERE EXISTS (
+    SELECT 1 FROM [Speakers] s
+    WHERE (
+        {% for kw in OrgKeywords %}
+        s.[Org] LIKE {{ kw | sqlLikeContains }}
+        {% if not loop.last %}OR {% endif %}
+        {% endfor %}
+    )
+)
+AND YEAR(s.[Date]) >= {{ StartYear | sqlNumber }}`;
+
+            const params = SQLParser.ExtractParameterInfo(sql);
+
+            // OrgKeywords (iterable) is registered as array, required.
+            const orgKeywords = params.find(p => p.name === 'OrgKeywords');
+            expect(orgKeywords).toBeDefined();
+            expect(orgKeywords!.type).toBe('array');
+            expect(orgKeywords!.isRequired).toBe(true);
+
+            // Plain (non-loop) parameter still works.
+            const startYear = params.find(p => p.name === 'StartYear');
+            expect(startYear).toBeDefined();
+            expect(startYear!.type).toBe('number');
+
+            // Loop local must NOT leak as a parameter — the validator would
+            // otherwise reject every save with "Required parameter 'kw' is missing".
+            expect(params.find(p => p.name === 'kw')).toBeUndefined();
+
+            // Nunjucks built-ins must NOT leak either (loop.last → loop, last).
+            expect(params.find(p => p.name === 'loop')).toBeUndefined();
+            expect(params.find(p => p.name === 'last')).toBeUndefined();
         });
     });
 
@@ -1382,7 +1428,7 @@ describe('Field Type Enrichment from Composition References', () => {
 describe('Field Type Enrichment from Entity Metadata', () => {
     it('should resolve direct column from entity metadata via SQLParser', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,
@@ -1405,7 +1451,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should resolve AS alias to source column from entity metadata', () => {
         const sql = 'SELECT u.__mj_CreatedAt AS CreatedAt FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'CreatedAt', description: 'Creation timestamp', type: 'date', optional: false,
@@ -1428,7 +1474,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should disambiguate multiple tables by alias', () => {
         const sql = 'SELECT u.Name, e.Name AS EntityName FROM __mj.vwUsers u JOIN __mj.vwEntities e ON u.ID = e.ID';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [
             { name: 'Name', description: 'User name', type: 'string', optional: false },
@@ -1461,7 +1507,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should skip fields that already have sqlBaseType and sqlFullType', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'Already resolved', type: 'string', optional: false,
@@ -1482,7 +1528,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
     it('should fall back to flat lookup when no SELECT column matches', () => {
         // Field "Email" is not in the SELECT clause but exists in the entity
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Email', description: 'User email', type: 'string', optional: false,
@@ -1503,7 +1549,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should not overwrite existing sourceEntity on the field', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,
@@ -1540,5 +1586,103 @@ describe('Field Type Enrichment from Entity Metadata', () => {
         expect(result[0].sqlBaseType).toBe('nvarchar');
         expect(result[0].sqlFullType).toBe('nvarchar(100)');
         expect(result[0].sourceEntity).toBe('Users');
+    });
+});
+
+// ═══════════════════════════════════════════════════
+// MSTA Lapsed-Members-District-Movers — parameter extraction
+// Tests parameter extraction for the query that caused the
+// nested-WITH paging bug (composition + apostrophes in comments).
+// ═══════════════════════════════════════════════════
+
+describe('MSTA Lapsed Members District Movers — Parameter Extraction', () => {
+    it('should extract TargetYear and PriorYear parameters from the lapsed-members query', () => {
+        const sql = `SELECT DISTINCT
+    bridge.AccountId,
+    bridge.FirstName,
+    bridge.LastName,
+    bridge.PersonEmail,
+    bridge.Region__c,
+    bridge.District_Name AS Prior_District,
+    d_new.description AS New_District,
+    {{ PriorYear }} AS Prior_Year,
+    {{ TargetYear }} AS New_Year
+FROM {{query:"Golden-Queries/Membership/MSTA NAMS-DESE Member Bridge(TargetYear=PriorYear)"}} bridge
+INNER JOIN nams.vwNU__Membership__cs m1
+    ON m1.NU__Account__c = bridge.AccountId
+    AND m1.Year__c = {{ PriorYear }}
+    AND m1.NU__MembershipProductName__c NOT IN ('Student', 'Retired Annual', 'Retired Lifetime', 'Associate')
+INNER JOIN dese.vweducators e_new
+    ON e_new.edssn = bridge.edssn
+    AND CAST(e_new.year AS INT) = {{ TargetYear }}
+INNER JOIN dese.vwco_dist_descs d_new
+    ON d_new.co_dist_code = e_new.co_dist_code
+WHERE NOT EXISTS (
+    SELECT 1 FROM nams.vwNU__Membership__cs m2
+    WHERE m2.NU__Account__c = bridge.AccountId AND m2.Year__c = {{ TargetYear }}
+)
+AND e_new.co_dist_code != bridge.co_dist_code
+ORDER BY bridge.LastName, bridge.FirstName`;
+
+        const params = SQLParser.ExtractParameterInfo(sql);
+
+        expect(params).toHaveLength(2);
+
+        const priorYear = params.find(p => p.name === 'PriorYear')!;
+        expect(priorYear).toBeDefined();
+        expect(priorYear.isRequired).toBe(true);
+        // PriorYear is used in multiple locations
+        expect(priorYear.usageLocations.length).toBeGreaterThanOrEqual(2);
+
+        const targetYear = params.find(p => p.name === 'TargetYear')!;
+        expect(targetYear).toBeDefined();
+        expect(targetYear.isRequired).toBe(true);
+        // TargetYear is used in SELECT, CAST comparison, and NOT EXISTS
+        expect(targetYear.usageLocations.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should extract composition ref for MSTA NAMS-DESE Member Bridge', () => {
+        const sql = `SELECT * FROM {{query:"Golden-Queries/Membership/MSTA NAMS-DESE Member Bridge(TargetYear=PriorYear)"}} bridge`;
+
+        const refs = SQLParser.ExtractCompositionRefs(sql);
+        expect(refs).toHaveLength(1);
+        expect(refs[0].queryName).toBe('MSTA NAMS-DESE Member Bridge');
+        expect(refs[0].categoryPath).toBe('Golden-Queries/Membership');
+        expect(refs[0].parameters).toHaveLength(1);
+        expect(refs[0].parameters[0].key).toBe('TargetYear');
+        expect(refs[0].parameters[0].value).toBe('PriorYear');
+        expect(refs[0].parameters[0].isPassThrough).toBe(true);
+    });
+
+    it('should extract parameters from the NAMS-DESE Member Bridge dependency query', () => {
+        const sql = `-- Bridge query: maps NAMS member accounts to DESE educator records
+-- Identity is verified by matching first+last name AND confirming the educator
+-- is in the same district as the member's Institution__c via co_dist_desc.
+SELECT DISTINCT
+    a.Id AS AccountId,
+    a.FirstName,
+    a.LastName,
+    a.PersonEmail,
+    a.Institution__c AS District_Name,
+    a.Region__c,
+    e.edssn,
+    e.co_dist_code,
+    e.year AS DESE_Year
+FROM nams.vwAccounts a
+INNER JOIN dese.vwco_dist_descs d
+    ON d.description = a.Institution__c
+INNER JOIN dese.vweducators e
+    ON UPPER(LTRIM(RTRIM(e.edfname))) = UPPER(LTRIM(RTRIM(a.FirstName)))
+    AND UPPER(LTRIM(RTRIM(e.edlname))) = UPPER(LTRIM(RTRIM(a.LastName)))
+    AND e.co_dist_code = d.co_dist_code
+    AND e.year = {{ TargetYear | sqlString }}
+WHERE a.IsPersonAccount = 1
+  AND a.Institution__c IS NOT NULL`;
+
+        const params = SQLParser.ExtractParameterInfo(sql);
+        expect(params).toHaveLength(1);
+        expect(params[0].name).toBe('TargetYear');
+        expect(params[0].type).toBe('string'); // sqlString filter
+        expect(params[0].isRequired).toBe(true);
     });
 });

@@ -1,4 +1,5 @@
 import { Args, Command } from '@oclif/core';
+import { EnableApp } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { buildOrchestratorContext } from '../../utils/open-app-context.js';
@@ -28,7 +29,6 @@ export default class AppEnable extends Command {
     const spinner = ora(`Enabling ${args.name}...`).start();
 
     try {
-      const { EnableApp } = await import('@memberjunction/open-app-engine');
       const context = await buildOrchestratorContext(this);
 
       const result = await EnableApp(args.name, context);

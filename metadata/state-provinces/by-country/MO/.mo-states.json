@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Macau",
+      "Code": "MO",
+      "ISO3166_2": "MO-MO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Macau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MO"
+    },
+    "primaryKey": {
+      "ID": "785C1589-0585-4505-9D5F-3A86FED7ACEC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.891Z",
+      "checksum": "b7aa5e7bd7cac63d954adb8642a68b741f45c8f1be65b5508212e7113e062ac7"
+    }
+  }
+]

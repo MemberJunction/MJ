@@ -3,6 +3,7 @@ import { UserInfo } from "./securityInfo";
 import { IMetadataProvider } from "./interfaces";
 import { Metadata } from "./metadata";
 import { LocalCacheManager } from "./localCacheManager";
+import { ProviderBase } from "./providerBase";
 
 /**
  * Options for the @RegisterForStartup decorator
@@ -405,10 +406,22 @@ export class StartupManager extends BaseSingleton<StartupManager> {
 
         this._loadCompleted = true;
 
+        // All engines have finished loading — close the fast-start window so
+        // subsequent RunViews use normal server-validated caching.
+        ProviderBase.ConsumeFastStartupMode();
+
+        // Log per-engine timing summary so slow engines are visible
+        const totalMs = Date.now() - startTime;
+        const sorted = [...results].sort((a, b) => b.durationMs - a.durationMs);
+        const lines = sorted.map(r =>
+            `  ${r.success ? '✅' : '❌'} ${r.className}: ${r.durationMs}ms`
+        );
+        console.log(`[StartupManager] All engines loaded in ${totalMs}ms:\n${lines.join('\n')}`);
+
         return {
             success: results.every(r => r.success || r.severity !== 'fatal'),
             results,
-            totalDurationMs: Date.now() - startTime
+            totalDurationMs: totalMs
         };
     }
 

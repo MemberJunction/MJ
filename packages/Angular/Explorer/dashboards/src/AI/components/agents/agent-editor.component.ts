@@ -61,9 +61,8 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   private zoom: any;
 
   constructor(
-    private createAgentService: CreateAgentService,
-    private navigationService: NavigationService
-  ) {}
+    private navigationService: NavigationService,
+    private createAgentService: CreateAgentService) {}
 
   ngOnInit(): void {
     if (this.agentId) {
@@ -482,29 +481,32 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
       const agent = result.Agent;
 
-      // Save the new agent
-      const saveResult = await agent.Save();
+      // Create the agent and all of its linked prompts/actions in one atomic transaction.
+      // agent.ID is assigned client-side by NewRecord() so we can use it on child records before submit.
+      const md = new Metadata();
+      const tg = await md.CreateTransactionGroup();
 
-      if (saveResult) {
+      agent.TransactionGroup = tg;
+      await agent.Save();
+
+      if (result.AgentPrompts && result.AgentPrompts.length > 0) {
+        for (const agentPrompt of result.AgentPrompts) {
+          agentPrompt.AgentID = agent.ID;
+          agentPrompt.TransactionGroup = tg;
+          await agentPrompt.Save();
+        }
+      }
+
+      if (result.AgentActions && result.AgentActions.length > 0) {
+        for (const agentAction of result.AgentActions) {
+          agentAction.AgentID = agent.ID;
+          agentAction.TransactionGroup = tg;
+          await agentAction.Save();
+        }
+      }
+
+      if (await tg.Submit()) {
         LogStatus('Sub-agent created successfully');
-
-        // Save any linked prompts
-        if (result.AgentPrompts && result.AgentPrompts.length > 0) {
-          for (const agentPrompt of result.AgentPrompts) {
-            // Update the AgentID now that the agent has been saved
-            agentPrompt.AgentID = agent.ID;
-            await agentPrompt.Save();
-          }
-        }
-
-        // Save any linked actions
-        if (result.AgentActions && result.AgentActions.length > 0) {
-          for (const agentAction of result.AgentActions) {
-            // Update the AgentID now that the agent has been saved
-            agentAction.AgentID = agent.ID;
-            await agentAction.Save();
-          }
-        }
 
         // Reload agent data to show the new hierarchy
         await this.loadAgentData();

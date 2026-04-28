@@ -213,7 +213,7 @@
 .main-splitter, .bottom-splitter {
   height: 100%;
 }
-.main-splitter .k-pane, .bottom-splitter .k-pane {
+.main-splitter ::ng-deep .as-split-area-content, .bottom-splitter ::ng-deep .as-split-area-content {
   overflow: hidden;
 }
 

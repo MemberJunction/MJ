@@ -1,0 +1,200 @@
+[
+  {
+    "fields": {
+      "Name": "Entity Permissions",
+      "Description": "CRUD permissions on MJ entities, role-based with optional row-level security filters. Enforced server-side by ResolverBase and EntityCRUDHandler.",
+      "ProviderClassName": "MJEntityPermissionProvider",
+      "SupportedGranteeTypes": "Role",
+      "SupportedActions": "Read,Create,Update,Delete",
+      "SupportsDeny": false,
+      "SupportsExpiration": false,
+      "SupportsHierarchyInheritance": false,
+      "IsActive": true,
+      "DisplayOrder": 10,
+      "Icon": "fa-solid fa-database"
+    },
+    "primaryKey": {
+      "ID": "99270FDD-9FAF-4242-A090-EEB0796E7BC8"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T02:07:25.490Z",
+      "checksum": "7b6c9f292cb92564e7ed842d738fa0bd318f7a2bee6bdb07dd7e8e61ca7d0aac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Application Roles",
+      "Description": "Role-based authorization for MJ applications (Phase 1). Apps with no ApplicationRole records are open-access; apps with at least one record restrict access to roles with CanAccess=1.",
+      "ProviderClassName": "MJApplicationRolePermissionProvider",
+      "SupportedGranteeTypes": "Role",
+      "SupportedActions": "Read,Admin",
+      "SupportsDeny": false,
+      "SupportsExpiration": false,
+      "SupportsHierarchyInheritance": false,
+      "IsActive": true,
+      "DisplayOrder": 20,
+      "Icon": "fa-solid fa-shield-alt"
+    },
+    "primaryKey": {
+      "ID": "75F9927B-ABE7-4225-87B8-801097AAEE82"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T02:07:25.505Z",
+      "checksum": "935832ba72fcf98a412e98cbc34459bf7dde4ab35636ef2ca20d05a39627d689"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dashboard Permissions",
+      "Description": "User-level sharing permissions on MJ dashboards. Supports Owner, direct, and category-inherited sources; covers Read, Update, Delete, and Share actions.",
+      "ProviderClassName": "MJDashboardPermissionProvider",
+      "SupportedGranteeTypes": "User",
+      "SupportedActions": "Read,Update,Delete,Share",
+      "SupportsDeny": false,
+      "SupportsExpiration": false,
+      "SupportsHierarchyInheritance": true,
+      "IsActive": true,
+      "DisplayOrder": 30,
+      "Icon": "fa-solid fa-chart-line"
+    },
+    "primaryKey": {
+      "ID": "CD3C4816-B6B3-4B3A-858B-DE2FB3BB181D"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T02:07:25.519Z",
+      "checksum": "cd94894c06be7012c7cdc04fd9099801ac5823881cee7db6b538457a1bc53772"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Resource Permissions",
+      "Description": "Generic resource sharing with User or Role grantees, hierarchical View/Edit/Owner levels, and approval workflow. Supports expiration via EndSharingAt.",
+      "ProviderClassName": "MJResourcePermissionProvider",
+      "SupportedGranteeTypes": "User,Role",
+      "SupportedActions": "Read,Update,Delete,Share,Admin",
+      "SupportsDeny": false,
+      "SupportsExpiration": true,
+      "SupportsHierarchyInheritance": false,
+      "IsActive": true,
+      "DisplayOrder": 40,
+      "Icon": "fa-solid fa-share-nodes"
+    },
+    "primaryKey": {
+      "ID": "7A709436-1879-41C8-96A3-D71F5D7DAFFF"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T02:07:25.536Z",
+      "checksum": "b81ffa1f26a217ac16f5fa53080e39196447033dde0790e298a35f3e714207b1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artifact Permissions",
+      "Description": "User-level sharing permissions on conversation artifacts. Covers Read, Update, Delete, and Share actions.",
+      "ProviderClassName": "MJArtifactPermissionProvider",
+      "SupportedGranteeTypes": "User",
+      "SupportedActions": "Read,Update,Delete,Share",
+      "SupportsDeny": false,
+      "SupportsExpiration": false,
+      "SupportsHierarchyInheritance": true,
+      "IsActive": true,
+      "DisplayOrder": 50,
+      "Icon": "fa-solid fa-file-lines"
+    },
+    "primaryKey": {
+      "ID": "CCECE791-4926-476D-8049-D762A7CDEC36"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T03:17:13.610Z",
+      "checksum": "9b3a9801f0ed6182e10add7db583e3205bcff7e9421598df07baa300a39bdeb7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Collection Permissions",
+      "Description": "User-level sharing permissions on artifact collections. Owners automatically have full access; direct grants cover Read, Update, Delete, and Share.",
+      "ProviderClassName": "MJCollectionPermissionProvider",
+      "SupportedGranteeTypes": "User",
+      "SupportedActions": "Read,Update,Delete,Share",
+      "SupportsDeny": false,
+      "SupportsExpiration": false,
+      "SupportsHierarchyInheritance": true,
+      "IsActive": true,
+      "DisplayOrder": 60,
+      "Icon": "fa-solid fa-folder-open"
+    },
+    "primaryKey": {
+      "ID": "FC6AC335-6FBD-4ABE-9AEF-AEEAB6B28FC8"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T03:17:13.625Z",
+      "checksum": "cb9219e42ac1e6f49792e5be2cf720b9109f74bfba4eeef067787d32388967d5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Agent Permissions",
+      "Description": "User- or role-level permissions on AI agents. Actions: View (Read), Run (Execute), Edit (Update), Delete.",
+      "ProviderClassName": "MJAIAgentPermissionProvider",
+      "SupportedGranteeTypes": "User,Role",
+      "SupportedActions": "Read,Execute,Update,Delete",
+      "SupportsDeny": false,
+      "SupportsExpiration": false,
+      "SupportsHierarchyInheritance": false,
+      "IsActive": true,
+      "DisplayOrder": 70,
+      "Icon": "fa-solid fa-robot"
+    },
+    "primaryKey": {
+      "ID": "85981CAB-60B0-4DE8-9921-3963FDE1F3E7"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T03:17:13.640Z",
+      "checksum": "0ebb7da6c54e63fb9d14b64c290760cf3b9e85ab300bfbe6598c752c5fd29e83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Query Permissions",
+      "Description": "Role-based Execute permission on MJ queries. Existence of a QueryPermission row for a role that the user holds grants Execute.",
+      "ProviderClassName": "MJQueryPermissionProvider",
+      "SupportedGranteeTypes": "Role",
+      "SupportedActions": "Execute",
+      "SupportsDeny": false,
+      "SupportsExpiration": false,
+      "SupportsHierarchyInheritance": false,
+      "IsActive": true,
+      "DisplayOrder": 80,
+      "Icon": "fa-solid fa-magnifying-glass"
+    },
+    "primaryKey": {
+      "ID": "387E74E5-17DD-43F1-B972-C3E6231D9A98"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T03:17:13.658Z",
+      "checksum": "5b58e6d743de21b4414a0eb62be3a6d97026d0e0c0709c2814ca4578b6b5b804"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Access Control Rules",
+      "Description": "Record-level permissions with User/Role/Everyone/Public grantees, full CRUD+Share actions, and optional time-bound expiration.",
+      "ProviderClassName": "MJAccessControlRuleProvider",
+      "SupportedGranteeTypes": "User,Role,Everyone,Public",
+      "SupportedActions": "Read,Create,Update,Delete,Share",
+      "SupportsDeny": false,
+      "SupportsExpiration": true,
+      "SupportsHierarchyInheritance": false,
+      "IsActive": true,
+      "DisplayOrder": 90,
+      "Icon": "fa-solid fa-lock"
+    },
+    "primaryKey": {
+      "ID": "960F0417-69E9-45D3-8B62-E961465CC43C"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T03:17:13.672Z",
+      "checksum": "32f5b4a0e61369636016c14af7f2af13b568f7bde7a83f094b10860d942f1e77"
+    }
+  }
+]

@@ -439,6 +439,98 @@ export class EntityField {
     }
 }
 
+/**
+ * Context describing a restore operation in progress on a BaseEntity.
+ *
+ * When set on an entity instance via {@link BaseEntity.SetRestoreContext}
+ * prior to calling Save(), the data provider will write the resulting
+ * RecordChange row with `Source='Restore'` and the lineage columns
+ * populated, producing an auditable chain back to the historical change
+ * that was restored.
+ */
+export interface RestoreContext {
+    /**
+     * ID of the historical RecordChange row whose state is being restored.
+     * Persisted to RecordChange.RestoredFromID on the new change row.
+     */
+    SourceChangeID: string;
+
+    /**
+     * Optional user-entered explanation for the restore. Persisted to
+     * RecordChange.RestoreReason. NULL when the user did not enter one.
+     */
+    Reason: string | null;
+}
+
+/**
+ * Discriminator for the `Source` column of a RecordChange row.
+ *
+ * - `Internal`: produced by an ordinary BaseEntity Save() / Delete() call
+ * - `External`: synthesized by an external-change-detection scanner
+ *   (records the platform discovers via direct SQL changes)
+ * - `Restore`: produced by a user-initiated restore — paired with
+ *   `RestoredFromID` and optional `RestoreReason` lineage columns
+ */
+export type RecordChangeSource = 'Internal' | 'External' | 'Restore';
+
+/**
+ * Dialect-agnostic payload for a RecordChange row.
+ *
+ * Built by `DatabaseProviderBase.BuildRecordChangePayload` from an
+ * entity's old/new data plus an optional restore context. Concrete
+ * providers consume the payload to render their dialect-specific SQL —
+ * SQL Server emits `EXEC spCreateRecordChange_Internal @...`, PostgreSQL
+ * emits a parameterized `INSERT INTO "RecordChange"` statement.
+ *
+ * Hoisting this shape into the base class means the diff/JSON/description
+ * assembly happens in exactly one place across providers, and adding new
+ * RecordChange columns in the future requires updating one method instead
+ * of every provider's render path.
+ */
+export interface RecordChangePayload {
+    /** EntityInfo.ID of the entity the change belongs to. */
+    entityID: string;
+    /**
+     * Composite-key serialized RecordID. May be empty when the caller
+     * intends to resolve it lazily from a SQL expression (e.g., PG's
+     * inline CTE save path uses the post-INSERT primary key).
+     */
+    recordID: string;
+    /** Acting user's UserInfo.ID. */
+    userID: string;
+    /** Change type — `Create`, `Update`, or `Delete`. */
+    type: 'Create' | 'Update' | 'Delete';
+    /** Source discriminator. See {@link RecordChangeSource}. */
+    source: RecordChangeSource;
+    /**
+     * JSON-serialized field-level diff. Empty string for `Create` and
+     * `Delete` (those rows are fully described by `fullRecordJSON`).
+     */
+    changesJSON: string;
+    /**
+     * Human-readable summary of the change ("Description set to ...",
+     * "Status changed from X to Y", "Record Created", etc.).
+     */
+    changesDescription: string;
+    /**
+     * Complete snapshot of the record's post-change state (or pre-delete
+     * state for deletes), JSON-encoded with quotes pre-escaped.
+     */
+    fullRecordJSON: string;
+    /**
+     * When `source === 'Restore'`, points at the historical RecordChange
+     * row whose state was restored. Persisted to
+     * `RecordChange.RestoredFromID`. Null otherwise.
+     */
+    restoredFromID: string | null;
+    /**
+     * When `source === 'Restore'`, the optional user-entered reason.
+     * Persisted to `RecordChange.RestoreReason`. Null when the user did
+     * not enter one.
+     */
+    restoreReason: string | null;
+}
+
 export class DataObjectRelatedEntityParam {
     relatedEntityName: string
     filter?: string
@@ -610,17 +702,94 @@ export class BaseEntityEvent {
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
 export abstract class BaseEntity<T = unknown> {
+    /**
+     * Metadata describing this entity (name, fields, keys, relationships). Populated during
+     * `SetEntityName()` from `Metadata.EntityByName` and used as the source of truth for
+     * field definitions and schema details throughout this class.
+     */
     private _EntityInfo: EntityInfo;
+
+    /**
+     * Runtime field instances for this record — one `EntityField` per column in `_EntityInfo.Fields`.
+     * Each holds the current value, old value, dirty state, and per-field validation. Populated
+     * in `init()` and used as the primary data store for Get/Set/Save/validate.
+     */
     private _Fields: EntityField[] = [];
+
+    /**
+     * Whether a database record has been loaded into this instance (via `Load`, `NewRecord`,
+     * `LoadFromData`, etc.). Used to gate operations that require loaded state and to distinguish
+     * uninitialized instances from genuinely empty new records.
+     */
     private _recordLoaded: boolean = false;
+
+    /**
+     * The user context to use for server-side operations (permission checks, audit trails).
+     * On the server this MUST be set per-request; on the client it may be null since the
+     * provider knows the logged-in user implicitly.
+     */
     private _contextCurrentUser: UserInfo = null;
+
+    /**
+     * The transaction group this entity is enlisted in, if any. When set, `Save()` and `Delete()`
+     * defer their provider calls to the group's coordinated `Submit()` so a batch of operations
+     * commits atomically.
+     */
     private _transactionGroup: TransactionGroupBase = null;
+
+    /**
+     * RxJS `Subject` that fires `BaseEntityEvent`s (save, delete, field-change,
+     * remote-invalidate). Exposed publicly via `Event$` so engines and UI components can react
+     * to entity lifecycle events.
+     */
     private _eventSubject: Subject<BaseEntityEvent>;
+
+    /**
+     * Append-only log of `BaseEntityResult` objects from each Save/Delete attempt. The most
+     * recent entry is exposed via `LatestResult` for error inspection after a failure.
+     */
     private _resultHistory: BaseEntityResult[] = [];
+
+    /**
+     * The `IEntityDataProvider` routing DB operations for this specific entity. Resolved lazily
+     * via `ProviderToUse` and may differ from `Metadata.Provider` when a custom provider is
+     * configured per-entity (e.g., entities served from an external system).
+     */
     private _provider: IEntityDataProvider | null = null;
+
+    /**
+     * Whether this entity instance has ever been persisted (via a successful Save). Distinct
+     * from `IsSaved` because `NewRecord()` resets dirty state; this flag remains true once set.
+     * Used by `Save()` to decide between spCreate vs spUpdate.
+     */
     private _everSaved: boolean = false;
+
+    /**
+     * Whether a `Load*` operation is currently in flight. Used to suppress field-change events
+     * and dirty-tracking while bulk-populating fields from the provider response.
+     */
     private _isLoading: boolean = false;
+
+    /**
+     * Shared `Observable` for an in-flight `Delete()` call. Concurrent Delete attempts return
+     * this same observable so the actual provider call only runs once, avoiding double-deletes
+     * and duplicate error reporting.
+     */
     private _pendingDelete$: Observable<boolean> | null = null;
+
+    /**
+     * Lazy `Map<fieldName, EntityField>` cache for O(1) `GetFieldByName()` lookups. Populated
+     * on first call and cleared on `init()` so re-initialized entities rebuild fresh. Replaces
+     * the previous O(N) `_Fields.find()` scan that dominated `SetMany`/setter/serialization paths.
+     */
+    private _fieldCache: Map<string, EntityField> | null = null;
+
+    /**
+     * Lazy `Map<codeName, EntityField>` cache for O(1) `GetFieldByCodeName()` lookups. Built the
+     * same way as `_fieldCache` but keyed by the JS-safe `CodeName` rather than the DB field
+     * name. Cleared on `init()`.
+     */
+    private _codeNameCache: Map<string, EntityField> | null = null;
 
     /**************************************************************************
      * IS-A Type Relationship — Bidirectional Entity Composition
@@ -1326,7 +1495,43 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
-        return this.Fields.find(f => f.Name.trim().toLowerCase() === lcase);
+
+        if (this._fieldCache === null) {
+            this._fieldCache = new Map<string, EntityField>();
+            for (const f of this.Fields) {
+                if (!this._fieldCache.has(f.Name.trim().toLowerCase())) {
+                    this._fieldCache.set(f.Name.trim().toLowerCase(), f);
+                }
+            }
+        }
+
+        return this._fieldCache.get(lcase) || null;
+    }
+
+    /**
+     * Convenience method to access a field by code name. This method is case-insensitive and will return null if the field is not found.
+     * @param codeName
+     * @returns
+     */
+    public GetFieldByCodeName(codeName: string): EntityField | null {
+        if(!codeName) {
+            return null;
+        }
+
+        const lcase = codeName.trim().toLowerCase();
+
+        if (this._codeNameCache === null) {
+            this._codeNameCache = new Map<string, EntityField>();
+            // First-write-wins on duplicate code names — matches prior Array.find() behavior
+            for (const f of this.Fields) {
+                const codeKey = f.CodeName.trim().toLowerCase();
+                if (!this._codeNameCache.has(codeKey)) {
+                    this._codeNameCache.set(codeKey, f);
+                }
+            }
+        }
+
+        return this._codeNameCache.get(lcase) || null;
     }
 
     /**
@@ -1503,7 +1708,7 @@ export abstract class BaseEntity<T = unknown> {
             else {
                 // if we don't find a match for the field name, check to see if we have a match for the code name
                 // because some objects passed in will use the code name
-                const field = this.Fields.find(f => f.CodeName.trim().toLowerCase() == key.trim().toLowerCase());
+                const field = this.GetFieldByCodeName(key);
                 if (field) {
                     const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
                     if (ignoreActiveStatusAssertions) {
@@ -1731,6 +1936,8 @@ export abstract class BaseEntity<T = unknown> {
         this._resultHistory = [];
         this._recordLoaded = false;
         this._Fields = [];
+        this._fieldCache = null;
+        this._codeNameCache = null;
         if (this.EntityInfo) {
             for (const rawField of this.EntityInfo.Fields) {
                 const key = this.EntityInfo.Name + '.' + rawField.Name;
@@ -1838,6 +2045,74 @@ export abstract class BaseEntity<T = unknown> {
         return true;
     }
 
+
+
+    // ────────────────────────────────────────────────────────────────────
+    // Restore context — populated by callers immediately before Save() to
+    // mark the resulting RecordChange row as a Restore (Source='Restore'
+    // with RestoredFromID and optional RestoreReason populated).
+    //
+    // The context lives on the entity instance for exactly one Save() and
+    // is consumed by the data provider when it generates the RecordChange
+    // SQL. Callers should set the context, await Save(), then either
+    // explicitly clear it via ClearRestoreContext() or rely on it being
+    // overwritten on the next restore. We deliberately do NOT auto-clear
+    // inside Save() because TransactionGroup execution is deferred — the
+    // provider may capture the context now but use it later.
+    // ────────────────────────────────────────────────────────────────────
+    private _restoreContext: RestoreContext | null = null;
+
+    /**
+     * Returns the active restore context for the next save, if any.
+     *
+     * Read by the data provider when generating the RecordChange SQL: when
+     * non-null, the resulting RecordChange row is written with
+     * `Source='Restore'`, `RestoredFromID = SourceChangeID`, and
+     * `RestoreReason = Reason`. Returns null for ordinary saves.
+     */
+    public get RestoreContext(): RestoreContext | null {
+        return this._restoreContext;
+    }
+
+    /**
+     * Marks the next Save() as a restore from a historical RecordChange row.
+     *
+     * The provider will write a new RecordChange entry with `Source='Restore'`,
+     * `RestoredFromID` pointing at `sourceChangeId`, and `RestoreReason` set to
+     * `reason` (or NULL). This produces an auditable lineage chain that the
+     * timeline UI can render via the `RestoredFromID` foreign key.
+     *
+     * The context is consumed exactly once per Save() and persists on the
+     * entity until either (a) overwritten by a subsequent SetRestoreContext()
+     * call or (b) explicitly cleared via ClearRestoreContext(). It is NOT
+     * auto-cleared inside Save() because TransactionGroup execution is
+     * deferred — see the comment on `_restoreContext` for details.
+     *
+     * @param sourceChangeId The ID of the historical RecordChange row whose
+     *   state is being restored. Required; throws if empty.
+     * @param reason Optional user-entered explanation captured at restore
+     *   time. Persisted to RecordChange.RestoreReason for audit purposes.
+     *
+     * @example
+     *   record.SetRestoreContext(versionId, 'Reverting incorrect Q2 entries');
+     *   const ok = await record.Save();
+     *   record.ClearRestoreContext();
+     */
+    public SetRestoreContext(sourceChangeId: string, reason: string | null = null): void {
+        if (!sourceChangeId || typeof sourceChangeId !== 'string') {
+            throw new Error('BaseEntity.SetRestoreContext: sourceChangeId is required and must be a non-empty string');
+        }
+        this._restoreContext = { SourceChangeID: sourceChangeId, Reason: reason ?? null };
+    }
+
+    /**
+     * Clears any pending restore context. Safe to call when no context is set.
+     * Recommended after Save() returns so a subsequent ordinary save isn't
+     * accidentally tagged as a restore.
+     */
+    public ClearRestoreContext(): void {
+        this._restoreContext = null;
+    }
 
 
     // Holds the current pending save observable (if any)

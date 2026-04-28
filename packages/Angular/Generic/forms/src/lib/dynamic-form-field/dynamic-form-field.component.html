@@ -23,12 +23,11 @@
     @if (QuestionType === 'text') {
       <input
         type="text"
-        kendoTextBox
+        class="mj-input question-input"
         [value]="$any(Value) || ''"
         [placeholder]="Placeholder"
         [disabled]="Disabled"
         (input)="OnValueChange($any($event.target).value)"
-        class="question-input"
         />
     }
 
@@ -36,84 +35,83 @@
     @if (QuestionType === 'email') {
       <input
         type="email"
-        kendoTextBox
+        class="mj-input question-input"
         [value]="$any(Value) || ''"
         [placeholder]="Placeholder"
         [disabled]="Disabled"
         (input)="OnValueChange($any($event.target).value)"
-        class="question-input"
         />
     }
 
     <!-- Textarea -->
     @if (QuestionType === 'textarea') {
       <textarea
-        kendoTextArea
+        class="mj-textarea question-textarea"
         [value]="$any(Value) || ''"
         [placeholder]="Placeholder"
         [disabled]="Disabled"
         (input)="OnValueChange($any($event.target).value)"
-        class="question-textarea"
         rows="5"
       ></textarea>
     }
 
     <!-- Number Input -->
     @if (QuestionType === 'number') {
-      <kendo-numerictextbox
-        [value]="$any(Value)"
-        [min]="Min || 0"
-        [max]="Max || 999999999"
-        [step]="Step || 1"
-        [disabled]="Disabled"
-        (valueChange)="OnValueChange($event)"
+      <mj-numeric-input
+        [ngModel]="$any(Value)"
+        [ngModelOptions]="{standalone: true}"
+        [Min]="Min || 0"
+        [Max]="Max || 999999999"
+        [Step]="Step || 1"
+        [Disabled]="Disabled"
+        (ngModelChange)="OnValueChange($any($event))"
         class="question-input"
-      ></kendo-numerictextbox>
+      ></mj-numeric-input>
     }
 
     <!-- Currency Input -->
     @if (QuestionType === 'currency') {
-      <kendo-numerictextbox
-        [value]="$any(Value)"
-        [min]="Min || 0"
-        [max]="Max || 999999999"
-        [step]="Step || 0.01"
-        [format]="'c2'"
-        [disabled]="Disabled"
-        (valueChange)="OnValueChange($event)"
+      <mj-numeric-input
+        [ngModel]="$any(Value)"
+        [ngModelOptions]="{standalone: true}"
+        [Min]="Min || 0"
+        [Max]="Max || 999999999"
+        [Step]="Step || 0.01"
+        [Decimals]="2"
+        [Disabled]="Disabled"
+        (ngModelChange)="OnValueChange($any($event))"
         class="question-input"
-      ></kendo-numerictextbox>
+      ></mj-numeric-input>
     }
 
     <!-- Date Picker -->
     @if (QuestionType === 'date') {
-      <kendo-datepicker
-        [value]="$any(Value)"
-        [disabled]="Disabled"
-        (valueChange)="OnValueChange($event)"
+      <mj-datepicker
+        [ngModel]="$any(Value)"
+        [ngModelOptions]="{standalone: true}"
+        [Disabled]="Disabled"
+        (ValueChange)="OnValueChange($any($event))"
         class="question-input"
-      ></kendo-datepicker>
+      ></mj-datepicker>
     }
 
     <!-- DateTime Picker -->
     @if (QuestionType === 'datetime') {
-      <kendo-datetimepicker
+      <input
+        type="datetime-local"
+        class="mj-input question-input"
         [value]="$any(Value)"
         [disabled]="Disabled"
-        (valueChange)="OnValueChange($event)"
-        class="question-input"
-      ></kendo-datetimepicker>
+        (change)="OnValueChange($any($event.target).value)"
+        />
     }
 
     <!-- Button Group -->
     @if (QuestionType === 'buttongroup') {
-      <kendo-buttongroup
-        [selection]="'single'"
-        class="question-buttongroup"
-        >
+      <div class="mj-buttongroup question-buttongroup">
         @for (option of Options; track TrackByValue($index, option)) {
           <button
-            kendoButton
+            mjButton
             [toggleable]="true"
             [selected]="Value === option.value"
             [disabled]="Disabled"
@@ -126,7 +124,7 @@
             {{ option.label }}
           </button>
         }
-      </kendo-buttongroup>
+      </div>
     }
 
     <!-- Radio Buttons -->
@@ -136,7 +134,7 @@
           <div class="radio-option">
             <input
               type="radio"
-              kendoRadioButton
+              class="mj-radio"
               [name]="Question.id"
               [value]="option.value"
               [checked]="Value === option.value"
@@ -174,15 +172,16 @@
     <!-- Slider -->
     @if (QuestionType === 'slider') {
       <div class="question-slider-container">
-        <kendo-slider
+        <input
+          type="range"
+          class="mj-slider question-slider"
           [min]="GetSliderConfig().min"
           [max]="GetSliderConfig().max"
-          [smallStep]="GetSliderConfig().step || 1"
+          [step]="GetSliderConfig().step || 1"
           [value]="$any(Value) || GetSliderConfig().min"
           [disabled]="Disabled"
-          (valueChange)="OnValueChange($event)"
-          class="question-slider"
-        ></kendo-slider>
+          (input)="OnValueChange(+$any($event.target).value)"
+          />
         <div class="slider-value">
           {{ Value || GetSliderConfig().min }}{{ GetSliderConfig().suffix || '' }}
         </div>
@@ -192,33 +191,35 @@
     <!-- Date Range -->
     @if (QuestionType === 'daterange') {
       <div class="question-daterange">
-        <kendo-datepicker
-          [value]="$any(Value)?.start"
-          [disabled]="Disabled"
-          (valueChange)="OnDateRangeStartChange($event)"
-          placeholder="Start Date"
+        <mj-datepicker
+          [ngModel]="$any(Value)?.start"
+          [ngModelOptions]="{standalone: true}"
+          [Disabled]="Disabled"
+          (ValueChange)="OnDateRangeStartChange($any($event))"
+          Placeholder="Start Date"
           class="daterange-start"
-        ></kendo-datepicker>
+        ></mj-datepicker>
         <span class="daterange-separator">to</span>
-        <kendo-datepicker
-          [value]="$any(Value)?.end"
-          [disabled]="Disabled"
-          (valueChange)="OnDateRangeEndChange($event)"
-          placeholder="End Date"
+        <mj-datepicker
+          [ngModel]="$any(Value)?.end"
+          [ngModelOptions]="{standalone: true}"
+          [Disabled]="Disabled"
+          (ValueChange)="OnDateRangeEndChange($any($event))"
+          Placeholder="End Date"
           class="daterange-end"
-        ></kendo-datepicker>
+        ></mj-datepicker>
       </div>
     }
 
     <!-- Time Picker -->
     @if (QuestionType === 'time') {
-      <kendo-timepicker
+      <input
+        type="time"
+        class="mj-input question-input"
         [value]="$any(Value)"
         [disabled]="Disabled"
-        (valueChange)="OnValueChange($event)"
-        [format]="'h:mm a'"
-        class="question-input"
-      ></kendo-timepicker>
+        (change)="OnValueChange($any($event.target).value)"
+        />
     }
 
     <!-- Checkboxes -->
@@ -228,7 +229,7 @@
           <div class="checkbox-option">
             <input
               type="checkbox"
-              kendoCheckBox
+              class="mj-checkbox"
               [checked]="IsChecked(option)"
               [disabled]="Disabled"
               (change)="ToggleCheckbox(option)"

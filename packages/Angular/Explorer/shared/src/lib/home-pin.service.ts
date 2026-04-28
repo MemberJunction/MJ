@@ -216,6 +216,20 @@ export class HomeAppPinService {
         const sameQP = pinQP === configQP;
         return sameApp && sameNav && sameRoute && sameQP;
       }
+      case 'Actions': {
+        // A pinned Action is unique per (actionId + preset-params + runtime-params + title).
+        // Two pins targeting the same action with different preset configs are allowed —
+        // e.g. "Weekly Report — Sales" vs. "Weekly Report — Ops" both pin "Run Report".
+        if (pin.Configuration['actionId'] !== config['actionId']) return false;
+        const pinPreset = JSON.stringify(pin.Configuration['presetParams'] ?? {});
+        const configPreset = JSON.stringify(config['presetParams'] ?? {});
+        const pinRuntime = JSON.stringify(pin.Configuration['runtimeParamNames'] ?? []);
+        const configRuntime = JSON.stringify(config['runtimeParamNames'] ?? []);
+        const samePreset = pinPreset === configPreset;
+        const sameRuntime = pinRuntime === configRuntime;
+        const sameTitle = pin.DisplayName === (config['displayName'] ?? pin.DisplayName);
+        return samePreset && sameRuntime && sameTitle;
+      }
       default:
         return false;
     }

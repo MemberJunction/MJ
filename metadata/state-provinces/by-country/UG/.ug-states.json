@@ -1,0 +1,821 @@
+[
+  {
+    "fields": {
+      "Name": "Apac",
+      "Code": "APA",
+      "ISO3166_2": "UG-APA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Apac"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "0C53766B-F885-409F-8F00-03DE1BEAE614"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.206Z",
+      "checksum": "798385d87ab1de43998197d009c84495aee7f17b26e31690f6b6c339100d105d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Arua",
+      "Code": "ARU",
+      "ISO3166_2": "UG-ARU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Arua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "D5A461FA-4E84-4BBC-8EDE-8387EDDCE28B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.222Z",
+      "checksum": "36e0ba5f65791aff0660f5b51e8c52da3f7e1d90902dbef7088d1ef1199ec8ae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bundibugyo",
+      "Code": "BUN",
+      "ISO3166_2": "UG-BUN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bundibugyo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "73239684-85B2-447E-B18D-B8E4FB689CD4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.240Z",
+      "checksum": "db57f265725a84bb3937e553e9e52112de9fce916be4ef207ead152388811fb4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bushenyi",
+      "Code": "BUS",
+      "ISO3166_2": "UG-BUS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bushenyi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "19A7DF95-219D-42A7-BE47-27056F20C3C8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.256Z",
+      "checksum": "89c4b045aa75d81ac241ab8fb8d4bb71ab79fef22753e0846ff313b5c45373a4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gulu",
+      "Code": "GUL",
+      "ISO3166_2": "UG-GUL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gulu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "4F094169-A42E-4E74-8AB3-39A079F7D9F4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.274Z",
+      "checksum": "d334c94a27b05eaedd4cfe68ac43133e29a36fb494b9b63ed34142f59cf5dd37"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hoima",
+      "Code": "HOI",
+      "ISO3166_2": "UG-HOI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Hoima"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "C0AB76FB-5BBF-42C0-88E2-585F1DF67863"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.292Z",
+      "checksum": "489781885be94ce00195a9b7875f708232ab976d935f812841ee10e846ee503a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Iganga",
+      "Code": "IGA",
+      "ISO3166_2": "UG-IGA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Iganga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "CCCCB46E-2E6D-4A90-BD79-F3B09059C42A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.314Z",
+      "checksum": "3bba19e4e1de467dc3f0a649f5d34ed4ed9fbb4e89e899c3fda2e2f554d38941"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jinja",
+      "Code": "JIN",
+      "ISO3166_2": "UG-JIN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jinja"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "160E0390-AC56-4D0C-A4A0-99AAE5A143F5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.334Z",
+      "checksum": "9498c8a5d93180c4907a8e78537a9b2f0575c7ba4cecbb9fb79b70199de8afa3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kabale",
+      "Code": "KBL",
+      "ISO3166_2": "UG-KBL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kabale"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "42EFA7FD-7139-4DC1-95DB-DF6C97253226"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.355Z",
+      "checksum": "8dfbb1391367fd91c45c07c278afb4fc4ee969c57c6e148d40e573c40920d70e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kabarole",
+      "Code": "KBR",
+      "ISO3166_2": "UG-KBR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kabarole"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "3AAB31DB-F710-47A5-8DAC-C59C85EC5558"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.371Z",
+      "checksum": "7379097ae0ab8d0ca364a23baf59513188a99fd7951c35056bb3caac67da9259"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kalangala",
+      "Code": "KLG",
+      "ISO3166_2": "UG-KLG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kalangala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "8124630C-10B1-4B51-B3B3-477B0F8892AA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.435Z",
+      "checksum": "866cf2ba62ce033170f8a54a0fd4158cde426711b63ba6a6632c18bf73b261bd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kampala",
+      "Code": "KLA",
+      "ISO3166_2": "UG-KLA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kampala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "FD508EBA-5D1C-4296-A730-651B67E48702"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.452Z",
+      "checksum": "72e85d462f4d42af03854b71bf77b867137e5e59ed3a24e15f3cfc8320ba2351"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kamuli",
+      "Code": "KLI",
+      "ISO3166_2": "UG-KLI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kamuli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "572C5F8D-017A-440B-825F-76F2297A426F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.469Z",
+      "checksum": "b27987a9e06f4d424a6160c33e154054676681a6f5544105a8bc17f96496592c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kapchorwa",
+      "Code": "KAP",
+      "ISO3166_2": "UG-KAP",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kapchorwa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "FDF1304E-F308-493B-A625-DD276FD48A6B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.486Z",
+      "checksum": "fb6ce8a31dc4178283c46fffa2ef371118a189aa46bb8b3211f02cb1f50dbbf6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kasese",
+      "Code": "KAS",
+      "ISO3166_2": "UG-KAS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kasese"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "0D70FD2D-8E0E-4A79-9CE1-61CB52F6FDE4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.504Z",
+      "checksum": "a9ed6aee47d15c07cea371ac88fbe39c829db5ce444aecbd8e9780578f26af17"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kibaale",
+      "Code": "KLE",
+      "ISO3166_2": "UG-KLE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kibaale"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "A8E28467-7C00-41C1-AE1D-0002CBBCED3F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.521Z",
+      "checksum": "3e1f5c5d15ff076cd1876cb0dba126e0a429fdf640c04f011b941098bce79779"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kiboga",
+      "Code": "KIB",
+      "ISO3166_2": "UG-KIB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kiboga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "218CB76C-6404-43B0-96C5-ECA16C4FFDE2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.537Z",
+      "checksum": "22efeaf6c8534aee0dbea3a043b3432eb27fbb53d0bf96853a20f882ed9be02e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kisoro",
+      "Code": "KIS",
+      "ISO3166_2": "UG-KIS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kisoro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "7EBFA0D1-ABD7-4FF5-A049-A20E77DE2376"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.553Z",
+      "checksum": "a9a3018e46e626a32495bf965e78eb53155719daac3d435cf13b159574732fcd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kitgum",
+      "Code": "KIT",
+      "ISO3166_2": "UG-KIT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kitgum"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "EAB92420-EBB3-424F-8F59-63E09D64CD48"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.573Z",
+      "checksum": "7ee2fd795aa6d0beb996ad03ef52ae1597c263e3058618499d5e364baa56c829"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kotido",
+      "Code": "KOT",
+      "ISO3166_2": "UG-KOT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kotido"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "A34BAC4B-A30C-4D24-B05B-5F4A03074379"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.586Z",
+      "checksum": "c7c1d9d1aebabb584d237127b5cb0a3c78ce732677420aebc228774a4f3ae08d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kumi",
+      "Code": "KUM",
+      "ISO3166_2": "UG-KUM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kumi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "1DC12B19-C9EE-479D-A555-3FF84C745EEE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.641Z",
+      "checksum": "b492059c45d85c3a9cd4da7ce1258571cc0fcb06584c50f915f32b5bc311a488"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lira",
+      "Code": "LIR",
+      "ISO3166_2": "UG-LIR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lira"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "B3BBDA60-E697-46EF-9529-54637CEB8CC3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.658Z",
+      "checksum": "6f05fdce8ff4209e52b97edab0b7a168ca7219aef725631459e09de44eafce6e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Luwero",
+      "Code": "LUW",
+      "ISO3166_2": "UG-LUW",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Luwero"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "68E2C7D8-0DCF-4FBB-A32C-E9817E7143EE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.674Z",
+      "checksum": "35641cc58e6c2b463e4e6454723faaf86c50a81b6555296585fdd79e44a7beb1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Masaka",
+      "Code": "MSK",
+      "ISO3166_2": "UG-MSK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Masaka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "2F59CAE9-15A7-48F7-8A47-CCB2E31F44DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.691Z",
+      "checksum": "43952cc3a8a118d724e2ad8f7c43405d9120169abb2b69b7aa2385f324de9b7b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Masindi",
+      "Code": "MSI",
+      "ISO3166_2": "UG-MSI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Masindi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "A4E1643C-88F7-4439-9101-BF3712957183"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.707Z",
+      "checksum": "5bf1066311e18941c9226b40a34accf3eb2d9e256b0d89f738de9a0b7e147e6f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mbale",
+      "Code": "MBL",
+      "ISO3166_2": "UG-MBL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mbale"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "1EB13BB7-18C6-4467-BC7D-00770B698C62"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.724Z",
+      "checksum": "be3a7984bbf3070686631ccebf7c29cd1191c5362f8d4c0ae7d608bdfef88b82"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mbarara",
+      "Code": "MBR",
+      "ISO3166_2": "UG-MBR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mbarara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "175C7FA4-77AB-442E-B4E0-41644A5F3872"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.742Z",
+      "checksum": "0d7a8dc827c2f82501b4f0b9d293c640019f7c2b42621fe45fdfb68e1961dda2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moroto",
+      "Code": "MOR",
+      "ISO3166_2": "UG-MOR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Moroto"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "32081F5E-643A-4520-A9F2-424CB784D3AB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.758Z",
+      "checksum": "37e9419bb661b3f66766ee9cad057125227e5b2c7f0725c2291126397f38fbbf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moyo",
+      "Code": "MOY",
+      "ISO3166_2": "UG-MOY",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Moyo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "9D1FED51-67B0-462A-B001-0ACE10125D60"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.775Z",
+      "checksum": "edf2d13c31f65272d46376922d318f4ada76b07eac8f0c7d64f9ce15b7192443"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mpigi",
+      "Code": "MPI",
+      "ISO3166_2": "UG-MPI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mpigi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "6151E54B-BA65-48F5-AAE6-7A90B6B9DDA3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.788Z",
+      "checksum": "7b4fad9e58cd77f53279d7653648dafc95a8e67a7f872127f2a1c147f3d06d21"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mubende",
+      "Code": "MUB",
+      "ISO3166_2": "UG-MUB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mubende"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "5D0FE44E-785E-4A52-98DD-BA3AE5929084"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.848Z",
+      "checksum": "74f606ef791fb15d8ee04a7558bcda2d6861f6cd24543f89564a799303c28142"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mukono",
+      "Code": "MUK",
+      "ISO3166_2": "UG-MUK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mukono"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "F388FD8B-6607-4A0D-B22D-C46DE2241A49"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.864Z",
+      "checksum": "4dce76e6ee01d0d6c483bd8713a0f48e4e1ed30662f651e59d2d7876ab1fae1d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nebbi",
+      "Code": "NEB",
+      "ISO3166_2": "UG-NEB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Nebbi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "95D8A8F6-E06A-4942-A1DD-FC137273D737"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.880Z",
+      "checksum": "b052b0e180e5a7830ca19efcfece727d5009820850927a1099e89e6f67e8ced3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ntungamo",
+      "Code": "NTU",
+      "ISO3166_2": "UG-NTU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ntungamo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "8A83E790-58D5-4AD8-8497-24BACF7A14BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.896Z",
+      "checksum": "1a48820b03603fdd6d2b4ba6dad73a779159c0082b70857901ad298ea2b0e585"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pallisa",
+      "Code": "PAL",
+      "ISO3166_2": "UG-PAL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pallisa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "0A05DC38-5FAA-469C-AD79-560928A09535"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.912Z",
+      "checksum": "ba6447c89166ea5f1bb55a104fbf405c8f14be530d17003afef17009bb4b121e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rakai",
+      "Code": "RAK",
+      "ISO3166_2": "UG-RAK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rakai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "5BDEA328-D0B5-4678-9F84-C30ED642AABA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.928Z",
+      "checksum": "2241d5ef480199e3ee29e355d3b9ed91f84665b38ff6385473a4a0afa5ceac0a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rukungiri",
+      "Code": "RUK",
+      "ISO3166_2": "UG-RUK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rukungiri"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "286818E0-E5CD-45C1-9C18-260DECD55E5E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.944Z",
+      "checksum": "27c7a6f7ebd469b5b41a10caffc7357121401af915d0b2dd4d4d2d8468e7824e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Soroti",
+      "Code": "SOR",
+      "ISO3166_2": "UG-SOR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Soroti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "9C25D6F4-5484-4D0D-90DD-20C13F31C39D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.960Z",
+      "checksum": "6d6e9132e57b5c44b802fadc638027d8ae2f7e3080f7045d061a6590157a1365"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tororo",
+      "Code": "TOR",
+      "ISO3166_2": "UG-TOR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tororo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UG"
+    },
+    "primaryKey": {
+      "ID": "00AFCFE6-6D91-4793-95B9-5F1A5B6A4E04"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.974Z",
+      "checksum": "a76256514817c26fa94b28a3fa33a2cbffa3e0931cc8c10a47cd61b9d566ea43"
+    }
+  }
+]

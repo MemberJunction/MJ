@@ -31,15 +31,15 @@ type SortBy = 'name' | 'date' | 'type';
             </button>
           </div>
     
-          <kendo-dropdownlist
-            [data]="sortOptions"
-            [textField]="'label'"
-            [valueField]="'value'"
-            [(value)]="sortBy"
-            (valueChange)="onSortChange()"
-            [style.width.px]="150"
-            placeholder="Sort by...">
-          </kendo-dropdownlist>
+          <select
+            [(ngModel)]="sortBy"
+            (ngModelChange)="onSortChange()"
+            class="mj-select"
+            style="width: 150px;">
+            @for (option of sortOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
     
           @if (canEdit) {
             <button class="btn-add" (click)="onAddArtifact()" title="Add Artifact">
@@ -272,9 +272,20 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
       }, this.currentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
-        // Delete this version association
+        // Delete all version associations atomically
+        const md = new Metadata();
+        const tg = await md.CreateTransactionGroup();
         for (const joinRecord of result.Results) {
+          joinRecord.TransactionGroup = tg;
           await joinRecord.Delete();
+        }
+        const success = await tg.Submit();
+        if (!success) {
+          MJNotificationService.Instance.CreateSimpleNotification(
+            `Failed to remove ${versionLabel} from collection`,
+            'error'
+          );
+          return;
         }
         await this.loadArtifacts();
         this.cdr.detectChanges();

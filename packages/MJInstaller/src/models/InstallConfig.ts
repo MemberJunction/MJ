@@ -63,8 +63,20 @@ export interface InstallConfig {
   /** TCP port for the MJAPI GraphQL server (default: `4000`). */
   APIPort: number;
 
-  /** TCP port for the MJExplorer Angular dev server (default: `4200`). */
+  /** TCP port for the MJExplorer Angular dev server (default: `4200` for distribution, `4201` for monorepo). */
   ExplorerPort: number;
+
+  // ── Install mode ──────────────────────────────────────────────────────
+
+  /**
+   * Installation mode selection.
+   * - `'distribution'` (default) — Downloads the lightweight bootstrap ZIP containing
+   *   only MJAPI, MJExplorer, GeneratedEntities, and GeneratedActions as workspace
+   *   packages. All `@memberjunction/*` packages come from npm.
+   * - `'monorepo'` — Downloads the full MemberJunction source repository. Use this
+   *   if you need to work on MJ framework code itself.
+   */
+  InstallMode: 'distribution' | 'monorepo';
 
   // ── Auth provider ─────────────────────────────────────────────────────
 
@@ -141,6 +153,7 @@ export const InstallConfigDefaults: PartialInstallConfig = {
   APIPort: 4000,
   ExplorerPort: 4200,
   AuthProvider: 'none',
+  InstallMode: 'distribution',
 };
 
 // ── Environment variable mapping ──────────────────────────────────────────
@@ -170,6 +183,7 @@ const ENV_VAR_MAP: ReadonlyArray<{
   { EnvVar: 'MJ_INSTALL_ANTHROPIC_KEY',     Field: 'AnthropicKey',     Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_MISTRAL_KEY',       Field: 'MistralKey',       Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_BASE_ENCRYPTION_KEY', Field: 'BaseEncryptionKey', Parse: (v) => v },
+  { EnvVar: 'MJ_INSTALL_MODE',              Field: 'InstallMode',       Parse: (v) => v as InstallConfig['InstallMode'] },
 ];
 
 /**
@@ -280,7 +294,7 @@ export async function loadConfigFile(filePath: string): Promise<PartialInstallCo
     'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert',
     'CodeGenUser', 'CodeGenPassword', 'APIUser', 'APIPassword',
     'APIPort', 'ExplorerPort', 'AuthProvider', 'AuthProviderValues',
-    'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'CreateNewUser',
+    'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',
   ]);
 
   for (const key of Object.keys(known)) {

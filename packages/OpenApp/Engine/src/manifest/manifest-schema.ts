@@ -52,6 +52,13 @@ const packageEntrySchema = z.object({
 
 const packagesSchema = z.object({
     registry: z.string().url().optional(),
+    /**
+     * npm package prefix for this app (e.g., '@bluecypress/bcsaas-').
+     * When set, `mj app install --version` and `mj app upgrade --version` will
+     * bump ALL dependencies matching this prefix across the workspace, not just
+     * the packages declared in server/client/shared.
+     */
+    prefix: z.string().min(1).optional(),
     server: z.array(packageEntrySchema).optional(),
     client: z.array(packageEntrySchema).optional(),
     shared: z.array(packageEntrySchema).optional(),

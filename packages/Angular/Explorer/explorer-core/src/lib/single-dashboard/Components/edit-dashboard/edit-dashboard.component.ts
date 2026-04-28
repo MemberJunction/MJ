@@ -1,6 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
-import { TileLayoutReorderEvent, TileLayoutResizeEvent } from '@progress/kendo-angular-layout';
 import { SharedService } from '@memberjunction/ng-shared';
 import { DashboardConfigDetails, DashboardItem } from '../../single-dashboard.component';
 
@@ -11,19 +10,19 @@ import { DashboardConfigDetails, DashboardItem } from '../../single-dashboard.co
   styleUrls: ['./edit-dashboard.component.css']
 })
 export class EditDashboardComponent {
-  @Output() onSave = new EventEmitter<any>();
-  @Output() onClose = new EventEmitter<any>();
-  @Output() triggerAddItem = new EventEmitter<any>();
+  @Output() onSave = new EventEmitter<{ itemsChanged: boolean; items: DashboardItem[]; config: DashboardConfigDetails }>();
+  @Output() onClose = new EventEmitter<void>();
+  @Output() triggerAddItem = new EventEmitter<{ ID: string; DisplayName: string }>();
   @Input() public editMode: boolean = false;
   @Input() public config: DashboardConfigDetails = new DashboardConfigDetails();
   @Input() public items: DashboardItem[] = [];
   public _items: DashboardItem[] = [];
   public itemsChanged: boolean = false;
+  public showAddMenu: boolean = false;
 
-  public get ResourceTypes(): any[] {
-    return SharedService.Instance.ResourceTypes.filter((rt: any) => rt.Name !== 'Dashboards' && rt.Name !== 'Records');
+  public get ResourceTypes(): { ID: string; Name: string; DisplayName: string }[] {
+    return SharedService.Instance.ResourceTypes.filter((rt: { Name: string }) => rt.Name !== 'Dashboards' && rt.Name !== 'Records');
   }
-  public resourceType: any = null;
 
   async ngOnInit(): Promise<void> {
       this._items = [];
@@ -33,7 +32,7 @@ export class EditDashboardComponent {
       }
   }
 
-  protected CreateDashboardItem(item: any): DashboardItem {
+  protected CreateDashboardItem(item: DashboardItem): DashboardItem {
     const dashboardItem = new DashboardItem();
     if (item) {
       dashboardItem.title = item.title;
@@ -42,37 +41,38 @@ export class EditDashboardComponent {
       dashboardItem.row = item.row;
       dashboardItem.rowSpan = item.rowSpan;
       dashboardItem.colSpan = item.colSpan;
-      dashboardItem.ResourceData = new ResourceData(item.ResourceData);  
+      dashboardItem.ResourceData = new ResourceData(item.ResourceData);
     }
     return dashboardItem;
   }
 
-  removeItem(e: any): void {
-    // remove the selected item from the dashboard
-    const index = this._items.indexOf(e);
+  removeItem(item: DashboardItem): void {
+    const index = this._items.indexOf(item);
     if (index >= 0) {
       this._items.splice(index, 1);
       this.itemsChanged = true;
     }
   }
 
-  onReorder(e: TileLayoutReorderEvent): void {
-    const item = this._items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
+  toggleAddMenu(): void {
+    this.showAddMenu = !this.showAddMenu;
+  }
+
+  onReorder(e: { oldIndex: number; newIndex: number; newCol?: number; newRow?: number; uniqueId?: number }): void {
+    const item = e.uniqueId != null ? this._items.find(i => i.uniqueId === e.uniqueId) : this._items[e.oldIndex];
     if (item) {
-      // move the item in our config state to the new index
       if (e.oldIndex !== e.newIndex) {
         this._items.splice(e.oldIndex, 1);
-        this._items.splice(e.newIndex, 0, item);  
+        this._items.splice(e.newIndex, 0, item);
       }
-      //item.order = e.item.order;
-      item.col = e.newCol ? e.newCol : item.col;
-      item.row = e.newRow ? e.newRow : item.row;
+      item.col = e.newCol ?? item.col;
+      item.row = e.newRow ?? item.row;
       this.itemsChanged = true;
     }
   }
-  
-  onResize(e: TileLayoutResizeEvent): void {
-    const item = this._items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
+
+  onResize(e: { newColSpan: number; newRowSpan: number; uniqueId?: number }): void {
+    const item = e.uniqueId != null ? this._items.find(i => i.uniqueId === e.uniqueId) : undefined;
     if (item) {
       item.colSpan = e.newColSpan;
       item.rowSpan = e.newRowSpan;
@@ -80,11 +80,13 @@ export class EditDashboardComponent {
     }
   }
 
-  closeDialog(event: any = null): void {
+  closeDialog(): void {
+    this.showAddMenu = false;
     this.onClose.emit();
   }
 
-  saveChanges() {
+  saveChanges(): void {
+    this.showAddMenu = false;
     this.onSave.emit({
       itemsChanged: this.itemsChanged,
       items: this._items,
@@ -92,8 +94,9 @@ export class EditDashboardComponent {
     });
   }
 
-  onItemSelect(event: any) {
-    if(event.ID){
+  onItemSelect(event: { ID: string; DisplayName: string }): void {
+    this.showAddMenu = false;
+    if (event.ID) {
       this.triggerAddItem.emit(event);
     }
   }

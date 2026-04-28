@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/global
 
+## 5.30.1
+
+## 5.30.0
+
+## 5.29.0
+
+## 5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- d18aa6c: Fix XSS vulnerability in highlight match bindings by escaping HTML entities via centralized EscapeHTML utility.
+
+## 5.27.0
+
+## 5.26.0
+
+## 5.25.0
+
+## 5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+
 ## 5.22.0
 
 ### Patch Changes

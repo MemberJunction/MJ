@@ -1,5 +1,92 @@
 # @memberjunction/interactive-component-types
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.30.1
+- @memberjunction/core@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- 00b5c26: Extract shared map-core library from Angular and React map components into a single source of truth. Add boundary render mode for per-record GeoJSON polygon rendering. Expose GeoDataEngine on React runtime utilities.
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/core@5.30.0
+  - @memberjunction/ai-vectors-memory@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/ai-vectors-memory@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/ai-vectors-memory@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.27.1
+- @memberjunction/core@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.27.0
+- @memberjunction/core@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [a1002f4]
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-vectors-memory@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- Updated dependencies [fc8cd52]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/ai-vectors-memory@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-vectors-memory@5.24.0
+  - @memberjunction/core@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/ai-vectors-memory@5.23.0
+
 ## 5.22.0
 
 ### Patch Changes

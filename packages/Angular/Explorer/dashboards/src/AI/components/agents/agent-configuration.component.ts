@@ -10,6 +10,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { TreeBranchConfig, TreeLeafConfig, AfterNodeClickEventArgs, AfterNodeDoubleClickEventArgs } from '@memberjunction/ng-trees';
 
 interface AgentFilter {
   searchTerm: string;
@@ -21,21 +22,6 @@ interface AgentFilter {
   categoryId: string;
 }
 
-/** Lightweight category row for tree-view grouping */
-interface CategoryInfo {
-  ID: string;
-  Name: string;
-  ParentID: string | null;
-  Description: string | null;
-}
-
-/** A category node with nested agents and child categories for tree rendering */
-export interface CategoryTreeNode {
-  Category: CategoryInfo;
-  Agents: MJAIAgentEntityExtended[];
-  Children: CategoryTreeNode[];
-  Expanded: boolean;
-}
 
 /**
  * User preferences for the Agent Configuration dashboard
@@ -62,7 +48,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   // Settings persistence
   private readonly USER_SETTINGS_KEY = 'AI.Agents.UserPreferences';
   private settingsPersistSubject = new Subject<void>();
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private settingsLoaded = false;
 
   public isLoading = false;
@@ -93,10 +79,27 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   public selectedAgentForTest: MJAIAgentEntityExtended | null = null;
 
-  // Category tree view data
-  public categoryTree: CategoryTreeNode[] = [];
-  public uncategorizedAgents: MJAIAgentEntityExtended[] = [];
-  private categories: CategoryInfo[] = [];
+  // mj-tree configuration for category tree view
+  public CategoryBranchConfig: TreeBranchConfig = {
+    EntityName: 'MJ: AI Agent Categories',
+    DisplayField: 'Name',
+    ParentIDField: 'ParentID',
+    DefaultIcon: 'fa-solid fa-folder',
+    DescriptionField: 'Description',
+    ExtraFilter: "Status='Active'",
+    OrderBy: 'Name ASC'
+  };
+
+  public AgentLeafConfig: TreeLeafConfig = {
+    EntityName: 'MJ: AI Agents',
+    ParentField: 'CategoryID',
+    DisplayField: 'Name',
+    DefaultIcon: 'fa-solid fa-robot',
+    IconField: 'IconClass',
+    DescriptionField: 'Type',
+    BadgeField: 'Status',
+    OrderBy: 'Name ASC'
+  };
 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
@@ -182,7 +185,6 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   constructor(
     private testHarnessService: AITestHarnessDialogService,
     private createAgentService: CreateAgentService,
-    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -204,21 +206,23 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     if (this.Data?.Configuration) {
       this.applyInitialState(this.Data.Configuration);
     }
-    await this.loadAgents();
+
+    // Load agents and categories in parallel
+    await Promise.all([
+      this.loadAgents(),
+      this.loadCategories()
+    ]);
 
     // Apply filters after data is loaded (uses saved preferences)
     this.applyFilters();
-
-    // If tree view mode is active, load categories for the tree
-    if (this.viewMode === 'tree') {
-      this.loadCategoriesAndBuildTree();
-    }
+    this.cdr.detectChanges();
 
     // Notify that the resource has finished loading
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -337,8 +341,6 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       console.error('Error loading AI agents:', error);
     } finally {
       this.isLoading = false;
-      // force change detection to update the view
-      this.cdr.detectChanges();
     }
   }
 
@@ -436,11 +438,6 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     filtered = this.applySorting(filtered);
 
     this.filteredAgents = filtered;
-
-    // Rebuild tree view data when filters change
-    if (this.viewMode === 'tree') {
-      this.buildCategoryTree();
-    }
   }
 
   /**
@@ -501,11 +498,6 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   public setViewMode(mode: 'grid' | 'list' | 'tree'): void {
     this.viewMode = mode;
-    if (mode === 'tree' && this.categories.length === 0) {
-      this.loadCategoriesAndBuildTree();
-    } else if (mode === 'tree') {
-      this.buildCategoryTree();
-    }
     this.emitStateChange();
     this.saveUserPreferencesDebounced();
   }
@@ -600,28 +592,32 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     try {
       const agent = result.Agent;
 
-      // Save the agent
-      const saveResult = await agent.Save();
-      if (!saveResult) {
-        throw new Error('Failed to save agent');
-      }
+      // Create agent + linked prompts + linked actions in one atomic transaction.
+      // agent.ID is assigned client-side by NewRecord() so we can use it on child records before submit.
+      const md = new Metadata();
+      const tg = await md.CreateTransactionGroup();
 
-      // Save linked prompts if any
+      agent.TransactionGroup = tg;
+      await agent.Save();
+
       if (result.AgentPrompts && result.AgentPrompts.length > 0) {
         for (const agentPrompt of result.AgentPrompts) {
-          // Update the AgentID to the saved agent's ID
           agentPrompt.AgentID = agent.ID;
+          agentPrompt.TransactionGroup = tg;
           await agentPrompt.Save();
         }
       }
 
-      // Save linked actions if any
       if (result.AgentActions && result.AgentActions.length > 0) {
         for (const agentAction of result.AgentActions) {
-          // Update the AgentID to the saved agent's ID
           agentAction.AgentID = agent.ID;
+          agentAction.TransactionGroup = tg;
           await agentAction.Save();
         }
+      }
+
+      if (!await tg.Submit()) {
+        throw new Error('Failed to save agent — all changes have been rolled back');
       }
 
       // Refresh the agent list
@@ -706,70 +702,28 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   }
 
   // ========================================
-  // Category Tree View
+  // Category Tree View (mj-tree)
   // ========================================
 
-  /** Load categories from the database and build the tree structure */
-  private async loadCategoriesAndBuildTree(): Promise<void> {
+  /** Lightweight category row for descendant filtering */
+  private categories: { ID: string; ParentID: string | null }[] = [];
+
+  /** Load categories for descendant-based filter matching */
+  private async loadCategories(): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<CategoryInfo>({
+      const result = await rv.RunView<{ ID: string; ParentID: string | null }>({
         EntityName: 'MJ: AI Agent Categories',
-        Fields: ['ID', 'Name', 'ParentID', 'Description'],
+        Fields: ['ID', 'ParentID'],
         ExtraFilter: "Status='Active'",
-        OrderBy: 'Name ASC',
         ResultType: 'simple'
       });
       if (result.Success) {
         this.categories = result.Results;
-        this.buildCategoryTree();
-        this.cdr.detectChanges();
       }
     } catch (error) {
       console.error('[AgentConfiguration] Error loading categories:', error);
     }
-  }
-
-  /** Build tree nodes from flat categories + filtered agents */
-  private buildCategoryTree(): void {
-    const agentsByCategory = new Map<string, MJAIAgentEntityExtended[]>();
-    const uncategorized: MJAIAgentEntityExtended[] = [];
-
-    for (const agent of this.filteredAgents) {
-      const catId = agent.CategoryID;
-      if (catId) {
-        const normalizedId = catId.toUpperCase();
-        if (!agentsByCategory.has(normalizedId)) {
-          agentsByCategory.set(normalizedId, []);
-        }
-        agentsByCategory.get(normalizedId)!.push(agent);
-      } else {
-        uncategorized.push(agent);
-      }
-    }
-
-    // Build tree from root categories (ParentID is null)
-    const rootCategories = this.categories.filter(c => !c.ParentID);
-    this.categoryTree = rootCategories.map(c => this.buildTreeNode(c, agentsByCategory));
-    this.uncategorizedAgents = uncategorized;
-  }
-
-  /** Recursively build a CategoryTreeNode */
-  private buildTreeNode(
-    category: CategoryInfo,
-    agentsByCategory: Map<string, MJAIAgentEntityExtended[]>
-  ): CategoryTreeNode {
-    const children = this.categories
-      .filter(c => c.ParentID && UUIDsEqual(c.ParentID, category.ID))
-      .map(c => this.buildTreeNode(c, agentsByCategory));
-
-    const normalizedId = category.ID.toUpperCase();
-    return {
-      Category: category,
-      Agents: agentsByCategory.get(normalizedId) || [],
-      Children: children,
-      Expanded: true // default expanded
-    };
   }
 
   /** Get a category and all its descendant IDs (for inclusive filtering) */
@@ -782,24 +736,23 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     return ids;
   }
 
-  /** Toggle a category node's expanded state in the tree view */
-  public toggleCategoryNode(node: CategoryTreeNode): void {
-    node.Expanded = !node.Expanded;
-  }
-
-  /** Check if a tree node has any visible content (agents or children with content) */
-  public hasVisibleContent(node: CategoryTreeNode): boolean {
-    if (node.Agents.length > 0) return true;
-    return node.Children.some(child => this.hasVisibleContent(child));
-  }
-
-  /** Get the total agent count for a category including all descendants */
-  public getAgentCount(node: CategoryTreeNode): number {
-    let count = node.Agents.length;
-    for (const child of node.Children) {
-      count += this.getAgentCount(child);
+  /** Handle click on a tree node — open detail panel for agents */
+  public onTreeNodeClick(event: AfterNodeClickEventArgs): void {
+    const node = event.Node;
+    if (node.Type === 'leaf') {
+      const agent = this.agents.find(a => UUIDsEqual(a.ID, node.ID));
+      if (agent) {
+        this.showAgentDetails(agent);
+      }
     }
-    return count;
+  }
+
+  /** Handle double-click on a tree node — open full record for agents */
+  public onTreeNodeDoubleClick(event: AfterNodeDoubleClickEventArgs): void {
+    const node = event.Node;
+    if (node.Type === 'leaf') {
+      this.openAgentRecord(node.ID);
+    }
   }
 
   // === BaseResourceComponent Required Methods ===

@@ -1,15 +1,26 @@
 /**
- * @fileoverview Type definitions for Loop Agent Type prompt parameters.
+ * @fileoverview Type definitions for Loop Agent Type parameters.
  *
- * This module contains the interface definition for parameters that control
- * which sections are included in the Loop Agent Type's system prompt.
- * These parameters enable significant token savings for agents that don't
- * need all capabilities documented in the full system prompt.
+ * This module defines the per-agent configuration interface for Loop-type agents.
+ * These parameters are stored in the `AgentTypePromptParams` JSON field on the
+ * `MJ: AI Agents` entity and control:
+ *
+ * - **Prompt inclusion**: Which sections are included in the system prompt
+ *   (enables token savings by excluding unused documentation)
+ * - **Client tools**: Browser-side tools the agent can invoke (navigation, UI actions)
+ * - **Content limits**: Max sub-agents/actions to include in prompts
+ *
+ * Parameters are merged with three-level precedence:
+ * 1. Schema defaults (from AIAgentType.PromptParamsSchema) — lowest priority
+ * 2. Agent config (from AIAgent.AgentTypePromptParams) — medium priority
+ * 3. Runtime override (from ExecuteAgentParams.data.__agentTypePromptParams) — highest priority
  *
  * @module @memberjunction/ai-agents
  * @author MemberJunction.com
  * @since 2.131.0
  */
+
+
 
 /**
  * Granular control over which parts of the response type definition to include.
@@ -70,6 +81,13 @@ export interface ResponseTypeInclusionRules {
      * @default true
      */
     scratchpad?: boolean;
+
+    /**
+     * Include artifactToolCalls field in the response interface.
+     * Auto-aligns with includeArtifactToolsDocs unless explicitly set.
+     * @default true
+     */
+    artifactToolCalls?: boolean;
 }
 
 /**
@@ -82,15 +100,18 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     commands: true,
     forEach: true,
     while: true,
-    scratchpad: true
+    scratchpad: true,
+    artifactToolCalls: true
 };
 
 /**
- * Prompt parameters for Loop Agent Type.
- * Controls which sections are included in the system prompt to optimize token usage.
+ * Configuration parameters for Loop Agent Type.
  *
- * All boolean properties default to true (include section) when not specified.
- * Set to false to exclude a section from the prompt.
+ * Controls prompt content (which sections are included), client tool availability,
+ * and content limits. Stored in `AIAgent.AgentTypePromptParams` as JSON.
+ *
+ * All boolean prompt-inclusion properties default to true (include section).
+ * Set to false to exclude a section from the prompt and save tokens.
  *
  * These parameters are configured at three levels with merge precedence:
  * 1. Schema defaults (from AIAgentType.PromptParamsSchema) - lowest priority
@@ -240,6 +261,15 @@ export interface LoopAgentTypePromptParams {
      */
     scratchpadMaxTasks?: number;
 
+    /**
+     * Include artifact tools documentation and artifact manifest in the prompt.
+     * Artifact tools allow agents to explore input artifacts on demand.
+     * Only emitted when artifacts are present in the run.
+     * Disable for agents that never work with artifacts.
+     * @default true
+     */
+    includeArtifactToolsDocs?: boolean;
+
     // === Content Limiting ===
 
     /**
@@ -265,7 +295,7 @@ export interface LoopAgentTypePromptParams {
 
 /**
  * Default values for LoopAgentTypePromptParams.
- * All section flags default to true (include), and limits default to -1 (include all).
+ * All section flags default to true (include), limits default to -1 (include all).
  */
 export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParams> = {
     includeResponseTypeDefinition: { ...DEFAULT_RESPONSE_TYPE_INCLUSION_RULES },
@@ -279,6 +309,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeDateTimeInPrompt: true,
     includeScratchpadDocs: true,
     scratchpadMaxTasks: 50,
+    includeArtifactToolsDocs: true,
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1
 };

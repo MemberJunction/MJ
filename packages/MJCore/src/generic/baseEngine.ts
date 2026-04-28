@@ -94,6 +94,29 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      */
     CacheLocalTTL?: number;
 
+    /**
+     * Controls whether loaded rows are returned as full BaseEntity subclass instances
+     * ('entity_object') or plain JavaScript objects ('simple').
+     *
+     * - 'entity_object': Full BaseEntity subclass instances with ORM capabilities
+     *   (.Save(), .Delete(), validation, dirty-tracking). Required for engines whose
+     *   data participates in immediate-mutation cache updates on entity save/delete events.
+     * - 'simple': Skips BaseEntity construction and class-factory lookup. Rows are plain
+     *   objects with typed field values. Much faster for read-only configuration data
+     *   that engines never mutate. NOTE: configs using 'simple' should be considered
+     *   read-only — the immediate-mutation path operates on BaseEntity arrays and is
+     *   not type-compatible with plain-object arrays.
+     *
+     * Resolution order when this property is left undefined:
+     *   1. The engine subclass's EngineDefaultResultType getter (override per engine)
+     *   2. The base getter, which returns 'entity_object'
+     *
+     * In other words, the effective default is 'entity_object' — leaving this undefined
+     * preserves the historical behavior. Do NOT initialize this field to a literal value
+     * here; it must remain undefined so the engine-level default can take effect.
+     */
+    ResultType?: 'simple' | 'entity_object';
+
     constructor(init?: Partial<BaseEnginePropertyConfig>) {
         super();
         // now copy the values from init to this object
@@ -176,6 +199,39 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _provider: IMetadataProvider;
     private _dataChange$ = new Subject<EngineDataChangeEvent>();
     private _cacheChangeUnsubscribers: (() => void)[] = [];
+    private _propertySubjects: Map<string, BehaviorSubject<BaseEntity[]>> = new Map();
+
+    /**
+     * Returns an Observable for a specific engine array property. Subscribers receive the
+     * current array immediately (BehaviorSubject semantics), then re-receive the same array
+     * reference whenever the engine mutates it (save, delete, remote-invalidate, refresh).
+     *
+     * The BehaviorSubject for a property is lazy-created on first call — engines where no
+     * one observes a property pay zero runtime cost.
+     *
+     * @param propertyName - The name of the backing array property on the engine (e.g. `_UserNotifications`).
+     */
+    public ObserveProperty<E extends BaseEntity>(propertyName: string): Observable<E[]> {
+        let subject = this._propertySubjects.get(propertyName);
+        if (!subject) {
+            const current = ((this as Record<string, unknown>)[propertyName] as BaseEntity[] | undefined) ?? [];
+            subject = new BehaviorSubject<BaseEntity[]>(current);
+            this._propertySubjects.set(propertyName, subject);
+        }
+        return subject.asObservable() as Observable<E[]>;
+    }
+
+    /**
+     * Notifies subscribers of `ObserveProperty(propertyName)` that the array has changed.
+     * No-op if no one has ever observed this property (BehaviorSubject not created).
+     * Called from the array mutation sites in BaseEngine.
+     */
+    protected emitPropertyChange(propertyName: string): void {
+        const subject = this._propertySubjects.get(propertyName);
+        if (!subject) return;
+        const current = ((this as Record<string, unknown>)[propertyName] as BaseEntity[] | undefined) ?? [];
+        subject.next(current);
+    }
 
     /**
      * While the BaseEngine class is a singleton, normally, it is possible to have multiple instances of the class in an application if the class is used in multiple contexts that have different providers.
@@ -228,6 +284,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             affectedEntity
         };
         this._dataChange$.next(event);
+    }
+
+    /**
+     * Controls the default RunView ResultType for all entity configs loaded by this engine.
+     * Override in subclasses to change the default for the entire engine without modifying
+     * each individual config entry.
+     *
+     * - 'entity_object': Full BaseEntity subclass instances (slower, required for .Save()/.Delete())
+     * - 'simple': Plain JavaScript objects (much faster, suitable for read-only engines)
+     *
+     * Individual configs can still override this via their own ResultType property.
+     * @default 'entity_object'
+     */
+    protected get EngineDefaultResultType(): 'simple' | 'entity_object' {
+        return 'entity_object';
     }
 
     /**
@@ -619,6 +690,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
+                this.emitPropertyChange(config.PropertyName);
                 // LocalCacheManager handles its own cache sync by listening for
                 // remote-invalidate events directly — no need to sync here
             }
@@ -661,6 +733,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     currentData.splice(index, 1);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
                     this.NotifyDataChange(config, currentData, 'delete', removed);
+                    this.emitPropertyChange(config.PropertyName);
                 }
                 // LocalCacheManager handles its own cache sync for deletes
             }
@@ -844,7 +917,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Immediate mutations are only safe when:
      * 1. The config has no Filter (no server-side filtering that might exclude the entity)
      * 2. The config has no OrderBy (no server-side ordering that would need to be maintained)
-     * 3. The subclass has not overridden AdditionalLoading (no post-processing that depends on full data)
+     * 3. The config does not use ResultType='simple' (immediate-mutation pushes BaseEntity
+     *    instances; arrays loaded as plain objects would become type-mixed)
+     * 4. The subclass has not overridden AdditionalLoading (no post-processing that depends on full data)
      *
      * @param config - The configuration to check
      * @param skipAdditionalLoadingCheck - When true, skips the AdditionalLoading override check.
@@ -864,6 +939,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // - For creates: we'd need to insert at the correct position
         // - For updates: the entity might need to move to a different position
         if (config.OrderBy) {
+            return false;
+        }
+
+        // applyImmediateMutation pushes/replaces with the BaseEntity instance from the
+        // event payload. If the config loaded as 'simple', the property holds plain JS
+        // objects — mixing in a BaseEntity would create a heterogeneous array. Check the
+        // effective ResultType (config override OR engine-wide default) and force a full
+        // refresh in the simple case so the array stays homogeneous and respects the
+        // configured ResultType.
+        const effectiveResultType = config.ResultType || this.EngineDefaultResultType;
+        if (effectiveResultType === 'simple') {
             return false;
         }
 
@@ -965,6 +1051,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 this.NotifyDataChange(config, currentData, 'delete', entity);
             }
         }
+
+        // Per-property observable emission for subscribers of ObserveProperty(config.PropertyName)
+        this.emitPropertyChange(config.PropertyName);
 
         // Sync to LocalCacheManager if CacheLocal is enabled for this config
         // This keeps IndexedDB/localStorage in sync with in-memory array
@@ -1124,15 +1213,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const rv = new RunView(p);
         const result = await rv.RunView({
             EntityName: config.EntityName,
-            ResultType: 'entity_object',
+            ResultType: config.ResultType || this.EngineDefaultResultType,
             ExtraFilter: config.Filter,
             OrderBy: config.OrderBy,
+            IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
             _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
             CacheLocal: config.CacheLocal,
             CacheLocalTTL: config.CacheLocalTTL
         }, contextUser);
 
         this.HandleSingleViewResult(config, result);
+        this.emitPropertyChange(config.PropertyName);
     }
 
     /**
@@ -1168,9 +1259,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             const viewConfigs = configs.map(c => {
                 return <RunViewParams>{
                     EntityName: c.EntityName,
-                    ResultType: 'entity_object',
+                    ResultType: c.ResultType || this.EngineDefaultResultType,
                     ExtraFilter: c.Filter,
                     OrderBy: c.OrderBy,
+                    IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
                     _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
                     CacheLocal: c.CacheLocal,
                     CacheLocalTTL: c.CacheLocalTTL
@@ -1182,6 +1274,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             const entityNames: string[] = [];
             for (let i = 0; i < configs.length; i++) {
                 this.HandleSingleViewResult(configs[i], results[i]);
+                this.emitPropertyChange(configs[i].PropertyName);
                 if (configs[i].EntityName) {
                     entityNames.push(configs[i].EntityName);
                 }
@@ -1203,7 +1296,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
         const p = this.ProviderToUse;
-        const result: DatasetResultType = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters)
+        const result: DatasetResultType = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
         if (!result) {
             LogError(`LoadSingleDatasetConfig: GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`);
             return;
@@ -1213,7 +1306,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (config.DatasetResultHandling === 'single_property') {
                     const singleObject = {};
                     for (const item of result.Results) {
-                        //convert the results to entity objects before 
+                        //convert the results to entity objects before
                         //adding them to the singleObject
                         const entities: BaseEntity[] = [];
                         for(const entityData of item.Results) {

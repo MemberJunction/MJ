@@ -1,10 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
@@ -34,11 +30,6 @@ import { CommunicationTemplatesResourceComponent } from './Communication/communi
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    ButtonsModule,
-    GridModule,
-    DropDownsModule,
-    DialogsModule,
-    WindowModule,
     ContainerDirectivesModule,
     SharedGenericModule,
     SharedDashboardWidgetsModule

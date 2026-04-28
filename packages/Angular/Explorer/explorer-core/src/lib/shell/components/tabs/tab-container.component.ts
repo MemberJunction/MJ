@@ -89,6 +89,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   // This avoids the 20px height issue when GL header is hidden
   useSingleResourceMode = false;
   private singleResourceComponentRef: ComponentRef<BaseResourceComponent> | null = null;
+  /** Cache identity of the current single-resource component for detachment */
+  private singleResourceCacheIdentity: { driverClass: string; recordId: string; appId: string; tabId: string } | null = null;
   private previousTabBarVisible: boolean | null = null;
   private currentSingleResourceSignature: string | null = null; // Track loaded content signature to avoid unnecessary reloads
   private isCreatingInitialTabs = false; // Flag to prevent syncTabsWithConfiguration during initial tab creation
@@ -149,7 +151,15 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
             if (activeTab) {
               const signature = this.getTabContentSignature(activeTab);
               if (signature !== this.currentSingleResourceSignature) {
+                // DO NOT call saveCurrentComponentQueryParams() here — by the time this
+                // subscription fires, OpenTab has already replaced the tab config with the
+                // new nav item's config, so queryParams are gone. The cache entry already
+                // has the correct queryParams from the most recent unchanged-signature save.
                 this.loadSingleResourceContent();
+              } else {
+                // Signature unchanged — sync queryParams to cache entry so it stays current.
+                // This catches incremental queryParam updates (e.g., user selects a conversation).
+                this.saveCurrentComponentQueryParams();
               }
             }
           } else if (this.layoutRestorationComplete && !this.isCreatingInitialTabs) {
@@ -343,7 +353,9 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (shouldUseSingleResourceMode !== this.useSingleResourceMode) {
       this.useSingleResourceMode = shouldUseSingleResourceMode;
-      this.cdr.detectChanges();
+      // Defer detectChanges to next microtask to avoid ExpressionChangedAfterItHasBeenCheckedError
+      // when this handler fires during an already-running change detection cycle.
+      Promise.resolve().then(() => this.cdr.detectChanges());
 
       if (this.useSingleResourceMode) {
         // Transitioning to single-resource mode
@@ -433,7 +445,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Get the container element
     const container = this.directContentContainer?.nativeElement;
     if (!container) {
-      console.warn('Direct content container not available yet, retrying...');
       // Retry after view is updated
       setTimeout(() => this.loadSingleResourceContent(), 50);
       return;
@@ -460,15 +471,39 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // Clean up previous single-resource component (if different)
       this.cleanupSingleResourceComponent();
 
-      // Detach from tab tracking (it was attached to a tab in Golden Layout)
-      this.cacheManager.markAsDetached(activeTab.id);
+      // Mark cached component as attached to this tab (it was detached / available for reuse).
+      // IMPORTANT: We use markAsAttached here, NOT markAsDetached — the component is being
+      // reattached to the DOM and should NOT be eligible for LRU eviction.
+      this.cacheManager.markAsAttached(
+        driverClass,
+        resourceData.ResourceRecordID || '',
+        activeTab.applicationId,
+        activeTab.id
+      );
 
       // Reattach the cached wrapper element to single-resource container
       cached.wrapperElement.style.height = "100%"; // Ensure full height
       container.appendChild(cached.wrapperElement);
 
-      // Store reference for cleanup
+      // Store reference and identity for cleanup/detachment
       this.singleResourceComponentRef = cached.componentRef;
+      this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
+
+      // Restore saved queryParams to the tab config so the URL reflects
+      // the component's preserved state (e.g., selected conversation, collection drill-down).
+      if (cached.savedQueryParams) {
+        this.workspaceManager.UpdateTabConfiguration(activeTab.id, {
+          queryParams: cached.savedQueryParams
+        });
+        // Do NOT clear savedQueryParams here — the else branch (unchanged-signature saves)
+        // will keep it current while the component is active. Clearing it would cause the
+        // queryParams to be lost on the next detach/reattach cycle.
+      }
+
+      // Cached component is already loaded — emit load-complete so the shell clears its
+      // loading overlay. Without this, single-tab mode navigation to a cached resource
+      // leaves the overlay blocking all user interaction.
+      this.emitFirstLoadCompleteOnce();
 
       return;
     }
@@ -504,13 +539,16 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       this.emitFirstLoadCompleteOnce();
     };
 
-    // Wire up display name change for single-resource mode
-    // Use a closure that resolves the tab ID at call time, not at wire-up time,
-    // because the tab may not be active yet when the component is first created.
+    // Wire up display name change for single-resource mode.
+    // Guard: only update the title if THIS component is the currently displayed one.
+    // Without this guard, cached components (detached but alive) can fire this callback
+    // and overwrite the active tab's title with a stale name.
     instance.DisplayNameChangedEvent = (newName: string) => {
-      const tabId = this.workspaceManager.GetActiveTabId();
-      if (tabId) {
-        this.workspaceManager.UpdateTabTitle(tabId, newName);
+      if (this.singleResourceComponentRef?.instance === instance) {
+        const tabId = this.workspaceManager.GetActiveTabId();
+        if (tabId) {
+          this.workspaceManager.UpdateTabTitle(tabId, newName);
+        }
       }
     };
 
@@ -522,24 +560,85 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       (container.children[0] as any).style.height = "100%";
     }
 
-    // Store reference for cleanup
+    // Cache the component for reuse when switching between nav items within the same app.
+    // Without this, every nav switch creates a brand new component from scratch.
+    const wrapperElement = nativeElement;
+    this.cacheManager.cacheComponent(
+      componentRef as ComponentRef<BaseResourceComponent>,
+      wrapperElement,
+      resourceData,
+      activeTab.id
+    );
+
+    // Store reference and identity for cleanup/detachment
     this.singleResourceComponentRef = componentRef as ComponentRef<BaseResourceComponent>;
+    this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
   }
 
   /**
    * Clean up single-resource mode component
    */
+  /**
+   * Detaches the current single-resource component from the DOM and marks it as
+   * available for reuse in the component cache.
+   *
+   * ╔══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️  DO NOT DESTROY THE COMPONENT HERE — INTENTIONAL DESIGN CHOICE  ⚠️  ║
+   * ║                                                                        ║
+   * ║  The component is DETACHED from the DOM, NOT destroyed. It stays alive ║
+   * ║  in the ComponentCacheManager with its full Angular state preserved     ║
+   * ║  (properties, subscriptions, loaded data, scroll position, etc).       ║
+   * ║                                                                        ║
+   * ║  When the user returns to this tab, the cached component is reattached ║
+   * ║  instantly — no data reload, no API calls, no flash of empty content.  ║
+   * ║                                                                        ║
+   * ║  Destroying components here "for memory optimization" is a net         ║
+   * ║  NEGATIVE: the reload on return is far more expensive (DB queries,     ║
+   * ║  API calls, re-rendering) than keeping the component in memory.        ║
+   * ║  The LRU eviction in ComponentCacheManager handles memory limits —     ║
+   * ║  when MaxDetachedComponents is exceeded, the LEAST recently used       ║
+   * ║  components are evicted automatically.                                 ║
+   * ║                                                                        ║
+   * ║  If you think memory is a problem, adjust MaxDetachedComponents        ║
+   * ║  instead of destroying components here.                                ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  /**
+   * Save the currently displayed component's queryParams to its cache entry.
+   * Called on every config change so the cache entry always has the latest queryParams,
+   * even after the tab config is overwritten by a new nav item.
+   */
+  private saveCurrentComponentQueryParams(): void {
+    if (!this.singleResourceCacheIdentity) return;
+
+    const { tabId } = this.singleResourceCacheIdentity;
+    const tab = this.workspaceManager.GetTab(tabId);
+    const qp = tab?.configuration?.['queryParams'] as Record<string, string> | undefined;
+    const cached = this.cacheManager.getComponentByTabId(tabId);
+    if (cached) {
+      cached.savedQueryParams = (qp && Object.keys(qp).length > 0) ? { ...qp } : undefined;
+    }
+  }
+
   private cleanupSingleResourceComponent(): void {
     if (this.singleResourceComponentRef) {
-      this.appRef.detachView(this.singleResourceComponentRef.hostView);
-      this.singleResourceComponentRef.destroy();
+      if (this.singleResourceCacheIdentity) {
+        const { driverClass, recordId, appId } = this.singleResourceCacheIdentity;
+        // Mark as DETACHED by resource identity — the ONE consistent key used everywhere.
+        this.cacheManager.markAsDetached(driverClass, recordId, appId);
+      }
       this.singleResourceComponentRef = null;
+      this.singleResourceCacheIdentity = null;
     }
 
-    // Clear the container
+    // Remove children from the container. This detaches the wrapper DOM element
+    // without destroying the Angular component — it lives on in the cache.
+    // Using removeChild (not innerHTML='') to avoid aggressive DOM cleanup.
     const container = this.directContentContainer?.nativeElement;
     if (container) {
-      container.innerHTML = '';
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
     }
   }
 
@@ -659,10 +758,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         // Keep legacy componentRefs map updated
         this.componentRefs.set(tabId, cached.componentRef);
 
-        // If resource is already loaded, update tab title immediately
+        // If resource is already loaded, update tab title immediately and signal
+        // load-complete so the shell clears any loading overlay.
         const instance = cached.componentRef.instance as BaseResourceComponent;
         if (instance.LoadComplete) {
           this.updateTabTitleFromResource(tabId, instance, resourceData);
+          this.emitFirstLoadCompleteOnce();
         }
 
         return;
@@ -855,11 +956,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // If no DriverClass in metadata, fall back to resourceType (backward compatibility)
     }
 
-    // Include applicationId and driverClass in configuration
+    // Include applicationId, driverClass, and tabId in configuration
     const resourceConfig = {
       ...config,
       applicationId: tab.applicationId,
-      resourceTypeDriverClass: driverClass  // Store resolved driver class for component lookup
+      resourceTypeDriverClass: driverClass,  // Store resolved driver class for component lookup
+      tabId: tab.id  // Needed for query param notification scoping in BaseResourceComponent
     };
 
     // Get ResourceRecordID from config or fall back to tab.resourceRecordId
@@ -981,7 +1083,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private cleanupTabComponent(tabId: string): void {
     // First, try to detach from cache (preserves component for reuse)
-    const cachedInfo = this.cacheManager.markAsDetached(tabId);
+    const cachedInfo = this.cacheManager.findAndDetachByTabId(tabId);
 
     if (cachedInfo) {
       // Remove from legacy componentRefs but keep in cache

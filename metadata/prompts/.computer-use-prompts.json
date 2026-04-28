@@ -9,7 +9,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "PromptRole": "System",
       "PromptPosition": "First",
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
@@ -45,8 +45,8 @@
       "ID": "35FF7A4B-B64A-4052-AD78-9DA8FBCF021A"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:39.087Z",
-      "checksum": "c01356a8f416c24510e0370be06c42726a35d84e786cebb956b9084b7a4cda5a"
+      "lastModified": "2026-04-20T23:53:41.172Z",
+      "checksum": "ed3d31c862828b19ef813bd9507a5ffeb8094e179a6307b9e857a7f7f8542eb8"
     }
   },
   {
@@ -59,7 +59,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "PromptRole": "System",
       "PromptPosition": "First",
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
@@ -95,8 +95,8 @@
       "ID": "DAFE960C-1CDA-4612-965C-A3CD400387E6"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:39.093Z",
-      "checksum": "7b45b67b74c3eabec44f88a7236ebdff492c818450e4bbb35175f3252bce9716"
+      "lastModified": "2026-04-20T23:53:41.194Z",
+      "checksum": "857a04d7b20ce01e185b446912dffe91d70122381e439397908b8938198bdf2b"
     }
   }
 ]

@@ -164,10 +164,13 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
   // ---------------------------------------------------------------------------
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
     await this.LoadData();
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     // Clean up if needed
   }
 

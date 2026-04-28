@@ -1,6 +1,10 @@
 <div class="filter-panel">
   <div class="filter-panel-header">
-    <h3>MCP Filters</h3>
+    <h3>MCP Filters
+      @if (activeFilterCount > 0) {
+        <span style="margin-left:6px;padding:2px 8px;background:var(--mj-brand-primary,#264FAF);color:#fff;border-radius:10px;font-size:0.7rem;font-weight:600">{{ activeFilterCount }}</span>
+      }
+    </h3>
     <div class="filter-summary-inline">
       <span class="summary-value">{{ filteredCount }}</span>
       <span class="summary-label">of {{ totalCount }}</span>
@@ -73,6 +77,35 @@
             <option [value]="option.value">{{ option.text }}</option>
           }
         </select>
+      </div>
+    }
+
+    <!-- Part 3.3 — Tools tab: Server + Category filters + Favorites-only toggle -->
+    @if (activeTab === 'tools') {
+      <div class="filter-group">
+        <label class="filter-label"><span class="fa-solid fa-server"></span> Server</label>
+        <select class="filter-select" [ngModel]="filters.toolsServer ?? 'all'" (ngModelChange)="onToolsServerChange($event)">
+          <option value="all">All Servers</option>
+          @for (s of availableServers; track s.ID) {
+            <option [value]="s.ID">{{ s.Name }}</option>
+          }
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label"><span class="fa-solid fa-tags"></span> Category</label>
+        <select class="filter-select" [ngModel]="filters.toolsCategory ?? 'all'" (ngModelChange)="onToolsCategoryChange($event)">
+          <option value="all">All Categories</option>
+          @for (c of availableCategories; track c.category) {
+            <option [value]="c.category">{{ c.category }} ({{ c.count }})</option>
+          }
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" [checked]="filters.favoritesOnly === true" (change)="onFavoritesOnlyChange($any($event.target).checked)" />
+          <span class="fa-solid fa-star"></span>
+          Favorites only
+        </label>
       </div>
     }
 

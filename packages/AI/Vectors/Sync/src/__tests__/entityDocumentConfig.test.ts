@@ -24,13 +24,17 @@ vi.mock('@memberjunction/global', () => {
   };
 });
 
-vi.mock('@memberjunction/core', () => ({
-  LogError: vi.fn(),
-  LogStatus: vi.fn(),
-  Metadata: class { Entities = []; },
-  RunView: class {},
-  ValidationResult: class { Errors: unknown[] = []; get Success() { return this.Errors.length === 0; } },
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    LogError: vi.fn(),
+    LogStatus: vi.fn(),
+    Metadata: class { Entities = []; },
+    RunView: class {},
+    ValidationResult: class { Errors: unknown[] = []; get Success() { return this.Errors.length === 0; } },
+  };
+});
 
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai', () => ({}));

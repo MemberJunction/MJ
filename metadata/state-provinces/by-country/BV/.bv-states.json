@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Bouvet Island",
+      "Code": "BV",
+      "ISO3166_2": "BV-BV",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bouvet Island"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BV"
+    },
+    "primaryKey": {
+      "ID": "B43B46FC-20BE-4D66-96E5-F3E3C769FE71"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.179Z",
+      "checksum": "fa083ffff732ebfab36441fbfe0e6af44db57175e06fb5b26990f03a138044a6"
+    }
+  }
+]

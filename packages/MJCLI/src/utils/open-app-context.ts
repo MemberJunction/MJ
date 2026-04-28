@@ -147,6 +147,7 @@ export async function buildOrchestratorContext(
     },
     GitHubOptions: {
       Token: config.openApps?.github?.token ?? process.env.GITHUB_TOKEN,
+      TokenMap: filterDefinedTokens(config.openApps?.github?.tokens),
     },
     RepoRoot: process.cwd(),
     MJVersion: getMJVersion(),
@@ -157,6 +158,8 @@ export async function buildOrchestratorContext(
     // Zod infers object fields as optional; runtime schema validates they're present
     AdditionalTargets: config.openApps?.additionalTargets as Array<{ Path: string; Role: 'server' | 'client' }> | undefined,
     ClientBootstrapSubpath: config.openApps?.clientBootstrapSubpath,
+    MJCoreSchema: config.coreSchema ?? '__mj',
+    MigrationPlaceholders: config.openApps?.migrationPlaceholders,
     Callbacks: {
       OnProgress: (phase: string, message: string) => spinner?.start(`[${phase}] ${message}`),
       OnSuccess: (phase: string, message: string) => spinner?.succeed(`[${phase}] ${message}`),
@@ -187,15 +190,18 @@ interface OrchestratorContextShape {
   };
   GitHubOptions: {
     Token?: string;
+    TokenMap?: Record<string, string>;
   };
   RepoRoot: string;
   MJVersion: string;
   ServerPackagePath?: string;
   ClientPackagePath?: string;
   PackageManager?: 'npm' | 'pnpm' | 'yarn';
-  VersionStrategy?: 'semver' | 'catalog' | 'workspace' | 'auto';
+  VersionStrategy?: 'semver' | 'exact' | 'catalog' | 'workspace' | 'auto';
   AdditionalTargets?: Array<{ Path: string; Role: 'server' | 'client' }>;
   ClientBootstrapSubpath?: string;
+  MJCoreSchema?: string;
+  MigrationPlaceholders?: Record<string, string>;
   Callbacks?: {
     OnProgress?: (phase: string, message: string) => void;
     OnSuccess?: (phase: string, message: string) => void;
@@ -203,6 +209,21 @@ interface OrchestratorContextShape {
     OnWarn?: (phase: string, message: string) => void;
     OnLog?: (message: string) => void;
   };
+}
+
+/**
+ * Filters a token map from config, removing entries where the env var resolved to undefined.
+ * This happens when mj.config.cjs references process.env.SOME_TOKEN but the var isn't set.
+ */
+function filterDefinedTokens(tokens: Record<string, string | undefined> | undefined): Record<string, string> | undefined {
+  if (!tokens) return undefined;
+  const filtered: Record<string, string> = {};
+  for (const [url, token] of Object.entries(tokens)) {
+    if (token) {
+      filtered[url] = token;
+    }
+  }
+  return Object.keys(filtered).length > 0 ? filtered : undefined;
 }
 
 // createRequire is needed because getMJVersion uses require.resolve() to locate

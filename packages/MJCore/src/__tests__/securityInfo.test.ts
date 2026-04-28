@@ -256,7 +256,7 @@ describe('AuthorizationInfo', () => {
     });
 
     describe('UserCanExecute', () => {
-        it('should return true when user has matching role', () => {
+        it('should return true when user has matching role (Allow grant)', () => {
             const auth = new AuthorizationInfo(mockMdProvider, {
                 ID: 'auth-1',
                 IsActive: true,
@@ -268,12 +268,43 @@ describe('AuthorizationInfo', () => {
                 UserRoles: [{ UserID: 'u-1', RoleID: 'r-1' }]
             });
 
-            // The UserCanExecute method checks user.UserRoles[].RoleID against auth.Roles[].ID
-            // But auth.Roles[].ID is the AuthorizationRoleInfo.ID, not the role ID
-            // Let's properly set it up
+            // Phase 2b fix: matching is now done on AuthorizationRoleInfo.RoleID (FK)
+            // instead of .ID (PK). User has role 'r-1' which matches the Allow auth-role's RoleID.
+            expect(auth.UserCanExecute(user)).toBe(true);
+        });
+
+        it('should return false when a matching role is a Deny — Deny overrides Allow', () => {
+            const auth = new AuthorizationInfo(mockMdProvider, {
+                ID: 'auth-1',
+                IsActive: true,
+                AuthorizationRoles: [
+                    { ID: 'ar-1', AuthorizationID: 'auth-1', RoleID: 'r-1', Type: 'Allow' },
+                    { ID: 'ar-2', AuthorizationID: 'auth-1', RoleID: 'r-2', Type: 'Deny' }
+                ]
+            });
+            const user = new UserInfo(null, {
+                UserRoles: [
+                    { UserID: 'u-1', RoleID: 'r-1' },
+                    { UserID: 'u-1', RoleID: 'r-2' }
+                ]
+            });
+
             expect(auth.UserCanExecute(user)).toBe(false);
-            // Actually the matching uses auth.Roles[].ID === user.UserRoles[].RoleID
-            // auth.Roles[0].ID = 'ar-1' vs user.UserRoles[0].RoleID = 'r-1', so no match
+        });
+
+        it('should return false when only matching roles are Deny', () => {
+            const auth = new AuthorizationInfo(mockMdProvider, {
+                ID: 'auth-1',
+                IsActive: true,
+                AuthorizationRoles: [
+                    { ID: 'ar-1', AuthorizationID: 'auth-1', RoleID: 'r-1', Type: 'Deny' }
+                ]
+            });
+            const user = new UserInfo(null, {
+                UserRoles: [{ UserID: 'u-1', RoleID: 'r-1' }]
+            });
+
+            expect(auth.UserCanExecute(user)).toBe(false);
         });
 
         it('should return false when authorization is not active', () => {
@@ -326,9 +357,24 @@ describe('AuthorizationInfo', () => {
                     { ID: 'ar-1', AuthorizationID: 'auth-1', RoleID: 'r-1', Type: 'Allow' }
                 ]
             });
-            const role = new RoleInfo({ ID: 'ar-1', Name: 'Admin' });
+            // Phase 2b fix: RoleCanExecute matches on AuthorizationRoleInfo.RoleID.
+            // The role's own ID must equal that FK, not the authorization-role PK.
+            const role = new RoleInfo({ ID: 'r-1', Name: 'Admin' });
 
             expect(auth.RoleCanExecute(role)).toBe(true);
+        });
+
+        it('should return false when the matching authorization-role is a Deny', () => {
+            const auth = new AuthorizationInfo(mockMdProvider, {
+                ID: 'auth-1',
+                IsActive: true,
+                AuthorizationRoles: [
+                    { ID: 'ar-1', AuthorizationID: 'auth-1', RoleID: 'r-1', Type: 'Deny' }
+                ]
+            });
+            const role = new RoleInfo({ ID: 'r-1', Name: 'Admin' });
+
+            expect(auth.RoleCanExecute(role)).toBe(false);
         });
 
         it('should return false when auth is not active', () => {

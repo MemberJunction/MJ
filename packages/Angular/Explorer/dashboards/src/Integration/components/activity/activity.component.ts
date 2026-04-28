@@ -74,7 +74,9 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
   private cdr = inject(ChangeDetectorRef);
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
     await this.LoadData();
+    this.NotifyLoadComplete();
   }
 
   // ── Data Loading ──────────────────────────────────────────

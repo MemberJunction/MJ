@@ -1,0 +1,548 @@
+[
+  {
+    "fields": {
+      "Name": "Ailinglapalap",
+      "Code": "ALL",
+      "ISO3166_2": "MH-ALL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ailinglapalap"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "31B58324-9E86-4AF3-807D-70746A4FE3EE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.215Z",
+      "checksum": "44f884e14438ef7ef3fc72a1bd7291ae76b7c2fa6ed858f384702294e7578294"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ailuk",
+      "Code": "ALK",
+      "ISO3166_2": "MH-ALK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ailuk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "A94D831B-77E7-4C43-8D96-B78C53BD9E8B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.235Z",
+      "checksum": "9a9e88222637239b4f081306b390df3e304c74fa00438212cd0c095bacaee612"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Arno",
+      "Code": "ARN",
+      "ISO3166_2": "MH-ARN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Arno"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "534ED698-5F34-40DD-984A-A4EF2D151DFC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.254Z",
+      "checksum": "009a9d5d6bcb1aefe7e89be9b193c05d43820dbe1f7bac906676a49298ec0880"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aur",
+      "Code": "AUR",
+      "ISO3166_2": "MH-AUR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Aur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "424E268C-0CBB-45FD-A257-EF19ED6DE300"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.272Z",
+      "checksum": "fd2907a1e54c14e7f0d082b81bc984ca440d5f85c42e6ca89a93c0cc57a85ce9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ebon",
+      "Code": "EBO",
+      "ISO3166_2": "MH-EBO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ebon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "49FE45C0-C28D-46FD-81AC-C6CAAD54A8BC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.289Z",
+      "checksum": "e045307c8bd48e61bf18bb91b23345cd22f3d752628e61d53f7b067a676a514e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eniwetok",
+      "Code": "ENI",
+      "ISO3166_2": "MH-ENI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Eniwetok"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "C3A7F10D-A9FA-4F00-8365-049082E4A0C3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.304Z",
+      "checksum": "1f55ed849d520ea0f488f6b6770626115c00ae7828e97a87d9a8f26b1e8381ae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jaluit",
+      "Code": "JAL",
+      "ISO3166_2": "MH-JAL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jaluit"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "5526762C-2994-4CDE-82E8-97550AB81498"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.320Z",
+      "checksum": "197662f0dad5d0adcb6a663cb9840d948a05eb1bf55529d054d97e5b5d128ddf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kili",
+      "Code": "KIL",
+      "ISO3166_2": "MH-KIL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kili"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "0AD6C459-5C7F-4F82-99B6-E329824E20E0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.335Z",
+      "checksum": "367ebb0286edae246bb144ed2fa0dbf372e187fcae4180a2f344063a62246c0b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kwajalein",
+      "Code": "KWA",
+      "ISO3166_2": "MH-KWA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kwajalein"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "6DB90296-0BD7-45B6-989D-20AAF039310C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.351Z",
+      "checksum": "6eacbf4a906eae59a6c60523df13ab0f9b87b629a82e002efa5726e2a6b21d55"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lae",
+      "Code": "LAE",
+      "ISO3166_2": "MH-LAE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lae"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "B708EF4C-B882-4ABC-B877-963B51572BA0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.364Z",
+      "checksum": "d68a4ca6ba92f70cd1930b00404ee599420951bf9299f8d40ac500dba8c53ac7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lib",
+      "Code": "LIB",
+      "ISO3166_2": "MH-LIB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lib"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "EAF0825E-96FC-4D4F-8D08-48E6F028E91C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.420Z",
+      "checksum": "e8c93ab6f9106f6d38599d49685f6d12ed08f12e976f14671b24e202cc50e066"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Likiep",
+      "Code": "LIK",
+      "ISO3166_2": "MH-LIK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Likiep"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "6B8F961B-4BF0-481B-BBBD-1E8AA540C288"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.437Z",
+      "checksum": "7eaa51f35e91f59160248894511d286c0af151db9e2b4e120481f64bc24f91a8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Majuro",
+      "Code": "MAJ",
+      "ISO3166_2": "MH-MAJ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Majuro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "A3CDED55-F169-403B-87BD-3900CC7FBD2F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.453Z",
+      "checksum": "26d20271e90e5655e70dbe82ccb1d4d40064d1bbb33088659e8030e7cf3eed32"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maloelap",
+      "Code": "MAL",
+      "ISO3166_2": "MH-MAL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Maloelap"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "FA72CF25-87C2-4E48-B88A-F711AA628852"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.469Z",
+      "checksum": "b5394e67986d25652551caf8e62501b1a6d88f4cb418bb1f90366fe3652c5f2d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mejit",
+      "Code": "MEJ",
+      "ISO3166_2": "MH-MEJ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mejit"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "AA7129C4-F1BE-4AF9-8C3E-050508D0E47D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.486Z",
+      "checksum": "7d4c6358b7bbae783fc3ddb47b6b561d2d8b403ae1d20dd9daa9edcd2ecd1c7e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mili",
+      "Code": "MIL",
+      "ISO3166_2": "MH-MIL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mili"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "1EB2B078-918E-49E9-A4F4-BF6423EC520E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.501Z",
+      "checksum": "c10d8ca5d15edb70f2058be49147194f8144ff1ae81b3c3758971b1d8b21f828"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Namorik",
+      "Code": "NMK",
+      "ISO3166_2": "MH-NMK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Namorik"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "ECB56D84-121F-4D3D-B4DE-E4D7AD38F4F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.517Z",
+      "checksum": "1b4454d64588071170e1101c144166fb68500af99d937fb0523d1e9a761a9c53"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Namu",
+      "Code": "NMU",
+      "ISO3166_2": "MH-NMU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Namu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "20767425-06E3-41F4-8492-2ED95908FBC6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.533Z",
+      "checksum": "6b8de486f60a05181a7ebb7d3fedbb8feb3c2830771264ac5923311d8a56a55b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ralik chain",
+      "Code": "L",
+      "ISO3166_2": "MH-L",
+      "Latitude": 7.5956,
+      "Longitude": 168.959,
+      "BoundaryGeoJSON": "@file:by-country/MH/boundaries/MH-L.geojson",
+      "CommonAliases": [
+        "Ralik chain"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "7AE73D64-FC5C-4880-B222-4B81F9A71937"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.550Z",
+      "checksum": "752ed63f605229d08ef2b7678c188f3ab73e94ba1e35b2488f21245eaab833a0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ratak chain",
+      "Code": "T",
+      "ISO3166_2": "MH-T",
+      "Latitude": 9.4592,
+      "Longitude": 170.243,
+      "BoundaryGeoJSON": "@file:by-country/MH/boundaries/MH-T.geojson",
+      "CommonAliases": [
+        "Ratak chain"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "4255C7A3-CD8B-4921-8FBB-48985F1AD3B8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.563Z",
+      "checksum": "102d159aa23479d0cda8a60722ed5c808ec4c84e51680694941dc4482458bd27"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rongelap",
+      "Code": "RON",
+      "ISO3166_2": "MH-RON",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rongelap"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "E7682BA9-045D-43F6-B7F9-BEC80282DC4A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.609Z",
+      "checksum": "9c0c1faa5c9c9f7b81fad8e576903ccf95d75235a9d2d26fcfc3e25d0caeaa0a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ujae",
+      "Code": "UJA",
+      "ISO3166_2": "MH-UJA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ujae"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "09BA88FD-D9F4-453F-B0B8-DED060846A4B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.624Z",
+      "checksum": "fb2164e2eb291b5a170d46a44876d0235e7d687068e8d73940898c23b75fd73b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ujelang",
+      "Code": "UJL",
+      "ISO3166_2": "MH-UJL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ujelang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "C23976A1-776D-4883-8660-1C9B8B322056"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.640Z",
+      "checksum": "a92532bf947dff3ec76ff8b5ec51cbd19aa9bc602976da4872c8aa753b0585b4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Utirik",
+      "Code": "UTI",
+      "ISO3166_2": "MH-UTI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Utirik"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "3A2587B1-2C1C-4347-85B6-3B26FD4D80AA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.658Z",
+      "checksum": "d570f4863bc4373e96a69c5444c4163847711e433144c8cb92558ebce86eb9e7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wotho",
+      "Code": "WTH",
+      "ISO3166_2": "MH-WTH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Wotho"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "D43ECBEE-B5E4-444C-B890-A3EFDBD2A006"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.675Z",
+      "checksum": "ed2b2adeb4d3873d4d1fbf2785c87e784f156475a7e8df832fbd5f3cf75d6390"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wotje",
+      "Code": "WTJ",
+      "ISO3166_2": "MH-WTJ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Wotje"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MH"
+    },
+    "primaryKey": {
+      "ID": "DE545704-CECC-43D0-92EA-47CF9EB953B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.688Z",
+      "checksum": "0c1656102fb61c93e2949062dace0b436b9a7a2e6c58e842380c8bc0bd5c6a1c"
+    }
+  }
+]

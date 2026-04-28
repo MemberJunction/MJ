@@ -6,6 +6,7 @@
 <!-- Normal authenticated view (not OAuth callback) -->
 @if ((authBase.isAuthenticated() | async) && !isOAuthCallback) {
   <div class="app-main">
+    <mj-server-connectivity-banner></mj-server-connectivity-banner>
     <mj-system-validation-banner></mj-system-validation-banner>
     @if (!HasError) {
       <mj-shell class="app-body"></mj-shell>
@@ -16,7 +17,14 @@
   </div>
   <!-- Floating chat overlay — persistent across navigation, hidden during load and in Conversations -->
   @if (IsChatOverlayReady) {
-    <mj-chat-overlay [IsHidden]="isChatRoute"></mj-chat-overlay>
+    <mj-chat-agents-overlay
+      [IsVisible]="!isChatRoute"
+      [AppContext]="$any(AppContextSnapshot)"
+      [EmptyStateGreeting]="'Ask me anything — I can navigate apps, search data, run queries, or help with tasks.'"
+      (ToolExecuted)="OnOverlayToolExecuted($event)"
+      (OpenEntityRecord)="OnOverlayOpenRecord($event)"
+      (OpenFullChatWorkspace)="OnOverlayOpenFullChatWorkspace($event)"
+    ></mj-chat-agents-overlay>
   }
   <!-- Hidden router-outlet required for Angular's router to activate routes and update the browser URL.
        The shell manages all visible content rendering through its tab system, not through routing.
@@ -71,7 +79,6 @@
       </svg>
 
       <!-- Login content (stacks above SVG via z-index) -->
-      <div class="logo-icon mj-logo-mark-login" role="img" aria-label="MemberJunction"></div>
       <div class="title">
         <div class="mj-logo-wordmark-login" role="img" aria-label="MemberJunction Logo"></div>
       </div>

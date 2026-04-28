@@ -140,7 +140,7 @@ export class GraphQLServerGeneratorBase {
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
-            GetReadOnlyProvider, GetReadWriteProvider } from '@memberjunction/server';
+            GetReadOnlyProvider, GetReadWriteProvider, RestoreContextInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
@@ -530,6 +530,17 @@ export class ${classPrefix}${typeNameBase}Input {`;
     OldValues___?: KeyValuePairInput[];
 `;
     }
+
+    // RestoreContext___: present on BOTH Create and Update inputs so user-initiated
+    // restores from a deleted record (Create path) and from a live record (Update path)
+    // can both carry lineage to the server. The server-side resolver detects this blob
+    // and calls BaseEntity.SetRestoreContext() before Save() so the data provider
+    // writes the resulting RecordChange row with Source='Restore' and lineage columns.
+    sRet += `
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+`;
+
     sRet += `}
     `;
     return sRet;

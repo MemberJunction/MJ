@@ -40,6 +40,31 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
     }
 
     /**
+     * Validates and sanitizes the index name for use with vector DB providers.
+     * Pinecone index names must be lowercase alphanumeric + hyphens, max 45 chars.
+     * Returns the sanitized name.
+     */
+    private sanitizeIndexName(name: string): string {
+        // Replace spaces and underscores with hyphens, remove invalid chars, lowercase, trim to 45 chars
+        let sanitized = name
+            .toLowerCase()
+            .replace(/[\s_]+/g, '-')
+            .replace(/[^a-z0-9-]/g, '')
+            .replace(/-+/g, '-')       // collapse multiple hyphens
+            .replace(/^-|-$/g, '');     // trim leading/trailing hyphens
+
+        if (sanitized.length > 45) {
+            sanitized = sanitized.substring(0, 45).replace(/-$/, '');
+        }
+
+        if (sanitized.length === 0) {
+            throw new Error(`Index name "${name}" results in an empty string after sanitization. Please use a name with alphanumeric characters.`);
+        }
+
+        return sanitized;
+    }
+
+    /**
      * Create the index in the vector database provider.
      */
     private async createIndexInProvider(): Promise<void> {
@@ -49,8 +74,14 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
             return;
         }
 
+        // Sanitize the index name for the provider (e.g., Pinecone requires lowercase, no spaces)
+        const sanitizedName = this.sanitizeIndexName(this.Name);
+        if (sanitizedName !== this.Name) {
+            LogStatus(`Index name sanitized from "${this.Name}" to "${sanitizedName}" for vector DB provider compatibility`);
+        }
+
         const params: CreateIndexParams = {
-            id: this.Name,
+            id: sanitizedName,
             dimension: this.resolveDimensions(),
             metric: 'cosine' as IndexModelMetricEnum,
             additionalParams: {
@@ -61,13 +92,17 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
             }
         };
 
-        LogStatus(`Creating index "${this.Name}" in vector DB provider...`);
-        const result = await vectorDB.CreateIndex(params);
-        if (result.success) {
-            LogStatus(`Index "${this.Name}" created successfully in provider`);
-            await this.saveProviderMetadata(result.data, params);
-        } else {
-            LogError(`Provider returned error creating index "${this.Name}": ${result.message}`);
+        LogStatus(`Creating index "${sanitizedName}" in vector DB provider...`);
+        try {
+            const result = await vectorDB.CreateIndex(params);
+            if (result.success) {
+                LogStatus(`Index "${sanitizedName}" created successfully in provider`);
+                await this.saveProviderMetadata(result.data, params, sanitizedName);
+            } else {
+                LogError(`Provider returned error creating index "${sanitizedName}": ${result.message}`);
+            }
+        } catch (error) {
+            LogError(`Exception while creating index "${sanitizedName}" in vector DB provider`, undefined, error);
         }
     }
 
@@ -81,12 +116,14 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
             return;
         }
 
-        LogStatus(`Deleting index "${this.Name}" from vector DB provider...`);
-        const result = await vectorDB.DeleteIndex({ id: this.Name });
+        // Use ExternalID if available (the sanitized name stored in the provider), fall back to Name
+        const providerIndexName = this.ExternalID || this.sanitizeIndexName(this.Name);
+        LogStatus(`Deleting index "${providerIndexName}" from vector DB provider...`);
+        const result = await vectorDB.DeleteIndex({ id: providerIndexName });
         if (result.success) {
-            LogStatus(`Index "${this.Name}" deleted from provider`);
+            LogStatus(`Index "${providerIndexName}" deleted from provider`);
         } else {
-            LogError(`Provider returned error deleting index "${this.Name}": ${result.message}`);
+            LogError(`Provider returned error deleting index "${providerIndexName}": ${result.message}`);
         }
     }
 
@@ -145,11 +182,12 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
      */
     private async saveProviderMetadata(
         providerResult: Record<string, unknown> | undefined,
-        params: CreateIndexParams
+        params: CreateIndexParams,
+        sanitizedName: string
     ): Promise<void> {
         try {
             // Save what we know from our params + whatever the provider returned
-            this.ExternalID = this.Name; // For Pinecone, name IS the external ID
+            this.ExternalID = sanitizedName; // The sanitized name used in the provider
             this.Dimensions = params.dimension;
             this.Metric = params.metric;
 

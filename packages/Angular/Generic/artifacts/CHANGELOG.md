@@ -1,5 +1,239 @@
 # @memberjunction/ng-artifacts
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.30.1
+- @memberjunction/ng-code-editor@5.30.1
+- @memberjunction/ng-export-service@5.30.1
+- @memberjunction/ng-markdown@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-pagination@5.30.1
+- @memberjunction/ng-query-viewer@5.30.1
+- @memberjunction/ng-react@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-trees@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/interactive-component-types@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- a00af98: no migration/metadata
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [9154ac7]
+- Updated dependencies [00b5c26]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/graphql-dataprovider@5.30.0
+  - @memberjunction/ng-react@5.30.0
+  - @memberjunction/interactive-component-types@5.30.0
+  - @memberjunction/ng-base-types@5.30.0
+  - @memberjunction/ng-code-editor@5.30.0
+  - @memberjunction/ng-notifications@5.30.0
+  - @memberjunction/ng-query-viewer@5.30.0
+  - @memberjunction/ng-shared-generic@5.30.0
+  - @memberjunction/ng-trees@5.30.0
+  - @memberjunction/ng-export-service@5.30.0
+  - @memberjunction/ng-markdown@5.30.0
+  - @memberjunction/ng-pagination@5.30.0
+  - @memberjunction/global@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/ng-trees@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ng-base-types@5.29.0
+  - @memberjunction/ng-code-editor@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/ng-query-viewer@5.29.0
+  - @memberjunction/ng-react@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/interactive-component-types@5.29.0
+  - @memberjunction/ng-export-service@5.29.0
+  - @memberjunction/ng-markdown@5.29.0
+  - @memberjunction/ng-pagination@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-base-types@5.28.0
+  - @memberjunction/ng-code-editor@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-query-viewer@5.28.0
+  - @memberjunction/ng-react@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/ng-trees@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/interactive-component-types@5.28.0
+  - @memberjunction/ng-export-service@5.28.0
+  - @memberjunction/ng-markdown@5.28.0
+  - @memberjunction/ng-pagination@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ng-base-types@5.27.1
+  - @memberjunction/ng-code-editor@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/ng-query-viewer@5.27.1
+  - @memberjunction/ng-react@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/ng-trees@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/interactive-component-types@5.27.1
+  - @memberjunction/ng-export-service@5.27.1
+  - @memberjunction/ng-markdown@5.27.1
+  - @memberjunction/ng-pagination@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- Updated dependencies [35cf7d4]
+  - @memberjunction/ng-trees@5.27.0
+  - @memberjunction/ng-base-types@5.27.0
+  - @memberjunction/ng-code-editor@5.27.0
+  - @memberjunction/ng-export-service@5.27.0
+  - @memberjunction/ng-markdown@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/ng-pagination@5.27.0
+  - @memberjunction/ng-query-viewer@5.27.0
+  - @memberjunction/ng-react@5.27.0
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/interactive-component-types@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/ng-code-editor@5.26.0
+  - @memberjunction/ng-shared-generic@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ng-base-types@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/ng-query-viewer@5.26.0
+  - @memberjunction/ng-react@5.26.0
+  - @memberjunction/ng-trees@5.26.0
+  - @memberjunction/graphql-dataprovider@5.26.0
+  - @memberjunction/interactive-component-types@5.26.0
+  - @memberjunction/ng-export-service@5.26.0
+  - @memberjunction/ng-markdown@5.26.0
+  - @memberjunction/ng-pagination@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Minor Changes
+
+- 008a62d: Add file based artifact I/O
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+- Updated dependencies [c5426c5]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/interactive-component-types@5.25.0
+  - @memberjunction/ng-query-viewer@5.25.0
+  - @memberjunction/ng-trees@5.25.0
+  - @memberjunction/ng-base-types@5.25.0
+  - @memberjunction/ng-code-editor@5.25.0
+  - @memberjunction/ng-notifications@5.25.0
+  - @memberjunction/ng-react@5.25.0
+  - @memberjunction/ng-shared-generic@5.25.0
+  - @memberjunction/ng-export-service@5.25.0
+  - @memberjunction/ng-markdown@5.25.0
+  - @memberjunction/ng-pagination@5.25.0
+  - @memberjunction/global@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [f9792d1]
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ng-react@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/interactive-component-types@5.24.0
+  - @memberjunction/ng-notifications@5.24.0
+  - @memberjunction/ng-base-types@5.24.0
+  - @memberjunction/ng-code-editor@5.24.0
+  - @memberjunction/ng-query-viewer@5.24.0
+  - @memberjunction/ng-shared-generic@5.24.0
+  - @memberjunction/ng-trees@5.24.0
+  - @memberjunction/ng-export-service@5.24.0
+  - @memberjunction/ng-markdown@5.24.0
+  - @memberjunction/ng-pagination@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- c17be20: no migration/metadata
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [c17be20]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ng-react@5.23.0
+  - @memberjunction/ng-base-types@5.23.0
+  - @memberjunction/ng-code-editor@5.23.0
+  - @memberjunction/ng-notifications@5.23.0
+  - @memberjunction/ng-query-viewer@5.23.0
+  - @memberjunction/ng-shared-generic@5.23.0
+  - @memberjunction/ng-trees@5.23.0
+  - @memberjunction/interactive-component-types@5.23.0
+  - @memberjunction/ng-export-service@5.23.0
+  - @memberjunction/ng-markdown@5.23.0
+  - @memberjunction/ng-pagination@5.23.0
+
 ## 5.22.0
 
 ### Patch Changes

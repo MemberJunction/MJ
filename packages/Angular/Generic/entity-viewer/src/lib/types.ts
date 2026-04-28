@@ -1,21 +1,23 @@
 import { EntityInfo, CompositeKey } from '@memberjunction/core';
 import {
-  ViewColumnPinned as CoreViewColumnPinned,
-  ViewGridSortSetting as CoreViewGridSortSetting,
-  ViewGridColumnSetting as CoreViewGridColumnSetting,
-  ViewGridState as CoreViewGridState,
+  ViewGridState,
+  MJUserViewEntity_IGridSortSetting,
+  MJUserViewEntity_IGridColumnSetting,
+  MJUserViewEntity_ITimelineState,
+  MJUserViewEntity_IDisplayCardState,
+  MJUserViewEntity_IGridDisplayState,
 } from '@memberjunction/core-entities';
 
-// Re-export core types for direct usage
-export type ViewColumnPinned = CoreViewColumnPinned;
-export type ViewGridSortSetting = CoreViewGridSortSetting;
-export type ViewGridColumnSetting = CoreViewGridColumnSetting;
-export type ViewGridState = CoreViewGridState;
+// Re-export core types for backward compatibility
+export type ViewColumnPinned = 'left' | 'right' | null;
+export type ViewGridSortSetting = MJUserViewEntity_IGridSortSetting;
+export type ViewGridColumnSetting = MJUserViewEntity_IGridColumnSetting;
+export { ViewGridState };
 
 /**
  * View modes supported by the EntityViewer component
  */
-export type EntityViewMode = 'grid' | 'cards' | 'timeline';
+export type EntityViewMode = 'grid' | 'cards' | 'timeline' | 'map';
 
 /**
  * Behavior when a record is selected
@@ -51,8 +53,12 @@ export interface CardDisplayField {
  * Auto-generated card template based on entity metadata
  */
 export interface CardTemplate {
-  /** Primary title field name */
-  titleField: string;
+  /**
+   * One or more field names that together form the card title.
+   * Multiple IsNameField fields are combined with spaces
+   * (e.g., ["FirstName", "LastName"] → "Elizabeth Rodriguez").
+   */
+  titleFields: string[];
   /** Secondary subtitle field name */
   subtitleField: string | null;
   /** Description/notes field name */
@@ -332,46 +338,27 @@ export type TimelineOrientation = 'vertical' | 'horizontal';
 /**
  * Timeline-specific configuration state
  * Persisted in UserView.DisplayState JSON
+ *
+ * Extends the generated {@link MJUserViewEntity_ITimelineState} with Angular-specific fields.
  */
-export interface TimelineState {
-  /** The date field name to use for timeline ordering */
-  dateFieldName: string;
-  /** Time segment grouping */
-  segmentGrouping?: TimelineSegmentGrouping;
-  /** Sort order for timeline events */
-  sortOrder?: 'asc' | 'desc';
-  /** Whether segments are collapsible */
-  segmentsCollapsible?: boolean;
-  /** Whether segments start expanded */
-  segmentsDefaultExpanded?: boolean;
-  /** Timeline orientation (vertical or horizontal) */
-  orientation?: TimelineOrientation;
-}
+export type TimelineState = MJUserViewEntity_ITimelineState;
 
 /**
  * Card-specific configuration state
  * Persisted in UserView.DisplayState JSON
+ *
+ * Identical to the generated {@link MJUserViewEntity_IDisplayCardState}.
  */
-export interface CardState {
-  /** Custom card size (small, medium, large) */
-  cardSize?: 'small' | 'medium' | 'large';
-}
+export type CardState = MJUserViewEntity_IDisplayCardState;
 
 /**
  * Grid-specific configuration state
  * Persisted in UserView.DisplayState JSON
  * Note: Most grid state is already in GridState column, this is for additional settings
+ *
+ * Extends the generated {@link MJUserViewEntity_IGridDisplayState} with Angular-specific fields.
  */
-export interface GridDisplayState {
-  /** Row height preference */
-  rowHeight?: 'compact' | 'normal' | 'comfortable';
-  /**
-   * Enable text wrapping in grid cells
-   * When true, long text will wrap to multiple lines and rows will auto-size
-   * @default false
-   */
-  wrapText?: boolean;
-}
+export type GridDisplayState = MJUserViewEntity_IGridDisplayState;
 
 /**
  * View display state - persisted in UserView.DisplayState
@@ -466,7 +453,7 @@ export const DEFAULT_VIEWER_CONFIG: Required<EntityViewerConfig> = {
   filterDebounceMs: 250,
   gridColumns: [],
   cardTemplate: {
-    titleField: '',
+    titleFields: [],
     subtitleField: null,
     descriptionField: null,
     displayFields: [],

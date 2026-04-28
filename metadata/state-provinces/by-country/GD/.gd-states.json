@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Grenada",
+      "Code": "GD",
+      "ISO3166_2": "GD-GD",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Grenada"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GD"
+    },
+    "primaryKey": {
+      "ID": "70415FCC-C909-468F-AF3C-FCE81D3E101A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.170Z",
+      "checksum": "16c8df60cd63823171f0ed328bc2de1c6e46094deae2b86cce788676dac39310"
+    }
+  }
+]

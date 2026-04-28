@@ -7,6 +7,7 @@ import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
+import { MapDisplayState, MapRenderMode } from '@memberjunction/ng-map-view';
 import {
   EntityViewMode,
   EntityViewerConfig,
@@ -77,6 +78,13 @@ import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.co
   }
 })
 export class EntityViewerComponent implements OnInit, OnDestroy {
+  /**
+   * Maximum records to load in map mode. Map view needs all records for
+   * geographic visualization — paging doesn't make sense for maps. This cap
+   * prevents unbounded queries on very large entities.
+   */
+  private static readonly MAP_MAX_RECORDS = 10000;
+
   // ========================================
   // INPUTS (using getter/setter pattern)
   // ========================================
@@ -107,6 +115,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
     // Detect date fields for timeline support
     this.detectDateFields();
+
+    // Detect geocoding support for map view
+    this.updateGeoCodingSupport();
 
     if (this._initialized) {
       // If entity changed to a different entity, clear all stale state from the old entity
@@ -343,6 +354,15 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    */
   @Input() showAddToListButton: boolean = false;
 
+  /**
+   * Whether to render the Recycle Bin chip in the viewer header.
+   * The chip auto-hides itself when the entity has no deleted records,
+   * doesn't track changes, or the user lacks Delete permission — so it
+   * stays out of the way on entities where it's not relevant.
+   * @default true
+   */
+  @Input() ShowRecycleBin: boolean = true;
+
   // ========================================
   // OUTPUTS
   // ========================================
@@ -471,6 +491,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
   /** Whether the current entity has date fields available for timeline view */
   public hasDateFields: boolean = false;
+
+  /** Whether the current entity supports geocoding (has SupportsGeoCoding = 1) */
+  public HasGeoCoding: boolean = false;
 
   /** Available date fields from the entity (sorted by priority) */
   public availableDateFields: EntityFieldInfo[] = [];
@@ -930,18 +953,14 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
     // Priority 2: GridState.sortSettings (sort may only be stored here)
     if (view.GridState) {
-      try {
-        const gridState = JSON.parse(view.GridState) as ViewGridState;
-        if (gridState.sortSettings && gridState.sortSettings.length > 0) {
-          const firstSort = gridState.sortSettings[0];
-          this.internalSortState = {
-            field: firstSort.field,
-            direction: firstSort.dir === 'desc' ? 'desc' : 'asc'
-          };
-          return;
-        }
-      } catch {
-        // Invalid GridState JSON — ignore
+      const gridState = view.GridStateObject;
+      if (gridState?.sortSettings && gridState.sortSettings.length > 0) {
+        const firstSort = gridState.sortSettings[0];
+        this.internalSortState = {
+          field: firstSort.field,
+          direction: firstSort.dir === 'desc' ? 'desc' : 'asc'
+        };
+        return;
       }
     }
 
@@ -1075,8 +1094,12 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
           .join(', ');
       }
 
-      // Calculate StartRow for pagination
-      const startRow = this.pagination.currentPage * config.pageSize;
+      // Map mode loads all records (up to MAP_MAX_RECORDS) since paging
+      // doesn't make sense for geographic visualization. Other modes use
+      // standard page-based pagination.
+      const isMapMode = this.effectiveViewMode === 'map';
+      const maxRows = isMapMode ? EntityViewerComponent.MAP_MAX_RECORDS : config.pageSize;
+      const startRow = isMapMode ? 0 : this.pagination.currentPage * config.pageSize;
 
       // Build ExtraFilter from view's WhereClause if available
       // The view's WhereClause is the "business filter" - UserSearchString is additive
@@ -1086,7 +1109,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
         EntityName: entity.Name,
         ResultType: 'simple',
         Fields: computeFieldsList(entity, this.gridState),
-        MaxRows: config.pageSize,
+        MaxRows: maxRows,
         StartRow: startRow,
         OrderBy: orderBy,
         ExtraFilter: extraFilter,
@@ -1113,6 +1136,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
         // Update pagination state
         this.pagination.totalRecords = result.TotalRowCount;
         this.pagination.hasMore = false; // No longer used with page-based paging
+
+        // Re-check geo support after data loads (effectiveEntity may have resolved via viewEntity)
+        this.updateGeoCodingSupport();
 
         this.dataLoaded.emit({
           totalRowCount: result.TotalRowCount,
@@ -1190,10 +1216,21 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Set the view mode and emit change event
    */
   setViewMode(mode: EntityViewMode): void {
-    if (this.effectiveViewMode !== mode) {
+    const previousMode = this.effectiveViewMode;
+    if (previousMode !== mode) {
       this.internalViewMode = mode;
       this.viewModeChange.emit(mode);
-      this.cdr.detectChanges();
+
+      // Reload data when switching to/from map mode because map loads all
+      // records (up to MAP_MAX_RECORDS) while other modes use page-based pagination.
+      const switchingToMap = mode === 'map' && previousMode !== 'map';
+      const switchingFromMap = mode !== 'map' && previousMode === 'map';
+      if (switchingToMap || switchingFromMap) {
+        this.resetPaginationState();
+        this.loadData();
+      } else {
+        this.cdr.detectChanges();
+      }
     }
   }
 
@@ -1448,6 +1485,64 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Update HasGeoCoding based on the current effectiveEntity.
+   * Called from entity setter and after data loads (when effectiveEntity may resolve via viewEntity).
+   */
+  private updateGeoCodingSupport(): void {
+    const entity = this.effectiveEntity;
+    const newValue = !!(entity && entity.SupportsGeoCoding);
+    if (newValue !== this.HasGeoCoding) {
+      this.HasGeoCoding = newValue;
+      this.fallbackFromMapIfNeeded();
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Handle map marker click — emit the record for the parent to handle (open record, etc.)
+   */
+  onMapMarkerClick(event: { RecordID: string; Latitude: number; Longitude: number; Record: Record<string, unknown> }): void {
+    const entity = this.effectiveEntity;
+    if (event.Record && entity) {
+      const compositeKey = buildCompositeKey(event.Record, entity);
+      // Emit both recordSelected (for detail panels) and recordOpened (for navigation)
+      this.recordSelected.emit({
+        record: event.Record,
+        entity: entity,
+        compositeKey
+      });
+      this.recordOpened.emit({
+        record: event.Record,
+        entity: entity,
+        compositeKey
+      });
+    }
+  }
+
+  /** Map display state (zoom, center) — passed from parent for persistence across reloads. */
+  @Input() mapDisplayState: Partial<MapDisplayState> | null = null;
+
+  /** Map render mode — separate from DisplayState for clear single-source-of-truth. */
+  @Input() mapRenderMode: MapRenderMode = 'point';
+
+  /** Emitted when the map's display state changes (zoom, center). */
+  @Output() mapDisplayStateChange = new EventEmitter<MapDisplayState>();
+
+  /** Emitted when the map's render mode changes (user clicks mode buttons). */
+  @Output() mapRenderModeChange = new EventEmitter<MapRenderMode>();
+
+  /**
+   * Handle map display state changes — bubble up to parent for persistence.
+   */
+  onMapDisplayStateChange(state: MapDisplayState): void {
+    this.mapDisplayStateChange.emit(state);
+  }
+
+  onMapRenderModeChange(mode: MapRenderMode): void {
+    this.mapRenderModeChange.emit(mode);
+  }
+
+  /**
    * Toggle timeline orientation between vertical and horizontal
    */
   toggleTimelineOrientation(): void {
@@ -1544,6 +1639,16 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    */
   private fallbackFromTimelineIfNeeded(): void {
     if (this.effectiveViewMode === 'timeline' && !this.hasDateFields) {
+      this.setViewMode('grid');
+    }
+  }
+
+  /**
+   * If currently on map view but geocoding is no longer available,
+   * fall back to grid view
+   */
+  private fallbackFromMapIfNeeded(): void {
+    if (this.effectiveViewMode === 'map' && !this.HasGeoCoding) {
       this.setViewMode('grid');
     }
   }

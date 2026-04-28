@@ -1,12 +1,8 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Float, InputType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, LogStatus, Metadata, RunView, UserInfo, ComputeRRF, ScoredCandidate, EntityRecordNameInput, CompositeKey } from '@memberjunction/core';
-import { MJVectorIndexEntity, MJVectorDatabaseEntity } from '@memberjunction/core-entities';
+import { LogError, LogStatus } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { AIEngine } from '@memberjunction/aiengine';
-import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
-import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { SearchEngine, SearchResult as SearchEngineResult, SearchResultItem as SearchEngineResultItem, SearchProviderInfo } from '@memberjunction/search-engine';
 
 /* ───── GraphQL types ───── */
 
@@ -20,6 +16,9 @@ export class SearchScoreBreakdown {
 
     @Field(() => Float, { nullable: true })
     Entity?: number;
+
+    @Field(() => Float, { nullable: true })
+    Storage?: number;
 }
 
 @ObjectType()
@@ -59,6 +58,26 @@ export class SearchKnowledgeResultItem {
 
     @Field()
     MatchedAt: Date;
+
+    /** Raw vector metadata as JSON string — contains all entity fields stored in the vector DB */
+    @Field({ nullable: true })
+    RawMetadata?: string;
+
+    /** Discriminator for UI rendering: 'entity-record', 'storage-file', or 'content-item' */
+    @Field()
+    ResultType: string;
+
+    /** ID of the SearchProvider metadata record that produced this result */
+    @Field({ nullable: true })
+    ProviderId?: string;
+
+    /** Display label from the SearchProvider metadata (e.g., "Database", "Semantic Search") */
+    @Field({ nullable: true })
+    ProviderLabel?: string;
+
+    /** Font Awesome icon class from the SearchProvider metadata */
+    @Field({ nullable: true })
+    ProviderIcon?: string;
 }
 
 @ObjectType()
@@ -71,6 +90,30 @@ export class SearchSourceCounts {
 
     @Field()
     Entity: number;
+
+    @Field()
+    Storage: number;
+}
+
+@ObjectType()
+export class SearchProviderInfoType {
+    @Field()
+    ID: string;
+
+    @Field()
+    Name: string;
+
+    @Field()
+    DisplayName: string;
+
+    @Field()
+    Icon: string;
+
+    @Field()
+    SourceType: string;
+
+    @Field()
+    Priority: number;
 }
 
 @ObjectType()
@@ -90,6 +133,9 @@ export class SearchKnowledgeResult {
     @Field(() => SearchSourceCounts)
     SourceCounts: SearchSourceCounts;
 
+    @Field(() => [SearchProviderInfoType])
+    Providers: SearchProviderInfoType[];
+
     @Field({ nullable: true })
     ErrorMessage?: string;
 }
@@ -106,7 +152,7 @@ export class SearchFiltersInput {
     Tags?: string[];
 }
 
-/* ───── Resolver ───── */
+/* ───── Resolver (thin wrapper around SearchEngine) ───── */
 
 @Resolver()
 export class SearchKnowledgeResolver extends ResolverBase {
@@ -126,53 +172,18 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 return this.errorResult('Unable to determine current user', startTime);
             }
 
-            if (!query.trim()) {
-                return this.errorResult('Query cannot be empty', startTime);
-            }
+            const result = await SearchEngine.Instance.Search({
+                Query: query,
+                MaxResults: maxResults,
+                MinScore: minScore,
+                Filters: filters ? {
+                    EntityNames: filters.EntityNames,
+                    SourceTypes: filters.SourceTypes,
+                    Tags: filters.Tags
+                } : undefined
+            }, currentUser);
 
-            const topK = maxResults ?? 20;
-
-            let t0 = Date.now();
-            await AIEngine.Instance.Config(false, currentUser);
-            LogStatus(`SearchKnowledge: AIEngine.Config: ${Date.now() - t0}ms`);
-
-            // Run vector search and full-text search in parallel
-            t0 = Date.now();
-            const [vectorResults, fullTextResults] = await Promise.all([
-                this.searchAllVectorIndexes(query, topK, filters, currentUser),
-                this.searchFullText(query, topK, filters, currentUser)
-            ]);
-            LogStatus(`SearchKnowledge: Vector(${vectorResults.length}) + FTS(${fullTextResults.length}): ${Date.now() - t0}ms`);
-
-            // Fuse results with RRF if we have results from multiple sources
-            t0 = Date.now();
-            const fusedResults = this.fuseResults(vectorResults, fullTextResults, topK);
-            const dedupedResults = this.deduplicateResults(fusedResults);
-
-            // Apply minimum score threshold (post-RRF, so fusion can surface cross-source matches first)
-            const scoreThreshold = minScore ?? 0;
-            const filteredResults = scoreThreshold > 0
-                ? dedupedResults.filter(r => r.Score >= scoreThreshold)
-                : dedupedResults;
-            LogStatus(`SearchKnowledge: Fuse + dedup + threshold≥${Math.round(scoreThreshold * 100)}% (${dedupedResults.length} → ${filteredResults.length} results): ${Date.now() - t0}ms`);
-
-            // Enrich with entity icons and record names
-            t0 = Date.now();
-            await this.enrichResults(filteredResults, currentUser);
-            LogStatus(`SearchKnowledge: Enrich (icons + names): ${Date.now() - t0}ms`);
-            LogStatus(`SearchKnowledge: Total: ${Date.now() - startTime}ms`);
-
-            return {
-                Success: true,
-                Results: filteredResults,
-                TotalCount: filteredResults.length,
-                ElapsedMs: Date.now() - startTime,
-                SourceCounts: {
-                    Vector: vectorResults.length,
-                    FullText: fullTextResults.length,
-                    Entity: 0
-                },
-            };
+            return this.mapSearchResult(result);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`SearchKnowledge mutation failed: ${msg}`);
@@ -180,425 +191,69 @@ export class SearchKnowledgeResolver extends ResolverBase {
         }
     }
 
-    /**
-     * Search ALL vector indexes. Groups indexes by embedding model, embeds the query
-     * in parallel per model, then queries all indexes per model in parallel as each
-     * embedding completes. Maximum concurrency at every level.
-     */
-    private async searchAllVectorIndexes(
-        query: string,
-        topK: number,
-        filters: SearchFiltersInput | undefined,
-        contextUser: UserInfo
-    ): Promise<SearchKnowledgeResultItem[]> {
-        const rv = new RunView();
-
-        const indexResult = await rv.RunView<MJVectorIndexEntity>({
-            EntityName: 'MJ: Vector Indexes',
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (!indexResult.Success || indexResult.Results.length === 0) {
-            LogStatus('SearchKnowledge: No vector indexes configured');
-            return [];
-        }
-
-        // Group indexes by EmbeddingModelID
-        const indexesByModel = this.groupIndexesByModel(indexResult.Results);
-        const pineFilter = this.buildPineconeFilter(filters);
-
-        // For each model group: embed query + query all indexes — all in parallel
-        const modelGroupPromises = Array.from(indexesByModel.entries()).map(
-            ([embeddingModelID, indexes]) =>
-                this.embedAndQueryGroup(query, embeddingModelID, indexes, topK, pineFilter, contextUser)
-        );
-
-        const groupResults = await Promise.all(modelGroupPromises);
-        return groupResults.flat();
-    }
-
-    /** Group vector indexes by their EmbeddingModelID */
-    private groupIndexesByModel(indexes: MJVectorIndexEntity[]): Map<string, MJVectorIndexEntity[]> {
-        const groups = new Map<string, MJVectorIndexEntity[]>();
-        for (const index of indexes) {
-            const modelId = index.EmbeddingModelID;
-            const existing = groups.get(modelId);
-            if (existing) {
-                existing.push(index);
-            } else {
-                groups.set(modelId, [index]);
-            }
-        }
-        return groups;
-    }
-
-    /**
-     * Embed query with one model, then immediately query all indexes that use that model.
-     * The embedding and subsequent queries are chained so index queries fire as soon as
-     * the embedding completes — without waiting for other models' embeddings.
-     */
-    private async embedAndQueryGroup(
-        query: string,
-        embeddingModelID: string,
-        indexes: MJVectorIndexEntity[],
-        topK: number,
-        filter: object | undefined,
-        contextUser: UserInfo
-    ): Promise<SearchKnowledgeResultItem[]> {
+    @Mutation(() => SearchKnowledgeResult)
+    async PreviewSearch(
+        @Arg('query') query: string,
+        @Arg('maxResults', () => Float, { nullable: true, defaultValue: 8 }) maxResults: number,
+        @Ctx() { userPayload }: AppContext = {} as AppContext
+    ): Promise<SearchKnowledgeResult> {
+        const startTime = Date.now();
         try {
-            // Find the AI model for this embedding
-            const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, embeddingModelID));
-            if (!model) {
-                LogError(`SearchKnowledge: Embedding model ${embeddingModelID} not found`);
-                return [];
+            const currentUser = this.GetUserFromPayload(userPayload);
+            if (!currentUser) {
+                return this.errorResult('Unable to determine current user', startTime);
             }
 
-            // Create embedding instance
-            const apiKey = GetAIAPIKey(model.DriverClass);
-            const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-                BaseEmbeddings, model.DriverClass, apiKey
-            );
-            if (!embedding) {
-                LogError(`SearchKnowledge: Failed to create embedding for ${model.DriverClass}`);
-                return [];
-            }
+            const result = await SearchEngine.Instance.PreviewSearch(query, maxResults, currentUser);
 
-            // Embed the query with this model
-            const embedResult = await embedding.EmbedText({ text: query, model: '' });
-            if (!embedResult?.vector?.length) {
-                LogError(`SearchKnowledge: Failed to embed with ${model.Name}`);
-                return [];
-            }
-
-            // Query all indexes for this model in parallel
-            const indexPromises = indexes.map(vectorIndex =>
-                this.queryOneIndex(vectorIndex, embedResult.vector, topK, filter, contextUser)
-                    .catch(error => {
-                        LogError(`SearchKnowledge: Error querying index "${vectorIndex.Name}": ${error}`);
-                        return [] as SearchKnowledgeResultItem[];
-                    })
-            );
-
-            const indexResults = await Promise.all(indexPromises);
-            return indexResults.flat();
+            return this.mapSearchResult(result);
         } catch (error) {
-            LogError(`SearchKnowledge: Error in embedding group ${embeddingModelID}: ${error}`);
-            return [];
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`PreviewSearch mutation failed: ${msg}`);
+            return this.errorResult(msg, startTime);
         }
     }
 
-    /**
-     * Query a single vector index by looking up its VectorDatabase provider and passing the index name.
-     */
-    private async queryOneIndex(
-        vectorIndex: MJVectorIndexEntity,
-        queryVector: number[],
-        topK: number,
-        filter: object | undefined,
-        contextUser: UserInfo
-    ): Promise<SearchKnowledgeResultItem[]> {
-        // Look up the vector database to get the ClassKey
-        const rv = new RunView();
-        const dbResult = await rv.RunView<MJVectorDatabaseEntity>({
-            EntityName: 'MJ: Vector Databases',
-            ExtraFilter: `ID='${vectorIndex.VectorDatabaseID}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (!dbResult.Success || dbResult.Results.length === 0) {
-            LogError(`SearchKnowledge: VectorDatabase not found for index "${vectorIndex.Name}"`);
-            return [];
-        }
-
-        const vectorDB = dbResult.Results[0];
-        const apiKey = GetAIAPIKey(vectorDB.ClassKey);
-        const vectorDBInstance = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
-            VectorDBBase, vectorDB.ClassKey, apiKey
-        );
-
-        if (!vectorDBInstance) {
-            LogError(`SearchKnowledge: Failed to create VectorDB instance for "${vectorDB.ClassKey}"`);
-            return [];
-        }
-
-        // Query with the specific index name
-        const response: BaseResponse = await vectorDBInstance.QueryIndex({
-            id: vectorIndex.Name,
-            vector: queryVector,
-            topK,
-            includeMetadata: true,
-            filter,
-        });
-
-        if (!response.success || !response.data?.matches) {
-            return [];
-        }
-
-        return this.convertMatches(response.data.matches, vectorIndex.Name);
-    }
-
-    /**
-     * Full-text search using the MJCore Metadata.FullTextSearch() method.
-     * Delegates to the provider stack which uses database-native FTS
-     * (SQL Server FREETEXT, PostgreSQL tsvector) via RunView + UserSearchString.
-     */
-    private async searchFullText(
-        query: string,
-        topK: number,
-        filters: SearchFiltersInput | undefined,
-        contextUser: UserInfo
-    ): Promise<SearchKnowledgeResultItem[]> {
-        try {
-            const md = new Metadata();
-            const ftsResult = await md.FullTextSearch({
-                SearchText: query,
-                EntityNames: filters?.EntityNames,
-                MaxRowsPerEntity: Math.max(3, Math.ceil(topK / 10))
-            }, contextUser);
-
-            if (!ftsResult.Success) {
-                LogError(`SearchKnowledge: FTS error: ${ftsResult.ErrorMessage}`);
-                return [];
-            }
-
-            return ftsResult.Results.map(r => ({
-                ID: `ft-${r.EntityName}-${r.RecordID}`,
+    private mapSearchResult(result: SearchEngineResult): SearchKnowledgeResult {
+        return {
+            Success: result.Success,
+            Results: result.Results.map((r: SearchEngineResultItem) => ({
+                ID: r.ID,
                 EntityName: r.EntityName,
                 RecordID: r.RecordID,
-                SourceType: 'fulltext',
+                SourceType: r.SourceType,
+                ResultType: r.ResultType,
                 Title: r.Title,
                 Snippet: r.Snippet,
                 Score: r.Score,
-                ScoreBreakdown: { FullText: r.Score },
-                Tags: [],
-                MatchedAt: new Date()
-            }));
-        } catch (error) {
-            LogError(`SearchKnowledge: Full-text search error: ${error}`);
-            return [];
-        }
-    }
-
-    /**
-     * Fuse vector and full-text results using Reciprocal Rank Fusion (RRF).
-     * Deduplicates by RecordID, preferring the higher-scored source.
-     */
-    private fuseResults(
-        vectorResults: SearchKnowledgeResultItem[],
-        fullTextResults: SearchKnowledgeResultItem[],
-        topK: number
-    ): SearchKnowledgeResultItem[] {
-        if (vectorResults.length === 0 && fullTextResults.length === 0) {
-            return [];
-        }
-
-        // If only one source has results, just return those
-        if (fullTextResults.length === 0) return vectorResults.slice(0, topK);
-        if (vectorResults.length === 0) return fullTextResults.slice(0, topK);
-
-        // Build scored candidate lists for RRF
-        const vectorCandidates: ScoredCandidate[] = vectorResults.map((r, i) => ({
-            ID: r.RecordID,
-            Score: r.Score,
-            Rank: i + 1
-        }));
-        const ftCandidates: ScoredCandidate[] = fullTextResults.map((r, i) => ({
-            ID: r.RecordID,
-            Score: r.Score,
-            Rank: i + 1
-        }));
-
-        // Compute RRF scores
-        const fused = ComputeRRF([vectorCandidates, ftCandidates]);
-
-        // Map fused results back to full result items
-        const resultMap = new Map<string, SearchKnowledgeResultItem>();
-        for (const r of [...vectorResults, ...fullTextResults]) {
-            if (!resultMap.has(r.RecordID)) {
-                resultMap.set(r.RecordID, r);
-            }
-        }
-
-        return fused.slice(0, topK).map(candidate => {
-            const item = resultMap.get(candidate.ID);
-            if (item) {
-                item.Score = candidate.Score;
-                return item;
-            }
-            // Shouldn't happen, but fallback
-            return {
-                ID: candidate.ID,
-                EntityName: 'Unknown',
-                RecordID: candidate.ID,
-                SourceType: 'fused',
-                Title: 'Unknown',
-                Snippet: '',
-                Score: candidate.Score,
-                ScoreBreakdown: {},
-                Tags: [],
-                MatchedAt: new Date()
-            };
-        });
-    }
-
-    /** Build Pinecone metadata filter from input */
-    private buildPineconeFilter(filters?: SearchFiltersInput): object | undefined {
-        if (!filters) return undefined;
-        const conditions: object[] = [];
-        if (filters.EntityNames?.length) {
-            conditions.push({ Entity: { $in: filters.EntityNames } });
-        }
-        if (filters.SourceTypes?.length) {
-            conditions.push({ SourceType: { $in: filters.SourceTypes } });
-        }
-        if (filters.Tags?.length) {
-            conditions.push({ Tags: { $in: filters.Tags } });
-        }
-        if (conditions.length === 0) return undefined;
-        if (conditions.length === 1) return conditions[0];
-        return { $and: conditions };
-    }
-
-    /** Convert Pinecone matches to SearchKnowledgeResultItem[] using enriched metadata */
-    private convertMatches(
-        matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
-        indexName: string
-    ): SearchKnowledgeResultItem[] {
-        return matches.map(match => {
-            const meta = match.metadata ?? {};
-            const entityName = (meta['Entity'] as string) ?? 'Unknown';
-            const recordID = (meta['RecordID'] as string) ?? match.id;
-
-            // Extract display fields from enriched metadata
-            const title = this.extractDisplayTitle(meta, entityName);
-            const snippet = this.extractDisplaySnippet(meta, indexName, match.score);
-            const entityIcon = (meta['EntityIcon'] as string) || undefined;
-            const updatedAt = meta['__mj_UpdatedAt'] ? new Date(meta['__mj_UpdatedAt'] as string) : new Date();
-
-            return {
-                ID: match.id,
-                EntityName: entityName,
-                RecordID: recordID,
-                SourceType: 'vector',
-                Title: title,
-                Snippet: snippet,
-                Score: match.score ?? 0,
-                ScoreBreakdown: { Vector: match.score ?? 0 },
-                Tags: [],
-                EntityIcon: entityIcon,
-                RecordName: title,
-                MatchedAt: updatedAt,
-            };
-        });
-    }
-
-    /** Extract the best display title from vector metadata */
-    private extractDisplayTitle(meta: Record<string, unknown>, fallbackEntity: string): string {
-        // Check common name fields stored in metadata
-        const nameFields = ['Name', 'Title', 'Subject', 'Label', 'DisplayName'];
-        for (const field of nameFields) {
-            if (meta[field] && typeof meta[field] === 'string') {
-                return meta[field] as string;
-            }
-        }
-        return `${fallbackEntity} Record`;
-    }
-
-    /** Extract the best display snippet from vector metadata */
-    private extractDisplaySnippet(meta: Record<string, unknown>, indexName: string, score?: number): string {
-        // Check common description fields stored in metadata
-        const descFields = ['Description', 'Summary', 'Body', 'Content', 'Text', 'Notes'];
-        for (const field of descFields) {
-            if (meta[field] && typeof meta[field] === 'string') {
-                const val = meta[field] as string;
-                return val.length > 200 ? val.substring(0, 200) + '...' : val;
-            }
-        }
-
-        // Build a snippet from other metadata fields (exclude system fields)
-        const skipFields = new Set(['RecordID', 'Entity', 'TemplateID', 'EntityIcon', '__mj_UpdatedAt']);
-        const parts: string[] = [];
-        for (const [key, val] of Object.entries(meta)) {
-            if (skipFields.has(key) || val == null) continue;
-            const strVal = String(val);
-            if (strVal.length > 0 && strVal.length < 100) {
-                parts.push(`${key}: ${strVal}`);
-            }
-            if (parts.length >= 3) break;
-        }
-        if (parts.length > 0) return parts.join(' · ');
-
-        return `Matched from index "${indexName}" with score ${(score ?? 0).toFixed(4)}`;
-    }
-
-    /** Remove duplicate results by RecordID, keeping the highest-scored entry */
-    private deduplicateResults(results: SearchKnowledgeResultItem[]): SearchKnowledgeResultItem[] {
-        const seen = new Map<string, SearchKnowledgeResultItem>();
-        for (const result of results) {
-            const key = `${result.EntityName}::${result.RecordID}`;
-            const existing = seen.get(key);
-            if (!existing || result.Score > existing.Score) {
-                seen.set(key, result);
-            }
-        }
-        return Array.from(seen.values()).sort((a, b) => b.Score - a.Score);
-    }
-
-    /** Enrich results with entity icons and record names */
-    private async enrichResults(results: SearchKnowledgeResultItem[], contextUser: UserInfo): Promise<void> {
-        const md = new Metadata();
-
-        // Add entity icons for results that don't already have them from metadata
-        for (const result of results) {
-            if (!result.EntityIcon) {
-                const entity = md.Entities.find(e => e.Name === result.EntityName);
-                if (entity?.Icon) {
-                    result.EntityIcon = entity.Icon;
-                }
-            }
-        }
-
-        // Only resolve record names for results that don't already have them
-        // (vector results from enriched metadata should already have names)
-        const needsNameResolution = results.filter(r =>
-            !r.RecordName || r.RecordName === `${r.EntityName} Record`
-        );
-
-        if (needsNameResolution.length === 0) return;
-
-        try {
-            const indexedResults: { index: number; input: EntityRecordNameInput }[] = [];
-            for (const r of needsNameResolution) {
-                const resultIndex = results.indexOf(r);
-                const entity = md.Entities.find(e => e.Name === r.EntityName);
-                if (!entity) continue;
-
-                const key = new CompositeKey();
-                key.LoadFromURLSegment(entity, r.RecordID);
-
-                const input = new EntityRecordNameInput();
-                input.EntityName = r.EntityName;
-                input.CompositeKey = key;
-                indexedResults.push({ index: resultIndex, input });
-            }
-
-            if (indexedResults.length > 0) {
-                const names = await md.GetEntityRecordNames(
-                    indexedResults.map(ir => ir.input),
-                    contextUser
-                );
-                for (let i = 0; i < names.length; i++) {
-                    if (names[i].RecordName) {
-                        const resultIndex = indexedResults[i].index;
-                        results[resultIndex].RecordName = names[i].RecordName;
-                        results[resultIndex].Title = names[i].RecordName;
-                    }
-                }
-            }
-        } catch (error) {
-            LogError(`SearchKnowledge: Error resolving record names: ${error}`);
-            // Non-fatal — results still usable without names
-        }
+                ScoreBreakdown: r.ScoreBreakdown as SearchScoreBreakdown,
+                Tags: r.Tags || [],
+                EntityIcon: r.EntityIcon,
+                RecordName: r.RecordName,
+                MatchedAt: r.MatchedAt,
+                RawMetadata: r.RawMetadata,
+                ProviderId: r.ProviderId,
+                ProviderLabel: r.ProviderLabel,
+                ProviderIcon: r.ProviderIcon,
+            })),
+            TotalCount: result.TotalCount,
+            ElapsedMs: result.ElapsedMs,
+            SourceCounts: {
+                Vector: result.SourceCounts.Vector,
+                FullText: result.SourceCounts.FullText,
+                Entity: result.SourceCounts.Entity,
+                Storage: result.SourceCounts.Storage,
+            },
+            Providers: (result.Providers || []).map((p: SearchProviderInfo) => ({
+                ID: p.ID,
+                Name: p.Name,
+                DisplayName: p.DisplayName,
+                Icon: p.Icon,
+                SourceType: p.SourceType,
+                Priority: p.Priority,
+            })),
+            ErrorMessage: result.ErrorMessage,
+        };
     }
 
     private errorResult(message: string, startTime: number): SearchKnowledgeResult {
@@ -607,8 +262,9 @@ export class SearchKnowledgeResolver extends ResolverBase {
             Results: [],
             TotalCount: 0,
             ElapsedMs: Date.now() - startTime,
-            SourceCounts: { Vector: 0, FullText: 0, Entity: 0 },
-            ErrorMessage: message,
+            SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+            Providers: [],
+            ErrorMessage: message
         };
     }
 }

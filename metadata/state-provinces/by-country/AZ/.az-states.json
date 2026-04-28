@@ -1,0 +1,1619 @@
+[
+  {
+    "fields": {
+      "Name": "Abşeron",
+      "Code": "ABS",
+      "ISO3166_2": "AZ-ABS",
+      "Latitude": 40.3278,
+      "Longitude": 49.3694,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-ABS.geojson",
+      "CommonAliases": [
+        "Abşeron"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "AADA614B-BB32-4241-B4B6-26081F3DA2A8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.077Z",
+      "checksum": "cc1e67fd61f92b8db7b2273d2710b0d0451eb486db05bc8f9e6d617ac428d2bc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ağcabädi",
+      "Code": "AGC",
+      "ISO3166_2": "AZ-AGC",
+      "Latitude": 39.971,
+      "Longitude": 47.4145,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-AGC.geojson",
+      "CommonAliases": [
+        "Ağcabädi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "BD701969-BA16-4D32-BF28-8AC5F22BA803"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.100Z",
+      "checksum": "3e8d3fa7c25c9c39b105cac227224615866b302c508619386591ada63b84666b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ağdam",
+      "Code": "AGM",
+      "ISO3166_2": "AZ-AGM",
+      "Latitude": 40.0455,
+      "Longitude": 46.9918,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-AGM.geojson",
+      "CommonAliases": [
+        "Ağdam"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "A3F2E3D3-F484-4212-BD9C-423EAE3EE669"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.122Z",
+      "checksum": "8418e9f7437590e4d0e1abcf28af9f9d2a9e34bc44d49d2be4c05c32afce4e98"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ağdas",
+      "Code": "AGS",
+      "ISO3166_2": "AZ-AGS",
+      "Latitude": 40.568,
+      "Longitude": 47.4132,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-AGS.geojson",
+      "CommonAliases": [
+        "Ağdas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "28F50FC6-2430-4991-BD93-CFA3120C7AAD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.142Z",
+      "checksum": "db1c6534a1c5e17f572700cd4da9d8a345aede61f460c094fcad760f84e2a83d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ağstafa",
+      "Code": "AGA",
+      "ISO3166_2": "AZ-AGA",
+      "Latitude": 41.1896,
+      "Longitude": 45.4341,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-AGA.geojson",
+      "CommonAliases": [
+        "Ağstafa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "6FFF03FD-C475-4856-9BD0-9FCD2E0762E8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.160Z",
+      "checksum": "ca82663ed71bfb22706700463a5aa81b4cac7b90f3cb8222c903bc14bced0da6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ağsu",
+      "Code": "AGU",
+      "ISO3166_2": "AZ-AGU",
+      "Latitude": 40.5091,
+      "Longitude": 48.3659,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-AGU.geojson",
+      "CommonAliases": [
+        "Ağsu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "7B60981D-AC6C-4D63-9A44-94ECD84157A3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.179Z",
+      "checksum": "aac4613ea698d2be16ba98db6be1353c5ef422122f48850601b7d6bc9141f22b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Äli Bayramli",
+      "Code": "AB",
+      "ISO3166_2": "AZ-AB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Äli Bayramli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "0063E8D6-25CB-498D-8022-08E5F173EF62"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.197Z",
+      "checksum": "36ca7c3f18e47ec6181278c93ac599d6edb564a4ed0c40097f4fed58ff4dc003"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Astara",
+      "Code": "AST",
+      "ISO3166_2": "AZ-AST",
+      "Latitude": 38.4938,
+      "Longitude": 48.7049,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-AST.geojson",
+      "CommonAliases": [
+        "Astara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "76C80168-9C39-48CE-95BA-203082C88391"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.214Z",
+      "checksum": "987ae7b622e252816eaa0d3c12f11a4cb87c3a33dc57b1cedcde2e96c7e45de5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Babäk",
+      "Code": "BAB",
+      "ISO3166_2": "AZ-BAB",
+      "Latitude": 39.1871,
+      "Longitude": 45.3373,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-BAB.geojson",
+      "CommonAliases": [
+        "Babäk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "C60DB96F-DA30-4290-9328-D52D78CA9AC5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.231Z",
+      "checksum": "22178bd50d7ba810cb0ae1626a8f4a944b0d1635672d796f4298541d5f0c472a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Baki",
+      "Code": "BA",
+      "ISO3166_2": "AZ-BA",
+      "Latitude": 40.4447,
+      "Longitude": 50.0435,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-BA.geojson",
+      "CommonAliases": [
+        "Baki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "5CE7F85F-F3CD-4F56-AEAB-04CC04871756"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.246Z",
+      "checksum": "3dcf0903b998617374f5a892b529a35b251d66efff718dcf84dc214e08a06737"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Balakän",
+      "Code": "BAL",
+      "ISO3166_2": "AZ-BAL",
+      "Latitude": 41.7393,
+      "Longitude": 46.4478,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-BAL.geojson",
+      "CommonAliases": [
+        "Balakän"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "1CF2B7D7-E434-49B6-A63C-3CBE20B9346F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.303Z",
+      "checksum": "e20559c4fc1550df4105c4b627767cbcf34d1af4eb46030f1b9bc0926f36e71e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bärdä",
+      "Code": "BAR",
+      "ISO3166_2": "AZ-BAR",
+      "Latitude": 40.3534,
+      "Longitude": 47.2467,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-BAR.geojson",
+      "CommonAliases": [
+        "Bärdä"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "2A702C03-BF40-4621-BA12-5223A10B5D9C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.319Z",
+      "checksum": "79d9a49cac7d71e79a14367b27b18244831a59556fc62b95b3543ada94d0ac93"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Beyläqan",
+      "Code": "BEY",
+      "ISO3166_2": "AZ-BEY",
+      "Latitude": 39.7591,
+      "Longitude": 47.6611,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-BEY.geojson",
+      "CommonAliases": [
+        "Beyläqan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "584CC8C0-5633-4806-BAFF-2DEAC5F36A60"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.336Z",
+      "checksum": "c9b96ce8645d73ee1bcc22cbc91eb85d1dda7679ec929da5160cfec6639d176f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Biläsuvar",
+      "Code": "BIL",
+      "ISO3166_2": "AZ-BIL",
+      "Latitude": 39.4604,
+      "Longitude": 48.3681,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-BIL.geojson",
+      "CommonAliases": [
+        "Biläsuvar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "A927DAB4-4A9B-43AD-BA82-C5D8E1DF22D7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.352Z",
+      "checksum": "2c908bf7e24153d9aad8bdd1f30a9a8b62432a50d3a94baf8faef94ce5377274"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cäbrayil",
+      "Code": "CAB",
+      "ISO3166_2": "AZ-CAB",
+      "Latitude": 39.2768,
+      "Longitude": 46.9823,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-CAB.geojson",
+      "CommonAliases": [
+        "Cäbrayil"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "DFBA084B-C475-458E-BED0-C20DEB9108D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.368Z",
+      "checksum": "c6c8a8e3087a02d7c88383ef0857161c44e1676195ba9ac3420044e72e62d91a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cälilabad",
+      "Code": "CAL",
+      "ISO3166_2": "AZ-CAL",
+      "Latitude": 39.1757,
+      "Longitude": 48.4338,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-CAL.geojson",
+      "CommonAliases": [
+        "Cälilabad"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "A0CE8609-8B95-46D8-97C5-204D0A2A6759"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.385Z",
+      "checksum": "ceb513d9d585e7d919780bb6d1fa3c6b75c2b094f397e01a006d459113d62e9c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Culfa",
+      "Code": "CUL",
+      "ISO3166_2": "AZ-CUL",
+      "Latitude": 39.136,
+      "Longitude": 45.6847,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-CUL.geojson",
+      "CommonAliases": [
+        "Culfa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "BEEE90B2-685A-4584-95EE-46724C59D939"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.404Z",
+      "checksum": "b8c7448d253b8a1d0b7b60fbe927e90ae57a598af98c7e5ef84eefe189dee374"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Daşkäsän",
+      "Code": "DAS",
+      "ISO3166_2": "AZ-DAS",
+      "Latitude": 40.4837,
+      "Longitude": 46.0228,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-DAS.geojson",
+      "CommonAliases": [
+        "Daşkäsän"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "7059C57E-76A9-4FA8-9AAC-3A3BBED729F3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.420Z",
+      "checksum": "994c3e0576931e2f87ca7c62850da871fa859b7a6afe590fc74484e3c1a86924"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Däväçi",
+      "Code": "DAV",
+      "ISO3166_2": "AZ-DAV",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Däväçi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "428A1F29-CE51-49E9-B927-6D8E258B2C6A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.436Z",
+      "checksum": "7cf4a4d920f9be525e6f0727c073afe8678fca93316522e6edc7309820bf3270"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Füzuli",
+      "Code": "FUZ",
+      "ISO3166_2": "AZ-FUZ",
+      "Latitude": 39.5574,
+      "Longitude": 47.322,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-FUZ.geojson",
+      "CommonAliases": [
+        "Füzuli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "10EE2C63-913F-4A1E-8E0D-B240EA71BE60"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.449Z",
+      "checksum": "ffbd016d27ece662ccc531badf69ecdd64a01001f0d17c49e2a8a5870e699f63"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gädäbäy",
+      "Code": "GAD",
+      "ISO3166_2": "AZ-GAD",
+      "Latitude": 40.492,
+      "Longitude": 45.6429,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-GAD.geojson",
+      "CommonAliases": [
+        "Gädäbäy"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "2775C58B-E485-4955-957C-D4665006109D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.508Z",
+      "checksum": "dcc25d2dd12157edfd60d5416bd58c4b053b36e68e80dd6821e2633b1e07ec9f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gäncä",
+      "Code": "GA",
+      "ISO3166_2": "AZ-GA",
+      "Latitude": 40.6864,
+      "Longitude": 46.3206,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-GA.geojson",
+      "CommonAliases": [
+        "Gäncä"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "3818914F-5104-4B60-AF5C-8A963F7D9574"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.525Z",
+      "checksum": "0e3aad1f3d13fb40a749af4008109b4d020ece8c29ca7be03870261a83f57083"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Goranboy",
+      "Code": "GOR",
+      "ISO3166_2": "AZ-GOR",
+      "Latitude": 40.5463,
+      "Longitude": 46.645,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-GOR.geojson",
+      "CommonAliases": [
+        "Goranboy"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "7E4879A9-AD5F-4040-8A0E-91F2C66263EB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.541Z",
+      "checksum": "f0ecbb23a35b540045cf8d85caa2600fec7d7af6a789fa2082acf0384417c363"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Göyçay",
+      "Code": "GOY",
+      "ISO3166_2": "AZ-GOY",
+      "Latitude": 40.569,
+      "Longitude": 47.8172,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-GOY.geojson",
+      "CommonAliases": [
+        "Göyçay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "7C2962BC-3867-4E14-A329-A78CDB0B5ADA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.557Z",
+      "checksum": "f8b78febe41f7db5c8ab5307c61851456b8d43f756b347c0bf1bae81d99f4cca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haciqabul",
+      "Code": "HAC",
+      "ISO3166_2": "AZ-HAC",
+      "Latitude": 40.1106,
+      "Longitude": 48.8984,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-HAC.geojson",
+      "CommonAliases": [
+        "Haciqabul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "55E5BFD8-6E7E-4FF6-BE21-A7BF6F1AA083"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.574Z",
+      "checksum": "457c46486f8d1b7dd10add2652f99547ff0abdda3bd6b756e050ea5a0d269cd2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Imişli",
+      "Code": "IMI",
+      "ISO3166_2": "AZ-IMI",
+      "Latitude": 39.9121,
+      "Longitude": 48.0606,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-IMI.geojson",
+      "CommonAliases": [
+        "Imişli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "3505DC9A-C126-4252-9D62-30122EE590A0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.590Z",
+      "checksum": "da7e436aa52d1d65c41352ecbbbb33fedd9ce54a2d39f3a357419935de7fbe85"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ismayilli",
+      "Code": "ISM",
+      "ISO3166_2": "AZ-ISM",
+      "Latitude": 40.7896,
+      "Longitude": 48.1125,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-ISM.geojson",
+      "CommonAliases": [
+        "Ismayilli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "C5B746A0-1D1E-45B4-B526-232012311F3D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.606Z",
+      "checksum": "bbda4d3f880949c81ab38d6321d9c3b4985084de24c80a4af2dca532c1d77f10"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kälbäcär",
+      "Code": "KAL",
+      "ISO3166_2": "AZ-KAL",
+      "Latitude": 40.0966,
+      "Longitude": 46.1688,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-KAL.geojson",
+      "CommonAliases": [
+        "Kälbäcär"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "E67E7DE9-D938-451D-801D-E95FB4A35C2E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.622Z",
+      "checksum": "4dad8c4c17dfab56c317f9903516182642b18e4187e2192427e3f6894e32e91d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kürdämir",
+      "Code": "KUR",
+      "ISO3166_2": "AZ-KUR",
+      "Latitude": 40.2443,
+      "Longitude": 48.1586,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-KUR.geojson",
+      "CommonAliases": [
+        "Kürdämir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "CDDB929C-B692-46FA-895A-C0646343D450"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.639Z",
+      "checksum": "09ce557fe09cffd29c423a362e3d63658e356654ad6eb718dc102cf75fe395f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Laçin",
+      "Code": "LAC",
+      "ISO3166_2": "AZ-LAC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Laçin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "F6C79A86-8507-4401-823E-3A59E0E76AEA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.653Z",
+      "checksum": "b3f309ceb3a55e2c5b5dab91ae76c4a4db489af0eec383f6d3c952b2c061732d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Länkäran",
+      "Code": "LA",
+      "ISO3166_2": "AZ-LA",
+      "Latitude": 38.7585,
+      "Longitude": 48.8421,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-LA.geojson",
+      "CommonAliases": [
+        "Länkäran"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "308845EF-C218-4451-BC4D-808A7C80944C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.707Z",
+      "checksum": "6504ffac962b45c6a43becf8f143922ab0663ded6bc8ccb22dee233869e6f27f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Länkäran",
+      "Code": "LAN",
+      "ISO3166_2": "AZ-LAN",
+      "Latitude": 39.7717,
+      "Longitude": 46.3095,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-LAN.geojson",
+      "CommonAliases": [
+        "Länkäran"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "307FCA5B-5281-4759-B1B0-3100039FAA45"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.723Z",
+      "checksum": "f94b25f3d0f1e66a84900b91b679756aa59ba263fe38fbdc36ce2559d1d9edd9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lerik",
+      "Code": "LER",
+      "ISO3166_2": "AZ-LER",
+      "Latitude": 38.7139,
+      "Longitude": 48.4779,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-LER.geojson",
+      "CommonAliases": [
+        "Lerik"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "DDCA38FE-43F0-4E62-921A-D3C7226E05E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.739Z",
+      "checksum": "336eafe94db28d193a48117e43baa0550601e43e136a9c855a8a5091dd985832"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Masalli",
+      "Code": "MAS",
+      "ISO3166_2": "AZ-MAS",
+      "Latitude": 38.9858,
+      "Longitude": 48.698,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-MAS.geojson",
+      "CommonAliases": [
+        "Masalli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "54598DE2-3E89-44E1-8E2A-9D977F1D31CD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.756Z",
+      "checksum": "7382026a6608f974fafaedc2d55ae73079f823cbb99b71ab67a7f04faddbea7e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mingäçevir",
+      "Code": "MI",
+      "ISO3166_2": "AZ-MI",
+      "Latitude": 40.7508,
+      "Longitude": 46.9846,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-MI.geojson",
+      "CommonAliases": [
+        "Mingäçevir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "C73EF985-3FAD-4ED5-ABF1-F3E7CAB7A394"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.772Z",
+      "checksum": "76cba54c22b09d07d456e400bff50b0b68980efe07195451d008eb327ab42d4b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Naftalan",
+      "Code": "NA",
+      "ISO3166_2": "AZ-NA",
+      "Latitude": 40.5077,
+      "Longitude": 46.8275,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-NA.geojson",
+      "CommonAliases": [
+        "Naftalan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "5BFCB29C-FE9B-4135-BB29-662A013E7C4E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.788Z",
+      "checksum": "9a019d5a4eea774ed70696525a2aa5997d13a159670b75fa056a9e25176966e8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Naxçivan",
+      "Code": "MM",
+      "ISO3166_2": "AZ-MM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Naxçivan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "3DCE5001-5121-4F38-B633-E3E06A850695"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.803Z",
+      "checksum": "41ac5d2227ced43d53940f602a333610fb984279ab9b4d364717130f0395a5ba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Neftçala",
+      "Code": "NEF",
+      "ISO3166_2": "AZ-NEF",
+      "Latitude": 39.3924,
+      "Longitude": 49.0585,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-NEF.geojson",
+      "CommonAliases": [
+        "Neftçala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "D7890F0B-B436-4F15-B48D-E14565CC0241"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.819Z",
+      "checksum": "1363b5423a977538a09634e740a9c151106d43e51d45bf9c0e8cd9186d834131"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oğuz",
+      "Code": "OGU",
+      "ISO3166_2": "AZ-OGU",
+      "Latitude": 41.04,
+      "Longitude": 47.4853,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-OGU.geojson",
+      "CommonAliases": [
+        "Oğuz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "C0481EC0-C8AC-4640-9308-14B6CE127F81"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.836Z",
+      "checksum": "db9bb28ac2ca011fab6c5f4c19e31a7e0db3a2fdbe3d61c6df5fd7c4dfdd5420"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ordubad",
+      "Code": "ORD",
+      "ISO3166_2": "AZ-ORD",
+      "Latitude": 39.0972,
+      "Longitude": 45.9272,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-ORD.geojson",
+      "CommonAliases": [
+        "Ordubad"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "D0DF0D41-75BF-4C7B-BA4E-1477C69A3185"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.849Z",
+      "checksum": "d591aa669c815d873dc9267944b478d301f6bf940930603bad7a20967d1837e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qäbälä",
+      "Code": "QAB",
+      "ISO3166_2": "AZ-QAB",
+      "Latitude": 40.9578,
+      "Longitude": 47.7784,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-QAB.geojson",
+      "CommonAliases": [
+        "Qäbälä"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "4161B611-C3B1-4E51-BB94-61830A8FD2F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.907Z",
+      "checksum": "1658fbebedad8c84b8d0f2515a3cc465a92a066fe0706cb89893f85320c24385"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qax",
+      "Code": "QAX",
+      "ISO3166_2": "AZ-QAX",
+      "Latitude": 41.375,
+      "Longitude": 46.7976,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-QAX.geojson",
+      "CommonAliases": [
+        "Qax"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "A3734640-CF78-4FE5-B2BD-F7C0E239B417"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.922Z",
+      "checksum": "14fa35cfe02912bfff25b1d75afa2241d9ef3e2b19b4e90c318c227ca3aa0542"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qazax",
+      "Code": "QAZ",
+      "ISO3166_2": "AZ-QAZ",
+      "Latitude": 41.0778,
+      "Longitude": 45.2004,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-QAZ.geojson",
+      "CommonAliases": [
+        "Qazax"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "521D781F-1308-44C7-A476-869EB556B9B7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.939Z",
+      "checksum": "ff36f954677cea217413a23f8c486d57327e228b32e377e0321ebb5ea0f26244"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qobustan",
+      "Code": "QOB",
+      "ISO3166_2": "AZ-QOB",
+      "Latitude": 40.4977,
+      "Longitude": 48.9623,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-QOB.geojson",
+      "CommonAliases": [
+        "Qobustan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "7FC279D3-A6F3-4052-9A7C-7D4F8F8E9682"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.956Z",
+      "checksum": "4def346f53ac53fe50800bcf5c81f3b67cdefec2ea246ebb740dc4432cf9eec4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quba",
+      "Code": "QBA",
+      "ISO3166_2": "AZ-QBA",
+      "Latitude": 41.1847,
+      "Longitude": 48.3368,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-QBA.geojson",
+      "CommonAliases": [
+        "Quba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "57DCDCA2-55F4-46E1-A161-9FEDAF92BF1A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.972Z",
+      "checksum": "20f702bf6bc0724dca1df04dab8b4565afd2c72dadbc233da650f28c3abf5cdd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qubadlı",
+      "Code": "QBI",
+      "ISO3166_2": "AZ-QBI",
+      "Latitude": 39.3434,
+      "Longitude": 46.5917,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-QBI.geojson",
+      "CommonAliases": [
+        "Qubadlı"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "26B4BA6A-C702-48BF-8B16-0F7EF76C1070"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.989Z",
+      "checksum": "8336b5a51aa07a81ad9004ff5b0277226d3bc6fb2027c10bd16e001090c8b637"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qusar",
+      "Code": "QUS",
+      "ISO3166_2": "AZ-QUS",
+      "Latitude": 41.4005,
+      "Longitude": 48.1944,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-QUS.geojson",
+      "CommonAliases": [
+        "Qusar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "AF1915BE-C2DC-470B-B505-99AC0AD0EBF0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.005Z",
+      "checksum": "93b6dcf810ade489b68081b3a88a84d76dafab2634e279b3c532171135104fec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saatli",
+      "Code": "SAT",
+      "ISO3166_2": "AZ-SAT",
+      "Latitude": 39.7892,
+      "Longitude": 48.4591,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SAT.geojson",
+      "CommonAliases": [
+        "Saatli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "E87A740B-5C86-4A4B-A4CF-6C01B64811B1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.021Z",
+      "checksum": "07d0c73b67a9500ee4983830f92f78bb18209d3932ee97e9d7e1f8a558a0af9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sabirabad",
+      "Code": "SAB",
+      "ISO3166_2": "AZ-SAB",
+      "Latitude": 39.8179,
+      "Longitude": 48.8122,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SAB.geojson",
+      "CommonAliases": [
+        "Sabirabad"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "2B4DE7BC-80F2-45F7-B86D-5B91F88E0D31"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.038Z",
+      "checksum": "21fb103c5d1411a1967c9d1f66966e3d3e25499f3df728fc29e7c25c2ba2a991"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sädäräk",
+      "Code": "SAD",
+      "ISO3166_2": "AZ-SAD",
+      "Latitude": 39.699,
+      "Longitude": 44.8638,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SAD.geojson",
+      "CommonAliases": [
+        "Sädäräk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "26F6C6E7-AE63-46F3-9B90-9BD8726F028E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.051Z",
+      "checksum": "2c1de29b0ca6b67f7ab4d58ccce9558a91410751f2eaf851be60bed0dc24d3ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şahbuz",
+      "Code": "SAH",
+      "ISO3166_2": "AZ-SAH",
+      "Latitude": 39.4227,
+      "Longitude": 45.5799,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SAH.geojson",
+      "CommonAliases": [
+        "Şahbuz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "EE143A7F-44C8-452D-B7BC-F0259582A608"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.116Z",
+      "checksum": "ef82e6c04e142aa1719732e2009d74ed94db96ac184542b3536c54551c1901ac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şäki",
+      "Code": "SA",
+      "ISO3166_2": "AZ-SA",
+      "Latitude": 41.1882,
+      "Longitude": 47.1885,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SA.geojson",
+      "CommonAliases": [
+        "Şäki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "6DC02299-157A-473E-9F2A-5A267C413BEE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.135Z",
+      "checksum": "bfbabfd220b9cc5b0a7e3c40c511101534f41054d4bc7606f187dbd1d2a48178"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şäki",
+      "Code": "SAK",
+      "ISO3166_2": "AZ-SAK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Şäki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "8A3C91B7-3C75-40E4-81A5-F978EE2DE9D9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.156Z",
+      "checksum": "b342b05d6210f831c5ab5e47bddf842e091dc6225b2da33619996b3b4e865c74"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Salyan",
+      "Code": "SAL",
+      "ISO3166_2": "AZ-SAL",
+      "Latitude": 39.7198,
+      "Longitude": 49.0495,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SAL.geojson",
+      "CommonAliases": [
+        "Salyan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "F44F2105-7AB1-4F0E-A8D0-A354AE400D08"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.184Z",
+      "checksum": "9a3b151b5f488459e6164737ea4560956f82839a5f9e6a312df1ad9f49bf5d4f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şamaxı",
+      "Code": "SMI",
+      "ISO3166_2": "AZ-SMI",
+      "Latitude": 40.3768,
+      "Longitude": 48.5986,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SMI.geojson",
+      "CommonAliases": [
+        "Şamaxı"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "5B5984A6-F56E-4ED3-A4C7-3192E9235EDF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.200Z",
+      "checksum": "78a544ee9d9ec0b941d4b61c2b555661b7274fb9a343330f6390fdf3d604a397"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şämkir",
+      "Code": "SKR",
+      "ISO3166_2": "AZ-SKR",
+      "Latitude": 40.8317,
+      "Longitude": 46.0161,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SKR.geojson",
+      "CommonAliases": [
+        "Şämkir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "64D349B4-894A-4DFC-8FE0-95A391AE606A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.216Z",
+      "checksum": "878b77fb18624343420df67ad69241491498e8c6ef1101665495a98684350500"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Samux",
+      "Code": "SMX",
+      "ISO3166_2": "AZ-SMX",
+      "Latitude": 40.8795,
+      "Longitude": 46.4234,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SMX.geojson",
+      "CommonAliases": [
+        "Samux"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "DEA999AC-0A36-4BF8-BC7D-DBDFB1DE1F3A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.233Z",
+      "checksum": "e0cc91f248a906a37c605505b169d559edfb8576bf1f5ea620a75e62899c540d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şärur",
+      "Code": "SAR",
+      "ISO3166_2": "AZ-SAR",
+      "Latitude": 39.5929,
+      "Longitude": 45.0172,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SAR.geojson",
+      "CommonAliases": [
+        "Şärur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "A585D6A4-01E9-4190-9A2D-5F3FE7539AEA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.249Z",
+      "checksum": "f8069ec3ea1e6a443f2715542eb742c692b0caf3b225b3f3b3cbe2cba58e9229"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Siyäzän",
+      "Code": "SIY",
+      "ISO3166_2": "AZ-SIY",
+      "Latitude": 41.0414,
+      "Longitude": 49.0973,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SIY.geojson",
+      "CommonAliases": [
+        "Siyäzän"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "5C71D4CE-B7AC-4E4E-9996-CE7F4E71C64A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.265Z",
+      "checksum": "64ecd1dec4661c43f4edef41d0ca1e0720d8c1c5908b2345320a9b8dfc2b7d67"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sumqayit",
+      "Code": "SM",
+      "ISO3166_2": "AZ-SM",
+      "Latitude": 40.5841,
+      "Longitude": 49.5962,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SM.geojson",
+      "CommonAliases": [
+        "Sumqayit"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "9CC7118F-09C8-431C-87F7-FEF9026365A4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.279Z",
+      "checksum": "1a0c3cd48d085ea860c6926e154e6927bac8e59d7cbc8b6346514d77cecf88a1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şuşa",
+      "Code": "SS",
+      "ISO3166_2": "AZ-SS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Şuşa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "6B0CAE5F-CCBF-4E94-A1E8-D743A8A9D91B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.335Z",
+      "checksum": "30420f4d3ee89e962086ef936a45916e78849c4bf2f11dcd4ab42e9600a0fa9d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şuşa",
+      "Code": "SUS",
+      "ISO3166_2": "AZ-SUS",
+      "Latitude": 39.7027,
+      "Longitude": 46.658,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-SUS.geojson",
+      "CommonAliases": [
+        "Şuşa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "C54B48F4-14A5-47DF-8F0C-DF9C8F9B6761"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.364Z",
+      "checksum": "3765b84fb1c97e20dca20a1d3a3852fddae45298140a760b2cb8c53a3d1b11cc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tärtär",
+      "Code": "TAR",
+      "ISO3166_2": "AZ-TAR",
+      "Latitude": 40.2547,
+      "Longitude": 46.7929,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-TAR.geojson",
+      "CommonAliases": [
+        "Tärtär"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "9FF98507-7D6E-4C3B-BA40-56CC665BFA69"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.379Z",
+      "checksum": "c404dce7c292700f05201214f02a7d2aba198084b7c9688f98bae592fcffa8bb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tovuz",
+      "Code": "TOV",
+      "ISO3166_2": "AZ-TOV",
+      "Latitude": 41.0669,
+      "Longitude": 45.8238,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-TOV.geojson",
+      "CommonAliases": [
+        "Tovuz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "9F246D78-6ACA-4CF2-AC63-3E4C3959E22B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.395Z",
+      "checksum": "f73bb23afec1105e79f5ddf07f8f4ab65fcbfb24539ea2d4821ef82295ec92fc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ucar",
+      "Code": "UCA",
+      "ISO3166_2": "AZ-UCA",
+      "Latitude": 40.3925,
+      "Longitude": 47.729,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-UCA.geojson",
+      "CommonAliases": [
+        "Ucar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "4A9F0809-C092-4427-84F8-E52D2273DCB2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.410Z",
+      "checksum": "126c222e38901b24bbb8bc6b887d93a9ee0eaf489a214ef516f0c26c7aa650fd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Xaçmaz",
+      "Code": "XAC",
+      "ISO3166_2": "AZ-XAC",
+      "Latitude": 41.5198,
+      "Longitude": 48.7701,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-XAC.geojson",
+      "CommonAliases": [
+        "Xaçmaz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "EEC7EE8B-1EC9-4A26-A380-9B872C12C2B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.424Z",
+      "checksum": "e5ba6e9e82c1ada226df01cb4273ee2715cf600bed2488bcaee4883259d7efc5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Xankändi",
+      "Code": "XA",
+      "ISO3166_2": "AZ-XA",
+      "Latitude": 39.8285,
+      "Longitude": 46.7662,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-XA.geojson",
+      "CommonAliases": [
+        "Xankändi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "DA28429B-0B88-4C63-8685-EB775D65F34C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.438Z",
+      "checksum": "ffbcf9ccdc2284f2fe8897eebd115c7381e0c8fd8a7cf62e752049f1993e5f4c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Xanlar",
+      "Code": "XAN",
+      "ISO3166_2": "AZ-XAN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Xanlar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "E022F802-E487-469B-9D45-05627156C25F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.452Z",
+      "checksum": "6b28e34f85c18141fd5a0334857b4147624d3b36230251d49416c0be6f08735c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Xizi",
+      "Code": "XIZ",
+      "ISO3166_2": "AZ-XIZ",
+      "Latitude": 40.7249,
+      "Longitude": 49.154,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-XIZ.geojson",
+      "CommonAliases": [
+        "Xizi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "F5FE30C8-94F4-4A23-9F9A-EA9CEF857A86"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.466Z",
+      "checksum": "3aced2edcba03d1c0eaaca4be5634d54eda0cc1a2d982e59a336cfc603b0f164"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Xocalı",
+      "Code": "XCI",
+      "ISO3166_2": "AZ-XCI",
+      "Latitude": 39.8925,
+      "Longitude": 46.6804,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-XCI.geojson",
+      "CommonAliases": [
+        "Xocalı"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "76318EA9-1974-4245-8CB5-E423BA102D38"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.481Z",
+      "checksum": "88f8e86123e51a137dc07a98f9bed08a9fa1259411ab4d21c31fc891ff7a6aa9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Xocavänd",
+      "Code": "XVD",
+      "ISO3166_2": "AZ-XVD",
+      "Latitude": 39.6307,
+      "Longitude": 46.99,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-XVD.geojson",
+      "CommonAliases": [
+        "Xocavänd"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "8E21FC88-510E-4372-B638-16E92753EFFC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.523Z",
+      "checksum": "cc11250c67b435e0fb452dae049ed3b6b891641ad3e2883a61352faa98af435b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yardimli",
+      "Code": "YAR",
+      "ISO3166_2": "AZ-YAR",
+      "Latitude": 38.866,
+      "Longitude": 48.269,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-YAR.geojson",
+      "CommonAliases": [
+        "Yardimli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "4DAF5B50-D0FB-4E20-92F0-4AF5E001FDFA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.537Z",
+      "checksum": "19e423f933182e250b59ecccfd53fa006d898624120a9d3eb2ebdac417852ab4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yevlax",
+      "Code": "YE",
+      "ISO3166_2": "AZ-YE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Yevlax"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "548309AE-0767-49EE-B81D-A6E2F21E4D1D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.553Z",
+      "checksum": "53c7c2b5c73a4a1c904492c9a9b61da2b2cc2895da5111ebfb996c3f8e8276eb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yevlax",
+      "Code": "YEV",
+      "ISO3166_2": "AZ-YEV",
+      "Latitude": 40.6019,
+      "Longitude": 47.1503,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-YEV.geojson",
+      "CommonAliases": [
+        "Yevlax"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "515B0A3A-26D3-4624-941F-B3BD5EF9ACBF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.569Z",
+      "checksum": "aba70ace9be67f82197816131cf1ec4dd717f15c286d75ad2239199d67cc0a09"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zängılan",
+      "Code": "ZAN",
+      "ISO3166_2": "AZ-ZAN",
+      "Latitude": 39.0904,
+      "Longitude": 46.6305,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-ZAN.geojson",
+      "CommonAliases": [
+        "Zängılan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "FE39DCB4-5CB8-449F-BC84-72101A3E0614"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.584Z",
+      "checksum": "383fc20a26ea08184bb78fb53e3408f8544d51b7363d463278bd144e8092bb95"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zaqatala",
+      "Code": "ZAQ",
+      "ISO3166_2": "AZ-ZAQ",
+      "Latitude": 41.5666,
+      "Longitude": 46.654,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-ZAQ.geojson",
+      "CommonAliases": [
+        "Zaqatala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "06D622CF-F26F-41ED-BF63-3121030137A0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.598Z",
+      "checksum": "70ee7defbfca6b2bd9c94f4b773a50160579e1b63845d8587d1d5b5390789d0c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zärdab",
+      "Code": "ZAR",
+      "ISO3166_2": "AZ-ZAR",
+      "Latitude": 40.2395,
+      "Longitude": 47.6936,
+      "BoundaryGeoJSON": "@file:by-country/AZ/boundaries/AZ-ZAR.geojson",
+      "CommonAliases": [
+        "Zärdab"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AZ"
+    },
+    "primaryKey": {
+      "ID": "75CDA600-72A5-41DE-9355-77554C9E4502"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.610Z",
+      "checksum": "baaaa061c048bb87adb8521bd5802c50a4c244962152986a13c19f109e3261e2"
+    }
+  }
+]

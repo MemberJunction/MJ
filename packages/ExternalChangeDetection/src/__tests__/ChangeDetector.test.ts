@@ -77,6 +77,7 @@ vi.mock('@memberjunction/core', () => {
     Metadata: class {
       Entities = [];
       GetEntityObject = vi.fn();
+      EntityByID = vi.fn();
       static Provider = {};
     },
     RunView: class {
@@ -121,6 +122,32 @@ vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
     MJCoreSchemaName = '__mj';
     ExecuteSQL = vi.fn().mockResolvedValue([]);
     CreateUserDescriptionOfChanges = vi.fn().mockReturnValue('Updated fields');
+  },
+}));
+
+// Mock encryption engine for buildEntityFromRow decryption tests.
+// IsEncrypted uses the real prefix check; Decrypt strips a known sentinel so
+// the tests can assert exactly which values went through decryption.
+const mockEncryptionEngine = {
+  Config: vi.fn().mockResolvedValue(undefined),
+  IsEncrypted: vi.fn((value: unknown, marker?: string): boolean => {
+    return typeof value === 'string' && value.startsWith(marker ?? '$ENC$');
+  }),
+  Decrypt: vi.fn().mockImplementation(async (value: string): Promise<string> => {
+    // Strip the $ENC$ prefix and return a deterministic plaintext.
+    // e.g. '$ENC$blob:SECRET' → 'SECRET'
+    if (typeof value === 'string' && value.startsWith('$ENC$')) {
+      const colonIdx = value.lastIndexOf(':');
+      return colonIdx > 4 ? value.substring(colonIdx + 1) : 'DECRYPTED';
+    }
+    return value;
+  }),
+  GetKeyByID: vi.fn().mockReturnValue({ Marker: '$ENC$' }),
+};
+
+vi.mock('@memberjunction/encryption', () => ({
+  EncryptionEngine: {
+    get Instance() { return mockEncryptionEngine; },
   },
 }));
 
@@ -178,6 +205,104 @@ describe('ChangeDetectionResult', () => {
     result.Success = true;
     result.Changes = [];
     expect(result.Success).toBe(true);
+  });
+});
+
+describe('ExternalChangeDetectorEngine - buildDetectionParams uses correct PK', () => {
+  it('should build detection params with entity-specific PK column, not "ID"', () => {
+    const engine = new ExternalChangeDetectorEngine();
+
+    // Initialize dialect (needed by buildDetectionParams -> getPrimaryKeyString)
+    (engine as unknown as Record<string, unknown>)['_dialect'] = {
+      ConcatOperator: () => '+',
+      CastToText: (expr: string) => `CAST(${expr} AS NVARCHAR(MAX))`,
+      QuoteIdentifier: (id: string) => `[${id}]`,
+    };
+
+    // Simulate an EntityInfo with PK = TicketId (not the default "ID")
+    // This is what the fix ensures: _EligibleEntities contains EntityInfo objects
+    // where PrimaryKeys reflects the actual entity, not the "MJ: Entities" table.
+    const entityInfo = {
+      ID: 'entity-1',
+      Name: 'Event Tickets',
+      SchemaName: 'ym',
+      BaseView: 'vwEventTickets',
+      PrimaryKeys: [{ Name: 'TicketId', IsPrimaryKey: true }],
+    };
+
+    // Also set up EligibleEntities so validateEntityEligibility passes
+    (engine as unknown as Record<string, unknown[]>)['_EligibleEntities'] = [entityInfo];
+    (engine as unknown as Record<string, string[]>)['_IneligibleEntities'] = [];
+
+    // Call the private buildDetectionParams method
+    const params = (engine as unknown as Record<string, Function>)['buildDetectionParams'](entityInfo);
+
+    // All three query param sets should reference TicketId, NOT ID
+    expect(params.creation.PrimaryKeyJoin).toContain('[TicketId]');
+    expect(params.creation.PrimaryKeyJoin).not.toContain('[ID]');
+
+    expect(params.update.PrimaryKeyJoin).toContain('[TicketId]');
+    expect(params.update.PrimaryKeyOrderBy).toBe('ot.[TicketId]');
+
+    expect(params.deletion.PrimaryKeyJoin).toContain('[TicketId]');
+    expect(params.deletion.PrimaryKeyIsNull).toBe('ot.[TicketId] IS NULL');
+  });
+
+  it('should handle composite primary keys correctly', () => {
+    const engine = new ExternalChangeDetectorEngine();
+
+    (engine as unknown as Record<string, unknown>)['_dialect'] = {
+      ConcatOperator: () => '+',
+      CastToText: (expr: string) => `CAST(${expr} AS NVARCHAR(MAX))`,
+      QuoteIdentifier: (id: string) => `[${id}]`,
+    };
+
+    const entityInfo = {
+      ID: 'entity-2',
+      Name: 'Person Attributes',
+      SchemaName: 'dbo',
+      BaseView: 'vwPersonAttributes',
+      PrimaryKeys: [
+        { Name: 'PersonID', IsPrimaryKey: true },
+        { Name: 'Name', IsPrimaryKey: true },
+      ],
+    };
+
+    (engine as unknown as Record<string, unknown[]>)['_EligibleEntities'] = [entityInfo];
+    (engine as unknown as Record<string, string[]>)['_IneligibleEntities'] = [];
+
+    const params = (engine as unknown as Record<string, Function>)['buildDetectionParams'](entityInfo);
+
+    // Should contain both PK fields
+    expect(params.creation.PrimaryKeyJoin).toContain('[PersonID]');
+    expect(params.creation.PrimaryKeyJoin).toContain('[Name]');
+    expect(params.update.PrimaryKeyOrderBy).toBe('ot.[PersonID], ot.[Name]');
+    expect(params.deletion.PrimaryKeyIsNull).toBe('ot.[PersonID] IS NULL AND ot.[Name] IS NULL');
+  });
+});
+
+describe('ExternalChangeDetectorEngine - getPrimaryKeyString uses correct PK field', () => {
+  it('should generate SQL with the entity-specific PK column, not "ID"', () => {
+    const engine = new ExternalChangeDetectorEngine();
+
+    // Initialize dialect (needed by getPrimaryKeyString)
+    (engine as unknown as Record<string, unknown>)['_dialect'] = {
+      ConcatOperator: () => '+',
+      CastToText: (expr: string) => `CAST(${expr} AS NVARCHAR(MAX))`,
+      QuoteIdentifier: (id: string) => `[${id}]`,
+    };
+
+    // EntityInfo with PK = TicketId (not ID)
+    const entityInfo = {
+      PrimaryKeys: [{ Name: 'TicketId', IsPrimaryKey: true }],
+    };
+
+    const result = (engine as unknown as Record<string, Function>)['getPrimaryKeyString'](entityInfo, 'ot');
+
+    // Should reference [TicketId], NOT [ID]
+    expect(result).toContain('[TicketId]');
+    expect(result).not.toContain('[ID]');
+    expect(result).toBe("'TicketId|' + CAST([ot].[TicketId] AS NVARCHAR(MAX))");
   });
 });
 
@@ -252,5 +377,169 @@ describe('ExternalChangeDetectorEngine - DoValuesDiffer', () => {
     const d2 = new Date('2024-01-01T00:00:00Z');
     const result = callDoValuesDiffer(engine, TSType.Date, d1, d2);
     expect(result.differ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildEntityFromRow — decryption of Encrypt=1 fields
+//
+// Regression for https://github.com/MemberJunction/MJ/issues/2367
+//
+// Detection queries run via RunQuery, which does NOT call PostProcessRows, so
+// encrypted fields are returned as raw $ENC$... strings from the database.
+// If we load those values straight into a BaseEntity and call Save(), the
+// provider's EncryptFieldValuesForSave guard (IsEncrypted check) does prevent
+// MJ's own re-encryption — but any application-level Save() override that
+// applies its own encryption will re-encrypt the already-$ENC$ string, and
+// MJ's layer will then wrap that again, producing $ENC$(app_enc($ENC$(...))).
+// Decrypting in buildEntityFromRow means Save() sees plaintext and the normal
+// encrypt-once path runs — identical to a regular Load/Save cycle.
+// ---------------------------------------------------------------------------
+describe('ExternalChangeDetectorEngine - buildEntityFromRow', () => {
+  type RowPayload = Record<string, unknown>;
+
+  const makeEngine = () => {
+    const engine = new ExternalChangeDetectorEngine();
+    // ContextUser is referenced inside buildEntityFromRow → GetEntityObject
+    (engine as unknown as { ContextUser: unknown }).ContextUser = {};
+    return engine;
+  };
+
+  const callBuildEntityFromRow = async (
+    engine: ExternalChangeDetectorEngine,
+    md: unknown,
+    entity: unknown,
+    row: RowPayload
+  ): Promise<{ loadedRow: RowPayload; record: unknown }> => {
+    let loadedRow: RowPayload = {};
+    const record = {
+      LoadFromData: vi.fn().mockImplementation((data: RowPayload) => {
+        loadedRow = data;
+      }),
+    };
+    (md as { GetEntityObject: ReturnType<typeof vi.fn> }).GetEntityObject = vi
+      .fn()
+      .mockResolvedValue(record);
+
+    await (engine as unknown as Record<string, Function>)['buildEntityFromRow'](md, entity, row);
+    return { loadedRow, record };
+  };
+
+  beforeEach(() => {
+    mockEncryptionEngine.Decrypt.mockClear();
+    mockEncryptionEngine.IsEncrypted.mockClear();
+    mockEncryptionEngine.Config.mockClear();
+    mockEncryptionEngine.GetKeyByID.mockClear();
+  });
+
+  it('should decrypt $ENC$ values on encrypted fields before loading into the entity', async () => {
+    const engine = makeEngine();
+    const entity = {
+      ID: 'ent-credentials',
+      Name: 'Credentials',
+      Fields: [
+        { Name: 'ID', Encrypt: false, EncryptionKeyID: null },
+        { Name: 'Name', Encrypt: false, EncryptionKeyID: null },
+        { Name: 'APIKey', Encrypt: true, EncryptionKeyID: 'key-1' },
+      ],
+    };
+
+    const row: RowPayload = {
+      ID: 'cred-1',
+      Name: 'GitHub Token',
+      APIKey: '$ENC$blob:gh_pat_top_secret',
+      __ecd_UpdatedAt: '2026-04-13T00:00:00Z',
+    };
+
+    const { loadedRow } = await callBuildEntityFromRow(engine, {}, entity, row);
+
+    // Plaintext makes it into the entity — Save() will re-encrypt cleanly.
+    expect(loadedRow.APIKey).toBe('gh_pat_top_secret');
+    expect(loadedRow.__ecd_UpdatedAt).toBeUndefined(); // __ecd_ columns stripped
+    expect(mockEncryptionEngine.Decrypt).toHaveBeenCalledTimes(1);
+    expect(mockEncryptionEngine.Decrypt).toHaveBeenCalledWith(
+      '$ENC$blob:gh_pat_top_secret',
+      expect.anything()
+    );
+  });
+
+  it('should skip plaintext values on encrypted fields (idempotent)', async () => {
+    const engine = makeEngine();
+    const entity = {
+      ID: 'ent-credentials',
+      Name: 'Credentials',
+      Fields: [
+        { Name: 'APIKey', Encrypt: true, EncryptionKeyID: 'key-1' },
+      ],
+    };
+
+    const { loadedRow } = await callBuildEntityFromRow(engine, {}, entity, {
+      APIKey: 'already-plaintext',
+    });
+
+    expect(loadedRow.APIKey).toBe('already-plaintext');
+    expect(mockEncryptionEngine.Decrypt).not.toHaveBeenCalled();
+  });
+
+  it('should be a no-op for entities with no encrypted fields', async () => {
+    const engine = makeEngine();
+    const entity = {
+      ID: 'ent-users',
+      Name: 'Users',
+      Fields: [
+        { Name: 'ID', Encrypt: false, EncryptionKeyID: null },
+        { Name: 'Email', Encrypt: false, EncryptionKeyID: null },
+      ],
+    };
+
+    const { loadedRow } = await callBuildEntityFromRow(engine, {}, entity, {
+      ID: 'u-1',
+      Email: 'alice@example.com',
+    });
+
+    expect(loadedRow.Email).toBe('alice@example.com');
+    expect(mockEncryptionEngine.Config).not.toHaveBeenCalled();
+    expect(mockEncryptionEngine.Decrypt).not.toHaveBeenCalled();
+  });
+
+  it('should leave value as $ENC$ if decryption fails (no crash, no corruption)', async () => {
+    mockEncryptionEngine.Decrypt.mockRejectedValueOnce(new Error('bad key'));
+
+    const engine = makeEngine();
+    const entity = {
+      ID: 'ent-credentials',
+      Name: 'Credentials',
+      Fields: [
+        { Name: 'APIKey', Encrypt: true, EncryptionKeyID: 'key-1' },
+      ],
+    };
+
+    const { loadedRow } = await callBuildEntityFromRow(engine, {}, entity, {
+      APIKey: '$ENC$blob:unrecoverable',
+    });
+
+    // Save() will then see the $ENC$ prefix and EncryptFieldValuesForSave
+    // will skip re-encryption via its IsEncrypted guard. DB value is preserved
+    // rather than corrupted.
+    expect(loadedRow.APIKey).toBe('$ENC$blob:unrecoverable');
+  });
+
+  it('should skip fields marked Encrypt=1 but with no EncryptionKeyID configured', async () => {
+    const engine = makeEngine();
+    const entity = {
+      ID: 'ent-weird',
+      Name: 'Misconfigured',
+      Fields: [
+        // Metadata says encrypt but no key — can't decrypt, can't encrypt either.
+        { Name: 'Mystery', Encrypt: true, EncryptionKeyID: null },
+      ],
+    };
+
+    const { loadedRow } = await callBuildEntityFromRow(engine, {}, entity, {
+      Mystery: '$ENC$blob:unknown',
+    });
+
+    expect(loadedRow.Mystery).toBe('$ENC$blob:unknown');
+    expect(mockEncryptionEngine.Decrypt).not.toHaveBeenCalled();
   });
 });

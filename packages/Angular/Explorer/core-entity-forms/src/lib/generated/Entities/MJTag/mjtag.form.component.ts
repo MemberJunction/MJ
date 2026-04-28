@@ -18,9 +18,16 @@ export class MJTagFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'tagBasics', sectionName: 'Tag Basics', isExpanded: true },
             { sectionKey: 'tagHierarchy', sectionName: 'Tag Hierarchy', isExpanded: true },
+            { sectionKey: 'tagLifecycle', sectionName: 'Tag Lifecycle', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJTags', sectionName: 'Tags', isExpanded: false },
-            { sectionKey: 'mJTaggedItems', sectionName: 'Tagged Items', isExpanded: false }
+            { sectionKey: 'mJTagsParentID', sectionName: 'Tags', isExpanded: false },
+            { sectionKey: 'mJTaggedItems', sectionName: 'Tagged Items', isExpanded: false },
+            { sectionKey: 'mJTagCoOccurrencesTagBID', sectionName: 'Tag Co Occurrences (Tag B ID)', isExpanded: false },
+            { sectionKey: 'mJContentItemTags', sectionName: 'Content Item Tags', isExpanded: false },
+            { sectionKey: 'mJTagAuditLogsRelatedTagID', sectionName: 'Tag Audit Logs (Related Tag)', isExpanded: false },
+            { sectionKey: 'mJTagCoOccurrencesTagAID', sectionName: 'Tag Co Occurrences (Tag A ID)', isExpanded: false },
+            { sectionKey: 'mJTagsMergedIntoTagID', sectionName: 'Tags (Merged Into Tag)', isExpanded: false },
+            { sectionKey: 'mJTagAuditLogsTagID', sectionName: 'Tag Audit Logs (Tag)', isExpanded: false }
         ]);
     }
 }

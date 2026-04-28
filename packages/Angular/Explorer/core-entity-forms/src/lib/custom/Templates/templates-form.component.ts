@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { MJTemplateEntity, MJTemplateContentEntity, MJTemplateCategoryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { MJTemplateFormComponent } from '../../generated/Entities/MJTemplate/mjtemplate.form.component';
 import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -22,6 +22,10 @@ import { TemplateEditorConfig } from '../../shared/components/template-editor.co
 })
 export class MJTemplateFormComponentExtended extends MJTemplateFormComponent implements OnInit, OnDestroy, AfterViewInit {
     public record!: MJTemplateEntity;
+    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** Custom-layout Template form looks best full-width on first open. */
+    public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
     public templateContents: MJTemplateContentEntity[] = [];
     public selectedContentIndex: number = 0;
     public isAddingNewContent: boolean = false;
