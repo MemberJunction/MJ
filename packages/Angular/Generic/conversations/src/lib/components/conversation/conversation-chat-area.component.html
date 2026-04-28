@@ -11,6 +11,12 @@
           </button>
         }
         <div class="chat-title">{{ conversation.Name || '' }}</div>
+        @if (sharedByBadge) {
+          <span class="shared-by-badge" [title]="sharedByBadge.fullTooltip">
+            <i class="fas fa-share-nodes"></i>
+            <span>Shared by {{ sharedByBadge.display }}</span>
+          </span>
+        }
         @if (conversation.ProjectID) {
           <button class="project-tag" (click)="openProjectSelector()" title="Assign to project">
             <i class="fas fa-folder"></i>
@@ -49,7 +55,7 @@
             <span class="btn-label">Export</span>
           </button>
         }
-        @if (showShareButton) {
+        @if (showShareButton && canShareConversation) {
           <button mjButton variant="flat" size="sm"
             [class.shared]="isShared"
             (click)="shareConversation()"
@@ -139,6 +145,12 @@
                 <mj-loading text="Loading conversation data..." size="medium"></mj-loading>
               </div>
             } @else {
+              @if (isReadOnlyView) {
+                <div class="read-only-banner" role="status">
+                  <i class="fas fa-eye"></i>
+                  <span>You have view-only access to this conversation.</span>
+                </div>
+              }
               <!-- Input Component - Multiple instances cached, only one visible -->
               <div class="message-input-container-wrapper">
                 @for (inputRef of getCachedInputs(); track inputRef.conversationId) {
@@ -154,7 +166,7 @@
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
                     [appContext]="appContext"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
-                    [disabled]="isProcessing"
+                    [disabled]="isProcessing || isReadOnlyView"
                     [enableAttachments]="enableAttachments"
                     [maxAttachments]="maxAttachments"
                     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
@@ -250,6 +262,14 @@
   (cancelled)="onExportModalCancelled()"
   (exported)="onExportModalComplete()">
 </mj-export-modal>
+
+<!-- Share Dialog (generic, shared with dashboards) -->
+<mj-resource-share-dialog
+  [Visible]="showShareModal"
+  [Context]="shareContext"
+  [Adapter]="shareAdapter"
+  (Result)="onShareDialogResult($event)">
+</mj-resource-share-dialog>
 
 <!-- Members Modal -->
 <mj-members-modal
