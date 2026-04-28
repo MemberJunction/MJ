@@ -131,16 +131,67 @@ export class ScopedSearchAction extends BaseAction {
             // 6. Run the search --------------------------------------------
             const maxResults = this.getNumericParam(params, "maxresults", 25);
             const minScore = this.getNumericParam(params, "minscore", 0);
+            const streamingMode = (this.getStringParam(params, "streamingmode") ?? 'finalOnly').toLowerCase();
 
-            LogStatus(`ScopedSearchAction: Agent="${agent.Name}" scope="${scope?.Name ?? 'Global'}" query="${query}"`);
+            LogStatus(`ScopedSearchAction: Agent="${agent.Name}" scope="${scope?.Name ?? 'Global'}" query="${query}" streamingMode="${streamingMode}"`);
 
-            const sr: SearchResult = await SearchEngine.Instance.Search({
-                Query: query,
-                MaxResults: maxResults,
-                MinScore: minScore,
-                ScopeIDs: scopeID ? [scopeID] : undefined,
-                Mode: 'full'
-            }, params.ContextUser);
+            // Phase 2C: when streamingMode='partials', consume the streaming
+            // iterable and accumulate progress events so the agent can
+            // observe intermediate provider returns. The aggregate result
+            // is identical to the synchronous Search() — we collect the
+            // 'final' event's payload as the authoritative result. When
+            // streamingMode='finalOnly' (default), use the synchronous
+            // Search() path for minimal overhead.
+            let sr: SearchResult;
+            const progressEvents: Array<Record<string, unknown>> = [];
+            if (streamingMode === 'partials') {
+                let finalEvent: { results: SearchResultItem[]; sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number }; elapsedMs: number } | undefined;
+                let errorMsg: string | undefined;
+                for await (const ev of SearchEngine.Instance.streamSearch({
+                    Query: query,
+                    MaxResults: maxResults,
+                    MinScore: minScore,
+                    ScopeIDs: scopeID ? [scopeID] : undefined,
+                    Mode: 'full'
+                }, params.ContextUser)) {
+                    // Capture each event for the agent's view. Skip the
+                    // 'final' results array from the progress trail to keep
+                    // the param size sane — the final results are returned
+                    // through the Results output param anyway.
+                    if (ev.phase === 'final') {
+                        finalEvent = { results: ev.results, sourceCounts: ev.sourceCounts, elapsedMs: ev.elapsedMs };
+                        progressEvents.push({ phase: 'final', count: ev.results.length, elapsedMs: ev.elapsedMs });
+                    } else if (ev.phase === 'provider') {
+                        progressEvents.push({ phase: 'provider', providerName: ev.providerName, count: ev.results.length, durationMs: ev.durationMs });
+                    } else if (ev.phase === 'fused') {
+                        progressEvents.push({ phase: 'fused', count: ev.results.length });
+                    } else if (ev.phase === 'reranked') {
+                        progressEvents.push({ phase: 'reranked', rerankerName: ev.rerankerName, count: ev.results.length });
+                    } else if (ev.phase === 'error') {
+                        errorMsg = ev.error;
+                        progressEvents.push({ phase: 'error', error: ev.error });
+                    }
+                }
+                if (errorMsg || !finalEvent) {
+                    return this.createErrorResult(errorMsg ?? 'Stream completed without a final event', 'SEARCH_FAILED');
+                }
+                sr = {
+                    Success: true,
+                    Results: finalEvent.results,
+                    TotalCount: finalEvent.results.length,
+                    ElapsedMs: finalEvent.elapsedMs,
+                    SourceCounts: finalEvent.sourceCounts,
+                    Providers: [],
+                };
+            } else {
+                sr = await SearchEngine.Instance.Search({
+                    Query: query,
+                    MaxResults: maxResults,
+                    MinScore: minScore,
+                    ScopeIDs: scopeID ? [scopeID] : undefined,
+                    Mode: 'full'
+                }, params.ContextUser);
+            }
 
             if (!sr.Success) {
                 return this.createErrorResult(
@@ -160,6 +211,9 @@ export class ScopedSearchAction extends BaseAction {
                 { Name: "ScopeID_Resolved",   Value: scopeID ?? null,           Type: "Output" },
                 { Name: "ScopeName_Resolved", Value: scope?.Name ?? "Global",   Type: "Output" }
             ];
+            if (progressEvents.length > 0) {
+                outputParams.push({ Name: 'ProgressEvents', Value: progressEvents, Type: 'Output' });
+            }
 
             return {
                 Success: true,
