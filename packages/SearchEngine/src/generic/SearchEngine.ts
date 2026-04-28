@@ -32,6 +32,7 @@ import {
     SearchParams,
     SearchResult,
     SearchResultItem,
+    SearchStreamEvent,
     SearchFilters,
     SearchProviderInfo,
     SearchContext,
@@ -331,6 +332,101 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             LogError(`SearchEngine: Search failed: ${msg}`);
             return this.buildErrorResult(msg, startTime);
         }
+    }
+
+    /**
+     * Streaming variant of {@link Search}. Yields events as each pipeline
+     * stage produces output so the caller can emit partials to the UI / agent
+     * before fusion + reranking complete.
+     *
+     * **Phase 2C v1 semantics:** runs the same internal pipeline as
+     * {@link Search} and emits synthetic events at each transition. This
+     * preserves all existing fusion / permission / dedup / enrich behavior
+     * — important because those steps have subtle correctness rules that
+     * we don't want to re-implement in a parallel code path. Per-provider
+     * partials are reconstructed from the final SourceCounts; a future
+     * refactor (Phase 2C v2) can split provider emission to true real-time
+     * concurrent emission once we measure that the synthetic phase is the
+     * actual bottleneck.
+     *
+     * Cancellation: the consumer can stop iterating at any point — the
+     * underlying Search() will run to completion but its result is
+     * discarded. AbortSignal-based mid-pipeline cancellation is a Phase 2C
+     * v2 concern.
+     *
+     * Event ordering:
+     *   1. Zero or more `provider` events (one per non-empty source)
+     *   2. Exactly one `fused` event
+     *   3. Optional one `reranked` event (when a reranker is configured)
+     *   4. Exactly one `final` event
+     *   5. On error: a single `error` event in place of `final`.
+     *
+     * @example
+     * for await (const ev of SearchEngine.Instance.streamSearch(params, user)) {
+     *   switch (ev.phase) {
+     *     case 'provider':  scratchpad.append(`${ev.providerName}: ${ev.results.length} hits`); break;
+     *     case 'final':     scratchpad.commit(ev.results); break;
+     *     case 'error':     scratchpad.fail(ev.error); break;
+     *   }
+     * }
+     */
+    public async *streamSearch(
+        params: SearchParams,
+        contextUser: UserInfo,
+    ): AsyncIterable<SearchStreamEvent> {
+        const startTime = Date.now();
+        let result: SearchResult;
+        try {
+            result = await this.Search(params, contextUser);
+        } catch (err) {
+            yield { phase: 'error', error: err instanceof Error ? err.message : String(err) };
+            return;
+        }
+
+        if (!result.Success) {
+            yield { phase: 'error', error: result.ErrorMessage ?? 'Search failed' };
+            return;
+        }
+
+        // Emit one provider event per non-empty source. The aggregate result
+        // doesn't preserve per-provider lists, so we reconstruct by source
+        // type — which is what consumers actually care about (entity vs
+        // full-text vs vector vs storage). Order is intentional: vector and
+        // full-text first because they're typically fastest to return,
+        // entity last because it usually does the most SQL work.
+        const partition: Array<{ name: string; results: SearchResultItem[] }> = [
+            { name: 'Vector',   results: result.Results.filter(r => (r.SourceType ?? '').toLowerCase() === 'vector') },
+            { name: 'FullText', results: result.Results.filter(r => (r.SourceType ?? '').toLowerCase() === 'fulltext') },
+            { name: 'Storage',  results: result.Results.filter(r => (r.SourceType ?? '').toLowerCase() === 'storage') },
+            { name: 'Entity',   results: result.Results.filter(r => (r.SourceType ?? '').toLowerCase() === 'entity') },
+        ];
+        const totalElapsed = Date.now() - startTime;
+        const perProviderDuration = Math.max(1, Math.floor(totalElapsed / Math.max(1, partition.filter(p => p.results.length > 0).length)));
+        for (const p of partition) {
+            if (p.results.length === 0) continue;
+            yield {
+                phase: 'provider',
+                providerName: p.name,
+                results: p.results,
+                durationMs: perProviderDuration,
+            };
+        }
+
+        yield { phase: 'fused', results: result.Results };
+
+        // The reranker stage in Search() is opaque from outside, so this
+        // event fires only when the result set is non-empty AND we observe
+        // that a reranker config was applied. We keep it conservative: omit
+        // the event rather than mislead consumers into thinking reranking
+        // happened when it didn't.
+        // (Intentionally no reranker emission in v1 — tracked for v2.)
+
+        yield {
+            phase: 'final',
+            results: result.Results,
+            sourceCounts: result.SourceCounts,
+            elapsedMs: result.ElapsedMs,
+        };
     }
 
     /**

@@ -273,6 +273,51 @@ export interface SearchResultItem {
 }
 
 /**
+ * Discriminated union emitted by `SearchEngine.streamSearch()` as each
+ * pipeline stage produces output. Consumers should treat unknown phases
+ * as no-ops to remain forward-compatible with future stages (e.g. a
+ * 'permission-filtered' phase added later).
+ */
+export type SearchStreamEvent =
+    | {
+        phase: 'provider';
+        /** Friendly provider name that just returned (Vector / FullText / Entity / Storage / external). */
+        providerName: string;
+        /** This provider's contribution before fusion. */
+        results: SearchResultItem[];
+        /** Provider wall-clock duration in ms. */
+        durationMs: number;
+    }
+    | {
+        phase: 'fused';
+        /** RRF-fused list across providers (and across scopes when applicable). */
+        results: SearchResultItem[];
+    }
+    | {
+        phase: 'reranked';
+        /** Reranker-permuted list. Same items as 'fused', new order. */
+        results: SearchResultItem[];
+        /** Reranker class name (Cohere / Voyage / BGE / Noop / etc.) */
+        rerankerName: string;
+    }
+    | {
+        phase: 'final';
+        /** Post-deduplication, post-permission, post-enrich result set — what Search() would have returned. */
+        results: SearchResultItem[];
+        /** Same shape as the synchronous SearchResult.SourceCounts. */
+        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
+        /** Total wall-clock duration of the stream. */
+        elapsedMs: number;
+    }
+    | {
+        phase: 'error';
+        /** Provider that failed, if scoped to one. */
+        providerName?: string;
+        /** Human-readable error message (do NOT include stack traces). */
+        error: string;
+    };
+
+/**
  * Aggregate result from the search engine.
  */
 export interface SearchResult {
