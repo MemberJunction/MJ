@@ -351,11 +351,12 @@
   {
     "fields": {
       "Name": "Search Result Set",
-      "Description": "Persisted ranked search results produced by a scoped search (pre-execution RAG or agent-invoked). Shaped as a Data artifact so the tabular Results table (Title, Entity, Scope, Source, Score) renders via the Data viewer. Query, scope list, search context, and provider breakdown are stored alongside the tabular data in the artifact spec.",
-      "ParentID": "@lookup:MJ: Artifact Types.Name=Data",
+      "Description": "Persisted ranked search results produced by a scoped search (pre-execution RAG or agent-invoked). Re-parented onto Data Snapshot in Phase 2B so it inherits Data Snapshot's tabular tools (filter, sort, paginate, get-row, project-columns) plus the search-specific tools (filterByScore, groupBySourceProvider, getMatchingChunks, followSourceLink, rerankInline) supplied by SearchResultSetToolLibrary. Query, scope list, search context, and provider breakdown are stored alongside the tabular data in the artifact spec.",
+      "ParentID": "@lookup:MJ: Artifact Types.Name=Data Snapshot",
       "ContentType": "application/vnd.mj.search-result-set",
       "ContentCategory": "Text",
       "DriverClass": "DataArtifactViewerPlugin",
+      "ToolLibraryClass": "SearchResultSetToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-solid fa-magnifying-glass-plus"
     },
@@ -363,8 +364,8 @@
       "ID": "249B4A72-7A7A-4CBC-BAAE-91DC66853795"
     },
     "sync": {
-      "lastModified": "2026-04-19T15:33:58.816Z",
-      "checksum": "f3cd716c5849c74effaf2fafb86124d8eb40c0d707cec188419d859e37f9d65f"
+      "lastModified": "2026-04-28T13:30:08.532Z",
+      "checksum": "02d9f97ae3797cc6f48845fbf7f7b5b4ceeec7f1e4a8866f2cf5f44a14b43879"
     }
   }
 ]
