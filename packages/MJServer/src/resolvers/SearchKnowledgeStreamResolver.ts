@@ -147,6 +147,7 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
                         FailureReason: denial,
                         StartTime: startTime,
                         ContextUser: currentUser,
+                        AIAgentID: agentID ?? null,
                     });
                     return { Success: false, StreamID: streamID, ErrorMessage: denial };
                 }
@@ -164,6 +165,7 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
                 minScore,
                 scopeIDs,
                 searchContext,
+                agentID,
             }, currentUser, pubSub).catch(err => {
                 const msg = err instanceof Error ? err.message : String(err);
                 LogError(`StreamScopedSearch background failure: ${msg}`);
@@ -194,6 +196,7 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
             minScore?: number;
             scopeIDs?: string[];
             searchContext: unknown;
+            agentID?: string;
         },
         currentUser: UserInfo,
         pubSub: PubSubEngine,
@@ -208,6 +211,7 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
                 MinScore: params.minScore,
                 ScopeIDs: params.scopeIDs && params.scopeIDs.length ? params.scopeIDs : undefined,
                 SearchContext: mappedContext,
+                AIAgentID: params.agentID ?? null,
             }, currentUser)) {
                 const notification = this.toNotification(streamID, ev);
                 await pubSub.publish(SEARCH_STREAM_TOPIC, notification);

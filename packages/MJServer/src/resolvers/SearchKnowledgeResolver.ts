@@ -235,6 +235,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
                         FailureReason: denied,
                         StartTime: startTime,
                         ContextUser: currentUser,
+                        AIAgentID: agentID ?? null,
                     });
                     return this.errorResult(denied, startTime);
                 }
@@ -258,7 +259,8 @@ export class SearchKnowledgeResolver extends ResolverBase {
                     EntityNames: filters.EntityNames,
                     SourceTypes: filters.SourceTypes,
                     Tags: filters.Tags
-                } : undefined
+                } : undefined,
+                AIAgentID: agentID ?? null,
             }, currentUser);
 
             return this.mapSearchResult(result);

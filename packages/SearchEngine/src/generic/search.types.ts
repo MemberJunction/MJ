@@ -101,6 +101,13 @@ export interface SearchParams {
      * strictly wants. The final result count is still bounded by `MaxResults`. Default: 2.
      */
     PermissionOverfetchFactor?: number;
+    /**
+     * Optional ID of the AIAgent on whose behalf this search runs. When set, the engine
+     * stamps it onto the SearchExecutionLog row so analytics can attribute usage back to
+     * the calling agent. Pass-through only — permission resolution does its own agent
+     * lookup separately via the resolver caller.
+     */
+    AIAgentID?: string | null;
 }
 
 /**

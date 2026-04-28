@@ -221,6 +221,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     RerankerCostCents: null,
                     SourceCounts: undefined,
                     ContextUser: contextUser,
+                    AIAgentID: params.AIAgentID ?? null,
                 });
                 return this.buildErrorResult('Query cannot be empty', startTime);
             }
@@ -354,6 +355,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 RerankerCostCents: invocationBudgetGuard ? invocationBudgetGuard.Spent : null,
                 SourceCounts: sourceCounts,
                 ContextUser: contextUser,
+                AIAgentID: params.AIAgentID ?? null,
             });
 
             return {
@@ -378,6 +380,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 RerankerCostCents: invocationBudgetGuard ? invocationBudgetGuard.Spent : null,
                 SourceCounts: undefined,
                 ContextUser: contextUser,
+                AIAgentID: params.AIAgentID ?? null,
             });
             return this.buildErrorResult(msg, startTime);
         }
@@ -1085,6 +1088,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         FailureReason: string;
         StartTime: number;
         ContextUser: UserInfo;
+        AIAgentID?: string | null;
     }): Promise<void> {
         await this.logSearchExecution({
             Status: 'Forbidden',
@@ -1097,6 +1101,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             RerankerCostCents: null,
             SourceCounts: undefined,
             ContextUser: input.ContextUser,
+            AIAgentID: input.AIAgentID ?? null,
         });
     }
 
@@ -1121,6 +1126,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         RerankerCostCents: number | null;
         SourceCounts?: { Vector: number; FullText: number; Entity: number; Storage: number };
         ContextUser: UserInfo;
+        AIAgentID?: string | null;
     }): Promise<void> {
         try {
             const md = new Metadata();
@@ -1130,7 +1136,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             );
             log.SearchScopeID = input.ScopeIDs && input.ScopeIDs.length > 0 ? input.ScopeIDs[0] : null;
             log.UserID = input.ContextUser.ID ?? null;
-            log.AIAgentID = null; // Plumb through when ScopedSearchAction passes the agent identity (Phase 3 follow-up)
+            log.AIAgentID = input.AIAgentID ?? null;
             log.Query = input.Query;
             log.TotalDurationMs = Date.now() - input.StartTime;
             log.ResultCount = input.ResultCount;
