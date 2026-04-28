@@ -26,6 +26,7 @@
     "nunjucks": "3.2.4"
   },
   "optionalDependencies": {
+    "@elastic/elasticsearch": "^9.0.0",
     "@xenova/transformers": "^2.17.2",
     "cohere-ai": "^7.18.5"
   },
