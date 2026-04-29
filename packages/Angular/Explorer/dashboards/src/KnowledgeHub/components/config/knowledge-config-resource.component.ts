@@ -407,7 +407,13 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
                 LogError(`KnowledgeConfig: LoadSearchScopes failed: ${result.ErrorMessage}`);
                 this.SearchScopes = [];
             } else {
-                this.SearchScopes = result.Results || [];
+                // Collapse by ID — defensive against any caller (or interleaved
+                // reactive cycle) that could ever put the same scope in twice.
+                const byID = new Map<string, MJSearchScopeEntity>();
+                for (const s of result.Results ?? []) {
+                    byID.set(s.ID, s);
+                }
+                this.SearchScopes = Array.from(byID.values());
                 if (!this.ActiveScopeID && this.SearchScopes.length > 0) {
                     this.ActiveScopeID = this.SearchScopes[0].ID;
                 }
@@ -451,6 +457,10 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
                 );
                 return;
             }
+            // Append synchronously so a rapid second + New click picks a fresh
+            // unique-suffix Name. An async refetch here would leave a window
+            // where pickUniqueNewScopeName() sees a stale list and re-picks
+            // the same suffix, producing UQ_SearchScope_Name violations.
             this.SearchScopes = [...this.SearchScopes, scope];
             this.ActiveScopeID = scope.ID;
             this.ActiveScopeTab = 'definition';
