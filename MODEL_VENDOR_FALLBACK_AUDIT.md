@@ -327,6 +327,12 @@ Continuing the numbering from §6 (items 1-35):
 
 38. **Forward-looking guard rail for TTS / STT / Video** — When the first consumer of `BaseAudioGenerator` or `BaseVideoGenerator` is built (whether in `Actions/CoreActions/`, in `MJServer/resolvers/`, or elsewhere), it must route through `ModelResolver.resolveForRequirements({ modelTypeName: 'TTS' \| 'STT' \| 'Video' })` + `ModelResolver.withFailover(…)`. Add an **eslint rule or a CI grep gate** that flags any `MJGlobal.Instance.ClassFactory.CreateInstance<BaseAudioGenerator>` / `<BaseVideoGenerator>` outside of `packages/AI/Providers/` and outside of `packages/AI/ModelResolver/`. This prevents a future PR from re-introducing the `Generate Image` pattern. Same rule should retroactively cover `BaseImageGenerator`, `BaseLLM`, `BaseEmbeddings`, `BaseReranker` to lock in the post-Phase-5 invariant.
 
+39. **`MJ: AI Prompts.FailoverStrategy` CHECK constraint cleanup** — The CHECK constraint on this column has each option listed twice. The generated TypeScript type signature is the visible symptom:
+    ```ts
+    get FailoverStrategy(): 'NextBestModel' | 'NextBestModel' | 'None' | 'None' | 'PowerRank' | 'PowerRank' | 'SameModelDifferentVendor' | 'SameModelDifferentVendor'
+    ```
+    Add a one-shot migration that drops the duplicated CHECK clauses, leaving exactly one of each enum literal, then run CodeGen so the generated entity type collapses to `'None' | 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank'`. Surfaced by AN-BC during PR review of this spec — bundled into the same release as Phase 1 since `ModelResolver` switches on this field and the duplicated literals make the TypeScript exhaustiveness check on the discriminated union confusing.
+
 #### 3.5.6 Vendor-pinning inventory (cross-cutting)
 
 Cross-cutting list of every place in the **MJ runtime** (DBAutoDoc out of scope per the §1 banner; tests excluded) that pins to a specific vendor name, vendor ID, model name, or driver-class string. Each entry is marked **IN GAP LIST** (already cited as G#) or **NEW** (newly surfaced by this §3.5 sweep).
@@ -344,6 +350,50 @@ Cross-cutting list of every place in the **MJ runtime** (DBAutoDoc out of scope 
 `packages/Angular/Explorer/explorer-core/src/lib/shell/shell.component.ts:1167` (`item.DriverClass === driverClass`) is a runtime equality compare against a parameter, not a hard-coded literal — not a pinning site.
 
 `packages/DBAutoDoc/src/utils/llm-factory.ts` (G22, G23, change items 24-25) remains explicitly **out of scope** per the §1 banner.
+
+#### 3.5.7 Provider & model registration consistency
+
+The §3.5.3 vendor matrix above checks the **provider package layer** — does each `packages/AI/Providers/<vendor>/` ship `@RegisterClass`-decorated subclasses for each capability. That's necessary for `ModelResolver` to consider a vendor at all, but it isn't sufficient for the per-capability sufficiency guarantee. There is a second consistency layer to audit: the **metadata layer** — for each shipped provider, are the actual `MJ: AI Models` and `MJ: AI Model Vendors` rows in place that wire that provider's catalog into the runtime?
+
+Why both layers matter:
+- The provider package layer answers: *can MJ instantiate this driver class at all?*
+- The metadata layer answers: *does any selectable `(model, vendor)` candidate row exist for `ModelResolver.resolveForRequirements` to return?*
+
+A new vendor is only operationally useful when both layers are populated. Today there is no enforced consistency between them — a provider package can ship while no `AIModel` rows for its catalog exist, or `AIModel` rows can reference a `DriverClass` whose provider package was removed. Symptoms today:
+- New vendors land in metadata as a `MJ: AI Vendors` row + a few `MJ: AI Models` for headline models, but the long tail of models that vendor publishes (especially fast-moving rosters like Bedrock and Gemini) is filled in opportunistically when someone needs it.
+- The metadata seed file `metadata/ai-models/.ai-models.json` is the source of truth; there is no automated cross-check that every model a vendor's API exposes has a corresponding row, nor that every `AIModelVendor.DriverClass` value matches a class actually registered in the provider package layer.
+
+**Concrete recently-added vendors to check** (input requested from reviewers — see PR description for tagged owners):
+
+| Vendor | Provider package shipped? | Headline `AIModel` rows present? | `AIModelVendor` rows present? | Long-tail models (smaller / older / regional / fine-tunes) covered? |
+|---|---|---|---|---|
+| **Bedrock** (AWS) | ✓ ([packages/AI/Providers/Bedrock/](packages/AI/Providers/Bedrock/)) | Needs spot-check (Claude family, Llama, Titan, Cohere-on-Bedrock, Mistral-on-Bedrock) | Needs spot-check that `DriverClass='BedrockLLM'` rows are paired with each model | Needs reconciliation against `aws bedrock list-foundation-models` |
+| **Gemini** (Google) | ✓ ([packages/AI/Providers/Gemini/](packages/AI/Providers/Gemini/)) | Needs spot-check (Gemini 2.5 Pro / Flash / Flash-Lite, Gemini 3 Flash, embedding model) | Needs spot-check that `DriverClass='GeminiLLM'` rows are paired with each model + that ImageGenerator coverage exists for Imagen | Needs reconciliation against `https://ai.google.dev/gemini-api/docs/models` |
+| **Vertex** (Google) | ✓ ([packages/AI/Providers/Vertex/](packages/AI/Providers/Vertex/)) | Needs spot-check — overlaps with Gemini for Google models but routed through Vertex's separate API surface | Needs spot-check that any model offered both via Gemini API and Vertex has rows for both vendors | Long-tail (PaLM, MedLM, etc.) likely incomplete |
+| **Bundle / Recommendations-Rex** | aggregator packages, no provider classes | n/a | n/a | n/a |
+
+Older providers (OpenAI, Anthropic, Groq, Cerebras, etc.) are well-covered because they have been the active consumers; the audit is mainly to ensure newer additions don't drift into a "ships but not selectable" state.
+
+**Recommended change items** (Phase 5 housekeeping; not blocking for ModelResolver extraction but should land before the Phase-5 CI guard rail in item 38 fires):
+
+40. **Vendor-roster reconciliation tool** — add a one-off `scripts/audit-model-vendor-rows.ts` that, for each provider package under `packages/AI/Providers/`, lists the registered driver classes and cross-checks against `MJ: AI Model Vendors` rows referencing the same `DriverClass`. Output is a markdown table of (a) `DriverClass`-with-no-rows (provider shipped but unwired) and (b) `DriverClass`-rows-with-no-class (rows pointing to a removed provider). Run it as part of `npm run mj:manifest` so future drift is caught at build time.
+
+41. **Bedrock and Gemini metadata reconciliation pass** — manual spot-check (and bulk-add via mj-sync) of the model rows currently missing for these two vendors specifically. Bedrock and Gemini were called out by reviewers as the most likely places where the runtime is missing entries.
+
+42. **Provider-package registration tests** — for each `packages/AI/Providers/<vendor>/` add a `__tests__/registration.test.ts` that asserts the expected base classes (`BaseLLM`, `BaseEmbeddings`, etc.) have a matching `@RegisterClass` registration with the expected driver class name. Catches the dead-import landmine pattern (G21) at unit-test time instead of at runtime.
+
+#### 3.5.8 `MJAIPromptEntity.FailoverStrategy` is the prompt designer's escape hatch — must be preserved
+
+AN-BC raised this explicitly during PR review, and it bears calling out at the audit level: the per-prompt `FailoverStrategy` field is **not** just one of several knobs `ModelResolver` exposes — it is the **escape hatch** that lets a prompt designer say "I want this to hard-fail, not silently degrade onto a model the configuration doesn't endorse." The Skip-style use case is the canonical example: a configuration enumerates a curated set of acceptable-quality models in `MJ: AI Prompt Models`; if none of those specific models are available the desired behavior is a hard error so the configuration gets fixed, *not* a silent fallback to whatever else the deployment happens to have credentials for.
+
+**Hard requirements on `ModelResolver` (carried through into Phase 1 spec §`withFailover` semantics):**
+
+1. `failoverStrategy: 'None'` MUST stop after the first candidate fails. No vendor-shopping, no model-shopping, no retry beyond the in-flight attempt's own retry budget.
+2. `failoverStrategy: 'SameModelDifferentVendor'` MUST never substitute a *different* model — if the prompt's enumerated models cannot resolve, the call fails. Cross-vendor failover is allowed only within the same `AIModel.ID`.
+3. `failoverStrategy: 'NextBestModel'` is the only strategy that may walk to a different model row — and even there, the prompt-level `RequireSpecificModels` flag (when set) restricts the candidate pool to models enumerated on `MJ: AI Prompt Models` for that prompt.
+4. `withFailover` callers (Phase 2-5 retrofit sites) MUST pass through the prompt's strategy verbatim — no silent upgrade from `'None'` to `'SameModelDifferentVendor'` "for resilience." If a non-prompt caller (e.g., `RerankerService`) has no `AIPrompt` to read from, the default for non-prompt callers is `'SameModelDifferentVendor'` (not `'None'`), explicitly distinguishing prompt-driven hard-fail-by-design from infrastructure resilience for capabilities that have no prompt.
+
+These are essentially restating §2.1's existing runner behavior — but in the audit because the post-extraction `ModelResolver` now becomes the canonical surface that every retrofit site sees, and conformance to these semantics is a non-negotiable acceptance criterion for Phase 1.
 
 ---
 

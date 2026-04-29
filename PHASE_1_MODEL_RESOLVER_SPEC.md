@@ -752,6 +752,30 @@ Phase 1 is **purely additive**:
 3. **No** other call site in the audit's gap list (G1–G35) is touched. Those
    are Phase 2+ work, gated on this PR shipping cleanly.
 
+### Honoring `MJAIPromptEntity.FailoverStrategy` — non-negotiable contract (raised by AN-BC during PR review)
+
+Phase 1 must preserve the existing per-prompt `FailoverStrategy` semantics exactly. The Skip-style use case is the canonical reason: a prompt designer enumerates a curated set of acceptable models in `MJ: AI Prompt Models` and explicitly does NOT want the system to silently fall back to anything else when those specific models are unavailable. They want a hard failure that surfaces in monitoring so the configuration gets fixed.
+
+**Contractually required behaviors of `ModelResolver.withFailover` and `ModelResolver.resolveForPrompt`:**
+
+1. **`failoverStrategy: 'None'`** — execute the first candidate; on failure, return / throw immediately. No vendor-shopping, no model-shopping. The first attempt's own retry budget (e.g., transient retries from `BaseLLM`) is the only retry surface.
+2. **`failoverStrategy: 'SameModelDifferentVendor'`** (the default for prompt callers) — try alternate vendors of the **same `AIModel.ID`** only. Never substitute a different model. If every vendor for the resolved model fails, the call fails.
+3. **`failoverStrategy: 'NextBestModel'`** — the only strategy that may walk to a different model. Even here, the prompt's `RequireSpecificModels` flag (when set) restricts the candidate pool to `MJ: AI Prompt Models` rows for that prompt; cross-vendor failover within those enumerated models is allowed but stepping outside the enumerated list is not.
+4. **`failoverStrategy: 'PowerRank'`** — same as `NextBestModel` but the next candidate is chosen by `PowerRank` rather than the prompt's enumerated order.
+5. **No silent upgrades.** Phase 2-5 retrofit sites MUST pass the prompt's strategy verbatim into `ModelResolver`. A retrofit must never replace a prompt's `'None'` with `'SameModelDifferentVendor'` "for resilience." If a non-prompt caller has no prompt to read from (e.g., `RerankerService`, `AIModelRunner.RunEmbedding`, `generate-image.action.ts`), the spec's documented default for non-prompt callers is `'SameModelDifferentVendor'` — these are infrastructure capabilities where cross-vendor resilience is the desired default. This deliberately diverges from the prompt-driven `'None'` semantics: the rule is "honor the prompt designer's intent when there is one; default to resilience when there isn't."
+
+The §5.2 test matrix already lists per-strategy assertions; the additional regression assertion for Phase 1 acceptance is **a test that explicitly drives the Skip-style scenario**: a prompt with `FailoverStrategy='None'` + `RequireSpecificModels=true` + an `AIPromptModel` list whose only entry is unavailable (vendor inactive / no credentials) MUST return a structured failure, NOT a successful run from another model.
+
+### Phase 1.5 housekeeping bundled with this rollout
+
+`MJ: AI Prompts.FailoverStrategy` CHECK constraint has each enum value duplicated. Visible in the generated TypeScript today:
+
+```ts
+get FailoverStrategy(): 'NextBestModel' | 'NextBestModel' | 'None' | 'None' | 'PowerRank' | 'PowerRank' | 'SameModelDifferentVendor' | 'SameModelDifferentVendor' { ... }
+```
+
+Add a one-shot migration that drops the duplicated CHECK clauses and re-adds a single canonical CHECK constraint, then re-run CodeGen. The generated entity type collapses to `'None' | 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank'`. This is a one-line conceptual change in the migration file but lands in the same release as Phase 1 because `ModelResolver` switches on this field and the duplicated literals make TypeScript exhaustiveness checks on the discriminated union confusing for reviewers reading the new code.
+
 ### Acceptance criteria
 
 - [ ] `ModelResolver` class exists at `packages/AI/Prompts/src/ModelResolver.ts`
@@ -786,6 +810,14 @@ Phase 1 is **purely additive**:
       multiple `AIPromptModel` rows across two configurations) shows the same
       model selected and the same `MJ: AI Prompt Runs` record content as
       before the change.
+- [ ] Skip-style hard-fail regression test passes: a prompt configured with
+      `FailoverStrategy='None'` + `RequireSpecificModels=true` whose only
+      enumerated model has no available vendor returns structured failure,
+      NEVER a successful run from a different model.
+- [ ] `MJ: AI Prompts.FailoverStrategy` CHECK constraint cleanup migration
+      lands in the same PR; `git grep "'NextBestModel' | 'NextBestModel'"`
+      in `packages/MJCoreEntities/src/generated/` returns nothing after a
+      post-migration CodeGen run.
 
 ---
 
