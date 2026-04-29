@@ -132,65 +132,75 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       forceRefresh = true; // Force refresh if user changed
     }
 
-    // Note: We intentionally do NOT use Filter or OrderBy in configs.
-    // This allows BaseEngine to use immediate array mutations for better performance.
-    // Filtering by user and sorting is done in the getter methods instead.
-    // This also makes the engine reusable for server-side admin scenarios where
-    // all users' data might be needed.
+    // On the client (Network/GraphQL provider), filter user-specific entities by UserID
+    // to avoid loading all users' data. On the server (Database provider), load everything
+    // because the server handles multiple users from a single process.
+    const isClientSide = this.ProviderToUse.ProviderType === 'Network';
+    const userFilter = isClientSide && userId ? `UserID='${userId}'` : undefined;
+
     const configs: Partial<BaseEnginePropertyConfig>[] = [
       {
         Type: 'entity',
         EntityName: 'MJ: User Notifications',
         PropertyName: '_UserNotifications',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Notification Types',
         PropertyName: '_NotificationTypes',
         CacheLocal: true,
+        // Global reference table — no user filter
       },
       {
         Type: 'entity',
         EntityName: 'MJ: Workspaces',
         PropertyName: '_Workspaces',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Settings',
         PropertyName: '_UserSettings',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Applications',
         PropertyName: '_UserApplications',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Favorites',
         PropertyName: '_UserFavorites',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Record Logs',
         PropertyName: '_UserRecordLogs',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Notification Preferences',
         PropertyName: '_UserNotificationPreferences',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: Application Roles',
         PropertyName: '_applicationRoles',
         CacheLocal: true,
+        // Global reference table — no user filter
       },
     ];
 
@@ -672,6 +682,14 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     }
 
     return userApp.IsActive ? 'installed_active' : 'installed_inactive';
+  }
+
+  /**
+   * Read-only view of the ApplicationRole catalog. Used by permission providers
+   * that need to reason about grants for arbitrary users (not just CurrentUser).
+   */
+  public get ApplicationRoles(): readonly MJApplicationRoleEntity[] {
+    return this._applicationRoles;
   }
 
   /**

@@ -75,6 +75,14 @@ vi.mock('@memberjunction/core', async () => {
             RunView(...args: unknown[]) { return mockRunViewFn(...args); }
         },
         Metadata: class MockMetadata {
+            // Stub out the database provider so ApplyRecords' BeginTransaction/Commit/Rollback
+            // pattern is a no-op in unit tests. Real transaction behavior is exercised by
+            // the full-stack regression suite.
+            static Provider = {
+                BeginTransaction: vi.fn().mockResolvedValue(undefined),
+                CommitTransaction: vi.fn().mockResolvedValue(undefined),
+                RollbackTransaction: vi.fn().mockResolvedValue(undefined),
+            };
             get Entities() {
                 return [{
                     Name: 'Contacts',
@@ -230,7 +238,7 @@ describe('IntegrationEngine', () => {
         }
     });
 
-    it('should isolate errors per record (one fails, others succeed)', async () => {
+    it('rolls back the whole batch when any record fails (batched atomicity)', async () => {
         const records = createMockRecords(3);
         const connector = createMockConnector({
             Records: records,
@@ -304,10 +312,14 @@ describe('IntegrationEngine', () => {
 
         try {
             const result = await orchestrator.RunSync('ci-1', contextUser);
+            // With batched atomicity, a single failing record rolls back every record in
+            // the batch. All 3 records are reported as errored with the same failure
+            // message, and no creates are committed.
             expect(result.RecordsProcessed).toBe(3);
-            expect(result.RecordsErrored).toBe(1);
-            expect(result.RecordsCreated).toBe(2);
-            expect(result.Errors.length).toBe(1);
+            expect(result.RecordsErrored).toBe(3);
+            expect(result.RecordsCreated).toBe(0);
+            expect(result.Errors.length).toBe(3);
+            expect(result.Errors.every(e => e.ErrorMessage.startsWith('Batch rolled back:'))).toBe(true);
         } finally {
             ConnectorFactory.Resolve = resolveOrig;
             MockMetadataClass.prototype.GetEntityObject = origGetEntity;

@@ -24,6 +24,15 @@
   - Renders shaded L.geoJSON polygons for countries with boundary data
   - Falls back to colored circle markers for countries without GeoJSON boundaries
   - Falls back to spatial clustering if boundary loading fails entirely
+- **Boundary**: Renders one GeoJSON polygon per record from a field on the record itself
+  - Set `renderMode="boundary"` and `boundaryField="FieldName"` (e.g. `"BoundaryGeoJSON"`)
+  - Each record's GeoJSON is read from the named field and drawn as a colored polygon
+  - Cycling color palette distinguishes adjacent regions
+  - Hover highlights the polygon and shows the record name as a tooltip
+  - Click fires onMarkerClick with the record (same as point mode)
+  - Records without boundary data fall back to a centroid circle marker using lat/lng fields
+  - Auto-fits map bounds to all rendered polygons
+  - Ideal for visualizing entity data that carries its own geographic boundaries (e.g. states, counties, districts, sales territories)
 
 ## Interactivity
 - **Clickable popup cards**: Show first N records as clickable blue links, "and X more..." for overflow

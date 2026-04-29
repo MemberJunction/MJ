@@ -1105,9 +1105,9 @@ ORDER BY ordinal_position`;
     // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
 
     /** @inheritdoc */
-    getPendingEntityFieldsSQL(mjCoreSchema: string): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
         const qs = pgDialect.QuoteSchema.bind(pgDialect);
-        return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs);
+        return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs, entityIDs);
     }
 
     /** @inheritdoc */
@@ -1830,8 +1830,14 @@ WHERE p.prokind IN ('f', 'p')
      */
     private buildPendingEntityFieldsQuery(
         schema: string,
-        qs: (schema: string, name: string) => string
+        qs: (schema: string, name: string) => string,
+        entityIDs?: string[]
     ): string {
+        // PG uses lowercase UUIDs; entity IDs from the metadata cache are already
+        // normalized so direct string interpolation is safe (internal IDs, not user input).
+        const scopeFilter = entityIDs && entityIDs.length > 0
+            ? `AND sf."EntityID" IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
         return `
 WITH fk_cache AS (
    SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema"
@@ -1897,6 +1903,7 @@ numbered_rows AS (
       uk_cache uk ON e."BaseTable" = uk."TableName" AND sf."FieldName" = uk."ColumnName" AND e."SchemaName" = uk."SchemaName"
    WHERE
       "EntityFieldID" IS NULL
+      ${scopeFilter}
 )
 SELECT *
 FROM numbered_rows

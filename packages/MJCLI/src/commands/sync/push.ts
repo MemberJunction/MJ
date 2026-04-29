@@ -38,6 +38,10 @@ export default class Push extends Command {
       description: 'Skip these directories (comma-separated, supports patterns)',
       multiple: false
     }),
+    incremental: Flags.boolean({
+      description: 'Skip unchanged files using stored checksums from last push',
+      default: false
+    }),
   };
 
   async run(): Promise<void> {
@@ -124,8 +128,15 @@ export default class Push extends Command {
         }
       }
 
-      // Create push service and execute
+      // Create push service with optional state manager for incremental sync
       const pushService = new PushService(syncEngine, getSystemUser());
+      if (flags.incremental) {
+        const { SyncStateManager } = await import('@memberjunction/metadata-sync');
+        const stateDir = flags.dir ? path.resolve(configManager.getOriginalCwd(), flags.dir) : configManager.getOriginalCwd();
+        const stateManager = new SyncStateManager(stateDir);
+        await stateManager.load();
+        pushService.setStateManager(stateManager);
+      }
 
       const result = await pushService.push(
         {
@@ -137,6 +148,7 @@ export default class Push extends Command {
           parallelBatchSize: flags['parallel-batch-size'],
           include: includeFilter,
           exclude: excludeFilter,
+          incremental: flags.incremental,
         },
         {
           onProgress: (message) => {

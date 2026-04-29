@@ -169,9 +169,10 @@ export class ComponentRunner {
   ];
 
   // Note: This counts React.createElement calls, not component re-renders
-  // A complex dashboard can easily have 5000+ createElement calls on initial mount
-  // Only flag if it's likely an infinite loop (10000+ is suspicious)
-  private static readonly MAX_RENDER_COUNT = 10000;
+  // Complex components with registry children (e.g. EntityDataGrid) can legitimately
+  // create 15,000-21,000 elements. We use a raised hard ceiling plus rate-of-growth
+  // detection to distinguish real infinite loops from large but finite renders.
+  private static readonly MAX_RENDER_COUNT = 50000;
 
   // Browser/page crash patterns - these are infrastructure issues, not code errors
   private static readonly BROWSER_CRASH_PATTERNS = [
@@ -785,21 +786,48 @@ export class ComponentRunner {
 
           const root = (window as any).ReactDOM.createRoot(rootElement);
           
-          // Set up render count protection
-          // This is for detecting infinite loops during execution
-          // Note: counts createElement calls, not re-renders
-          const MAX_RENDERS_ALLOWED = 10000; // Complex dashboards can have many createElement calls
-          
+          // Set up render count protection with rate-of-growth detection.
+          // Counts createElement calls, not re-renders.
+          // Strategy:
+          //   - Hard ceiling (50,000) triggers immediate failure at any time
+          //   - After a 3-second settling period, rapid sustained growth
+          //     (>1000 new calls per 100ms) combined with a moderate count (>15,000)
+          //     is flagged as a render loop. This avoids false positives for
+          //     large-but-finite components like EntityDataGrid (15k-21k elements).
+          const HARD_CEILING = 50000;          // must match ComponentRunner.MAX_RENDER_COUNT
+          const RATE_THRESHOLD = 1000;        // new calls per 100ms that indicate a loop
+          const RATE_COUNT_FLOOR = 15000;     // min count before rate detection kicks in
+          const SETTLING_CHECKS = 30;         // 30 × 100ms = 3 seconds settling period
+          let previousCount = 0;
+          let checkIndex = 0;
+
           if (typeof window !== 'undefined') {
             renderCheckInterval = setInterval(() => {
               const currentRenderCount = (window as any).__testHarnessRenderCount || 0;
-              if (currentRenderCount > MAX_RENDERS_ALLOWED) {
+              const delta = currentRenderCount - previousCount;
+              previousCount = currentRenderCount;
+              checkIndex++;
+
+              // Hard ceiling — always enforced
+              const exceededHardCeiling = currentRenderCount > HARD_CEILING;
+
+              // Rate-of-growth — only after settling period
+              const exceededRate = checkIndex > SETTLING_CHECKS &&
+                                   delta > RATE_THRESHOLD &&
+                                   currentRenderCount > RATE_COUNT_FLOOR;
+
+              if (exceededHardCeiling || exceededRate) {
                 clearInterval(renderCheckInterval);
+                const reason = exceededHardCeiling
+                  ? `exceeded hard ceiling of ${HARD_CEILING}`
+                  : `sustained rapid growth (${delta} calls/100ms after ${checkIndex * 100}ms)`;
+                const msg = `Likely infinite render loop: ${currentRenderCount} createElement calls (${reason})`;
+
                 // Mark test as failed due to excessive renders
                 (window as any).__testHarnessTestFailed = true;
                 (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
                 (window as any).__testHarnessRuntimeErrors.push({
-                  message: `Likely infinite render loop: ${currentRenderCount} createElement calls (max: ${MAX_RENDERS_ALLOWED})`,
+                  message: msg,
                   type: 'render-loop',
                   source: 'test-harness'
                 });
@@ -809,7 +837,7 @@ export class ComponentRunner {
                 } catch (e) {
                   console.error('Failed to unmount after render loop:', e);
                 }
-                throw new Error(`Likely infinite render loop: ${currentRenderCount} createElement calls detected`);
+                throw new Error(msg);
               }
             }, 100); // Check every 100ms
           }

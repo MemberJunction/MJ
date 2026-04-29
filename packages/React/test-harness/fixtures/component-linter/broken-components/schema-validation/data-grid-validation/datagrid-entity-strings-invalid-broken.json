@@ -3,16 +3,37 @@
   "type": "generic",
   "title": "DataGrid Entity String Array Invalid - Broken Pattern",
   "description": "Tests linter detection of invalid field in string array columns",
-  "code": "function DataGridEntityStringsInvalidBroken({ utilities, components }) {\n  const { EntityGrid } = components;\n\n  return (\n    <div>\n      <h3>Invoices</h3>\n      {/* ❌ Using simple string array with invalid field */}\n      <EntityGrid \n        entityName=\"Invoices\" \n        fields={['InvoiceNumber', 'InvoiceTotal', 'PaymentStatus', 'DueDate']} \n      />\n    </div>\n  );\n}",
+  "code": "function DataGridEntityStringsInvalidBroken({ utilities, components }) {\n  const { EntityGrid } = components;\n\n  return (\n    <div>\n      <h3>Applications</h3>\n      {/* ❌ Using simple string array with invalid field AppVersion */}\n      <EntityGrid \n        entityName=\"MJ: Applications\" \n        fields={['Name', 'Description', 'Status', 'AppVersion']} \n      />\n    </div>\n  );\n}",
   "location": "embedded",
   "namespace": "test/fixtures/type-rules",
   "version": "1.0.0",
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
+    "mode": "views",
     "entities": [{
-      "name": "Invoices",
-      "fields": ["ID", "InvoiceNumber", "TotalAmount", "Status", "DueDate"]
+      "name": "MJ: Applications",
+      "type": "view",
+      "fieldMetadata": [
+        {"name": "ID", "type": "uniqueidentifier"},
+        {"name": "Name", "type": "nvarchar"},
+        {"name": "Description", "type": "nvarchar"},
+        {"name": "Status", "type": "nvarchar"},
+        {"name": "Icon", "type": "nvarchar"},
+        {"name": "Path", "type": "nvarchar"},
+        {"name": "DefaultForNewUser", "type": "bit"},
+        {"name": "DefaultSequence", "type": "int"},
+        {"name": "ClassName", "type": "nvarchar"},
+        {"name": "Color", "type": "nvarchar"},
+        {"name": "NavigationStyle", "type": "nvarchar"},
+        {"name": "TopNavLocation", "type": "nvarchar"},
+        {"name": "AutoUpdatePath", "type": "bit"},
+        {"name": "HideNavBarIconWhenActive", "type": "bit"},
+        {"name": "DefaultNavItems", "type": "nvarchar"},
+        {"name": "SchemaAutoAddNewEntities", "type": "nvarchar"},
+        {"name": "__mj_CreatedAt", "type": "datetimeoffset"},
+        {"name": "__mj_UpdatedAt", "type": "datetimeoffset"}
+      ]
     }]
   }
 }

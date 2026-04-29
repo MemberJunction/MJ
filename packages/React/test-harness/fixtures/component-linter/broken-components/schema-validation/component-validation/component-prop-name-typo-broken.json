@@ -3,7 +3,7 @@
   "type": "generic",
   "title": "Component Property Name Typo - Broken Pattern",
   "description": "Tests linter detection of typo in component property name",
-  "code": "function ComponentPropNameTypoBroken({ utilities, components }) {\n  const [members, setMembers] = useState([]);\n  const { DataTable } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'Members' });\n      if (result?.Success) {\n        setMembers(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Members</h3>\n      {/* ❌ Typo: dataSource should be data */}\n      <DataTable dataSource={members} columns={['Name', 'Email']} />\n    </div>\n  );\n}",
+  "code": "function ComponentPropNameTypoBroken({ utilities, components }) {\n  const [employees, setEmployees] = useState([]);\n  const { DataTable } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Employees' });\n      if (result?.Success) {\n        setEmployees(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Employees</h3>\n      {/* ❌ Typo: dataSource should be data */}\n      <DataTable dataSource={employees} columns={['FirstName', 'Email']} />\n    </div>\n  );\n}",
   "location": "embedded",
   "namespace": "test/fixtures/type-rules",
   "version": "1.0.0",
@@ -17,5 +17,22 @@
         {"name": "columns", "type": "array", "isRequired": false}
       ]
     }]
-  }
+  },
+  "dependencies": [
+    {
+      "name": "DataTable",
+      "location": "registry",
+      "type": "table",
+      "title": "Data Table",
+      "description": "Displays data in a configurable table with pagination and sorting",
+      "code": "",
+      "functionalRequirements": "",
+      "technicalDesign": "",
+      "exampleUsage": "<DataTable data={employees} columns={['FirstName', 'Email']} />",
+      "properties": [
+        {"name": "data", "type": "array", "required": true, "description": "Array of records to display in the table"},
+        {"name": "columns", "type": "array", "required": false, "description": "Array of column names or column definitions to display"}
+      ]
+    }
+  ]
 }

@@ -1,194 +1,181 @@
 # @memberjunction/react-test-harness
 
-Automated test harness for MemberJunction React components using Playwright. Provides static analysis (linting), constraint validation, browser-based rendering tests, and a CLI for running test suites against dynamically compiled components.
+Automated test harness for MemberJunction interactive React components. Provides static analysis (linting) with 57 extensible rules, type inference, constraint validation, browser-based rendering via Playwright, and a CLI for running test suites.
 
-## Architecture
+## Quick Start
 
-```mermaid
-graph TD
-    subgraph "@memberjunction/react-test-harness"
-        A[TestHarness] --> B[ComponentLinter]
-        A --> C[ComponentRunner]
-        A --> D[BrowserContext]
-
-        B --> E[Type Inference Engine]
-        B --> F[Control Flow Analyzer]
-        B --> G[Prop Value Extractor]
-        B --> H[Styles Type Analyzer]
-
-        subgraph "Constraint Validators"
-            I[BaseConstraintValidator]
-            I --> J[RequiredWhenValidator]
-            I --> K[SQLWhereClauseValidator]
-            I --> L[SubsetOfEntityFieldsValidator]
-        end
-
-        C --> D
-        D --> M["Playwright Browser"]
-
-        N[CLI] --> A
-    end
-
-    subgraph "Dependencies"
-        O["@memberjunction/react-runtime<br/>(Component Compilation)"]
-        P["Babel Parser<br/>(AST Analysis)"]
-    end
-
-    B --> P
-    C --> O
-
-    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
-    style B fill:#2d8659,stroke:#1a5c3a,color:#fff
-    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
-    style D fill:#7c5295,stroke:#563a6b,color:#fff
-    style E fill:#b8762f,stroke:#8a5722,color:#fff
-    style I fill:#7c5295,stroke:#563a6b,color:#fff
-    style N fill:#2d6a9f,stroke:#1a4971,color:#fff
-```
-
-## Overview
-
-This package provides comprehensive testing for MemberJunction's dynamically compiled React components. It combines static analysis (without executing) and runtime testing (via Playwright) to validate components before deployment.
-
-**Key capabilities:**
-
-- **Component Linting**: Static analysis of component source using Babel AST parsing
-- **Type Inference**: Infers component prop types from source code and usage patterns
-- **Constraint Validation**: Validates data constraints like SQL WHERE clauses, required-when conditions, and entity field subsets
-- **Control Flow Analysis**: Detects unreachable code, missing returns, and complex control flow patterns
-- **Browser Rendering**: Launches components in a real browser via Playwright for visual/functional testing
-- **Prop Value Extraction**: Extracts and validates prop values from JSX source
-- **Library Lint Caching**: Caches lint results for external libraries to improve performance
-- **CLI Tool**: `mj-react-test` command for running test suites
-
-## Installation
-
-```bash
-npm install @memberjunction/react-test-harness
-```
-
-## Usage
-
-### CLI
-
-```bash
-# Run the test harness
-npx mj-react-test
-
-# Or if installed globally
-mj-react-test
-```
-
-### Programmatic API
-
-```typescript
-import { TestHarness } from '@memberjunction/react-test-harness';
-
-const harness = new TestHarness();
-
-// Run all tests for a component
-const results = await harness.RunTests(componentSource, {
-    libraries: libraryConfigs,
-    entityMetadata: entityInfo
-});
-```
-
-### Component Linting
+### Linting a Component
 
 ```typescript
 import { ComponentLinter } from '@memberjunction/react-test-harness';
 
-const linter = new ComponentLinter();
-const lintResults = linter.Lint(componentSource, {
-    checkPropTypes: true,
-    checkControlFlow: true,
-    validateConstraints: true
-});
+const result = await ComponentLinter.lintComponent(
+  code,           // JavaScript/JSX source
+  'MyComponent',  // Component name
+  componentSpec,  // ComponentSpec with metadata
+  true,           // isRootComponent
+);
 
-for (const issue of lintResults.issues) {
-    console.log(`${issue.severity}: ${issue.message} (line ${issue.line})`);
+if (!result.success) {
+  for (const v of result.violations) {
+    console.log(`[${v.severity}] ${v.rule}: ${v.message} (line ${v.line})`);
+  }
 }
 ```
 
 ### Browser-Based Testing
 
 ```typescript
-import { ComponentRunner, BrowserContext } from '@memberjunction/react-test-harness';
+import { ComponentRunner } from '@memberjunction/react-test-harness';
 
-const browser = await BrowserContext.Create();
-const runner = new ComponentRunner(browser);
-
-const result = await runner.Render(compiledComponent, {
-    props: { data: testData },
-    timeout: 5000
+const runner = new ComponentRunner();
+const result = await runner.executeComponent(componentSpec, {
+  contextUser,
+  props: { data: testData },
 });
 
-console.log('Rendered successfully:', result.success);
-console.log('Console errors:', result.consoleErrors);
-
-await browser.Close();
+console.log('Rendered:', result.success);
+console.log('Errors:', result.errors);
 ```
 
-### Constraint Validation
+### Writing Custom Rules
+
+Rules extend `BaseLintRule` and auto-register via `@RegisterClass`:
 
 ```typescript
-import {
-    SQLWhereClauseValidator,
-    RequiredWhenValidator,
-    SubsetOfEntityFieldsValidator
-} from '@memberjunction/react-test-harness';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLintRule } from '@memberjunction/react-test-harness';
 
-// Validate a SQL WHERE clause
-const sqlValidator = new SQLWhereClauseValidator();
-const sqlResult = sqlValidator.Validate("Status = 'Active' AND Age > 18", context);
+@RegisterClass(BaseLintRule, 'my-custom-rule')
+export class MyCustomRule extends BaseLintRule {
+  get Name() { return 'my-custom-rule'; }
+  get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
 
-// Validate required-when conditions
-const reqValidator = new RequiredWhenValidator();
-const reqResult = reqValidator.Validate("IsAdmin = true", context);
-
-// Validate field subset
-const subsetValidator = new SubsetOfEntityFieldsValidator();
-const subsetResult = subsetValidator.Validate(["Name", "Email", "Status"], context);
+  Test(ast, componentName, componentSpec, options, typeContext) {
+    const violations = [];
+    // Babel AST traversal and validation logic
+    return violations;
+  }
+}
 ```
 
-## Components
-
-| Component | Description |
-|-----------|-------------|
-| `TestHarness` | Main orchestrator for running all test types |
-| `ComponentLinter` | Static analysis of component source code |
-| `ComponentRunner` | Browser-based component rendering tests |
-| `BrowserContext` | Manages Playwright browser lifecycle |
-| `TypeInferenceEngine` | Infers prop types from source code |
-| `ControlFlowAnalyzer` | Detects control flow issues |
-| `PropValueExtractor` | Extracts and validates prop values |
-| `StylesTypeAnalyzer` | Analyzes component style patterns |
-| `LibraryLintCache` | Caches lint results for external libraries |
-| `LinterTestTool` | Testing utilities for linter development |
+External packages (e.g., Skip-Brain) can define custom rules — the linter discovers them automatically via MJGlobal's ClassFactory.
 
 ## Testing
 
 ```bash
-npm test
-npm run test:watch
+cd packages/React/test-harness
+
+# Build (required before testing)
+npm run build
+
+# Run all 425 tests
+npx vitest run
+
+# Run with verbose output (see individual fixture results)
+npx vitest run --reporter=verbose
+
+# Watch mode
+npx vitest
 ```
 
-Uses Vitest for unit testing.
+### Database Connection (Optional)
 
-## Dependencies
+Some rules validate against entity metadata from the database. Create `.env`:
 
-| Package | Purpose |
-|---------|---------|
-| `@memberjunction/react-runtime` | Component compilation and registry |
-| `@memberjunction/interactive-component-types` | Component type definitions |
-| `@memberjunction/core` | Core MJ functionality |
-| `@memberjunction/core-entities` | Entity types |
-| `@babel/parser` | AST parsing for static analysis |
-| `@babel/traverse` | AST traversal |
-| `@playwright/test` | Browser automation |
-| `commander` | CLI framework |
-| `chalk` | Terminal styling |
-| `node-sql-parser` | SQL WHERE clause validation |
+```
+DB_HOST=your-host
+DB_DATABASE=your-db
+DB_USERNAME=your-user
+DB_PASSWORD=your-password
+DB_PORT=1433
+DB_TRUST_SERVER_CERTIFICATE=1
+```
+
+Without a database, DB-dependent fixtures still run but rules that need entity metadata emit low-severity warnings instead of violations.
+
+## Architecture
+
+See [LINTER-ARCHITECTURE.md](LINTER-ARCHITECTURE.md) for comprehensive documentation including:
+- How rules work and how to add new ones
+- Rule categories and what each validates
+- Type inference engine capabilities
+- Metadata fallback strategy
+- SQL dialect configuration
+- Test fixture organization
+
+## Lint Rules (57)
+
+### Data Access (5 rules)
+- `runview-call-validation` — RunView/RunViews call-site validation
+- `runquery-call-validation` — RunQuery call-site validation with parameter type checking
+- `data-result-validation` — RunView/RunQuery/Search result usage patterns
+- `search-availability-check` — `utilities.search` null guard
+- `search-call-validation` — Search/PreviewSearch parameter validation
+
+### Entity & Query Fields (4 rules)
+- `entity-field-access-validation` — Field access on RunView results (typos, case, type coercion)
+- `query-result-field-access-validation` — Field access on RunQuery results
+- `chart-field-validation` — Chart prop field references
+- `datagrid-field-validation` — Grid column field references
+
+### Runtime Constraints (8 rules)
+- `no-import-statements`, `no-export-statements`, `no-require-statements`
+- `no-iife-wrapper`, `no-return-component`, `no-window-access`
+- `use-function-declaration`, `single-function-only`
+
+### Component Structure (9 rules)
+- `react-component-naming`, `component-name-mismatch`, `pass-standard-props`
+- `no-react-destructuring`, `no-data-prop`, `no-child-implementation`
+- `component-props-validation`, `child-component-prop-validation`
+- `component-usage-without-destructuring`
+
+### Dependencies (7 rules)
+- `component-not-in-dependencies`, `undefined-component-usage`
+- `unused-libraries`, `unused-component-dependencies`
+- `library-variable-names`, `dependency-shadowing`, `validate-component-references`
+
+### Callbacks & Events (1 consolidated rule)
+- `callback-event-validation` — Method usage, parameter signatures, passthrough, event null-checks
+
+### Best Practices (8 rules)
+- `prefer-async-await`, `prefer-jsx-syntax`, `react-hooks-rules`
+- `useeffect-unstable-dependencies`, `unsafe-array-operations`, `unsafe-formatting-methods`
+- `string-replace-all-occurrences`, `string-template-validation`
+
+### Type Safety (2 rules)
+- `type-inference-errors`, `type-mismatch-operation`
+
+### Styles (1 consolidated rule)
+- `styles-validation` — Invalid path access, unsafe patterns
+
+### Utilities (3 rules)
+- `utilities-api-validation`, `utilities-no-direct-instantiation`, `ai-tools-availability-check`
+
+### State & Settings (5 rules)
+- `saved-user-settings-pattern`, `noisy-settings-updates`, `prop-state-sync`
+- `property-name-consistency`, `server-reload-on-client-operation`
+
+### Other (4 rules)
+- `no-use-reducer`, `required-queries-not-called`
+- `undefined-jsx-component`, `no-child-implementation`
+
+## Exports
+
+```typescript
+// Core linting
+export { ComponentLinter, LintResult, Violation } from './lib/component-linter';
+export { BaseLintRule } from './lib/lint-rule';
+
+// Test harness
+export { ReactTestHarness, TestHarnessOptions } from './lib/test-harness';
+export { ComponentRunner, ComponentExecutionOptions, ComponentExecutionResult } from './lib/component-runner';
+export { BrowserManager, BrowserContextOptions } from './lib/browser-context';
+
+// Utilities
+export { LibraryLintCache, CompiledLibraryRules, CompiledValidator } from './lib/library-lint-cache';
+export { ComponentSpec } from '@memberjunction/interactive-component-types';
+```
 
 ## License
 

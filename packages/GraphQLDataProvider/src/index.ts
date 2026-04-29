@@ -78,5 +78,7 @@ export type {
     DefaultObjectConfigResult,
     DefaultConfigResult,
     ApplyAllEntityMapCreated,
-    ApplyAllResult
+    ApplyAllResult,
+    SourceObjectListItem,
+    SourceObjectSelectionInput
 } from './graphQLIntegrationClient';
