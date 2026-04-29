@@ -253,6 +253,10 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
 
     // ─── Transaction Management ──────────────────────────────────────
 
+    public override get IsInTransaction(): boolean {
+        return this._transaction !== null;
+    }
+
     async BeginTransaction(): Promise<void> {
         if (this._transaction) {
             throw new Error('A transaction is already active. Nested transactions are not yet supported in the PostgreSQL provider.');
