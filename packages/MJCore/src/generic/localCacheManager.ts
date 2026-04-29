@@ -1,5 +1,5 @@
 import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
-import { AggregateResult, DatasetItemFilterType, DatasetResultType, ILocalStorageProvider } from "./interfaces";
+import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider } from "./interfaces";
 import { AggregateExpression, RunViewParams } from "../views/runView";
 import { LogError, LogStatusEx } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
@@ -593,8 +593,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const entityName = entityEvent.entityName;
         if (!entityName) return;
 
-        // Short-circuit: if caching is disabled for this entity, skip processing
-        const md = new Metadata();
+        // Short-circuit: if caching is disabled for this entity, skip processing.
+        // Use the provider attached to the event (from the publisher — e.g. GraphQLDataProvider)
+        // so multi-provider client setups resolve metadata against the correct server. Fall back
+        // to a default Metadata instance when no provider is attached (single-provider apps);
+        // the Metadata helper itself proxies to the global provider with sensible fallbacks.
+        const md = entityEvent.provider ?? new Metadata();
         const entityInfo = md.EntityByName(entityName);
         if (entityInfo && !this.IsCachingEnabledForEntity(entityInfo)) return;
 
@@ -1113,6 +1117,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param results - The results to cache
      * @param maxUpdatedAt - The latest __mj_UpdatedAt from the results
      * @param aggregateResults - Optional aggregate results to cache alongside the row data
+     * @param totalRowCount - Optional total row count when paging
+     * @param provider - The IMetadataProvider that produced these results. Required for correct
+     *   AllowCaching gating in multi-provider scenarios (parallel client connections to multiple
+     *   servers). Falls back to `Metadata.Provider` (global default) when omitted, which is fine
+     *   for single-provider apps but wrong when AllowCaching differs across servers.
      */
     public async SetRunViewResult(
         fingerprint: string,
@@ -1120,9 +1129,42 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         results: unknown[],
         maxUpdatedAt: string,
         aggregateResults?: AggregateResult[],
-        totalRowCount?: number
+        totalRowCount?: number,
+        provider?: IMetadataProvider
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
+
+        // Short-circuit: if the entity has AllowCaching = false, do not write to the cache.
+        // The invalidation path (HandleBaseEntityEvent line 552) already short-circuits for
+        // these entities, so any entry we write here would never be invalidated and would
+        // serve stale data on subsequent reads. This was causing the "newly created
+        // Channel Actions / Organization Actions don't show up in the UI" bug.
+        //
+        // Resolve metadata via the caller's provider when available — in multi-provider
+        // client scenarios, the global Metadata.Provider may belong to a different server
+        // and have different AllowCaching flags. Fall back to the global provider only when
+        // no provider was passed.
+        //
+        // EntityByName is case-insensitive, trims whitespace, and uses the O(1) entity-by-name
+        // map. During startup the provider may not be ready, in which case EntityByName
+        // returns undefined; we fall through and write to avoid blocking legitimate boot-time
+        // caching of system/metadata entities.
+        if (params.EntityName) {
+            try {
+                // Use the caller's provider when supplied (multi-provider correctness); fall back
+                // to a default Metadata instance (which proxies to the global provider) for
+                // single-provider apps and tests that mock Metadata.prototype.
+                const md = provider ?? new Metadata();
+                const entity = md.EntityByName(params.EntityName);
+                if (entity && !this.IsCachingEnabledForEntity(entity)) {
+                    LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for non-cacheable entity "${params.EntityName}" (AllowCaching=false)`, verboseOnly: true });
+                    return;
+                }
+            } catch (err) {
+                // fall through and write — fail-open is safer than fail-closed here
+                // (an unexpected exception shouldn't break caching for valid entities)
+            }
+        }
 
         // Persist results, maxUpdatedAt, aggregateResults, and totalRowCount
         const data: CachedRunViewData = { results, maxUpdatedAt };
@@ -1253,6 +1295,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param newMaxUpdatedAt - The new maxUpdatedAt timestamp after applying the delta
      * @param _serverRowCount - DEPRECATED: This parameter is ignored. rowCount is always derived from merged results.length.
      * @param aggregateResults - Optional fresh aggregate results (since aggregates can't be differentially computed)
+     * @param provider - The IMetadataProvider that produced these results (for AllowCaching gating
+     *   in multi-provider scenarios). Falls back to global Metadata.Provider when omitted.
      * @returns The merged results after applying the differential update, or null if cache not found
      */
     public async ApplyDifferentialUpdate(
@@ -1263,7 +1307,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         primaryKeyFieldName: string,
         newMaxUpdatedAt: string,
         _serverRowCount?: number,
-        aggregateResults?: AggregateResult[]
+        aggregateResults?: AggregateResult[],
+        provider?: IMetadataProvider
     ): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
@@ -1313,7 +1358,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 mergedResults,
                 newMaxUpdatedAt,
                 aggregateResults,
-                mergedTotalRowCount
+                mergedTotalRowCount,
+                provider
             );
 
             // Return with rowCount derived from merged results and aggregates if provided
