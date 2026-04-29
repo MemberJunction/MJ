@@ -82,7 +82,7 @@ both:
 ### The tour
 
 1. Open `http://localhost:4200/app/knowledge-hub/Configuration`. Click the
-   **Search Scopes** tab. You see a left sidebar labeled "SCOPES (N)" with
+   **Search Scopes** tab. You see a left sidebar labeled "Scopes (N)" with
    one or more existing scopes plus a **+ New** button. Click an existing
    scope (e.g. `P4 Verify Scope` if the workbench seed is present). The
    right pane populates with the Definition tab: Name, Icon, Description,
@@ -184,16 +184,26 @@ ProviderConfigOverride.
 1. Open the scope in its full form: `/resource/record/MJ: Search Scopes/{id}`.
 2. Scroll to the **Search Scope Providers** panel near the bottom.
 3. Click the **New** button on the panel toolbar.
-4. A new tab opens with five labelled fields: **Search Scope Name** (pre-
-   populated with your scope's name), **Search Provider Name**, **Enabled**
-   (checkbox, on by default), **Max Results Override**, **Provider
-   Configuration Override**. There's also a hidden Query Processing section
-   for **Query Transform Template** (FK to a Nunjucks template).
+4. A new tab opens with four collapsible sections, each containing one or
+   two fields:
+   - **Search Configuration**: **Search Scope Name** (pre-populated with
+     your scope's name) and **Search Provider Name** (lookup).
+   - **Operational Settings**: **Enabled** (checkbox, on by default),
+     **Max Results Override** (numeric), **Provider Configuration
+     Override** (JSON textarea).
+   - **Query Processing**: **Query Transform Template** (FK lookup to a
+     Nunjucks template; optional).
+   - **System Metadata** (read-only after first save).
 5. Click into **Search Provider Name** and type a partial provider name
-   (e.g. `data` for "Database" or "Database Full-Text"). A small dropdown
-   appears below the input listing matching SearchProvider records.
-6. Pick `Database`. Leave Enabled checked. Optionally set **Max Results
-   Override** or **Provider Configuration Override** (JSON).
+   (e.g. `Data` for "Database" or "Database Full-Text"). A small dropdown
+   appears below the input listing matching SearchProvider records. The
+   dropdown is case-sensitive and only opens after at least one event-firing
+   keystroke into the focused field — if it doesn't appear, click the input
+   first, then type.
+6. Click `Database` in the dropdown. The input value changes to `Database`
+   and a **Clear** button appears next to it (this is the visual signal
+   that the FK is bound). Leave Enabled checked. Optionally set **Max
+   Results Override** or **Provider Configuration Override** (JSON).
 7. Click **Save Changes**.
 8. Return to the SearchScope form. The Providers panel count is `1` and the
    new row appears in the grid.
@@ -219,13 +229,17 @@ named entities so the scope only matches `MJ: Actions`, for example.
 **Steps:**
 1. On the SearchScope record form, scroll to **Search Scope Entities**.
 2. Click **New** on the panel toolbar.
-3. The new tab opens with the parent scope pre-populated. Set **Entity** by
-   typing into the lookup (e.g. `Actions` resolves `MJ: Actions`).
-4. Optionally fill **Extra Filter** (extra SQL `WHERE` predicate that gets
-   AND-ed into the EntitySearchProvider's query) or **User Search String**
+3. The new tab opens with these labelled fields: **Search Scope Name**
+   (pre-populated), **Entity Name** (FK lookup), **Extra Filter**, **User
+   Search String**.
+4. Click into **Entity Name**, type a partial name (e.g. `Actions` resolves
+   `MJ: Actions`), and click the matched option in the dropdown — the
+   input value updates and a Clear button appears.
+5. Optionally fill **Extra Filter** (extra SQL `WHERE` predicate AND-ed
+   into the EntitySearchProvider's query) or **User Search String**
    (a Nunjucks template the provider uses for the user-facing match string).
-5. Save Changes.
-6. Return to the parent scope. The Entities panel count is `1`.
+6. Save Changes.
+7. Return to the parent scope. The Entities panel count is `1`.
 
 **What you should see:** count badge 1; row visible.
 
@@ -241,13 +255,18 @@ in the **Search Scope External Indexes** panel.
 1. On the SearchScope record form, scroll to **Search Scope External
    Indexes**.
 2. Click **New**.
-3. The form fields: **Index Type** (lookup; pick e.g. `Elasticsearch`),
-   **Vector Index** (optional FK to an MJ Vector Index record), **External
-   Index Name** (e.g. `prod-knowledge`), **External Index Config** (JSON
-   the provider parses for query-time options), **Metadata Filter** (JSON
-   filter DSL pushed into the provider's query for permission / tenant
-   scoping).
+3. The form's labelled fields: **Search Scope** (pre-populated), **Index
+   Type** (lookup; pick e.g. `Elasticsearch`), **Vector Index Name**
+   (optional FK to an MJ Vector Index record), **External Index Name**
+   (e.g. `prod-knowledge`), **External Index Config** (JSON the provider
+   parses for query-time options), **Metadata Filter** (JSON filter DSL
+   pushed into the provider's query for permission / tenant scoping).
 4. Save.
+
+**Display vs schema names:** the form labels follow the entity's
+DisplayName metadata, which differs from the underlying column names. For
+SQL audits the column names are `IndexType`, `VectorIndexID`,
+`ExternalIndexName`, `ExternalIndexConfig`, `MetadataFilter`.
 
 **Note:** without the matching peer dep installed and a real cluster
 configured (see Section 8), the external provider self-disables at runtime.
@@ -265,11 +284,13 @@ Dropbox / etc.) participate in this scope.
 **Steps:**
 1. Scroll to **Search Scope Storage Accounts**.
 2. Click **New**.
-3. Set **File Storage Account** (lookup). Optionally restrict via **Folder
-   Path** (e.g. `/policies` to scope to one subtree).
+3. The form's labelled fields: **Search Scope** (pre-populated), **File
+   Storage Account** (FK lookup), **Folder Path** (optional, e.g.
+   `/policies` to scope to one subtree).
 4. Save.
 
-**Cross-reference:** Schema columns are in `__mj.SearchScopeStorageAccount`.
+**Cross-reference:** Schema columns are in `__mj.SearchScopeStorageAccount`
+(`FileStorageAccountID`, `FolderPath`).
 
 ---
 
@@ -638,11 +659,13 @@ write to the same table.
 1. Open the scope at `/resource/record/MJ: Search Scopes/{id}`.
 2. Scroll to **AI Agent Search Scopes** related panel.
 3. Click **New** on the panel toolbar.
-4. The new tab opens with **Search Scope Name** pre-populated. Set
-   **Agent Name** (lookup), **Phase** (combobox: PreExecution,
-   AgentInvoked, Both), and optionally **Priority** (lower = runs first),
-   **Status**, **MaxResults**, **MinScore**, **FusionWeightsOverride**
-   (JSON), **QueryTemplate**, **IsDefault**.
+4. The new tab opens with **Search Scope Name** pre-populated. The
+   labelled fields (display names) are: **Agent Name** (FK lookup),
+   **Search Scope Name** (pre-populated), **Execution Phase** (combobox:
+   PreExecution, AgentInvoked, Both), **Status**, **Start Date**, **End
+   Date**, **Priority** (lower = runs first), **Max Results**, **Minimum
+   Score**, **Query Template Name** (FK lookup), **Fusion Weights
+   Override** (JSON textarea), **Is Default**.
 5. Click **Save Changes**.
 
 **Path B — from the AIAgent form's Search section (compact in-form grid):**
