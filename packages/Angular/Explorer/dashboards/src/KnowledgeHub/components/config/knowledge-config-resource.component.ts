@@ -437,7 +437,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         try {
             const md = new Metadata();
             const scope = await md.GetEntityObject<MJSearchScopeEntity>('MJ: Search Scopes');
-            scope.Name = 'New Search Scope';
+            scope.Name = this.pickUniqueNewScopeName();
             scope.Description = 'New scope — configure providers, entities, or storage below.';
             scope.Icon = 'fa-solid fa-filter';
             scope.Status = 'Active';
@@ -459,6 +459,27 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             const msg = err instanceof Error ? err.message : String(err);
             MJNotificationService.Instance.CreateSimpleNotification(`Error creating scope: ${msg}`, 'error', 5000);
         }
+    }
+
+    /**
+     * Pick a placeholder Name that doesn't collide with an existing scope.
+     * `__mj.SearchScope.Name` is UNIQUE, so reusing the literal string
+     * "New Search Scope" twice in a row throws SQL Server's UQ violation.
+     * Walk an incrementing suffix until we find one the in-memory list
+     * doesn't already use ("New Search Scope", "New Search Scope 2",
+     * "New Search Scope 3", ...). Existing scopes table is small and
+     * already loaded, so the linear scan is trivially cheap.
+     */
+    private pickUniqueNewScopeName(): string {
+        const base = 'New Search Scope';
+        const existing = new Set(this.SearchScopes.map(s => (s.Name ?? '').toLowerCase()));
+        if (!existing.has(base.toLowerCase())) return base;
+        for (let i = 2; i < 1000; i++) {
+            const candidate = `${base} ${i}`;
+            if (!existing.has(candidate.toLowerCase())) return candidate;
+        }
+        // Fallback: degrade to a timestamp suffix so we never throw.
+        return `${base} ${Date.now()}`;
     }
 
     /**
