@@ -550,7 +550,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (343 classes)
+// @memberjunction/core-entities (344 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -842,6 +842,7 @@ import {
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
+    MJSearchScopeTestQueryEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
@@ -897,7 +898,7 @@ import {
     ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
-// @memberjunction/core-entities-server (15 classes)
+// @memberjunction/core-entities-server (16 classes)
 import {
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
@@ -910,6 +911,7 @@ import {
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJQueryEntityServer,
+    MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTemplateContentEntityServer,
     MJUserViewEntityServer,
@@ -993,13 +995,21 @@ import {
     MJScheduledJobEntityExtended,
 } from '@memberjunction/scheduling-engine-base';
 
-// @memberjunction/search-engine (5 classes)
+// @memberjunction/search-engine (13 classes)
 import {
+    AzureAISearchProvider,
+    BGEReRanker,
+    CohereReRanker,
+    ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
     NoopReRanker,
+    OpenAIReRanker,
+    OpenSearchSearchProvider,
     StorageSearchProvider,
+    TypesenseSearchProvider,
     VectorSearchProvider,
+    VoyageReRanker,
 } from '@memberjunction/search-engine';
 
 // @memberjunction/server (3 classes)
@@ -1663,6 +1673,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
+    MJSearchScopeTestQueryEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
@@ -1727,6 +1738,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJQueryEntityServer,
+    MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTemplateContentEntityServer,
     MJUserViewEntityServer,
@@ -1764,11 +1776,19 @@ export const CLASS_REGISTRATIONS: any[] = [
     AgentScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     MJScheduledJobEntityExtended,
+    AzureAISearchProvider,
+    BGEReRanker,
+    CohereReRanker,
+    ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
     NoopReRanker,
+    OpenAIReRanker,
+    OpenSearchSearchProvider,
     StorageSearchProvider,
+    TypesenseSearchProvider,
     VectorSearchProvider,
+    VoyageReRanker,
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     SkipProxyAgent,
@@ -1789,7 +1809,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 741;
+export const CLASS_REGISTRATIONS_COUNT = 751;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
