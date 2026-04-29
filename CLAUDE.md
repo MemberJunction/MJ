@@ -731,6 +731,45 @@ const entity = md.Entities.find(e => e.Name === params.EntityName);
 
 This rule applies to any code that needs to look up a single entity by name. Use `Entities` (the array) only when you genuinely need to iterate over all entities (e.g. to filter by `SchemaName`).
 
+### 🚨 CRITICAL: Don't Reach for the Global `Metadata` Provider in Per-Provider Code Paths
+
+`new Metadata()` and the static `Metadata.Provider` both resolve to the **process-global default provider**. That's fine in single-provider apps, but **wrong** in any code path that may run under a non-default provider — most importantly:
+
+- **Multi-provider client setups** (a client connecting to multiple MJ servers in parallel — each server is a separate `IMetadataProvider` with its own entities, roles, AllowCaching flags, and CurrentUser).
+- **Server-side code servicing multiple tenants/connections** where the active provider is bound to the request, not to the process.
+
+The rule:
+
+1. **If a class instance already owns a provider** (e.g. `ProviderBase`, `BaseEngine`, `BaseEntity`), use **`this`** / **`this.ProviderToUse`** — never `new Metadata()`.
+2. **If a function/method receives a provider via parameter or event**, use **that** provider — never `new Metadata()`. Examples: cache writes pass the provider that produced the data; `BaseEntityEvent.provider` carries the publishing provider for `remote-invalidate` events.
+3. **If neither of the above applies**, accept an optional `provider?: IMetadataProvider` parameter and fall back to the global only as a last resort:
+   ```typescript
+   public DoThing(name: string, provider?: IMetadataProvider) {
+       const md = provider ?? Metadata.Provider;     // explicit fallback
+       const entity = md?.EntityByName(name);
+       // ...
+   }
+   ```
+
+```typescript
+// ❌ WRONG — silently uses the global provider, even if the caller is on a different one
+const md = new Metadata();
+const entity = md.EntityByName(name);
+
+// ✅ CORRECT (inside a provider class) — use `this`, which IS an IMetadataProvider
+const entity = this.EntityByName(name);
+
+// ✅ CORRECT (helper that doesn't own a provider) — accept it as a parameter
+function gateCacheWrite(name: string, provider?: IMetadataProvider) {
+    const md = provider ?? Metadata.Provider;
+    return md?.EntityByName(name);
+}
+```
+
+**Why this matters**: `LocalCacheManager.SetRunViewResult`, `BaseEntityEvent` consumers, `AuthorizationEvaluator`, and `BaseEngine.applyRemoteRecordData` all read per-provider state (entity flags, roles, current user). When they reach for `new Metadata()` in a multi-provider client, they read the wrong server's metadata and produce subtly wrong cache decisions, role evaluations, or entity instances. These are latent bugs that don't surface until parallel-server scenarios exist.
+
+**When `new Metadata()` IS fine**: methods that genuinely operate on the global default — e.g., a one-off CLI script, application bootstrap, a singleton initializer that explicitly registers itself as the global provider.
+
 ### 🚨 CRITICAL: Entity Naming Convention Warning
 
 **ALWAYS** use the correct entity names with the "MJ: " prefix where required. To prevent naming collisions on client systems, all new core entities use the "MJ: " prefix, while older entities do not.
