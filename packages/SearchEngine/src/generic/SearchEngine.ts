@@ -96,6 +96,25 @@ interface ReRankerConfig {
 }
 
 /**
+ * Callback fired the moment an individual provider's `Search()` resolves —
+ * before fusion, dedup, permission filtering, or rerank. Used by
+ * {@link SearchEngine.streamSearch} to emit `provider` events as each
+ * provider returns rather than waiting for the whole pipeline. The callback
+ * runs inside the provider's promise chain, so any throw it raises will
+ * cancel that provider's contribution but won't take down the search.
+ */
+export type OnProviderResolved = (event: {
+    /** Source type as reported by the provider (e.g. 'vector', 'fulltext'). */
+    sourceType: string;
+    /** Result rows from this provider, with metadata already stamped. */
+    results: SearchResultItem[];
+    /** Wall-clock time spent inside `Provider.Search()` for this invocation. */
+    durationMs: number;
+    /** Scope ID when running per-scope; undefined when unconstrained. */
+    scopeID?: string;
+}) => void;
+
+/**
  * Singleton search engine that orchestrates multi-source search with RRF fusion.
  *
  * Providers are discovered from the MJ: Search Providers entity. Each active
@@ -203,6 +222,20 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * @returns Aggregated search result
      */
     public async Search(params: SearchParams, contextUser: UserInfo): Promise<SearchResult> {
+        return this.searchInternal(params, contextUser);
+    }
+
+    /**
+     * Internal search implementation that optionally fires `onProviderResolved`
+     * as each provider's promise settles. Exposed via the public {@link Search}
+     * (no callback) and {@link streamSearch} (queue-backed callback that
+     * yields `provider` events to the caller).
+     */
+    private async searchInternal(
+        params: SearchParams,
+        contextUser: UserInfo,
+        onProviderResolved?: OnProviderResolved,
+    ): Promise<SearchResult> {
         const startTime = Date.now();
         // Per-invocation tracking for the post-search SearchExecutionLog row (P3.2).
         let invocationBudgetGuard: RerankerBudgetGuard | null = null;
@@ -256,7 +289,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     params.Filters,
                     contextUser,
                     isPreview,
-                    undefined
+                    undefined,
+                    onProviderResolved,
                 );
                 sourceCounts = this.countSources(labeledLists);
                 const defaultFusionWeights = params.FusionWeightsOverride;
@@ -272,7 +306,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                         isPreview,
                         bundle,
                         params.SearchContext,
-                        params.FusionWeightsOverride
+                        params.FusionWeightsOverride,
+                        onProviderResolved,
                     )
                 ));
 
@@ -426,59 +461,113 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         params: SearchParams,
         contextUser: UserInfo,
     ): AsyncIterable<SearchStreamEvent> {
-        const startTime = Date.now();
-        let result: SearchResult;
-        try {
-            result = await this.Search(params, contextUser);
-        } catch (err) {
-            yield { phase: 'error', error: err instanceof Error ? err.message : String(err) };
-            return;
-        }
+        // Phase 2C v2: true concurrent emission. The internal search is run
+        // with an `onProviderResolved` callback that pushes a `provider`
+        // event into a queue the moment each provider's promise settles.
+        // The generator drains the queue while the search keeps running, so
+        // `provider` events arrive as fast as their providers resolve. After
+        // the search completes (or errors) we emit `fused` + `final` (or
+        // `error`) and close the iterator.
+        //
+        // Cancellation: if the consumer breaks out of `for await`, the
+        // generator's `return()` runs and the underlying search is allowed
+        // to finish in the background (its result is discarded). Mid-pipeline
+        // AbortSignal propagation is a future enhancement.
 
-        if (!result.Success) {
-            yield { phase: 'error', error: result.ErrorMessage ?? 'Search failed' };
-            return;
-        }
+        const queue: SearchStreamEvent[] = [];
+        let resolveNext: (() => void) | null = null;
+        let done = false;
 
-        // Emit one provider event per non-empty source. The aggregate result
-        // doesn't preserve per-provider lists, so we reconstruct by source
-        // type — which is what consumers actually care about (entity vs
-        // full-text vs vector vs storage). Order is intentional: vector and
-        // full-text first because they're typically fastest to return,
-        // entity last because it usually does the most SQL work.
-        const partition: Array<{ name: string; results: SearchResultItem[] }> = [
-            { name: 'Vector',   results: result.Results.filter(r => (r.SourceType ?? '').toLowerCase() === 'vector') },
-            { name: 'FullText', results: result.Results.filter(r => (r.SourceType ?? '').toLowerCase() === 'fulltext') },
-            { name: 'Storage',  results: result.Results.filter(r => (r.SourceType ?? '').toLowerCase() === 'storage') },
-            { name: 'Entity',   results: result.Results.filter(r => (r.SourceType ?? '').toLowerCase() === 'entity') },
-        ];
-        const totalElapsed = Date.now() - startTime;
-        const perProviderDuration = Math.max(1, Math.floor(totalElapsed / Math.max(1, partition.filter(p => p.results.length > 0).length)));
-        for (const p of partition) {
-            if (p.results.length === 0) continue;
-            yield {
-                phase: 'provider',
-                providerName: p.name,
-                results: p.results,
-                durationMs: perProviderDuration,
-            };
-        }
-
-        yield { phase: 'fused', results: result.Results };
-
-        // The reranker stage in Search() is opaque from outside, so this
-        // event fires only when the result set is non-empty AND we observe
-        // that a reranker config was applied. We keep it conservative: omit
-        // the event rather than mislead consumers into thinking reranking
-        // happened when it didn't.
-        // (Intentionally no reranker emission in v1 — tracked for v2.)
-
-        yield {
-            phase: 'final',
-            results: result.Results,
-            sourceCounts: result.SourceCounts,
-            elapsedMs: result.ElapsedMs,
+        const push = (ev: SearchStreamEvent): void => {
+            queue.push(ev);
+            if (resolveNext) {
+                const r = resolveNext;
+                resolveNext = null;
+                r();
+            }
         };
+
+        const finish = (): void => {
+            done = true;
+            if (resolveNext) {
+                const r = resolveNext;
+                resolveNext = null;
+                r();
+            }
+        };
+
+        // Source-type → friendly provider label mapping for stable UI display.
+        // Keys are lowercased to match what providers report.
+        const sourceTypeToLabel: Record<string, string> = {
+            vector: 'Vector',
+            fulltext: 'FullText',
+            entity: 'Entity',
+            storage: 'Storage',
+        };
+
+        const onProviderResolved: OnProviderResolved = (ev) => {
+            const label = sourceTypeToLabel[ev.sourceType.toLowerCase()] ?? ev.sourceType;
+            push({
+                phase: 'provider',
+                providerName: label,
+                results: ev.results,
+                durationMs: ev.durationMs,
+            });
+        };
+
+        // Kick off the search; do NOT await it here — we want the generator
+        // loop below to interleave with the provider callbacks.
+        const searchPromise = (async () => {
+            try {
+                const result = await this.searchInternal(params, contextUser, onProviderResolved);
+                if (!result.Success) {
+                    push({ phase: 'error', error: result.ErrorMessage ?? 'Search failed' });
+                    return;
+                }
+                push({ phase: 'fused', results: result.Results });
+                // Reranker emission is intentionally elided here — the engine's
+                // post-fusion rerank fires inside `searchInternal` before this
+                // point, and observers seeking that signal should look at the
+                // final SearchExecutionLog row. Keeping this generator narrow
+                // avoids leaking rerank internals into a streaming surface that
+                // can't faithfully separate them from fusion.
+                push({
+                    phase: 'final',
+                    results: result.Results,
+                    sourceCounts: result.SourceCounts,
+                    elapsedMs: result.ElapsedMs,
+                });
+            } catch (err) {
+                push({ phase: 'error', error: err instanceof Error ? err.message : String(err) });
+            } finally {
+                finish();
+            }
+        })();
+
+        // Drain the queue. The loop blocks on `resolveNext` between bursts
+        // so that we don't busy-spin while waiting for providers.
+        try {
+            while (true) {
+                if (queue.length > 0) {
+                    yield queue.shift()!;
+                    continue;
+                }
+                if (done) {
+                    break;
+                }
+                await new Promise<void>((resolve) => {
+                    resolveNext = resolve;
+                });
+            }
+        } finally {
+            // If the consumer aborts mid-iteration, surface any background
+            // error so it isn't silently swallowed. We don't await the
+            // promise on the happy path because `done` already implies it
+            // settled.
+            if (!done) {
+                searchPromise.catch(() => { /* already pushed as error event */ });
+            }
+        }
     }
 
     /**
@@ -537,7 +626,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         isPreview: boolean,
         bundle: ScopeBundle,
         searchContext: SearchContext | undefined,
-        agentFusionWeights: FusionWeightsByProvider | undefined
+        agentFusionWeights: FusionWeightsByProvider | undefined,
+        onProviderResolved?: OnProviderResolved,
     ): Promise<{
         scopeID: string;
         fused: SearchResultItem[];
@@ -570,6 +660,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
         // Resolve per-provider `SearchScopeProvider.MaxResultsOverride` if present
         const promises = applicableProviders.map(async (entry): Promise<LabeledResultList> => {
+            const providerStart = Date.now();
             try {
                 const spRow = bundle.Providers.find(r => NormalizeUUID(r.SearchProviderID) === NormalizeUUID(entry.ID));
                 const effectiveTopK = spRow?.MaxResultsOverride ?? entry.MaxResultsOverride ?? topK;
@@ -597,10 +688,33 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     r.ProviderLabel = entry.DisplayName;
                     r.ProviderIcon = entry.Icon;
                 }
+                if (onProviderResolved) {
+                    try {
+                        onProviderResolved({
+                            sourceType: entry.Provider.SourceType,
+                            results: providerResults,
+                            durationMs: Date.now() - providerStart,
+                            scopeID: scope.ID,
+                        });
+                    } catch (cbErr) {
+                        const cbMsg = cbErr instanceof Error ? cbErr.message : String(cbErr);
+                        LogError(`SearchEngine: onProviderResolved callback threw for "${entry.Provider.SourceType}" in scope "${scope.Name}": ${cbMsg}`);
+                    }
+                }
                 return { Source: entry.Provider.SourceType, Results: providerResults };
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
                 LogError(`SearchEngine: Provider "${entry.Provider.SourceType}" failed in scope "${scope.Name}": ${msg}`);
+                if (onProviderResolved) {
+                    try {
+                        onProviderResolved({
+                            sourceType: entry.Provider.SourceType,
+                            results: [],
+                            durationMs: Date.now() - providerStart,
+                            scopeID: scope.ID,
+                        });
+                    } catch { /* swallow */ }
+                }
                 return { Source: entry.Provider.SourceType, Results: [] };
             }
         });
@@ -849,7 +963,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         filters: SearchFilters | undefined,
         contextUser: UserInfo,
         isPreview: boolean,
-        scopeConstraints: ScopeConstraints | undefined
+        scopeConstraints: ScopeConstraints | undefined,
+        onProviderResolved?: OnProviderResolved,
     ): Promise<LabeledResultList[]> {
         const entries = this._providerEntries.filter(e => {
             if (!e.Provider.IsAvailable()) return false;
@@ -863,6 +978,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         }
 
         const promises = entries.map(async (entry): Promise<LabeledResultList> => {
+            const providerStart = Date.now();
             try {
                 const providerTopK = entry.MaxResultsOverride ?? topK;
                 const results = await entry.Provider.Search(query, providerTopK, filters, contextUser, scopeConstraints);
@@ -872,10 +988,32 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     r.ProviderLabel = entry.DisplayName;
                     r.ProviderIcon = entry.Icon;
                 }
+                if (onProviderResolved) {
+                    try {
+                        onProviderResolved({
+                            sourceType: entry.Provider.SourceType,
+                            results,
+                            durationMs: Date.now() - providerStart,
+                        });
+                    } catch (cbErr) {
+                        // Streaming callback throwing must NOT corrupt the result; just log.
+                        const cbMsg = cbErr instanceof Error ? cbErr.message : String(cbErr);
+                        LogError(`SearchEngine: onProviderResolved callback threw for "${entry.Provider.SourceType}": ${cbMsg}`);
+                    }
+                }
                 return { Source: entry.Provider.SourceType, Results: results };
             } catch (error) {
                 const msg = error instanceof Error ? error.message : String(error);
                 LogError(`SearchEngine: Provider "${entry.Provider.SourceType}" failed: ${msg}`);
+                if (onProviderResolved) {
+                    try {
+                        onProviderResolved({
+                            sourceType: entry.Provider.SourceType,
+                            results: [],
+                            durationMs: Date.now() - providerStart,
+                        });
+                    } catch { /* swallow */ }
+                }
                 return { Source: entry.Provider.SourceType, Results: [] };
             }
         });

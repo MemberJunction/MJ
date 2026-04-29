@@ -44,14 +44,19 @@ Reinvents Apollo's plumbing. Maintenance burden for zero feature win.
 - Cancellation: `AbortSignal` from the subscription's onComplete handler
 - Client: `GraphQLSearchClient.streamScopedSearch()` returns an Observable wrapper around the Apollo subscription
 
-## Implementation reality (post-ship audit, 2026-04-29)
+## Implementation reality (v2, 2026-04-29 — concurrent emission landed)
 
-The `SearchEngine.streamSearch()` implementation is currently a **post-hoc partition**, not concurrent live streaming. It awaits the synchronous `Search()` to completion, then walks the per-provider buckets and emits `'provider'` events in sequence followed by `'fused'` and `'final'`. The transport (subscription) and event shape are stable; consumers can rely on the contract. But on a deployment with a genuinely slow provider, the events will all fire after that slow provider returns, not progressively as faster providers complete. On the workbench's fast providers (Database, Database Full-Text) the whole sequence completes in <100ms and the difference is invisible.
+`SearchEngine.streamSearch()` is now **true concurrent emission**: an internal `searchInternal()` accepts an `OnProviderResolved` callback, threads it through `executeProviders()` and `executeScopeBundle()`, and fires the callback the moment each provider's `Provider.Search()` promise settles. The streaming generator pushes each fired event into a queue and yields it immediately, so a fast provider's `'provider'` event reaches the consumer before a slow provider has even returned.
 
-**To get true live streaming** (per-provider events as soon as each provider returns):
-- Refactor `SearchEngine.Search()` to dispatch providers via `Promise.race`-style iteration with bounded concurrency
-- Yield each provider's results into the AsyncIterable as the corresponding promise resolves
-- Add `AbortSignal` plumbing through to each provider's `Search()` so cancellation propagates without waiting
-- Preserve fusion/rerank ordering — the `'fused'` and `'final'` events still need all providers' inputs
+Order guarantees in v2:
+- `'provider'` events arrive in **resolution order**, not registration order
+- Exactly one `'fused'` event after all providers settle
+- Exactly one `'final'` event after fusion + dedup + permission filter + enrich
+- `'error'` replaces `'fused'`/`'final'` if the search fails
 
-Until that work is done, document this as the deliberate semantic gap so reviewers and downstream consumers don't expect concurrent partial emission.
+What's still future work:
+- **AbortSignal propagation** — if the consumer breaks out of `for await`, the underlying search keeps running in the background (its result is discarded). Mid-pipeline cancellation needs `AbortSignal` plumbing into each provider's `Search()`.
+- **Per-scope event fan-out** — the callback already receives a `scopeID` when running per-scope, but the public `SearchStreamEvent` shape doesn't expose it yet. Adding it is non-breaking.
+- **Reranker emission** — intentionally elided. The reranker stage is opaque to streaming; observers seeking that signal should read the `SearchExecutionLog.RerankerName` row.
+
+Test contract: `packages/SearchEngine/src/__tests__/SearchEngine.streamSearch.test.ts` locks in (a) resolution-order emission, (b) time-to-first-event < slow-provider latency, and (c) the error-only-no-fused-no-final path.
