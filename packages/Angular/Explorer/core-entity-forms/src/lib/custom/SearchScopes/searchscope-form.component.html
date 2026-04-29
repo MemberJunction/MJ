@@ -233,7 +233,7 @@
                  Pulls the last 500 rows from MJ: Search Execution Logs filtered
                  to this scope's ID and downloads as CSV for offline analysis. -->
             <div class="reranker-export-row">
-                <button class="mj-input reranker-export-btn"
+                <button class="reranker-export-btn"
                         type="button"
                         [disabled]="!record?.ID || IsExportingTuningCsv"
                         (click)="ExportTuningCsv()">
@@ -271,14 +271,14 @@
                     (input)="PreviewQuery = $any($event.target).value"
                     (keydown.enter)="RunPreview()" />
                 @if (!PreviewIsRunning) {
-                    <button class="mj-input live-preview-btn"
+                    <button class="live-preview-btn"
                             type="button"
                             [disabled]="!record?.ID || !PreviewQuery.trim()"
                             (click)="RunPreview()">
                         <i class="fa-solid fa-play"></i> Run
                     </button>
                 } @else {
-                    <button class="mj-input live-preview-btn live-preview-btn-cancel"
+                    <button class="live-preview-btn live-preview-btn-cancel"
                             type="button"
                             (click)="CancelPreview()">
                         <i class="fa-solid fa-stop"></i> Cancel
