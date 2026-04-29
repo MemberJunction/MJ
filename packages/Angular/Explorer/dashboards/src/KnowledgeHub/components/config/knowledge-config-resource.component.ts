@@ -104,6 +104,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         { ID: 'thresholds', Label: 'Thresholds', Icon: 'fa-solid fa-sliders', Description: 'Set scoring thresholds for search and deduplication' },
         { ID: 'search-scopes', Label: 'Search Scopes', Icon: 'fa-solid fa-compass-drafting', Description: 'Define reusable search scopes — which providers, entities, external indexes, and storage accounts participate in scoped search' },
         { ID: 'search-analytics', Label: 'Search Analytics', Icon: 'fa-solid fa-chart-line', Description: 'Per-scope query volume, p50/p95 latency, hit rate, top failures, and reranker spend (driven by SearchExecutionLog)' },
+        { ID: 'search-permissions', Label: 'Permissions', Icon: 'fa-solid fa-shield-halved', Description: 'Cross-scope view of every SearchScopePermission row, filterable by scope, user, or role (P2A.7)' },
         { ID: 'scheduling', Label: 'Scheduling', Icon: 'fa-solid fa-clock', Description: 'Manage automated pipeline schedules' },
     ];
 
@@ -271,6 +272,9 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         if (sectionId === 'search-analytics' && !this.AnalyticsLoaded && !this.AnalyticsLoading) {
             void this.LoadSearchAnalytics();
         }
+        if (sectionId === 'search-permissions' && !this.PermissionsLoaded && !this.PermissionsLoading) {
+            void this.LoadPermissionsAudit();
+        }
         this.cdr.detectChanges();
     }
 
@@ -389,6 +393,121 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             this.AnalyticsLoading = false;
             this.cdr.detectChanges();
         }
+    }
+
+    // ─── Permissions Audit (P2A.7) ────────────────────────────────────────────
+    //
+    // Cross-scope view of every SearchScopePermission row. Renders a flat,
+    // filterable list so an admin can answer "who has access to which scopes"
+    // in one place. Editing happens on the SearchScope full form's
+    // Permissions panel — this dashboard is read-only.
+
+    public PermissionsLoaded = false;
+    public PermissionsLoading = false;
+    public PermissionsRows: Array<{
+        ID: string;
+        SearchScopeID: string;
+        SearchScopeName: string;
+        UserID: string | null;
+        UserName: string | null;
+        UserEmail: string | null;
+        RoleID: string | null;
+        RoleName: string | null;
+        PermissionLevel: string;
+    }> = [];
+    public PermissionsFilterScope: string = '';
+    public PermissionsFilterPrincipal: string = '';
+    public PermissionsFilterLevel: string = '';
+
+    public async LoadPermissionsAudit(): Promise<void> {
+        this.PermissionsLoading = true;
+        this.cdr.detectChanges();
+        try {
+            const rv = new RunView();
+            // Pull permissions, scopes, users, roles in one batched call.
+            // SearchScopePermission has SearchScopeID, UserID, RoleID;
+            // join in JS against the already-loaded scope list and live RunView
+            // results for users/roles.
+            const result = await rv.RunViews([
+                {
+                    EntityName: 'MJ: Search Scope Permissions',
+                    Fields: ['ID', 'SearchScopeID', 'UserID', 'RoleID', 'PermissionLevel'],
+                    OrderBy: '__mj_CreatedAt DESC',
+                    MaxRows: 5000,
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ: Search Scopes',
+                    Fields: ['ID', 'Name'],
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ: Users',
+                    Fields: ['ID', 'Name', 'Email'],
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ: Roles',
+                    Fields: ['ID', 'Name'],
+                    ResultType: 'simple',
+                },
+            ]);
+            if (!result?.[0]?.Success) {
+                LogError(`KnowledgeConfig: LoadPermissionsAudit failed: ${result?.[0]?.ErrorMessage}`);
+                this.PermissionsRows = [];
+                return;
+            }
+            const perms = result[0].Results as Array<{
+                ID: string; SearchScopeID: string; UserID: string | null;
+                RoleID: string | null; PermissionLevel: string;
+            }>;
+            const scopes = (result[1].Results ?? []) as Array<{ ID: string; Name: string }>;
+            const users = (result[2].Results ?? []) as Array<{ ID: string; Name: string; Email: string }>;
+            const roles = (result[3].Results ?? []) as Array<{ ID: string; Name: string }>;
+            const scopeName = new Map(scopes.map(s => [s.ID, s.Name]));
+            const userByID = new Map(users.map(u => [u.ID, u]));
+            const roleName = new Map(roles.map(r => [r.ID, r.Name]));
+            this.PermissionsRows = perms.map(p => {
+                const u = p.UserID ? userByID.get(p.UserID) : null;
+                return {
+                    ID: p.ID,
+                    SearchScopeID: p.SearchScopeID,
+                    SearchScopeName: scopeName.get(p.SearchScopeID) ?? '(unknown)',
+                    UserID: p.UserID,
+                    UserName: u?.Name ?? null,
+                    UserEmail: u?.Email ?? null,
+                    RoleID: p.RoleID,
+                    RoleName: p.RoleID ? (roleName.get(p.RoleID) ?? '(unknown)') : null,
+                    PermissionLevel: p.PermissionLevel,
+                };
+            });
+            this.PermissionsLoaded = true;
+        } catch (err) {
+            LogError(`KnowledgeConfig: LoadPermissionsAudit threw: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            this.PermissionsLoading = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public get FilteredPermissionsRows(): typeof this.PermissionsRows {
+        const scope = (this.PermissionsFilterScope || '').toLowerCase();
+        const principal = (this.PermissionsFilterPrincipal || '').toLowerCase();
+        const level = this.PermissionsFilterLevel;
+        return this.PermissionsRows.filter(r => {
+            if (scope && !r.SearchScopeName.toLowerCase().includes(scope)) return false;
+            if (principal) {
+                const candidates = [r.UserName, r.UserEmail, r.RoleName].filter(Boolean) as string[];
+                if (!candidates.some(c => c.toLowerCase().includes(principal))) return false;
+            }
+            if (level && r.PermissionLevel !== level) return false;
+            return true;
+        });
+    }
+
+    public RefreshPermissionsAudit(): void {
+        this.PermissionsLoaded = false;
+        void this.LoadPermissionsAudit();
     }
 
     // ─── Search Scopes ────────────────────────────────────────────────────────

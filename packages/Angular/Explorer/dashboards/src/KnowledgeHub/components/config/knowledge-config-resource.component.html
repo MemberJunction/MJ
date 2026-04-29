@@ -719,6 +719,81 @@
                 </div>
             }
 
+            <!-- Permissions Audit Section (P2A.7) -->
+            @if (ActiveSection === 'search-permissions') {
+                <div class="config-section-content">
+                    <h2 class="config-section-title"><i class="fa-solid fa-shield-halved"></i> Permissions</h2>
+                    <p class="config-section-desc">
+                        Cross-scope view of every <code>SearchScopePermission</code> row. Filter by scope, by user/role, or by permission level to answer "who has access to what". Read-only — to add or edit a grant, open the SearchScope's full form and use its Permissions panel.
+                    </p>
+
+                    @if (PermissionsLoading) {
+                        <div class="search-permissions-loading">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Loading permission rows...
+                        </div>
+                    }
+
+                    @if (PermissionsLoaded && !PermissionsLoading) {
+                        <div class="search-permissions-filters">
+                            <input class="mj-input" type="text" placeholder="Filter by scope name..." [(ngModel)]="PermissionsFilterScope" />
+                            <input class="mj-input" type="text" placeholder="Filter by user/role (name or email)..." [(ngModel)]="PermissionsFilterPrincipal" />
+                            <select class="mj-input" [(ngModel)]="PermissionsFilterLevel">
+                                <option value="">All levels</option>
+                                <option value="None">None</option>
+                                <option value="Read">Read</option>
+                                <option value="Search">Search</option>
+                                <option value="Manage">Manage</option>
+                            </select>
+                            <button class="mj-input" type="button" (click)="RefreshPermissionsAudit()">
+                                <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                            </button>
+                        </div>
+
+                        <div class="search-permissions-summary">
+                            Showing {{ FilteredPermissionsRows.length }} of {{ PermissionsRows.length }} rows
+                        </div>
+
+                        @if (FilteredPermissionsRows.length === 0) {
+                            <div class="search-permissions-empty">
+                                No permission rows match your filters.
+                            </div>
+                        } @else {
+                            <table class="search-permissions-table">
+                                <thead>
+                                    <tr>
+                                        <th>Scope</th>
+                                        <th>Principal</th>
+                                        <th>Type</th>
+                                        <th>Permission Level</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (row of FilteredPermissionsRows; track row.ID) {
+                                        <tr>
+                                            <td>{{ row.SearchScopeName }}</td>
+                                            <td>
+                                                @if (row.UserID) {
+                                                    {{ row.UserName }} <span class="search-permissions-secondary">({{ row.UserEmail }})</span>
+                                                } @else {
+                                                    {{ row.RoleName }}
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (row.UserID) { <span class="search-permissions-tag">User</span> }
+                                                @if (row.RoleID) { <span class="search-permissions-tag">Role</span> }
+                                            </td>
+                                            <td>
+                                                <span class="search-permissions-level search-permissions-level-{{ row.PermissionLevel | lowercase }}">{{ row.PermissionLevel }}</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    }
+                </div>
+            }
+
             <!-- Scheduling Section -->
             @if (ActiveSection === 'scheduling') {
                 <div class="config-section-content">
