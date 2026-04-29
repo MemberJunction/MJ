@@ -25,6 +25,7 @@ Two scenarios make this real today:
 - **GraphQLDataProvider:** Cache-invalidation publisher attaches `this` provider to remote-invalidate events.
 - **GenericDatabaseProvider:** Cache writes pass `this`.
 - **CLAUDE.md guidance:** Root + Angular CLAUDE.md updated with the rule and patterns.
+- **Compliance ratchet test** ([packages/MJGlobal/src/__tests__/MultiProviderCompliance.test.ts](../packages/MJGlobal/src/__tests__/MultiProviderCompliance.test.ts) + [multi-provider-baseline.json](../packages/MJGlobal/src/__tests__/multi-provider-baseline.json)) — scans the repo for `new Metadata()` and `Metadata.Provider` references, fails if any package's count exceeds its baseline. Inline `// global-provider-ok: <reason>` comment suppresses individual lines.
 
 ### 1.3 What this plan covers — Phases 2–6
 
@@ -429,7 +430,19 @@ This clone-from-default pattern is questionable in a multi-provider world. When 
 
 ### 8.3 Tests for the global rule
 
-Add a CI lint that flags new `new Metadata()` / `Metadata.Provider` calls in changed code, requiring an inline `// global-provider-ok: <reason>` comment to allowlist legitimate uses (bootstrap, CLI, etc.).
+The compliance ratchet test added in Phase 1 ([packages/MJGlobal/src/__tests__/MultiProviderCompliance.test.ts](../packages/MJGlobal/src/__tests__/MultiProviderCompliance.test.ts)) prevents regressions during the migration. It scans every `*.ts` file under `packages/` for `new Metadata()` and `Metadata.Provider` references and fails if any package's count exceeds its persisted baseline. Inline `// global-provider-ok: <reason>` allowlists individual lines.
+
+**During Phases 2–5** (each phase's PR):
+1. Migrate the call sites in scope.
+2. Re-run the test — it will print "fewer violations than baseline" reductions.
+3. Update [multi-provider-baseline.json](../packages/MJGlobal/src/__tests__/multi-provider-baseline.json) to lock in the lower numbers.
+4. Confirm the test is green against the new baseline.
+
+**At the end of Phase 6** (the PR that completes the migration), the test must be **flipped to strict mode**:
+- Delete `multi-provider-baseline.json`.
+- Replace the ratchet logic in `MultiProviderCompliance.test.ts` with a strict assertion: any non-allowlisted violation fails the test, no per-package allowance.
+- The only way past the test is then either (a) fix the call site, or (b) add a `// global-provider-ok: <reason>` comment with a reviewable justification (bootstrap, CLI, codegen).
+- This is mandatory; ratchet mode is a migration-only crutch and must not survive past Phase 6.
 
 ### 8.4 Documentation deltas
 
@@ -458,11 +471,11 @@ These are pessimistic estimates that include integration testing, code review it
 
 ## 10. Acceptance Criteria for "Done"
 
-1. Zero non-bootstrap `new Metadata()` / `Metadata.Provider` calls anywhere outside CLI / codegen / Angular bootstrap. Every remaining one has a `// global-provider-ok: <reason>` comment.
+1. **Compliance test flipped to strict mode** ([§8.3](#83-tests-for-the-global-rule)). Baseline file deleted. Every remaining `new Metadata()` / `Metadata.Provider` reference is annotated with `// global-provider-ok: <reason>` (bootstrap, CLI, codegen, or other reviewable justification). This is the hard gate for "phases 2–6 are done" — the test must be strict and green before merge.
 2. `LocalCacheManager` cache decisions are correct under a 2-provider integration test (one provider has `AllowCaching=true` for entity X, the other has `AllowCaching=false`; cache writes/reads/invalidations only affect each provider's namespace).
 3. MJServer integration test: two requests in flight, each with a different `AppContext.providers` set, run a save through one and a view through the other; no metadata, cache, or RLS leakage observed.
 4. Angular smoke-test app demonstrates two `GraphQLDataProvider` instances against different servers, with components correctly scoping queries and saves.
-5. CI check enforces the rule on all new code.
+5. The strict compliance test runs in CI and fails any PR that introduces a non-annotated violation.
 
 ---
 
