@@ -696,6 +696,16 @@ export class BaseEntityEvent {
      * where baseEntity is null but the entity name is known from the remote notification.
      */
     entityName?: string;
+
+    /**
+     * The metadata provider associated with the entity that raised this event. Required for
+     * `remote-invalidate` events where `baseEntity` is null and listeners (e.g. LocalCacheManager,
+     * BaseEngine) need to resolve entity metadata from the correct provider in multi-provider
+     * scenarios. For other event types, baseEntity.ProviderToUse is the source of truth and this
+     * field can be omitted; listeners should fall back to `baseEntity?.ProviderToUse` and finally
+     * to `Metadata.Provider` when no provider is available.
+     */
+    provider?: IMetadataProvider;
 }
 
 /**
@@ -1283,9 +1293,18 @@ export abstract class BaseEntity<T = unknown> {
      * Used for raising events within the BaseEntity and can be used by sub-classes to raise events that are specific to the entity.
      */
     protected RaiseEvent(type: BaseEntityEvent["type"], payload: any, saveSubType: BaseEntityEvent["saveSubType"] = undefined) {
+        // Resolve the entity's bound provider once so every consumer (local subscribers
+        // AND MJGlobal listeners) receives consistent provider context. This matters in
+        // multi-provider scenarios — listeners like LocalCacheManager / BaseEngine need to
+        // know which provider produced the event to scope cache invalidation, metadata
+        // lookups, and engine state correctly. Cast through unknown because BaseEntity
+        // exposes ProviderToUse as IEntityDataProvider; the event consumers want the
+        // metadata-side view of the same instance.
+        const provider = this.ProviderToUse as unknown as IMetadataProvider | undefined;
+
         // this is the local event handler that is specific to THIS instance of the entity object
         LogDebug(`BaseEntity.RaiseEvent() - ${type === 'save' ? 'save:' + saveSubType : type} event raised for ${this.EntityInfo.Name}, about to call this._eventSubject.next()`);
-        this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this});
+        this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this, provider});
 
         // this next call is to MJGlobal to let everyone who cares knows that we had an event on an entity object
         // we broadcast save/delete/load events and their _started counterparts
@@ -1296,6 +1315,7 @@ export abstract class BaseEntity<T = unknown> {
             event.payload = payload;
             event.type = type;
             event.saveSubType = saveSubType;
+            event.provider = provider;
 
             LogDebug(`BaseEntity.RaiseEvent() - ${type === 'save' ? 'save:' + saveSubType : type} event raised for ${this.EntityInfo.Name}, about to call MJGlobal.RaiseEvent()`);
             MJGlobal.Instance.RaiseEvent({
@@ -3096,10 +3116,13 @@ export abstract class BaseEntity<T = unknown> {
     public static async ResolveLeafEntity(
         entityName: string,
         primaryKey: CompositeKey,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ LeafEntityName: string; IsLeaf: boolean }> {
-        const md = new Metadata();
-        const entityInfo = md.EntityByName(entityName);
+        // Resolve metadata via the caller-supplied provider so multi-provider client setups
+        // walk the entity hierarchy of the right server. Fall back to the global default.
+        const md = provider ?? Metadata.Provider;
+        const entityInfo = md?.EntityByName(entityName);
         if (!entityInfo) {
             return { LeafEntityName: entityName, IsLeaf: true };
         }
