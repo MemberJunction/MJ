@@ -28,7 +28,7 @@ import {
     MJSearchExecutionLogEntity,
     ScopeBundle
 } from '@memberjunction/core-entities';
-import { BaseSingleton, MJGlobal, NormalizeUUID } from '@memberjunction/global';
+import { BaseSingleton, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     SearchParams,
     SearchResult,
@@ -662,7 +662,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         const promises = applicableProviders.map(async (entry): Promise<LabeledResultList> => {
             const providerStart = Date.now();
             try {
-                const spRow = bundle.Providers.find(r => NormalizeUUID(r.SearchProviderID) === NormalizeUUID(entry.ID));
+                const spRow = bundle.Providers.find(r => UUIDsEqual(r.SearchProviderID, entry.ID));
                 const effectiveTopK = spRow?.MaxResultsOverride ?? entry.MaxResultsOverride ?? topK;
 
                 // If this provider has a per-provider QueryTransform override, stash it
@@ -788,7 +788,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     private lookupEntityName(entityID: string): string {
         try {
             const md = new Metadata();
-            const entity = md.Entities.find(e => NormalizeUUID(e.ID) === NormalizeUUID(entityID));
+            const entity = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
             return entity?.Name ?? '';
         } catch {
             return '';

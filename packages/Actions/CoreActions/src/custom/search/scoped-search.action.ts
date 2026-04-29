@@ -67,6 +67,9 @@ interface FormattedSearchResult {
 export class ScopedSearchAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        // Track action-call wall-clock so any Forbidden log row reports
+        // accurate latency for "denial took 12ms" telemetry.
+        const startTime = Date.now();
         try {
             // 1. Required input + user context ------------------------------
             const query = this.getStringParam(params, "query");
@@ -102,6 +105,20 @@ export class ScopedSearchAction extends BaseAction {
             // 5. Apply SearchScopeAccess enforcement + resolve scope ------
             const scopeResolution = await this.resolveScope(agent, this.getStringParam(params, "scopeid"));
             if (!scopeResolution.success) {
+                // P3.2 — make agent-side denials visible in SearchExecutionLog so
+                // analytics + per-scope volume charts reflect them. Non-denial
+                // errors (NO_DEFAULT_SCOPE, SCOPE_NOT_FOUND) aren't access
+                // denials and stay out of the Forbidden bucket.
+                if (scopeResolution.errorCode === 'ACCESS_DENIED') {
+                    await SearchEngine.Instance.LogForbiddenSearch({
+                        Query: query,
+                        ScopeIDs: undefined,
+                        FailureReason: scopeResolution.errorMessage!,
+                        StartTime: startTime,
+                        ContextUser: params.ContextUser,
+                        AIAgentID: agent.ID,
+                    });
+                }
                 return this.createErrorResult(scopeResolution.errorMessage!, scopeResolution.errorCode!);
             }
             const { scope, scopeID } = scopeResolution;
@@ -126,6 +143,17 @@ export class ScopedSearchAction extends BaseAction {
                     // to use this scope" from "the user isn't permitted".
                     const isAgentDenial = verdict.Source === 'AgentNone'
                         || verdict.Source === 'AgentAssignedNotListed';
+                    // P3.2 — record the Forbidden in SearchExecutionLog. Without
+                    // this, action-driven denials (the agent-tool path) never
+                    // appear on the analytics dashboard.
+                    await SearchEngine.Instance.LogForbiddenSearch({
+                        Query: query,
+                        ScopeIDs: [scopeID],
+                        FailureReason: verdict.Reason ?? 'Permission denied',
+                        StartTime: startTime,
+                        ContextUser: params.ContextUser,
+                        AIAgentID: agent.ID,
+                    });
                     return this.createErrorResult(
                         `Forbidden: ${verdict.Reason}`,
                         isAgentDenial ? 'ACCESS_DENIED' : 'PERMISSION_DENIED'
@@ -136,6 +164,14 @@ export class ScopedSearchAction extends BaseAction {
                 if (verdict.Level === 'Read') {
                     const reason = `User '${params.ContextUser.Name}' has Read-level access on this scope, which permits metadata visibility but not search execution. Search or Manage is required to run a query.`;
                     LogStatus(`ScopedSearchAction denied: ${reason} (scope=${scopeID}, source=${verdict.Source})`);
+                    await SearchEngine.Instance.LogForbiddenSearch({
+                        Query: query,
+                        ScopeIDs: [scopeID],
+                        FailureReason: reason,
+                        StartTime: startTime,
+                        ContextUser: params.ContextUser,
+                        AIAgentID: agent.ID,
+                    });
                     return this.createErrorResult(`Forbidden: ${reason}`, 'PERMISSION_DENIED');
                 }
             }

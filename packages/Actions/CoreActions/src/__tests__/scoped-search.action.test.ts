@@ -13,6 +13,7 @@ vi.mock('@memberjunction/global', async () => {
 
 const searchSpy = vi.fn();
 const permissionResolveSpy = vi.fn();
+const logForbiddenSpy = vi.fn();
 
 // Mock the SearchEngine singleton + the SearchScopePermissionResolver class.
 // The resolver mock returns Allowed=true by default so existing tests that
@@ -22,6 +23,7 @@ vi.mock('@memberjunction/search-engine', () => ({
     SearchEngine: {
         Instance: {
             Search: (...args: unknown[]) => searchSpy(...args),
+            LogForbiddenSearch: (...args: unknown[]) => logForbiddenSpy(...args),
         }
     },
     SearchScopePermissionResolver: class {

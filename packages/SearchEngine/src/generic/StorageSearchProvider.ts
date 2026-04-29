@@ -10,7 +10,7 @@
  */
 
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { NormalizeUUID, RegisterClass } from '@memberjunction/global';
+import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     MJFileStorageAccountEntity,
     MJFileStorageAccountPermissionEntity,
@@ -96,7 +96,7 @@ export class StorageSearchProvider extends BaseSearchProvider {
             for (const account of accounts) {
                 if (searchProviderIDs.has(NormalizeUUID(account.ProviderID))) {
                     const provider = providers.find(
-                        p => NormalizeUUID(p.ID) === NormalizeUUID(account.ProviderID)
+                        p => UUIDsEqual(p.ID, account.ProviderID)
                     );
                     if (provider) {
                         this._searchableAccounts.push({ Account: account, Provider: provider });
@@ -167,7 +167,7 @@ export class StorageSearchProvider extends BaseSearchProvider {
         // Search all accounts in parallel, threading per-account FolderPath (if any)
         const searchPromises = accessibleAccounts.map(entry => {
             const scopeRow = scopeConstraints?.StorageAccounts?.find(
-                r => NormalizeUUID(r.FileStorageAccountID) === NormalizeUUID(entry.Account.ID)
+                r => UUIDsEqual(r.FileStorageAccountID, entry.Account.ID)
             );
             return this.searchOneAccount(entry, effectiveQuery, perAccountLimit, contextUser, scopeRow?.FolderPath);
         });
@@ -209,14 +209,16 @@ export class StorageSearchProvider extends BaseSearchProvider {
         accounts: SearchableAccount[],
         contextUser: UserInfo
     ): SearchableAccount[] {
-        const normalizedUserID = NormalizeUUID(contextUser.ID);
+        // userRoleIDs is normalized for Set-key lookups (the canonical idiom);
+        // user ID equality goes through UUIDsEqual since there's only one user
+        // per call, so we don't need a hoisted-normalize hot-loop optimization.
         const userRoleIDs = new Set(
             (contextUser.UserRoles ?? []).map(r => NormalizeUUID(r.RoleID))
         );
 
         return accounts.filter(entry => {
             const accountPerms = this._permissions.filter(
-                p => NormalizeUUID(p.FileStorageAccountID) === NormalizeUUID(entry.Account.ID)
+                p => UUIDsEqual(p.FileStorageAccountID, entry.Account.ID)
             );
 
             // No permission records means open access (backwards compatible)
@@ -233,7 +235,7 @@ export class StorageSearchProvider extends BaseSearchProvider {
                         return true;
                     case 'User':
                         return perm.UserID != null &&
-                            NormalizeUUID(perm.UserID) === normalizedUserID;
+                            UUIDsEqual(perm.UserID, contextUser.ID);
                     case 'Role':
                         return perm.RoleID != null &&
                             userRoleIDs.has(NormalizeUUID(perm.RoleID));
