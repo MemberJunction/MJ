@@ -69,14 +69,15 @@ both:
 - **Dashboard view** at `/app/knowledge-hub/Configuration` → **Search Scopes**
   tab. A master-detail page: scopes listed in a left sidebar, the selected
   scope's editor in the right pane. The right pane has six tabs (Definition,
-  Providers, External Indexes, Entities, Storage, Permissions) and a **Save**
-  button. Good for quick authoring of the metadata fields.
+  Providers, External Indexes, Entities, Storage, Permissions) plus a tab-strip
+  toolbar with **Open Full Form**, **Save**, and **Delete** buttons. Good for
+  quick authoring of the metadata fields.
 - **Full custom form** at `/resource/record/MJ: Search Scopes/{id}`. The
   full BaseForm-derived custom form. This is where every Phase 2D / Phase 4
   feature lives — Fusion Weights sliders, Reranker dropdown, Reranker Budget
   Cents, Live Preview, Export tuning data, Search Scope Test Queries panel,
-  Search Execution Logs panel. There is no link from the dashboard view to
-  the full form; you navigate by URL using the scope's ID.
+  Search Execution Logs panel. Click the **Open Full Form** button on the
+  dashboard tab strip (or navigate by URL using the scope's ID).
 
 ### The tour
 
@@ -90,11 +91,10 @@ both:
 2. Switch tabs (Providers / External Indexes / Entities / Storage /
    Permissions) to see each child collection. Each tab is its own grid with
    its own add affordance.
-3. Now navigate to the full custom form: copy the scope's ID from the URL
-   bar's window state or by inspecting the right pane's network requests,
-   and open `http://localhost:4200/resource/record/MJ: Search Scopes/{id}`
-   (URL-encode the colon and space if you prefer:
-   `MJ%3A%20Search%20Scopes`).
+3. Now open the full custom form by clicking **Open Full Form** in the
+   right-pane tab strip (the icon-with-text button to the left of Save).
+   A new MJExplorer tab opens at
+   `/app/home/record/MJ: Search Scopes/ID|{scope-id}`.
 4. The full form renders ~18 collapsible panels. In top-to-bottom order:
    Scope Definition, Scope Configuration, Access Control, Lifecycle
    Management, Technical Configuration, **Fusion Weights** (4 sliders),

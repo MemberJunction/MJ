@@ -470,6 +470,13 @@
                                     <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'storage'" (click)="SelectScopeTab('storage')">Storage</button>
                                     <button type="button" class="scope-manager-tab" [class.active]="ActiveScopeTab === 'permissions'" (click)="SelectScopeTab('permissions')">Permissions</button>
                                     <div class="scope-manager-tab-spacer"></div>
+                                    @if (ActiveScope.ID) {
+                                        <button type="button" class="scope-manager-open-btn"
+                                                (click)="OpenActiveScopeFullForm()"
+                                                title="Open the full custom form for this scope (Live Preview, Fusion Weights, Reranker, Test Queries, Execution Logs)">
+                                            <i class="fa-solid fa-up-right-from-square"></i> Open Full Form
+                                        </button>
+                                    }
                                     <button type="button" class="scope-manager-save-btn" (click)="SaveActiveScope()">
                                         <i class="fa-solid fa-save"></i> Save
                                     </button>

@@ -8,7 +8,7 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { Metadata, RunView, LogError } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView, LogError } from '@memberjunction/core';
 import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, MJCredentialEntity, KnowledgeHubMetadataEngine, MJSearchScopeEntity } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -459,6 +459,21 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             const msg = err instanceof Error ? err.message : String(err);
             MJNotificationService.Instance.CreateSimpleNotification(`Error creating scope: ${msg}`, 'error', 5000);
         }
+    }
+
+    /**
+     * Open the active scope in its full custom form (a new MJExplorer tab).
+     * The dashboard view exposes a quick-edit subset; the full form has the
+     * Phase 2D / Phase 4 surfaces (Fusion Weights sliders, Reranker dropdown,
+     * Reranker Budget Cents, Live Preview, Search Scope Test Queries panel,
+     * Search Execution Logs panel, etc.). No-ops for the built-in Global
+     * scope (no detail to author) and any scope without an ID yet.
+     */
+    public OpenActiveScopeFullForm(): void {
+        const scope = this.ActiveScope;
+        if (!scope?.ID) return;
+        const pkey = new CompositeKey([{ FieldName: 'ID', Value: scope.ID }]);
+        this.navigationService.OpenEntityRecord('MJ: Search Scopes', pkey);
     }
 
     public async SaveActiveScope(): Promise<void> {
