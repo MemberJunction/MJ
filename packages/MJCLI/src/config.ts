@@ -113,6 +113,7 @@ const mjConfigSchema = z.object({
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
   baselineVersion: z.string().optional(),
   baselineOnMigrate: z.boolean().optional().default(true),
+  outOfOrder: z.boolean().optional().default(false),
   transactionMode: z.enum(['per-run', 'per-migration']).optional().default('per-migration'),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
@@ -138,6 +139,7 @@ const mjConfigSchemaOptional = z.object({
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
   baselineVersion: z.string().optional(),
   baselineOnMigrate: z.boolean().optional().default(true),
+  outOfOrder: z.boolean().optional().default(false),
   transactionMode: z.enum(['per-run', 'per-migration']).optional().default('per-migration'),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
@@ -306,6 +308,7 @@ export const getSkywayConfig = async (
       // when omitted, Skyway auto-detects the latest B__baseline file.
       ...(mjConfig.baselineVersion ? { BaselineVersion: mjConfig.baselineVersion } : {}),
       BaselineOnMigrate: mjConfig.baselineOnMigrate,
+      OutOfOrder: mjConfig.outOfOrder,
     },
     TransactionMode: mjConfig.transactionMode,
     Placeholders: Object.keys(placeholders).length > 0 ? placeholders : undefined,
