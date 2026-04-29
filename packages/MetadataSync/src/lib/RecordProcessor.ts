@@ -6,6 +6,7 @@ import { EntityPropertyExtractor } from './EntityPropertyExtractor';
 import { FieldExternalizer } from './FieldExternalizer';
 import { RelatedEntityHandler } from './RelatedEntityHandler';
 import { METADATA_KEYWORDS, createKeywordReference } from '../constants/metadata-keywords';
+import { RelatedEntityConfig } from '../config';
 
 /**
  * Handles the core processing of individual record data into the sync format
@@ -25,23 +26,36 @@ export class RecordProcessor {
   }
 
   /**
+   * Batch pre-fetch related entities for a set of parent records.
+   * Public facade so callers don't need direct access to relatedEntityHandler.
+   */
+  async batchPrefetchRelatedEntities(
+    parentPrimaryKeys: string[],
+    relationConfig: RelatedEntityConfig,
+    verbose?: boolean
+  ): Promise<Map<string, BaseEntity[]>> {
+    return this.relatedEntityHandler.batchQueryRelatedEntities(parentPrimaryKeys, relationConfig, verbose);
+  }
+
+  /**
    * Processes a record into the standardized RecordData format
    */
   async processRecord(
-    record: BaseEntity, 
+    record: BaseEntity,
     primaryKey: Record<string, any>,
-    targetDir: string, 
+    targetDir: string,
     entityConfig: EntityConfig,
     verbose?: boolean,
     isNewRecord: boolean = true,
     existingRecordData?: RecordData,
     currentDepth: number = 0,
     ancestryPath: Set<string> = new Set(),
-    fieldOverrides?: Record<string, any>
+    fieldOverrides?: Record<string, any>,
+    batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>
   ): Promise<RecordData> {
     // Extract all properties from the entity
     const allProperties = this.propertyExtractor.extractAllProperties(record, fieldOverrides);
-    
+
     // Process fields and related entities
     const { fields, relatedEntities } = await this.processEntityData(
       allProperties,
@@ -52,7 +66,8 @@ export class RecordProcessor {
       existingRecordData,
       currentDepth,
       ancestryPath,
-      verbose
+      verbose,
+      batchedRelatedData
     );
     
     // Calculate checksum and sync metadata
@@ -85,33 +100,35 @@ export class RecordProcessor {
     existingRecordData: RecordData | undefined,
     currentDepth: number,
     ancestryPath: Set<string>,
-    verbose?: boolean
+    verbose?: boolean,
+    batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>
   ): Promise<{ fields: Record<string, any>; relatedEntities: Record<string, RecordData[]> }> {
     const fields: Record<string, any> = {};
     const relatedEntities: Record<string, RecordData[]> = {};
-    
+
     // Process individual fields
     await this.processFields(
-      allProperties, 
-      primaryKey, 
-      targetDir, 
-      entityConfig, 
-      existingRecordData, 
-      fields, 
+      allProperties,
+      primaryKey,
+      targetDir,
+      entityConfig,
+      existingRecordData,
+      fields,
       verbose
     );
-    
+
     // Process related entities if configured
     await this.processRelatedEntities(
-      record, 
-      entityConfig, 
-      existingRecordData, 
-      currentDepth, 
-      ancestryPath, 
-      relatedEntities, 
-      verbose
+      record,
+      entityConfig,
+      existingRecordData,
+      currentDepth,
+      ancestryPath,
+      relatedEntities,
+      verbose,
+      batchedRelatedData
     );
-    
+
     return { fields, relatedEntities };
   }
 
@@ -401,27 +418,46 @@ export class RecordProcessor {
     currentDepth: number,
     ancestryPath: Set<string>,
     relatedEntities: Record<string, RecordData[]>,
-    verbose?: boolean
+    verbose?: boolean,
+    batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>
   ): Promise<void> {
     if (!entityConfig.pull?.relatedEntities) {
       return;
     }
-    
+
     for (const [relationKey, relationConfig] of Object.entries(entityConfig.pull.relatedEntities)) {
       try {
         const existingRelated = existingRecordData?.relatedEntities?.[relationKey] || [];
-        
-        const relatedRecords = await this.relatedEntityHandler.loadRelatedEntities(
-          record,
-          relationConfig,
-          entityConfig,
-          existingRelated,
-          this.processRecord.bind(this), // Pass bound method reference
-          currentDepth,
-          ancestryPath,
-          verbose
-        );
-        
+
+        let relatedRecords: RecordData[];
+
+        if (batchedRelatedData && batchedRelatedData.has(relationKey)) {
+          // Use pre-fetched batch data — avoids per-parent queries
+          relatedRecords = await this.relatedEntityHandler.loadRelatedEntitiesFromBatch(
+            record,
+            relationConfig,
+            entityConfig,
+            existingRelated,
+            this.processRecord.bind(this),
+            currentDepth,
+            ancestryPath,
+            batchedRelatedData.get(relationKey)!,
+            verbose
+          );
+        } else {
+          // Fall back to per-record loading (original behavior)
+          relatedRecords = await this.relatedEntityHandler.loadRelatedEntities(
+            record,
+            relationConfig,
+            entityConfig,
+            existingRelated,
+            this.processRecord.bind(this),
+            currentDepth,
+            ancestryPath,
+            verbose
+          );
+        }
+
         if (relatedRecords.length > 0) {
           relatedEntities[relationKey] = relatedRecords;
         }
