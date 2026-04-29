@@ -295,6 +295,14 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 LogStatus(`SearchKnowledge denied: ${verdict.Reason} (scope=${scopeID}, source=${verdict.Source})`);
                 return `Forbidden: ${verdict.Reason}`;
             }
+            // Read level grants metadata visibility but not the right to run a
+            // search. The SearchScopes query (scope-listing) accepts Read; the
+            // SearchKnowledge mutation (actual search) does not.
+            if (verdict.Level === 'Read') {
+                const reason = `User '${user.Name}' has Read-level access on this scope, which permits metadata visibility but not search execution. Search or Manage is required to run a query.`;
+                LogStatus(`SearchKnowledge denied: ${reason} (scope=${scopeID}, source=${verdict.Source})`);
+                return `Forbidden: ${reason}`;
+            }
         }
         return undefined;
     }

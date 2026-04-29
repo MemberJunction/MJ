@@ -43,3 +43,15 @@ Reinvents Apollo's plumbing. Maintenance burden for zero feature win.
 - Event shape: discriminated union — `{ phase: 'provider'|'fused'|'reranked'|'final'|'error', ... }`
 - Cancellation: `AbortSignal` from the subscription's onComplete handler
 - Client: `GraphQLSearchClient.streamScopedSearch()` returns an Observable wrapper around the Apollo subscription
+
+## Implementation reality (post-ship audit, 2026-04-29)
+
+The `SearchEngine.streamSearch()` implementation is currently a **post-hoc partition**, not concurrent live streaming. It awaits the synchronous `Search()` to completion, then walks the per-provider buckets and emits `'provider'` events in sequence followed by `'fused'` and `'final'`. The transport (subscription) and event shape are stable; consumers can rely on the contract. But on a deployment with a genuinely slow provider, the events will all fire after that slow provider returns, not progressively as faster providers complete. On the workbench's fast providers (Database, Database Full-Text) the whole sequence completes in <100ms and the difference is invisible.
+
+**To get true live streaming** (per-provider events as soon as each provider returns):
+- Refactor `SearchEngine.Search()` to dispatch providers via `Promise.race`-style iteration with bounded concurrency
+- Yield each provider's results into the AsyncIterable as the corresponding promise resolves
+- Add `AbortSignal` plumbing through to each provider's `Search()` so cancellation propagates without waiting
+- Preserve fusion/rerank ordering — the `'fused'` and `'final'` events still need all providers' inputs
+
+Until that work is done, document this as the deliberate semantic gap so reviewers and downstream consumers don't expect concurrent partial emission.

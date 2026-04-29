@@ -121,10 +121,22 @@ export class ScopedSearchAction extends BaseAction {
                 });
                 if (!verdict.Allowed) {
                     LogStatus(`ScopedSearchAction denied: ${verdict.Reason} (scope=${scopeID}, source=${verdict.Source})`);
+                    // ACCESS_DENIED is reserved for agent-side denials so
+                    // calling code can distinguish "the agent isn't permitted
+                    // to use this scope" from "the user isn't permitted".
+                    const isAgentDenial = verdict.Source === 'AgentNone'
+                        || verdict.Source === 'AgentAssignedNotListed';
                     return this.createErrorResult(
                         `Forbidden: ${verdict.Reason}`,
-                        verdict.Source === 'AgentNone' ? 'ACCESS_DENIED' : 'PERMISSION_DENIED'
+                        isAgentDenial ? 'ACCESS_DENIED' : 'PERMISSION_DENIED'
                     );
+                }
+                // Read level grants metadata visibility but not the right to run a
+                // search. Mirror the GraphQL resolvers' gate.
+                if (verdict.Level === 'Read') {
+                    const reason = `User '${params.ContextUser.Name}' has Read-level access on this scope, which permits metadata visibility but not search execution. Search or Manage is required to run a query.`;
+                    LogStatus(`ScopedSearchAction denied: ${reason} (scope=${scopeID}, source=${verdict.Source})`);
+                    return this.createErrorResult(`Forbidden: ${reason}`, 'PERMISSION_DENIED');
                 }
             }
 

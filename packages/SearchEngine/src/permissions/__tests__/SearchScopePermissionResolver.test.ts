@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Hoisted mocks: rows returned by RunView and the mock function itself.
-const { mockRunViewFn, mockRows } = vi.hoisted(() => {
+// The resolver makes two distinct RunView queries:
+//   - 'MJ: Search Scope Permissions' for the user/role grant matrix
+//   - 'MJ: AI Agent Search Scopes' for the agent's Assigned-mode allow list
+// We dispatch by EntityName so each test can populate the right corpus.
+const { mockRunViewFn, mockRows, mockAgentScopeAssignments } = vi.hoisted(() => {
     const mockRunViewFn = vi.fn();
     const mockRows: Array<{
         ID: string;
@@ -10,7 +14,11 @@ const { mockRunViewFn, mockRows } = vi.hoisted(() => {
         RoleID: string | null;
         PermissionLevel: 'None' | 'Read' | 'Search' | 'Manage';
     }> = [];
-    return { mockRunViewFn, mockRows };
+    const mockAgentScopeAssignments: Array<{
+        AgentID: string;
+        SearchScopeID: string;
+    }> = [];
+    return { mockRunViewFn, mockRows, mockAgentScopeAssignments };
 });
 
 vi.mock('@memberjunction/core', () => {
@@ -74,11 +82,23 @@ describe('SearchScopePermissionResolver', () => {
     beforeEach(() => {
         resolver = new SearchScopePermissionResolver();
         mockRows.length = 0;
+        mockAgentScopeAssignments.length = 0;
         mockRunViewFn.mockReset();
-        mockRunViewFn.mockImplementation(async () => ({
-            Success: true,
-            Results: mockRows,
-        }));
+        mockRunViewFn.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: AI Agent Search Scopes') {
+                // Return the subset of mockAgentScopeAssignments matching the
+                // ExtraFilter's AgentID and SearchScopeID. This is loose
+                // matching — sufficient for unit tests since the caller only
+                // checks length > 0.
+                const filter = params.ExtraFilter ?? '';
+                const match = (rec: { AgentID: string; SearchScopeID: string }) =>
+                    filter.includes(`'${rec.AgentID}'`) && filter.includes(`'${rec.SearchScopeID}'`);
+                const matches = mockAgentScopeAssignments.filter(match);
+                return { Success: true, Results: matches };
+            }
+            // Default: SearchScopePermission rows
+            return { Success: true, Results: mockRows };
+        });
     });
 
     describe('PM-01: no grants and no agent → reject', () => {
@@ -252,6 +272,61 @@ describe('SearchScopePermissionResolver', () => {
                 User: makeUser([ROLE_ID_DEV]),
                 SearchScopeID: SCOPE_ID,
                 Agent: null,
+            });
+            expect(result.Allowed).toBe(false);
+            expect(result.Source).toBe('NoGrant');
+        });
+    });
+
+    describe('PM-11: agent SearchScopeAccess=Assigned + scope NOT listed', () => {
+        it('rejects with AgentAssignedNotListed even when user has direct Manage', async () => {
+            // User has Manage but agent is Assigned and the scope isn't in
+            // the agent's allow list. The Assigned restriction fires first.
+            setRows([{
+                ID: 'p1', SearchScopeID: SCOPE_ID,
+                UserID: USER_ID, RoleID: null, PermissionLevel: 'Manage',
+            }]);
+            // Note: mockAgentScopeAssignments is empty — agent has no
+            // assignments.
+            const result = await resolver.ResolveEffectivePermission({
+                User: makeUser(),
+                SearchScopeID: SCOPE_ID,
+                Agent: makeAgent('Assigned'),
+            });
+            expect(result.Allowed).toBe(false);
+            expect(result.Source).toBe('AgentAssignedNotListed');
+            expect(result.Level).toBe('None');
+            expect(result.Reason).toContain('ACCESS_DENIED');
+        });
+    });
+
+    describe('PM-12: agent SearchScopeAccess=Assigned + scope listed + user grant', () => {
+        it('falls through to user grant and allows', async () => {
+            setRows([{
+                ID: 'p1', SearchScopeID: SCOPE_ID,
+                UserID: USER_ID, RoleID: null, PermissionLevel: 'Manage',
+            }]);
+            mockAgentScopeAssignments.push({ AgentID: 'agent-1', SearchScopeID: SCOPE_ID });
+            const result = await resolver.ResolveEffectivePermission({
+                User: makeUser(),
+                SearchScopeID: SCOPE_ID,
+                Agent: makeAgent('Assigned'),
+            });
+            // Assigned mode restricts (only listed scopes are reachable) but
+            // does not grant — the user-direct grant produces the verdict.
+            expect(result.Allowed).toBe(true);
+            expect(result.Source).toBe('DirectGrant');
+            expect(result.Level).toBe('Manage');
+        });
+    });
+
+    describe('PM-13: agent SearchScopeAccess=Assigned + scope listed + no user grant', () => {
+        it('falls through to NoGrant (Assigned restricts, does not grant)', async () => {
+            mockAgentScopeAssignments.push({ AgentID: 'agent-1', SearchScopeID: SCOPE_ID });
+            const result = await resolver.ResolveEffectivePermission({
+                User: makeUser(),
+                SearchScopeID: SCOPE_ID,
+                Agent: makeAgent('Assigned'),
             });
             expect(result.Allowed).toBe(false);
             expect(result.Source).toBe('NoGrant');

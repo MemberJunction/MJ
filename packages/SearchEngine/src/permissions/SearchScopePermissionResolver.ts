@@ -14,11 +14,12 @@ export type SearchScopePermissionLevel = 'None' | 'Read' | 'Search' | 'Manage';
  * logging and explanatory error messages.
  */
 export type SearchScopePermissionSource =
-    | 'DirectGrant'        // SearchScopePermission row keyed by UserID
-    | 'RoleGrant'          // SearchScopePermission row keyed by one of the user's RoleIDs
-    | 'AgentUnscopedAll'   // Agent's SearchScopeAccess = 'All' overrides per-scope rules
-    | 'AgentNone'          // Agent's SearchScopeAccess = 'None' rejects regardless of user grants
-    | 'NoGrant';           // No applicable row found
+    | 'DirectGrant'                // SearchScopePermission row keyed by UserID
+    | 'RoleGrant'                  // SearchScopePermission row keyed by one of the user's RoleIDs
+    | 'AgentUnscopedAll'           // Agent's SearchScopeAccess = 'All' overrides per-scope rules
+    | 'AgentNone'                  // Agent's SearchScopeAccess = 'None' rejects regardless of user grants
+    | 'AgentAssignedNotListed'     // Agent's SearchScopeAccess = 'Assigned' and this scope is not in its assigned list
+    | 'NoGrant';                   // No applicable row found
 
 export interface EffectivePermission {
     /** True when the principal can at least read the scope's metadata. */
@@ -126,6 +127,20 @@ export class SearchScopePermissionResolver {
                 `Agent '${Agent.Name}' has SearchScopeAccess='None'; refused without consulting per-scope grants.`);
         }
 
+        // Step 1b: agent-side Assigned restriction. When SearchScopeAccess='Assigned'
+        // the agent can ONLY use scopes listed in __mj.AIAgentSearchScope for
+        // this agent. If the scope isn't in that list, deny early before
+        // consulting per-user grants — this is a deny-list, not a grant.
+        if (Agent && Agent.SearchScopeAccess === 'Assigned') {
+            const isListed = await this.isScopeAssignedToAgent(Agent.ID, SearchScopeID, contextUser);
+            if (!isListed) {
+                return this.buildResult(false, 'None', 'AgentAssignedNotListed',
+                    `Agent '${Agent.Name}' has SearchScopeAccess='Assigned' and this scope is not in its assigned scope list; refused with ACCESS_DENIED.`);
+            }
+            // Falls through to user/role checks; Assigned restricts but does
+            // not grant — the user must still have a per-scope grant.
+        }
+
         // Load all SearchScopePermission rows for this scope. We pull the
         // whole set (typically small per scope) and filter in JS so we can
         // apply the user-direct-None short-circuit deterministically.
@@ -167,6 +182,35 @@ export class SearchScopePermissionResolver {
         // Step 5: no grant.
         return this.buildResult(false, 'None', 'NoGrant',
             `User '${User.Name}' has no direct grant, no qualifying role grant, and no agent-side fallback for this scope.`);
+    }
+
+    /**
+     * Checks whether the given scope is in the agent's assigned-scope list
+     * via __mj.AIAgentSearchScope. Used to enforce the SearchScopeAccess='Assigned'
+     * deny-list rule. Returns true when at least one matching row exists with
+     * Status='Active'; false otherwise.
+     */
+    protected async isScopeAssignedToAgent(
+        agentID: string,
+        searchScopeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: AI Agent Search Scopes',
+            ExtraFilter: `AgentID='${agentID}' AND SearchScopeID='${searchScopeID}' AND Status='Active'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            // Same fail-closed semantics as loadPermissionsForScope: a stale
+            // cache must never let an Assigned-mode agent reach a scope it
+            // shouldn't.
+            BypassCache: true,
+        }, contextUser);
+        if (!result.Success) {
+            throw new Error(
+                `SearchScopePermissionResolver: failed to load AIAgentSearchScope rows for agent ${agentID}, scope ${searchScopeID}: ${result.ErrorMessage}`);
+        }
+        return (result.Results?.length ?? 0) > 0;
     }
 
     /**

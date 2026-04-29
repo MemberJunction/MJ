@@ -22,6 +22,22 @@
  *   - All state flows through @Input/@Output
  *   - Parent owns persistence coordination if needed — rows are saved in-place on edit
  *
+ * ## Runtime-generic by design (re P6.2 in RAG_plan.md)
+ *
+ * The plan asked whether this grid should adopt the strongly-typed entity API
+ * (`record.Field` accessors) instead of `BaseEntity.Get/Set`. It cannot:
+ * the component is parameterized by `ChildEntityName` and `Columns[].Field`,
+ * both runtime strings, so the entity class is unknown at compile time.
+ * Picking a concrete type would force one consumer per child-entity flavor
+ * (SearchScopeProvider, SearchScopeEntity, SearchScopeExternalIndex,
+ * SearchScopeStorageAccount, AIAgentSearchScope, plus future ones), defeating
+ * the point of the abstraction.
+ *
+ * Mitigation: a runtime sanity check (`Entity.GetFieldByName`) confirms each
+ * column's `Field` name exists on the loaded entity before any Get/Set is
+ * issued. This catches typos / schema drift at first render rather than
+ * silently writing to a non-existent property. See `assertFieldsExist()`.
+ *
  * @module @memberjunction/ng-search
  */
 
@@ -179,7 +195,15 @@ export class SearchScopeChildGridComponent implements OnDestroy {
                 this.LoadError = result.ErrorMessage ?? 'Failed to load rows';
                 this.Rows = [];
             } else {
-                this.Rows = (result.Results || []).map(entity => this.makeRow(entity));
+                const rows = result.Results || [];
+                // Runtime sanity check: every column's Field must be a real
+                // property on the loaded entity. Catches schema drift between
+                // a parent form's Columns spec and the actual entity shape
+                // before the first Get/Set fires.
+                if (rows.length > 0) {
+                    this.assertFieldsExist(rows[0]);
+                }
+                this.Rows = rows.map(entity => this.makeRow(entity));
                 await this.hydrateLookups();
             }
         } catch (err) {
@@ -363,6 +387,33 @@ export class SearchScopeChildGridComponent implements OnDestroy {
             if (col.Type === 'checkbox' && entity.Get(col.Field) === null) {
                 entity.Set(col.Field, true);
             }
+        }
+    }
+
+    /**
+     * Sanity-check that every column's `Field` exists on the loaded entity.
+     * The component is runtime-generic by design, but each consumer's `Columns`
+     * spec must match the actual entity shape; otherwise `entity.Get(col.Field)`
+     * silently returns null and `entity.Set(col.Field, ...)` silently no-ops,
+     * masking schema drift. Logging here surfaces the mismatch at first render.
+     *
+     * `entity.Fields` is the canonical metadata-driven list of fields the
+     * BaseEntity subclass exposes. Comparing the column spec's `Field` against
+     * that list catches typos and stale Columns arrays in custom forms.
+     */
+    private assertFieldsExist(sample: BaseEntity): void {
+        const knownFields = new Set(sample.Fields.map(f => f.Name.toLowerCase()));
+        const unknown = this.Columns
+            .filter(c => !c.ReadOnly)
+            .map(c => c.Field)
+            .filter(f => !knownFields.has(f.toLowerCase()));
+        if (unknown.length > 0) {
+            LogError(
+                `SearchScopeChildGridComponent: Columns spec references fields ` +
+                `not found on entity '${this.ChildEntityName}': ${unknown.join(', ')}. ` +
+                `This indicates schema drift — update the parent form's Columns ` +
+                `array to match the entity's typed properties.`,
+            );
         }
     }
 }

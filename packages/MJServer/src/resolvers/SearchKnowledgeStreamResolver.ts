@@ -311,6 +311,14 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
                 LogStatus(`StreamScopedSearch denied: ${verdict.Reason} (scope=${scopeID}, source=${verdict.Source})`);
                 return `Forbidden: ${verdict.Reason}`;
             }
+            // Read level grants metadata visibility but not the right to run a
+            // search. Mirror the SearchKnowledge resolver's gate so the streaming
+            // path enforces the same Read=metadata-only rule.
+            if (verdict.Level === 'Read') {
+                const reason = `User '${user.Name}' has Read-level access on this scope, which permits metadata visibility but not search execution. Search or Manage is required to run a query.`;
+                LogStatus(`StreamScopedSearch denied: ${reason} (scope=${scopeID}, source=${verdict.Source})`);
+                return `Forbidden: ${reason}`;
+            }
         }
         return undefined;
     }
