@@ -158,7 +158,11 @@ use it.
    - `reRanker.driverClass` — registered reranker class name (the Reranker
      dropdown on the full form writes this for you)
    Leave it as `{}` for now.
-6. Click **Save**. The scope appears in the left sidebar.
+6. Click **Save**. The scope appears in the left sidebar, and the
+   server-side `MJSearchScopeEntityServer` automatically writes a
+   Manage-level `SearchScopePermission` row for you on the new scope —
+   so the Live Preview, Reranker, and other tuning demos in §4 work
+   immediately without a separate permission step.
 
 **What you should see:** the new scope appears in the left sidebar list
 (scroll if needed) and the right pane shows the saved values. Switch to
@@ -166,18 +170,20 @@ the full custom form (`/resource/record/MJ: Search Scopes/{new id}`,
 findable via the **Open Full Form** button on the right-pane toolbar) to
 see the related-entity panels — all zero counts.
 
-**Known minor display quirk:** after a hard browser reload while still on
-the Search Scopes tab, the sidebar may briefly render the most recently
-created scope twice (stale in-memory entry + DB-loaded entry). The DB
-has only the one row — confirm via the Optional audit SQL below. The
-quirk clears on the next tab switch.
-
 **Optional audit:**
 ```sql
 SELECT TOP 1 ID, Name, Status, ScopeConfig
 FROM __mj.SearchScope
 WHERE Name = 'My Demo Scope'
 ORDER BY __mj_CreatedAt DESC;
+
+-- Verify auto-grant fired:
+SELECT p.PermissionLevel, u.Email
+FROM __mj.SearchScopePermission p
+JOIN __mj.[User] u ON u.ID = p.UserID
+WHERE p.SearchScopeID = '{your scope ID}';
+-- Expected: one row, PermissionLevel='Manage', Email matches the
+--           logged-in user.
 ```
 
 **Cross-reference:** RAG_plan §3.1 Phase 1 (the SearchScope entity itself was
@@ -237,24 +243,14 @@ WHERE ssp.SearchScopeID = '{your scope ID}';
 **What you're demonstrating:** narrowing the EntitySearchProvider's reach to
 named entities so the scope only matches `MJ: Actions`, for example.
 
-**Important caveat about the related-panel New buttons.** When you click
-**New** on a related-entity panel (Test Queries, Storage Accounts,
-Entities, External Indexes, Providers, AI Agent Search Scopes,
-Permissions), the request to open a new-record form goes to the
-workspace's tab manager. On the standard `/app/home/...` URLs you'll see
-a new tab strip entry with the new record. On the bare
-`/resource/record/...` URLs (single-resource mode, `hide-tab-bar`
-active), the tab opens silently behind the current view and you can't
-see it. **Use the `/app/home/record/MJ: Search Scopes/{id}` URL**
-(reachable via the dashboard's **Open Full Form** button) when walking
-this section so the new tab is visible.
-
 **Steps:**
-1. Open the scope at `/app/home/record/MJ: Search Scopes/{id}` (use the
-   dashboard's **Open Full Form** button to get this URL).
+1. Open the scope's full form (the dashboard's **Open Full Form** button
+   is the easiest way; either of the `/app/home/...` or
+   `/resource/record/...` URLs works).
 2. Scroll to **Search Scope Entities**. Click **New** on the panel
    toolbar.
-3. The workspace switches to a new tab. The form has three sections:
+3. The workspace pins the current scope as a tab and opens a second
+   tab focused on the new entity form. The form has three sections:
    - **Search Configuration**: **Search Scope Name** (pre-populated) and
      **Entity Name** (FK lookup)
    - **Query Overrides**: **Extra Filter** (text), **User Search String**
@@ -280,10 +276,10 @@ External-index providers (Elasticsearch, Typesense, etc.) consume scope rows
 in the **Search Scope External Indexes** panel.
 
 **Steps:**
-1. On the SearchScope record form (use the `/app/home/...` URL from
-   §3.3), scroll to **Search Scope External Indexes**.
-2. Click **New**. The workspace switches to a new tab — wait several
-   seconds for it to render.
+1. On the SearchScope record form, scroll to **Search Scope External
+   Indexes**.
+2. Click **New**. The workspace switches to a new tab focused on the
+   new external-index form.
 3. The form has four sections:
    - **Scope Identification**: **Search Scope** (pre-populated)
    - **Index Configuration**: **Index Type** (lookup; pick e.g.
@@ -340,10 +336,11 @@ selection, and live preview.
 §4.2 follow-up, and §4.3 budget cap all run a real search against the
 scope. Like any search, the call goes through `SearchScopePermissionResolver`
 and rejects with **Forbidden** if the calling user has no SearchScopePermission
-row at level Read or higher on this scope. **Before walking §4.4 onward,
-either create a Search-level permission row for yourself on the scope you're
-tuning** (jump ahead to §5.1 and come back), or use the seeded `P4 Verify
-Scope` which already has arie's Search grant.
+row at level Read or higher on this scope. The scope creator gets a
+Manage-level grant automatically when the scope is created (see §3.1),
+so any scope you just made via **+ New** is ready to preview against —
+no extra permission setup needed before §4.4. The seeded `P4 Verify
+Scope` ships with arie's Search grant for the same reason.
 
 ### 4.1 Fusion weight sliders
 
@@ -1085,3 +1082,6 @@ definition.
 | `6b24f82fa7` | Exported reranker + external-provider classes from `packages/SearchEngine/src/index.ts` so their `@RegisterClass` decorators actually run (the cause of "Cohere selected but cost=0" and "entry.Provider.Search is not a function") |
 | `2e4d1e18a3` | Plumbed `AIAgentID` through `SearchExecutionLog` (it was hardcoded to NULL with a "Phase 3 follow-up" TODO) |
 | `ff44a5eabf` | Fresh-DB migration replay fix — `spUpdateAIAgent.@SearchScopeAccess` defaulted to NULL with COALESCE so the `V202604221600__v5.29.x__Metadata_Sync.sql` calls succeed |
+| `721de85ce0` | `MJSearchScopeEntityServer` auto-grants the creating user a Manage-level `SearchScopePermission` on every new scope, so freshly-created scopes are immediately usable for Live Preview without a separate permission step |
+| `fc2b5b28c2` | Knowledge Hub Search Scopes sidebar dedups by ID and synchronously appends new scopes (preventing UQ_SearchScope_Name collisions on rapid + New clicks) |
+| `dea32401ff` | Single-resource workspace mode no longer swallows the form when clicking + New on a related-entity panel — `NavigationService.handleSingleResourceModeTransition` now routes cross-resource nav through `OpenTabForced` so the existing tab is preserved and the new one is activated atomically |
