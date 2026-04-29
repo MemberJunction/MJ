@@ -1,6 +1,8 @@
 # Unified Permissions Architecture — Review & Architectural Recommendations
 
 > **Context**: This document provides a review of the [Unified Permissions Architecture plan](./unified-permissions-architecture.md) with architectural commentary, industry comparisons, and concrete improvement proposals. It is intended to be read alongside the original plan.
+>
+> **Implementation status**: **Phase 1 (Application Roles) is complete.** See the [Phase 1 Deliverables Checklist](./unified-permissions-architecture.md#18-phase-1-deliverables-checklist) in the primary plan for per-item status. The recommendations in this document apply to Phase 2 and beyond.
 
 ---
 
@@ -1019,7 +1021,7 @@ This should only be built if instrumentation from Design 2 shows consistent budg
 ### Proposed Revised Phasing
 
 ```
-Phase 1   — Application Roles (unchanged from original plan)
+Phase 1   — Application Roles ✅ COMPLETED (unchanged from original plan)
 
 Phase 2a  — Provider architecture + PermissionEngine + basic Sharing Center
             (unchanged from original plan)

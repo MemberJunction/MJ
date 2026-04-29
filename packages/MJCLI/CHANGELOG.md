@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/cli
 
+## 5.30.1
+
+### Patch Changes
+
+- 1826093: Fix migration V202604260056 failure on existing databases by replacing hardcoded CHECK constraint names with dynamic lookups via sys.check_constraints
+  - @memberjunction/ai-cli@5.30.1
+  - @memberjunction/codegen-lib@5.30.1
+  - @memberjunction/config@5.30.1
+  - @memberjunction/db-auto-doc@5.30.1
+  - @memberjunction/core@5.30.1
+  - @memberjunction/installer@5.30.1
+  - @memberjunction/metadata-sync@5.30.1
+  - @memberjunction/open-app-engine@5.30.1
+  - @memberjunction/query-gen@5.30.1
+  - @memberjunction/sql-converter@5.30.1
+  - @memberjunction/sqlserver-dataprovider@5.30.1
+  - @memberjunction/server-bootstrap-lite@5.30.1
+  - @memberjunction/testing-cli@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- 29a1fad: no migration/metadata, just da patch
+- 0279a5c: Open App: exact version pins, per-repo tokens, and workspace-wide prefix bumps
+  - `--version` flag now pins packages to exact versions (no ^ prefix) and validates the GitHub tag exists before proceeding
+  - Per-repo GitHub token map (`openApps.github.tokens`) for multi-private-repo dependency chains
+  - `GetLatestVersion` falls back to tags when no GitHub Releases exist
+  - Schema reuse when `createIfNotExists: true` and schema already exists (adopts sidestep installs)
+  - Don't pass `--registry` for default npm registry (fixes private scoped package auth)
+  - Prevent duplicate `dynamicPackages.server` entries on re-install
+  - npm install failures demoted to warnings when package.json was updated (auth issues don't abort install)
+  - `packages.prefix` manifest field for workspace-wide dependency bumps during install/upgrade
+
+- fe35537: Scope CodeGen Pass 2 entity field management to changed entities. Adds optional `@EntityIDs` (comma-delimited UUID list) parameter to `spDeleteUnneededEntityFields` and `spUpdateExistingEntityFieldsFromSchema`; adds `--forced-advanced-gen` CLI flag for bypassing scoped behavior in regression testing.
+- Updated dependencies [366e646]
+- Updated dependencies [8980b38]
+- Updated dependencies [68bf87f]
+- Updated dependencies [29a1fad]
+- Updated dependencies [963f2df]
+- Updated dependencies [0279a5c]
+- Updated dependencies [4729398]
+- Updated dependencies [fe35537]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+- Updated dependencies [216ddc3]
+  - @memberjunction/server-bootstrap-lite@5.30.0
+  - @memberjunction/codegen-lib@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/open-app-engine@5.30.0
+  - @memberjunction/query-gen@5.30.0
+  - @memberjunction/db-auto-doc@5.30.0
+  - @memberjunction/metadata-sync@5.30.0
+  - @memberjunction/ai-cli@5.30.0
+  - @memberjunction/sqlserver-dataprovider@5.30.0
+  - @memberjunction/testing-cli@5.30.0
+  - @memberjunction/config@5.30.0
+  - @memberjunction/installer@5.30.0
+  - @memberjunction/sql-converter@5.30.0
+
 ## 5.29.0
 
 ### Patch Changes

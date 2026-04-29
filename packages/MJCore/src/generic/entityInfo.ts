@@ -268,6 +268,19 @@ export const EntityPermissionType = {
 
 export type EntityPermissionType = typeof EntityPermissionType[keyof typeof EntityPermissionType];
 
+/**
+ * Distinguishes an additive grant from an explicit refusal on an EntityPermission row.
+ * A matching Deny row overrides any Allow rows for the same action across all of the
+ * user's roles. Default is 'Allow' to preserve backwards compatibility for rows
+ * created before the Type column existed.
+ */
+export const EntityPermissionEffect = {
+    Allow: 'Allow',
+    Deny: 'Deny',
+} as const;
+
+export type EntityPermissionEffect = typeof EntityPermissionEffect[keyof typeof EntityPermissionEffect];
+
 
 export class EntityUserPermissionInfo {
     ID: string = null
@@ -289,6 +302,13 @@ export class EntityPermissionInfo extends BaseInfo{
 
     EntityID: string = null
     RoleID: string = null
+    /**
+     * Allow (default) or Deny. Deny rows override matching Allow rows for the same action
+     * during `EntityInfo.GetUserPermisions()` aggregation. Added in Phase 2b of the unified
+     * permissions architecture; defaults to 'Allow' for backwards compatibility with rows
+     * materialized before the column existed.
+     */
+    Type: string = 'Allow'
     CanCreate: boolean = null
     CanRead: boolean = null
     CanUpdate: boolean = null
@@ -1872,9 +1892,15 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Returns the Permissions for this entity for a given user, based on the roles the user is part of
-     * @param user
-     * @returns
+     * Returns the Permissions for this entity for a given user, based on the roles the user is part of.
+     *
+     * Allow rows are OR-aggregated across all of the user's matching roles; any single
+     * Allow on an action yields permission for that action. Deny rows from any matching
+     * role then *subtract* from the aggregated Allow set — so a Deny on `CanDelete`
+     * overrides a Delete grant that the user otherwise has from another role. This lets
+     * administrators carve out specific role exclusions without restructuring the Allow
+     * hierarchy. Rows with a missing/unknown Type default to Allow for backwards
+     * compatibility with data written before the Type column existed (Phase 2b).
      */
     public GetUserPermisions(user: UserInfo ): EntityUserPermissionInfo {
         try {
@@ -1886,19 +1912,27 @@ export class EntityInfo extends BaseInfo {
                 if (roleMatch) // user has this role
                     permissionList.push(ep)
             }
-            // now that we have matched any number of EntityPermissions to the current user, aggregate the permissions
-            const userPermission: EntityUserPermissionInfo = new EntityUserPermissionInfo();
-            userPermission.CanCreate = false; userPermission.CanDelete = false; userPermission.CanRead = false; userPermission.CanUpdate = false;
-            for (let j: number = 0; j < permissionList.length; j++) {
-                const ep: EntityPermissionInfo = permissionList[j];
-                userPermission.CanCreate = userPermission.CanCreate || ep.CanCreate;
-                userPermission.CanRead = userPermission.CanRead || ep.CanRead;
-                userPermission.CanUpdate = userPermission.CanUpdate || ep.CanUpdate;
-                userPermission.CanDelete = userPermission.CanDelete || ep.CanDelete;
+
+            // Aggregate Allow and Deny separately, then subtract Deny from Allow per action.
+            const allow = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
+            const deny = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
+            for (const ep of permissionList) {
+                const isDeny = (ep.Type || 'Allow').trim().toLowerCase() === 'deny';
+                const bucket = isDeny ? deny : allow;
+                bucket.CanCreate = bucket.CanCreate || !!ep.CanCreate;
+                bucket.CanRead   = bucket.CanRead   || !!ep.CanRead;
+                bucket.CanUpdate = bucket.CanUpdate || !!ep.CanUpdate;
+                bucket.CanDelete = bucket.CanDelete || !!ep.CanDelete;
             }
+
+            const userPermission: EntityUserPermissionInfo = new EntityUserPermissionInfo();
+            userPermission.CanCreate = allow.CanCreate && !deny.CanCreate;
+            userPermission.CanRead   = allow.CanRead   && !deny.CanRead;
+            userPermission.CanUpdate = allow.CanUpdate && !deny.CanUpdate;
+            userPermission.CanDelete = allow.CanDelete && !deny.CanDelete;
             userPermission.Entity = this;
             userPermission.User = user;
-    
+
             return userPermission;
         }
         catch (err) {

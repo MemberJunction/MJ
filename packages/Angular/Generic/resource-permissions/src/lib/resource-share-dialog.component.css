@@ -1,0 +1,511 @@
+/* Generic Resource Share Dialog - Compact Design */
+
+/* Window container — overrides the default `<mj-window>` surface styling with a
+ * larger radius + accent shadow so the dialog reads as an "action surface". */
+.mj-share-dialog-window .mj-window {
+    border-radius: 12px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
+    overflow: hidden !important;
+}
+
+/* Branded titlebar: accent background so the header reads as chrome rather than
+ * another surface panel. Text uses `--mj-text-inverse` because the background is
+ * `--mj-brand-primary` — `--mj-text-inverse` is defined as "legible on a
+ * colored/dark accent", not "light mode-only white". */
+.mj-share-dialog-window .mj-window-titlebar {
+    background: var(--mj-brand-primary) !important;
+    border: none !important;
+    padding: 16px 20px !important;
+    cursor: move;
+}
+
+/* The default title slot isn't rendered (we pass no `Title` input), but hide
+ * it defensively in case a future refactor sets one — we already show our own
+ * branded header via `<mj-window-titlebar>`. */
+.mj-share-dialog-window .mj-window-title {
+    display: none !important;
+}
+
+/* Close button: tint against the accent titlebar to match the inverse text color. */
+.mj-share-dialog-window .mj-window-close {
+    background: color-mix(in srgb, var(--mj-bg-surface) 15%, transparent) !important;
+    border: none !important;
+    color: var(--mj-text-inverse) !important;
+    border-radius: 4px !important;
+}
+
+.mj-share-dialog-window .mj-window-close:hover {
+    background: color-mix(in srgb, var(--mj-bg-surface) 25%, transparent) !important;
+    color: var(--mj-text-inverse) !important;
+}
+
+.mj-share-dialog-window .mj-window-body {
+    padding: 0 !important;
+    background: var(--mj-bg-surface) !important;
+}
+
+/* Header */
+.share-dialog-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--mj-text-inverse);
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.share-dialog-header i {
+    font-size: 18px;
+    opacity: 0.9;
+}
+
+/* Body */
+.share-dialog-body {
+    padding: 0;
+}
+
+/* Alert */
+.share-alert {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    font-size: 13px;
+}
+
+.share-alert-error {
+    background: var(--mj-bg-error);
+    color: var(--mj-status-error);
+    border-bottom: 1px solid var(--mj-border-error);
+}
+
+/* Sections */
+.share-section {
+    padding: 16px 20px;
+}
+
+.share-section:not(:last-child) {
+    border-bottom: 1px solid var(--mj-border-default);
+}
+
+.share-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+/* Search Box */
+.share-search-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--mj-bg-surface-card);
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+}
+
+.share-search-box:focus-within {
+    background: var(--mj-bg-surface);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.share-search-box i {
+    color: var(--mj-text-disabled);
+    font-size: 14px;
+}
+
+.share-search-box input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    outline: none;
+}
+
+.share-search-box input::placeholder {
+    color: var(--mj-text-disabled);
+}
+
+/* User Dropdown */
+.share-user-dropdown {
+    margin-top: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    background: var(--mj-bg-surface-card);
+}
+
+/* User Option */
+.share-user-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+}
+
+.share-user-option:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+
+.share-user-option:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.share-user-option .share-user-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--mj-text-primary);
+}
+
+.share-user-option .share-user-email {
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+    margin-right: auto;
+}
+
+.share-user-option i.fa-plus {
+    color: var(--mj-brand-primary);
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+
+.share-user-option:hover i.fa-plus {
+    opacity: 1;
+}
+
+.share-no-results {
+    padding: 16px;
+    text-align: center;
+    color: var(--mj-text-secondary);
+    font-size: 13px;
+}
+
+/* Avatar */
+.share-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.share-avatar-owner {
+    background: var(--mj-status-warning);
+    font-size: 14px;
+}
+
+.share-avatar-removed {
+    background: var(--mj-border-strong);
+}
+
+/* Person Row */
+.share-person {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+}
+
+.share-person:not(:last-child) {
+    border-bottom: 1px solid var(--mj-bg-surface-sunken);
+}
+
+.share-person-new {
+    background: color-mix(in srgb, var(--mj-status-success) 5%, transparent);
+    margin: 0 -20px;
+    padding: 10px 20px;
+}
+
+.share-person-modified {
+    background: color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
+    margin: 0 -20px;
+    padding: 10px 20px;
+}
+
+.share-person-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.share-person-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--mj-text-primary);
+}
+
+.share-person-email {
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.share-person-role {
+    font-size: 12px;
+    color: var(--mj-status-warning);
+    font-weight: 500;
+}
+
+.share-badge-new {
+    padding: 2px 6px;
+    background: var(--mj-status-success);
+    color: var(--mj-text-inverse);
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 4px;
+}
+
+/* Level selector (segmented control) */
+.share-level-select {
+    display: inline-flex;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--mj-bg-surface-card);
+}
+
+.share-level-btn {
+    padding: 4px 12px;
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+}
+
+.share-level-btn:not(:last-child) {
+    border-right: 1px solid var(--mj-border-default);
+}
+
+.share-level-btn:hover:not(.active) {
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+    color: var(--mj-text-primary);
+}
+
+.share-level-btn.active {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+}
+
+/* Legacy checkbox classes (kept but unused now). */
+.share-permissions {
+    display: flex;
+    gap: 4px;
+}
+
+.share-perm {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.1s;
+    position: relative;
+}
+
+.share-perm input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.share-perm i {
+    font-size: 12px;
+    color: var(--mj-border-strong);
+    transition: color 0.1s;
+}
+
+.share-perm:hover {
+    background: var(--mj-bg-surface-sunken);
+}
+
+.share-perm input:checked + i {
+    color: var(--mj-brand-primary);
+}
+
+.share-perm input:disabled + i {
+    color: var(--mj-brand-primary);
+    opacity: 0.7;
+}
+
+/* Remove Button */
+.share-remove-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--mj-border-strong);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.1s;
+}
+
+.share-remove-btn:hover {
+    background: var(--mj-bg-error);
+    color: var(--mj-status-error);
+}
+
+/* Empty State */
+.share-empty {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px;
+    color: var(--mj-text-disabled);
+    font-size: 13px;
+    background: var(--mj-bg-surface-card);
+    border-radius: 8px;
+    justify-content: center;
+}
+
+.share-empty i {
+    font-size: 16px;
+}
+
+/* Removed Section */
+.share-removed-section {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--mj-bg-warning);
+    border-radius: 8px;
+    border: 1px solid var(--mj-border-warning);
+}
+
+.share-removed-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+}
+
+.share-removed-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+    text-decoration: line-through;
+}
+
+.share-undo-btn {
+    padding: 4px 10px;
+    border: none;
+    background: transparent;
+    color: var(--mj-status-warning);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.share-undo-btn:hover {
+    text-decoration: underline;
+}
+
+/* Footer */
+.share-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: var(--mj-bg-surface-card);
+    border-top: 1px solid var(--mj-border-default);
+}
+
+.share-changes-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--mj-brand-primary);
+}
+
+.share-changes-hint i {
+    font-size: 6px;
+}
+
+.share-footer-actions {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.share-btn {
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.share-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.share-btn-secondary {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-strong);
+    color: var(--mj-text-secondary);
+}
+
+.share-btn-secondary:hover:not(:disabled) {
+    background: var(--mj-bg-surface-card);
+    border-color: var(--mj-border-strong);
+}
+
+.share-btn-primary {
+    background: var(--mj-brand-primary);
+    border: none;
+    color: var(--mj-text-inverse);
+}
+
+.share-btn-primary:hover:not(:disabled) {
+    background: var(--mj-brand-primary-hover);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+
+/* Owner row specific styling */
+.share-owner {
+    background: var(--mj-bg-warning);
+    margin: 0 -20px;
+    padding: 10px 20px;
+    border-radius: 0;
+}
