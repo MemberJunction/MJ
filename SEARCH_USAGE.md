@@ -142,9 +142,13 @@ use it.
 1. Navigate to `/app/knowledge-hub/Configuration`.
 2. Click the **Search Scopes** tab.
 3. In the left sidebar, click **+ New**. The right pane immediately
-   populates with a template: Name=`New Search Scope`, Icon=`fa-solid
-   fa-filter`, Description=`New scope — configure providers, entities, or
-   storage below.`
+   populates with a template:
+   - **Name**: `New Search Scope` (or `New Search Scope 2`, `New Search
+     Scope 3`, ... — the dashboard auto-suffixes a counter so repeated
+     clicks don't collide with the UNIQUE constraint on `Name`)
+   - **Icon**: `fa-solid fa-filter`
+   - **Description**: `New scope — configure providers, entities, or
+     storage below.`
 4. Edit **Name** (e.g. `My Demo Scope`) and **Description** to your liking.
    Leave **Status** at `Active`. Leave the **Default scope — picked when
    users/agents don't specify one** checkbox unchecked. The **Global**
@@ -156,10 +160,17 @@ use it.
    Leave it as `{}` for now.
 6. Click **Save**. The scope appears in the left sidebar.
 
-**What you should see:** the new scope is selected in the sidebar with its
-form populated. Switch to the full custom form
-(`/resource/record/MJ: Search Scopes/{new id}`) to see the related-entity
-panels — all zero counts.
+**What you should see:** the new scope appears in the left sidebar list
+(scroll if needed) and the right pane shows the saved values. Switch to
+the full custom form (`/resource/record/MJ: Search Scopes/{new id}`,
+findable via the **Open Full Form** button on the right-pane toolbar) to
+see the related-entity panels — all zero counts.
+
+**Known minor display quirk:** after a hard browser reload while still on
+the Search Scopes tab, the sidebar may briefly render the most recently
+created scope twice (stale in-memory entry + DB-loaded entry). The DB
+has only the one row — confirm via the Optional audit SQL below. The
+quirk clears on the next tab switch.
 
 **Optional audit:**
 ```sql
@@ -226,20 +237,37 @@ WHERE ssp.SearchScopeID = '{your scope ID}';
 **What you're demonstrating:** narrowing the EntitySearchProvider's reach to
 named entities so the scope only matches `MJ: Actions`, for example.
 
+**Important caveat about the related-panel New buttons.** When you click
+**New** on a related-entity panel (Test Queries, Storage Accounts,
+Entities, External Indexes, Providers, AI Agent Search Scopes,
+Permissions), the request to open a new-record form goes to the
+workspace's tab manager. On the standard `/app/home/...` URLs you'll see
+a new tab strip entry with the new record. On the bare
+`/resource/record/...` URLs (single-resource mode, `hide-tab-bar`
+active), the tab opens silently behind the current view and you can't
+see it. **Use the `/app/home/record/MJ: Search Scopes/{id}` URL**
+(reachable via the dashboard's **Open Full Form** button) when walking
+this section so the new tab is visible.
+
 **Steps:**
-1. On the SearchScope record form, scroll to **Search Scope Entities**.
-2. Click **New** on the panel toolbar.
-3. The new tab opens with these labelled fields: **Search Scope Name**
-   (pre-populated), **Entity Name** (FK lookup), **Extra Filter**, **User
-   Search String**.
-4. Click into **Entity Name**, type a partial name (e.g. `Actions` resolves
-   `MJ: Actions`), and click the matched option in the dropdown — the
-   input value updates and a Clear button appears.
+1. Open the scope at `/app/home/record/MJ: Search Scopes/{id}` (use the
+   dashboard's **Open Full Form** button to get this URL).
+2. Scroll to **Search Scope Entities**. Click **New** on the panel
+   toolbar.
+3. The workspace switches to a new tab. The form has three sections:
+   - **Search Configuration**: **Search Scope Name** (pre-populated) and
+     **Entity Name** (FK lookup)
+   - **Query Overrides**: **Extra Filter** (text), **User Search String**
+     (text)
+   - **System Metadata** (read-only)
+4. Click into **Entity Name**, type a partial name (e.g. `Actions`
+   resolves `MJ: Actions`), and click the matched option in the dropdown
+   — the input value updates and a Clear button appears.
 5. Optionally fill **Extra Filter** (extra SQL `WHERE` predicate AND-ed
    into the EntitySearchProvider's query) or **User Search String**
    (a Nunjucks template the provider uses for the user-facing match string).
-6. Save Changes.
-7. Return to the parent scope. The Entities panel count is `1`.
+6. Click **Save Changes**.
+7. Switch back to the SearchScope tab. The Entities panel count is `1`.
 
 **What you should see:** count badge 1; row visible.
 
@@ -252,15 +280,21 @@ External-index providers (Elasticsearch, Typesense, etc.) consume scope rows
 in the **Search Scope External Indexes** panel.
 
 **Steps:**
-1. On the SearchScope record form, scroll to **Search Scope External
-   Indexes**.
-2. Click **New**.
-3. The form's labelled fields: **Search Scope** (pre-populated), **Index
-   Type** (lookup; pick e.g. `Elasticsearch`), **Vector Index Name**
-   (optional FK to an MJ Vector Index record), **External Index Name**
-   (e.g. `prod-knowledge`), **External Index Config** (JSON the provider
-   parses for query-time options), **Metadata Filter** (JSON filter DSL
-   pushed into the provider's query for permission / tenant scoping).
+1. On the SearchScope record form (use the `/app/home/...` URL from
+   §3.3), scroll to **Search Scope External Indexes**.
+2. Click **New**. The workspace switches to a new tab — wait several
+   seconds for it to render.
+3. The form has four sections:
+   - **Scope Identification**: **Search Scope** (pre-populated)
+   - **Index Configuration**: **Index Type** (lookup; pick e.g.
+     `Elasticsearch`), **Vector Index Name** (optional FK to an MJ
+     Vector Index record), **External Index Name** (e.g.
+     `prod-knowledge`)
+   - **Advanced Settings**: **External Index Config** (JSON the provider
+     parses for query-time options), **Metadata Filter** (JSON filter
+     DSL pushed into the provider's query for permission / tenant
+     scoping)
+   - **System Metadata** (read-only)
 4. Save.
 
 **Display vs schema names:** the form labels follow the entity's
@@ -283,10 +317,13 @@ Dropbox / etc.) participate in this scope.
 
 **Steps:**
 1. Scroll to **Search Scope Storage Accounts**.
-2. Click **New**.
-3. The form's labelled fields: **Search Scope** (pre-populated), **File
-   Storage Account** (FK lookup), **Folder Path** (optional, e.g.
-   `/policies` to scope to one subtree).
+2. Click **New**. The workspace switches to a new tab — wait several
+   seconds for it to render.
+3. The form has three sections:
+   - **Scope Configuration**: **Search Scope** (pre-populated)
+   - **Storage Account Details**: **File Storage Account** (FK lookup),
+     **Folder Path** (optional, e.g. `/policies` to scope to one subtree)
+   - **System Metadata** (read-only)
 4. Save.
 
 **Cross-reference:** Schema columns are in `__mj.SearchScopeStorageAccount`
@@ -298,6 +335,15 @@ Dropbox / etc.) participate in this scope.
 
 After a scope is authored, tune its behavior with sliders, reranker
 selection, and live preview.
+
+**Precondition:** the Live Preview demos in §4.4, §4.5 (Kendall-tau),
+§4.2 follow-up, and §4.3 budget cap all run a real search against the
+scope. Like any search, the call goes through `SearchScopePermissionResolver`
+and rejects with **Forbidden** if the calling user has no SearchScopePermission
+row at level Read or higher on this scope. **Before walking §4.4 onward,
+either create a Search-level permission row for yourself on the scope you're
+tuning** (jump ahead to §5.1 and come back), or use the seeded `P4 Verify
+Scope` which already has arie's Search grant.
 
 ### 4.1 Fusion weight sliders
 
