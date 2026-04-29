@@ -428,6 +428,12 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             // SearchScopePermission has SearchScopeID, UserID, RoleID;
             // join in JS against the already-loaded scope list and live RunView
             // results for users/roles.
+            // BypassCache: true on every view — this is an audit dashboard, so we
+            // want SQL-truth even when permission/scope rows have been written
+            // outside the normal BaseEntity.Save() path (test harnesses,
+            // direct-SQL maintenance, recovery scripts). Without this, scope
+            // names can render as "(unknown)" if the cache was populated before
+            // the underlying row was inserted.
             const result = await rv.RunViews([
                 {
                     EntityName: 'MJ: Search Scope Permissions',
@@ -435,21 +441,25 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
                     OrderBy: '__mj_CreatedAt DESC',
                     MaxRows: 5000,
                     ResultType: 'simple',
+                    BypassCache: true,
                 },
                 {
                     EntityName: 'MJ: Search Scopes',
                     Fields: ['ID', 'Name'],
                     ResultType: 'simple',
+                    BypassCache: true,
                 },
                 {
                     EntityName: 'MJ: Users',
                     Fields: ['ID', 'Name', 'Email'],
                     ResultType: 'simple',
+                    BypassCache: true,
                 },
                 {
                     EntityName: 'MJ: Roles',
                     Fields: ['ID', 'Name'],
                     ResultType: 'simple',
+                    BypassCache: true,
                 },
             ]);
             if (!result?.[0]?.Success) {
@@ -467,20 +477,29 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             const scopeName = new Map(scopes.map(s => [s.ID, s.Name]));
             const userByID = new Map(users.map(u => [u.ID, u]));
             const roleName = new Map(roles.map(r => [r.ID, r.Name]));
-            this.PermissionsRows = perms.map(p => {
-                const u = p.UserID ? userByID.get(p.UserID) : null;
-                return {
-                    ID: p.ID,
-                    SearchScopeID: p.SearchScopeID,
-                    SearchScopeName: scopeName.get(p.SearchScopeID) ?? '(unknown)',
-                    UserID: p.UserID,
-                    UserName: u?.Name ?? null,
-                    UserEmail: u?.Email ?? null,
-                    RoleID: p.RoleID,
-                    RoleName: p.RoleID ? (roleName.get(p.RoleID) ?? '(unknown)') : null,
-                    PermissionLevel: p.PermissionLevel,
-                };
-            });
+            // Drop permission rows whose SearchScope is not visible to the
+            // current user. MJ's row-level filtering on the SearchScope entity
+            // means non-Owner users only see scopes they have access to;
+            // surfacing the permission row with "(unknown)" leaks the row's
+            // existence without giving the auditor anything useful, so we
+            // skip it. This is a UX call, not a security one — the API
+            // already enforces visibility on the underlying entities.
+            this.PermissionsRows = perms
+                .filter(p => scopeName.has(p.SearchScopeID))
+                .map(p => {
+                    const u = p.UserID ? userByID.get(p.UserID) : null;
+                    return {
+                        ID: p.ID,
+                        SearchScopeID: p.SearchScopeID,
+                        SearchScopeName: scopeName.get(p.SearchScopeID) ?? '(unknown)',
+                        UserID: p.UserID,
+                        UserName: u?.Name ?? null,
+                        UserEmail: u?.Email ?? null,
+                        RoleID: p.RoleID,
+                        RoleName: p.RoleID ? (roleName.get(p.RoleID) ?? '(unknown)') : null,
+                        PermissionLevel: p.PermissionLevel,
+                    };
+                });
             this.PermissionsLoaded = true;
         } catch (err) {
             LogError(`KnowledgeConfig: LoadPermissionsAudit threw: ${err instanceof Error ? err.message : String(err)}`);
