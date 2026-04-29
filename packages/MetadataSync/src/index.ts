@@ -61,6 +61,7 @@ export {
 // Provider utilities
 export {
   initializeProvider,
+  cleanupProvider,
   getSystemUser,
   findEntityDirectories,
   getDataProvider

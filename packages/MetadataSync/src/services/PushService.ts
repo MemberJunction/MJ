@@ -396,11 +396,20 @@ export class PushService {
           await this.writeDeferredFiles(options, callbacks);
         }
       } catch (error) {
-        // Rollback transaction on error
+        // Rollback transaction on error. In non-transactional mode (PG) this
+        // is a no-op — already-committed records stay in place; the warning
+        // emitted by TransactionManager.rollbackTransaction explains the
+        // partial-write semantics.
         if (!options.dryRun) {
-          callbacks?.onLog?.('\n⚠️  Rolling back database transaction due to error...');
+          if (transactionManager.isNonTransactionalMode) {
+            callbacks?.onLog?.('\n⚠️  Push failed in commit-as-you-go mode — partial writes are persisted.');
+          } else {
+            callbacks?.onLog?.('\n⚠️  Rolling back database transaction due to error...');
+          }
           await transactionManager.rollbackTransaction();
-          callbacks?.onLog?.('✓ Database transaction rolled back successfully\n');
+          if (!transactionManager.isNonTransactionalMode) {
+            callbacks?.onLog?.('✓ Database transaction rolled back successfully\n');
+          }
         }
         throw error;
       }
