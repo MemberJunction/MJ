@@ -201,14 +201,6 @@ function extractEntityFieldInserts(content: string, fileName: string): SequenceE
     // ReplayRun at 100040 collided with v5.28 RestoreReason at the same value).
     if (!/INSERT\s+INTO\s+"?__mj"?\."EntityField"/i.test(lines[i])) continue;
 
-    // Skip INSERTs that are guarded by a runtime IF NOT EXISTS check inside a
-    // DO $$ ... END $$ block. The metadata-sync output emits the same INSERT in
-    // multiple migrations as an idempotent pattern — only the first fires; the
-    // rest hit the guard and become no-ops. Counting them as collisions
-    // produces false-positive (UQ_EntityField_EntityID_Sequence) reports for
-    // INSERTs that can never actually collide at runtime.
-    if (isInsertGuardedByIfNotExists(lines, i)) continue;
-
     // Found an INSERT. Determine the column order by scanning the column list.
     // Look for the column list to find positions of "EntityID" and "Sequence"
     let entityIdPos = -1;
@@ -289,26 +281,4 @@ function extractEntityFieldInserts(content: string, fileName: string): SequenceE
   }
 
   return entries;
-}
-
-/**
- * Returns true when the INSERT at `insertLineIdx` lives inside an open
- * `DO $$ BEGIN IF NOT EXISTS (...) THEN` block that closes with
- * `END IF; END $$;`. The metadata-sync converter wraps idempotent inserts in
- * this pattern so re-applying the same migration is a no-op; counting these
- * as duplicate-sequence collisions produces false positives.
- *
- * Heuristic: scan upward up to 30 lines from the INSERT, looking for either
- *   (a) `IF NOT EXISTS (` introduced by a `DO $$ BEGIN` (true → guarded), or
- *   (b) `END $$;` (false → previous block already closed, so this INSERT is bare).
- */
-function isInsertGuardedByIfNotExists(lines: string[], insertLineIdx: number): boolean {
-  const SCAN_LIMIT = 30;
-  const start = Math.max(0, insertLineIdx - SCAN_LIMIT);
-  for (let k = insertLineIdx - 1; k >= start; k--) {
-    const t = lines[k].trim();
-    if (/^END\s+\$\$\s*;?\s*$/i.test(t)) return false;       // previous block closed before us
-    if (/IF\s+NOT\s+EXISTS\s*\(/i.test(t)) return true;      // guarded
-  }
-  return false;
 }
