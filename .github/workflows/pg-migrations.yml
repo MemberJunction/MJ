@@ -66,54 +66,40 @@ jobs:
       - name: Build SQLConverter (and workspace deps)
         run: npx turbo build --filter=@memberjunction/sql-converter
 
-      # ─── Step 3: Convert T-SQL migrations → PG ──────────────────────
-      # Uses the converter to regenerate all PG migration files from T-SQL source.
-      # The committed .pg.sql files in the PR should match this output.
-      - name: Convert T-SQL migrations to PostgreSQL
-        id: convert
+      # ─── Step 3: Verify committed PG migration files exist ──────────
+      # Previously this step regenerated all V*.pg.sql from T-SQL via the
+      # converter. We've moved away from regenerate-on-CI for two reasons:
+      #
+      #   1. Real `mj migrate` (the install path) applies the COMMITTED
+      #      .pg.sql files as-is. Regenerating during CI tested something
+      #      different from what users actually run.
+      #   2. Some PG migrations have hand-fixes that the converter doesn't
+      #      produce natively (managed-PG boolean rewrites, the
+      #      vwEntityPermissions RoleName alias fix, the Scoped_EntityField_SPs
+      #      hand-port). Regenerating overwrites those fixes.
+      #
+      # Coverage of the converter is preserved by:
+      #   - packages/SQLConverter/src/__tests__/pg-migration-regression.test.ts
+      #     (107 conversion tests + sequence-dedup + TODO-marker check)
+      #   - The parity test in the same file (re-enabled) which enforces that
+      #     every T-SQL V-migration has a committed PG counterpart.
+      #
+      # If migrations-pg/v5/ is empty (e.g. on a tooling-only PR before the
+      # migrations PR has merged), this step skips the apply gracefully so the
+      # workflow doesn't block. The actual coverage gate is the parity test.
+      - name: Verify committed PG migration files
+        id: verify_committed
         run: |
-          node -e "
-          const { convertFile, getRulesForDialects, deduplicateEntityFieldSequences } = require('./packages/SQLConverter/dist/index.js');
-          const fs = require('fs');
-          const path = require('path');
-
-          const rules = getRulesForDialects('tsql', 'postgres');
-          const sourceDir = 'migrations/v5';
-          const outputDir = 'migrations-pg/v5';
-
-          // Ensure output dir exists
-          fs.mkdirSync(outputDir, { recursive: true });
-
-          // Convert all V-migrations (not baseline — baseline is pre-converted)
-          const tsqlFiles = fs.readdirSync(sourceDir)
-            .filter(f => f.startsWith('V') && f.endsWith('.sql'))
-            .sort();
-
-          let converted = 0, errors = 0;
-          for (const file of tsqlFiles) {
-            const outFile = file.replace(/\.sql$/, '.pg.sql');
-            try {
-              convertFile({
-                Source: path.join(sourceDir, file),
-                SourceIsFile: true,
-                OutputFile: path.join(outputDir, outFile),
-                Rules: rules,
-                IncludeHeader: false,
-              });
-              converted++;
-            } catch (e) {
-              console.error('FAIL: ' + file + ' — ' + e.message);
-              errors++;
-            }
-          }
-
-          // Run sequence deduplication
-          const dedup = deduplicateEntityFieldSequences(outputDir);
-          console.log('Converted: ' + converted + ', Errors: ' + errors);
-          console.log('Sequence collisions fixed: ' + dedup.totalCollisions);
-
-          if (errors > 0) process.exit(1);
-          "
+          PG_FILES=$(ls migrations-pg/v5/*.pg.sql migrations-pg/v5/*.pg-only.sql 2>/dev/null | wc -l)
+          BASELINE=$(ls migrations-pg/v5/B*.pg.sql 2>/dev/null | head -1)
+          echo "Committed PG migration files: $PG_FILES"
+          echo "Baseline file: ${BASELINE:-(none)}"
+          if [ "$PG_FILES" -eq 0 ]; then
+            echo "::notice::No committed PG migration files — skipping apply step. Migration content lives in the companion PR."
+            echo "skip_apply=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip_apply=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # ─── Step 4: Bootstrap PG (roles + helper procs) ────────────────
       - name: Bootstrap PostgreSQL
@@ -135,6 +121,7 @@ jobs:
       # ─── Step 5: Apply PG migrations ────────────────────────────────
       - name: Apply PG migrations
         id: apply
+        if: steps.verify_committed.outputs.skip_apply != 'true'
         env:
           PGHOST: localhost
           PGPORT: 5432
@@ -225,6 +212,7 @@ jobs:
 
       # ─── Step 6: Verify schema ──────────────────────────────────────
       - name: Verify PG schema
+        if: steps.verify_committed.outputs.skip_apply != 'true'
         env:
           PGHOST: localhost
           PGPORT: 5432

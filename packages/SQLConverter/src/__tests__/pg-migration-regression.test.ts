@@ -240,30 +240,43 @@ describe.skipIf(!hasMigrations || !hasPGMigrations)('v5 migration regression —
   ]);
 
   /**
-   * Real coverage debt — recent v5.30 T-SQL migrations that need PG ports.
-   * Five of the original six are now converted and committed in the migrations
-   * PR (Runtime_Actions_Schema, Archive_Codegen, Memory_Consolidation_Schema,
-   * Unified_Permissions_Phase_2, Scoped_EntityField_SPs — the last 3 verified
-   * functionally equivalent against SQL Server via schema-delta diffing). The
-   * remaining one (Metadata_Sync) is the 964k-line auto-generated metadata dump
-   * that hit a string-literal escaping bug; will be regenerated via mj-sync push
-   * from a known-correct state in v5.30.1 rather than chase escape bugs in
-   * generated content.
+   * Real coverage debt — T-SQL migrations that don't yet have a PG counterpart.
+   *
+   * v5.30:
+   *   Five of the original six v5.30 ports are converted and committed in the
+   *   migrations PR (Runtime_Actions_Schema, Archive_Codegen,
+   *   Memory_Consolidation_Schema, Unified_Permissions_Phase_2,
+   *   Scoped_EntityField_SPs — the last 3 verified functionally equivalent
+   *   against SQL Server via schema-delta diffing). The remaining one
+   *   (Metadata_Sync) is the 964k-line auto-generated metadata dump that hit
+   *   a string-literal escaping bug; will be regenerated via mj-sync push
+   *   from a known-correct state in v5.30.1 rather than chase escape bugs in
+   *   generated content.
+   *
+   * v5.31:
+   *   Create_UDT_Schema is in-flight v5.31 work landed on origin/next as part
+   *   of the Database Designer Agent. Needs a PG port (idiomatic
+   *   `CREATE SCHEMA IF NOT EXISTS "__mj_UDT"` + `COMMENT ON SCHEMA`).
+   *   Tracked for v5.31's first migrations PR.
    */
   const PENDING_V5_30_PORTS = new Set<string>([
     'V202604271430__v5.30.x__Metadata_Sync',                        // 964k-line generated content; regenerate via mj-sync push in v5.30.1
+    'V202604292210__v5.31.x__Create_UDT_Schema',                    // v5.31 in-flight; needs PG port for new __mj_UDT schema (Database Designer)
   ]);
 
-  // PERMANENTLY SKIPPED on the baseline path (this PR). The v5.30 baseline
-  // replaces all V*.pg.sql files; there are no per-file PG counterparts to
-  // map to T-SQL sources. Re-enabling here would always show 100% missing.
+  // Enforces that every T-SQL V-migration has a committed PG counterpart in
+  // migrations-pg/v5/. This is the primary gate keeping migration content in
+  // sync between SQL Server and PostgreSQL — paired with pg-migrations.yml
+  // (which now applies committed PG files rather than regenerating them),
+  // this test makes sure the committed files actually exist.
   //
-  // This test is meaningful ONLY on the alternative `pg-migration-files`
-  // worktree branch, which preserves the full historical V*.pg.sql files.
-  // If that branch is chosen for merge, remove the `.skip` and the historical
-  // PG files will satisfy the parity check (modulo the entries in
-  // PENDING_V5_30_PORTS above). On the baseline path, leave skipped.
-  it.skip('should have a PG counterpart for every T-SQL V-migration (allowing tracked exemptions)', () => {
+  // On a tooling-only branch where migrations-pg/v5/ is empty, the parent
+  // `describe.skipIf(!hasPGMigrations)` skips this test before it runs.
+  // On any branch where PG files are committed (the migrations PR, or the
+  // merged state on `next`), this test runs and fails if any T-SQL file
+  // lacks a PG counterpart (modulo the entries in PENDING_V5_30_PORTS and
+  // INTENTIONALLY_NO_PG_COUNTERPART above).
+  it('should have a PG counterpart for every T-SQL V-migration (allowing tracked exemptions)', () => {
     const tsqlFiles = readdirSync(MIGRATIONS_DIR)
       .filter(f => f.startsWith('V') && f.endsWith('.sql'))
       .sort();
